@@ -24,21 +24,21 @@ export default function Editor({ className }: { className?: string }) {
   return (
     <Canvas shadows camera={{ position: [10, 12, 12], fov: 25 }} className={cn('bg-[#303035]', className)}>
       <group position={[0, -0.5, 0]}>
-        <Center top>
+        {/* <Center top>
           <Suzi rotation={[-0.63, 0, 0]} scale={2} />
-        </Center>
-        <Center top position={[-2, 0, 2]}>
+        </Center> */}
+        {/* <Center top position={[-2, 0, 2]}>
           <mesh castShadow>
             <sphereGeometry args={[0.5, 64, 64]} />
             <meshStandardMaterial color="#9d4b4b" />
           </mesh>
-        </Center>
-        <Center top position={[2.5, 0, 1]}>
+        </Center> */}
+        {/* <Center top position={[2.5, 0, 1]}>
           <mesh castShadow rotation={[0, Math.PI / 4, 0]}>
             <boxGeometry args={[0.7, 0.7, 0.7]} />
             <meshStandardMaterial color="#9d4b4b" />
           </mesh>
-        </Center>
+        </Center> */}
         <Shadows />
         <Grid position={[0, -0.01, 0]} args={gridSize} {...gridConfig} />
       </group>
