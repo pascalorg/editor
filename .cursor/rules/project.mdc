@@ -1,57 +1,128 @@
 ---
 alwaysApply: true
 ---
+I am updating the project documentation to reflect the current codebase structure, including providers, sidebar, context, and editor components for better guidance to future developers and AI agents.
+
 # House Builder Project
 
 ## Project Overview
-This is a 3D house builder application using Three.js and React Three Fiber. Users can design houses by clicking on a 2D grid to place walls, which are then extruded and rendered as 3D models in an isometric view.
+This is a 3D house builder application built with React, Next.js, React Three Fiber (R3F), Three.js, and @react-three/drei. Users design houses by interacting with a 2D grid to place and remove walls, which are automatically extruded into 3D models and rendered in an isometric view within a Canvas. The app supports reference image uploads, wall selection and deletion, and GLB export.
+
+Key integrations:
+- **React Three Fiber (R3F)**: Handles 3D rendering and scene management.
+- **Three.js**: Core 3D library for meshes, geometries, materials, and raycasting.
+- **@react-three/drei**: Provides high-level components like Grid, OrbitControls, GizmoHelper, and Environment.
+- **Leva**: Real-time controls for parameters like wall height, tile size, and reference image properties.
+- **Shadcn UI**: Components for sidebar, dialogs, buttons, and context menus.
+- **Lucide React**: Icons for UI elements.
 
 ## Core Features
-- **Interactive 2D Grid**: 30m × 30m grid (200×200 tiles) with 15cm square tiles
-- **Wall Placement**: Click tiles to place/remove walls; walls automatically extrude to 2.5m height
-- **3D Visualization**: Isometric view with orbit controls, shadows, and lighting
-- **Grid Snapping**: All walls snap to the @react-three/drei Grid component for precision
-- **Real-time Controls**: Leva controls for adjusting wall height, tile size, grid visibility, and opacity
+- **Interactive 2D Grid**: 30m × 30m buildable area divided into 15cm square tiles (200×200 grid).
+- **Wall Placement**: Left-click tiles to toggle walls; drag to place multiple. Walls extrude to configurable height (default 2.5m).
+- **Wall Segments**: Automatically groups connected walls into segments for selection and management (horizontal/vertical runs).
+- **3D Visualization**: Isometric perspective or orthographic view with orbit controls (enabled via spacebar), shadows, lighting, and gizmos.
+- **Selection & Editing**: Click or Cmd/Ctrl+click to select walls; Shift+click for range selection in sidebar; right-click for context menu deletion; Backspace to delete.
+- **Reference Images**: Upload PNG/JPEG floorplans as semi-transparent overlays with adjustable position, scale, rotation, and opacity.
+- **Export**: Download the 3D model as a GLB file using Three.js GLTFExporter.
+- **Sidebar Controls**: File upload, wall segment list with selection, delete/export buttons, and help dialog.
+- **Grid Snapping & Visuals**: Uses drei's Grid for precise snapping and visual reference; configurable opacity and visibility.
 
-## Technical Architecture
+## File Structure & Key Components
+The app follows Next.js App Router structure with client-side rendering for the 3D editor.
 
-### Key Constants
-- `TILE_SIZE`: 0.15m (15cm) - the base unit for the building grid
-- `WALL_HEIGHT`: 2.5m - standard wall height
-- `GRID_SIZE`: 30m - total size of the buildable area
-- Grid dimensions: 200×200 tiles (calculated from GRID_SIZE / TILE_SIZE)
+### Root Layout (`app/layout.tsx`)
+- Wraps the app with `EditorProvider` (manages global state) and `SidebarProvider` (from Shadcn UI).
+- Includes `AppSidebar` for persistent controls.
+- Sets up fonts (Geist Sans/Mono) and global CSS.
+- Renders children (e.g., `app/page.tsx` which mounts the Editor).
 
-### Component Structure
-- **Editor**: Main component managing state and rendering the Canvas
-- **GridTiles**: Renders clickable tiles for wall placement
-- **GridTile**: Individual clickable tile with hover effects
-- **Walls**: Container for all wall instances
-- **Wall**: Individual 3D extruded wall mesh
+### App Sidebar (`components/app-sidebar.tsx`)
+- Floating sidebar with sections:
+  - **Reference Image Upload**: File input for PNG/JPEG images.
+  - **Wall Segments List**: Scrollable list of computed segments (e.g., "Wall 1: 5 tiles wide (Row 10, Cols 20-24)"). Supports multi-selection via Cmd/Ctrl+click, Shift+click for ranges.
+  - **Actions**: Delete Selected (with count), Export 3D Model, Help dialog (usage instructions).
+- Listens for Backspace key to delete selected walls.
+- Uses Shadcn UI components (Sidebar, Button, Dialog, Input) and Lucide icons.
 
-### State Management
-- Walls are stored as a Set<string> with keys in format "x,z"
-- Click toggles wall placement (add if absent, remove if present)
-- Memoized components for performance optimization
+### Editor Context (`hooks/use-editor.tsx`)
+- Provides global state via React Context (`EditorProvider`).
+- **State**:
+  - `walls`: Set<string> of tile positions (keys: "x,y" where x=column, y=row, 0-based).
+  - `imageURL`: Data URL for reference image.
+  - `selectedWallIds`: Set<string> of segment IDs for multi-selection.
+  - `wallSegments`: Derived array of `WallSegment` objects (computed via useMemo from walls).
+- **Computed: Wall Segments**:
+  - Groups connected wall tiles into horizontal/vertical runs (e.g., consecutive tiles in a row/column).
+  - Prioritizes vertical segments (>1 tile), then horizontal (including singles).
+  - Each segment: `{ isHorizontal: boolean, fixed: number (row/col), start/end: number (range), id: string (e.g., "v-5-10-12") }`.
+  - Used for rendering optimized meshes and selection.
+- **Handlers**:
+  - `handleUpload`: Reads file as data URL and sets imageURL.
+  - `handleExport`: Uses GLTFExporter on `wallsGroupRef` to download GLB.
+  - `handleDeleteSelectedWalls`: Parses segment IDs, removes corresponding tiles from walls Set, clears selection.
+- Exported hook: `useEditorContext()` for accessing state/handlers in components.
 
-### 3D Setup
-- Camera: Position [15, 15, 15] for isometric view, FOV 50
-- Lighting: Ambient (0.5) + Directional (1.0) with shadows
-- Grid: @react-three/drei Grid component for visual reference and snapping
-- Controls: OrbitControls with restricted polar angle to prevent going under ground
+### Main Editor (`components/editor.tsx`)
+- Core 3D scene component, mounted in `app/page.tsx`.
+- Uses `useControls` from Leva for real-time tweaks:
+  - **Main Controls**: Wall height (1-5m), tile size (0.1-0.5m), show grid (bool), grid opacity (0-1), camera type (perspective/orthographic).
+  - **Reference Image** (collapsed): Opacity, scale, position (joystick), rotation.
+- **State & Interactions**:
+  - Manages camera enabling (spacebar for orbit), hovered walls, context menus (right-click on canvas/walls).
+  - GridTiles: Invisible plane with UV-based raycasting for tile interaction (hover highlight, click/drag to place/toggle walls).
+  - Walls: Renders grouped segments as box meshes with selection/hover visuals (color changes, emissive glow).
+  - HoverDetector: Raycasts selected walls to detect face hovers (shows arrow indicator on sides/top, excludes top face).
+  - ContextMenu: Custom overlay for delete (walls only if selected) or placeholder (canvas).
+- **3D Setup in Canvas**:
+  - **Cameras**: Perspective (default, pos [10,0,5], FOV 50) or Orthographic (zoom 20); custom `CameraSetup` sets up vector (0,0,1).
+  - **Lighting**: Ambient (0.5) + Directional (1.0, pos [10,10,5]) with shadows (1024 map size, -15 to 15 bounds).
+  - **Grid**: Drei Grid (size 30x30, cellSize=tileSize, colors #aaaabf/#9d4b4b, fadeDistance=60, rotated π/2 on X).
+  - **Interactions**: OrbitControls (target [0,0,0], polar 0 to π/2, enabled on spacebar); raycasting for hovers/clicks.
+  - **Meshes**:
+    - GridTiles: Semi-transparent plane (#404045) for input; hover previews (#5a5a5f); placed tiles (#9d4b4b).
+    - Walls: BoxGeometry (width/depth=segment length * tileSize, height=wallHeight); material (#aaaabf base, variants for select/hover); positioned offset by half grid.
+    - ReferenceImage: Plane with texture (double-sided, transparent); positioned/scaled/rotated via Leva.
+    - Arrow: Cylinder + cone for face hover direction (white, semi-transparent).
+  - **Helpers**: Environment ("city" preset), GizmoHelper (bottom-right), Stats (performance).
+
+### State Management Flow
+1. User clicks/drags on GridTiles → `handleTileInteract` updates `walls` Set.
+2. `wallSegments` recomputes on walls change → optimizes rendering (one mesh per segment vs. per tile).
+3. Selection: Click on wall mesh or sidebar item → updates `selectedWallIds`.
+4. Deletion: Backspace, button click, or context menu → `handleDeleteSelectedWalls` removes tiles by parsing segments.
+5. Export: Serializes `wallsGroupRef` (group of wall meshes) to GLB.
+
+### Key Constants (in editor.tsx)
+- `TILE_SIZE`: 0.15m (15cm base unit).
+- `WALL_HEIGHT`: 2.5m (default).
+- `GRID_SIZE`: 30m (total area).
+- Derived: `rows/cols = GRID_SIZE / tileSize` (~200).
 
 ## Design Decisions
-1. Using @react-three/drei Grid for visual grid lines and ensuring wall snapping
-2. Tiles are 15cm to match realistic architectural dimensions
-3. Walls are full-tile cubes that can be placed/removed individually
-4. Isometric view provides best perspective for house design
-5. Leva controls allow real-time experimentation with parameters
+1. **State as Tile Set**: Simple "x,y" keys for walls; segments derived for optimization (avoids 40,000 individual meshes).
+2. **UV Raycasting for Grid**: Efficient 2D input on a single plane; supports drag-placement.
+3. **Segment Grouping**: Reduces draw calls; enables range selection in sidebar.
+4. **Isometric View**: Camera at [10,0,5] (adjusted from [15,15,15] for better fit); restricted polar angle prevents underground views.
+5. **Leva Controls**: Collapsible for UX; joystick for image position.
+6. **Custom Context Menus**: Overlay divs for precise control (avoids R3F event quirks).
+7. **Performance**: Memoized components (GridTiles, Walls); useFrame for hover detection only on selected walls.
+8. **Accessibility**: Keyboard support (spacebar, Backspace); help dialog with instructions.
+
+## Integration Notes
+- **Dependencies**: Ensure @react-three/fiber, three, @react-three/drei, leva are installed via Bun.
+- **Client-Side Only**: All 3D logic in "use client" components; no server rendering for Canvas.
+- **Raycasting**: Used for wall hovers/clicks; UV for grid; excludes top faces for side-only interactions.
+- **Export**: Binary GLB via Three.js exporter; includes only walls group (no grid/image).
 
 ## Future Enhancements to Consider
-- Wall types (exterior, interior, different heights)
-- Door and window placement
-- Room detection and labeling
-- Export/import floor plans
-- Multi-floor support
-- Measurement tools
-- Material/texture options
+- **Wall Types**: Exterior/interior materials, variable heights per segment.
+- **Doors/Windows**: Placement on wall faces with cutouts.
+- **Room Detection**: Flood-fill to identify/label rooms.
+- **Multi-Floor**: Layered grids with floor switching.
+- **Measurements**: Distance tools, area calculations.
+- **Import/Undo**: Load GLB/JSON plans; history stack.
+- **Materials/Textures**: Custom shaders, PBR for realism.
+- **Mobile Support**: Touch gestures for placement/rotation.
+- **Persistence**: Save/load projects to localStorage or backend.
+- **Analytics**: Snap-to-grid for alignments, auto-complete walls.
 
