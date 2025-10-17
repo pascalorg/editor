@@ -1,47 +1,39 @@
 'use client'
 
-import { createContext, useContext, ReactNode, useState, useRef, useEffect } from 'react'
+import { createContext, useContext, useState, ReactNode, useRef, useMemo } from 'react'
 import * as THREE from 'three'
+// @ts-ignore
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
+
+export interface WallSegment {
+  isHorizontal: boolean
+  fixed: number
+  start: number
+  end: number
+  id: string
+}
 
 interface EditorContextType {
-  // State
   walls: Set<string>
   setWalls: React.Dispatch<React.SetStateAction<Set<string>>>
-  isCameraEnabled: boolean
-  setIsCameraEnabled: React.Dispatch<React.SetStateAction<boolean>>
   imageURL: string | null
   setImageURL: React.Dispatch<React.SetStateAction<string | null>>
   isHelpOpen: boolean
   setIsHelpOpen: React.Dispatch<React.SetStateAction<boolean>>
-  hoveredWallIndex: number | null
-  setHoveredWallIndex: React.Dispatch<React.SetStateAction<number | null>>
-
-  // Refs
   wallsGroupRef: React.RefObject<THREE.Group<THREE.Object3DEventMap> | null>
-
-  // Handlers
-  handleTileInteract: (x: number, y: number, action: 'toggle' | 'add') => void
+  wallSegments: WallSegment[]
+  selectedWallIds: Set<string>
+  setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   handleExport: () => void
   handleUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
-
-  // Leva controls
-  wallHeight: number
-  tileSize: number
-  showGrid: boolean
-  gridOpacity: number
-  cameraType: 'perspective' | 'orthographic'
-  imageOpacity: number
-  imageScale: number
-  imagePosition: [number, number]
-  imageRotation: number
 }
 
-const EditorContext = createContext<EditorContextType | null>(null)
+const EditorContext = createContext<EditorContextType | undefined>(undefined)
 
-export function useEditor() {
+export const useEditorContext = () => {
   const context = useContext(EditorContext)
   if (!context) {
-    throw new Error('useEditor must be used within an EditorProvider')
+    throw new Error('useEditorContext must be used within an EditorProvider')
   }
   return context
 }
@@ -50,51 +42,75 @@ interface EditorProviderProps {
   children: ReactNode
 }
 
-export function EditorProvider({ children }: EditorProviderProps) {
-  // State
+export const EditorProvider = ({ children }: EditorProviderProps) => {
   const [walls, setWalls] = useState<Set<string>>(new Set())
-  const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [imageURL, setImageURL] = useState<string | null>(null)
   const [isHelpOpen, setIsHelpOpen] = useState(false)
-  const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
+  const [selectedWallIds, setSelectedWallIds] = useState<Set<string>>(new Set())
+  const wallsGroupRef = useRef<THREE.Group<THREE.Object3DEventMap>>(null)
 
-  // Refs
-  const wallsGroupRef = useRef<THREE.Group<THREE.Object3DEventMap> | null>(null)
+  const wallSegments = useMemo(() => {
+    const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
 
-  // Leva controls (these would be replaced with actual leva controls in the component)
-  const [wallHeight, setWallHeight] = useState(2.5)
-  const [tileSize, setTileSize] = useState(0.15)
-  const [showGrid, setShowGrid] = useState(true)
-  const [gridOpacity, setGridOpacity] = useState(0.3)
-  const [cameraType, setCameraType] = useState<'perspective' | 'orthographic'>('perspective')
-  const [imageOpacity, setImageOpacity] = useState(0.5)
-  const [imageScale, setImageScale] = useState(1)
-  const [imagePosition, setImagePosition] = useState<[number, number]>([0, 0])
-  const [imageRotation, setImageRotation] = useState(0)
+    const horiz = new Map<number, number[]>();
+    const vert = new Map<number, number[]>();
 
-  // Handlers
-  const handleTileInteract = (x: number, y: number, action: 'toggle' | 'add') => {
-    const key = `${x},${y}`
-    setWalls(prev => {
-      const next = new Set(prev)
-      if (action === 'toggle') {
-        if (next.has(key)) {
-          next.delete(key)
-        } else {
-          next.add(key)
+    for (const [x, y] of allPositions) {
+      if (!horiz.has(y)) horiz.set(y, []);
+      horiz.get(y)!.push(x);
+      if (!vert.has(x)) vert.set(x, []);
+      vert.get(x)!.push(y);
+    }
+
+    const segments: WallSegment[] = [];
+    const covered = new Set<string>();
+
+    // Vertical segments (only for runs >1)
+    for (const [fixed, varying] of vert) {
+      if (varying.length < 2) continue;
+      varying.sort((a, b) => a - b);
+      let i = 0;
+      while (i < varying.length) {
+        let j = i;
+        while (j < varying.length - 1 && varying[j + 1] === varying[j] + 1) j++;
+        const start = varying[i];
+        const end = varying[j];
+        const length = j - i + 1;
+        if (length > 1) {
+          const id = `v-${fixed}-${start}-${end}`;
+          segments.push({isHorizontal: false, fixed, start, end, id});
+          for (let k = i; k <= j; k++) {
+            covered.add(`${fixed},${varying[k]}`);
+          }
         }
-      } else if (action === 'add' && !next.has(key)) {
-        next.add(key)
+        i = j + 1;
       }
-      return next
-    })
-  }
+    }
+
+    // Horizontal segments (for remaining tiles, including singles)
+    for (const [fixed, varying] of horiz) {
+      const filtered = varying.filter(x => !covered.has(`${x},${fixed}`));
+      if (filtered.length === 0) continue;
+      filtered.sort((a, b) => a - b);
+      let i = 0;
+      while (i < filtered.length) {
+        let j = i;
+        while (j < filtered.length - 1 && filtered[j + 1] === filtered[j] + 1) j++;
+        const start = filtered[i];
+        const end = filtered[j];
+        const id = `h-${fixed}-${start}-${end}`;
+        segments.push({isHorizontal: true, fixed, start, end, id});
+        i = j + 1;
+      }
+    }
+
+    return segments;
+  }, [walls])
 
   const handleExport = () => {
     if (!wallsGroupRef.current) return;
 
-    // @ts-ignore
-    const exporter = new (require('three/examples/jsm/exporters/GLTFExporter').GLTFExporter)();
+    const exporter = new GLTFExporter();
 
     exporter.parse(
       wallsGroupRef.current,
@@ -125,65 +141,23 @@ export function EditorProvider({ children }: EditorProviderProps) {
     }
   }
 
-  // Camera controls keyboard handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ') {
-        setIsCameraEnabled(true)
-        e.preventDefault()
-      }
-    }
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === ' ') {
-        setIsCameraEnabled(false)
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('keyup', handleKeyUp)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('keyup', handleKeyUp)
-    }
-  }, [])
-
-  const contextValue: EditorContextType = {
-    // State
+  const value: EditorContextType = {
     walls,
     setWalls,
-    isCameraEnabled,
-    setIsCameraEnabled,
     imageURL,
     setImageURL,
     isHelpOpen,
     setIsHelpOpen,
-    hoveredWallIndex,
-    setHoveredWallIndex,
-
-    // Refs
     wallsGroupRef,
-
-    // Handlers
-    handleTileInteract,
+    wallSegments,
+    selectedWallIds,
+    setSelectedWallIds,
     handleExport,
     handleUpload,
-
-    // Leva controls
-    wallHeight,
-    tileSize,
-    showGrid,
-    gridOpacity,
-    cameraType,
-    imageOpacity,
-    imageScale,
-    imagePosition,
-    imageRotation,
   }
 
   return (
-    <EditorContext.Provider value={contextValue}>
+    <EditorContext.Provider value={value}>
       {children}
     </EditorContext.Provider>
   )

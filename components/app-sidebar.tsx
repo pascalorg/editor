@@ -19,10 +19,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useEditorContext } from "@/hooks/use-editor-context"
+import { useEditorContext, WallSegment } from "@/hooks/use-editor"
 
 export function AppSidebar() {
-  const { isHelpOpen, setIsHelpOpen, handleExport, handleUpload } = useEditorContext()
+  const { isHelpOpen, setIsHelpOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds } = useEditorContext()
+
+  const handleWallSelect = (wallId: string) => {
+    setSelectedWallIds(prev => {
+      const next = new Set(prev)
+      if (next.has(wallId)) {
+        next.delete(wallId)
+      } else {
+        next.add(wallId)
+      }
+      return next
+    })
+  }
+
+  const formatWallDescription = (segment: WallSegment) => {
+    const length = segment.end - segment.start + 1
+    const unit = segment.isHorizontal ? 'tiles wide' : 'tiles tall'
+    const position = segment.isHorizontal
+      ? `Row ${segment.fixed}, Cols ${segment.start}-${segment.end}`
+      : `Col ${segment.fixed}, Rows ${segment.start}-${segment.end}`
+    return `${length} ${unit} (${position})`
+  }
 
   return (
     <Sidebar variant="floating">
@@ -43,6 +64,41 @@ export function AppSidebar() {
                 onChange={handleUpload}
                 className="w-full text-xs"
               />
+            </div>
+          </SidebarMenuItem>
+
+          {/* Wall Segments List */}
+          <SidebarMenuItem>
+            <div className="px-2 py-2">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Wall Segments ({wallSegments.length})
+              </label>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {wallSegments.length === 0 ? (
+                  <div className="text-xs text-muted-foreground italic">
+                    No walls placed yet
+                  </div>
+                ) : (
+                  wallSegments.map((segment, index) => (
+                    <div
+                      key={segment.id}
+                      className={`p-2 rounded text-xs cursor-pointer transition-colors ${
+                        selectedWallIds.has(segment.id)
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted hover:bg-muted/80'
+                      }`}
+                      onClick={() => handleWallSelect(segment.id)}
+                    >
+                      <div className="font-medium">
+                        Wall {index + 1}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {formatWallDescription(segment)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </SidebarMenuItem>
 

@@ -7,7 +7,7 @@ import { useControls } from 'leva'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
 import { useTexture } from '@react-three/drei'
-import { useEditorContext } from '@/hooks/use-editor-context'
+import { useEditorContext, WallSegment } from '@/hooks/use-editor'
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -21,7 +21,7 @@ type WallTile = {
 }
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, imageURL, wallsGroupRef } = useEditorContext()
+  const { walls, setWalls, imageURL, wallsGroupRef, wallSegments, selectedWallIds, setSelectedWallIds } = useEditorContext()
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
@@ -160,10 +160,12 @@ export default function Editor({ className }: { className?: string }) {
             disableBuild={isCameraEnabled}
           />
           <Walls
-            walls={walls}
+            wallSegments={wallSegments}
             tileSize={tileSize}
             wallHeight={wallHeight}
             hoveredWallIndex={hoveredWallIndex}
+            selectedWallIds={selectedWallIds}
+            setSelectedWallIds={setSelectedWallIds}
             onWallHover={setHoveredWallIndex}
             ref={wallsGroupRef}
           />
@@ -320,75 +322,24 @@ const GridTiles = memo(({ rows, cols, tileSize, walls, onTileInteract, opacity, 
 })
 
 type WallsProps = {
-  walls: Set<string>
+  wallSegments: WallSegment[]
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
+  selectedWallIds: Set<string>
+  setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   onWallHover: (index: number | null) => void
 }
 
-const Walls = memo(forwardRef(({ walls, tileSize, wallHeight, hoveredWallIndex, onWallHover }: WallsProps, ref: Ref<THREE.Group>) => {
-  const segments = useMemo(() => {
-    const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
-    
-    const horiz = new Map<number, number[]>();
-    const vert = new Map<number, number[]>();
-    
-    for (const [x, y] of allPositions) {
-      if (!horiz.has(y)) horiz.set(y, []);
-      horiz.get(y)!.push(x);
-      if (!vert.has(x)) vert.set(x, []);
-      vert.get(x)!.push(y);
-    }
-    
-    const segments: {isHorizontal: boolean, fixed: number, start: number, end: number}[] = [];
-    const covered = new Set<string>();
-    
-    // Vertical segments (only for runs >1)
-    for (const [fixed, varying] of vert) {
-      if (varying.length < 2) continue;
-      varying.sort((a, b) => a - b);
-      let i = 0;
-      while (i < varying.length) {
-        let j = i;
-        while (j < varying.length - 1 && varying[j + 1] === varying[j] + 1) j++;
-        const start = varying[i];
-        const end = varying[j];
-        const length = j - i + 1;
-        if (length > 1) {
-          segments.push({isHorizontal: false, fixed, start, end});
-          for (let k = i; k <= j; k++) {
-            covered.add(`${fixed},${varying[k]}`);
-          }
-        }
-        i = j + 1;
-      }
-    }
-    
-    // Horizontal segments (for remaining tiles, including singles)
-    for (const [fixed, varying] of horiz) {
-      const filtered = varying.filter(x => !covered.has(`${x},${fixed}`));
-      if (filtered.length === 0) continue;
-      filtered.sort((a, b) => a - b);
-      let i = 0;
-      while (i < filtered.length) {
-        let j = i;
-        while (j < filtered.length - 1 && filtered[j + 1] === filtered[j] + 1) j++;
-        const start = filtered[i];
-        const end = filtered[j];
-        segments.push({isHorizontal: true, fixed, start, end});
-        i = j + 1;
-      }
-    }
-    
-    return segments;
-  }, [walls]);
-  
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, selectedWallIds, setSelectedWallIds, onWallHover }: WallsProps, ref: Ref<THREE.Group>) => {
   return (
     <group ref={ref}>
-      {segments.map((seg, i) => {
+      {wallSegments.map((seg, i) => {
         let width, depth, posX, posY;
         const height = wallHeight;
+        const isSelected = selectedWallIds.has(seg.id);
+        const isHovered = hoveredWallIndex === i;
+
         if (seg.isHorizontal) {
           const num = seg.end - seg.start + 1;
           width = num * tileSize;
@@ -401,21 +352,61 @@ const Walls = memo(forwardRef(({ walls, tileSize, wallHeight, hoveredWallIndex, 
           posX = seg.fixed * tileSize + tileSize / 2;
           posY = seg.start * tileSize + depth / 2;
         }
+
+        // Determine color based on selection and hover state
+        let color = "#aaaabf"; // default
+        let emissive = "#000000";
+
+        if (isSelected && isHovered) {
+          color = "#ff4444"; // selected and hovered
+          emissive = "#441111";
+        } else if (isSelected) {
+          color = "#ff8888"; // selected
+          emissive = "#331111";
+        } else if (isHovered) {
+          color = "#ff6b6b"; // hovered
+          emissive = "#331111";
+        }
+
         return (
           <mesh
-            key={i}
+            key={seg.id}
             position={[posX, posY, height / 2]}
             castShadow
             receiveShadow
-            onPointerEnter={() => onWallHover(i)}
-            onPointerLeave={() => onWallHover(null)}
+            onPointerEnter={(e) => {
+              e.stopPropagation();
+              onWallHover(i);
+            }}
+            onPointerLeave={(e) => {
+              e.stopPropagation();
+              onWallHover(null);
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedWallIds(prev => {
+                const next = new Set(prev);
+                if (next.has(seg.id)) {
+                  next.delete(seg.id);
+                } else {
+                  next.add(seg.id);
+                }
+                return next;
+              });
+            }}
           >
             <boxGeometry args={[width, depth, height]} />
             <meshStandardMaterial
-              color={hoveredWallIndex === i ? "#ff6b6b" : "#aaaabf"}
+              color={color}
               roughness={0.7}
               metalness={0.1}
-              emissive={hoveredWallIndex === i ? "#331111" : "#000000"}
+              emissive={emissive}
             />
           </mesh>
         );
