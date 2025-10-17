@@ -1,0 +1,57 @@
+---
+alwaysApply: true
+---
+# House Builder Project
+
+## Project Overview
+This is a 3D house builder application using Three.js and React Three Fiber. Users can design houses by clicking on a 2D grid to place walls, which are then extruded and rendered as 3D models in an isometric view.
+
+## Core Features
+- **Interactive 2D Grid**: 30m × 30m grid (200×200 tiles) with 15cm square tiles
+- **Wall Placement**: Click tiles to place/remove walls; walls automatically extrude to 2.5m height
+- **3D Visualization**: Isometric view with orbit controls, shadows, and lighting
+- **Grid Snapping**: All walls snap to the @react-three/drei Grid component for precision
+- **Real-time Controls**: Leva controls for adjusting wall height, tile size, grid visibility, and opacity
+
+## Technical Architecture
+
+### Key Constants
+- `TILE_SIZE`: 0.15m (15cm) - the base unit for the building grid
+- `WALL_HEIGHT`: 2.5m - standard wall height
+- `GRID_SIZE`: 30m - total size of the buildable area
+- Grid dimensions: 200×200 tiles (calculated from GRID_SIZE / TILE_SIZE)
+
+### Component Structure
+- **Editor**: Main component managing state and rendering the Canvas
+- **GridTiles**: Renders clickable tiles for wall placement
+- **GridTile**: Individual clickable tile with hover effects
+- **Walls**: Container for all wall instances
+- **Wall**: Individual 3D extruded wall mesh
+
+### State Management
+- Walls are stored as a Set<string> with keys in format "x,z"
+- Click toggles wall placement (add if absent, remove if present)
+- Memoized components for performance optimization
+
+### 3D Setup
+- Camera: Position [15, 15, 15] for isometric view, FOV 50
+- Lighting: Ambient (0.5) + Directional (1.0) with shadows
+- Grid: @react-three/drei Grid component for visual reference and snapping
+- Controls: OrbitControls with restricted polar angle to prevent going under ground
+
+## Design Decisions
+1. Using @react-three/drei Grid for visual grid lines and ensuring wall snapping
+2. Tiles are 15cm to match realistic architectural dimensions
+3. Walls are full-tile cubes that can be placed/removed individually
+4. Isometric view provides best perspective for house design
+5. Leva controls allow real-time experimentation with parameters
+
+## Future Enhancements to Consider
+- Wall types (exterior, interior, different heights)
+- Door and window placement
+- Room detection and labeling
+- Export/import floor plans
+- Multi-floor support
+- Measurement tools
+- Material/texture options
+
