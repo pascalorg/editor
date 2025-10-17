@@ -26,6 +26,7 @@ interface EditorContextType {
   setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   handleExport: () => void
   handleUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  handleDeleteSelectedWalls: () => void
 }
 
 const EditorContext = createContext<EditorContextType | undefined>(undefined)
@@ -141,6 +142,41 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
     }
   }
 
+  const handleDeleteSelectedWalls = () => {
+    if (selectedWallIds.size === 0) return
+
+    setWalls(prevWalls => {
+      const newWalls = new Set(prevWalls)
+
+      for (const segmentId of selectedWallIds) {
+        // Parse segment ID to get the positions to remove
+        const parts = segmentId.split('-')
+        const isHorizontal = parts[0] === 'h'
+        const fixed = parseInt(parts[1])
+        const start = parseInt(parts[2])
+        const end = parseInt(parts[3])
+
+        // Remove all tiles in this segment
+        if (isHorizontal) {
+          // Horizontal segment: fixed row, varying columns
+          for (let col = start; col <= end; col++) {
+            newWalls.delete(`${col},${fixed}`)
+          }
+        } else {
+          // Vertical segment: fixed column, varying rows
+          for (let row = start; row <= end; row++) {
+            newWalls.delete(`${fixed},${row}`)
+          }
+        }
+      }
+
+      return newWalls
+    })
+
+    // Clear selection after deletion
+    setSelectedWallIds(new Set())
+  }
+
   const value: EditorContextType = {
     walls,
     setWalls,
@@ -154,6 +190,7 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
     setSelectedWallIds,
     handleExport,
     handleUpload,
+    handleDeleteSelectedWalls,
   }
 
   return (

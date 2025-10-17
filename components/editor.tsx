@@ -392,9 +392,16 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
               e.stopPropagation();
               setSelectedWallIds(prev => {
                 const next = new Set(prev);
-                if (next.has(seg.id)) {
-                  next.delete(seg.id);
+                if (e.shiftKey) {
+                  // Shift+click: add/remove from selection
+                  if (next.has(seg.id)) {
+                    next.delete(seg.id);
+                  } else {
+                    next.add(seg.id);
+                  }
                 } else {
+                  // Regular click: select only this wall
+                  next.clear();
                   next.add(seg.id);
                 }
                 return next;

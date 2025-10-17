@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import {
   Sidebar,
   SidebarContent,
@@ -8,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Home, Settings, Upload, Download, HelpCircle } from "lucide-react"
+import { Home, Settings, Upload, Download, HelpCircle, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -22,16 +23,59 @@ import {
 import { useEditorContext, WallSegment } from "@/hooks/use-editor"
 
 export function AppSidebar() {
-  const { isHelpOpen, setIsHelpOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds } = useEditorContext()
+  const { isHelpOpen, setIsHelpOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls } = useEditorContext()
 
-  const handleWallSelect = (wallId: string) => {
+  // Handle backspace key to delete selected walls
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Backspace' && selectedWallIds.size > 0) {
+        event.preventDefault()
+        handleDeleteSelectedWalls()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedWallIds, handleDeleteSelectedWalls])
+
+  const handleWallSelect = (wallId: string, event: React.MouseEvent) => {
     setSelectedWallIds(prev => {
       const next = new Set(prev)
-      if (next.has(wallId)) {
-        next.delete(wallId)
+      const clickedIndex = wallSegments.findIndex(seg => seg.id === wallId)
+
+      if (event.metaKey || event.ctrlKey) {
+        // Cmd/Ctrl+click: add/remove from selection
+        if (next.has(wallId)) {
+          next.delete(wallId)
+        } else {
+          next.add(wallId)
+        }
+      } else if (event.shiftKey && next.size > 0) {
+        // Shift+click: select range between closest selected wall and clicked wall
+        const selectedIndices = Array.from(next).map(id =>
+          wallSegments.findIndex(seg => seg.id === id)
+        ).filter(idx => idx !== -1)
+
+        // Find closest selected wall index
+        const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
+          const currentDist = Math.abs(current - clickedIndex)
+          const closestDist = Math.abs(closest - clickedIndex)
+          return currentDist < closestDist ? current : closest
+        })
+
+        // Select all walls between closest selected and clicked
+        const start = Math.min(closestSelectedIndex, clickedIndex)
+        const end = Math.max(closestSelectedIndex, clickedIndex)
+
+        for (let i = start; i <= end; i++) {
+          next.add(wallSegments[i].id)
+        }
       } else {
+        // Regular click: select only this wall
+        next.clear()
         next.add(wallId)
       }
+
       return next
     })
   }
@@ -87,7 +131,7 @@ export function AppSidebar() {
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted hover:bg-muted/80'
                       }`}
-                      onClick={() => handleWallSelect(segment.id)}
+                      onClick={(e) => handleWallSelect(segment.id, e)}
                     >
                       <div className="font-medium">
                         Wall {index + 1}
@@ -100,6 +144,21 @@ export function AppSidebar() {
                 )}
               </div>
             </div>
+          </SidebarMenuItem>
+
+          {/* Delete Selected Walls Button */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDeleteSelectedWalls}
+                disabled={selectedWallIds.size === 0}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Selected ({selectedWallIds.size})</span>
+              </Button>
+            </SidebarMenuButton>
           </SidebarMenuItem>
 
           <SidebarMenuItem>
