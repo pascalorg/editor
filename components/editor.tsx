@@ -15,6 +15,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { Trash2 } from 'lucide-react'
+import { Vector2, Vector3, Plane, Raycaster } from 'three'
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -40,6 +41,11 @@ export default function Editor({ className }: { className?: string }) {
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
+  const [hoveredFace, setHoveredFace] = useState<{
+    wallIndex: number
+    faceNormal: THREE.Vector3
+    facePosition: THREE.Vector3
+  } | null>(null)
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     position: { x: number; y: number }
@@ -47,6 +53,19 @@ export default function Editor({ className }: { className?: string }) {
     wallSegment?: WallSegment
   }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'canvas' })
   const wallContextMenuTriggeredRef = useRef(false)
+  const [draggingFace, setDraggingFace] = useState<{
+    wallIndex: number;
+    segment: WallSegment;
+    normal: THREE.Vector3;
+    originalPoint: THREE.Vector3;
+    isEndFace: boolean;
+    sign: number;
+    axis: 'x' | 'y';
+  } | null>(null)
+  const [previewNum, setPreviewNum] = useState(0)
+  const [currentMouse, setCurrentMouse] = useState({x: 0, y: 0})
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -76,6 +95,130 @@ export default function Editor({ className }: { className?: string }) {
       document.removeEventListener('click', handleClickOutside)
     }
   }, [])
+
+  useEffect(() => {
+    if (!draggingFace) return
+
+    const handleDragMove = (event: PointerEvent) => {
+      setCurrentMouse({x: event.clientX, y: event.clientY})
+    }
+
+    const handleDragUp = (event: PointerEvent) => {
+      if (draggingFace && previewNum > 0) {
+        setWalls(prev => {
+          const next = new Set(prev)
+          const {segment: s, isEndFace, sign, axis} = draggingFace
+          if (isEndFace) {
+            const fixed = s.fixed
+            const varying = s.isHorizontal ? 'x' : 'y'
+            for (let k = 1; k <= previewNum; k++) {
+              const offset = sign > 0 ? s.end + k : s.start - k
+              const tileX = varying === 'x' ? offset : fixed
+              const tileY = varying === 'y' ? offset : fixed
+              next.add(`${tileX},${tileY}`)
+            }
+          } else {
+            const fixed = s.fixed
+            const varying = s.isHorizontal ? 'y' : 'x'
+            for (let k = 1; k <= previewNum; k++) {
+              const newFixed = fixed + k * sign
+              for (let j = s.start; j <= s.end; j++) {
+                const tileX = s.isHorizontal ? j : newFixed
+                const tileY = s.isHorizontal ? newFixed : j
+                next.add(`${tileX},${tileY}`)
+              }
+            }
+          }
+          return next
+        })
+      }
+      document.removeEventListener('pointermove', handleDragMove)
+      document.removeEventListener('pointerup', handleDragUp)
+      setDraggingFace(null)
+      setPreviewNum(0)
+    }
+
+    document.addEventListener('pointermove', handleDragMove)
+    document.addEventListener('pointerup', handleDragUp)
+
+    return () => {
+      document.removeEventListener('pointermove', handleDragMove)
+      document.removeEventListener('pointerup', handleDragUp)
+    }
+  }, [draggingFace, previewNum, setWalls, tileSize])
+
+  const UpdatePreview = () => {
+    const { camera, size } = useThree()
+    useFrame(() => {
+      if (!draggingFace) {
+        setPreviewNum(0)
+        return
+      }
+      const mouse = new Vector2()
+      mouse.x = (currentMouse.x / size.width) * 2 - 1
+      mouse.y = - (currentMouse.y / size.height) * 2 + 1
+      raycaster.setFromCamera(mouse, camera)
+      const intersectPoint = new Vector3()
+      if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
+        const { originalPoint, normal, axis } = draggingFace
+        const coord = axis === 'x' ? intersectPoint.x : intersectPoint.y
+        const original_coord = axis === 'x' ? originalPoint.x : originalPoint.y
+        const adjustedDelta = draggingFace.sign * (coord - original_coord) / tileSize
+        setPreviewNum(Math.max(0, Math.floor(adjustedDelta)))
+      }
+    })
+    return null
+  }
+
+const PreviewExtrusion = ({ draggingFace, previewNum, tileSize, wallHeight }: {
+  draggingFace: any
+  previewNum: number
+  tileSize: number
+  wallHeight: number
+}) => {
+  if (!draggingFace || previewNum <= 0) return null
+  const { segment: seg, isEndFace, sign, axis, originalPoint } = draggingFace
+  let width, depth, posX, posY
+  const height = wallHeight
+  const cols = Math.floor(GRID_SIZE / tileSize)
+  const rows = Math.floor(GRID_SIZE / tileSize)
+  // Convert world originalPoint to local group coordinates
+  const local_face_pos = axis === 'x' ? (originalPoint.x + (cols * tileSize) / 2) : (originalPoint.y + (rows * tileSize) / 2)
+  const extrude_size = previewNum * tileSize
+  const center_offset = sign * (extrude_size / 2)
+  const new_pos_dir = local_face_pos + center_offset
+    if (isEndFace) {
+      if (seg.isHorizontal) {
+        width = extrude_size
+        depth = tileSize
+        posX = new_pos_dir
+        posY = seg.fixed * tileSize + tileSize / 2
+      } else {
+        width = tileSize
+        depth = extrude_size
+        posX = seg.fixed * tileSize + tileSize / 2
+        posY = new_pos_dir
+      }
+    } else {
+      if (seg.isHorizontal) {
+        width = (seg.end - seg.start + 1) * tileSize
+        depth = extrude_size
+        posX = seg.start * tileSize + width / 2
+        posY = new_pos_dir
+      } else {
+        width = extrude_size
+        depth = (seg.end - seg.start + 1) * tileSize
+        posX = new_pos_dir
+        posY = seg.start * tileSize + depth / 2
+      }
+    }
+    return (
+      <mesh position={[posX, posY, height / 2]}>
+        <boxGeometry args={[width, depth, height]} />
+        <meshStandardMaterial color="#aaaabf" transparent opacity={0.5} />
+      </mesh>
+    )
+  }
 
   const rows = Math.floor(GRID_SIZE / tileSize)
   const cols = Math.floor(GRID_SIZE / tileSize)
@@ -249,20 +392,31 @@ export default function Editor({ className }: { className?: string }) {
             walls={walls}
             onTileInteract={handleTileInteract}
             opacity={gridOpacity}
-            disableBuild={isCameraEnabled}
+            disableBuild={isCameraEnabled || !!draggingFace}
           />
           <Walls
             wallSegments={wallSegments}
             tileSize={tileSize}
             wallHeight={wallHeight}
             hoveredWallIndex={hoveredWallIndex}
+            hoveredFace={hoveredFace}
             selectedWallIds={selectedWallIds}
             setSelectedWallIds={setSelectedWallIds}
             onWallHover={setHoveredWallIndex}
             onWallRightClick={handleWallRightClick}
+            onFaceHover={setHoveredFace}
             isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
+            setDraggingFace={setDraggingFace}
           />
+          <FaceHighlight
+            wallSegments={wallSegments}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+            hoveredFace={hoveredFace}
+          />
+          <UpdatePreview />
+          <PreviewExtrusion draggingFace={draggingFace} previewNum={previewNum} tileSize={tileSize} wallHeight={wallHeight} />
         </group>
 
         <OrbitControls 
@@ -447,13 +601,20 @@ type WallsProps = {
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
+  hoveredFace: {
+    wallIndex: number
+    faceNormal: THREE.Vector3
+    facePosition: THREE.Vector3
+  } | null
   selectedWallIds: Set<string>
   setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   onWallHover: (index: number | null) => void
+  onFaceHover: (face: { wallIndex: number; faceNormal: THREE.Vector3; facePosition: THREE.Vector3 } | null) => void
   isCameraEnabled?: boolean
+  setDraggingFace: (info: any) => void
 }
 
-const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, isCameraEnabled }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -503,6 +664,36 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             onPointerLeave={(e) => {
               e.stopPropagation();
               onWallHover(null);
+              onFaceHover(null);
+            }}
+            onPointerMove={(e) => {
+              e.stopPropagation();
+              if (!isSelected) {
+                onFaceHover(null);
+                return;
+              }
+
+              // Face detection using raycasting
+              if (e.intersections && e.intersections.length > 0) {
+                const intersection = e.intersections[0];
+                if (intersection.face) {
+                  const normal = intersection.face.normal.clone();
+                  // Transform normal to world space
+                  normal.transformDirection(e.object.matrixWorld);
+
+                  // Only highlight vertical faces (exclude top/bottom)
+                  if (Math.abs(normal.z) < 0.1) {
+                    const facePosition = intersection.point.clone();
+                    onFaceHover({
+                      wallIndex: i,
+                      faceNormal: normal,
+                      facePosition: facePosition
+                    });
+                  } else {
+                    onFaceHover(null);
+                  }
+                }
+              }
             }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -513,6 +704,28 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
                   e.nativeEvent.preventDefault();
                 }
                 onWallRightClick?.(e, seg);
+              }
+              if (e.button === 0 && isSelected) {
+                e.stopPropagation()
+                const intersection = e.intersections[0]
+                if (intersection && intersection.face) {
+                  const normal = intersection.face.normal.clone().transformDirection(e.object.matrixWorld)
+                  if (Math.abs(normal.z) < 0.1) {
+                    const axis = Math.abs(normal.x) > Math.abs(normal.y) ? 'x' : 'y'
+                    const sign = Math.sign(normal[axis])
+                    const isEndFace = (seg.isHorizontal && axis === 'x') || (!seg.isHorizontal && axis === 'y')
+                    setDraggingFace({
+                      wallIndex: i,
+                      segment: seg,
+                      normal,
+                      originalPoint: intersection.point.clone(),
+                      isEndFace,
+                      sign,
+                      axis
+                    })
+                    return // Prevent selection click
+                  }
+                }
               }
             }}
             onPointerUp={(e) => {
@@ -560,6 +773,109 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
     </group>
   );
 }));
+
+const FaceHighlight = ({ wallSegments, tileSize, wallHeight, hoveredFace }: {
+  wallSegments: WallSegment[]
+  tileSize: number
+  wallHeight: number
+  hoveredFace: {
+    wallIndex: number
+    faceNormal: THREE.Vector3
+    facePosition: THREE.Vector3
+  } | null
+}) => {
+  if (!hoveredFace) return null;
+
+  const seg = wallSegments[hoveredFace.wallIndex];
+  if (!seg) return null;
+
+  let width, depth, posX, posY;
+  const height = wallHeight;
+
+  if (seg.isHorizontal) {
+    const num = seg.end - seg.start + 1;
+    width = num * tileSize;
+    depth = tileSize;
+    posX = seg.start * tileSize + width / 2;
+    posY = seg.fixed * tileSize + tileSize / 2;
+  } else {
+    width = tileSize;
+    depth = (seg.end - seg.start + 1) * tileSize;
+    posX = seg.fixed * tileSize + tileSize / 2;
+    posY = seg.start * tileSize + depth / 2;
+  }
+
+  // Determine which face based on normal
+  const normal = hoveredFace.faceNormal;
+  let faceCenterX = posX;
+  let faceCenterY = posY;
+  let faceCenterZ = height / 2;
+
+  // Face center offsets based on normal direction
+  if (Math.abs(normal.x) > 0.9) { // Left/Right face
+    faceCenterX += normal.x * width / 2;
+  } else if (Math.abs(normal.y) > 0.9) { // Front/Back face
+    faceCenterY += normal.y * depth / 2;
+  }
+
+  // Create a rectangle outline for the specific face
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+  const halfHeight = height / 2;
+
+  let corners: THREE.Vector3[];
+
+  if (Math.abs(normal.x) > 0.9) { // Left/Right face - YZ plane
+    corners = [
+      new THREE.Vector3(faceCenterX, faceCenterY - halfDepth, faceCenterZ - halfHeight),
+      new THREE.Vector3(faceCenterX, faceCenterY + halfDepth, faceCenterZ - halfHeight),
+      new THREE.Vector3(faceCenterX, faceCenterY + halfDepth, faceCenterZ + halfHeight),
+      new THREE.Vector3(faceCenterX, faceCenterY - halfDepth, faceCenterZ + halfHeight),
+    ];
+  } else { // Front/Back face - XZ plane
+    corners = [
+      new THREE.Vector3(faceCenterX - halfWidth, faceCenterY, faceCenterZ - halfHeight),
+      new THREE.Vector3(faceCenterX + halfWidth, faceCenterY, faceCenterZ - halfHeight),
+      new THREE.Vector3(faceCenterX + halfWidth, faceCenterY, faceCenterZ + halfHeight),
+      new THREE.Vector3(faceCenterX - halfWidth, faceCenterY, faceCenterZ + halfHeight),
+    ];
+  }
+
+  // Create edges geometry for the face outline
+  const edgesGeometry = new THREE.BufferGeometry();
+  const positions = new Float32Array([
+    // Rectangle outline
+    corners[0].x, corners[0].y, corners[0].z, corners[1].x, corners[1].y, corners[1].z,
+    corners[1].x, corners[1].y, corners[1].z, corners[2].x, corners[2].y, corners[2].z,
+    corners[2].x, corners[2].y, corners[2].z, corners[3].x, corners[3].y, corners[3].z,
+    corners[3].x, corners[3].y, corners[3].z, corners[0].x, corners[0].y, corners[0].z,
+  ]);
+
+  edgesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  return (
+    <group>
+      <ThickLine start={corners[0]} end={corners[1]} />
+      <ThickLine start={corners[1]} end={corners[2]} />
+      <ThickLine start={corners[2]} end={corners[3]} />
+      <ThickLine start={corners[3]} end={corners[0]} />
+    </group>
+  );
+};
+
+const ThickLine = ({ start, end, radius = 0.01, color = "white" }: { start: THREE.Vector3; end: THREE.Vector3; radius?: number; color?: string }) => {
+  const length = start.distanceTo(end);
+  const position = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+  const direction = new THREE.Vector3().subVectors(end, start).normalize();
+  const orientation = new THREE.Quaternion();
+  orientation.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  return (
+    <mesh position={position} quaternion={orientation}>
+      <cylinderGeometry args={[radius, radius, length, 8]} />
+      <meshBasicMaterial color={color} transparent opacity={0.8} depthTest={false} />
+    </mesh>
+  );
+};
 
 const ReferenceImage = ({ url, opacity, scale, position, rotation }: {
   url: string
