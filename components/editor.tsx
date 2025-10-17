@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, memo, useRef, useMemo, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, OrbitControls, Environment, Grid, Stats } from '@react-three/drei'
 import { useControls } from 'leva'
 import { cn } from '@/lib/utils'
@@ -15,7 +15,7 @@ const GRID_COLS = Math.floor(GRID_SIZE / TILE_SIZE) // 200 tiles
 
 type WallTile = {
   x: number
-  z: number
+  y: number
 }
 
 export default function Editor({ className }: { className?: string }) {
@@ -28,11 +28,36 @@ export default function Editor({ className }: { className?: string }) {
     gridOpacity: { value: 0.3, min: 0, max: 1, step: 0.1, label: 'Grid Opacity' },
   })
 
+  const [isCameraEnabled, setIsCameraEnabled] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setIsCameraEnabled(true)
+        e.preventDefault()
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setIsCameraEnabled(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
+
   const rows = Math.floor(GRID_SIZE / tileSize)
   const cols = Math.floor(GRID_SIZE / tileSize)
 
-  const handleTileClick = (x: number, z: number) => {
-    const key = `${x},${z}`
+  const handleTileClick = (x: number, y: number) => {
+    const key = `${x},${y}`
     setWalls(prev => {
       const next = new Set(prev)
       if (next.has(key)) {
@@ -45,20 +70,24 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const wallArray = Array.from(walls).map(key => {
-    const [x, z] = key.split(',').map(Number)
-    return { x, z }
+    const [x, y] = key.split(',').map(Number)
+    return { x, y }
   })
 
   return (
     <Canvas 
       shadows 
       camera={{ 
-        position: [15, 15, 15], 
+        position: [10, 0, 5], 
         fov: 50,
         near: 0.1,
         far: 1000
       }} 
       className={cn('bg-[#303035]', className)}
+      onCreated={({ camera }) => {
+        camera.up.set(0, 0, 1)
+        camera.lookAt(0, 0, 0)
+      }}
     >
       <ambientLight intensity={0.5} />
       <directionalLight 
@@ -87,10 +116,11 @@ export default function Editor({ className }: { className?: string }) {
           fadeStrength={1}
           infiniteGrid={false}
           side={2}
+          rotation={[Math.PI / 2, 0, 0]}
         />
       )}
       
-      <group position={[-(cols * tileSize) / 2, 0, -(rows * tileSize) / 2]}>
+      <group position={[-(cols * tileSize) / 2, -(rows * tileSize) / 2, 0]}>
         <GridTiles 
           rows={rows} 
           cols={cols} 
@@ -106,7 +136,9 @@ export default function Editor({ className }: { className?: string }) {
         makeDefault 
         target={[0, 0, 0]}
         minPolarAngle={0}
-        maxPolarAngle={Math.PI / 2.2}
+        maxPolarAngle={Math.PI / 2}
+        screenSpacePanning={true}
+        enabled={isCameraEnabled}
       />
       <Environment preset="city" />
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
@@ -122,24 +154,23 @@ type GridTilesProps = {
   cols: number
   tileSize: number
   walls: Set<string>
-  onTileClick: (x: number, z: number) => void
+  onTileClick: (x: number, y: number) => void
   opacity: number
 }
 
 const GridTiles = memo(({ rows, cols, tileSize, walls, onTileClick, opacity }: GridTilesProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
-  const [hoveredTile, setHoveredTile] = useState<{ x: number; z: number } | null>(null)
+  const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number } | null>(null)
 
   const handlePointerMove = (e: any) => {
     e.stopPropagation()
     
-    // Use UV coordinates (0-1) to calculate tile position
     if (e.uv) {
       const x = Math.floor(e.uv.x * cols)
-      const z = Math.floor((1 - e.uv.y) * rows)
+      const y = Math.floor(e.uv.y * rows)
       
-      if (x >= 0 && x < cols && z >= 0 && z < rows) {
-        setHoveredTile({ x, z })
+      if (x >= 0 && x < cols && y >= 0 && y < rows) {
+        setHoveredTile({ x, y })
       } else {
         setHoveredTile(null)
       }
@@ -151,25 +182,22 @@ const GridTiles = memo(({ rows, cols, tileSize, walls, onTileClick, opacity }: G
   const handleClick = (e: any) => {
     e.stopPropagation()
     
-    // Use UV coordinates (0-1) to calculate tile position
     if (e.uv) {
       const x = Math.floor(e.uv.x * cols)
-      const z = Math.floor((1 - e.uv.y) * rows)
+      const y = Math.floor(e.uv.y * rows)
       
-      if (x >= 0 && x < cols && z >= 0 && z < rows) {
-        onTileClick(x, z)
+      if (x >= 0 && x < cols && y >= 0 && y < rows) {
+        onTileClick(x, y)
       }
-
     }
   }
 
   return (
     <>
-      {/* Single plane for interaction - positioned to cover all tiles from (0,0) to (cols, rows) */}
       <mesh
         ref={meshRef}
-        position={[(cols * tileSize) / 2, 0.001, (rows * tileSize) / 2]}
-        rotation={[-Math.PI / 2, 0, 0]}
+        position={[(cols * tileSize) / 2, (rows * tileSize) / 2, 0.001]}
+        rotation={[0, 0, 0]}
         onClick={handleClick}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHoveredTile(null)}
@@ -182,15 +210,14 @@ const GridTiles = memo(({ rows, cols, tileSize, walls, onTileClick, opacity }: G
         />
       </mesh>
       
-      {/* Hover indicator */}
-      {hoveredTile && !walls.has(`${hoveredTile.x},${hoveredTile.z}`) && (
+      {hoveredTile && !walls.has(`${hoveredTile.x},${hoveredTile.y}`) && (
         <mesh
           position={[
             hoveredTile.x * tileSize + tileSize / 2,
-            0.002,
-            hoveredTile.z * tileSize + tileSize / 2
+            hoveredTile.y * tileSize + tileSize / 2,
+            0.002
           ]}
-          rotation={[-Math.PI / 2, 0, 0]}
+          rotation={[0, 0, 0]}
         >
           <planeGeometry args={[tileSize * 0.95, tileSize * 0.95]} />
           <meshStandardMaterial 
@@ -201,18 +228,17 @@ const GridTiles = memo(({ rows, cols, tileSize, walls, onTileClick, opacity }: G
         </mesh>
       )}
       
-      {/* Wall tile indicators */}
       {Array.from(walls).map(key => {
-        const [x, z] = key.split(',').map(Number)
+        const [x, y] = key.split(',').map(Number)
         return (
           <mesh
             key={key}
             position={[
               x * tileSize + tileSize / 2,
-              0.002,
-              z * tileSize + tileSize / 2
+              y * tileSize + tileSize / 2,
+              0.002
             ]}
-            rotation={[-Math.PI / 2, 0, 0]}
+            rotation={[0, 0, 0]}
           >
             <planeGeometry args={[tileSize * 0.95, tileSize * 0.95]} />
             <meshStandardMaterial 
@@ -236,25 +262,23 @@ type WallsProps = {
 const Walls = memo(({ walls, tileSize, wallHeight }: WallsProps) => {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const tempObject = useMemo(() => new THREE.Object3D(), [])
-  const maxWalls = 10000 // Maximum number of walls we can have
+  const maxWalls = 10000
 
   useEffect(() => {
     if (!meshRef.current) return
     
-    // Update positions for all walls
-    walls.forEach(({ x, z }, i) => {
+    walls.forEach(({ x, y }, i) => {
       tempObject.position.set(
         x * tileSize + tileSize / 2,
-        wallHeight / 2,
-        z * tileSize + tileSize / 2
+        y * tileSize + tileSize / 2,
+        wallHeight / 2
       )
       tempObject.updateMatrix()
       meshRef.current!.setMatrixAt(i, tempObject.matrix)
     })
     
-    // Hide unused instances by setting them far away
     for (let i = walls.length; i < Math.min(maxWalls, meshRef.current.count); i++) {
-      tempObject.position.set(0, -1000, 0)
+      tempObject.position.set(0, 0, -1000)
       tempObject.updateMatrix()
       meshRef.current.setMatrixAt(i, tempObject.matrix)
     }
@@ -269,8 +293,9 @@ const Walls = memo(({ walls, tileSize, wallHeight }: WallsProps) => {
       args={[undefined, undefined, maxWalls]} 
       castShadow 
       receiveShadow
+      frustumCulled={false}
     >
-      <boxGeometry args={[tileSize, wallHeight, tileSize]} />
+      <boxGeometry args={[tileSize, tileSize, wallHeight]} />
       <meshStandardMaterial 
         color="#aaaabf"
         roughness={0.7}
