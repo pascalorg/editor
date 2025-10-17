@@ -117,7 +117,7 @@ export function AppSidebar() {
               <label className="text-sm font-medium text-muted-foreground mb-2 block">
                 Wall Segments ({wallSegments.length})
               </label>
-              <div className="max-h-48 overflow-y-auto space-y-1">
+              <div className="max-h-48 overflow-y-auto space-y-1 select-none">
                 {wallSegments.length === 0 ? (
                   <div className="text-xs text-muted-foreground italic">
                     No walls placed yet
@@ -126,7 +126,7 @@ export function AppSidebar() {
                   wallSegments.map((segment, index) => (
                     <div
                       key={segment.id}
-                      className={`p-2 rounded text-xs cursor-pointer transition-colors ${
+                      className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
                         selectedWallIds.has(segment.id)
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted hover:bg-muted/80'

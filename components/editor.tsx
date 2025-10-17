@@ -8,6 +8,13 @@ import { cn } from '@/lib/utils'
 import * as THREE from 'three'
 import { useTexture } from '@react-three/drei'
 import { useEditorContext, WallSegment } from '@/hooks/use-editor'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import { Trash2 } from 'lucide-react'
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -21,7 +28,7 @@ type WallTile = {
 }
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, imageURL, wallsGroupRef, wallSegments, selectedWallIds, setSelectedWallIds } = useEditorContext()
+  const { walls, setWalls, imageURL, wallsGroupRef, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls } = useEditorContext()
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
@@ -33,6 +40,13 @@ export default function Editor({ className }: { className?: string }) {
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
+  const [contextMenuState, setContextMenuState] = useState<{
+    isOpen: boolean
+    position: { x: number; y: number }
+    type: 'canvas' | 'wall'
+    wallSegment?: WallSegment
+  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'canvas' })
+  const wallContextMenuTriggeredRef = useRef(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -48,12 +62,18 @@ export default function Editor({ className }: { className?: string }) {
       }
     }
 
+    const handleClickOutside = () => {
+      setContextMenuState(prev => ({ ...prev, isOpen: false }))
+    }
+
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('keyup', handleKeyUp)
+    document.addEventListener('click', handleClickOutside)
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('keyup', handleKeyUp)
+      document.removeEventListener('click', handleClickOutside)
     }
   }, [])
 
@@ -77,6 +97,67 @@ export default function Editor({ className }: { className?: string }) {
     })
   }
 
+  const handleCanvasRightClick = (e: React.MouseEvent) => {
+    // Only show canvas context menu if no wall was right-clicked
+    if (!wallContextMenuTriggeredRef.current) {
+      setContextMenuState({
+        isOpen: true,
+        position: { x: e.clientX, y: e.clientY },
+        type: 'canvas'
+      })
+    }
+    wallContextMenuTriggeredRef.current = false
+  }
+
+  const handleWallRightClick = (e: any, wallSegment: WallSegment) => {
+    e.stopPropagation()
+    wallContextMenuTriggeredRef.current = true
+
+    // Only show context menu if there are selected walls to delete
+    if (selectedWallIds.size === 0) {
+      return
+    }
+
+    // Get mouse position - try different approaches for R3F events
+    let clientX, clientY
+
+    if (e.nativeEvent) {
+      // Standard DOM event
+      clientX = e.nativeEvent.clientX
+      clientY = e.nativeEvent.clientY
+    } else if (e.pointer) {
+      // Three.js pointer event - convert to screen coordinates
+      const canvas = document.querySelector('canvas')
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect()
+        clientX = rect.left + (e.pointer.x + 1) * rect.width / 2
+        clientY = rect.top + (-e.pointer.y + 1) * rect.height / 2
+      }
+    }
+
+    if (clientX !== undefined && clientY !== undefined) {
+      setContextMenuState({
+        isOpen: true,
+        position: { x: clientX, y: clientY },
+        type: 'wall',
+        wallSegment
+      })
+    }
+  }
+
+  const handleDeleteWall = () => {
+    if (contextMenuState.wallSegment) {
+      // Select the wall segment and delete it
+      setSelectedWallIds(new Set([contextMenuState.wallSegment.id]))
+      handleDeleteSelectedWalls()
+    }
+    setContextMenuState(prev => ({ ...prev, isOpen: false }))
+  }
+
+  const handleCloseContextMenu = () => {
+    setContextMenuState(prev => ({ ...prev, isOpen: false }))
+  }
+
   const { imageOpacity, imageScale, imagePosition, imageRotation } = useControls('Reference Image', {
     imageOpacity: { value: 0.5, min: 0, max: 1, step: 0.1 },
     imageScale: { value: 1, min: 0.1, max: 5, step: 0.1 },
@@ -86,9 +167,20 @@ export default function Editor({ className }: { className?: string }) {
 
   return (
     <div className="relative h-full w-full">
-      <Canvas 
-        shadows 
+      <Canvas
+        shadows
         className={cn('bg-[#303035]', className)}
+        onContextMenu={(e) => {
+          // Don't show context menu when camera controls are enabled (spacebar held)
+          if (isCameraEnabled) {
+            return;
+          }
+          // Only prevent default if we're showing our own context menu
+          if (!wallContextMenuTriggeredRef.current) {
+            e.preventDefault()
+          }
+          handleCanvasRightClick(e)
+        }}
       >
         {cameraType === 'perspective' ? (
           <PerspectiveCamera 
@@ -167,6 +259,8 @@ export default function Editor({ className }: { className?: string }) {
             selectedWallIds={selectedWallIds}
             setSelectedWallIds={setSelectedWallIds}
             onWallHover={setHoveredWallIndex}
+            onWallRightClick={handleWallRightClick}
+            isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
           />
         </group>
@@ -185,6 +279,31 @@ export default function Editor({ className }: { className?: string }) {
         </GizmoHelper>
         <Stats/>
       </Canvas>
+
+      {contextMenuState.isOpen && (contextMenuState.type === 'canvas' || (contextMenuState.type === 'wall' && selectedWallIds.size > 0)) && (
+        <div
+          className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-lg p-1 min-w-[8rem]"
+          style={{
+            left: contextMenuState.position.x,
+            top: contextMenuState.position.y,
+          }}
+        >
+          {contextMenuState.type === 'wall' && contextMenuState.wallSegment && selectedWallIds.size > 0 && (
+            <div
+              className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+              onClick={handleDeleteWall}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Wall
+            </div>
+          )}
+          {contextMenuState.type === 'canvas' && (
+            <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm opacity-50 cursor-not-allowed">
+              Canvas Options (Coming Soon)
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -242,17 +361,19 @@ const GridTiles = memo(({ rows, cols, tileSize, walls, onTileInteract, opacity, 
     isDraggingRef.current = true
     hasMovedRef.current = false
     prevHoveredRef.current = {x, y}
+    // Place the wall immediately on pointer down
+    onTileInteract(x, y, 'add')
     document.addEventListener('pointerup', handlePointerUp)
   }
 
   const handlePointerUp = () => {
     if (isDraggingRef.current) {
       isDraggingRef.current = false
+      // If no movement occurred (single click), toggle the wall that was added on pointer down
       if (!hasMovedRef.current && initialTileRef.current) {
         onTileInteract(initialTileRef.current.x, initialTileRef.current.y, 'toggle')
-      } else if (hasMovedRef.current && initialTileRef.current) {
-        onTileInteract(initialTileRef.current.x, initialTileRef.current.y, 'add')
       }
+      // If movement occurred, keep the wall that was added on pointer down
     }
     document.removeEventListener('pointerup', handlePointerUp)
   }
@@ -329,9 +450,10 @@ type WallsProps = {
   selectedWallIds: Set<string>
   setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   onWallHover: (index: number | null) => void
+  isCameraEnabled?: boolean
 }
 
-const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, selectedWallIds, setSelectedWallIds, onWallHover }: WallsProps, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, isCameraEnabled }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -384,9 +506,26 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onPointerDown={(e) => {
               e.stopPropagation();
+              // Check for right-click (button 2) and camera not enabled and walls selected
+              if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
+                // Prevent default browser context menu
+                if (e.nativeEvent) {
+                  e.nativeEvent.preventDefault();
+                }
+                onWallRightClick?.(e, seg);
+              }
             }}
             onPointerUp={(e) => {
               e.stopPropagation();
+            }}
+            onContextMenu={(e) => {
+              // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
+              if (!isCameraEnabled && selectedWallIds.size > 0) {
+                e.stopPropagation();
+                if (e.nativeEvent) {
+                  e.nativeEvent.preventDefault();
+                }
+              }
             }}
             onClick={(e) => {
               e.stopPropagation();
