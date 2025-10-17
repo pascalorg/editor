@@ -6,21 +6,8 @@ import { GizmoHelper, GizmoViewport, OrbitControls, Environment, Grid, Stats, Pe
 import { useControls } from 'leva'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
-import { Button } from '@/components/ui/button'
-// @ts-ignore
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
 import { useTexture } from '@react-three/drei'
-import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-
-import { Card } from "@/components/ui/card"
+import { useEditorContext } from '@/hooks/use-editor-context'
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -34,8 +21,8 @@ type WallTile = {
 }
 
 export default function Editor({ className }: { className?: string }) {
-  const [walls, setWalls] = useState<Set<string>>(new Set())
-  
+  const { walls, setWalls, imageURL, wallsGroupRef } = useEditorContext()
+
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
     tileSize: { value: TILE_SIZE, min: 0.1, max: 0.5, step: 0.01, label: 'Tile Size (m)' },
@@ -45,8 +32,7 @@ export default function Editor({ className }: { className?: string }) {
   })
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
-  const [imageURL, setImageURL] = useState<string | null>(null)
-  const [isHelpOpen, setIsHelpOpen] = useState(false)
+  const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -91,32 +77,6 @@ export default function Editor({ className }: { className?: string }) {
     })
   }
 
-  const wallsGroupRef = useRef<THREE.Group>(null)
-  const imageRef = useRef<THREE.Mesh>(null)
-
-  const handleExport = () => {
-    if (!wallsGroupRef.current) return;
-    
-    const exporter = new GLTFExporter();
-    
-    exporter.parse(
-      wallsGroupRef.current,
-      (result: ArrayBuffer) => {
-        const blob = new Blob([result], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'house_model.glb';
-        link.click();
-        URL.revokeObjectURL(url);
-      },
-      (error: Error) => {
-        console.error('Export error:', error);
-      },
-      { binary: true }
-    );
-  }
-
   const { imageOpacity, imageScale, imagePosition, imageRotation } = useControls('Reference Image', {
     imageOpacity: { value: 0.5, min: 0, max: 1, step: 0.1 },
     imageScale: { value: 1, min: 0.1, max: 5, step: 0.1 },
@@ -124,48 +84,8 @@ export default function Editor({ className }: { className?: string }) {
     imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
   }, { collapsed: true })
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        setImageURL(event.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
   return (
     <div className="relative h-full w-full">
-      <Dialog open={isHelpOpen} onOpenChange={setIsHelpOpen}>
-        <Card className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-4 flex flex-col gap-4 bg-background/80">
-          <Input
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={handleUpload}
-            className="w-40"
-          />
-          <Button onClick={handleExport}>
-            Export 3D Model
-          </Button>
-          <DialogTrigger asChild>
-            <Button variant="link">Help</Button>
-          </DialogTrigger>
-        </Card>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>House Builder Controls</DialogTitle>
-            <DialogDescription>
-              - Click on grid tiles to place or remove walls.<br/>
-              - Hold spacebar to enable camera controls (orbit, pan, zoom).<br/>
-              - Use Leva panel (top-right) to adjust wall height, tile size, grid visibility, etc.<br/>
-              - Upload PNG/JPEG floorplan images as reference (left button).<br/>
-              - Adjust image position, scale, rotation, opacity in Leva 'Reference Image' section.<br/>
-              - Export your 3D model as GLB file (right button).
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
       <Canvas 
         shadows 
         className={cn('bg-[#303035]', className)}
@@ -239,7 +159,14 @@ export default function Editor({ className }: { className?: string }) {
             opacity={gridOpacity}
             disableBuild={isCameraEnabled}
           />
-          <Walls walls={walls} tileSize={tileSize} wallHeight={wallHeight} ref={wallsGroupRef} />
+          <Walls
+            walls={walls}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+            hoveredWallIndex={hoveredWallIndex}
+            onWallHover={setHoveredWallIndex}
+            ref={wallsGroupRef}
+          />
         </group>
 
         <OrbitControls 
@@ -254,7 +181,7 @@ export default function Editor({ className }: { className?: string }) {
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
         </GizmoHelper>
-        <Stats />
+        <Stats/>
       </Canvas>
     </div>
   )
@@ -396,9 +323,11 @@ type WallsProps = {
   walls: Set<string>
   tileSize: number
   wallHeight: number
+  hoveredWallIndex: number | null
+  onWallHover: (index: number | null) => void
 }
 
-const Walls = memo(forwardRef(({ walls, tileSize, wallHeight }: WallsProps, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ walls, tileSize, wallHeight, hoveredWallIndex, onWallHover }: WallsProps, ref: Ref<THREE.Group>) => {
   const segments = useMemo(() => {
     const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
     
@@ -473,17 +402,20 @@ const Walls = memo(forwardRef(({ walls, tileSize, wallHeight }: WallsProps, ref:
           posY = seg.start * tileSize + depth / 2;
         }
         return (
-          <mesh 
-            key={i} 
-            position={[posX, posY, height / 2]} 
-            castShadow 
+          <mesh
+            key={i}
+            position={[posX, posY, height / 2]}
+            castShadow
             receiveShadow
+            onPointerEnter={() => onWallHover(i)}
+            onPointerLeave={() => onWallHover(null)}
           >
             <boxGeometry args={[width, depth, height]} />
-            <meshStandardMaterial 
-              color="#aaaabf"
+            <meshStandardMaterial
+              color={hoveredWallIndex === i ? "#ff6b6b" : "#aaaabf"}
               roughness={0.7}
               metalness={0.1}
+              emissive={hoveredWallIndex === i ? "#331111" : "#000000"}
             />
           </mesh>
         );
