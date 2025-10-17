@@ -1,11 +1,26 @@
 'use client'
 
-import { useState, memo, useRef, useMemo, useEffect } from 'react'
+import { useState, memo, useRef, useMemo, useEffect, forwardRef, Ref } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, OrbitControls, Environment, Grid, Stats, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
 import { useControls } from 'leva'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
+import { Button } from '@/components/ui/button'
+// @ts-ignore
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
+import { useTexture } from '@react-three/drei'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+
+import { Card } from "@/components/ui/card"
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -30,6 +45,8 @@ export default function Editor({ className }: { className?: string }) {
   })
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
+  const [imageURL, setImageURL] = useState<string | null>(null)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -74,87 +91,172 @@ export default function Editor({ className }: { className?: string }) {
     })
   }
 
-  return (
-    <Canvas 
-      shadows 
-      className={cn('bg-[#303035]', className)}
-    >
-      {cameraType === 'perspective' ? (
-        <PerspectiveCamera 
-          makeDefault 
-          position={[10, 0, 5]} 
-          fov={50}
-          near={0.1}
-          far={1000}
-        />
-      ) : (
-        <OrthographicCamera 
-          makeDefault 
-          position={[10, 0, 5]} 
-          zoom={20}
-          near={-1000}
-          far={1000}
-        />
-      )}
-      <CameraSetup />
-      <ambientLight intensity={0.5} />
-      <directionalLight 
-        position={[10, 10, 5]} 
-        intensity={1} 
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-15}
-        shadow-camera-right={15}
-        shadow-camera-top={15}
-        shadow-camera-bottom={-15}
-      />
-      
-      {/* Drei Grid for visual reference and snapping */}
-      {showGrid && (
-        <Grid
-          position={[0, 0, 0]}
-          args={[GRID_SIZE, GRID_SIZE]}
-          cellSize={tileSize}
-          cellThickness={0.5}
-          cellColor="#aaaabf"
-          sectionSize={tileSize * 5}
-          sectionThickness={1}
-          sectionColor="#9d4b4b"
-          fadeDistance={GRID_SIZE * 2}
-          fadeStrength={1}
-          infiniteGrid={false}
-          side={2}
-          rotation={[Math.PI / 2, 0, 0]}
-        />
-      )}
-      
-      <group position={[-(cols * tileSize) / 2, -(rows * tileSize) / 2, 0]}>
-        <GridTiles 
-          rows={rows} 
-          cols={cols} 
-          tileSize={tileSize}
-          walls={walls}
-          onTileInteract={handleTileInteract}
-          opacity={gridOpacity}
-          disableBuild={isCameraEnabled}
-        />
-        <Walls walls={walls} tileSize={tileSize} wallHeight={wallHeight} />
-      </group>
+  const wallsGroupRef = useRef<THREE.Group>(null)
+  const imageRef = useRef<THREE.Mesh>(null)
 
-      <OrbitControls 
-        makeDefault 
-        target={[0, 0, 0]}
-        minPolarAngle={0}
-        maxPolarAngle={Math.PI / 2}
-        screenSpacePanning={true}
-        enabled={isCameraEnabled}
-      />
-      <Environment preset="city" />
-      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-        <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
-      </GizmoHelper>
-      <Stats />
-    </Canvas>
+  const handleExport = () => {
+    if (!wallsGroupRef.current) return;
+    
+    const exporter = new GLTFExporter();
+    
+    exporter.parse(
+      wallsGroupRef.current,
+      (result: ArrayBuffer) => {
+        const blob = new Blob([result], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'house_model.glb';
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      (error: Error) => {
+        console.error('Export error:', error);
+      },
+      { binary: true }
+    );
+  }
+
+  const { imageOpacity, imageScale, imagePosition, imageRotation } = useControls('Reference Image', {
+    imageOpacity: { value: 0.5, min: 0, max: 1, step: 0.1 },
+    imageScale: { value: 1, min: 0.1, max: 5, step: 0.1 },
+    imagePosition: { value: [0, 0], step: 0.1, joystick: 'invertY' },
+    imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
+  }, { collapsed: true })
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setImageURL(event.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <Dialog open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+        <Card className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-4 flex flex-col gap-4 bg-background/80">
+          <Input
+            type="file"
+            accept="image/png,image/jpeg"
+            onChange={handleUpload}
+            className="w-40"
+          />
+          <Button onClick={handleExport}>
+            Export 3D Model
+          </Button>
+          <DialogTrigger asChild>
+            <Button variant="link">Help</Button>
+          </DialogTrigger>
+        </Card>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>House Builder Controls</DialogTitle>
+            <DialogDescription>
+              - Click on grid tiles to place or remove walls.<br/>
+              - Hold spacebar to enable camera controls (orbit, pan, zoom).<br/>
+              - Use Leva panel (top-right) to adjust wall height, tile size, grid visibility, etc.<br/>
+              - Upload PNG/JPEG floorplan images as reference (left button).<br/>
+              - Adjust image position, scale, rotation, opacity in Leva 'Reference Image' section.<br/>
+              - Export your 3D model as GLB file (right button).
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+      <Canvas 
+        shadows 
+        className={cn('bg-[#303035]', className)}
+      >
+        {cameraType === 'perspective' ? (
+          <PerspectiveCamera 
+            makeDefault 
+            position={[10, 0, 5]} 
+            fov={50}
+            near={0.1}
+            far={1000}
+          />
+        ) : (
+          <OrthographicCamera 
+            makeDefault 
+            position={[10, 0, 5]} 
+            zoom={20}
+            near={-1000}
+            far={1000}
+          />
+        )}
+        <CameraSetup />
+        <ambientLight intensity={0.5} />
+        <directionalLight 
+          position={[10, 10, 5]} 
+          intensity={1} 
+          castShadow
+          shadow-mapSize={[1024, 1024]}
+          shadow-camera-left={-15}
+          shadow-camera-right={15}
+          shadow-camera-top={15}
+          shadow-camera-bottom={-15}
+        />
+        
+        {/* Drei Grid for visual reference and snapping */}
+        {showGrid && (
+          <Grid
+            position={[0, 0, 0]}
+            args={[GRID_SIZE, GRID_SIZE]}
+            cellSize={tileSize}
+            cellThickness={0.5}
+            cellColor="#aaaabf"
+            sectionSize={tileSize * 5}
+            sectionThickness={1}
+            sectionColor="#9d4b4b"
+            fadeDistance={GRID_SIZE * 2}
+            fadeStrength={1}
+            infiniteGrid={false}
+            side={2}
+            rotation={[Math.PI / 2, 0, 0]}
+          />
+        )}
+        
+        {imageURL && (
+          <ReferenceImage 
+            url={imageURL}
+            opacity={imageOpacity}
+            scale={imageScale}
+            position={imagePosition}
+            rotation={imageRotation}
+          />
+        )}
+
+        <group position={[-(cols * tileSize) / 2, -(rows * tileSize) / 2, 0]}>
+          <GridTiles 
+            rows={rows} 
+            cols={cols} 
+            tileSize={tileSize}
+            walls={walls}
+            onTileInteract={handleTileInteract}
+            opacity={gridOpacity}
+            disableBuild={isCameraEnabled}
+          />
+          <Walls walls={walls} tileSize={tileSize} wallHeight={wallHeight} ref={wallsGroupRef} />
+        </group>
+
+        <OrbitControls 
+          makeDefault 
+          target={[0, 0, 0]}
+          minPolarAngle={0}
+          maxPolarAngle={Math.PI / 2}
+          screenSpacePanning={true}
+          enabled={isCameraEnabled}
+        />
+        <Environment preset="city" />
+        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+          <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
+        </GizmoHelper>
+        <Stats />
+      </Canvas>
+    </div>
   )
 }
 
@@ -296,7 +398,7 @@ type WallsProps = {
   wallHeight: number
 }
 
-const Walls = memo(({ walls, tileSize, wallHeight }: WallsProps) => {
+const Walls = memo(forwardRef(({ walls, tileSize, wallHeight }: WallsProps, ref: Ref<THREE.Group>) => {
   const segments = useMemo(() => {
     const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
     
@@ -354,7 +456,7 @@ const Walls = memo(({ walls, tileSize, wallHeight }: WallsProps) => {
   }, [walls]);
   
   return (
-    <group>
+    <group ref={ref}>
       {segments.map((seg, i) => {
         let width, depth, posX, posY;
         const height = wallHeight;
@@ -388,7 +490,33 @@ const Walls = memo(({ walls, tileSize, wallHeight }: WallsProps) => {
       })}
     </group>
   );
-});
+}));
+
+const ReferenceImage = ({ url, opacity, scale, position, rotation }: {
+  url: string
+  opacity: number
+  scale: number
+  position: [number, number]
+  rotation: number
+}) => {
+  const texture = useTexture(url)
+  
+  return (
+    <mesh
+      position={[position[0], position[1], 0.001]}
+      rotation={[0, 0, rotation]}
+      scale={scale}
+    >
+      <planeGeometry args={[GRID_SIZE, GRID_SIZE]} />
+      <meshStandardMaterial 
+        map={texture}
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  )
+}
 
 const CameraSetup = () => {
   const { camera } = useThree()
