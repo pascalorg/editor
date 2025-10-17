@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "grid": {
+    "size": 200
+  },
+  "components": [
+    {
+      "id": "walls-default",
+      "type": "wall",
+      "label": "All Walls",
+      "group": null,
+      "data": {
+        "tiles": [
+          [20, 10],
+          [21, 10],
+          [22, 10],
+          [23, 10]
+        ],
+        "segments": [
+          {
+            "isHorizontal": true,
+            "minFixed": 10,
+            "maxFixed": 10,
+            "startVarying": 20,
+            "endVarying": 23,
+            "id": "h-10-10-20-23"
+          }
+        ]
+      },
+      "createdAt": "2025-10-17T12:00:00Z"
+    }
+  ],
+  "groups": []
+}
+

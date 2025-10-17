@@ -14,6 +14,36 @@ export interface WallSegment {
   id: string
 }
 
+export type ComponentData = {
+  tiles: [number, number][]
+  segments: WallSegment[]
+}
+
+export type Component = {
+  id: string
+  type: 'wall'
+  label: string
+  group: string | null
+  data: ComponentData
+  createdAt: string
+}
+
+export type ComponentGroup = {
+  id: string
+  name: string
+  type: 'room' | 'floor' | 'outdoor'
+  color: string
+}
+
+export type LayoutJSON = {
+  version: string
+  grid: {
+    size: number
+  }
+  components: Component[]
+  groups: ComponentGroup[]
+}
+
 interface EditorContextType {
   walls: Set<string>
   setWalls: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -21,6 +51,8 @@ interface EditorContextType {
   setImageURL: React.Dispatch<React.SetStateAction<string | null>>
   isHelpOpen: boolean
   setIsHelpOpen: React.Dispatch<React.SetStateAction<boolean>>
+  isJsonInspectorOpen: boolean
+  setIsJsonInspectorOpen: React.Dispatch<React.SetStateAction<boolean>>
   wallsGroupRef: React.RefObject<THREE.Group<THREE.Object3DEventMap> | null>
   wallSegments: WallSegment[]
   selectedWallIds: Set<string>
@@ -28,6 +60,10 @@ interface EditorContextType {
   handleExport: () => void
   handleUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
   handleDeleteSelectedWalls: () => void
+  serializeLayout: () => LayoutJSON
+  loadLayout: (json: LayoutJSON) => void
+  handleSaveLayout: () => void
+  handleLoadLayout: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 const EditorContext = createContext<EditorContextType | undefined>(undefined)
@@ -48,6 +84,7 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
   const [walls, setWalls] = useState<Set<string>>(new Set())
   const [imageURL, setImageURL] = useState<string | null>(null)
   const [isHelpOpen, setIsHelpOpen] = useState(false)
+  const [isJsonInspectorOpen, setIsJsonInspectorOpen] = useState(false)
   const [selectedWallIds, setSelectedWallIds] = useState<Set<string>>(new Set())
   const wallsGroupRef = useRef<THREE.Group<THREE.Object3DEventMap>>(null)
 
@@ -204,6 +241,72 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
     setSelectedWallIds(new Set())
   }
 
+  const serializeLayout = (): LayoutJSON => {
+    const tiles: [number, number][] = Array.from(walls).map(key => {
+      const [x, y] = key.split(',').map(Number)
+      return [x, y]
+    })
+
+    return {
+      version: '1.0',
+      grid: { size: 200 },
+      components: [{
+        id: 'walls-default',
+        type: 'wall',
+        label: 'All Walls',
+        group: null,
+        data: {
+          tiles,
+          segments: wallSegments
+        },
+        createdAt: new Date().toISOString()
+      }],
+      groups: []
+    }
+  }
+
+  const loadLayout = (json: LayoutJSON) => {
+    // Clear current selection
+    setSelectedWallIds(new Set())
+
+    // Find the wall component and restore tiles
+    const wallComponent = json.components.find(c => c.type === 'wall')
+    if (wallComponent && wallComponent.data.tiles) {
+      const newWalls = new Set<string>()
+      for (const [x, y] of wallComponent.data.tiles) {
+        newWalls.add(`${x},${y}`)
+      }
+      setWalls(newWalls)
+    }
+  }
+
+  const handleSaveLayout = () => {
+    const layout = serializeLayout()
+    const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `layout_${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleLoadLayout = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        try {
+          const json = JSON.parse(event.target?.result as string) as LayoutJSON
+          loadLayout(json)
+        } catch (error) {
+          console.error('Failed to parse layout JSON:', error)
+        }
+      }
+      reader.readAsText(file)
+    }
+  }
+
   const value: EditorContextType = {
     walls,
     setWalls,
@@ -211,6 +314,8 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
     setImageURL,
     isHelpOpen,
     setIsHelpOpen,
+    isJsonInspectorOpen,
+    setIsJsonInspectorOpen,
     wallsGroupRef,
     wallSegments,
     selectedWallIds,
@@ -218,6 +323,10 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
     handleExport,
     handleUpload,
     handleDeleteSelectedWalls,
+    serializeLayout,
+    loadLayout,
+    handleSaveLayout,
+    handleLoadLayout,
   }
 
   return (

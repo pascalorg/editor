@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   Sidebar,
   SidebarContent,
@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Home, Settings, Upload, Download, HelpCircle, Trash2 } from "lucide-react"
+import { Home, Settings, Upload, Download, HelpCircle, Trash2, Save, FolderOpen, FileCode, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -21,9 +21,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useEditorContext, WallSegment } from "@/hooks/use-editor"
+import JsonView from '@uiw/react-json-view'
 
 export function AppSidebar() {
-  const { isHelpOpen, setIsHelpOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls } = useEditorContext()
+  const { isHelpOpen, setIsHelpOpen, isJsonInspectorOpen, setIsJsonInspectorOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, handleSaveLayout, handleLoadLayout, serializeLayout } = useEditorContext()
+  const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
 
   // Handle backspace key to delete selected walls
   useEffect(() => {
@@ -177,6 +179,85 @@ export function AppSidebar() {
           </SidebarMenuItem>
 
           <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleSaveLayout}
+              >
+                <Save className="h-4 w-4" />
+                <span>Save Layout</span>
+              </Button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <div className="px-2 py-2">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Load Layout
+              </label>
+              <Input
+                type="file"
+                accept="application/json"
+                onChange={handleLoadLayout}
+                className="w-full text-xs"
+              />
+            </div>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <Dialog open={isJsonInspectorOpen} onOpenChange={setIsJsonInspectorOpen}>
+              <DialogTrigger asChild>
+                <SidebarMenuButton asChild>
+                  <Button variant="ghost" className="w-full justify-start gap-2">
+                    <FileCode className="h-4 w-4" />
+                    <span>Inspect JSON</span>
+                  </Button>
+                </SidebarMenuButton>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between">
+                    <span>Layout JSON Inspector</span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setJsonCollapsed(false)}
+                        className="gap-1"
+                      >
+                        <ChevronDown className="h-3 w-3" />
+                        Expand All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setJsonCollapsed(true)}
+                        className="gap-1"
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                        Collapse All
+                      </Button>
+                    </div>
+                  </DialogTitle>
+                  <DialogDescription>
+                    View the raw JSON structure of your current layout
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="mt-4">
+                  <JsonView 
+                    value={serializeLayout()} 
+                    collapsed={jsonCollapsed}
+                    style={{
+                      fontSize: '12px',
+                    }}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
             <Dialog open={isHelpOpen} onOpenChange={setIsHelpOpen}>
               <DialogTrigger asChild>
                 <SidebarMenuButton asChild>
@@ -195,6 +276,9 @@ export function AppSidebar() {
                     - Use Leva panel (top-right) to adjust wall height, tile size, grid visibility, etc.<br/>
                     - Upload PNG/JPEG floorplan images as reference.<br/>
                     - Adjust image position, scale, rotation, opacity in Leva 'Reference Image' section.<br/>
+                    - Save your layout as JSON file for later use or database storage.<br/>
+                    - Load previously saved layouts from JSON files.<br/>
+                    - Inspect JSON to view the raw data structure of your current layout.<br/>
                     - Export your 3D model as GLB file.
                   </DialogDescription>
                 </DialogHeader>

@@ -15,6 +15,7 @@ Key integrations:
 - **Leva**: Real-time controls for parameters like wall height, tile size, and reference image properties.
 - **Shadcn UI**: Components for sidebar, dialogs, buttons, and context menus.
 - **Lucide React**: Icons for UI elements.
+- **@uiw/react-json-view**: JSON viewer for layout data inspection with syntax highlighting and collapsible tree view.
 
 ## Core Features
 - **Interactive 2D Grid**: 30m × 30m buildable area divided into 15cm square tiles (200×200 grid).
@@ -24,7 +25,8 @@ Key integrations:
 - **Selection & Editing**: Click or Cmd/Ctrl+click to select walls; Shift+click for range selection in sidebar; right-click for context menu deletion; Backspace to delete.
 - **Reference Images**: Upload PNG/JPEG floorplans as semi-transparent overlays with adjustable position, scale, rotation, and opacity.
 - **Export**: Download the 3D model as a GLB file using Three.js GLTFExporter.
-- **Sidebar Controls**: File upload, wall segment list with selection, delete/export buttons, and help dialog.
+- **Layout Persistence**: Save/load layouts as JSON files; inspect raw JSON structure in real-time via JSON viewer dialog.
+- **Sidebar Controls**: File upload, wall segment list with selection, delete/export buttons, layout save/load, JSON inspector, and help dialog.
 - **Grid Snapping & Visuals**: Uses drei's Grid for precise snapping and visual reference; configurable opacity and visibility.
 
 ## File Structure & Key Components
@@ -40,7 +42,11 @@ The app follows Next.js App Router structure with client-side rendering for the 
 - Floating sidebar with sections:
   - **Reference Image Upload**: File input for PNG/JPEG images.
   - **Wall Segments List**: Scrollable list of computed segments (e.g., "Wall 1: 5 tiles wide (Row 10, Cols 20-24)"). Supports multi-selection via Cmd/Ctrl+click, Shift+click for ranges.
-  - **Actions**: Delete Selected (with count), Export 3D Model, Help dialog (usage instructions).
+  - **Actions**: Delete Selected (with count), Export 3D Model, Save Layout, Load Layout, Inspect JSON, Help dialog (usage instructions).
+- **Layout Persistence Controls**:
+  - **Save Layout**: Downloads current layout as JSON file with timestamp (e.g., `layout_2025-10-17.json`).
+  - **Load Layout**: File input for JSON uploads to restore previous layouts.
+  - **Inspect JSON**: Opens dialog with `@uiw/react-json-view` showing live JSON structure; includes Expand/Collapse All controls.
 - Listens for Backspace key to delete selected walls.
 - Uses Shadcn UI components (Sidebar, Button, Dialog, Input) and Lucide icons.
 
@@ -51,15 +57,21 @@ The app follows Next.js App Router structure with client-side rendering for the 
   - `imageURL`: Data URL for reference image.
   - `selectedWallIds`: Set<string> of segment IDs for multi-selection.
   - `wallSegments`: Derived array of `WallSegment` objects (computed via useMemo from walls).
+  - `isHelpOpen`: Boolean for help dialog visibility.
+  - `isJsonInspectorOpen`: Boolean for JSON inspector dialog visibility.
 - **Computed: Wall Segments**:
   - Groups connected wall tiles into horizontal/vertical runs (e.g., consecutive tiles in a row/column).
   - Prioritizes vertical segments (>1 tile), then horizontal (including singles).
-  - Each segment: `{ isHorizontal: boolean, fixed: number (row/col), start/end: number (range), id: string (e.g., "v-5-10-12") }`.
+  - Each segment: `{ isHorizontal: boolean, minFixed: number, maxFixed: number, startVarying: number, endVarying: number, id: string (e.g., "v-5-10-12") }`.
   - Used for rendering optimized meshes and selection.
 - **Handlers**:
   - `handleUpload`: Reads file as data URL and sets imageURL.
   - `handleExport`: Uses GLTFExporter on `wallsGroupRef` to download GLB.
   - `handleDeleteSelectedWalls`: Parses segment IDs, removes corresponding tiles from walls Set, clears selection.
+  - `serializeLayout`: Converts current walls and wallSegments to LayoutJSON structure.
+  - `loadLayout`: Restores walls from LayoutJSON (parses tiles, updates walls Set).
+  - `handleSaveLayout`: Downloads layout as JSON file with timestamp.
+  - `handleLoadLayout`: Uploads and parses JSON file to restore layout.
 - Exported hook: `useEditorContext()` for accessing state/handlers in components.
 
 ### Main Editor (`components/editor.tsx`)
@@ -86,11 +98,14 @@ The app follows Next.js App Router structure with client-side rendering for the 
   - **Helpers**: Environment ("city" preset), GizmoHelper (bottom-right), Stats (performance).
 
 ### State Management Flow
-1. User clicks/drags on GridTiles → `handleTileInteract` updates `walls` Set.
-2. `wallSegments` recomputes on walls change → optimizes rendering (one mesh per segment vs. per tile).
-3. Selection: Click on wall mesh or sidebar item → updates `selectedWallIds`.
-4. Deletion: Backspace, button click, or context menu → `handleDeleteSelectedWalls` removes tiles by parsing segments.
-5. Export: Serializes `wallsGroupRef` (group of wall meshes) to GLB.
+1. **Placement**: User clicks/drags on GridTiles → `handleTileInteract` updates `walls` Set.
+2. **Segment Computation**: `wallSegments` recomputes on walls change → optimizes rendering (one mesh per segment vs. per tile).
+3. **Selection**: Click on wall mesh or sidebar item → updates `selectedWallIds`.
+4. **Deletion**: Backspace, button click, or context menu → `handleDeleteSelectedWalls` removes tiles by parsing segments.
+5. **Save Layout**: Click "Save Layout" → `serializeLayout()` converts walls/segments to JSON → downloads file.
+6. **Load Layout**: Upload JSON file → `loadLayout(json)` parses tiles → updates `walls` Set → triggers segment recomputation.
+7. **Inspect JSON**: Click "Inspect JSON" → dialog shows live `serializeLayout()` output with expand/collapse controls.
+8. **Export 3D**: Serializes `wallsGroupRef` (group of wall meshes) to GLB.
 
 ### Key Constants (in editor.tsx)
 - `TILE_SIZE`: 0.15m (15cm base unit).
@@ -102,27 +117,215 @@ The app follows Next.js App Router structure with client-side rendering for the 
 1. **State as Tile Set**: Simple "x,y" keys for walls; segments derived for optimization (avoids 40,000 individual meshes).
 2. **UV Raycasting for Grid**: Efficient 2D input on a single plane; supports drag-placement.
 3. **Segment Grouping**: Reduces draw calls; enables range selection in sidebar.
-4. **Isometric View**: Camera at [10,0,5] (adjusted from [15,15,15] for better fit); restricted polar angle prevents underground views.
-5. **Leva Controls**: Collapsible for UX; joystick for image position.
-6. **Custom Context Menus**: Overlay divs for precise control (avoids R3F event quirks).
-7. **Performance**: Memoized components (GridTiles, Walls); useFrame for hover detection only on selected walls.
-8. **Accessibility**: Keyboard support (spacebar, Backspace); help dialog with instructions.
+4. **Dual Representation JSON**: Stores both raw tiles (flexibility) and computed segments (performance); enables reconstruction and validation.
+5. **Isometric View**: Camera at [10,0,5] (adjusted from [15,15,15] for better fit); restricted polar angle prevents underground views.
+6. **Leva Controls**: Collapsible for UX; joystick for image position.
+7. **Custom Context Menus**: Overlay divs for precise control (avoids R3F event quirks).
+8. **Performance**: Memoized components (GridTiles, Walls); useFrame for hover detection only on selected walls.
+9. **Versioned Schema**: JSON includes version field for future migrations; extensible component/group structure.
+10. **Accessibility**: Keyboard support (spacebar, Backspace); help dialog with instructions; JSON inspector for debugging.
 
 ## Integration Notes
-- **Dependencies**: Ensure @react-three/fiber, three, @react-three/drei, leva are installed via Bun.
+- **Dependencies**: Ensure @react-three/fiber, three, @react-three/drei, leva, @uiw/react-json-view are installed via Bun.
 - **Client-Side Only**: All 3D logic in "use client" components; no server rendering for Canvas.
 - **Raycasting**: Used for wall hovers/clicks; UV for grid; excludes top faces for side-only interactions.
 - **Export**: Binary GLB via Three.js exporter; includes only walls group (no grid/image).
 
+## Data Persistence & JSON Structure
+
+### Overview
+The app uses a structured JSON format to serialize and persist layout data. This enables saving/loading layouts as files and future database integration. The schema stores both raw tile coordinates and optimized wall segments for flexibility and performance.
+
+### JSON Schema (Version 1.0)
+
+**TypeScript Types** (`hooks/use-editor.tsx`):
+```typescript
+export type ComponentData = {
+  tiles: [number, number][]      // Raw [x, y] coordinates
+  segments: WallSegment[]         // Optimized wall segments
+}
+
+export type Component = {
+  id: string                      // Unique component identifier
+  type: 'wall'                    // Component type (extensible)
+  label: string                   // User-friendly name
+  group: string | null            // Group/room association
+  data: ComponentData             // Component-specific data
+  createdAt: string               // ISO 8601 timestamp
+}
+
+export type ComponentGroup = {
+  id: string                      // Group identifier
+  name: string                    // Display name
+  type: 'room' | 'floor' | 'outdoor'
+  color: string                   // Hex color for UI
+}
+
+export type LayoutJSON = {
+  version: string                 // Schema version
+  grid: { size: number }          // Grid dimensions
+  components: Component[]         // All placed elements
+  groups: ComponentGroup[]        // Semantic groupings
+}
+```
+
+**Example JSON Output**:
+```json
+{
+  "version": "1.0",
+  "grid": { "size": 200 },
+  "components": [{
+    "id": "walls-default",
+    "type": "wall",
+    "label": "All Walls",
+    "group": null,
+    "data": {
+      "tiles": [[20, 10], [21, 10], [22, 10]],
+      "segments": [{
+        "isHorizontal": true,
+        "minFixed": 10,
+        "maxFixed": 10,
+        "startVarying": 20,
+        "endVarying": 22,
+        "id": "h-10-10-20-22"
+      }]
+    },
+    "createdAt": "2025-10-17T12:00:00Z"
+  }],
+  "groups": []
+}
+```
+
+### Serialization Functions
+
+**`serializeLayout()` in `hooks/use-editor.tsx` (lines 241-263)**:
+- Converts `walls` Set to array of `[x, y]` tuples
+- Includes computed `wallSegments` for rendering optimization
+- Creates single component with id "walls-default" (future: multiple components)
+- Returns complete LayoutJSON with metadata
+
+```typescript
+const serializeLayout = (): LayoutJSON => {
+  const tiles: [number, number][] = Array.from(walls).map(key => {
+    const [x, y] = key.split(',').map(Number)
+    return [x, y]
+  })
+
+  return {
+    version: '1.0',
+    grid: { size: 200 },
+    components: [{
+      id: 'walls-default',
+      type: 'wall',
+      label: 'All Walls',
+      group: null,
+      data: { tiles, segments: wallSegments },
+      createdAt: new Date().toISOString()
+    }],
+    groups: []
+  }
+}
+```
+
+**`loadLayout(json: LayoutJSON)` in `hooks/use-editor.tsx` (lines 265-278)**:
+- Finds wall component in JSON
+- Reconstructs `walls` Set from tiles array
+- Clears selection before loading
+- Triggers wallSegments recomputation via useMemo
+
+```typescript
+const loadLayout = (json: LayoutJSON) => {
+  setSelectedWallIds(new Set())
+  const wallComponent = json.components.find(c => c.type === 'wall')
+  if (wallComponent?.data.tiles) {
+    const newWalls = new Set<string>()
+    for (const [x, y] of wallComponent.data.tiles) {
+      newWalls.add(`${x},${y}`)
+    }
+    setWalls(newWalls)
+  }
+}
+```
+
+### UI Integration
+
+**Save Layout** (`components/app-sidebar.tsx` lines 179-191):
+- Button calls `handleSaveLayout()`
+- Creates Blob with formatted JSON (2-space indent)
+- Downloads as `layout_YYYY-MM-DD.json`
+
+**Load Layout** (`components/app-sidebar.tsx` lines 193-205):
+- File input accepts `application/json`
+- Reads file, parses JSON, calls `loadLayout()`
+- Handles parse errors gracefully
+
+**Inspect JSON** (`components/app-sidebar.tsx` lines 207-257):
+- Dialog with `@uiw/react-json-view` component
+- Live updates via `serializeLayout()` call
+- Expand/Collapse All controls toggle `collapsed` prop (boolean or depth number)
+- Syntax highlighting, collapsible tree view
+- Max-width 3xl, max-height 80vh with scrolling
+
+### Database Storage Considerations
+
+**Recommended Schema (PostgreSQL/Supabase)**:
+```sql
+CREATE TABLE layouts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  data JSONB NOT NULL,
+  user_id UUID REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX idx_layouts_data_version ON layouts ((data->>'version'));
+CREATE INDEX idx_layouts_data_components ON layouts USING gin (data->'components');
+```
+
+**Query Examples**:
+- Version filter: `SELECT * FROM layouts WHERE data->>'version' = '1.0'`
+- Type filter: `SELECT * FROM layouts WHERE data->'components' @> '[{"type": "wall"}]'`
+- Grid size: `SELECT * FROM layouts WHERE (data->'grid'->>'size')::int = 200`
+
+### Extensibility
+
+The schema supports future additions:
+- **Multiple component types**: Add `type: 'door' | 'window' | 'furniture'` with type-specific data
+- **Component grouping**: Assign components to groups for room/floor organization
+- **Materials**: Add `material` field to components
+- **Transformations**: Store position, rotation, scale per component
+- **Metadata**: User notes, tags, version history
+
+**Example Future Component**:
+```json
+{
+  "id": "door-1",
+  "type": "door",
+  "label": "Front Door",
+  "group": "living-room",
+  "data": {
+    "parentWall": "wall-1",
+    "position": [25, 10],
+    "width": 0.9,
+    "height": 2.1,
+    "material": "wood"
+  },
+  "createdAt": "2025-10-17T12:30:00Z"
+}
+```
+
 ## Future Enhancements to Consider
 - **Wall Types**: Exterior/interior materials, variable heights per segment.
 - **Doors/Windows**: Placement on wall faces with cutouts.
-- **Room Detection**: Flood-fill to identify/label rooms.
+- **Room Detection**: Flood-fill to identify/label rooms; auto-assign groups.
 - **Multi-Floor**: Layered grids with floor switching.
-- **Measurements**: Distance tools, area calculations.
-- **Import/Undo**: Load GLB/JSON plans; history stack.
-- **Materials/Textures**: Custom shaders, PBR for realism.
+- **Measurements**: Distance tools, area calculations, wall length displays.
+- **Undo/Redo**: History stack for layout changes; time-travel debugging.
+- **GLB Import**: Load existing 3D models and convert to grid tiles.
+- **Materials/Textures**: Custom shaders, PBR for realism, material library.
 - **Mobile Support**: Touch gestures for placement/rotation.
-- **Persistence**: Save/load projects to localStorage or backend.
-- **Analytics**: Snap-to-grid for alignments, auto-complete walls.
+- **Backend Integration**: Supabase sync for multi-device access, collaboration.
+- **Component Library**: Pre-built wall templates, furniture catalog with GLB models.
+- **Snap Features**: Snap-to-grid refinements, auto-complete walls, corner detection.
 
