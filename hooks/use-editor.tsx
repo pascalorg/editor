@@ -7,9 +7,10 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
 
 export interface WallSegment {
   isHorizontal: boolean
-  fixed: number
-  start: number
-  end: number
+  minFixed: number
+  maxFixed: number
+  startVarying: number
+  endVarying: number
   id: string
 }
 
@@ -63,10 +64,9 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
       vert.get(x)!.push(y);
     }
 
-    const segments: WallSegment[] = [];
+    const verticalLineSegments: WallSegment[] = [];
     const covered = new Set<string>();
 
-    // Vertical segments (only for runs >1)
     for (const [fixed, varying] of vert) {
       if (varying.length < 2) continue;
       varying.sort((a, b) => a - b);
@@ -74,12 +74,12 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
       while (i < varying.length) {
         let j = i;
         while (j < varying.length - 1 && varying[j + 1] === varying[j] + 1) j++;
-        const start = varying[i];
-        const end = varying[j];
+        const startV = varying[i];
+        const endV = varying[j];
         const length = j - i + 1;
         if (length > 1) {
-          const id = `v-${fixed}-${start}-${end}`;
-          segments.push({isHorizontal: false, fixed, start, end, id});
+          const id = `v-${fixed}-${fixed}-${startV}-${endV}`;
+          verticalLineSegments.push({ isHorizontal: false, minFixed: fixed, maxFixed: fixed, startVarying: startV, endVarying: endV, id });
           for (let k = i; k <= j; k++) {
             covered.add(`${fixed},${varying[k]}`);
           }
@@ -88,7 +88,7 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
       }
     }
 
-    // Horizontal segments (for remaining tiles, including singles)
+    const horizontalLineSegments: WallSegment[] = [];
     for (const [fixed, varying] of horiz) {
       const filtered = varying.filter(x => !covered.has(`${x},${fixed}`));
       if (filtered.length === 0) continue;
@@ -97,15 +97,41 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
       while (i < filtered.length) {
         let j = i;
         while (j < filtered.length - 1 && filtered[j + 1] === filtered[j] + 1) j++;
-        const start = filtered[i];
-        const end = filtered[j];
-        const id = `h-${fixed}-${start}-${end}`;
-        segments.push({isHorizontal: true, fixed, start, end, id});
+        const startV = filtered[i];
+        const endV = filtered[j];
+        const id = `h-${fixed}-${fixed}-${startV}-${endV}`;
+        horizontalLineSegments.push({ isHorizontal: true, minFixed: fixed, maxFixed: fixed, startVarying: startV, endVarying: endV, id });
         i = j + 1;
       }
     }
 
-    return segments;
+    const mergeSegments = (segs: WallSegment[], isHoriz: boolean) => {
+      segs.sort((a, b) => a.minFixed - b.minFixed);
+      const merged: WallSegment[] = [];
+      let current: WallSegment | null = null;
+      for (let seg of segs) {
+        if (current === null) {
+          current = { ...seg };
+        } else if (
+          seg.minFixed === current.maxFixed + 1 &&
+          seg.startVarying === current.startVarying &&
+          seg.endVarying === current.endVarying
+        ) {
+          current.maxFixed = seg.maxFixed;
+          current.id = `${isHoriz ? 'h' : 'v'}-${current.minFixed}-${current.maxFixed}-${current.startVarying}-${current.endVarying}`;
+        } else {
+          merged.push(current);
+          current = { ...seg };
+        }
+      }
+      if (current) merged.push(current);
+      return merged;
+    };
+
+    const mergedVertical = mergeSegments(verticalLineSegments, false);
+    const mergedHorizontal = mergeSegments(horizontalLineSegments, true);
+
+    return [...mergedVertical, ...mergedHorizontal];
   }, [walls])
 
   const handleExport = () => {
@@ -149,23 +175,24 @@ export const EditorProvider = ({ children }: EditorProviderProps) => {
       const newWalls = new Set(prevWalls)
 
       for (const segmentId of selectedWallIds) {
-        // Parse segment ID to get the positions to remove
         const parts = segmentId.split('-')
-        const isHorizontal = parts[0] === 'h'
-        const fixed = parseInt(parts[1])
-        const start = parseInt(parts[2])
-        const end = parseInt(parts[3])
+        const type = parts[0]
+        const minF = parseInt(parts[1])
+        const maxF = parseInt(parts[2])
+        const startV = parseInt(parts[3])
+        const endV = parseInt(parts[4])
 
-        // Remove all tiles in this segment
-        if (isHorizontal) {
-          // Horizontal segment: fixed row, varying columns
-          for (let col = start; col <= end; col++) {
-            newWalls.delete(`${col},${fixed}`)
+        if (type === 'h') {
+          for (let y = minF; y <= maxF; y++) {
+            for (let x = startV; x <= endV; x++) {
+              newWalls.delete(`${x},${y}`)
+            }
           }
         } else {
-          // Vertical segment: fixed column, varying rows
-          for (let row = start; row <= end; row++) {
-            newWalls.delete(`${fixed},${row}`)
+          for (let x = minF; x <= maxF; x++) {
+            for (let y = startV; y <= endV; y++) {
+              newWalls.delete(`${x},${y}`)
+            }
           }
         }
       }

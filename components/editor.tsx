@@ -107,24 +107,27 @@ export default function Editor({ className }: { className?: string }) {
       if (draggingFace && previewNum > 0) {
         setWalls(prev => {
           const next = new Set(prev)
-          const {segment: s, isEndFace, sign, axis} = draggingFace
+          const {segment: s, isEndFace, sign} = draggingFace
+
           if (isEndFace) {
-            const fixed = s.fixed
-            const varying = s.isHorizontal ? 'x' : 'y'
+            const fixedMin = s.minFixed
+            const fixedMax = s.maxFixed
+            const varyingSign = sign
             for (let k = 1; k <= previewNum; k++) {
-              const offset = sign > 0 ? s.end + k : s.start - k
-              const tileX = varying === 'x' ? offset : fixed
-              const tileY = varying === 'y' ? offset : fixed
-              next.add(`${tileX},${tileY}`)
+              const offset = varyingSign > 0 ? s.endVarying + k : s.startVarying - k
+              for (let f = fixedMin; f <= fixedMax; f++) {
+                const tileX = s.isHorizontal ? offset : f
+                const tileY = s.isHorizontal ? f : offset
+                next.add(`${tileX},${tileY}`)
+              }
             }
           } else {
-            const fixed = s.fixed
-            const varying = s.isHorizontal ? 'y' : 'x'
+            const fixedSign = sign
             for (let k = 1; k <= previewNum; k++) {
-              const newFixed = fixed + k * sign
-              for (let j = s.start; j <= s.end; j++) {
-                const tileX = s.isHorizontal ? j : newFixed
-                const tileY = s.isHorizontal ? newFixed : j
+              const newFixed = fixedSign > 0 ? s.maxFixed + k : s.minFixed - k
+              for (let v = s.startVarying; v <= s.endVarying; v++) {
+                const tileX = s.isHorizontal ? v : newFixed
+                const tileY = s.isHorizontal ? newFixed : v
                 next.add(`${tileX},${tileY}`)
               }
             }
@@ -168,56 +171,6 @@ export default function Editor({ className }: { className?: string }) {
       }
     })
     return null
-  }
-
-const PreviewExtrusion = ({ draggingFace, previewNum, tileSize, wallHeight }: {
-  draggingFace: any
-  previewNum: number
-  tileSize: number
-  wallHeight: number
-}) => {
-  if (!draggingFace || previewNum <= 0) return null
-  const { segment: seg, isEndFace, sign, axis, originalPoint } = draggingFace
-  let width, depth, posX, posY
-  const height = wallHeight
-  const cols = Math.floor(GRID_SIZE / tileSize)
-  const rows = Math.floor(GRID_SIZE / tileSize)
-  // Convert world originalPoint to local group coordinates
-  const local_face_pos = axis === 'x' ? (originalPoint.x + (cols * tileSize) / 2) : (originalPoint.y + (rows * tileSize) / 2)
-  const extrude_size = previewNum * tileSize
-  const center_offset = sign * (extrude_size / 2)
-  const new_pos_dir = local_face_pos + center_offset
-    if (isEndFace) {
-      if (seg.isHorizontal) {
-        width = extrude_size
-        depth = tileSize
-        posX = new_pos_dir
-        posY = seg.fixed * tileSize + tileSize / 2
-      } else {
-        width = tileSize
-        depth = extrude_size
-        posX = seg.fixed * tileSize + tileSize / 2
-        posY = new_pos_dir
-      }
-    } else {
-      if (seg.isHorizontal) {
-        width = (seg.end - seg.start + 1) * tileSize
-        depth = extrude_size
-        posX = seg.start * tileSize + width / 2
-        posY = new_pos_dir
-      } else {
-        width = extrude_size
-        depth = (seg.end - seg.start + 1) * tileSize
-        posX = new_pos_dir
-        posY = seg.start * tileSize + depth / 2
-      }
-    }
-    return (
-      <mesh position={[posX, posY, height / 2]}>
-        <boxGeometry args={[width, depth, height]} />
-        <meshStandardMaterial color="#aaaabf" transparent opacity={0.5} />
-      </mesh>
-    )
   }
 
   const rows = Math.floor(GRID_SIZE / tileSize)
@@ -408,6 +361,8 @@ const PreviewExtrusion = ({ draggingFace, previewNum, tileSize, wallHeight }: {
             isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
             setDraggingFace={setDraggingFace}
+            draggingFace={draggingFace}
+            previewNum={previewNum}
           />
           <FaceHighlight
             wallSegments={wallSegments}
@@ -416,7 +371,6 @@ const PreviewExtrusion = ({ draggingFace, previewNum, tileSize, wallHeight }: {
             hoveredFace={hoveredFace}
           />
           <UpdatePreview />
-          <PreviewExtrusion draggingFace={draggingFace} previewNum={previewNum} tileSize={tileSize} wallHeight={wallHeight} />
         </group>
 
         <OrbitControls 
@@ -612,9 +566,19 @@ type WallsProps = {
   onFaceHover: (face: { wallIndex: number; faceNormal: THREE.Vector3; facePosition: THREE.Vector3 } | null) => void
   isCameraEnabled?: boolean
   setDraggingFace: (info: any) => void
+  draggingFace: {
+    wallIndex: number
+    segment: WallSegment
+    normal: THREE.Vector3
+    originalPoint: THREE.Vector3
+    isEndFace: boolean
+    sign: number
+    axis: 'x' | 'y'
+  } | null
+  previewNum: number
 }
 
-const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace, draggingFace, previewNum }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -622,18 +586,35 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
         const height = wallHeight;
         const isSelected = selectedWallIds.has(seg.id);
         const isHovered = hoveredWallIndex === i;
+        const isDragged = draggingFace?.wallIndex === i && previewNum > 0
+
+        let minF = seg.minFixed
+        let maxF = seg.maxFixed
+        let startV = seg.startVarying
+        let endV = seg.endVarying
+
+        if (isDragged) {
+          const sign = draggingFace.sign
+          const isEnd = draggingFace.isEndFace
+          if (isEnd) {
+            if (sign > 0) endV += previewNum
+            else startV -= previewNum
+          } else {
+            if (sign > 0) maxF += previewNum
+            else minF -= previewNum
+          }
+        }
 
         if (seg.isHorizontal) {
-          const num = seg.end - seg.start + 1;
-          width = num * tileSize;
-          depth = tileSize;
-          posX = seg.start * tileSize + width / 2;
-          posY = seg.fixed * tileSize + tileSize / 2;
+          width = (endV - startV + 1) * tileSize;
+          depth = (maxF - minF + 1) * tileSize;
+          posX = startV * tileSize + width / 2;
+          posY = minF * tileSize + depth / 2;
         } else {
-          width = tileSize;
-          depth = (seg.end - seg.start + 1) * tileSize;
-          posX = seg.fixed * tileSize + tileSize / 2;
-          posY = seg.start * tileSize + depth / 2;
+          width = (maxF - minF + 1) * tileSize;
+          depth = (endV - startV + 1) * tileSize;
+          posX = minF * tileSize + width / 2;
+          posY = startV * tileSize + depth / 2;
         }
 
         // Determine color based on selection and hover state
@@ -668,7 +649,7 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onPointerMove={(e) => {
               e.stopPropagation();
-              if (!isSelected) {
+              if (draggingFace) {
                 onFaceHover(null);
                 return;
               }
@@ -792,17 +773,21 @@ const FaceHighlight = ({ wallSegments, tileSize, wallHeight, hoveredFace }: {
   let width, depth, posX, posY;
   const height = wallHeight;
 
+  let minF = seg.minFixed
+  let maxF = seg.maxFixed
+  let startV = seg.startVarying
+  let endV = seg.endVarying
+
   if (seg.isHorizontal) {
-    const num = seg.end - seg.start + 1;
-    width = num * tileSize;
-    depth = tileSize;
-    posX = seg.start * tileSize + width / 2;
-    posY = seg.fixed * tileSize + tileSize / 2;
+    width = (endV - startV + 1) * tileSize;
+    depth = (maxF - minF + 1) * tileSize;
+    posX = startV * tileSize + width / 2;
+    posY = minF * tileSize + depth / 2;
   } else {
-    width = tileSize;
-    depth = (seg.end - seg.start + 1) * tileSize;
-    posX = seg.fixed * tileSize + tileSize / 2;
-    posY = seg.start * tileSize + depth / 2;
+    width = (maxF - minF + 1) * tileSize;
+    depth = (endV - startV + 1) * tileSize;
+    posX = minF * tileSize + width / 2;
+    posY = startV * tileSize + depth / 2;
   }
 
   // Determine which face based on normal
