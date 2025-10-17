@@ -53,6 +53,7 @@ type StoreState = {
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
+  undoStack: string[][]
 } & {
   setWalls: (walls: string[]) => void
   setImageURL: (url: string | null) => void
@@ -70,6 +71,7 @@ type StoreState = {
   loadLayout: (json: LayoutJSON) => void
   handleSaveLayout: () => void
   handleLoadLayout: (file: File) => void
+  undo: () => void
 }
 
 const useStore = create<StoreState>()(
@@ -81,7 +83,18 @@ const useStore = create<StoreState>()(
       isHelpOpen: false,
       isJsonInspectorOpen: false,
       wallsGroupRef: null,
-      setWalls: (walls) => set({ walls }),
+      undoStack: [],
+      setWalls: (walls) => set(state => {
+        const sortedNew = [...walls].sort()
+        const sortedCurrent = [...state.walls].sort()
+        if (sortedNew.length === sortedCurrent.length && sortedNew.every((v, i) => v === sortedCurrent[i])) {
+          return state
+        }
+        return {
+          undoStack: [...state.undoStack, state.walls].slice(-50),
+          walls
+        }
+      }),
       setImageURL: (url) => set({ imageURL: url }),
       setSelectedWallIds: (ids) => set({ selectedWallIds: ids }),
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
@@ -205,38 +218,34 @@ const useStore = create<StoreState>()(
         }
       },
       handleDeleteSelectedWalls: () => {
-        const selectedWallIds = get().selectedWallIds
-        if (selectedWallIds.length === 0) return
-
-        set((state) => {
-          const newWalls = [...state.walls]
-
-          for (const segmentId of selectedWallIds) {
+        set(state => {
+          if (state.selectedWallIds.length === 0) return state
+          const newWallsSet = new Set(state.walls)
+          for (const segmentId of state.selectedWallIds) {
             const parts = segmentId.split('-')
             const type = parts[0]
             const minF = parseInt(parts[1])
             const maxF = parseInt(parts[2])
             const startV = parseInt(parts[3])
             const endV = parseInt(parts[4])
-
             if (type === 'h') {
               for (let y = minF; y <= maxF; y++) {
                 for (let x = startV; x <= endV; x++) {
-                  const index = newWalls.indexOf(`${x},${y}`)
-                  if (index > -1) newWalls.splice(index, 1)
+                  newWallsSet.delete(`${x},${y}`)
                 }
               }
             } else {
               for (let x = minF; x <= maxF; x++) {
                 for (let y = startV; y <= endV; y++) {
-                  const index = newWalls.indexOf(`${x},${y}`)
-                  if (index > -1) newWalls.splice(index, 1)
+                  newWallsSet.delete(`${x},${y}`)
                 }
               }
             }
           }
-
-          return { walls: newWalls, selectedWallIds: [] }
+          const newWalls = Array.from(newWallsSet)
+          // Since setWalls will handle undoStack, call it
+          get().setWalls(newWalls)
+          return { selectedWallIds: [] }
         })
       },
       serializeLayout: () => {
@@ -269,7 +278,7 @@ const useStore = create<StoreState>()(
         const wallComponent = json.components.find(c => c.type === 'wall')
         if (wallComponent && wallComponent.data.tiles) {
           const newWalls = wallComponent.data.tiles.map(([x, y]) => `${x},${y}`)
-          set({ walls: newWalls })
+          get().setWalls(newWalls)
         }
       },
       handleSaveLayout: () => {
@@ -296,6 +305,15 @@ const useStore = create<StoreState>()(
           reader.readAsText(file)
         }
       },
+      undo: () => set(state => {
+        if (state.undoStack.length === 0) return state
+        const previous = state.undoStack[state.undoStack.length - 1]
+        return {
+          walls: previous,
+          undoStack: state.undoStack.slice(0, -1),
+          selectedWallIds: []
+        }
+      }),
     }),
     {
       name: 'editor-storage',
@@ -339,5 +357,6 @@ export const useEditorContext = () => {
     loadLayout: store.loadLayout,
     handleSaveLayout: store.handleSaveLayout,
     handleLoadLayout: store.handleLoadLayout,
+    undo: store.undo,
   }
 }
