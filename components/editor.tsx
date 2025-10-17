@@ -29,7 +29,14 @@ type WallTile = {
 }
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, imageURL, wallsGroupRef, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls } = useEditorContext()
+  const { walls, setWalls, imageURL, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls } = useEditorContext()
+
+  const wallsGroupRef = useRef(null)
+  const { setWallsGroupRef } = useEditorContext()
+
+  useEffect(() => {
+    setWallsGroupRef(wallsGroupRef.current)
+  }, [setWallsGroupRef])
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },

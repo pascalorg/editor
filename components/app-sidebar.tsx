@@ -109,7 +109,7 @@ export function AppSidebar() {
               <Input
                 type="file"
                 accept="image/png,image/jpeg"
-                onChange={handleUpload}
+                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file); }}
                 className="w-full text-xs"
               />
             </div>
@@ -199,7 +199,7 @@ export function AppSidebar() {
               <Input
                 type="file"
                 accept="application/json"
-                onChange={handleLoadLayout}
+                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLoadLayout(file); }}
                 className="w-full text-xs"
               />
             </div>
