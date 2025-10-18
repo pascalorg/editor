@@ -2,7 +2,7 @@
 
 import { useState, memo, useRef, useMemo, useEffect, forwardRef, Ref } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { GizmoHelper, GizmoViewport, OrbitControls, Environment, Grid, Stats, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, OrbitControls, Environment, Grid, Stats, PerspectiveCamera, OrthographicCamera, Line } from '@react-three/drei'
 import { useControls } from 'leva'
 import { cn } from '@/lib/utils'
 import * as THREE from 'three'
@@ -319,6 +319,8 @@ export default function Editor({ className }: { className?: string }) {
           />
         )}
         <CameraSetup />
+        {/* <fog attach="fog" args={['#17171b', 30, 40]} /> */}
+        <color attach="background" args={['#17171b']} />
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[10, 10, 5]} 
@@ -349,6 +351,38 @@ export default function Editor({ className }: { className?: string }) {
             rotation={[Math.PI / 2, 0, 0]}
           />
         )}
+        
+        {/* Infinite dashed axis lines */}
+        <Line 
+          points={[[-1000, 0, 0.001], [1000, 0, 0.001]]} 
+          lineWidth={1}
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          color="white"
+          opacity={0.01}
+          depthTest={false}
+        />
+        <Line 
+          points={[[0, -1000, 0.001], [0, 1000, 0.001]]} 
+          lineWidth={1}
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          color="white"
+          opacity={0.01}
+          depthTest={false}
+        />
+        <Line 
+          points={[[0, 0, -1000], [0, 0, 1000]]} 
+          lineWidth={1}
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          color="white"
+          opacity={0.01}
+          depthTest={false}
+        />
         
         {imageURL && (
           <ReferenceImage 
@@ -408,7 +442,7 @@ export default function Editor({ className }: { className?: string }) {
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
         </GizmoHelper>
-        <Stats/>
+        {/* <Stats/> */}
       </Canvas>
 
       {contextMenuState.isOpen && (contextMenuState.type === 'canvas' || (contextMenuState.type === 'wall' && selectedWallIds.size > 0)) && (
@@ -667,7 +701,6 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onPointerLeave={(e) => {
               e.stopPropagation();
-              onWallHover(null);
               onFaceHover(null);
             }}
             onPointerMove={(e) => {
