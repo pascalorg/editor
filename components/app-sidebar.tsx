@@ -24,7 +24,7 @@ import { useEditorContext, WallSegment } from "@/hooks/use-editor"
 import JsonView from '@uiw/react-json-view'
 
 export function AppSidebar() {
-  const { isHelpOpen, setIsHelpOpen, isJsonInspectorOpen, setIsJsonInspectorOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, handleSaveLayout, handleLoadLayout, serializeLayout } = useEditorContext()
+  const { isHelpOpen, setIsHelpOpen, isJsonInspectorOpen, setIsJsonInspectorOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, handleSaveLayout, handleLoadLayout, serializeLayout, handleClear } = useEditorContext()
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
 
   // Handle backspace key to delete selected walls
@@ -187,6 +187,20 @@ export function AppSidebar() {
               >
                 <Save className="h-4 w-4" />
                 <span>Save Layout</span>
+              </Button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleClear}
+                disabled={wallSegments.length === 0}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Clear All ({wallSegments.length})</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>

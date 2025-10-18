@@ -54,6 +54,8 @@ type StoreState = {
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
   undoStack: string[][]
+  redoStack: string[][]
+  handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
   setImageURL: (url: string | null) => void
@@ -72,6 +74,7 @@ type StoreState = {
   handleSaveLayout: () => void
   handleLoadLayout: (file: File) => void
   undo: () => void
+  redo: () => void
 }
 
 const useStore = create<StoreState>()(
@@ -84,6 +87,7 @@ const useStore = create<StoreState>()(
       isJsonInspectorOpen: false,
       wallsGroupRef: null,
       undoStack: [],
+      redoStack: [],
       setWalls: (walls) => set(state => {
         const sortedNew = [...walls].sort()
         const sortedCurrent = [...state.walls].sort()
@@ -92,6 +96,7 @@ const useStore = create<StoreState>()(
         }
         return {
           undoStack: [...state.undoStack, state.walls].slice(-50),
+          redoStack: [],
           walls
         }
       }),
@@ -248,6 +253,10 @@ const useStore = create<StoreState>()(
           return { selectedWallIds: [] }
         })
       },
+      handleClear: () => {
+        get().setWalls([])
+        set({ selectedWallIds: [] })
+      },
       serializeLayout: () => {
         const walls = get().walls
         const wallSegments = get().wallSegments()
@@ -311,6 +320,17 @@ const useStore = create<StoreState>()(
         return {
           walls: previous,
           undoStack: state.undoStack.slice(0, -1),
+          redoStack: [...state.redoStack, state.walls],
+          selectedWallIds: []
+        }
+      }),
+      redo: () => set(state => {
+        if (state.redoStack.length === 0) return state
+        const next = state.redoStack[state.redoStack.length - 1]
+        return {
+          walls: next,
+          redoStack: state.redoStack.slice(0, -1),
+          undoStack: [...state.undoStack, state.walls],
           selectedWallIds: []
         }
       }),
@@ -358,5 +378,7 @@ export const useEditorContext = () => {
     handleSaveLayout: store.handleSaveLayout,
     handleLoadLayout: store.handleLoadLayout,
     undo: store.undo,
+    redo: store.redo,
+    handleClear: store.handleClear,
   }
 }
