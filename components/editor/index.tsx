@@ -135,21 +135,24 @@ export default function Editor({ className }: { className?: string }) {
       // First click: set start point
       setWallStartPoint([x, y])
     } else {
-      // Second click: create wall
-      const [x1, y1] = wallStartPoint
-      // Ensure wall is at least MIN_WALL_LENGTH
-      const dx = Math.abs(x - x1) * TILE_SIZE
-      const dy = Math.abs(y - y1) * TILE_SIZE
-      const length = Math.sqrt(dx * dx + dy * dy)
-      
-      if (length >= MIN_WALL_LENGTH && (x === x1 || y === y1)) {
-        // Wall is valid (horizontal or vertical, meets min length)
-        const wallKey = `${x1},${y1}-${x},${y}`
-        setWalls(prev => {
-          const next = new Set(prev)
-          next.add(wallKey)
-          return next
-        })
+      // Second click: create wall using wallPreviewEnd (snapped position)
+      if (wallPreviewEnd) {
+        const [x1, y1] = wallStartPoint
+        const [x2, y2] = wallPreviewEnd
+        // Ensure wall is at least MIN_WALL_LENGTH
+        const dx = Math.abs(x2 - x1) * TILE_SIZE
+        const dy = Math.abs(y2 - y1) * TILE_SIZE
+        const length = Math.sqrt(dx * dx + dy * dy)
+        
+        if (length >= MIN_WALL_LENGTH && (x2 === x1 || y2 === y1)) {
+          // Wall is valid (horizontal or vertical, meets min length)
+          const wallKey = `${x1},${y1}-${x2},${y2}`
+          setWalls(prev => {
+            const next = new Set(prev)
+            next.add(wallKey)
+            return next
+          })
+        }
       }
       
       // Reset placement state
@@ -365,6 +368,7 @@ export default function Editor({ className }: { className?: string }) {
             wallPreviewEnd={wallPreviewEnd}
             opacity={gridOpacity}
             disableBuild={controlMode !== 'building' || activeTool !== 'wall'}
+            wallHeight={wallHeight}
           />
           <Walls
             wallSegments={wallSegments}
@@ -429,9 +433,10 @@ type GridTilesProps = {
   wallPreviewEnd: [number, number] | null
   opacity: number
   disableBuild?: boolean
+  wallHeight: number
 }
 
-const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, onIntersectionHover, wallStartPoint, wallPreviewEnd, opacity, disableBuild = false }: GridTilesProps) => {
+const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, onIntersectionHover, wallStartPoint, wallPreviewEnd, opacity, disableBuild = false, wallHeight }: GridTilesProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
   const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(null)
 
@@ -463,6 +468,9 @@ const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, o
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation()
+    // Only handle left-click (button 0) for wall placement
+    // Right-click (button 2) and middle-click (button 1) are for camera controls
+    if (e.button !== 0) return
     if (disableBuild || !hoveredIntersection) return
     onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
   }
@@ -489,9 +497,13 @@ const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, o
         />
       </mesh>
       
-      {/* Down arrow at hovered intersection */}
+      {/* Down arrow at hovered intersection or snapped preview position */}
       {hoveredIntersection && !disableBuild && (
-        <group position={[hoveredIntersection.x * tileSize, hoveredIntersection.y * tileSize, 2]}>
+        <group position={[
+          wallPreviewEnd ? wallPreviewEnd[0] * tileSize : hoveredIntersection.x * tileSize,
+          wallPreviewEnd ? wallPreviewEnd[1] * tileSize : hoveredIntersection.y * tileSize,
+          2
+        ]}>
           <DownArrow />
         </group>
       )}
@@ -516,7 +528,57 @@ const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, o
           dashed={false}
         />
       )}
+      
+      {/* Wall shadow preview */}
+      {wallStartPoint && wallPreviewEnd && (
+        <WallShadowPreview 
+          start={wallStartPoint}
+          end={wallPreviewEnd}
+          tileSize={tileSize}
+          wallHeight={wallHeight}
+        />
+      )}
     </>
+  )
+})
+
+// Wall shadow preview component
+const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: {
+  start: [number, number]
+  end: [number, number]
+  tileSize: number
+  wallHeight: number
+}) => {
+  const [x1, y1] = start
+  const [x2, y2] = end
+  
+  // Calculate wall dimensions
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const thickness = WALL_THICKNESS
+  const height = wallHeight
+  
+  // Calculate center position
+  const centerX = (x1 + x2) / 2 * tileSize
+  const centerY = (y1 + y2) / 2 * tileSize
+  
+  // Calculate rotation
+  const angle = Math.atan2(dy, dx)
+  
+  return (
+    <group position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+      <mesh>
+        <boxGeometry args={[length, thickness, height]} />
+        <meshStandardMaterial
+          color="#44ff44"
+          transparent
+          opacity={0.4}
+          emissive="#22aa22"
+          emissiveIntensity={0.3}
+        />
+      </mesh>
+    </group>
   )
 })
 
@@ -673,6 +735,11 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
               }}
               onClick={(e) => {
                 e.stopPropagation();
+                
+                // Building mode: no wall selection while placing walls
+                if (controlMode === 'building') {
+                  return
+                }
                 
                 // Delete mode: handled in onPointerDown/Up
                 if (controlMode === 'delete') {
