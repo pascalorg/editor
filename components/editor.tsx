@@ -1065,6 +1065,9 @@ const CustomControls = ({ tileSize, controlMode }: { tileSize: number; controlMo
           dragType.current = 'pan';
           grabbedPoint.current.copy(hitPoint);
         }
+      } else if (event.button === 1) { // middle - pan (works in any mode)
+        dragType.current = 'pan';
+        grabbedPoint.current.copy(hitPoint);
       } else if (event.button === 2) { // right - rotate (always enabled)
         dragType.current = 'rotate';
         const centerMouse = new THREE.Vector2(0, 0);
