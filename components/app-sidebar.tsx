@@ -20,11 +20,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useEditorContext, WallSegment } from "@/hooks/use-editor"
+import type { WallSegment } from "@/hooks/use-editor"
+import { useEditorContext } from "@/hooks/use-editor"
 import JsonView from '@uiw/react-json-view'
 
 export function AppSidebar() {
-  const { isHelpOpen, setIsHelpOpen, isJsonInspectorOpen, setIsJsonInspectorOpen, handleExport, handleUpload, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, handleSaveLayout, handleLoadLayout, serializeLayout, handleClear } = useEditorContext()
+  const { 
+    isHelpOpen, 
+    setIsHelpOpen, 
+    isJsonInspectorOpen, 
+    setIsJsonInspectorOpen, 
+    handleExport, 
+    handleUpload, 
+    wallSegments, 
+    selectedWallIds, 
+    setSelectedWallIds, 
+    handleDeleteSelectedWalls, 
+    handleSaveLayout, 
+    handleLoadLayout, 
+    serializeLayout, 
+    handleClear,
+    images,
+    selectedImageIds,
+    setSelectedImageIds,
+    handleDeleteSelectedImages,
+  } = useEditorContext()
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
 
   // Handle backspace key to delete selected walls
@@ -82,6 +102,46 @@ export function AppSidebar() {
     })
   }
 
+  const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
+    setSelectedImageIds(prev => {
+      const next = new Set(prev)
+      const clickedIndex = images.findIndex(img => img.id === imageId)
+
+      if (event.metaKey || event.ctrlKey) {
+        // Cmd/Ctrl+click: add/remove from selection
+        if (next.has(imageId)) {
+          next.delete(imageId)
+        } else {
+          next.add(imageId)
+        }
+      } else if (event.shiftKey && next.size > 0) {
+        // Shift+click: select range
+        const selectedIndices = Array.from(next).map(id =>
+          images.findIndex(img => img.id === id)
+        ).filter(idx => idx !== -1)
+
+        const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
+          const currentDist = Math.abs(current - clickedIndex)
+          const closestDist = Math.abs(closest - clickedIndex)
+          return currentDist < closestDist ? current : closest
+        })
+
+        const start = Math.min(closestSelectedIndex, clickedIndex)
+        const end = Math.max(closestSelectedIndex, clickedIndex)
+
+        for (let i = start; i <= end; i++) {
+          next.add(images[i].id)
+        }
+      } else {
+        // Regular click: select only this image
+        next.clear()
+        next.add(imageId)
+      }
+
+      return next
+    })
+  }
+
   const formatWallDescription = (segment: WallSegment) => {
     const length = segment.endVarying - segment.startVarying + 1
     const thickness = segment.maxFixed - segment.minFixed + 1
@@ -113,6 +173,56 @@ export function AppSidebar() {
                 className="w-full text-xs"
               />
             </div>
+          </SidebarMenuItem>
+
+          {/* Reference Images List */}
+          <SidebarMenuItem>
+            <div className="px-2 py-2">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Reference Images ({images.length})
+              </label>
+              <div className="max-h-48 overflow-y-auto space-y-1 select-none">
+                {images.length === 0 ? (
+                  <div className="text-xs text-muted-foreground italic">
+                    No images uploaded yet
+                  </div>
+                ) : (
+                  images.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
+                        selectedImageIds.has(image.id)
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted hover:bg-muted/80'
+                      }`}
+                      onClick={(e) => handleImageSelect(image.id, e)}
+                    >
+                      <div className="font-medium truncate" title={image.name}>
+                        Image {index + 1}
+                      </div>
+                      <div className="text-muted-foreground truncate" title={image.name}>
+                        {image.name}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </SidebarMenuItem>
+
+          {/* Delete Selected Images Button */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleDeleteSelectedImages}
+                disabled={selectedImageIds.size === 0}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Selected Images ({selectedImageIds.size})</span>
+              </Button>
+            </SidebarMenuButton>
           </SidebarMenuItem>
 
           {/* Wall Segments List */}

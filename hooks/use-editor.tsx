@@ -16,6 +16,13 @@ export interface WallSegment {
   id: string
 }
 
+export interface ReferenceImage {
+  id: string
+  url: string
+  name: string
+  createdAt: string
+}
+
 export type ComponentData = {
   tiles: [number, number][]
   segments: WallSegment[]
@@ -48,8 +55,9 @@ export type LayoutJSON = {
 
 type StoreState = {
   walls: string[]
-  imageURL: string | null
+  images: ReferenceImage[]
   selectedWallIds: string[]
+  selectedImageIds: string[]
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
@@ -58,17 +66,20 @@ type StoreState = {
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
-  setImageURL: (url: string | null) => void
+  setImages: (images: ReferenceImage[]) => void
   setSelectedWallIds: (ids: string[]) => void
+  setSelectedImageIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
   setWallsGroupRef: (ref: THREE.Group | null) => void
   getWallsSet: () => Set<string>
   getSelectedWallIdsSet: () => Set<string>
+  getSelectedImageIdsSet: () => Set<string>
   wallSegments: () => WallSegment[]
   handleExport: () => void
   handleUpload: (file: File) => void
   handleDeleteSelectedWalls: () => void
+  handleDeleteSelectedImages: () => void
   serializeLayout: () => LayoutJSON
   loadLayout: (json: LayoutJSON) => void
   handleSaveLayout: () => void
@@ -81,8 +92,9 @@ const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
       walls: [],
-      imageURL: null,
+      images: [],
       selectedWallIds: [],
+      selectedImageIds: [],
       isHelpOpen: false,
       isJsonInspectorOpen: false,
       wallsGroupRef: null,
@@ -100,13 +112,15 @@ const useStore = create<StoreState>()(
           walls
         }
       }),
-      setImageURL: (url) => set({ imageURL: url }),
+      setImages: (images) => set({ images }),
       setSelectedWallIds: (ids) => set({ selectedWallIds: ids }),
+      setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
       setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
       setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
       getWallsSet: () => new Set(get().walls),
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
+      getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
       wallSegments: () => {
         const walls = get().getWallsSet()
         const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
@@ -217,10 +231,27 @@ const useStore = create<StoreState>()(
         if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
           const reader = new FileReader()
           reader.onload = (event) => {
-            set({ imageURL: event.target?.result as string })
+            const newImage: ReferenceImage = {
+              id: `img-${Date.now()}`,
+              url: event.target?.result as string,
+              name: file.name,
+              createdAt: new Date().toISOString()
+            }
+            set(state => ({ images: [...state.images, newImage] }))
           }
           reader.readAsDataURL(file)
         }
+      },
+      handleDeleteSelectedImages: () => {
+        set(state => {
+          if (state.selectedImageIds.length === 0) return state
+          const idsToDelete = new Set(state.selectedImageIds)
+          const newImages = state.images.filter(img => !idsToDelete.has(img.id))
+          return {
+            images: newImages,
+            selectedImageIds: []
+          }
+        })
       },
       handleDeleteSelectedWalls: () => {
         set(state => {
@@ -339,8 +370,9 @@ const useStore = create<StoreState>()(
       name: 'editor-storage',
       partialize: (state) => ({
         walls: state.walls,
-        imageURL: state.imageURL,
+        images: state.images,
         selectedWallIds: state.selectedWallIds,
+        selectedImageIds: state.selectedImageIds,
       }),
     }
   )
@@ -355,13 +387,19 @@ export const useEditorContext = () => {
       const newSet = typeof action === 'function' ? action(currentSet) : action
       store.setWalls(Array.from(newSet))
     },
-    imageURL: store.imageURL,
-    setImageURL: store.setImageURL,
+    images: store.images,
+    setImages: store.setImages,
     selectedWallIds: store.getSelectedWallIdsSet(),
     setSelectedWallIds: (action: SetStateAction<Set<string>>) => {
       const currentSet = store.getSelectedWallIdsSet()
       const newSet = typeof action === 'function' ? action(currentSet) : action
       store.setSelectedWallIds(Array.from(newSet))
+    },
+    selectedImageIds: store.getSelectedImageIdsSet(),
+    setSelectedImageIds: (action: SetStateAction<Set<string>>) => {
+      const currentSet = store.getSelectedImageIdsSet()
+      const newSet = typeof action === 'function' ? action(currentSet) : action
+      store.setSelectedImageIds(Array.from(newSet))
     },
     isHelpOpen: store.isHelpOpen,
     setIsHelpOpen: store.setIsHelpOpen,
@@ -373,6 +411,7 @@ export const useEditorContext = () => {
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,
     handleDeleteSelectedWalls: store.handleDeleteSelectedWalls,
+    handleDeleteSelectedImages: store.handleDeleteSelectedImages,
     serializeLayout: store.serializeLayout,
     loadLayout: store.loadLayout,
     handleSaveLayout: store.handleSaveLayout,

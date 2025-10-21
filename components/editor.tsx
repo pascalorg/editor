@@ -14,7 +14,14 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Box, DoorOpen, RectangleHorizontal, Circle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Vector2, Vector3, Plane, Raycaster } from 'three'
 
 const TILE_SIZE = 0.15 // 15cm
@@ -28,8 +35,52 @@ type WallTile = {
   y: number
 }
 
+const BuildingToolsMenu = () => {
+  const [activeTool, setActiveTool] = useState<'wall' | 'door' | 'window' | 'dummy1' | 'dummy2' | null>('wall')
+
+  const tools = [
+    { id: 'wall' as const, icon: Box, label: 'Wall' },
+    { id: 'door' as const, icon: DoorOpen, label: 'Door' },
+    { id: 'window' as const, icon: RectangleHorizontal, label: 'Window' },
+    { id: 'dummy1' as const, icon: Circle, label: 'Tool 1' },
+    { id: 'dummy2' as const, icon: Circle, label: 'Tool 2' },
+  ]
+
+  return (
+    <TooltipProvider>
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-lg">
+        {tools.map((tool) => {
+          const Icon = tool.icon
+          const isActive = activeTool === tool.id
+          
+          return (
+            <Tooltip key={tool.id}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isActive ? 'default' : 'ghost'}
+                  size="icon"
+                  onClick={() => setActiveTool(tool.id)}
+                  className={cn(
+                    'h-10 w-10 transition-all',
+                    isActive && 'bg-primary text-primary-foreground'
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{tool.label}</p>
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+    </TooltipProvider>
+  )
+}
+
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, imageURL, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo } = useEditorContext()
+  const { walls, setWalls, images, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -72,9 +123,9 @@ export default function Editor({ className }: { className?: string }) {
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     position: { x: number; y: number }
-    type: 'canvas' | 'wall'
+    type: 'wall'
     wallSegment?: WallSegment
-  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'canvas' })
+  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'wall' })
   const wallContextMenuTriggeredRef = useRef(false)
   const [draggingFace, setDraggingFace] = useState<{
     wallIndex: number;
@@ -222,7 +273,7 @@ export default function Editor({ className }: { className?: string }) {
       setContextMenuState({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
-        type: 'canvas'
+        type: 'wall'
       })
     }
     wallContextMenuTriggeredRef.current = false
@@ -284,21 +335,16 @@ export default function Editor({ className }: { className?: string }) {
     imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
   }, { collapsed: true })
 
+  const isBuildingMode = false;
+
   return (
     <div className="relative h-full w-full">
       <Canvas
         shadows
         className={cn('bg-[#303035]', className)}
         onContextMenu={(e) => {
-          // Don't show context menu when camera controls are enabled (spacebar held)
-          if (isCameraEnabled) {
-            return;
-          }
-          // Only prevent default if we're showing our own context menu
-          if (!wallContextMenuTriggeredRef.current) {
-            e.preventDefault()
-          }
-          handleCanvasRightClick(e)
+          // Prevent browser context menu
+          e.preventDefault();
         }}
       >
         {cameraType === 'perspective' ? (
@@ -384,15 +430,16 @@ export default function Editor({ className }: { className?: string }) {
           depthTest={false}
         />
         
-        {imageURL && (
+        {images.map((image) => (
           <ReferenceImage 
-            url={imageURL}
+            key={image.id}
+            url={image.url}
             opacity={imageOpacity}
             scale={imageScale}
             position={imagePosition}
             rotation={imageRotation}
           />
-        )}
+        ))}
 
         <group position={[-(cols * tileSize) / 2, -(rows * tileSize) / 2, 0]}>
           <GridTiles 
@@ -402,7 +449,7 @@ export default function Editor({ className }: { className?: string }) {
             walls={walls}
             onTileInteract={handleTileInteract}
             opacity={gridOpacity}
-            disableBuild={isCameraEnabled || !!draggingFace}
+            disableBuild={true}
           />
           <Walls
             wallSegments={wallSegments}
@@ -430,14 +477,7 @@ export default function Editor({ className }: { className?: string }) {
           <UpdatePreview />
         </group>
 
-        <OrbitControls 
-          makeDefault 
-          target={[0, 0, 0]}
-          minPolarAngle={0}
-          maxPolarAngle={Math.PI / 2}
-          screenSpacePanning={true}
-          enabled={isCameraEnabled}
-        />
+        <CustomControls tileSize={tileSize} />
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
@@ -445,30 +485,30 @@ export default function Editor({ className }: { className?: string }) {
         {/* <Stats/> */}
       </Canvas>
 
-      {contextMenuState.isOpen && (contextMenuState.type === 'canvas' || (contextMenuState.type === 'wall' && selectedWallIds.size > 0)) && (
+      {contextMenuState.isOpen && contextMenuState.type === 'wall' && selectedWallIds.size > 0 && (
         <div
           className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-lg p-1 min-w-[8rem]"
           style={{
-            left: contextMenuState.position.x,
-            top: contextMenuState.position.y,
+            top: `${contextMenuState.position.y}px`,
+            left: `${contextMenuState.position.x}px`,
           }}
         >
-          {contextMenuState.type === 'wall' && contextMenuState.wallSegment && selectedWallIds.size > 0 && (
+          {contextMenuState.wallSegment && (
             <div
               className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
-              onClick={handleDeleteWall}
+              onClick={() => {
+                handleDeleteSelectedWalls();
+                setContextMenuState({ ...contextMenuState, isOpen: false });
+              }}
             >
               <Trash2 className="h-4 w-4" />
-              Delete Wall
-            </div>
-          )}
-          {contextMenuState.type === 'canvas' && (
-            <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm opacity-50 cursor-not-allowed">
-              Canvas Options (Coming Soon)
+              Delete Selected Walls
             </div>
           )}
         </div>
       )}
+
+      <BuildingToolsMenu />
     </div>
   )
 }
@@ -953,4 +993,186 @@ const CameraSetup = () => {
   }, [camera])
   return null
 }
+
+const CustomControls = ({ tileSize }: { tileSize: number }) => {
+  const { camera, gl } = useThree();
+  const dragging = useRef(false);
+  const dragType = useRef<'pan' | 'rotate' | null>(null);
+  const startMouse = useRef(new THREE.Vector2());
+  const initialPosition = useRef(new THREE.Vector3());
+  const initialTarget = useRef(new THREE.Vector3());
+  const currentTarget = useRef(new THREE.Vector3(0, 0, 0));
+  const grabbedPoint = useRef(new THREE.Vector3());
+  const rotationTarget = useRef(new THREE.Vector3());
+  const raycaster = useRef(new THREE.Raycaster());
+  const floorPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
+  
+  // Damping state for smooth camera movement
+  const targetPosition = useRef(new THREE.Vector3());
+  const currentVelocity = useRef(new THREE.Vector3());
+  
+  // Performance optimization for pointer events
+  const pendingPointerMove = useRef<PointerEvent | null>(null);
+  const rafId = useRef<number | null>(null);
+
+  useEffect(() => {
+    const h = 30 * tileSize;
+    camera.position.set(h, 0, h);
+    targetPosition.current.copy(camera.position);
+    currentTarget.current.set(0, 0, 0);
+    camera.lookAt(currentTarget.current);
+  }, [tileSize, camera]);
+
+  useEffect(() => {
+    const domElement = gl.domElement;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const mouse = new THREE.Vector2(
+        (event.clientX / domElement.clientWidth) * 2 - 1,
+        -(event.clientY / domElement.clientHeight) * 2 + 1
+      );
+      raycaster.current.setFromCamera(mouse, camera);
+      const hitPoint = new THREE.Vector3();
+      if (!raycaster.current.ray.intersectPlane(floorPlane.current, hitPoint)) {
+        return;
+      }
+
+      startMouse.current.set(event.clientX, event.clientY);
+      initialPosition.current.copy(camera.position);
+      initialTarget.current.copy(currentTarget.current);
+      dragging.current = true;
+
+      if (event.button === 0) { // left - pan
+        dragType.current = 'pan';
+        grabbedPoint.current.copy(hitPoint);
+      } else if (event.button === 2) { // right - rotate
+        dragType.current = 'rotate';
+        const centerMouse = new THREE.Vector2(0, 0);
+        raycaster.current.setFromCamera(centerMouse, camera);
+        const hitPoint = new THREE.Vector3();
+        if (raycaster.current.ray.intersectPlane(floorPlane.current, hitPoint)) {
+          rotationTarget.current.copy(hitPoint);
+          currentTarget.current.copy(hitPoint);
+        }
+      }
+    };
+
+    const processPointerMove = (event: PointerEvent) => {
+      if (dragType.current === 'pan') {
+        const mouse = new THREE.Vector2(
+          (event.clientX / domElement.clientWidth) * 2 - 1,
+          -(event.clientY / domElement.clientHeight) * 2 + 1
+        );
+        raycaster.current.setFromCamera(mouse, camera);
+        const newPoint = new THREE.Vector3();
+        if (raycaster.current.ray.intersectPlane(floorPlane.current, newPoint)) {
+          const delta = grabbedPoint.current.clone().sub(newPoint);
+          const newPos = initialPosition.current.clone().add(delta);
+          camera.position.copy(newPos);
+          targetPosition.current.copy(newPos);
+          currentTarget.current.copy(initialTarget.current.clone().add(delta));
+          camera.lookAt(currentTarget.current);
+        }
+      } else if (dragType.current === 'rotate') {
+        const deltaX = event.clientX - startMouse.current.x;
+        const angle = deltaX * -0.002; // sensitivity
+        const relative = initialPosition.current.clone().sub(rotationTarget.current);
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+        const newX = relative.x * cosA - relative.y * sinA;
+        const newY = relative.x * sinA + relative.y * cosA;
+        const newPos = new THREE.Vector3(
+          rotationTarget.current.x + newX,
+          rotationTarget.current.y + newY,
+          initialPosition.current.z // keep height fixed
+        );
+        camera.position.copy(newPos);
+        targetPosition.current.copy(newPos);
+        camera.lookAt(rotationTarget.current);
+      }
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!dragging.current) return;
+      
+      // Store the latest event
+      pendingPointerMove.current = event;
+      
+      // Use RAF to batch updates and sync with display refresh
+      if (rafId.current === null) {
+        rafId.current = requestAnimationFrame(() => {
+          if (pendingPointerMove.current) {
+            processPointerMove(pendingPointerMove.current);
+            pendingPointerMove.current = null;
+          }
+          rafId.current = null;
+        });
+      }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      dragging.current = false;
+      dragType.current = null;
+      // Cancel any pending RAF
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+      pendingPointerMove.current = null;
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const zoomSpeed = 0.001; // Much smaller for smoother zoom
+      const direction = targetPosition.current.clone().sub(currentTarget.current).normalize();
+      const currentDistance = targetPosition.current.distanceTo(currentTarget.current);
+      let newDistance = currentDistance * (1 + event.deltaY * zoomSpeed);
+
+      const minDistance = 5 * tileSize * Math.sqrt(2);
+      const maxDistance = 100 * tileSize * Math.sqrt(2);
+      newDistance = Math.max(minDistance, Math.min(maxDistance, newDistance));
+
+      targetPosition.current.copy(currentTarget.current.clone().add(direction.multiplyScalar(newDistance)));
+    };
+
+    domElement.addEventListener('pointerdown', handlePointerDown);
+    domElement.addEventListener('pointermove', handlePointerMove);
+    domElement.addEventListener('pointerup', handlePointerUp);
+    domElement.addEventListener('pointercancel', handlePointerUp);
+    domElement.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      domElement.removeEventListener('pointerdown', handlePointerDown);
+      domElement.removeEventListener('pointermove', handlePointerMove);
+      domElement.removeEventListener('pointerup', handlePointerUp);
+      domElement.removeEventListener('pointercancel', handlePointerUp);
+      domElement.removeEventListener('wheel', handleWheel);
+      // Clean up any pending RAF
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+      }
+    };
+  }, [camera, gl, tileSize]);
+
+  // Smooth damping animation
+  useFrame((state, delta) => {
+    // Skip damping when actively dragging for instant response
+    if (dragging.current) return;
+
+    const dampingFactor = 8; // Higher = faster response
+    const epsilon = 0.001; // Threshold to stop interpolation
+
+    // Calculate smooth damped movement
+    const distance = camera.position.distanceTo(targetPosition.current);
+    
+    if (distance > epsilon) {
+      // Smooth damp using lerp
+      const t = Math.min(1, dampingFactor * delta);
+      camera.position.lerp(targetPosition.current, t);
+      camera.lookAt(currentTarget.current);
+    }
+  });
+
+  return null;
+};
 
