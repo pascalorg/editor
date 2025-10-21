@@ -8,12 +8,10 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
 import { SetStateAction } from 'react'
 
 export interface WallSegment {
-  isHorizontal: boolean
-  minFixed: number
-  maxFixed: number
-  startVarying: number
-  endVarying: number
+  start: [number, number] // [x, y] intersection coordinates
+  end: [number, number]   // [x, y] intersection coordinates
   id: string
+  isHorizontal: boolean
 }
 
 export interface ReferenceImage {
@@ -28,8 +26,7 @@ export type Tool = 'wall' | 'door' | 'window' | 'dummy1' | 'dummy2'
 export type ControlMode = 'select' | 'delete' | 'building'
 
 export type ComponentData = {
-  tiles: [number, number][]
-  segments: WallSegment[]
+  segments: WallSegment[] // Line segments between intersections
 }
 
 export type Component = {
@@ -143,86 +140,37 @@ const useStore = create<StoreState>()(
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
       wallSegments: () => {
         const walls = get().getWallsSet()
-        const allPositions: [number, number][] = Array.from(walls).map(key => key.split(',').map(Number) as [number, number]);
-
-        const horiz = new Map<number, number[]>();
-        const vert = new Map<number, number[]>();
-
-        for (const [x, y] of allPositions) {
-          if (!horiz.has(y)) horiz.set(y, []);
-          horiz.get(y)!.push(x);
-          if (!vert.has(x)) vert.set(x, []);
-          vert.get(x)!.push(y);
-        }
-
-        const verticalLineSegments: WallSegment[] = [];
-        const covered = new Set<string>();
-
-        for (const [fixed, varying] of vert) {
-          if (varying.length < 2) continue;
-          varying.sort((a, b) => a - b);
-          let i = 0;
-          while (i < varying.length) {
-            let j = i;
-            while (j < varying.length - 1 && varying[j + 1] === varying[j] + 1) j++;
-            const startV = varying[i];
-            const endV = varying[j];
-            const length = j - i + 1;
-            if (length > 1) {
-              const id = `v-${fixed}-${fixed}-${startV}-${endV}`;
-              verticalLineSegments.push({ isHorizontal: false, minFixed: fixed, maxFixed: fixed, startVarying: startV, endVarying: endV, id });
-              for (let k = i; k <= j; k++) {
-                covered.add(`${fixed},${varying[k]}`);
-              }
-            }
-            i = j + 1;
+        const segments: WallSegment[] = []
+        
+        for (const wallKey of walls) {
+          // Check if this is the new format "x1,y1-x2,y2" or old format "x,y"
+          if (!wallKey.includes('-')) {
+            // Skip old format tiles - they're incompatible with the new system
+            continue
           }
+          
+          // Parse "x1,y1-x2,y2" format
+          const parts = wallKey.split('-')
+          if (parts.length !== 2) continue // Invalid format
+          
+          const [start, end] = parts
+          const [x1, y1] = start.split(',').map(Number)
+          const [x2, y2] = end.split(',').map(Number)
+          
+          // Validate all coordinates are numbers
+          if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
+          
+          const isHorizontal = y1 === y2
+          
+          segments.push({
+            start: [x1, y1],
+            end: [x2, y2],
+            id: wallKey,
+            isHorizontal
+          })
         }
-
-        const horizontalLineSegments: WallSegment[] = [];
-        for (const [fixed, varying] of horiz) {
-          const filtered = varying.filter(x => !covered.has(`${x},${fixed}`));
-          if (filtered.length === 0) continue;
-          filtered.sort((a, b) => a - b);
-          let i = 0;
-          while (i < filtered.length) {
-            let j = i;
-            while (j < filtered.length - 1 && filtered[j + 1] === filtered[j] + 1) j++;
-            const startV = filtered[i];
-            const endV = filtered[j];
-            const id = `h-${fixed}-${fixed}-${startV}-${endV}`;
-            horizontalLineSegments.push({ isHorizontal: true, minFixed: fixed, maxFixed: fixed, startVarying: startV, endVarying: endV, id });
-            i = j + 1;
-          }
-        }
-
-        const mergeSegments = (segs: WallSegment[], isHoriz: boolean) => {
-          segs.sort((a, b) => a.minFixed - b.minFixed);
-          const merged: WallSegment[] = [];
-          let current: WallSegment | null = null;
-          for (let seg of segs) {
-            if (current === null) {
-              current = { ...seg };
-            } else if (
-              seg.minFixed === current.maxFixed + 1 &&
-              seg.startVarying === current.startVarying &&
-              seg.endVarying === current.endVarying
-            ) {
-              current.maxFixed = seg.maxFixed;
-              current.id = `${isHoriz ? 'h' : 'v'}-${current.minFixed}-${current.maxFixed}-${current.startVarying}-${current.endVarying}`;
-            } else {
-              merged.push(current);
-              current = { ...seg };
-            }
-          }
-          if (current) merged.push(current);
-          return merged;
-        };
-
-        const mergedVertical = mergeSegments(verticalLineSegments, false);
-        const mergedHorizontal = mergeSegments(horizontalLineSegments, true);
-
-        return [...mergedVertical, ...mergedHorizontal];
+        
+        return segments
       },
       handleExport: () => {
         const ref = get().wallsGroupRef
@@ -277,26 +225,9 @@ const useStore = create<StoreState>()(
         set(state => {
           if (state.selectedWallIds.length === 0) return state
           const newWallsSet = new Set(state.walls)
-          for (const segmentId of state.selectedWallIds) {
-            const parts = segmentId.split('-')
-            const type = parts[0]
-            const minF = parseInt(parts[1])
-            const maxF = parseInt(parts[2])
-            const startV = parseInt(parts[3])
-            const endV = parseInt(parts[4])
-            if (type === 'h') {
-              for (let y = minF; y <= maxF; y++) {
-                for (let x = startV; x <= endV; x++) {
-                  newWallsSet.delete(`${x},${y}`)
-                }
-              }
-            } else {
-              for (let x = minF; x <= maxF; x++) {
-                for (let y = startV; y <= endV; y++) {
-                  newWallsSet.delete(`${x},${y}`)
-                }
-              }
-            }
+          // segmentId is now the wall key in format "x1,y1-x2,y2"
+          for (const wallKey of state.selectedWallIds) {
+            newWallsSet.delete(wallKey)
           }
           const newWalls = Array.from(newWallsSet)
           // Since setWalls will handle undoStack, call it
@@ -309,23 +240,17 @@ const useStore = create<StoreState>()(
         set({ selectedWallIds: [] })
       },
       serializeLayout: () => {
-        const walls = get().walls
         const wallSegments = get().wallSegments()
-        const tiles: [number, number][] = walls.map(key => {
-          const [x, y] = key.split(',').map(Number)
-          return [x, y]
-        })
 
         return {
-          version: '1.0',
-          grid: { size: 200 },
+          version: '2.0', // Updated version for intersection-based walls
+          grid: { size: 61 }, // 61 intersections (60 divisions + 1)
           components: [{
             id: 'walls-default',
             type: 'wall',
             label: 'All Walls',
             group: null,
             data: {
-              tiles,
               segments: wallSegments
             },
             createdAt: new Date().toISOString()
@@ -336,8 +261,10 @@ const useStore = create<StoreState>()(
       loadLayout: (json: LayoutJSON) => {
         set({ selectedWallIds: [] })
         const wallComponent = json.components.find(c => c.type === 'wall')
-        if (wallComponent && wallComponent.data.tiles) {
-          const newWalls = wallComponent.data.tiles.map(([x, y]) => `${x},${y}`)
+        if (wallComponent?.data.segments) {
+          const newWalls = wallComponent.data.segments.map(seg => 
+            `${seg.start[0]},${seg.start[1]}-${seg.end[0]},${seg.end[1]}`
+          )
           get().setWalls(newWalls)
         }
       },
@@ -394,6 +321,18 @@ const useStore = create<StoreState>()(
         selectedWallIds: state.selectedWallIds,
         selectedImageIds: state.selectedImageIds,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Migrate: Remove old format walls (tile-based "x,y" format)
+          // Keep only new format walls (line-based "x1,y1-x2,y2" format)
+          const validWalls = state.walls.filter(wallKey => wallKey.includes('-'))
+          if (validWalls.length !== state.walls.length) {
+            console.log(`Migrated: Removed ${state.walls.length - validWalls.length} old format walls`)
+            state.walls = validWalls
+            state.selectedWallIds = []
+          }
+        }
+      },
     }
   )
 )

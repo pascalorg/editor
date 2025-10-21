@@ -143,14 +143,17 @@ export function AppSidebar() {
   }
 
   const formatWallDescription = (segment: WallSegment) => {
-    const length = segment.endVarying - segment.startVarying + 1
-    const thickness = segment.maxFixed - segment.minFixed + 1
-    const lengthUnit = segment.isHorizontal ? 'tiles long' : 'tiles tall'
-    const thickUnit = segment.isHorizontal ? 'tiles thick' : 'tiles thick'
-    const position = segment.isHorizontal
-      ? `Rows ${segment.minFixed}-${segment.maxFixed}, Cols ${segment.startVarying}-${segment.endVarying}`
-      : `Cols ${segment.minFixed}-${segment.maxFixed}, Rows ${segment.startVarying}-${segment.endVarying}`
-    return `${length} ${lengthUnit}, ${thickness} ${thickUnit} (${position})`
+    const [x1, y1] = segment.start
+    const [x2, y2] = segment.end
+    
+    const dx = Math.abs(x2 - x1)
+    const dy = Math.abs(y2 - y1)
+    const length = Math.sqrt(dx * dx + dy * dy) * 0.5 // 0.5m per grid spacing
+    
+    const orientation = segment.isHorizontal ? 'Horizontal' : 'Vertical'
+    const position = `(${x1},${y1}) → (${x2},${y2})`
+    
+    return `${orientation} wall: ${length.toFixed(2)}m ${position}`
   }
 
   return (

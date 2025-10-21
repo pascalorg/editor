@@ -19,11 +19,13 @@ import { Vector2, Vector3, Plane, Raycaster } from 'three'
 import { BuildingMenu } from '@/components/building-menu'
 import { ControlModeMenu } from '@/components/control-mode-menu'
 
-const TILE_SIZE = 0.15 // 15cm
+const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
+const WALL_THICKNESS = 0.2 // 20cm wall thickness
+const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 const GRID_SIZE = 30 // 30m x 30m
-const GRID_ROWS = Math.floor(GRID_SIZE / TILE_SIZE) // 200 tiles
-const GRID_COLS = Math.floor(GRID_SIZE / TILE_SIZE) // 200 tiles
+const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
+const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 type WallTile = {
   x: number
@@ -49,6 +51,9 @@ export default function Editor({ className }: { className?: string }) {
 
       if (e.key === 'Escape') {
         e.preventDefault()
+        // Cancel wall placement if in progress
+        setWallStartPoint(null)
+        setWallPreviewEnd(null)
         setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -80,11 +85,6 @@ export default function Editor({ className }: { className?: string }) {
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
-  const [hoveredFace, setHoveredFace] = useState<{
-    wallIndex: number
-    faceNormal: THREE.Vector3
-    facePosition: THREE.Vector3
-  } | null>(null)
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     position: { x: number; y: number }
@@ -92,20 +92,6 @@ export default function Editor({ className }: { className?: string }) {
     wallSegment?: WallSegment
   }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'wall' })
   const wallContextMenuTriggeredRef = useRef(false)
-  const [draggingFace, setDraggingFace] = useState<{
-    wallIndex: number;
-    segment: WallSegment;
-    normal: THREE.Vector3;
-    originalPoint: THREE.Vector3;
-    isEndFace: boolean;
-    sign: number;
-    axis: 'x' | 'y';
-  } | null>(null)
-  const [previewNum, setPreviewNum] = useState(0)
-  const [currentMouse, setCurrentMouse] = useState({x: 0, y: 0})
-  const raycaster = useMemo(() => new THREE.Raycaster(), [])
-  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ') {
@@ -135,101 +121,63 @@ export default function Editor({ className }: { className?: string }) {
     }
   }, [])
 
-  useEffect(() => {
-    if (!draggingFace) return
 
-    const handleDragMove = (event: PointerEvent) => {
-      setCurrentMouse({x: event.clientX, y: event.clientY})
-    }
+  const intersections = GRID_INTERSECTIONS
 
-    const handleDragUp = (event: PointerEvent) => {
-      if (draggingFace && previewNum > 0) {
+  // State for two-click wall placement
+  const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
+  const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
+
+  const handleIntersectionClick = (x: number, y: number) => {
+    if (wallStartPoint === null) {
+      // First click: set start point
+      setWallStartPoint([x, y])
+    } else {
+      // Second click: create wall
+      const [x1, y1] = wallStartPoint
+      // Ensure wall is at least MIN_WALL_LENGTH
+      const dx = Math.abs(x - x1) * TILE_SIZE
+      const dy = Math.abs(y - y1) * TILE_SIZE
+      const length = Math.sqrt(dx * dx + dy * dy)
+      
+      if (length >= MIN_WALL_LENGTH && (x === x1 || y === y1)) {
+        // Wall is valid (horizontal or vertical, meets min length)
+        const wallKey = `${x1},${y1}-${x},${y}`
         setWalls(prev => {
           const next = new Set(prev)
-          const {segment: s, isEndFace, sign} = draggingFace
-
-          if (isEndFace) {
-            const fixedMin = s.minFixed
-            const fixedMax = s.maxFixed
-            const varyingSign = sign
-            for (let k = 1; k <= previewNum; k++) {
-              const offset = varyingSign > 0 ? s.endVarying + k : s.startVarying - k
-              for (let f = fixedMin; f <= fixedMax; f++) {
-                const tileX = s.isHorizontal ? offset : f
-                const tileY = s.isHorizontal ? f : offset
-                next.add(`${tileX},${tileY}`)
-              }
-            }
-          } else {
-            const fixedSign = sign
-            for (let k = 1; k <= previewNum; k++) {
-              const newFixed = fixedSign > 0 ? s.maxFixed + k : s.minFixed - k
-              for (let v = s.startVarying; v <= s.endVarying; v++) {
-                const tileX = s.isHorizontal ? v : newFixed
-                const tileY = s.isHorizontal ? newFixed : v
-                next.add(`${tileX},${tileY}`)
-              }
-            }
-          }
+          next.add(wallKey)
           return next
         })
       }
-      document.removeEventListener('pointermove', handleDragMove)
-      document.removeEventListener('pointerup', handleDragUp)
-      setDraggingFace(null)
-      setPreviewNum(0)
+      
+      // Reset placement state
+      setWallStartPoint(null)
+      setWallPreviewEnd(null)
     }
-
-    document.addEventListener('pointermove', handleDragMove)
-    document.addEventListener('pointerup', handleDragUp)
-
-    return () => {
-      document.removeEventListener('pointermove', handleDragMove)
-      document.removeEventListener('pointerup', handleDragUp)
-    }
-  }, [draggingFace, previewNum, setWalls, tileSize])
-
-  const UpdatePreview = () => {
-    const { camera, size } = useThree()
-    useFrame(() => {
-      if (!draggingFace) {
-        setPreviewNum(0)
-        return
-      }
-      const mouse = new Vector2()
-      mouse.x = (currentMouse.x / size.width) * 2 - 1
-      mouse.y = - (currentMouse.y / size.height) * 2 + 1
-      raycaster.setFromCamera(mouse, camera)
-      const intersectPoint = new Vector3()
-      if (raycaster.ray.intersectPlane(plane, intersectPoint)) {
-        const { originalPoint, normal, axis } = draggingFace
-        const coord = axis === 'x' ? intersectPoint.x : intersectPoint.y
-        const original_coord = axis === 'x' ? originalPoint.x : originalPoint.y
-        const adjustedDelta = draggingFace.sign * (coord - original_coord) / tileSize
-        setPreviewNum(Math.max(0, Math.floor(adjustedDelta)))
-      }
-    })
-    return null
   }
 
-  const rows = Math.floor(GRID_SIZE / tileSize)
-  const cols = Math.floor(GRID_SIZE / tileSize)
-
-  const handleTileInteract = (x: number, y: number, action: 'toggle' | 'add') => {
-    const key = `${x},${y}`
-    setWalls(prev => {
-      const next = new Set(prev)
-      if (action === 'toggle') {
-        if (next.has(key)) {
-          next.delete(key)
-        } else {
-          next.add(key)
-        }
-      } else if (action === 'add' && !next.has(key)) {
-        next.add(key)
+  const handleIntersectionHover = (x: number, y: number | null) => {
+    if (wallStartPoint && y !== null) {
+      // Calculate projected point on same row or column
+      const [x1, y1] = wallStartPoint
+      let projectedX = x1
+      let projectedY = y1
+      
+      const dx = Math.abs(x - x1)
+      const dy = Math.abs(y - y1)
+      
+      if (dx > dy) {
+        // Project horizontally
+        projectedX = x
+      } else {
+        // Project vertically
+        projectedY = y
       }
-      return next
-    })
+      
+      setWallPreviewEnd([projectedX, projectedY])
+    } else if (!wallStartPoint) {
+      setWallPreviewEnd(null)
+    }
   }
 
   const handleCanvasRightClick = (e: React.MouseEvent) => {
@@ -404,42 +352,32 @@ export default function Editor({ className }: { className?: string }) {
           />
         ))}
 
-        <group position={[-(cols * tileSize) / 2, -(rows * tileSize) / 2, 0]}>
+        <group position={[-(GRID_SIZE) / 2, -(GRID_SIZE) / 2, 0]}>
           <GridTiles 
-            rows={rows} 
-            cols={cols} 
+            intersections={intersections}
             tileSize={tileSize}
             walls={walls}
-            onTileInteract={handleTileInteract}
+            onIntersectionClick={handleIntersectionClick}
+            onIntersectionHover={handleIntersectionHover}
+            wallStartPoint={wallStartPoint}
+            wallPreviewEnd={wallPreviewEnd}
             opacity={gridOpacity}
-            disableBuild={controlMode !== 'building'}
+            disableBuild={controlMode !== 'building' || activeTool !== 'wall'}
           />
           <Walls
             wallSegments={wallSegments}
             tileSize={tileSize}
             wallHeight={wallHeight}
             hoveredWallIndex={hoveredWallIndex}
-            hoveredFace={hoveredFace}
             selectedWallIds={selectedWallIds}
             setSelectedWallIds={setSelectedWallIds}
             onWallHover={setHoveredWallIndex}
             onWallRightClick={handleWallRightClick}
-            onFaceHover={setHoveredFace}
             isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
-            setDraggingFace={setDraggingFace}
-            draggingFace={draggingFace}
-            previewNum={previewNum}
             controlMode={controlMode}
             onDeleteWalls={handleDeleteSelectedWalls}
           />
-          <FaceHighlight
-            wallSegments={wallSegments}
-            tileSize={tileSize}
-            wallHeight={wallHeight}
-            hoveredFace={hoveredFace}
-          />
-          <UpdatePreview />
         </group>
 
         <CustomControls tileSize={tileSize} controlMode={controlMode} />
@@ -480,208 +418,166 @@ export default function Editor({ className }: { className?: string }) {
 }
 
 type GridTilesProps = {
-  rows: number
-  cols: number
+  intersections: number
   tileSize: number
   walls: Set<string>
-  onTileInteract: (x: number, y: number, action: 'toggle' | 'add') => void
+  onIntersectionClick: (x: number, y: number) => void
+  onIntersectionHover: (x: number, y: number | null) => void
+  wallStartPoint: [number, number] | null
+  wallPreviewEnd: [number, number] | null
   opacity: number
   disableBuild?: boolean
 }
 
-const GridTiles = memo(({ rows, cols, tileSize, walls, onTileInteract, opacity, disableBuild = false }: GridTilesProps) => {
+const GridTiles = memo(({ intersections, tileSize, walls, onIntersectionClick, onIntersectionHover, wallStartPoint, wallPreviewEnd, opacity, disableBuild = false }: GridTilesProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
-  const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number } | null>(null)
-  const isDraggingRef = useRef(false)
-  const hasMovedRef = useRef(false)
-  const initialTileRef = useRef<{x: number, y: number} | null>(null)
-  const prevHoveredRef = useRef<{x: number, y: number} | null>(null)
+  const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(null)
+
+  const gridSize = (intersections - 1) * tileSize
 
   const handlePointerMove = (e: any) => {
     e.stopPropagation()
     
-    if (e.uv) {
-      const x = Math.floor(e.uv.x * cols)
-      const y = Math.floor(e.uv.y * rows)
+    if (e.point && !disableBuild) {
+      // e.point is in world coordinates
+      // The parent group is offset by [-GRID_SIZE/2, -GRID_SIZE/2, 0]
+      // Convert world coords to local coords by adding the offset back
+      const localX = e.point.x + (GRID_SIZE / 2)
+      const localY = e.point.y + (GRID_SIZE / 2)
       
-      const newHovered = (x >= 0 && x < cols && y >= 0 && y < rows) ? {x, y} : null
-      setHoveredTile(newHovered)
+      // Round to nearest intersection
+      const x = Math.round(localX / tileSize)
+      const y = Math.round(localY / tileSize)
       
-      if (isDraggingRef.current && newHovered) {
-        if (!prevHoveredRef.current || prevHoveredRef.current.x !== newHovered.x || prevHoveredRef.current.y !== newHovered.y) {
-          hasMovedRef.current = true
-          onTileInteract(newHovered.x, newHovered.y, 'add')
-          prevHoveredRef.current = newHovered
-        }
-      } else if (!newHovered) {
-        prevHoveredRef.current = null
+      if (x >= 0 && x < intersections && y >= 0 && y < intersections) {
+        setHoveredIntersection({ x, y })
+        onIntersectionHover(x, y)
+      } else {
+        setHoveredIntersection(null)
+        onIntersectionHover(0, null)
       }
-    } else {
-      setHoveredTile(null)
-      prevHoveredRef.current = null
     }
   }
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation()
-    if (disableBuild || !e.uv) return
-    const x = Math.floor(e.uv.x * cols)
-    const y = Math.floor(e.uv.y * rows)
-    if (x < 0 || x >= cols || y < 0 || y >= rows) return
-    initialTileRef.current = {x, y}
-    isDraggingRef.current = true
-    hasMovedRef.current = false
-    prevHoveredRef.current = {x, y}
-    // Place the wall immediately on pointer down
-    onTileInteract(x, y, 'add')
-    document.addEventListener('pointerup', handlePointerUp)
-  }
-
-  const handlePointerUp = () => {
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false
-      // If no movement occurred (single click), toggle the wall that was added on pointer down
-      if (!hasMovedRef.current && initialTileRef.current) {
-        onTileInteract(initialTileRef.current.x, initialTileRef.current.y, 'toggle')
-      }
-      // If movement occurred, keep the wall that was added on pointer down
-    }
-    document.removeEventListener('pointerup', handlePointerUp)
+    if (disableBuild || !hoveredIntersection) return
+    onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
   }
 
   return (
     <>
+      {/* Invisible plane for raycasting */}
       <mesh
         ref={meshRef}
-        position={[(cols * tileSize) / 2, (rows * tileSize) / 2, 0.001]}
+        position={[gridSize / 2, gridSize / 2, 0.001]}
         rotation={[0, 0, 0]}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
-          setHoveredTile(null)
-          prevHoveredRef.current = null
+          setHoveredIntersection(null)
+          onIntersectionHover(0, null)
         }}
       >
-        <planeGeometry args={[cols * tileSize, rows * tileSize]} />
+        <planeGeometry args={[gridSize, gridSize]} />
         <meshStandardMaterial 
           color="#404045"
           transparent
-          opacity={opacity}
+          opacity={opacity * 0.3}
         />
       </mesh>
       
-      {hoveredTile && !walls.has(`${hoveredTile.x},${hoveredTile.y}`) && (
-        <mesh
-          position={[
-            hoveredTile.x * tileSize + tileSize / 2,
-            hoveredTile.y * tileSize + tileSize / 2,
-            0.002
-          ]}
-          rotation={[0, 0, 0]}
-        >
-          <planeGeometry args={[tileSize * 0.95, tileSize * 0.95]} />
-          <meshStandardMaterial 
-            color="#5a5a5f"
-            transparent
-            opacity={0.6}
-          />
+      {/* Down arrow at hovered intersection */}
+      {hoveredIntersection && !disableBuild && (
+        <group position={[hoveredIntersection.x * tileSize, hoveredIntersection.y * tileSize, 2]}>
+          <DownArrow />
+        </group>
+      )}
+      
+      {/* Start point indicator */}
+      {wallStartPoint && (
+        <mesh position={[wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.01]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
+          <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
         </mesh>
       )}
       
-      {Array.from(walls).map(key => {
-        const [x, y] = key.split(',').map(Number)
-        return (
-          <mesh
-            key={key}
-            position={[
-              x * tileSize + tileSize / 2,
-              y * tileSize + tileSize / 2,
-              0.002
-            ]}
-            rotation={[0, 0, 0]}
-          >
-            <planeGeometry args={[tileSize * 0.95, tileSize * 0.95]} />
-            <meshStandardMaterial 
-              color="#9d4b4b"
-              transparent
-              opacity={0.8}
-            />
-          </mesh>
-        )
-      })}
+      {/* Preview line when placing wall */}
+      {wallStartPoint && wallPreviewEnd && (
+        <Line
+          points={[
+            [wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.1],
+            [wallPreviewEnd[0] * tileSize, wallPreviewEnd[1] * tileSize, 0.1]
+          ]}
+          color="#44ff44"
+          lineWidth={3}
+          dashed={false}
+        />
+      )}
     </>
   )
 })
+
+// Down arrow component (2m height, pointing down)
+const DownArrow = () => {
+  const shaftHeight = 1.7
+  const coneHeight = 0.3
+  const shaftRadius = 0.03
+  const coneRadius = 0.1
+  
+  return (
+    <group>
+      {/* Shaft - cylinder is created along Y-axis, rotate to align with Z-axis */}
+      <mesh position={[0, 0, -shaftHeight / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
+        <meshStandardMaterial color="white" transparent opacity={0.8} />
+      </mesh>
+      {/* Cone tip - cone points up by default along Y, rotate to point down along -Z */}
+      <mesh position={[0, 0, -(shaftHeight + coneHeight / 2)]} rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[coneRadius, coneHeight, 8]} />
+        <meshStandardMaterial color="white" transparent opacity={0.8} />
+      </mesh>
+    </group>
+  )
+}
 
 type WallsProps = {
   wallSegments: WallSegment[]
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
-  hoveredFace: {
-    wallIndex: number
-    faceNormal: THREE.Vector3
-    facePosition: THREE.Vector3
-  } | null
   selectedWallIds: Set<string>
   setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
   onWallHover: (index: number | null) => void
-  onFaceHover: (face: { wallIndex: number; faceNormal: THREE.Vector3; facePosition: THREE.Vector3 } | null) => void
   isCameraEnabled?: boolean
-  setDraggingFace: (info: any) => void
-  draggingFace: {
-    wallIndex: number
-    segment: WallSegment
-    normal: THREE.Vector3
-    originalPoint: THREE.Vector3
-    isEndFace: boolean
-    sign: number
-    axis: 'x' | 'y'
-  } | null
-  previewNum: number
   controlMode: string
   onDeleteWalls: () => void
 }
 
-const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace, draggingFace, previewNum, controlMode, onDeleteWalls }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, isCameraEnabled, controlMode, onDeleteWalls }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
   const [deleteStartWall, setDeleteStartWall] = useState<string | null>(null)
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
-        let width, depth, posX, posY;
-        const height = wallHeight;
+        const [x1, y1] = seg.start
+        const [x2, y2] = seg.end
+        
+        // Calculate wall dimensions
+        const dx = x2 - x1
+        const dy = y2 - y1
+        const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+        const thickness = WALL_THICKNESS
+        const height = wallHeight
+        
+        // Calculate center position
+        const centerX = (x1 + x2) / 2 * tileSize
+        const centerY = (y1 + y2) / 2 * tileSize
+        
+        // Calculate rotation
+        const angle = Math.atan2(dy, dx)
+        
         const isSelected = selectedWallIds.has(seg.id);
         const isHovered = hoveredWallIndex === i;
-        const isDragged = draggingFace?.wallIndex === i && previewNum > 0
-
-        let minF = seg.minFixed
-        let maxF = seg.maxFixed
-        let startV = seg.startVarying
-        let endV = seg.endVarying
-
-        if (isDragged) {
-          const sign = draggingFace.sign
-          const isEnd = draggingFace.isEndFace
-          if (isEnd) {
-            if (sign > 0) endV += previewNum
-            else startV -= previewNum
-          } else {
-            if (sign > 0) maxF += previewNum
-            else minF -= previewNum
-          }
-        }
-
-        if (seg.isHorizontal) {
-          width = (endV - startV + 1) * tileSize;
-          depth = (maxF - minF + 1) * tileSize;
-          posX = startV * tileSize + width / 2;
-          posY = minF * tileSize + depth / 2;
-        } else {
-          width = (maxF - minF + 1) * tileSize;
-          depth = (endV - startV + 1) * tileSize;
-          posX = minF * tileSize + width / 2;
-          posY = startV * tileSize + depth / 2;
-        }
 
         // Determine color based on selection and hover state
         let color = "#aaaabf"; // default
@@ -699,281 +595,124 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
         }
 
         return (
-          <mesh
-            key={seg.id}
-            position={[posX, posY, height / 2]}
-            castShadow
-            receiveShadow
-            onPointerEnter={(e) => {
-              e.stopPropagation();
-              onWallHover(i);
-            }}
-            onPointerLeave={(e) => {
-              e.stopPropagation();
-              onFaceHover(null);
-            }}
-            onPointerOver={(e) => {
-              e.stopPropagation();
-              if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                // Multi-select during drag
-                setSelectedWallIds(prev => {
-                  const next = new Set(prev)
-                  next.add(seg.id)
-                  return next
-                })
-              }
-              
-              if (draggingFace) {
-                onFaceHover(null);
-                return;
-              }
-
-              // Face detection using raycasting
-              if (e.intersections && e.intersections.length > 0) {
-                const intersection = e.intersections[0];
-                if (intersection.face) {
-                  const normal = intersection.face.normal.clone();
-                  // Transform normal to world space
-                  normal.transformDirection(e.object.matrixWorld);
-
-                  // Only highlight vertical faces (exclude top/bottom)
-                  if (Math.abs(normal.z) < 0.1) {
-                    const facePosition = intersection.point.clone();
-                    onFaceHover({
-                      wallIndex: i,
-                      faceNormal: normal,
-                      facePosition: facePosition
-                    });
-                  } else {
-                    onFaceHover(null);
-                  }
-                }
-              }
-            }}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              
-              // Delete mode: left click to select/multi-select for deletion
-              if (controlMode === 'delete' && e.button === 0) {
-                setDeleteStartWall(seg.id)
-                setSelectedWallIds(prev => {
-                  const next = new Set(prev)
-                  next.add(seg.id)
-                  return next
-                })
-                return
-              }
-
-              // Check for right-click (button 2) and camera not enabled and walls selected
-              if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
-                // Prevent default browser context menu
-                if (e.nativeEvent) {
-                  e.nativeEvent.preventDefault();
-                }
-                onWallRightClick?.(e, seg);
-              }
-              
-              // Building mode: handle face dragging
-              if (e.button === 0 && isSelected && controlMode === 'building') {
-                e.stopPropagation()
-                const intersection = e.intersections[0]
-                if (intersection && intersection.face) {
-                  const normal = intersection.face.normal.clone().transformDirection(e.object.matrixWorld)
-                  if (Math.abs(normal.z) < 0.1) {
-                    const axis = Math.abs(normal.x) > Math.abs(normal.y) ? 'x' : 'y'
-                    const sign = Math.sign(normal[axis])
-                    const isEndFace = (seg.isHorizontal && axis === 'x') || (!seg.isHorizontal && axis === 'y')
-                    setDraggingFace({
-                      wallIndex: i,
-                      segment: seg,
-                      normal,
-                      originalPoint: intersection.point.clone(),
-                      isEndFace,
-                      sign,
-                      axis
-                    })
-                    return // Prevent selection click
-                  }
-                }
-              }
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              
-              // Delete mode: release to confirm deletion
-              if (controlMode === 'delete' && deleteStartWall) {
-                onDeleteWalls()
-                setDeleteStartWall(null)
-              }
-            }}
-            onPointerMove={(e) => {
-              if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                // Multi-select during drag
-                setSelectedWallIds(prev => {
-                  const next = new Set(prev)
-                  next.add(seg.id)
-                  return next
-                })
-              }
-            }}
-            onContextMenu={(e) => {
-              // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
-              if (!isCameraEnabled && selectedWallIds.size > 0) {
+          <group key={seg.id} position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+            <mesh
+              castShadow
+              receiveShadow
+              onPointerEnter={(e) => {
                 e.stopPropagation();
-                if (e.nativeEvent) {
-                  e.nativeEvent.preventDefault();
+                onWallHover(i);
+              }}
+              onPointerLeave={(e) => {
+                e.stopPropagation();
+                onWallHover(null);
+              }}
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
+                  // Multi-select during drag
+                  setSelectedWallIds(prev => {
+                    const next = new Set(prev)
+                    next.add(seg.id)
+                    return next
+                  })
                 }
-              }
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              
-              // Delete mode: handled in onPointerDown/Up
-              if (controlMode === 'delete') {
-                return
-              }
-              
-              // Select mode: normal selection behavior
-              if (controlMode === 'select') {
-                setSelectedWallIds(prev => {
-                  const next = new Set(prev);
-                  if (e.shiftKey) {
-                    // Shift+click: add/remove from selection
-                    if (next.has(seg.id)) {
-                      next.delete(seg.id);
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                
+                // Delete mode: left click to select/multi-select for deletion
+                if (controlMode === 'delete' && e.button === 0) {
+                  setDeleteStartWall(seg.id)
+                  setSelectedWallIds(prev => {
+                    const next = new Set(prev)
+                    next.add(seg.id)
+                    return next
+                  })
+                  return
+                }
+
+                // Check for right-click (button 2) and camera not enabled and walls selected
+                if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
+                  // Prevent default browser context menu
+                  if (e.nativeEvent) {
+                    e.nativeEvent.preventDefault();
+                  }
+                  onWallRightClick?.(e, seg);
+                }
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                
+                // Delete mode: release to confirm deletion
+                if (controlMode === 'delete' && deleteStartWall) {
+                  onDeleteWalls()
+                  setDeleteStartWall(null)
+                }
+              }}
+              onPointerMove={(e) => {
+                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
+                  // Multi-select during drag
+                  setSelectedWallIds(prev => {
+                    const next = new Set(prev)
+                    next.add(seg.id)
+                    return next
+                  })
+                }
+              }}
+              onContextMenu={(e) => {
+                // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
+                if (!isCameraEnabled && selectedWallIds.size > 0) {
+                  e.stopPropagation();
+                  if (e.nativeEvent) {
+                    e.nativeEvent.preventDefault();
+                  }
+                }
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                
+                // Delete mode: handled in onPointerDown/Up
+                if (controlMode === 'delete') {
+                  return
+                }
+                
+                // Select mode: normal selection behavior
+                if (controlMode === 'select') {
+                  setSelectedWallIds(prev => {
+                    const next = new Set(prev);
+                    if (e.shiftKey) {
+                      // Shift+click: add/remove from selection
+                      if (next.has(seg.id)) {
+                        next.delete(seg.id);
+                      } else {
+                        next.add(seg.id);
+                      }
                     } else {
+                      // Regular click: select only this wall
+                      next.clear();
                       next.add(seg.id);
                     }
-                  } else {
-                    // Regular click: select only this wall
-                    next.clear();
-                    next.add(seg.id);
-                  }
-                  return next;
-                });
-              }
-            }}
-          >
-            <boxGeometry args={[width, depth, height]} />
-            <meshStandardMaterial
-              color={color}
-              roughness={0.7}
-              metalness={0.1}
-              emissive={emissive}
-            />
-          </mesh>
+                    return next;
+                  });
+                }
+              }}
+            >
+              <boxGeometry args={[length, thickness, height]} />
+              <meshStandardMaterial
+                color={color}
+                roughness={0.7}
+                metalness={0.1}
+                emissive={emissive}
+              />
+            </mesh>
+          </group>
         );
       })}
     </group>
   );
 }));
 
-const FaceHighlight = ({ wallSegments, tileSize, wallHeight, hoveredFace }: {
-  wallSegments: WallSegment[]
-  tileSize: number
-  wallHeight: number
-  hoveredFace: {
-    wallIndex: number
-    faceNormal: THREE.Vector3
-    facePosition: THREE.Vector3
-  } | null
-}) => {
-  if (!hoveredFace) return null;
-
-  const seg = wallSegments[hoveredFace.wallIndex];
-  if (!seg) return null;
-
-  let width, depth, posX, posY;
-  const height = wallHeight;
-
-  let minF = seg.minFixed
-  let maxF = seg.maxFixed
-  let startV = seg.startVarying
-  let endV = seg.endVarying
-
-  if (seg.isHorizontal) {
-    width = (endV - startV + 1) * tileSize;
-    depth = (maxF - minF + 1) * tileSize;
-    posX = startV * tileSize + width / 2;
-    posY = minF * tileSize + depth / 2;
-  } else {
-    width = (maxF - minF + 1) * tileSize;
-    depth = (endV - startV + 1) * tileSize;
-    posX = minF * tileSize + width / 2;
-    posY = startV * tileSize + depth / 2;
-  }
-
-  // Determine which face based on normal
-  const normal = hoveredFace.faceNormal;
-  let faceCenterX = posX;
-  let faceCenterY = posY;
-  let faceCenterZ = height / 2;
-
-  // Face center offsets based on normal direction
-  if (Math.abs(normal.x) > 0.9) { // Left/Right face
-    faceCenterX += normal.x * width / 2;
-  } else if (Math.abs(normal.y) > 0.9) { // Front/Back face
-    faceCenterY += normal.y * depth / 2;
-  }
-
-  // Create a rectangle outline for the specific face
-  const halfWidth = width / 2;
-  const halfDepth = depth / 2;
-  const halfHeight = height / 2;
-
-  let corners: THREE.Vector3[];
-
-  if (Math.abs(normal.x) > 0.9) { // Left/Right face - YZ plane
-    corners = [
-      new THREE.Vector3(faceCenterX, faceCenterY - halfDepth, faceCenterZ - halfHeight),
-      new THREE.Vector3(faceCenterX, faceCenterY + halfDepth, faceCenterZ - halfHeight),
-      new THREE.Vector3(faceCenterX, faceCenterY + halfDepth, faceCenterZ + halfHeight),
-      new THREE.Vector3(faceCenterX, faceCenterY - halfDepth, faceCenterZ + halfHeight),
-    ];
-  } else { // Front/Back face - XZ plane
-    corners = [
-      new THREE.Vector3(faceCenterX - halfWidth, faceCenterY, faceCenterZ - halfHeight),
-      new THREE.Vector3(faceCenterX + halfWidth, faceCenterY, faceCenterZ - halfHeight),
-      new THREE.Vector3(faceCenterX + halfWidth, faceCenterY, faceCenterZ + halfHeight),
-      new THREE.Vector3(faceCenterX - halfWidth, faceCenterY, faceCenterZ + halfHeight),
-    ];
-  }
-
-  // Create edges geometry for the face outline
-  const edgesGeometry = new THREE.BufferGeometry();
-  const positions = new Float32Array([
-    // Rectangle outline
-    corners[0].x, corners[0].y, corners[0].z, corners[1].x, corners[1].y, corners[1].z,
-    corners[1].x, corners[1].y, corners[1].z, corners[2].x, corners[2].y, corners[2].z,
-    corners[2].x, corners[2].y, corners[2].z, corners[3].x, corners[3].y, corners[3].z,
-    corners[3].x, corners[3].y, corners[3].z, corners[0].x, corners[0].y, corners[0].z,
-  ]);
-
-  edgesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  return (
-    <group>
-      <ThickLine start={corners[0]} end={corners[1]} />
-      <ThickLine start={corners[1]} end={corners[2]} />
-      <ThickLine start={corners[2]} end={corners[3]} />
-      <ThickLine start={corners[3]} end={corners[0]} />
-    </group>
-  );
-};
-
-const ThickLine = ({ start, end, radius = 0.01, color = "white" }: { start: THREE.Vector3; end: THREE.Vector3; radius?: number; color?: string }) => {
-  const length = start.distanceTo(end);
-  const position = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-  const direction = new THREE.Vector3().subVectors(end, start).normalize();
-  const orientation = new THREE.Quaternion();
-  orientation.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-  return (
-    <mesh position={position} quaternion={orientation}>
-      <cylinderGeometry args={[radius, radius, length, 8]} />
-      <meshBasicMaterial color={color} transparent opacity={0.8} depthTest={false} />
-    </mesh>
-  );
-};
 
 const ReferenceImage = ({ url, opacity, scale, position, rotation }: {
   url: string
