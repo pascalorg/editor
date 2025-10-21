@@ -23,6 +23,10 @@ export interface ReferenceImage {
   createdAt: string
 }
 
+export type Tool = 'wall' | 'door' | 'window' | 'dummy1' | 'dummy2'
+
+export type ControlMode = 'select' | 'delete' | 'building'
+
 export type ComponentData = {
   tiles: [number, number][]
   segments: WallSegment[]
@@ -63,6 +67,8 @@ type StoreState = {
   wallsGroupRef: THREE.Group | null
   undoStack: string[][]
   redoStack: string[][]
+  activeTool: Tool | null
+  controlMode: ControlMode
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
@@ -72,6 +78,8 @@ type StoreState = {
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
   setWallsGroupRef: (ref: THREE.Group | null) => void
+  setActiveTool: (tool: Tool | null) => void
+  setControlMode: (mode: ControlMode) => void
   getWallsSet: () => Set<string>
   getSelectedWallIdsSet: () => Set<string>
   getSelectedImageIdsSet: () => Set<string>
@@ -100,6 +108,8 @@ const useStore = create<StoreState>()(
       wallsGroupRef: null,
       undoStack: [],
       redoStack: [],
+      activeTool: 'wall',
+      controlMode: 'building',
       setWalls: (walls) => set(state => {
         const sortedNew = [...walls].sort()
         const sortedCurrent = [...state.walls].sort()
@@ -118,6 +128,16 @@ const useStore = create<StoreState>()(
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
       setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
       setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
+      setActiveTool: (tool) => {
+        set({ activeTool: tool })
+        // Automatically switch to building mode when a building tool is selected
+        if (tool !== null) {
+          set({ controlMode: 'building' })
+        } else {
+          set({ controlMode: 'select' })
+        }
+      },
+      setControlMode: (mode) => set({ controlMode: mode }),
       getWallsSet: () => new Set(get().walls),
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
@@ -407,6 +427,10 @@ export const useEditorContext = () => {
     setIsJsonInspectorOpen: store.setIsJsonInspectorOpen,
     wallsGroupRef: store.wallsGroupRef,
     setWallsGroupRef: store.setWallsGroupRef,
+    activeTool: store.activeTool,
+    setActiveTool: store.setActiveTool,
+    controlMode: store.controlMode,
+    setControlMode: store.setControlMode,
     wallSegments: store.wallSegments(),
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,

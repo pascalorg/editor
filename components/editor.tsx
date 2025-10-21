@@ -14,15 +14,10 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { Trash2, Box, DoorOpen, RectangleHorizontal, Circle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Trash2 } from 'lucide-react'
 import { Vector2, Vector3, Plane, Raycaster } from 'three'
+import { BuildingMenu } from '@/components/building-menu'
+import { ControlModeMenu } from '@/components/control-mode-menu'
 
 const TILE_SIZE = 0.15 // 15cm
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -35,52 +30,8 @@ type WallTile = {
   y: number
 }
 
-const BuildingToolsMenu = () => {
-  const [activeTool, setActiveTool] = useState<'wall' | 'door' | 'window' | 'dummy1' | 'dummy2' | null>('wall')
-
-  const tools = [
-    { id: 'wall' as const, icon: Box, label: 'Wall' },
-    { id: 'door' as const, icon: DoorOpen, label: 'Door' },
-    { id: 'window' as const, icon: RectangleHorizontal, label: 'Window' },
-    { id: 'dummy1' as const, icon: Circle, label: 'Tool 1' },
-    { id: 'dummy2' as const, icon: Circle, label: 'Tool 2' },
-  ]
-
-  return (
-    <TooltipProvider>
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-lg">
-        {tools.map((tool) => {
-          const Icon = tool.icon
-          const isActive = activeTool === tool.id
-          
-          return (
-            <Tooltip key={tool.id}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={isActive ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => setActiveTool(tool.id)}
-                  className={cn(
-                    'h-10 w-10 transition-all',
-                    isActive && 'bg-primary text-primary-foreground'
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{tool.label}</p>
-              </TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </TooltipProvider>
-  )
-}
-
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo } = useEditorContext()
+  const { walls, setWalls, images, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -91,7 +42,21 @@ export default function Editor({ className }: { className?: string }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+      // Don't handle shortcuts if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setControlMode('select')
+      } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('select')
+      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('delete')
+      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
           e.preventDefault()
           redo()
@@ -103,7 +68,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo])
+  }, [undo, redo, setControlMode])
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
@@ -335,8 +300,6 @@ export default function Editor({ className }: { className?: string }) {
     imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
   }, { collapsed: true })
 
-  const isBuildingMode = false;
-
   return (
     <div className="relative h-full w-full">
       <Canvas
@@ -449,7 +412,7 @@ export default function Editor({ className }: { className?: string }) {
             walls={walls}
             onTileInteract={handleTileInteract}
             opacity={gridOpacity}
-            disableBuild={true}
+            disableBuild={controlMode !== 'building'}
           />
           <Walls
             wallSegments={wallSegments}
@@ -467,6 +430,8 @@ export default function Editor({ className }: { className?: string }) {
             setDraggingFace={setDraggingFace}
             draggingFace={draggingFace}
             previewNum={previewNum}
+            controlMode={controlMode}
+            onDeleteWalls={handleDeleteSelectedWalls}
           />
           <FaceHighlight
             wallSegments={wallSegments}
@@ -477,7 +442,7 @@ export default function Editor({ className }: { className?: string }) {
           <UpdatePreview />
         </group>
 
-        <CustomControls tileSize={tileSize} />
+        <CustomControls tileSize={tileSize} controlMode={controlMode} />
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
@@ -508,7 +473,8 @@ export default function Editor({ className }: { className?: string }) {
         </div>
       )}
 
-      <BuildingToolsMenu />
+      <ControlModeMenu />
+      <BuildingMenu />
     </div>
   )
 }
@@ -673,9 +639,12 @@ type WallsProps = {
     axis: 'x' | 'y'
   } | null
   previewNum: number
+  controlMode: string
+  onDeleteWalls: () => void
 }
 
-const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace, draggingFace, previewNum }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
+const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWallIndex, hoveredFace, selectedWallIds, setSelectedWallIds, onWallHover, onWallRightClick, onFaceHover, isCameraEnabled, setDraggingFace, draggingFace, previewNum, controlMode, onDeleteWalls }: WallsProps & { onWallRightClick?: (e: any, wallSegment: WallSegment) => void }, ref: Ref<THREE.Group>) => {
+  const [deleteStartWall, setDeleteStartWall] = useState<string | null>(null)
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -743,8 +712,17 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
               e.stopPropagation();
               onFaceHover(null);
             }}
-            onPointerMove={(e) => {
+            onPointerOver={(e) => {
               e.stopPropagation();
+              if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
+                // Multi-select during drag
+                setSelectedWallIds(prev => {
+                  const next = new Set(prev)
+                  next.add(seg.id)
+                  return next
+                })
+              }
+              
               if (draggingFace) {
                 onFaceHover(null);
                 return;
@@ -774,6 +752,18 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onPointerDown={(e) => {
               e.stopPropagation();
+              
+              // Delete mode: left click to select/multi-select for deletion
+              if (controlMode === 'delete' && e.button === 0) {
+                setDeleteStartWall(seg.id)
+                setSelectedWallIds(prev => {
+                  const next = new Set(prev)
+                  next.add(seg.id)
+                  return next
+                })
+                return
+              }
+
               // Check for right-click (button 2) and camera not enabled and walls selected
               if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
                 // Prevent default browser context menu
@@ -782,7 +772,9 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
                 }
                 onWallRightClick?.(e, seg);
               }
-              if (e.button === 0 && isSelected) {
+              
+              // Building mode: handle face dragging
+              if (e.button === 0 && isSelected && controlMode === 'building') {
                 e.stopPropagation()
                 const intersection = e.intersections[0]
                 if (intersection && intersection.face) {
@@ -807,6 +799,22 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onPointerUp={(e) => {
               e.stopPropagation();
+              
+              // Delete mode: release to confirm deletion
+              if (controlMode === 'delete' && deleteStartWall) {
+                onDeleteWalls()
+                setDeleteStartWall(null)
+              }
+            }}
+            onPointerMove={(e) => {
+              if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
+                // Multi-select during drag
+                setSelectedWallIds(prev => {
+                  const next = new Set(prev)
+                  next.add(seg.id)
+                  return next
+                })
+              }
             }}
             onContextMenu={(e) => {
               // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
@@ -819,22 +827,31 @@ const Walls = memo(forwardRef(({ wallSegments, tileSize, wallHeight, hoveredWall
             }}
             onClick={(e) => {
               e.stopPropagation();
-              setSelectedWallIds(prev => {
-                const next = new Set(prev);
-                if (e.shiftKey) {
-                  // Shift+click: add/remove from selection
-                  if (next.has(seg.id)) {
-                    next.delete(seg.id);
+              
+              // Delete mode: handled in onPointerDown/Up
+              if (controlMode === 'delete') {
+                return
+              }
+              
+              // Select mode: normal selection behavior
+              if (controlMode === 'select') {
+                setSelectedWallIds(prev => {
+                  const next = new Set(prev);
+                  if (e.shiftKey) {
+                    // Shift+click: add/remove from selection
+                    if (next.has(seg.id)) {
+                      next.delete(seg.id);
+                    } else {
+                      next.add(seg.id);
+                    }
                   } else {
+                    // Regular click: select only this wall
+                    next.clear();
                     next.add(seg.id);
                   }
-                } else {
-                  // Regular click: select only this wall
-                  next.clear();
-                  next.add(seg.id);
-                }
-                return next;
-              });
+                  return next;
+                });
+              }
             }}
           >
             <boxGeometry args={[width, depth, height]} />
@@ -994,7 +1011,7 @@ const CameraSetup = () => {
   return null
 }
 
-const CustomControls = ({ tileSize }: { tileSize: number }) => {
+const CustomControls = ({ tileSize, controlMode }: { tileSize: number; controlMode: string }) => {
   const { camera, gl } = useThree();
   const dragging = useRef(false);
   const dragType = useRef<'pan' | 'rotate' | null>(null);
@@ -1042,10 +1059,13 @@ const CustomControls = ({ tileSize }: { tileSize: number }) => {
       initialTarget.current.copy(currentTarget.current);
       dragging.current = true;
 
-      if (event.button === 0) { // left - pan
-        dragType.current = 'pan';
-        grabbedPoint.current.copy(hitPoint);
-      } else if (event.button === 2) { // right - rotate
+      if (event.button === 0) { // left - pan (only in select mode)
+        // Only allow panning in select mode
+        if (controlMode === 'select') {
+          dragType.current = 'pan';
+          grabbedPoint.current.copy(hitPoint);
+        }
+      } else if (event.button === 2) { // right - rotate (always enabled)
         dragType.current = 'rotate';
         const centerMouse = new THREE.Vector2(0, 0);
         raycaster.current.setFromCamera(centerMouse, camera);
@@ -1152,7 +1172,7 @@ const CustomControls = ({ tileSize }: { tileSize: number }) => {
         cancelAnimationFrame(rafId.current);
       }
     };
-  }, [camera, gl, tileSize]);
+  }, [camera, gl, tileSize, controlMode]);
 
   // Smooth damping animation
   useFrame((state, delta) => {
