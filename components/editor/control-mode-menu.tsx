@@ -26,6 +26,7 @@ export function ControlModeMenu({ className }: { className?: string }) {
         'fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 border rounded-lg p-1 ', 
         'bg-[#1b1c1f] backdrop-blur-sm border-gray-800 shadow-lg',
         'text-white',
+        'hover:opacity-100 transition-opacity opacity-70',
         className,
         )}> 
         {modes.map((mode) => {

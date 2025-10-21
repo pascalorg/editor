@@ -182,7 +182,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <div className="px-2 py-2">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Reference Images ({images.length})
+                Reference Images (<span suppressHydrationWarning>{images.length}</span>)
               </label>
               <div className="max-h-48 overflow-y-auto space-y-1 select-none">
                 {images.length === 0 ? (
@@ -223,7 +223,7 @@ export function AppSidebar() {
                 disabled={selectedImageIds.size === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete Selected Images ({selectedImageIds.size})</span>
+                <span>Delete Selected Images (<span suppressHydrationWarning>{selectedImageIds.size}</span>)</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -232,7 +232,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <div className="px-2 py-2">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Wall Segments ({wallSegments.length})
+                Wall Segments (<span suppressHydrationWarning>{wallSegments.length}</span>)
               </label>
               <div className="max-h-48 overflow-y-auto space-y-1 select-none">
                 {wallSegments.length === 0 ? (
@@ -273,7 +273,7 @@ export function AppSidebar() {
                 disabled={selectedWallIds.size === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete Selected ({selectedWallIds.size})</span>
+                <span>Delete Selected (<span suppressHydrationWarning>{selectedWallIds.size}</span>)</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -313,7 +313,7 @@ export function AppSidebar() {
                 disabled={wallSegments.length === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Clear All ({wallSegments.length})</span>
+                <span>Clear All (<span suppressHydrationWarning>{wallSegments.length}</span>)</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
