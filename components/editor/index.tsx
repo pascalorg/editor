@@ -132,8 +132,14 @@ export default function Editor({ className }: { className?: string }) {
         const dy = Math.abs(y2 - y1) * TILE_SIZE
         const length = Math.sqrt(dx * dx + dy * dy)
         
-        if (length >= MIN_WALL_LENGTH && (x2 === x1 || y2 === y1)) {
-          // Wall is valid (horizontal or vertical, meets min length)
+        const absDxGrid = Math.abs(x2 - x1)
+        const absDyGrid = Math.abs(y2 - y1)
+        const isHorizontal = y2 === y1
+        const isVertical = x2 === x1
+        const isDiagonal = absDxGrid === absDyGrid // 45° diagonal
+        
+        if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
+          // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
           const wallKey = `${x1},${y1}-${x2},${y2}`
           setWalls(prev => {
             const next = new Set(prev)
@@ -151,19 +157,36 @@ export default function Editor({ className }: { className?: string }) {
 
   const handleIntersectionHover = (x: number, y: number | null) => {
     if (wallStartPoint && y !== null) {
-      // Calculate projected point on same row or column
+      // Calculate projected point on same row, column, or 45° diagonal
       const [x1, y1] = wallStartPoint
       let projectedX = x1
       let projectedY = y1
       
-      const dx = Math.abs(x - x1)
-      const dy = Math.abs(y - y1)
+      const dx = x - x1
+      const dy = y - y1
+      const absDx = Math.abs(dx)
+      const absDy = Math.abs(dy)
       
-      if (dx > dy) {
-        // Project horizontally
+      // Calculate distances to horizontal, vertical, and diagonal lines
+      const horizontalDist = absDy
+      const verticalDist = absDx
+      const diagonalDist = Math.abs(absDx - absDy)
+      
+      // Find the minimum distance to determine which axis to snap to
+      const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+      
+      if (minDist === diagonalDist) {
+        // Snap to 45° diagonal
+        const diagonalLength = Math.min(absDx, absDy)
+        projectedX = x1 + Math.sign(dx) * diagonalLength
+        projectedY = y1 + Math.sign(dy) * diagonalLength
+      } else if (minDist === horizontalDist) {
+        // Snap to horizontal
         projectedX = x
+        projectedY = y1
       } else {
-        // Project vertically
+        // Snap to vertical
+        projectedX = x1
         projectedY = y
       }
       
