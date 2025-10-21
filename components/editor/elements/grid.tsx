@@ -1,7 +1,7 @@
 'use client'
 
-import { memo, useRef, useState } from 'react'
 import { Line } from '@react-three/drei'
+import { memo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { WallShadowPreview } from './wall'
 
@@ -151,12 +151,12 @@ const DownArrow = () => {
       {/* Shaft - cylinder is created along Y-axis, rotate to align with Z-axis */}
       <mesh position={[0, 0, -shaftHeight / 2]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
-        <meshStandardMaterial color="white" transparent opacity={0.8} />
+        <meshStandardMaterial color="white" transparent opacity={0.8} depthTest={false} />
       </mesh>
       {/* Cone tip - cone points up by default along Y, rotate to point down along -Z */}
       <mesh position={[0, 0, -(shaftHeight + coneHeight / 2)]} rotation={[-Math.PI / 2, 0, 0]}>
         <coneGeometry args={[coneRadius, coneHeight, 8]} />
-        <meshStandardMaterial color="white" transparent opacity={0.8} />
+        <meshStandardMaterial color="white" transparent opacity={0.8} depthTest={false} />
       </mesh>
     </group>
   )
