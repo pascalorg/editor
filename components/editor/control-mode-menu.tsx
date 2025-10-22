@@ -1,6 +1,5 @@
 'use client'
 
-import { MousePointer2, Trash2, Hammer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -8,8 +7,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
 import { useEditorContext, type ControlMode } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
+import { Hammer, MousePointer2, Trash2 } from 'lucide-react'
 
 export function ControlModeMenu({ className }: { className?: string }) {
   const { controlMode, setControlMode, activeTool } = useEditorContext()
@@ -17,7 +17,7 @@ export function ControlModeMenu({ className }: { className?: string }) {
   const modes: Array<{ id: ControlMode; icon: typeof MousePointer2; label: string; shortcut: string; color: string }> = [
     { id: 'select', icon: MousePointer2, label: 'Select', shortcut: 'V', color: 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-600/30 hover:text-blue-400' },
     { id: 'delete', icon: Trash2, label: 'Delete', shortcut: 'D', color: 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-600/30 hover:text-red-400' },
-    { id: 'building', icon: Hammer, label: 'Building', shortcut: 'Tool', color: 'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:text-green-400' },
+    { id: 'building', icon: Hammer, label: 'Building', shortcut: 'B', color: 'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:text-green-400' },
   ]
 
   return (
@@ -57,8 +57,9 @@ export function ControlModeMenu({ className }: { className?: string }) {
                   {mode.label} Mode
                   {mode.id === 'select' && ' (V)'}
                   {mode.id === 'delete' && ' (D)'}
-                  {mode.id === 'building' && !activeTool && ' (Select a tool first)'}
-                  {mode.id === 'building' && activeTool && ' (Active)'}
+                  {mode.id === 'building' && !isActive && ' (B)'}
+                  {mode.id === 'building' && isActive && !activeTool && ' (Select a tool first)'}
+                  {mode.id === 'building' && isActive && activeTool && ' (Active)'}
                   {isActive && mode.id !== 'select' && ' • Press Esc to exit'}
                 </p>
               </TooltipContent>

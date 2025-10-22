@@ -1,8 +1,8 @@
 'use client'
 
-import { memo, forwardRef, useState, type Ref } from 'react'
-import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
+import { forwardRef, memo, type Ref } from 'react'
+import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 
@@ -31,10 +31,8 @@ export const Walls = memo(forwardRef(({
   onWallRightClick, 
   isCameraEnabled, 
   controlMode, 
-  onDeleteWalls 
+  onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
-  const [deleteStartWall, setDeleteStartWall] = useState<string | null>(null)
-  
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -43,17 +41,20 @@ export const Walls = memo(forwardRef(({
         
         // Calculate wall dimensions
         const dx = x2 - x1
-        const dy = y2 - y1
-        const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+        const dz = y2 - y1  // y1, y2 from grid are now z coordinates in 3D space
+        const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
         const thickness = WALL_THICKNESS
+        // Extend wall by half thickness on each end for perfect corners
+        // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
+        const length = baseLength + thickness
         const height = wallHeight
-        
-        // Calculate center position
+
+        // Calculate center position (x-z plane is ground, y is up)
         const centerX = (x1 + x2) / 2 * tileSize
-        const centerY = (y1 + y2) / 2 * tileSize
-        
-        // Calculate rotation
-        const angle = Math.atan2(dy, dx)
+        const centerZ = (y1 + y2) / 2 * tileSize
+
+        // Calculate rotation around Y axis (vertical)
+        const angle = Math.atan2(dz, dx)
         
         const isSelected = selectedWallIds.has(seg.id);
         const isHovered = hoveredWallIndex === i;
@@ -74,42 +75,31 @@ export const Walls = memo(forwardRef(({
         }
 
         return (
-          <group key={seg.id} position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+          <group key={seg.id} position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
             <mesh
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                e.stopPropagation();
-                onWallHover(i);
+                // Don't highlight walls in delete mode
+                if (controlMode !== 'delete') {
+                  e.stopPropagation();
+                  onWallHover(i);
+                }
               }}
               onPointerLeave={(e) => {
-                e.stopPropagation();
-                onWallHover(null);
-              }}
-              onPointerOver={(e) => {
-                e.stopPropagation();
-                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                  // Multi-select during drag
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
+                // Don't highlight walls in delete mode
+                if (controlMode !== 'delete') {
+                  e.stopPropagation();
+                  onWallHover(null);
                 }
               }}
               onPointerDown={(e) => {
-                e.stopPropagation();
-                
-                // Delete mode: left click to select/multi-select for deletion
-                if (controlMode === 'delete' && e.button === 0) {
-                  setDeleteStartWall(seg.id)
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
+
+                // Delete mode: interactions now handled through grid intersections
+                if (controlMode === 'delete') {
                   return
                 }
+                e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
                 if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
@@ -118,25 +108,6 @@ export const Walls = memo(forwardRef(({
                     e.nativeEvent.preventDefault();
                   }
                   onWallRightClick?.(e, seg);
-                }
-              }}
-              onPointerUp={(e) => {
-                e.stopPropagation();
-                
-                // Delete mode: release to confirm deletion
-                if (controlMode === 'delete' && deleteStartWall) {
-                  onDeleteWalls()
-                  setDeleteStartWall(null)
-                }
-              }}
-              onPointerMove={(e) => {
-                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                  // Multi-select during drag
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
                 }
               }}
               onContextMenu={(e) => {
@@ -182,7 +153,7 @@ export const Walls = memo(forwardRef(({
                 }
               }}
             >
-              <boxGeometry args={[length, thickness, height]} />
+              <boxGeometry args={[length, height, thickness]} />
               <meshStandardMaterial
                 color={color}
                 roughness={0.7}
@@ -209,25 +180,28 @@ type WallShadowPreviewProps = {
 export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: WallShadowPreviewProps) => {
   const [x1, y1] = start
   const [x2, y2] = end
-  
+
   // Calculate wall dimensions
   const dx = x2 - x1
-  const dy = y2 - y1
-  const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const dz = y2 - y1  // y coordinates from grid are z in 3D space
+  const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
   const thickness = WALL_THICKNESS
+  // Extend wall by half thickness on each end for perfect corners
+  // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
+  const length = baseLength + thickness
   const height = wallHeight
-  
-  // Calculate center position
+
+  // Calculate center position (x-z plane is ground, y is up)
   const centerX = (x1 + x2) / 2 * tileSize
-  const centerY = (y1 + y2) / 2 * tileSize
-  
-  // Calculate rotation
-  const angle = Math.atan2(dy, dx)
-  
+  const centerZ = (y1 + y2) / 2 * tileSize
+
+  // Calculate rotation around Y axis (vertical)
+  const angle = Math.atan2(dz, dx)
+
   return (
-    <group position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+    <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
       <mesh>
-        <boxGeometry args={[length, thickness, height]} />
+        <boxGeometry args={[length, height, thickness]} />
         <meshStandardMaterial
           color="#44ff44"
           transparent
