@@ -41,20 +41,20 @@ export const Walls = memo(forwardRef(({
         
         // Calculate wall dimensions
         const dx = x2 - x1
-        const dy = y2 - y1
-        const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
+        const dz = y2 - y1  // y1, y2 from grid are now z coordinates in 3D space
+        const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
         const thickness = WALL_THICKNESS
         // Extend wall by half thickness on each end for perfect corners
         // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
         const length = baseLength + thickness
         const height = wallHeight
-        
-        // Calculate center position
+
+        // Calculate center position (x-z plane is ground, y is up)
         const centerX = (x1 + x2) / 2 * tileSize
-        const centerY = (y1 + y2) / 2 * tileSize
-        
-        // Calculate rotation
-        const angle = Math.atan2(dy, dx)
+        const centerZ = (y1 + y2) / 2 * tileSize
+
+        // Calculate rotation around Y axis (vertical)
+        const angle = Math.atan2(dz, dx)
         
         const isSelected = selectedWallIds.has(seg.id);
         const isHovered = hoveredWallIndex === i;
@@ -75,7 +75,7 @@ export const Walls = memo(forwardRef(({
         }
 
         return (
-          <group key={seg.id} position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+          <group key={seg.id} position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
             <mesh
               castShadow
               receiveShadow
@@ -153,7 +153,7 @@ export const Walls = memo(forwardRef(({
                 }
               }}
             >
-              <boxGeometry args={[length, thickness, height]} />
+              <boxGeometry args={[length, height, thickness]} />
               <meshStandardMaterial
                 color={color}
                 roughness={0.7}
@@ -180,28 +180,28 @@ type WallShadowPreviewProps = {
 export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: WallShadowPreviewProps) => {
   const [x1, y1] = start
   const [x2, y2] = end
-  
+
   // Calculate wall dimensions
   const dx = x2 - x1
-  const dy = y2 - y1
-  const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const dz = y2 - y1  // y coordinates from grid are z in 3D space
+  const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
   const thickness = WALL_THICKNESS
   // Extend wall by half thickness on each end for perfect corners
   // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
   const length = baseLength + thickness
   const height = wallHeight
-  
-  // Calculate center position
+
+  // Calculate center position (x-z plane is ground, y is up)
   const centerX = (x1 + x2) / 2 * tileSize
-  const centerY = (y1 + y2) / 2 * tileSize
-  
-  // Calculate rotation
-  const angle = Math.atan2(dy, dx)
-  
+  const centerZ = (y1 + y2) / 2 * tileSize
+
+  // Calculate rotation around Y axis (vertical)
+  const angle = Math.atan2(dz, dx)
+
   return (
-    <group position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+    <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
       <mesh>
-        <boxGeometry args={[length, thickness, height]} />
+        <boxGeometry args={[length, height, thickness]} />
         <meshStandardMaterial
           color="#44ff44"
           transparent

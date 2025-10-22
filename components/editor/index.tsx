@@ -673,17 +673,17 @@ export default function Editor({ className }: { className?: string }) {
         }}
       >
         {cameraType === 'perspective' ? (
-          <PerspectiveCamera 
-            makeDefault 
-            position={[10, 0, 5]} 
+          <PerspectiveCamera
+            makeDefault
+            position={[10, 10, 10]}
             fov={50}
             near={0.1}
             far={1000}
           />
         ) : (
-          <OrthographicCamera 
-            makeDefault 
-            position={[10, 0, 5]} 
+          <OrthographicCamera
+            makeDefault
+            position={[10, 10, 10]}
             zoom={20}
             near={-1000}
             far={1000}
@@ -718,13 +718,13 @@ export default function Editor({ className }: { className?: string }) {
             fadeStrength={1}
             infiniteGrid={false}
             side={2}
-            rotation={[Math.PI / 2, 0, 0]}
           />
         )}
         
         {/* Infinite dashed axis lines */}
-        <Line 
-          points={[[-1000, 0, 0.001], [1000, 0, 0.001]]} 
+        {/* X axis (red) */}
+        <Line
+          points={[[-1000, 0, 0], [1000, 0, 0]]}
           lineWidth={1}
           dashed
           dashSize={0.5}
@@ -733,8 +733,9 @@ export default function Editor({ className }: { className?: string }) {
           opacity={0.01}
           depthTest={false}
         />
-        <Line 
-          points={[[0, -1000, 0.001], [0, 1000, 0.001]]} 
+        {/* Y axis (green) - vertical */}
+        <Line
+          points={[[0, -1000, 0], [0, 1000, 0]]}
           lineWidth={1}
           dashed
           dashSize={0.5}
@@ -743,8 +744,9 @@ export default function Editor({ className }: { className?: string }) {
           opacity={0.01}
           depthTest={false}
         />
-        <Line 
-          points={[[0, 0, -1000], [0, 0, 1000]]} 
+        {/* Z axis (blue) */}
+        <Line
+          points={[[0, 0, -1000], [0, 0, 1000]]}
           lineWidth={1}
           dashed
           dashSize={0.5}
@@ -765,7 +767,7 @@ export default function Editor({ className }: { className?: string }) {
           />
         ))}
 
-        <group position={[-(GRID_SIZE) / 2, -(GRID_SIZE) / 2, 0]}>
+        <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
           <GridTiles
             intersections={intersections}
             tileSize={tileSize}

@@ -59,18 +59,18 @@ export const GridTiles = memo(({
 
   const handlePointerMove = (e: any) => {
     e.stopPropagation()
-    
+
     if (e.point && !disableBuild) {
       // e.point is in world coordinates
-      // The parent group is offset by [-GRID_SIZE/2, -GRID_SIZE/2, 0]
+      // The parent group is offset by [-GRID_SIZE/2, 0, -GRID_SIZE/2]
       // Convert world coords to local coords by adding the offset back
       const localX = e.point.x + (GRID_SIZE / 2)
-      const localY = e.point.y + (GRID_SIZE / 2)
-      
+      const localZ = e.point.z + (GRID_SIZE / 2)
+
       // Round to nearest intersection
       const x = Math.round(localX / tileSize)
-      const y = Math.round(localY / tileSize)
-      
+      const y = Math.round(localZ / tileSize)  // y in grid space is z in 3D space
+
       if (x >= 0 && x < intersections && y >= 0 && y < intersections) {
         setHoveredIntersection({ x, y })
         onIntersectionHover(x, y)
@@ -124,8 +124,8 @@ export const GridTiles = memo(({
       {/* Invisible plane for raycasting */}
       <mesh
         ref={meshRef}
-        position={[gridSize / 2, gridSize / 2, 0.001]}
-        rotation={[0, 0, 0]}
+        position={[gridSize / 2, 0.001, gridSize / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
@@ -134,7 +134,7 @@ export const GridTiles = memo(({
         }}
       >
         <planeGeometry args={[gridSize, gridSize]} />
-        <meshStandardMaterial 
+        <meshStandardMaterial
           color="#404045"
           transparent
           opacity={opacity * 0.3}
@@ -152,19 +152,19 @@ export const GridTiles = memo(({
           (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[0] * tileSize :
           (controlMode === 'delete' && deletePreviewEnd) ? deletePreviewEnd[0] * tileSize :
           hoveredIntersection.x * tileSize,
+          2,
           (activeTool === 'wall' && wallPreviewEnd) ? wallPreviewEnd[1] * tileSize :
           (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[1] * tileSize :
           (controlMode === 'delete' && deletePreviewEnd) ? deletePreviewEnd[1] * tileSize :
-          hoveredIntersection.y * tileSize,
-          2
+          hoveredIntersection.y * tileSize
         ]}>
           <DownArrow />
         </group>
       )}
-      
+
       {/* Start point indicator for wall mode */}
       {wallStartPoint && activeTool === 'wall' && (
-        <mesh position={[wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.01]}>
+        <mesh position={[wallStartPoint[0] * tileSize, 0.01, wallStartPoint[1] * tileSize]}>
           <sphereGeometry args={[0.1, 16, 16]} />
           <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
         </mesh>
@@ -174,8 +174,8 @@ export const GridTiles = memo(({
       {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
         <Line
           points={[
-            [wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.1],
-            [wallPreviewEnd[0] * tileSize, wallPreviewEnd[1] * tileSize, 0.1]
+            [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
+            [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
           ]}
           color="#44ff44"
           lineWidth={3}
@@ -197,7 +197,7 @@ export const GridTiles = memo(({
       {roomStartPoint && roomPreviewEnd && activeTool === 'room' && (
         <>
           {/* Start point indicator */}
-          <mesh position={[roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.01]}>
+          <mesh position={[roomStartPoint[0] * tileSize, 0.01, roomStartPoint[1] * tileSize]}>
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
           </mesh>
@@ -205,11 +205,11 @@ export const GridTiles = memo(({
           {/* Preview lines for the 4 walls */}
           <Line
             points={[
-              [roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
-              [roomPreviewEnd[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
-              [roomPreviewEnd[0] * tileSize, roomPreviewEnd[1] * tileSize, 0.1],
-              [roomStartPoint[0] * tileSize, roomPreviewEnd[1] * tileSize, 0.1],
-              [roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
             ]}
             color="#44ff44"
             lineWidth={3}
@@ -257,7 +257,7 @@ export const GridTiles = memo(({
               customRoomPreviewEnd[1] === point[1]
 
             return (
-              <mesh key={index} position={[point[0] * tileSize, point[1] * tileSize, 0.01]}>
+              <mesh key={index} position={[point[0] * tileSize, 0.01, point[1] * tileSize]}>
                 <sphereGeometry args={[isHoveringFirstPoint ? 0.15 : 0.1, 16, 16]} />
                 <meshStandardMaterial
                   color={isHoveringFirstPoint ? "#ffff44" : "#44ff44"}
@@ -277,8 +277,8 @@ export const GridTiles = memo(({
                   <Line
                     key={`line-${index}`}
                     points={[
-                      [prevPoint[0] * tileSize, prevPoint[1] * tileSize, 0.1],
-                      [point[0] * tileSize, point[1] * tileSize, 0.1]
+                      [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
+                      [point[0] * tileSize, 0.1, point[1] * tileSize]
                     ]}
                     color="#44ff44"
                     lineWidth={3}
@@ -303,8 +303,8 @@ export const GridTiles = memo(({
                   return (
                     <Line
                       points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, customRoomPoints[customRoomPoints.length - 1][1] * tileSize, 0.1],
-                        [customRoomPoints[0][0] * tileSize, customRoomPoints[0][1] * tileSize, 0.1]
+                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                        [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
                       ]}
                       color="#ffff44"
                       lineWidth={3}
@@ -316,8 +316,8 @@ export const GridTiles = memo(({
                   return (
                     <Line
                       points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, customRoomPoints[customRoomPoints.length - 1][1] * tileSize, 0.1],
-                        [customRoomPreviewEnd[0] * tileSize, customRoomPreviewEnd[1] * tileSize, 0.1]
+                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                        [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
                       ]}
                       color="#44ff44"
                       lineWidth={3}
@@ -350,7 +350,7 @@ export const GridTiles = memo(({
       {controlMode === 'delete' && deleteStartPoint && (
         <>
           {/* Start point indicator for delete mode */}
-          <mesh position={[deleteStartPoint[0] * tileSize, deleteStartPoint[1] * tileSize, 0.01]}>
+          <mesh position={[deleteStartPoint[0] * tileSize, 0.01, deleteStartPoint[1] * tileSize]}>
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshStandardMaterial color="#ff4444" emissive="#aa2222" depthTest={false} />
           </mesh>
@@ -360,8 +360,8 @@ export const GridTiles = memo(({
             <>
               <Line
                 points={[
-                  [deleteStartPoint[0] * tileSize, deleteStartPoint[1] * tileSize, 0.1],
-                  [deletePreviewEnd[0] * tileSize, deletePreviewEnd[1] * tileSize, 0.1]
+                  [deleteStartPoint[0] * tileSize, 0.1, deleteStartPoint[1] * tileSize],
+                  [deletePreviewEnd[0] * tileSize, 0.1, deletePreviewEnd[1] * tileSize]
                 ]}
                 color="#ff4444"
                 lineWidth={3}
@@ -386,22 +386,22 @@ export const GridTiles = memo(({
 
 GridTiles.displayName = 'GridTiles'
 
-// Down arrow component (2m height, pointing down)
+// Down arrow component (2m height, pointing down along -Y axis)
 const DownArrow = () => {
   const shaftHeight = 1.7
   const coneHeight = 0.3
   const shaftRadius = 0.03
   const coneRadius = 0.1
-  
+
   return (
     <group>
-      {/* Shaft - cylinder is created along Y-axis, rotate to align with Z-axis */}
-      <mesh position={[0, 0, -shaftHeight / 2]} rotation={[Math.PI / 2, 0, 0]}>
+      {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
+      <mesh position={[0, -shaftHeight / 2, 0]}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
         <meshStandardMaterial color="white" transparent opacity={0.8} depthTest={false} />
       </mesh>
-      {/* Cone tip - cone points up by default along Y, rotate to point down along -Z */}
-      <mesh position={[0, 0, -(shaftHeight + coneHeight / 2)]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Cone tip - cone points up by default along Y, rotate 180° to point down */}
+      <mesh position={[0, -(shaftHeight + coneHeight / 2), 0]} rotation={[0, 0, Math.PI]}>
         <coneGeometry args={[coneRadius, coneHeight, 8]} />
         <meshStandardMaterial color="white" transparent opacity={0.8} depthTest={false} />
       </mesh>
@@ -423,24 +423,24 @@ const DeletePlanePreview = memo(({ start, end, tileSize, wallHeight }: DeletePla
 
   // Calculate dimensions
   const dx = x2 - x1
-  const dy = y2 - y1
-  const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const dz = y2 - y1  // y coordinates from grid are z in 3D space
+  const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
   const thickness = 0.2 // Same as WALL_THICKNESS
   // Extend by half thickness on each end
   const length = baseLength + thickness
   const height = wallHeight
 
-  // Calculate center position
+  // Calculate center position (x-z plane is ground, y is up)
   const centerX = (x1 + x2) / 2 * tileSize
-  const centerY = (y1 + y2) / 2 * tileSize
+  const centerZ = (y1 + y2) / 2 * tileSize
 
-  // Calculate rotation
-  const angle = Math.atan2(dy, dx)
+  // Calculate rotation around Y axis (vertical)
+  const angle = Math.atan2(dz, dx)
 
   return (
-    <group position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+    <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
       <mesh>
-        <boxGeometry args={[length, thickness, height]} />
+        <boxGeometry args={[length, height, thickness]} />
         <meshStandardMaterial
           color="#ff4444"
           transparent
