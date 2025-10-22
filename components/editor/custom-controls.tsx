@@ -22,7 +22,12 @@ export function CustomControls({ tileSize }: CustomControlsProps) {
   }, [controls]);
 
   return (
-    <CameraControls mouseButtons={controlMode === 'select' ?  {
+    <CameraControls
+      minPolarAngle={0}
+      maxPolarAngle={Math.PI / 2 - 0.1}
+      minDistance={10}
+      maxDistance={50}
+    mouseButtons={controlMode === 'select' ?  {
       left: CameraControlsImpl.ACTION.ROTATE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
