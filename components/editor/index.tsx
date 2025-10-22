@@ -28,6 +28,18 @@ export default function Editor({ className }: { className?: string }) {
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
 
+  // State for two-click wall placement
+  const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
+  const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
+
+  // State for room mode (rectangle with 4 walls)
+  const [roomStartPoint, setRoomStartPoint] = useState<[number, number] | null>(null)
+  const [roomPreviewEnd, setRoomPreviewEnd] = useState<[number, number] | null>(null)
+
+  // State for custom-room mode (multi-point polygon)
+  const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
+  const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
+
   useEffect(() => {
     setWallsGroupRef(wallsGroupRef.current)
   }, [setWallsGroupRef])
@@ -41,6 +53,9 @@ export default function Editor({ className }: { className?: string }) {
 
       if (e.key === 'Escape') {
         e.preventDefault()
+        // Check if there's an active placement in progress
+        const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0
+
         // Cancel all placement modes
         setWallStartPoint(null)
         setWallPreviewEnd(null)
@@ -48,7 +63,11 @@ export default function Editor({ className }: { className?: string }) {
         setRoomPreviewEnd(null)
         setCustomRoomPoints([])
         setCustomRoomPreviewEnd(null)
-        setControlMode('select')
+
+        // Only change mode to 'select' if there was no active placement
+        if (!hasActivePlacement) {
+          setControlMode('select')
+        }
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('select')
@@ -67,7 +86,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, setControlMode])
+  }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd])
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
@@ -117,18 +136,6 @@ export default function Editor({ className }: { className?: string }) {
 
 
   const intersections = GRID_INTERSECTIONS
-
-  // State for two-click wall placement
-  const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
-  const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
-
-  // State for room mode (rectangle with 4 walls)
-  const [roomStartPoint, setRoomStartPoint] = useState<[number, number] | null>(null)
-  const [roomPreviewEnd, setRoomPreviewEnd] = useState<[number, number] | null>(null)
-
-  // State for custom-room mode (multi-point polygon)
-  const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
-  const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
 
   const handleIntersectionClick = (x: number, y: number) => {
     if (activeTool === 'wall') {
