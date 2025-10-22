@@ -435,7 +435,8 @@ const DeletePlanePreview = memo(({ start, end, tileSize, wallHeight }: DeletePla
   const centerZ = (y1 + y2) / 2 * tileSize
 
   // Calculate rotation around Y axis (vertical)
-  const angle = Math.atan2(dz, dx)
+  // Note: negative dz because Three.js Y-axis rotation transforms local X as (cos(θ), 0, -sin(θ))
+  const angle = Math.atan2(-dz, dx)
 
   return (
     <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
