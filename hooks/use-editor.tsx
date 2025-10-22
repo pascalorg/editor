@@ -3,9 +3,8 @@
 import * as THREE from 'three'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-// @ts-ignore
-import { SetStateAction } from 'react'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
+import type { SetStateAction } from 'react'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -180,8 +179,8 @@ const useStore = create<StoreState>()(
 
         exporter.parse(
           ref,
-          (result: ArrayBuffer) => {
-            const blob = new Blob([result], { type: 'application/octet-stream' });
+          (result: ArrayBuffer | { [key: string]: unknown }) => {
+            const blob = new Blob([result as ArrayBuffer], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -189,7 +188,7 @@ const useStore = create<StoreState>()(
             link.click();
             URL.revokeObjectURL(url);
           },
-          (error: Error) => {
+          (error: ErrorEvent) => {
             console.error('Export error:', error);
           },
           { binary: true }
