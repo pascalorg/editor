@@ -21,9 +21,12 @@ type GridTilesProps = {
   roomPreviewEnd: [number, number] | null
   customRoomPoints: Array<[number, number]>
   customRoomPreviewEnd: [number, number] | null
+  deleteStartPoint: [number, number] | null
+  deletePreviewEnd: [number, number] | null
   opacity: number
   disableBuild?: boolean
   wallHeight: number
+  controlMode: 'select' | 'delete' | 'building'
 }
 
 export const GridTiles = memo(({
@@ -39,9 +42,12 @@ export const GridTiles = memo(({
   roomPreviewEnd,
   customRoomPoints,
   customRoomPreviewEnd,
+  deleteStartPoint,
+  deletePreviewEnd,
   opacity,
   disableBuild = false,
-  wallHeight
+  wallHeight,
+  controlMode
 }: GridTilesProps) => {
   const { activeTool } = useEditorContext()
   const meshRef = useRef<THREE.Mesh>(null)
@@ -140,12 +146,15 @@ export const GridTiles = memo(({
         <group position={[
           // For wall mode, use wallPreviewEnd for snapped position
           // For custom-room mode, use customRoomPreviewEnd for snapped position
+          // For delete mode, use deletePreviewEnd for snapped position
           // For other modes, use the raw hovered intersection
           (activeTool === 'wall' && wallPreviewEnd) ? wallPreviewEnd[0] * tileSize :
           (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[0] * tileSize :
+          (controlMode === 'delete' && deletePreviewEnd) ? deletePreviewEnd[0] * tileSize :
           hoveredIntersection.x * tileSize,
           (activeTool === 'wall' && wallPreviewEnd) ? wallPreviewEnd[1] * tileSize :
           (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[1] * tileSize :
+          (controlMode === 'delete' && deletePreviewEnd) ? deletePreviewEnd[1] * tileSize :
           hoveredIntersection.y * tileSize,
           2
         ]}>
@@ -336,6 +345,41 @@ export const GridTiles = memo(({
           })}
         </>
       )}
+
+      {/* Delete mode preview - red line and plane */}
+      {controlMode === 'delete' && deleteStartPoint && (
+        <>
+          {/* Start point indicator for delete mode */}
+          <mesh position={[deleteStartPoint[0] * tileSize, deleteStartPoint[1] * tileSize, 0.01]}>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshStandardMaterial color="#ff4444" emissive="#aa2222" depthTest={false} />
+          </mesh>
+
+          {/* Preview line and transparent red plane when selecting deletion area */}
+          {deletePreviewEnd && (
+            <>
+              <Line
+                points={[
+                  [deleteStartPoint[0] * tileSize, deleteStartPoint[1] * tileSize, 0.1],
+                  [deletePreviewEnd[0] * tileSize, deletePreviewEnd[1] * tileSize, 0.1]
+                ]}
+                color="#ff4444"
+                lineWidth={3}
+                dashed={false}
+                depthTest={false}
+              />
+
+              {/* Transparent red plane showing what will be deleted */}
+              <DeletePlanePreview
+                start={deleteStartPoint}
+                end={deletePreviewEnd}
+                tileSize={tileSize}
+                wallHeight={wallHeight}
+              />
+            </>
+          )}
+        </>
+      )}
     </>
   )
 })
@@ -364,4 +408,51 @@ const DownArrow = () => {
     </group>
   )
 }
+
+// Delete plane preview component - shows transparent red plane for deletion area
+type DeletePlanePreviewProps = {
+  start: [number, number]
+  end: [number, number]
+  tileSize: number
+  wallHeight: number
+}
+
+const DeletePlanePreview = memo(({ start, end, tileSize, wallHeight }: DeletePlanePreviewProps) => {
+  const [x1, y1] = start
+  const [x2, y2] = end
+
+  // Calculate dimensions
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const thickness = 0.2 // Same as WALL_THICKNESS
+  // Extend by half thickness on each end
+  const length = baseLength + thickness
+  const height = wallHeight
+
+  // Calculate center position
+  const centerX = (x1 + x2) / 2 * tileSize
+  const centerY = (y1 + y2) / 2 * tileSize
+
+  // Calculate rotation
+  const angle = Math.atan2(dy, dx)
+
+  return (
+    <group position={[centerX, centerY, height / 2]} rotation={[0, 0, angle]}>
+      <mesh>
+        <boxGeometry args={[length, thickness, height]} />
+        <meshStandardMaterial
+          color="#ff4444"
+          transparent
+          opacity={0.5}
+          emissive="#aa2222"
+          emissiveIntensity={0.5}
+          depthTest={false}
+        />
+      </mesh>
+    </group>
+  )
+})
+
+DeletePlanePreview.displayName = 'DeletePlanePreview'
 

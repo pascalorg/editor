@@ -40,6 +40,10 @@ export default function Editor({ className }: { className?: string }) {
   const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
   const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for delete mode (two-click selection)
+  const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
+  const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
+
   useEffect(() => {
     setWallsGroupRef(wallsGroupRef.current)
   }, [setWallsGroupRef])
@@ -53,18 +57,20 @@ export default function Editor({ className }: { className?: string }) {
 
       if (e.key === 'Escape') {
         e.preventDefault()
-        // Check if there's an active placement in progress
-        const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0
+        // Check if there's an active placement/deletion in progress
+        const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0 || deleteStartPoint !== null
 
-        // Cancel all placement modes
+        // Cancel all placement and delete modes
         setWallStartPoint(null)
         setWallPreviewEnd(null)
         setRoomStartPoint(null)
         setRoomPreviewEnd(null)
         setCustomRoomPoints([])
         setCustomRoomPreviewEnd(null)
+        setDeleteStartPoint(null)
+        setDeletePreviewEnd(null)
 
-        // Only change mode to 'select' if there was no active placement
+        // Only change mode to 'select' if there was no active placement/deletion
         if (!hasActivePlacement) {
           setControlMode('select')
         }
@@ -86,7 +92,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd])
+  }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd, setDeleteStartPoint, setDeletePreviewEnd])
 
   const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
     wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
@@ -137,7 +143,184 @@ export default function Editor({ className }: { className?: string }) {
 
   const intersections = GRID_INTERSECTIONS
 
+  // Helper function to check if two line segments overlap (for collinear segments only)
+  const getOverlappingSegment = (
+    seg1: [[number, number], [number, number]],
+    seg2: [[number, number], [number, number]]
+  ): { overlap: boolean; remaining: Array<[[number, number], [number, number]]> } => {
+    const [[x1, y1], [x2, y2]] = seg1
+    const [[x3, y3], [x4, y4]] = seg2
+
+    // Check if segments are collinear (on same line)
+    const isHorizontal1 = y1 === y2
+    const isHorizontal2 = y3 === y4
+    const isVertical1 = x1 === x2
+    const isVertical2 = x3 === x4
+
+    // Calculate diagonal direction for diagonal segments
+    const dx1 = x2 - x1
+    const dy1 = y2 - y1
+    const dx2 = x4 - x3
+    const dy2 = y4 - y3
+
+    const isDiagonal1 = !isHorizontal1 && !isVertical1 && Math.abs(dx1) === Math.abs(dy1)
+    const isDiagonal2 = !isHorizontal2 && !isVertical2 && Math.abs(dx2) === Math.abs(dy2)
+
+    // For segments to overlap, they must be on the same line
+    if (isHorizontal1 && isHorizontal2 && y1 === y3) {
+      // Both horizontal on same row
+      const minX1 = Math.min(x1, x2)
+      const maxX1 = Math.max(x1, x2)
+      const minX2 = Math.min(x3, x4)
+      const maxX2 = Math.max(x3, x4)
+
+      // Check for overlap
+      const overlapStart = Math.max(minX1, minX2)
+      const overlapEnd = Math.min(maxX1, maxX2)
+
+      if (overlapStart <= overlapEnd) {
+        // There is overlap, calculate remaining segments
+        const remaining: Array<[[number, number], [number, number]]> = []
+
+        if (minX1 < overlapStart) {
+          remaining.push([[minX1, y1], [overlapStart, y1]])
+        }
+        if (maxX1 > overlapEnd) {
+          remaining.push([[overlapEnd, y1], [maxX1, y1]])
+        }
+
+        return { overlap: true, remaining }
+      }
+    } else if (isVertical1 && isVertical2 && x1 === x3) {
+      // Both vertical on same column
+      const minY1 = Math.min(y1, y2)
+      const maxY1 = Math.max(y1, y2)
+      const minY2 = Math.min(y3, y4)
+      const maxY2 = Math.max(y3, y4)
+
+      // Check for overlap
+      const overlapStart = Math.max(minY1, minY2)
+      const overlapEnd = Math.min(maxY1, maxY2)
+
+      if (overlapStart <= overlapEnd) {
+        // There is overlap, calculate remaining segments
+        const remaining: Array<[[number, number], [number, number]]> = []
+
+        if (minY1 < overlapStart) {
+          remaining.push([[x1, minY1], [x1, overlapStart]])
+        }
+        if (maxY1 > overlapEnd) {
+          remaining.push([[x1, overlapEnd], [x1, maxY1]])
+        }
+
+        return { overlap: true, remaining }
+      }
+    } else if (isDiagonal1 && isDiagonal2) {
+      // Both diagonal - check if they're on the same diagonal line
+      // For diagonals, we need to check if they have the same slope and intercept
+      const slope1 = dy1 / dx1
+      const slope2 = dy2 / dx2
+
+      if (Math.abs(slope1 - slope2) < 0.001) {
+        // Same slope - check if they're on the same line
+        const intercept1 = y1 - slope1 * x1
+        const intercept2 = y3 - slope2 * x3
+
+        if (Math.abs(intercept1 - intercept2) < 0.001) {
+          // Same line - check for overlap using x-coordinates (assuming slope is consistent)
+          const minX1 = Math.min(x1, x2)
+          const maxX1 = Math.max(x1, x2)
+          const minX2 = Math.min(x3, x4)
+          const maxX2 = Math.max(x3, x4)
+
+          const overlapStartX = Math.max(minX1, minX2)
+          const overlapEndX = Math.min(maxX1, maxX2)
+
+          if (overlapStartX <= overlapEndX) {
+            // There is overlap
+            const remaining: Array<[[number, number], [number, number]]> = []
+
+            if (minX1 < overlapStartX) {
+              const startY = y1 + slope1 * (minX1 - x1)
+              const endY = y1 + slope1 * (overlapStartX - x1)
+              remaining.push([[minX1, Math.round(startY)], [overlapStartX, Math.round(endY)]])
+            }
+            if (maxX1 > overlapEndX) {
+              const startY = y1 + slope1 * (overlapEndX - x1)
+              const endY = y1 + slope1 * (maxX1 - x1)
+              remaining.push([[overlapEndX, Math.round(startY)], [maxX1, Math.round(endY)]])
+            }
+
+            return { overlap: true, remaining }
+          }
+        }
+      }
+    }
+
+    return { overlap: false, remaining: [seg1] }
+  }
+
+  const handleDeleteWallPortion = (x1: number, y1: number, x2: number, y2: number) => {
+    const deleteSegment: [[number, number], [number, number]] = [[x1, y1], [x2, y2]]
+
+    setWalls(prev => {
+      const next = new Set<string>()
+
+      // Check each existing wall
+      for (const wallKey of prev) {
+        const parts = wallKey.split('-')
+        if (parts.length !== 2) continue
+
+        const [start, end] = parts
+        const [wx1, wy1] = start.split(',').map(Number)
+        const [wx2, wy2] = end.split(',').map(Number)
+
+        const wallSegment: [[number, number], [number, number]] = [[wx1, wy1], [wx2, wy2]]
+
+        // Check if this wall overlaps with the deletion segment
+        const result = getOverlappingSegment(wallSegment, deleteSegment)
+
+        if (result.overlap) {
+          // Add remaining segments (if any)
+          for (const remaining of result.remaining) {
+            const [[rx1, ry1], [rx2, ry2]] = remaining
+            next.add(`${rx1},${ry1}-${rx2},${ry2}`)
+          }
+        } else {
+          // No overlap, keep the wall
+          next.add(wallKey)
+        }
+      }
+
+      return next
+    })
+  }
+
   const handleIntersectionClick = (x: number, y: number) => {
+    // Check control mode first - delete mode takes priority
+    if (controlMode === 'delete') {
+      // Delete mode: two-click line selection
+      if (deleteStartPoint === null) {
+        // First click: set start point
+        setDeleteStartPoint([x, y])
+      } else {
+        // Second click: delete wall portions using deletePreviewEnd (snapped position)
+        if (deletePreviewEnd) {
+          const [x1, y1] = deleteStartPoint
+          const [x2, y2] = deletePreviewEnd
+
+          // Delete wall portions that overlap with the selected segment
+          handleDeleteWallPortion(x1, y1, x2, y2)
+        }
+
+        // Reset delete state
+        setDeleteStartPoint(null)
+        setDeletePreviewEnd(null)
+      }
+      return
+    }
+
+    // Building mode - check active tool
     if (activeTool === 'wall') {
       // Wall mode: two-click line drawing
       if (wallStartPoint === null) {
@@ -269,6 +452,50 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
+    // Check control mode first - delete mode takes priority
+    if (controlMode === 'delete') {
+      // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
+      if (deleteStartPoint && y !== null) {
+        const [x1, y1] = deleteStartPoint
+        let projectedX = x1
+        let projectedY = y1
+
+        const dx = x - x1
+        const dy = y - y1
+        const absDx = Math.abs(dx)
+        const absDy = Math.abs(dy)
+
+        // Calculate distances to horizontal, vertical, and diagonal lines
+        const horizontalDist = absDy
+        const verticalDist = absDx
+        const diagonalDist = Math.abs(absDx - absDy)
+
+        // Find the minimum distance to determine which axis to snap to
+        const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+
+        if (minDist === diagonalDist) {
+          // Snap to 45° diagonal
+          const diagonalLength = Math.min(absDx, absDy)
+          projectedX = x1 + Math.sign(dx) * diagonalLength
+          projectedY = y1 + Math.sign(dy) * diagonalLength
+        } else if (minDist === horizontalDist) {
+          // Snap to horizontal
+          projectedX = x
+          projectedY = y1
+        } else {
+          // Snap to vertical
+          projectedX = x1
+          projectedY = y
+        }
+
+        setDeletePreviewEnd([projectedX, projectedY])
+      } else if (!deleteStartPoint) {
+        setDeletePreviewEnd(null)
+      }
+      return
+    }
+
+    // Building mode - check active tool
     if (activeTool === 'wall') {
       // Wall mode: snap to horizontal, vertical, or 45° diagonal
       if (wallStartPoint && y !== null) {
@@ -550,9 +777,12 @@ export default function Editor({ className }: { className?: string }) {
             roomPreviewEnd={roomPreviewEnd}
             customRoomPoints={customRoomPoints}
             customRoomPreviewEnd={customRoomPreviewEnd}
+            deleteStartPoint={deleteStartPoint}
+            deletePreviewEnd={deletePreviewEnd}
             opacity={gridOpacity}
-            disableBuild={controlMode !== 'building' || !activeTool}
+            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select'}
             wallHeight={wallHeight}
+            controlMode={controlMode}
           />
           <Walls
             wallSegments={wallSegments}

@@ -1,8 +1,8 @@
 'use client'
 
-import { memo, forwardRef, useState, type Ref } from 'react'
-import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
+import { forwardRef, memo, type Ref } from 'react'
+import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 
@@ -31,10 +31,8 @@ export const Walls = memo(forwardRef(({
   onWallRightClick, 
   isCameraEnabled, 
   controlMode, 
-  onDeleteWalls 
+  onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
-  const [deleteStartWall, setDeleteStartWall] = useState<string | null>(null)
-  
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -82,37 +80,26 @@ export const Walls = memo(forwardRef(({
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                e.stopPropagation();
-                onWallHover(i);
+                // Don't highlight walls in delete mode
+                if (controlMode !== 'delete') {
+                  e.stopPropagation();
+                  onWallHover(i);
+                }
               }}
               onPointerLeave={(e) => {
-                e.stopPropagation();
-                onWallHover(null);
-              }}
-              onPointerOver={(e) => {
-                e.stopPropagation();
-                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                  // Multi-select during drag
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
+                // Don't highlight walls in delete mode
+                if (controlMode !== 'delete') {
+                  e.stopPropagation();
+                  onWallHover(null);
                 }
               }}
               onPointerDown={(e) => {
-                e.stopPropagation();
-                
-                // Delete mode: left click to select/multi-select for deletion
-                if (controlMode === 'delete' && e.button === 0) {
-                  setDeleteStartWall(seg.id)
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
+
+                // Delete mode: interactions now handled through grid intersections
+                if (controlMode === 'delete') {
                   return
                 }
+                e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
                 if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
@@ -121,25 +108,6 @@ export const Walls = memo(forwardRef(({
                     e.nativeEvent.preventDefault();
                   }
                   onWallRightClick?.(e, seg);
-                }
-              }}
-              onPointerUp={(e) => {
-                e.stopPropagation();
-                
-                // Delete mode: release to confirm deletion
-                if (controlMode === 'delete' && deleteStartWall) {
-                  onDeleteWalls()
-                  setDeleteStartWall(null)
-                }
-              }}
-              onPointerMove={(e) => {
-                if (controlMode === 'delete' && deleteStartWall && e.buttons === 1) {
-                  // Multi-select during drag
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev)
-                    next.add(seg.id)
-                    return next
-                  })
                 }
               }}
               onContextMenu={(e) => {
