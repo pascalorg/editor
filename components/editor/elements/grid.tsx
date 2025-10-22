@@ -4,6 +4,7 @@ import { Line } from '@react-three/drei'
 import { memo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { WallShadowPreview } from './wall'
+import { useEditorContext } from '@/hooks/use-editor'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -12,28 +13,41 @@ type GridTilesProps = {
   tileSize: number
   walls: Set<string>
   onIntersectionClick: (x: number, y: number) => void
+  onIntersectionDoubleClick: () => void
   onIntersectionHover: (x: number, y: number | null) => void
   wallStartPoint: [number, number] | null
   wallPreviewEnd: [number, number] | null
+  roomStartPoint: [number, number] | null
+  roomPreviewEnd: [number, number] | null
+  customRoomPoints: Array<[number, number]>
+  customRoomPreviewEnd: [number, number] | null
   opacity: number
   disableBuild?: boolean
   wallHeight: number
 }
 
-export const GridTiles = memo(({ 
-  intersections, 
-  tileSize, 
-  walls, 
-  onIntersectionClick, 
-  onIntersectionHover, 
-  wallStartPoint, 
-  wallPreviewEnd, 
-  opacity, 
-  disableBuild = false, 
-  wallHeight 
+export const GridTiles = memo(({
+  intersections,
+  tileSize,
+  walls,
+  onIntersectionClick,
+  onIntersectionDoubleClick,
+  onIntersectionHover,
+  wallStartPoint,
+  wallPreviewEnd,
+  roomStartPoint,
+  roomPreviewEnd,
+  customRoomPoints,
+  customRoomPreviewEnd,
+  opacity,
+  disableBuild = false,
+  wallHeight
 }: GridTilesProps) => {
+  const { activeTool } = useEditorContext()
   const meshRef = useRef<THREE.Mesh>(null)
   const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(null)
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastClickTimeRef = useRef<number>(0)
 
   const gridSize = (intersections - 1) * tileSize
 
@@ -67,7 +81,36 @@ export const GridTiles = memo(({
     // Right-click (button 2) and middle-click (button 1) are for camera controls
     if (e.button !== 0) return
     if (disableBuild || !hoveredIntersection) return
-    onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
+
+    const now = Date.now()
+    const timeSinceLastClick = now - lastClickTimeRef.current
+
+    // Detect double-click within 300ms
+    if (activeTool === 'custom-room' && timeSinceLastClick < 300) {
+      // This is a double-click
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current)
+        clickTimeoutRef.current = null
+      }
+      onIntersectionDoubleClick()
+      lastClickTimeRef.current = 0 // Reset to prevent triple-click issues
+    } else {
+      // Single click
+      if (activeTool === 'custom-room') {
+        // For custom-room mode, delay the click to check if it's part of a double-click
+        if (clickTimeoutRef.current) {
+          clearTimeout(clickTimeoutRef.current)
+        }
+        clickTimeoutRef.current = setTimeout(() => {
+          onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
+          clickTimeoutRef.current = null
+        }, 300)
+      } else {
+        // For other modes, handle click immediately
+        onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
+      }
+      lastClickTimeRef.current = now
+    }
   }
 
   return (
@@ -95,24 +138,31 @@ export const GridTiles = memo(({
       {/* Down arrow at hovered intersection or snapped preview position */}
       {hoveredIntersection && !disableBuild && (
         <group position={[
-          wallPreviewEnd ? wallPreviewEnd[0] * tileSize : hoveredIntersection.x * tileSize,
-          wallPreviewEnd ? wallPreviewEnd[1] * tileSize : hoveredIntersection.y * tileSize,
+          // For wall mode, use wallPreviewEnd for snapped position
+          // For custom-room mode, use customRoomPreviewEnd for snapped position
+          // For other modes, use the raw hovered intersection
+          (activeTool === 'wall' && wallPreviewEnd) ? wallPreviewEnd[0] * tileSize :
+          (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[0] * tileSize :
+          hoveredIntersection.x * tileSize,
+          (activeTool === 'wall' && wallPreviewEnd) ? wallPreviewEnd[1] * tileSize :
+          (activeTool === 'custom-room' && customRoomPreviewEnd) ? customRoomPreviewEnd[1] * tileSize :
+          hoveredIntersection.y * tileSize,
           2
         ]}>
           <DownArrow />
         </group>
       )}
       
-      {/* Start point indicator */}
-      {wallStartPoint && (
+      {/* Start point indicator for wall mode */}
+      {wallStartPoint && activeTool === 'wall' && (
         <mesh position={[wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.01]}>
           <sphereGeometry args={[0.1, 16, 16]} />
           <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
         </mesh>
       )}
-      
+
       {/* Preview line when placing wall */}
-      {wallStartPoint && wallPreviewEnd && (
+      {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
         <Line
           points={[
             [wallStartPoint[0] * tileSize, wallStartPoint[1] * tileSize, 0.1],
@@ -125,13 +175,166 @@ export const GridTiles = memo(({
       )}
       
       {/* Wall shadow preview */}
-      {wallStartPoint && wallPreviewEnd && (
-        <WallShadowPreview 
+      {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
+        <WallShadowPreview
           start={wallStartPoint}
           end={wallPreviewEnd}
           tileSize={tileSize}
           wallHeight={wallHeight}
         />
+      )}
+
+      {/* Room mode preview - rectangle with 4 walls */}
+      {roomStartPoint && roomPreviewEnd && activeTool === 'room' && (
+        <>
+          {/* Start point indicator */}
+          <mesh position={[roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.01]}>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
+          </mesh>
+
+          {/* Preview lines for the 4 walls */}
+          <Line
+            points={[
+              [roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
+              [roomPreviewEnd[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
+              [roomPreviewEnd[0] * tileSize, roomPreviewEnd[1] * tileSize, 0.1],
+              [roomStartPoint[0] * tileSize, roomPreviewEnd[1] * tileSize, 0.1],
+              [roomStartPoint[0] * tileSize, roomStartPoint[1] * tileSize, 0.1],
+            ]}
+            color="#44ff44"
+            lineWidth={3}
+            dashed={false}
+          />
+
+          {/* Wall shadow previews for all 4 walls */}
+          <WallShadowPreview
+            start={[roomStartPoint[0], roomStartPoint[1]]}
+            end={[roomPreviewEnd[0], roomStartPoint[1]]}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+          />
+          <WallShadowPreview
+            start={[roomPreviewEnd[0], roomStartPoint[1]]}
+            end={[roomPreviewEnd[0], roomPreviewEnd[1]]}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+          />
+          <WallShadowPreview
+            start={[roomPreviewEnd[0], roomPreviewEnd[1]]}
+            end={[roomStartPoint[0], roomPreviewEnd[1]]}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+          />
+          <WallShadowPreview
+            start={[roomStartPoint[0], roomPreviewEnd[1]]}
+            end={[roomStartPoint[0], roomStartPoint[1]]}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+          />
+        </>
+      )}
+
+      {/* Custom-room mode preview - polygon */}
+      {activeTool === 'custom-room' && customRoomPoints.length > 0 && (
+        <>
+          {/* Point indicators for all placed points */}
+          {customRoomPoints.map((point, index) => {
+            // Check if hovering over the first point (to close the shape)
+            const isHoveringFirstPoint = index === 0 &&
+              customRoomPoints.length >= 3 &&
+              customRoomPreviewEnd &&
+              customRoomPreviewEnd[0] === point[0] &&
+              customRoomPreviewEnd[1] === point[1]
+
+            return (
+              <mesh key={index} position={[point[0] * tileSize, point[1] * tileSize, 0.01]}>
+                <sphereGeometry args={[isHoveringFirstPoint ? 0.15 : 0.1, 16, 16]} />
+                <meshStandardMaterial
+                  color={isHoveringFirstPoint ? "#ffff44" : "#44ff44"}
+                  emissive={isHoveringFirstPoint ? "#aaaa22" : "#22aa22"}
+                />
+              </mesh>
+            )
+          })}
+
+          {/* Lines between consecutive points */}
+          {customRoomPoints.length > 1 && (
+            <>
+              {customRoomPoints.map((point, index) => {
+                if (index === 0) return null
+                const prevPoint = customRoomPoints[index - 1]
+                return (
+                  <Line
+                    key={`line-${index}`}
+                    points={[
+                      [prevPoint[0] * tileSize, prevPoint[1] * tileSize, 0.1],
+                      [point[0] * tileSize, point[1] * tileSize, 0.1]
+                    ]}
+                    color="#44ff44"
+                    lineWidth={3}
+                    dashed={false}
+                  />
+                )
+              })}
+            </>
+          )}
+
+          {/* Preview line from last point to current hover position */}
+          {customRoomPreviewEnd && (
+            <>
+              {/* Check if hovering over first point */}
+              {(() => {
+                const isHoveringFirstPoint = customRoomPoints.length >= 3 &&
+                  customRoomPreviewEnd[0] === customRoomPoints[0][0] &&
+                  customRoomPreviewEnd[1] === customRoomPoints[0][1]
+
+                if (isHoveringFirstPoint) {
+                  // Show closing line when hovering over first point
+                  return (
+                    <Line
+                      points={[
+                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, customRoomPoints[customRoomPoints.length - 1][1] * tileSize, 0.1],
+                        [customRoomPoints[0][0] * tileSize, customRoomPoints[0][1] * tileSize, 0.1]
+                      ]}
+                      color="#ffff44"
+                      lineWidth={3}
+                      dashed={false}
+                    />
+                  )
+                } else {
+                  // Normal preview line to cursor (no auto-closing line)
+                  return (
+                    <Line
+                      points={[
+                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, customRoomPoints[customRoomPoints.length - 1][1] * tileSize, 0.1],
+                        [customRoomPreviewEnd[0] * tileSize, customRoomPreviewEnd[1] * tileSize, 0.1]
+                      ]}
+                      color="#44ff44"
+                      lineWidth={3}
+                      dashed={false}
+                    />
+                  )
+                }
+              })()}
+            </>
+          )}
+
+          {/* Wall shadow previews for placed segments */}
+          {customRoomPoints.length > 1 && customRoomPoints.map((point, index) => {
+            if (index === 0) return null
+            const prevPoint = customRoomPoints[index - 1]
+            return (
+              <WallShadowPreview
+                key={`shadow-${index}`}
+                start={prevPoint}
+                end={point}
+                tileSize={tileSize}
+                wallHeight={wallHeight}
+              />
+            )
+          })}
+        </>
       )}
     </>
   )

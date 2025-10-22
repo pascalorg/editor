@@ -41,9 +41,13 @@ export default function Editor({ className }: { className?: string }) {
 
       if (e.key === 'Escape') {
         e.preventDefault()
-        // Cancel wall placement if in progress
+        // Cancel all placement modes
         setWallStartPoint(null)
         setWallPreviewEnd(null)
+        setRoomStartPoint(null)
+        setRoomPreviewEnd(null)
+        setCustomRoomPoints([])
+        setCustomRoomPreviewEnd(null)
         setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -118,81 +122,238 @@ export default function Editor({ className }: { className?: string }) {
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
   const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for room mode (rectangle with 4 walls)
+  const [roomStartPoint, setRoomStartPoint] = useState<[number, number] | null>(null)
+  const [roomPreviewEnd, setRoomPreviewEnd] = useState<[number, number] | null>(null)
+
+  // State for custom-room mode (multi-point polygon)
+  const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
+  const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
+
   const handleIntersectionClick = (x: number, y: number) => {
-    if (wallStartPoint === null) {
-      // First click: set start point
-      setWallStartPoint([x, y])
-    } else {
-      // Second click: create wall using wallPreviewEnd (snapped position)
-      if (wallPreviewEnd) {
-        const [x1, y1] = wallStartPoint
-        const [x2, y2] = wallPreviewEnd
-        // Ensure wall is at least MIN_WALL_LENGTH
-        const dx = Math.abs(x2 - x1) * TILE_SIZE
-        const dy = Math.abs(y2 - y1) * TILE_SIZE
-        const length = Math.sqrt(dx * dx + dy * dy)
-        
-        const absDxGrid = Math.abs(x2 - x1)
-        const absDyGrid = Math.abs(y2 - y1)
-        const isHorizontal = y2 === y1
-        const isVertical = x2 === x1
-        const isDiagonal = absDxGrid === absDyGrid // 45° diagonal
-        
-        if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
-          // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
-          const wallKey = `${x1},${y1}-${x2},${y2}`
+    if (activeTool === 'wall') {
+      // Wall mode: two-click line drawing
+      if (wallStartPoint === null) {
+        // First click: set start point
+        setWallStartPoint([x, y])
+      } else {
+        // Second click: create wall using wallPreviewEnd (snapped position)
+        if (wallPreviewEnd) {
+          const [x1, y1] = wallStartPoint
+          const [x2, y2] = wallPreviewEnd
+          // Ensure wall is at least MIN_WALL_LENGTH
+          const dx = Math.abs(x2 - x1) * TILE_SIZE
+          const dy = Math.abs(y2 - y1) * TILE_SIZE
+          const length = Math.sqrt(dx * dx + dy * dy)
+
+          const absDxGrid = Math.abs(x2 - x1)
+          const absDyGrid = Math.abs(y2 - y1)
+          const isHorizontal = y2 === y1
+          const isVertical = x2 === x1
+          const isDiagonal = absDxGrid === absDyGrid // 45° diagonal
+
+          if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
+            // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
+            const wallKey = `${x1},${y1}-${x2},${y2}`
+            setWalls(prev => {
+              const next = new Set(prev)
+              next.add(wallKey)
+              return next
+            })
+          }
+        }
+
+        // Reset placement state
+        setWallStartPoint(null)
+        setWallPreviewEnd(null)
+      }
+    } else if (activeTool === 'room') {
+      // Room mode: two-click rectangle (4 walls)
+      if (roomStartPoint === null) {
+        // First click: set start corner
+        setRoomStartPoint([x, y])
+      } else {
+        // Second click: create 4 walls forming a rectangle
+        if (roomPreviewEnd) {
+          const [x1, y1] = roomStartPoint
+          const [x2, y2] = roomPreviewEnd
+
+          // Create 4 walls: top, bottom, left, right
           setWalls(prev => {
             const next = new Set(prev)
-            next.add(wallKey)
+            // Top wall
+            next.add(`${x1},${y2}-${x2},${y2}`)
+            // Bottom wall
+            next.add(`${x1},${y1}-${x2},${y1}`)
+            // Left wall
+            next.add(`${x1},${y1}-${x1},${y2}`)
+            // Right wall
+            next.add(`${x2},${y1}-${x2},${y2}`)
             return next
           })
         }
+
+        // Reset placement state
+        setRoomStartPoint(null)
+        setRoomPreviewEnd(null)
       }
-      
-      // Reset placement state
-      setWallStartPoint(null)
-      setWallPreviewEnd(null)
+    } else if (activeTool === 'custom-room') {
+      // Custom-room mode: multi-point polygon
+      // Use the snapped preview position instead of raw x,y
+      const snappedX = customRoomPreviewEnd ? customRoomPreviewEnd[0] : x
+      const snappedY = customRoomPreviewEnd ? customRoomPreviewEnd[1] : y
+
+      // Check if clicking on the first point to close the shape
+      if (customRoomPoints.length >= 3 && snappedX === customRoomPoints[0][0] && snappedY === customRoomPoints[0][1]) {
+        // Complete the custom room polygon by creating walls between all points
+        setWalls(prev => {
+          const next = new Set(prev)
+          // Create walls between consecutive points (including closing wall)
+          for (let i = 0; i < customRoomPoints.length; i++) {
+            const [x1, y1] = customRoomPoints[i]
+            const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
+            next.add(`${x1},${y1}-${x2},${y2}`)
+          }
+          return next
+        })
+        // Reset custom room state
+        setCustomRoomPoints([])
+        setCustomRoomPreviewEnd(null)
+      } else {
+        // Add snapped point to the list and reset preview
+        setCustomRoomPoints(prev => [...prev, [snappedX, snappedY]])
+        // Reset preview so it recalculates from the new point on next hover
+        setCustomRoomPreviewEnd(null)
+      }
+    }
+  }
+
+  const handleIntersectionDoubleClick = () => {
+    if (activeTool === 'custom-room' && customRoomPoints.length >= 1) {
+      // Add the current preview point (from the first click of the double-click)
+      // But only if it's different from the last point
+      let finalPoints = customRoomPoints
+      if (customRoomPreviewEnd) {
+        const lastPoint = customRoomPoints[customRoomPoints.length - 1]
+        const isDifferent = lastPoint[0] !== customRoomPreviewEnd[0] || lastPoint[1] !== customRoomPreviewEnd[1]
+        if (isDifferent) {
+          finalPoints = [...customRoomPoints, customRoomPreviewEnd]
+        }
+      }
+
+      // Create walls between consecutive points (NOT closing the shape)
+      if (finalPoints.length >= 2) {
+        setWalls(prev => {
+          const next = new Set(prev)
+          // Create walls between consecutive points only (no closing wall)
+          for (let i = 0; i < finalPoints.length - 1; i++) {
+            const [x1, y1] = finalPoints[i]
+            const [x2, y2] = finalPoints[i + 1]
+            next.add(`${x1},${y1}-${x2},${y2}`)
+          }
+          return next
+        })
+      }
+
+      // Reset custom room state
+      setCustomRoomPoints([])
+      setCustomRoomPreviewEnd(null)
     }
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
-    if (wallStartPoint && y !== null) {
-      // Calculate projected point on same row, column, or 45° diagonal
-      const [x1, y1] = wallStartPoint
-      let projectedX = x1
-      let projectedY = y1
-      
-      const dx = x - x1
-      const dy = y - y1
-      const absDx = Math.abs(dx)
-      const absDy = Math.abs(dy)
-      
-      // Calculate distances to horizontal, vertical, and diagonal lines
-      const horizontalDist = absDy
-      const verticalDist = absDx
-      const diagonalDist = Math.abs(absDx - absDy)
-      
-      // Find the minimum distance to determine which axis to snap to
-      const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-      
-      if (minDist === diagonalDist) {
-        // Snap to 45° diagonal
-        const diagonalLength = Math.min(absDx, absDy)
-        projectedX = x1 + Math.sign(dx) * diagonalLength
-        projectedY = y1 + Math.sign(dy) * diagonalLength
-      } else if (minDist === horizontalDist) {
-        // Snap to horizontal
-        projectedX = x
-        projectedY = y1
-      } else {
-        // Snap to vertical
-        projectedX = x1
-        projectedY = y
+    if (activeTool === 'wall') {
+      // Wall mode: snap to horizontal, vertical, or 45° diagonal
+      if (wallStartPoint && y !== null) {
+        // Calculate projected point on same row, column, or 45° diagonal
+        const [x1, y1] = wallStartPoint
+        let projectedX = x1
+        let projectedY = y1
+
+        const dx = x - x1
+        const dy = y - y1
+        const absDx = Math.abs(dx)
+        const absDy = Math.abs(dy)
+
+        // Calculate distances to horizontal, vertical, and diagonal lines
+        const horizontalDist = absDy
+        const verticalDist = absDx
+        const diagonalDist = Math.abs(absDx - absDy)
+
+        // Find the minimum distance to determine which axis to snap to
+        const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+
+        if (minDist === diagonalDist) {
+          // Snap to 45° diagonal
+          const diagonalLength = Math.min(absDx, absDy)
+          projectedX = x1 + Math.sign(dx) * diagonalLength
+          projectedY = y1 + Math.sign(dy) * diagonalLength
+        } else if (minDist === horizontalDist) {
+          // Snap to horizontal
+          projectedX = x
+          projectedY = y1
+        } else {
+          // Snap to vertical
+          projectedX = x1
+          projectedY = y
+        }
+
+        setWallPreviewEnd([projectedX, projectedY])
+      } else if (!wallStartPoint) {
+        setWallPreviewEnd(null)
       }
-      
-      setWallPreviewEnd([projectedX, projectedY])
-    } else if (!wallStartPoint) {
-      setWallPreviewEnd(null)
+    } else if (activeTool === 'room') {
+      // Room mode: show rectangle preview
+      if (roomStartPoint && y !== null) {
+        setRoomPreviewEnd([x, y])
+      } else if (!roomStartPoint) {
+        setRoomPreviewEnd(null)
+      }
+    } else if (activeTool === 'custom-room') {
+      // Custom-room mode: show preview line to current hover point with snapping
+      if (y !== null) {
+        if (customRoomPoints.length > 0) {
+          const lastPoint = customRoomPoints[customRoomPoints.length - 1]
+          const [x1, y1] = lastPoint
+          let projectedX = x1
+          let projectedY = y1
+
+          const dx = x - x1
+          const dy = y - y1
+          const absDx = Math.abs(dx)
+          const absDy = Math.abs(dy)
+
+          // Calculate distances to horizontal, vertical, and diagonal lines
+          const horizontalDist = absDy
+          const verticalDist = absDx
+          const diagonalDist = Math.abs(absDx - absDy)
+
+          // Find the minimum distance to determine which axis to snap to
+          const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+
+          if (minDist === diagonalDist) {
+            // Snap to 45° diagonal
+            const diagonalLength = Math.min(absDx, absDy)
+            projectedX = x1 + Math.sign(dx) * diagonalLength
+            projectedY = y1 + Math.sign(dy) * diagonalLength
+          } else if (minDist === horizontalDist) {
+            // Snap to horizontal
+            projectedX = x
+            projectedY = y1
+          } else {
+            // Snap to vertical
+            projectedX = x1
+            projectedY = y
+          }
+
+          setCustomRoomPreviewEnd([projectedX, projectedY])
+        } else {
+          // No points yet, just follow the cursor
+          setCustomRoomPreviewEnd([x, y])
+        }
+      } else {
+        setCustomRoomPreviewEnd(null)
+      }
     }
   }
 
@@ -369,16 +530,21 @@ export default function Editor({ className }: { className?: string }) {
         ))}
 
         <group position={[-(GRID_SIZE) / 2, -(GRID_SIZE) / 2, 0]}>
-          <GridTiles 
+          <GridTiles
             intersections={intersections}
             tileSize={tileSize}
             walls={walls}
             onIntersectionClick={handleIntersectionClick}
+            onIntersectionDoubleClick={handleIntersectionDoubleClick}
             onIntersectionHover={handleIntersectionHover}
             wallStartPoint={wallStartPoint}
             wallPreviewEnd={wallPreviewEnd}
+            roomStartPoint={roomStartPoint}
+            roomPreviewEnd={roomPreviewEnd}
+            customRoomPoints={customRoomPoints}
+            customRoomPreviewEnd={customRoomPreviewEnd}
             opacity={gridOpacity}
-            disableBuild={controlMode !== 'building' || activeTool !== 'wall'}
+            disableBuild={controlMode !== 'building' || !activeTool}
             wallHeight={wallHeight}
           />
           <Walls

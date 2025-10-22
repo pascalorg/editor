@@ -1,11 +1,11 @@
 'use client'
 
+import * as THREE from 'three'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import * as THREE from 'three'
 // @ts-ignore
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
 import { SetStateAction } from 'react'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -21,7 +21,7 @@ export interface ReferenceImage {
   createdAt: string
 }
 
-export type Tool = 'wall' | 'door' | 'window' | 'dummy1' | 'dummy2'
+export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
 
 export type ControlMode = 'select' | 'delete' | 'building'
 
