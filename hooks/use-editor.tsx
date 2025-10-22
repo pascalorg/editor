@@ -337,6 +337,8 @@ const useStore = create<StoreState>()(
   )
 )
 
+export const useEditor = useStore;
+
 export const useEditorContext = () => {
   const store = useStore()
   return {

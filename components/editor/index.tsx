@@ -1,19 +1,18 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { GizmoHelper, GizmoViewport, Environment, Grid, PerspectiveCamera, OrthographicCamera, Line } from '@react-three/drei'
-import { useControls } from 'leva'
-import { cn } from '@/lib/utils'
-import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
-import { Trash2 } from 'lucide-react'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { CustomControls } from '@/components/editor/custom-controls'
-import { CameraSetup } from '@/components/editor/camera-setup'
-import { Walls } from '@/components/editor/elements/wall'
 import { GridTiles } from '@/components/editor/elements/grid'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Walls } from '@/components/editor/elements/wall'
+import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
+import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { useControls } from 'leva'
+import { Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CustomControls } from './custom-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -690,7 +689,6 @@ export default function Editor({ className }: { className?: string }) {
             far={1000}
           />
         )}
-        <CameraSetup />
         {/* <fog attach="fog" args={['#17171b', 30, 40]} /> */}
         <color attach="background" args={['#17171b']} />
         <ambientLight intensity={0.5} />
