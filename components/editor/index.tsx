@@ -9,7 +9,6 @@ import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useControls } from 'leva'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { CustomControls } from './custom-controls'
@@ -18,6 +17,13 @@ const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 const GRID_SIZE = 30 // 30m x 30m
+const SHOW_GRID = true // Show grid by default
+const GRID_OPACITY = 0.3 // Grid opacity
+const CAMERA_TYPE = 'perspective' as 'perspective' | 'orthographic' // Camera type
+const IMAGE_OPACITY = 0.5 // Reference image opacity
+const IMAGE_SCALE = 1 // Reference image scale
+const IMAGE_POSITION: [number, number] = [0, 0] // Reference image position
+const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
@@ -97,13 +103,12 @@ export default function Editor({ className }: { className?: string }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd, setDeleteStartPoint, setDeletePreviewEnd])
 
-  const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
-    wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
-    tileSize: { value: TILE_SIZE, min: 0.1, max: 0.5, step: 0.01, label: 'Tile Size (m)' },
-    showGrid: { value: true, label: 'Show Grid' },
-    gridOpacity: { value: 0.3, min: 0, max: 1, step: 0.1, label: 'Grid Opacity' },
-    cameraType: { value: 'perspective', options: { Perspective: 'perspective', Orthographic: 'orthographic' }, label: 'View Type' }
-  })
+  // Use constants instead of Leva controls
+  const wallHeight = WALL_HEIGHT
+  const tileSize = TILE_SIZE
+  const showGrid = SHOW_GRID
+  const gridOpacity = GRID_OPACITY
+  const cameraType = CAMERA_TYPE
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
@@ -655,12 +660,11 @@ export default function Editor({ className }: { className?: string }) {
     setContextMenuState(prev => ({ ...prev, isOpen: false }))
   }
 
-  const { imageOpacity, imageScale, imagePosition, imageRotation } = useControls('Reference Image', {
-    imageOpacity: { value: 0.5, min: 0, max: 1, step: 0.1 },
-    imageScale: { value: 1, min: 0.1, max: 5, step: 0.1 },
-    imagePosition: { value: [0, 0], step: 0.1, joystick: 'invertY' },
-    imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
-  }, { collapsed: true })
+  // Use constants for reference image
+  const imageOpacity = IMAGE_OPACITY
+  const imageScale = IMAGE_SCALE
+  const imagePosition = IMAGE_POSITION
+  const imageRotation = IMAGE_ROTATION
 
   return (
     <div className="relative h-full w-full">

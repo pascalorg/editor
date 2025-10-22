@@ -398,11 +398,10 @@ export function AppSidebar() {
                 <DialogHeader>
                   <DialogTitle>House Builder Controls</DialogTitle>
                   <DialogDescription>
-                    - Click on grid tiles to place or remove walls.<br/>
+                    - Click on grid intersections to place walls using the building tools.<br/>
                     - Hold spacebar to enable camera controls (orbit, pan, zoom).<br/>
-                    - Use Leva panel (top-right) to adjust wall height, tile size, grid visibility, etc.<br/>
+                    - Use control modes (Select/Delete/Building) to switch between different interactions.<br/>
                     - Upload PNG/JPEG floorplan images as reference.<br/>
-                    - Adjust image position, scale, rotation, opacity in Leva 'Reference Image' section.<br/>
                     - Save your layout as JSON file for later use or database storage.<br/>
                     - Load previously saved layouts from JSON files.<br/>
                     - Inspect JSON to view the raw data structure of your current layout.<br/>
