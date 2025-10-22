@@ -18,8 +18,8 @@ export const ReferenceImage = ({ url, opacity, scale, position, rotation }: Refe
   
   return (
     <mesh
-      position={[position[0], position[1], 0.001]}
-      rotation={[0, 0, rotation]}
+      position={[position[0], 0.001, position[1]]}
+      rotation={[-Math.PI / 2, rotation, 0]}
       scale={scale}
     >
       <planeGeometry args={[GRID_SIZE, GRID_SIZE]} />
