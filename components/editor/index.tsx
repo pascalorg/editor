@@ -80,7 +80,11 @@ export default function Editor({ className }: { className?: string }) {
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('delete')
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+      }  else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('building')
+      }
+       else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
           e.preventDefault()
           redo()
