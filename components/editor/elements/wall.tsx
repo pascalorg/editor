@@ -44,8 +44,11 @@ export const Walls = memo(forwardRef(({
         // Calculate wall dimensions
         const dx = x2 - x1
         const dy = y2 - y1
-        const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+        const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
         const thickness = WALL_THICKNESS
+        // Extend wall by half thickness on each end for perfect corners
+        // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
+        const length = baseLength + thickness
         const height = wallHeight
         
         // Calculate center position
@@ -213,8 +216,11 @@ export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: Wal
   // Calculate wall dimensions
   const dx = x2 - x1
   const dy = y2 - y1
-  const length = Math.sqrt(dx * dx + dy * dy) * tileSize
+  const baseLength = Math.sqrt(dx * dx + dy * dy) * tileSize
   const thickness = WALL_THICKNESS
+  // Extend wall by half thickness on each end for perfect corners
+  // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
+  const length = baseLength + thickness
   const height = wallHeight
   
   // Calculate center position
