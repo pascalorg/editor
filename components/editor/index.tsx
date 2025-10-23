@@ -9,7 +9,6 @@ import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useControls } from 'leva'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { CustomControls } from './custom-controls'
@@ -18,11 +17,18 @@ const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 const GRID_SIZE = 30 // 30m x 30m
+const SHOW_GRID = true // Show grid by default
+const GRID_OPACITY = 0.3 // Grid opacity
+const CAMERA_TYPE = 'perspective' as 'perspective' | 'orthographic' // Camera type
+const IMAGE_OPACITY = 0.5 // Reference image opacity
+const IMAGE_SCALE = 1 // Reference image scale
+const IMAGE_POSITION: [number, number] = [0, 0] // Reference image position
+const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode } = useEditorContext()
+  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -42,6 +48,21 @@ export default function Editor({ className }: { className?: string }) {
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
+  
+  // Helper function to clear all placement states and selections
+  const clearPlacementStates = () => {
+    setWallStartPoint(null)
+    setWallPreviewEnd(null)
+    setRoomStartPoint(null)
+    setRoomPreviewEnd(null)
+    setCustomRoomPoints([])
+    setCustomRoomPreviewEnd(null)
+    setDeleteStartPoint(null)
+    setDeletePreviewEnd(null)
+    // Clear all selections (walls and images)
+    setSelectedWallIds(new Set([]))
+    setSelectedImageIds(new Set([]))
+  }
 
   useEffect(() => {
     setWallsGroupRef(wallsGroupRef.current)
@@ -60,14 +81,7 @@ export default function Editor({ className }: { className?: string }) {
         const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0 || deleteStartPoint !== null
 
         // Cancel all placement and delete modes
-        setWallStartPoint(null)
-        setWallPreviewEnd(null)
-        setRoomStartPoint(null)
-        setRoomPreviewEnd(null)
-        setCustomRoomPoints([])
-        setCustomRoomPreviewEnd(null)
-        setDeleteStartPoint(null)
-        setDeletePreviewEnd(null)
+        clearPlacementStates()
 
         // Only change mode to 'select' if there was no active placement/deletion
         if (!hasActivePlacement) {
@@ -75,13 +89,25 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
+        clearPlacementStates()
         setControlMode('select')
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
+        clearPlacementStates()
         setControlMode('delete')
       }  else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        setControlMode('building')
+        clearPlacementStates()
+        // Default to 'wall' tool if no active tool when entering building mode
+        if (!activeTool) {
+          setActiveTool('wall')
+        } else {
+          setControlMode('building')
+        }
+      } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        clearPlacementStates()
+        setControlMode('guide')
       }
        else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
@@ -95,15 +121,14 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd, setDeleteStartPoint, setDeletePreviewEnd])
+  }, [undo, redo, setControlMode, setActiveTool, activeTool, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, clearPlacementStates])
 
-  const { wallHeight, tileSize, showGrid, gridOpacity, cameraType } = useControls({
-    wallHeight: { value: WALL_HEIGHT, min: 1, max: 5, step: 0.1, label: 'Wall Height (m)' },
-    tileSize: { value: TILE_SIZE, min: 0.1, max: 0.5, step: 0.01, label: 'Tile Size (m)' },
-    showGrid: { value: true, label: 'Show Grid' },
-    gridOpacity: { value: 0.3, min: 0, max: 1, step: 0.1, label: 'Grid Opacity' },
-    cameraType: { value: 'perspective', options: { Perspective: 'perspective', Orthographic: 'orthographic' }, label: 'View Type' }
-  })
+  // Use constants instead of Leva controls
+  const wallHeight = WALL_HEIGHT
+  const tileSize = TILE_SIZE
+  const showGrid = SHOW_GRID
+  const gridOpacity = GRID_OPACITY
+  const cameraType = CAMERA_TYPE
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
@@ -300,6 +325,15 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionClick = (x: number, y: number) => {
+    // Don't handle clicks while camera is moving
+    if (movingCamera) return;
+    
+    // Guide mode: deselect images when clicking on the grid
+    if (controlMode === 'guide') {
+      setSelectedImageIds(new Set([]))
+      return
+    }
+    
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: two-click line selection
@@ -323,8 +357,8 @@ export default function Editor({ className }: { className?: string }) {
       return
     }
 
-    // Building mode - check active tool
-    if (activeTool === 'wall') {
+    // Building mode - check active tool (only allow building in building mode)
+    if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: two-click line drawing
       if (wallStartPoint === null) {
         // First click: set start point
@@ -360,7 +394,7 @@ export default function Editor({ className }: { className?: string }) {
         setWallStartPoint(null)
         setWallPreviewEnd(null)
       }
-    } else if (activeTool === 'room') {
+    } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: two-click rectangle (4 walls)
       if (roomStartPoint === null) {
         // First click: set start corner
@@ -390,7 +424,7 @@ export default function Editor({ className }: { className?: string }) {
         setRoomStartPoint(null)
         setRoomPreviewEnd(null)
       }
-    } else if (activeTool === 'custom-room') {
+    } else if (controlMode === 'building' && activeTool === 'custom-room') {
       // Custom-room mode: multi-point polygon
       // Use the snapped preview position instead of raw x,y
       const snappedX = customRoomPreviewEnd ? customRoomPreviewEnd[0] : x
@@ -422,7 +456,10 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionDoubleClick = () => {
-    if (activeTool === 'custom-room' && customRoomPoints.length >= 1) {
+    // Don't handle double-clicks while camera is moving
+    if (movingCamera) return;
+    
+    if (controlMode === 'building' && activeTool === 'custom-room' && customRoomPoints.length >= 1) {
       // Add the current preview point (from the first click of the double-click)
       // But only if it's different from the last point
       let finalPoints = customRoomPoints
@@ -498,8 +535,8 @@ export default function Editor({ className }: { className?: string }) {
       return
     }
 
-    // Building mode - check active tool
-    if (activeTool === 'wall') {
+    // Building mode - check active tool (only allow previews in building mode)
+    if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: snap to horizontal, vertical, or 45° diagonal
       if (wallStartPoint && y !== null) {
         // Calculate projected point on same row, column, or 45° diagonal
@@ -539,14 +576,14 @@ export default function Editor({ className }: { className?: string }) {
       } else if (!wallStartPoint) {
         setWallPreviewEnd(null)
       }
-    } else if (activeTool === 'room') {
+    } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: show rectangle preview
       if (roomStartPoint && y !== null) {
         setRoomPreviewEnd([x, y])
       } else if (!roomStartPoint) {
         setRoomPreviewEnd(null)
       }
-    } else if (activeTool === 'custom-room') {
+    } else if (controlMode === 'building' && activeTool === 'custom-room') {
       // Custom-room mode: show preview line to current hover point with snapping
       if (y !== null) {
         if (customRoomPoints.length > 0) {
@@ -655,12 +692,11 @@ export default function Editor({ className }: { className?: string }) {
     setContextMenuState(prev => ({ ...prev, isOpen: false }))
   }
 
-  const { imageOpacity, imageScale, imagePosition, imageRotation } = useControls('Reference Image', {
-    imageOpacity: { value: 0.5, min: 0, max: 1, step: 0.1 },
-    imageScale: { value: 1, min: 0.1, max: 5, step: 0.1 },
-    imagePosition: { value: [0, 0], step: 0.1, joystick: 'invertY' },
-    imageRotation: { value: 0, min: -Math.PI, max: Math.PI, step: 0.1 }
-  }, { collapsed: true })
+  // Use constants for reference image
+  const imageOpacity = IMAGE_OPACITY
+  const imageScale = IMAGE_SCALE
+  const imagePosition = IMAGE_POSITION
+  const imageRotation = IMAGE_ROTATION
 
   return (
     <div className="relative h-full w-full">
@@ -703,67 +739,79 @@ export default function Editor({ className }: { className?: string }) {
           shadow-camera-bottom={-15}
         />
         
-        {/* Drei Grid for visual reference and snapping */}
+        {/* Drei Grid for visual reference only - not interactive */}
         {showGrid && (
-          <Grid
-            position={[0, 0, 0]}
-            args={[GRID_SIZE, GRID_SIZE]}
-            cellSize={tileSize}
-            cellThickness={0.5}
-            cellColor="#aaaabf"
-            sectionSize={tileSize * 5}
-            sectionThickness={1}
-            sectionColor="#9d4b4b"
-            fadeDistance={GRID_SIZE * 2}
-            fadeStrength={1}
-            infiniteGrid={false}
-            side={2}
-          />
+          <group raycast={() => null}>
+            <Grid
+              position={[0, 0, 0]}
+              args={[GRID_SIZE, GRID_SIZE]}
+              cellSize={tileSize}
+              cellThickness={0.5}
+              cellColor="#aaaabf"
+              sectionSize={tileSize * 5}
+              sectionThickness={1}
+              sectionColor="#9d4b4b"
+              fadeDistance={GRID_SIZE * 2}
+              fadeStrength={1}
+              infiniteGrid={false}
+              side={2}
+            />
+          </group>
         )}
         
-        {/* Infinite dashed axis lines */}
-        {/* X axis (red) */}
-        <Line
-          points={[[-1000, 0, 0], [1000, 0, 0]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
-        {/* Y axis (green) - vertical */}
-        <Line
-          points={[[0, -1000, 0], [0, 1000, 0]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
-        {/* Z axis (blue) */}
-        <Line
-          points={[[0, 0, -1000], [0, 0, 1000]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
+        {/* Infinite dashed axis lines - visual only, not interactive */}
+        <group raycast={() => null}>
+          {/* X axis (red) */}
+          <Line
+            points={[[-1000, 0, 0], [1000, 0, 0]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+          {/* Y axis (green) - vertical */}
+          <Line
+            points={[[0, -1000, 0], [0, 1000, 0]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+          {/* Z axis (blue) */}
+          <Line
+            points={[[0, 0, -1000], [0, 0, 1000]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+        </group>
         
         {images.map((image) => (
           <ReferenceImage 
             key={image.id}
+            id={image.id}
             url={image.url}
             opacity={imageOpacity}
-            scale={imageScale}
-            position={imagePosition}
-            rotation={imageRotation}
+            scale={image.scale}
+            position={image.position}
+            rotation={image.rotation}
+            isSelected={selectedImageIds.has(image.id)}
+            controlMode={controlMode}
+            movingCamera={movingCamera}
+            onSelect={() => setSelectedImageIds(new Set([image.id]))}
+            onUpdate={(updates, pushToUndo = true) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i), pushToUndo)}
+            onManipulationStart={() => setIsManipulatingImage(true)}
+            onManipulationEnd={() => setIsManipulatingImage(false)}
           />
         ))}
 
@@ -784,7 +832,7 @@ export default function Editor({ className }: { className?: string }) {
             deleteStartPoint={deleteStartPoint}
             deletePreviewEnd={deletePreviewEnd}
             opacity={gridOpacity}
-            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select'}
+            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
             wallHeight={wallHeight}
             controlMode={controlMode}
           />
@@ -800,11 +848,12 @@ export default function Editor({ className }: { className?: string }) {
             isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
             controlMode={controlMode}
+            movingCamera={movingCamera}
             onDeleteWalls={handleDeleteSelectedWalls}
           />
         </group>
 
-        <CustomControls tileSize={tileSize} />
+        <CustomControls />
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
@@ -835,7 +884,7 @@ export default function Editor({ className }: { className?: string }) {
         </div>
       )}
 
-      <ControlModeMenu />
+      <ControlModeMenu onModeChange={clearPlacementStates} />
       <BuildingMenu />
     </div>
   )

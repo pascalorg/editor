@@ -17,6 +17,7 @@ type WallsProps = {
   onWallRightClick?: (e: any, wallSegment: WallSegment) => void
   isCameraEnabled?: boolean
   controlMode: string
+  movingCamera: boolean
   onDeleteWalls: () => void
 }
 
@@ -31,6 +32,7 @@ export const Walls = memo(forwardRef(({
   onWallRightClick, 
   isCameraEnabled, 
   controlMode, 
+  movingCamera,
   onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
   return (
@@ -81,25 +83,33 @@ export const Walls = memo(forwardRef(({
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                // Don't highlight walls in delete mode
-                if (controlMode !== 'delete') {
+                // Don't highlight walls in delete or guide mode
+                if (controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(i);
                 }
               }}
               onPointerLeave={(e) => {
-                // Don't highlight walls in delete mode
-                if (controlMode !== 'delete') {
+                // Don't highlight walls in delete or guide mode
+                if (controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(null);
                 }
               }}
               onPointerDown={(e) => {
-
+                // Don't handle interactions while camera is moving
+                if (movingCamera) return;
+                
                 // Delete mode: interactions now handled through grid intersections
                 if (controlMode === 'delete') {
                   return
                 }
+                
+                // Guide mode: no wall interactions while manipulating reference images
+                if (controlMode === 'guide') {
+                  return
+                }
+                
                 e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
@@ -121,6 +131,9 @@ export const Walls = memo(forwardRef(({
                 }
               }}
               onClick={(e) => {
+                // Don't handle clicks while camera is moving
+                if (movingCamera) return;
+                
                 e.stopPropagation();
                 
                 // Building mode: no wall selection while placing walls
@@ -130,6 +143,11 @@ export const Walls = memo(forwardRef(({
                 
                 // Delete mode: handled in onPointerDown/Up
                 if (controlMode === 'delete') {
+                  return
+                }
+                
+                // Guide mode: no wall selection while manipulating reference images
+                if (controlMode === 'guide') {
                   return
                 }
                 

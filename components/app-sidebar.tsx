@@ -46,6 +46,12 @@ export function AppSidebar() {
     handleDeleteSelectedImages,
   } = useEditorContext()
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
+  const [mounted, setMounted] = useState(false)
+
+  // Wait for client-side hydration to complete before rendering store-dependent content
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Handle backspace key to delete selected walls
   useEffect(() => {
@@ -182,10 +188,14 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <div className="px-2 py-2">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Reference Images (<span suppressHydrationWarning>{images.length}</span>)
+                Reference Images ({mounted ? images.length : 0})
               </label>
               <div className="max-h-48 overflow-y-auto space-y-1 select-none">
-                {images.length === 0 ? (
+                {!mounted ? (
+                  <div className="text-xs text-muted-foreground italic">
+                    Loading...
+                  </div>
+                ) : images.length === 0 ? (
                   <div className="text-xs text-muted-foreground italic">
                     No images uploaded yet
                   </div>
@@ -220,10 +230,10 @@ export function AppSidebar() {
                 variant="outline"
                 className="w-full justify-start gap-2"
                 onClick={handleDeleteSelectedImages}
-                disabled={selectedImageIds.size === 0}
+                disabled={!mounted || selectedImageIds.size === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete Selected Images (<span suppressHydrationWarning>{selectedImageIds.size}</span>)</span>
+                <span>Delete Selected Images ({mounted ? selectedImageIds.size : 0})</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -232,10 +242,14 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <div className="px-2 py-2">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Wall Segments (<span suppressHydrationWarning>{wallSegments.length}</span>)
+                Wall Segments ({mounted ? wallSegments.length : 0})
               </label>
               <div className="max-h-48 overflow-y-auto space-y-1 select-none">
-                {wallSegments.length === 0 ? (
+                {!mounted ? (
+                  <div className="text-xs text-muted-foreground italic">
+                    Loading...
+                  </div>
+                ) : wallSegments.length === 0 ? (
                   <div className="text-xs text-muted-foreground italic">
                     No walls placed yet
                   </div>
@@ -270,10 +284,10 @@ export function AppSidebar() {
                 variant="outline"
                 className="w-full justify-start gap-2"
                 onClick={handleDeleteSelectedWalls}
-                disabled={selectedWallIds.size === 0}
+                disabled={!mounted || selectedWallIds.size === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete Selected (<span suppressHydrationWarning>{selectedWallIds.size}</span>)</span>
+                <span>Delete Selected ({mounted ? selectedWallIds.size : 0})</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -310,10 +324,10 @@ export function AppSidebar() {
                 variant="outline"
                 className="w-full justify-start gap-2"
                 onClick={handleClear}
-                disabled={wallSegments.length === 0}
+                disabled={!mounted || wallSegments.length === 0}
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Clear All (<span suppressHydrationWarning>{wallSegments.length}</span>)</span>
+                <span>Clear All ({mounted ? wallSegments.length : 0})</span>
               </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -398,11 +412,10 @@ export function AppSidebar() {
                 <DialogHeader>
                   <DialogTitle>House Builder Controls</DialogTitle>
                   <DialogDescription>
-                    - Click on grid tiles to place or remove walls.<br/>
+                    - Click on grid intersections to place walls using the building tools.<br/>
                     - Hold spacebar to enable camera controls (orbit, pan, zoom).<br/>
-                    - Use Leva panel (top-right) to adjust wall height, tile size, grid visibility, etc.<br/>
+                    - Use control modes (Select/Delete/Building) to switch between different interactions.<br/>
                     - Upload PNG/JPEG floorplan images as reference.<br/>
-                    - Adjust image position, scale, rotation, opacity in Leva 'Reference Image' section.<br/>
                     - Save your layout as JSON file for later use or database storage.<br/>
                     - Load previously saved layouts from JSON files.<br/>
                     - Inspect JSON to view the raw data structure of your current layout.<br/>

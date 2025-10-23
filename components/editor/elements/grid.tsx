@@ -26,7 +26,7 @@ type GridTilesProps = {
   opacity: number
   disableBuild?: boolean
   wallHeight: number
-  controlMode: 'select' | 'delete' | 'building'
+  controlMode: 'select' | 'delete' | 'building' | 'guide'
 }
 
 export const GridTiles = memo(({
@@ -60,6 +60,13 @@ export const GridTiles = memo(({
   const handlePointerMove = (e: any) => {
     e.stopPropagation()
 
+    // Don't show hover indicators in guide mode (reserved for image manipulation)
+    if (controlMode === 'guide') {
+      setHoveredIntersection(null)
+      onIntersectionHover(0, null)
+      return
+    }
+
     if (e.point && !disableBuild) {
       // e.point is in world coordinates
       // The parent group is offset by [-GRID_SIZE/2, 0, -GRID_SIZE/2]
@@ -86,6 +93,13 @@ export const GridTiles = memo(({
     // Only handle left-click (button 0) for wall placement
     // Right-click (button 2) and middle-click (button 1) are for camera controls
     if (e.button !== 0) return
+    
+    // Special handling for guide mode - allow clicks for deselection
+    if (controlMode === 'guide') {
+      onIntersectionClick(0, 0) // Trigger deselection (coordinates don't matter)
+      return
+    }
+    
     if (disableBuild || !hoveredIntersection) return
 
     const now = Date.now()

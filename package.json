@@ -21,7 +21,6 @@
     "@uiw/react-json-view": "^2.0.0-alpha.39",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "leva": "^0.10.0",
     "lucide-react": "^0.546.0",
     "next": "^16.0.0-beta.0",
     "react": "19.2.0",

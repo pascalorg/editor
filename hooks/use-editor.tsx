@@ -18,11 +18,14 @@ export interface ReferenceImage {
   url: string
   name: string
   createdAt: string
+  position: [number, number]
+  rotation: number
+  scale: number
 }
 
 export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
 
-export type ControlMode = 'select' | 'delete' | 'building'
+export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
@@ -51,6 +54,12 @@ export type LayoutJSON = {
   }
   components: Component[]
   groups: ComponentGroup[]
+  images?: ReferenceImage[] // Optional for backward compatibility
+}
+
+type HistoryState = {
+  walls: string[]
+  images: ReferenceImage[]
 }
 
 type StoreState = {
@@ -61,14 +70,16 @@ type StoreState = {
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
-  undoStack: string[][]
-  redoStack: string[][]
+  undoStack: HistoryState[]
+  redoStack: HistoryState[]
   activeTool: Tool | null
   controlMode: ControlMode
+  movingCamera: boolean
+  isManipulatingImage: boolean // Flag to prevent undo stack during drag
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
-  setImages: (images: ReferenceImage[]) => void
+  setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
   setSelectedWallIds: (ids: string[]) => void
   setSelectedImageIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
@@ -76,6 +87,8 @@ type StoreState = {
   setWallsGroupRef: (ref: THREE.Group | null) => void
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
+  setMovingCamera: (moving: boolean) => void
+  setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
   getSelectedWallIdsSet: () => Set<string>
   getSelectedImageIdsSet: () => Set<string>
@@ -106,6 +119,8 @@ const useStore = create<StoreState>()(
       redoStack: [],
       activeTool: 'wall',
       controlMode: 'building',
+      movingCamera: false,
+      isManipulatingImage: false,
       setWalls: (walls) => set(state => {
         const sortedNew = [...walls].sort()
         const sortedCurrent = [...state.walls].sort()
@@ -113,12 +128,40 @@ const useStore = create<StoreState>()(
           return state
         }
         return {
-          undoStack: [...state.undoStack, state.walls].slice(-50),
+          undoStack: [...state.undoStack, { walls: state.walls, images: state.images }].slice(-50),
           redoStack: [],
           walls
         }
       }),
-      setImages: (images) => set({ images }),
+      setImages: (images, pushToUndo = true) => set(state => {
+        // Deep comparison to avoid unnecessary undo stack pushes
+        const areEqual = state.images.length === images.length && 
+          state.images.every((img, i) => {
+            const newImg = images[i]
+            return img.id === newImg.id && 
+              img.position[0] === newImg.position[0] && 
+              img.position[1] === newImg.position[1] && 
+              img.rotation === newImg.rotation && 
+              img.scale === newImg.scale &&
+              img.url === newImg.url
+          })
+        
+        if (areEqual) {
+          return state
+        }
+        
+        // Only push to undo stack if requested (used for final commit, not intermediate updates)
+        if (pushToUndo) {
+          return {
+            undoStack: [...state.undoStack, { walls: state.walls, images: state.images }].slice(-50),
+            redoStack: [],
+            images
+          }
+        }
+        
+        // Just update images without affecting undo stack (for intermediate drag updates)
+        return { images }
+      }),
       setSelectedWallIds: (ids) => set({ selectedWallIds: ids }),
       setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
@@ -133,7 +176,15 @@ const useStore = create<StoreState>()(
           set({ controlMode: 'select' })
         }
       },
-      setControlMode: (mode) => set({ controlMode: mode }),
+      setControlMode: (mode) => {
+        set({ controlMode: mode })
+        // Clear activeTool when switching away from building mode to prevent mode leakage
+        if (mode !== 'building') {
+          set({ activeTool: null })
+        }
+      },
+      setMovingCamera: (moving) => set({ movingCamera: moving }),
+      setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
       getWallsSet: () => new Set(get().walls),
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
@@ -202,7 +253,10 @@ const useStore = create<StoreState>()(
               id: `img-${Date.now()}`,
               url: event.target?.result as string,
               name: file.name,
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              position: [0, 0],
+              rotation: 0,
+              scale: 1
             }
             set(state => ({ images: [...state.images, newImage] }))
           }
@@ -240,6 +294,7 @@ const useStore = create<StoreState>()(
       },
       serializeLayout: () => {
         const wallSegments = get().wallSegments()
+        const images = get().images
 
         return {
           version: '2.0', // Updated version for intersection-based walls
@@ -254,17 +309,25 @@ const useStore = create<StoreState>()(
             },
             createdAt: new Date().toISOString()
           }],
-          groups: []
+          groups: [],
+          images // Include reference images in the layout
         }
       },
       loadLayout: (json: LayoutJSON) => {
-        set({ selectedWallIds: [] })
+        set({ selectedWallIds: [], selectedImageIds: [] })
+        
+        // Load walls
         const wallComponent = json.components.find(c => c.type === 'wall')
         if (wallComponent?.data.segments) {
           const newWalls = wallComponent.data.segments.map(seg => 
             `${seg.start[0]},${seg.start[1]}-${seg.end[0]},${seg.end[1]}`
           )
           get().setWalls(newWalls)
+        }
+        
+        // Load reference images (if present in the JSON)
+        if (json.images && Array.isArray(json.images)) {
+          get().setImages(json.images)
         }
       },
       handleSaveLayout: () => {
@@ -295,20 +358,24 @@ const useStore = create<StoreState>()(
         if (state.undoStack.length === 0) return state
         const previous = state.undoStack[state.undoStack.length - 1]
         return {
-          walls: previous,
+          walls: previous.walls,
+          images: previous.images,
           undoStack: state.undoStack.slice(0, -1),
-          redoStack: [...state.redoStack, state.walls],
-          selectedWallIds: []
+          redoStack: [...state.redoStack, { walls: state.walls, images: state.images }],
+          selectedWallIds: [],
+          selectedImageIds: []
         }
       }),
       redo: () => set(state => {
         if (state.redoStack.length === 0) return state
         const next = state.redoStack[state.redoStack.length - 1]
         return {
-          walls: next,
+          walls: next.walls,
+          images: next.images,
           redoStack: state.redoStack.slice(0, -1),
-          undoStack: [...state.undoStack, state.walls],
-          selectedWallIds: []
+          undoStack: [...state.undoStack, { walls: state.walls, images: state.images }],
+          selectedWallIds: [],
+          selectedImageIds: []
         }
       }),
     }),
@@ -329,6 +396,16 @@ const useStore = create<StoreState>()(
             console.log(`Migrated: Removed ${state.walls.length - validWalls.length} old format walls`)
             state.walls = validWalls
             state.selectedWallIds = []
+          }
+          
+          // Migrate: Add missing position, rotation, scale to existing images
+          if (state.images && state.images.length > 0) {
+            state.images = state.images.map((img: any) => ({
+              ...img,
+              position: img.position ?? [0, 0],
+              rotation: img.rotation ?? 0,
+              scale: img.scale ?? 1
+            }))
           }
         }
       },
@@ -371,6 +448,10 @@ export const useEditorContext = () => {
     setActiveTool: store.setActiveTool,
     controlMode: store.controlMode,
     setControlMode: store.setControlMode,
+    movingCamera: store.movingCamera,
+    setMovingCamera: store.setMovingCamera,
+    isManipulatingImage: store.isManipulatingImage,
+    setIsManipulatingImage: store.setIsManipulatingImage,
     wallSegments: store.wallSegments(),
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,
