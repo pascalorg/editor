@@ -56,6 +56,9 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   
+  // Track hover state for the image itself
+  const [isHovered, setIsHovered] = useState(false)
+  
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
@@ -326,14 +329,25 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     <group ref={groupRef} position={[position[0], 0.001, position[1]]} rotation={[0, rotation * Math.PI / 180, 0]}>
       {/* Image plane - rotated to lie flat on XZ plane */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
-        <mesh scale={scale} onClick={(e) => {
-          // Only respond to left-click, ignore right-click for camera
-          if (e.button !== 0) return;
-          if (controlMode === 'guide' && !movingCamera) {
-            e.stopPropagation()
-            onSelect()
-          }
-        }}>
+        <mesh 
+          scale={scale} 
+          onPointerDown={(e) => {
+            // Only respond to left-click, ignore right-click for camera
+            if (e.button !== 0) return;
+            if (controlMode === 'guide' && !movingCamera) {
+              e.stopPropagation()
+              onSelect()
+            }
+          }}
+          onPointerEnter={(e) => {
+            if (controlMode === 'guide' && !movingCamera) {
+              setIsHovered(true)
+            }
+          }}
+          onPointerLeave={() => {
+            setIsHovered(false)
+          }}
+        >
           <planeGeometry args={[planeWidth, planeHeight]} />
           <meshStandardMaterial 
             map={texture}
@@ -343,6 +357,8 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
             polygonOffset
             polygonOffsetFactor={-1}
             polygonOffsetUnits={1}
+            emissive={controlMode === 'guide' && (isHovered || isSelected) ? "#ffffff" : "#000000"}
+            emissiveIntensity={controlMode === 'guide' && (isHovered || isSelected) ? 0.2 : 0}
           />
         </mesh>
       </group>

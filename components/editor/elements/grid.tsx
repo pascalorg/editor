@@ -93,6 +93,13 @@ export const GridTiles = memo(({
     // Only handle left-click (button 0) for wall placement
     // Right-click (button 2) and middle-click (button 1) are for camera controls
     if (e.button !== 0) return
+    
+    // Special handling for guide mode - allow clicks for deselection
+    if (controlMode === 'guide') {
+      onIntersectionClick(0, 0) // Trigger deselection (coordinates don't matter)
+      return
+    }
+    
     if (disableBuild || !hoveredIntersection) return
 
     const now = Date.now()

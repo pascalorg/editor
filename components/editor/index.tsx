@@ -328,6 +328,12 @@ export default function Editor({ className }: { className?: string }) {
     // Don't handle clicks while camera is moving
     if (movingCamera) return;
     
+    // Guide mode: deselect images when clicking on the grid
+    if (controlMode === 'guide') {
+      setSelectedImageIds(new Set([]))
+      return
+    }
+    
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: two-click line selection
@@ -446,8 +452,6 @@ export default function Editor({ className }: { className?: string }) {
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
-    } else if (controlMode === 'guide') {
-      setSelectedImageIds(new Set([]))
     }
   }
 
