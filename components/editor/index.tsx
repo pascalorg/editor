@@ -739,58 +739,62 @@ export default function Editor({ className }: { className?: string }) {
           shadow-camera-bottom={-15}
         />
         
-        {/* Drei Grid for visual reference and snapping */}
+        {/* Drei Grid for visual reference only - not interactive */}
         {showGrid && (
-          <Grid
-            position={[0, 0, 0]}
-            args={[GRID_SIZE, GRID_SIZE]}
-            cellSize={tileSize}
-            cellThickness={0.5}
-            cellColor="#aaaabf"
-            sectionSize={tileSize * 5}
-            sectionThickness={1}
-            sectionColor="#9d4b4b"
-            fadeDistance={GRID_SIZE * 2}
-            fadeStrength={1}
-            infiniteGrid={false}
-            side={2}
-          />
+          <group raycast={() => null}>
+            <Grid
+              position={[0, 0, 0]}
+              args={[GRID_SIZE, GRID_SIZE]}
+              cellSize={tileSize}
+              cellThickness={0.5}
+              cellColor="#aaaabf"
+              sectionSize={tileSize * 5}
+              sectionThickness={1}
+              sectionColor="#9d4b4b"
+              fadeDistance={GRID_SIZE * 2}
+              fadeStrength={1}
+              infiniteGrid={false}
+              side={2}
+            />
+          </group>
         )}
         
-        {/* Infinite dashed axis lines */}
-        {/* X axis (red) */}
-        <Line
-          points={[[-1000, 0, 0], [1000, 0, 0]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
-        {/* Y axis (green) - vertical */}
-        <Line
-          points={[[0, -1000, 0], [0, 1000, 0]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
-        {/* Z axis (blue) */}
-        <Line
-          points={[[0, 0, -1000], [0, 0, 1000]]}
-          lineWidth={1}
-          dashed
-          dashSize={0.5}
-          gapSize={0.25}
-          color="white"
-          opacity={0.01}
-          depthTest={false}
-        />
+        {/* Infinite dashed axis lines - visual only, not interactive */}
+        <group raycast={() => null}>
+          {/* X axis (red) */}
+          <Line
+            points={[[-1000, 0, 0], [1000, 0, 0]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+          {/* Y axis (green) - vertical */}
+          <Line
+            points={[[0, -1000, 0], [0, 1000, 0]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+          {/* Z axis (blue) */}
+          <Line
+            points={[[0, 0, -1000], [0, 0, 1000]]}
+            lineWidth={1}
+            dashed
+            dashSize={0.5}
+            gapSize={0.25}
+            color="white"
+            opacity={0.01}
+            depthTest={false}
+          />
+        </group>
         
         {images.map((image) => (
           <ReferenceImage 
