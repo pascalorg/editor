@@ -70,6 +70,25 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     return 0.05 // No emissive when inactive - prevents glow from overpowering opacity
   }
   
+  // Reusable material components
+  const HitMaterial = () => (
+    <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+  )
+  
+  const HandleMaterial = ({ color, handleId }: { color: string; handleId: string }) => (
+    <meshStandardMaterial 
+      color={color}
+      emissive={color}
+      emissiveIntensity={getHandleEmissiveIntensity(handleId)}
+      transparent
+      opacity={getHandleOpacity(handleId)}
+      depthTest={false}
+      side={THREE.DoubleSide}
+      metalness={0.3}
+      roughness={0.4}
+    />
+  )
+  
   // Calculate aspect-ratio-preserving dimensions
   const [planeWidth, planeHeight] = useMemo(() => {
     if (!texture.image) return [GRID_SIZE, GRID_SIZE]
@@ -378,19 +397,12 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <boxGeometry args={[originHitSize, originHitSize, originHitSize]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             {/* Visible origin marker */}
             <mesh position={[0, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <boxGeometry args={[ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE]} />
-              <meshStandardMaterial 
-                color="white" 
-                emissive="white" 
-                emissiveIntensity={getHandleEmissiveIntensity('translate-xz')}
-                transparent
-                opacity={getHandleOpacity('translate-xz')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="white" handleId="translate-xz" />
             </mesh>
           </group>
           
@@ -407,31 +419,17 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <cylinderGeometry args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             {/* Visible arrow shaft - anchored to visible marker edge */}
             <mesh position={[arrowShaftPos, 0, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <cylinderGeometry args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ff4444" 
-                emissive="#ff4444" 
-                emissiveIntensity={getHandleEmissiveIntensity('translate-x')}
-                transparent
-                opacity={getHandleOpacity('translate-x')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ff4444" handleId="translate-x" />
             </mesh>
             {/* Arrow head */}
             <mesh position={[arrowHeadPos, 0, 0]} rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ff4444" 
-                emissive="#ff4444" 
-                emissiveIntensity={getHandleEmissiveIntensity('translate-x')}
-                transparent
-                opacity={getHandleOpacity('translate-x')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ff4444" handleId="translate-x" />
             </mesh>
           </group>
           
@@ -448,31 +446,17 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <cylinderGeometry args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             {/* Visible arrow shaft - anchored to visible marker edge */}
             <mesh position={[0, 0, arrowShaftPos]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <cylinderGeometry args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#44ff44" 
-                emissive="#44ff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('translate-z')}
-                transparent
-                opacity={getHandleOpacity('translate-z')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#44ff44" handleId="translate-z" />
             </mesh>
             {/* Arrow head */}
             <mesh position={[0, 0, arrowHeadPos]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#44ff44" 
-                emissive="#44ff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('translate-z')}
-                transparent
-                opacity={getHandleOpacity('translate-z')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#44ff44" handleId="translate-z" />
             </mesh>
           </group>
           
@@ -487,18 +471,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial 
-                color="#4444ff" 
-                emissive="#4444ff" 
-                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
-                transparent
-                opacity={getHandleOpacity('rotation')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, (planeHeight * scale) / 2]}>
@@ -511,18 +488,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial 
-                color="#4444ff" 
-                emissive="#4444ff" 
-                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
-                transparent
-                opacity={getHandleOpacity('rotation')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
@@ -535,18 +505,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI]} renderOrder={1000} scale={HANDLE_SCALE}>
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial 
-                color="#4444ff" 
-                emissive="#4444ff" 
-                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
-                transparent
-                opacity={getHandleOpacity('rotation')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
           <group position={[(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
@@ -559,18 +522,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial 
-                color="#4444ff" 
-                emissive="#4444ff" 
-                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
-                transparent
-                opacity={getHandleOpacity('rotation')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
           
@@ -585,18 +541,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ffff44" 
-                emissive="#ffff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('scale')}
-                transparent
-                opacity={getHandleOpacity('scale')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, 0]}>
@@ -609,18 +558,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ffff44" 
-                emissive="#ffff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('scale')}
-                transparent
-                opacity={getHandleOpacity('scale')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
           <group position={[0, 0, (planeHeight * scale) / 2]}>
@@ -633,18 +575,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ffff44" 
-                emissive="#ffff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('scale')}
-                transparent
-                opacity={getHandleOpacity('scale')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
           <group position={[0, 0, -(planeHeight * scale) / 2]}>
@@ -657,18 +592,11 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
               scale={HANDLE_SCALE}
             >
               <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
-              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
+              <HitMaterial />
             </mesh>
             <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
               <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
-              <meshStandardMaterial 
-                color="#ffff44" 
-                emissive="#ffff44" 
-                emissiveIntensity={getHandleEmissiveIntensity('scale')}
-                transparent
-                opacity={getHandleOpacity('scale')}
-                depthTest={false} 
-              />
+              <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
         </group>
