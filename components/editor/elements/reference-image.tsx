@@ -119,7 +119,13 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
       const vector = intersect.clone().sub(center)
       const angle = Math.atan2(vector.z, vector.x)
       const delta = angle - initialAngle
-      const newRotation = initialRotation - delta * (180 / Math.PI)
+      let newRotation = initialRotation - delta * (180 / Math.PI)
+      
+      // Snap to 45-degree increments when Shift is held
+      if (ev.shiftKey) {
+        newRotation = Math.round(newRotation / 45) * 45
+      }
+      
       onUpdate({ rotation: newRotation })
     }
     const handleUp = () => {
