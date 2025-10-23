@@ -6,7 +6,7 @@ I am updating the project documentation to reflect the current codebase structur
 # House Builder Project
 
 ## Project Overview
-A 3D house builder inspired by The Sims' building mode. Users place walls between grid intersections using point-to-point placement, creating line segments that extrude into 3D walls in an isometric view. Features three control modes (Select/Delete/Building), multiple building tools (Wall, Room, Custom Room), reference image overlays, and GLB export.
+A 3D house builder inspired by The Sims' building mode. Users place walls between grid intersections using point-to-point placement, creating line segments that extrude into 3D walls in an isometric view. Features four control modes (Select/Delete/Building/Guide), multiple building tools (Wall, Room, Custom Room), reference image overlays with interactive manipulation, and GLB export.
 
 **Stack**: React 19, Next.js 15, React Three Fiber, Three.js, Zustand, Drei, Leva, Shadcn UI, Tailwind v4.
 
@@ -22,10 +22,12 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 ## Core Features
 
 ### Control Modes (Top-Center Menu)
-- **Select (V)**: Click walls to select, Shift+click for multi-selection, right-click context menu
-- **Delete (D)**: Two-click line deletion - click two intersections to remove overlapping wall segments
-- **Building (B)**: Auto-activated when selecting a building tool
-- **Shortcuts**: `Esc` to cancel, `V/D/B` to switch modes, `Space` for orbit controls
+- **Select (V)**: Click walls to select, Shift+click for multi-selection, right-click context menu. Left-click+drag pans camera.
+- **Delete (D)**: Two-click line deletion - click two intersections to remove overlapping wall segments. Left-click reserved for deletion (camera pan via middle-click only).
+- **Building (B)**: Auto-activated when selecting a building tool. Left-click reserved for placement (camera pan via middle-click only).
+- **Guide (G)**: Interactive reference image manipulation mode - click images to select, drag 3D handles to transform. Left-click reserved for image manipulation (camera pan via middle-click only).
+- **Camera Controls**: All modes support middle-click pan, right-click rotate, scroll wheel zoom
+- **Shortcuts**: `Esc` to cancel, `V/D/B/G` to switch modes, `Space` for orbit controls
 
 ### Building Tools (Bottom-Center Menu)
 - **Wall**: Two-click placement with smart snapping (H/V/45° diagonal), green preview + shadow
@@ -48,7 +50,7 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 
 ### Editing Features
 - **Undo/Redo**: `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` (50-state stack)
-- **Reference Images**: Multiple PNG/JPEG overlays with Leva controls (position, scale, rotation, opacity)
+- **Reference Images**: Multiple PNG/JPEG overlays with per-image position, rotation (Y-axis), and scale. In Guide mode, interactive 3D handles appear on selected images for direct manipulation
 - **GLB Export**: Download walls group as binary GLB
 - **Layout Files**: Save/load as JSON (version 2.0, segment-based)
 
@@ -59,10 +61,10 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 
 **Core State**:
 - `walls`: Array<string> - wall keys ("x1,y1-x2,y2")
-- `images`: Array<ReferenceImage>
+- `images`: Array<ReferenceImage> - each with id, url, name, createdAt, position [x,z], rotation (degrees), scale
 - `selectedWallIds`, `selectedImageIds`: Arrays for selection
 - `activeTool`: 'wall' | 'room' | 'custom-room' | null
-- `controlMode`: 'select' | 'delete' | 'building'
+- `controlMode`: 'select' | 'delete' | 'building' | 'guide'
 - `undoStack`, `redoStack`: Max 50 states each
 - `wallsGroupRef`: Three.js Group for export
 
@@ -84,12 +86,12 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - `handleDeleteWallPortion`: Line overlap detection with `getOverlappingSegment()`
 - `handleIntersectionDoubleClick`: Finishes custom-room without closing
 
-**Keyboard**: `Esc` cancel, `V/D/B` modes, `Space` orbit, `Cmd/Ctrl+Z` undo
+**Keyboard**: `Esc` cancel, `V/D/B/G` modes, `Space` orbit, `Cmd/Ctrl+Z` undo
 
 **Canvas**: Group offset `[−15,0,−15]` centers grid, renders GridTiles + Walls + ReferenceImage + CustomControls
 
 ### UI Components
-**`control-mode-menu.tsx`**: Top-center, 3 buttons (Select/Delete/Building), color-coded active state, tooltips with shortcuts
+**`control-mode-menu.tsx`**: Top-center, 4 buttons (Select/Delete/Building/Guide), color-coded active state (blue/red/green/purple), tooltips with shortcuts
 
 **`building-menu.tsx`**: Bottom-center, tool buttons with Phosphor icons, click to activate/deactivate, auto-switches mode
 
@@ -97,9 +99,16 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 
 **`elements/wall.tsx`**: BoxGeometry meshes, `atan2(-dz, dx)` rotation for any angle, color states (default/hover/selected), WallShadowPreview component
 
-**`elements/reference-image.tsx`**: Plane mesh with texture, Leva-controlled transforms
+**`elements/reference-image.tsx`**: Plane mesh with texture, per-image transforms (position, rotation, scale). In Guide mode, displays 3D manipulation handles when selected:
+- **Translation handles**: White arrow-cylinder pairs at center for X/Z movement (aligned to image rotation)
+- **Rotation handles**: White quarter-torus arcs at each corner for Y-axis rotation
+- **Scale handles**: White cylinders at edge midpoints for uniform scaling from center
 
-**`custom-controls.tsx`**: OrbitControls wrapper, polar angle 0-π/2, spacebar-enabled
+**`custom-controls.tsx`**: CameraControls wrapper with mode-aware mouse button configuration. Dynamically adjusts camera controls based on `controlMode`:
+- **Select mode**: Left-click+drag pans camera (TRUCK), full camera controls available
+- **Delete/Build/Guide modes**: Left-click disabled for camera (ACTION.NONE) - reserved for mode-specific actions (deletion, placement, image manipulation)
+- **All modes**: Middle-click+drag pans (SCREEN_PAN), right-click+drag rotates (ROTATE), scroll wheel zooms (DOLLY)
+- Polar angle constrained to 0-π/2 (overhead isometric view), distance 10-50 units
 
 ### Key Flows
 
@@ -108,6 +117,13 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 **Deletion**: 
 - Select mode: Click wall → right-click → context menu
 - Delete mode: Two clicks define line → `getOverlappingSegment()` calculates overlaps → removes/splits walls
+
+**Reference Image Manipulation**:
+- Upload via sidebar → images persist with position [0,0], rotation 0°, scale 1
+- Guide mode: Click image → select → white 3D handles appear
+- Drag translate arrows (X/Z), rotation arcs (corners), or scale handles (edges)
+- Real-time updates via `onUpdate()` callback → `setImages()` → localStorage sync
+- Click grid to deselect
 
 **Mode Switching**: `setActiveTool()` auto-switches to building, `Esc` cancels operations
 
@@ -130,8 +146,10 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - **Drei Grid + Custom Raycasting**: Drei for visuals, custom plane for clicks - Drei Grid is visual-only
 - **Memoized Components**: React.memo on GridTiles/Walls/Previews - smooth 60fps with hundreds of walls
 - **HTML Context Menu**: Overlay div vs. R3F component - reliable pointer coords
-- **Keyboard Shortcuts**: V/D/B/Esc/Space/Z - CAD/Sims-inspired power user workflow
+- **Keyboard Shortcuts**: V/D/B/G/Esc/Space/Z - CAD/Sims-inspired power user workflow
 - **Versioned JSON**: Schema v2.0 with segment-based format - extensible for doors/windows/furniture
+- **Direct Manipulation Handles**: 3D gizmos for reference images - raycasting + pointer events for intuitive transformations, handles scale inversely to image scale for consistent size
+- **Mode-Aware Camera Controls**: Dynamic mouse button configuration - left-click reserved for mode actions (delete/build/guide) vs. camera panning (select), prevents conflicts between camera and tool interactions
 
 ## Data Persistence & JSON Structure
 

@@ -28,7 +28,7 @@ const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, wallSegments, selectedWallIds, setSelectedWallIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode } = useEditorContext()
+  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -88,6 +88,9 @@ export default function Editor({ className }: { className?: string }) {
       }  else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('building')
+      } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('guide')
       }
        else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
@@ -423,6 +426,8 @@ export default function Editor({ className }: { className?: string }) {
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
+    } else if (controlMode === 'guide') {
+      setSelectedImageIds(new Set([]))
     }
   }
 
@@ -763,11 +768,16 @@ export default function Editor({ className }: { className?: string }) {
         {images.map((image) => (
           <ReferenceImage 
             key={image.id}
+            id={image.id}
             url={image.url}
             opacity={imageOpacity}
-            scale={imageScale}
-            position={imagePosition}
-            rotation={imageRotation}
+            scale={image.scale}
+            position={image.position}
+            rotation={image.rotation}
+            isSelected={selectedImageIds.has(image.id)}
+            controlMode={controlMode}
+            onSelect={() => setSelectedImageIds(new Set([image.id]))}
+            onUpdate={(updates) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i))}
           />
         ))}
 
@@ -808,7 +818,7 @@ export default function Editor({ className }: { className?: string }) {
           />
         </group>
 
-        <CustomControls tileSize={tileSize} />
+        <CustomControls />
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />

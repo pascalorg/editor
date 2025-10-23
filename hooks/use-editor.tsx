@@ -18,11 +18,14 @@ export interface ReferenceImage {
   url: string
   name: string
   createdAt: string
+  position: [number, number]
+  rotation: number
+  scale: number
 }
 
 export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
 
-export type ControlMode = 'select' | 'delete' | 'building'
+export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
@@ -202,7 +205,10 @@ const useStore = create<StoreState>()(
               id: `img-${Date.now()}`,
               url: event.target?.result as string,
               name: file.name,
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              position: [0, 0],
+              rotation: 0,
+              scale: 1
             }
             set(state => ({ images: [...state.images, newImage] }))
           }
@@ -329,6 +335,16 @@ const useStore = create<StoreState>()(
             console.log(`Migrated: Removed ${state.walls.length - validWalls.length} old format walls`)
             state.walls = validWalls
             state.selectedWallIds = []
+          }
+          
+          // Migrate: Add missing position, rotation, scale to existing images
+          if (state.images && state.images.length > 0) {
+            state.images = state.images.map((img: any) => ({
+              ...img,
+              position: img.position ?? [0, 0],
+              rotation: img.rotation ?? 0,
+              scale: img.scale ?? 1
+            }))
           }
         }
       },

@@ -26,7 +26,7 @@ type GridTilesProps = {
   opacity: number
   disableBuild?: boolean
   wallHeight: number
-  controlMode: 'select' | 'delete' | 'building'
+  controlMode: 'select' | 'delete' | 'building' | 'guide'
 }
 
 export const GridTiles = memo(({
