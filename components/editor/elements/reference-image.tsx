@@ -2,14 +2,32 @@
 
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ControlMode } from '@/hooks/use-editor'
 import { useThree } from '@react-three/fiber'
 
 const GRID_SIZE = 30 // 30m x 30m
 
-const DEBUG = true
+const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles
+
+// Handle geometry dimensions - base sizes
+const ORIGIN_MARKER_SIZE = 0.16
+const ARROW_SHAFT_RADIUS = 0.06
+const ARROW_SHAFT_LENGTH = 2
+const ARROW_HEAD_RADIUS = 0.12
+const ARROW_HEAD_LENGTH = 0.3
+const ROTATION_HANDLE_RADIUS = 0.4
+const ROTATION_HANDLE_THICKNESS = 0.06
+const SCALE_HANDLE_RADIUS = 0.12
+const SCALE_HANDLE_LENGTH = 0.3
+
+// Hit target scale factors (multipliers for base dimensions)
+const ORIGIN_HIT_SCALE = 2.5        // 0.4 / 0.16 = 2.5x
+const ARROW_HIT_RADIUS_SCALE = 2.5  // 0.15 / 0.06 = 2.5x
+const ARROW_HIT_LENGTH_SCALE = 1.1 // 2.5 / 2 = 1.25x
+const ROTATION_HIT_SCALE = 2        // 0.12 / 0.06 = 2x
+const SCALE_HIT_SCALE = 1.5         // 0.18 / 0.12 = 1.5x (radius), 0.4 / 0.3 = 1.33x (length, use 1.5 for consistency)
 
 type ReferenceImageProps = {
   id: string
@@ -31,6 +49,21 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
   const { camera, gl } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
   
+  // Track hover and active states for handles
+  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
+  const [activeHandle, setActiveHandle] = useState<string | null>(null)
+  
+  // Visual states for handles
+  const getHandleOpacity = (handleId: string) => {
+    if (activeHandle === handleId || hoveredHandle === handleId) return 1
+    return 0.1
+  }
+  
+  const getHandleEmissiveIntensity = (handleId: string) => {
+    if (activeHandle === handleId || hoveredHandle === handleId) return 0.5
+    return 0 // No emissive when inactive - prevents glow from overpowering opacity
+  }
+  
   // Calculate aspect-ratio-preserving dimensions
   const [planeWidth, planeHeight] = useMemo(() => {
     if (!texture.image) return [GRID_SIZE, GRID_SIZE]
@@ -49,11 +82,29 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     }
   }, [texture])
   
+  // Calculate derived dimensions from base sizes and scale factors
+  const originHitSize = ORIGIN_MARKER_SIZE * ORIGIN_HIT_SCALE
+  const arrowHitRadius = ARROW_SHAFT_RADIUS * ARROW_HIT_RADIUS_SCALE
+  const arrowHitLength = ARROW_SHAFT_LENGTH * ARROW_HIT_LENGTH_SCALE
+  const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
+  const scaleHitRadius = SCALE_HANDLE_RADIUS * SCALE_HIT_SCALE
+  const scaleHitLength = SCALE_HANDLE_LENGTH * SCALE_HIT_SCALE
+  
+  // Calculate handle positions based on dimensions
+  const originMarkerEdge = ORIGIN_MARKER_SIZE / 2
+  const originHitEdge = originHitSize / 2
+  
+  const arrowShaftPos = originMarkerEdge + ARROW_SHAFT_LENGTH / 2
+  const arrowHitPos = originHitEdge + arrowHitLength / 2
+  const arrowHeadPos = originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
+  
   const handleTranslateDown = (axis: 'x' | 'y') => (e: any) => {
     // Only respond to left-click (button 0), ignore right-click (button 2) for camera
     if (e.button !== 0) return;
     if (movingCamera) return;
     e.stopPropagation()
+    const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
+    setActiveHandle(handleId)
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const raycaster = new THREE.Raycaster()
@@ -80,6 +131,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
+      setActiveHandle(null)
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -90,6 +142,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (e.button !== 0) return;
     if (movingCamera) return;
     e.stopPropagation()
+    setActiveHandle('translate-xz')
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const raycaster = new THREE.Raycaster()
@@ -111,6 +164,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
+      setActiveHandle(null)
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -120,6 +174,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (e.button !== 0) return;
     if (movingCamera) return;
     e.stopPropagation()
+    setActiveHandle('rotation')
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -152,6 +207,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
+      setActiveHandle(null)
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -161,6 +217,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (e.button !== 0) return;
     if (movingCamera) return;
     e.stopPropagation()
+    setActiveHandle('scale')
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -198,6 +255,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
+      setActiveHandle(null)
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -236,136 +294,306 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
           {/* Center origin marker for reference with XZ plane translation hit box */}
           <group position={[0, 0, 0]}>
             {/* Invisible larger hit target for XZ translation */}
-            <mesh position={[0, 0, 0]} onPointerDown={handleTranslateXZDown} renderOrder={1000} scale={HANDLE_SCALE}>
-              <boxGeometry args={[0.4, 0.4, 0.4]} />
+            <mesh 
+              position={[0, 0, 0]} 
+              onPointerDown={handleTranslateXZDown}
+              onPointerEnter={() => setHoveredHandle('translate-xz')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <boxGeometry args={[originHitSize, originHitSize, originHitSize]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             {/* Visible origin marker */}
             <mesh position={[0, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <boxGeometry args={[0.16, 0.16, 0.16]} />
-              <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} depthTest={false} />
+              <boxGeometry args={[ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE]} />
+              <meshStandardMaterial 
+                color="white" 
+                emissive="white" 
+                emissiveIntensity={getHandleEmissiveIntensity('translate-xz')}
+                transparent
+                opacity={getHandleOpacity('translate-xz')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           
           {/* Translate X (world X) - Red arrow pointing along X axis */}
           <group position={[0, 0, 0]}>
-            {/* Invisible larger hit target */}
-            <mesh position={[1.25, 0, 0]} rotation={[0, 0, Math.PI / 2]} onPointerDown={handleTranslateDown('x')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <cylinderGeometry args={[0.15, 0.15, 2.5, 8]} />
+            {/* Invisible larger hit target - anchored to hit box edge */}
+            <mesh 
+              position={[arrowHitPos, 0, 0]} 
+              rotation={[0, 0, Math.PI / 2]} 
+              onPointerDown={handleTranslateDown('x')}
+              onPointerEnter={() => setHoveredHandle('translate-x')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <cylinderGeometry args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            {/* Visible arrow shaft */}
-            <mesh position={[1, 0, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <cylinderGeometry args={[0.06, 0.06, 2, 16]} />
-              <meshStandardMaterial color="#ff4444" emissive="#ff4444" emissiveIntensity={0.3} depthTest={false} />
+            {/* Visible arrow shaft - anchored to visible marker edge */}
+            <mesh position={[arrowShaftPos, 0, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
+              <cylinderGeometry args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ff4444" 
+                emissive="#ff4444" 
+                emissiveIntensity={getHandleEmissiveIntensity('translate-x')}
+                transparent
+                opacity={getHandleOpacity('translate-x')}
+                depthTest={false} 
+              />
             </mesh>
             {/* Arrow head */}
-            <mesh position={[2.15, 0, 0]} rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#ff4444" emissive="#ff4444" emissiveIntensity={0.3} depthTest={false} />
+            <mesh position={[arrowHeadPos, 0, 0]} rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
+              <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ff4444" 
+                emissive="#ff4444" 
+                emissiveIntensity={getHandleEmissiveIntensity('translate-x')}
+                transparent
+                opacity={getHandleOpacity('translate-x')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           
           {/* Translate Z (world Z) - Green arrow pointing along Z axis */}
           <group position={[0, 0, 0]}>
-            {/* Invisible larger hit target */}
-            <mesh position={[0, 0, 1.25]} rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleTranslateDown('y')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <cylinderGeometry args={[0.15, 0.15, 2.5, 8]} />
+            {/* Invisible larger hit target - anchored to hit box edge */}
+            <mesh 
+              position={[0, 0, arrowHitPos]} 
+              rotation={[Math.PI / 2, 0, 0]} 
+              onPointerDown={handleTranslateDown('y')}
+              onPointerEnter={() => setHoveredHandle('translate-z')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <cylinderGeometry args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            {/* Visible arrow shaft */}
-            <mesh position={[0, 0, 1]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <cylinderGeometry args={[0.06, 0.06, 2, 16]} />
-              <meshStandardMaterial color="#44ff44" emissive="#44ff44" emissiveIntensity={0.3} depthTest={false} />
+            {/* Visible arrow shaft - anchored to visible marker edge */}
+            <mesh position={[0, 0, arrowShaftPos]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
+              <cylinderGeometry args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#44ff44" 
+                emissive="#44ff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('translate-z')}
+                transparent
+                opacity={getHandleOpacity('translate-z')}
+                depthTest={false} 
+              />
             </mesh>
             {/* Arrow head */}
-            <mesh position={[0, 0, 2.15]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#44ff44" emissive="#44ff44" emissiveIntensity={0.3} depthTest={false} />
+            <mesh position={[0, 0, arrowHeadPos]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
+              <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#44ff44" 
+                emissive="#44ff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('translate-z')}
+                transparent
+                opacity={getHandleOpacity('translate-z')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           
           {/* Rotation handles at corners - Blue curved arrows around Y axis */}
           <group position={[(planeWidth * scale) / 2, 0, (planeHeight * scale) / 2]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleRotationDown} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
+            <mesh 
+              rotation={[Math.PI / 2, 0, 0]} 
+              onPointerDown={handleRotationDown}
+              onPointerEnter={() => setHoveredHandle('rotation')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial color="#4444ff" emissive="#4444ff" emissiveIntensity={0.3} depthTest={false} />
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
+              <meshStandardMaterial 
+                color="#4444ff" 
+                emissive="#4444ff" 
+                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
+                transparent
+                opacity={getHandleOpacity('rotation')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, (planeHeight * scale) / 2]}>
-            <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} onPointerDown={handleRotationDown} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
+            <mesh 
+              rotation={[Math.PI / 2, 0, Math.PI / 2]} 
+              onPointerDown={handleRotationDown}
+              onPointerEnter={() => setHoveredHandle('rotation')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial color="#4444ff" emissive="#4444ff" emissiveIntensity={0.3} depthTest={false} />
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
+              <meshStandardMaterial 
+                color="#4444ff" 
+                emissive="#4444ff" 
+                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
+                transparent
+                opacity={getHandleOpacity('rotation')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
-            <mesh rotation={[Math.PI / 2, 0, Math.PI]} onPointerDown={handleRotationDown} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
+            <mesh 
+              rotation={[Math.PI / 2, 0, Math.PI]} 
+              onPointerDown={handleRotationDown}
+              onPointerEnter={() => setHoveredHandle('rotation')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial color="#4444ff" emissive="#4444ff" emissiveIntensity={0.3} depthTest={false} />
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
+              <meshStandardMaterial 
+                color="#4444ff" 
+                emissive="#4444ff" 
+                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
+                transparent
+                opacity={getHandleOpacity('rotation')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
-            <mesh rotation={[Math.PI / 2, 0, -Math.PI / 2]} onPointerDown={handleRotationDown} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
+            <mesh 
+              rotation={[Math.PI / 2, 0, -Math.PI / 2]} 
+              onPointerDown={handleRotationDown}
+              onPointerEnter={() => setHoveredHandle('rotation')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, rotationHitThickness, 16, 32, Math.PI / 2]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial color="#4444ff" emissive="#4444ff" emissiveIntensity={0.3} depthTest={false} />
+              <torusGeometry args={[ROTATION_HANDLE_RADIUS, ROTATION_HANDLE_THICKNESS, 16, 32, Math.PI / 2]} />
+              <meshStandardMaterial 
+                color="#4444ff" 
+                emissive="#4444ff" 
+                emissiveIntensity={getHandleEmissiveIntensity('rotation')}
+                transparent
+                opacity={getHandleOpacity('rotation')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           
           {/* Scale handles at edge midpoints - Yellow cones pointing outward */}
           <group position={[(planeWidth * scale) / 2, 0, 0]}>
-            <mesh rotation={[0, 0, -Math.PI / 2]} onPointerDown={handleScaleDown('right')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.18, 0.4, 16]} />
+            <mesh 
+              rotation={[0, 0, -Math.PI / 2]} 
+              onPointerDown={handleScaleDown('right')}
+              onPointerEnter={() => setHoveredHandle('scale')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
+              <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ffff44" 
+                emissive="#ffff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('scale')}
+                transparent
+                opacity={getHandleOpacity('scale')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, 0]}>
-            <mesh rotation={[0, 0, Math.PI / 2]} onPointerDown={handleScaleDown('left')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.18, 0.4, 16]} />
+            <mesh 
+              rotation={[0, 0, Math.PI / 2]} 
+              onPointerDown={handleScaleDown('left')}
+              onPointerEnter={() => setHoveredHandle('scale')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
+              <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ffff44" 
+                emissive="#ffff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('scale')}
+                transparent
+                opacity={getHandleOpacity('scale')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[0, 0, (planeHeight * scale) / 2]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleScaleDown('top')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.18, 0.4, 16]} />
+            <mesh 
+              rotation={[Math.PI / 2, 0, 0]} 
+              onPointerDown={handleScaleDown('top')}
+              onPointerEnter={() => setHoveredHandle('scale')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
+              <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ffff44" 
+                emissive="#ffff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('scale')}
+                transparent
+                opacity={getHandleOpacity('scale')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
           <group position={[0, 0, -(planeHeight * scale) / 2]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} onPointerDown={handleScaleDown('bottom')} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.18, 0.4, 16]} />
+            <mesh 
+              rotation={[-Math.PI / 2, 0, 0]} 
+              onPointerDown={handleScaleDown('bottom')}
+              onPointerEnter={() => setHoveredHandle('scale')}
+              onPointerLeave={() => setHoveredHandle(null)}
+              renderOrder={1000} 
+              scale={HANDLE_SCALE}
+            >
+              <coneGeometry args={[scaleHitRadius, scaleHitLength, 16]} />
               <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1000} scale={HANDLE_SCALE}>
-              <coneGeometry args={[0.12, 0.3, 16]} />
-              <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
+              <coneGeometry args={[SCALE_HANDLE_RADIUS, SCALE_HANDLE_LENGTH, 16]} />
+              <meshStandardMaterial 
+                color="#ffff44" 
+                emissive="#ffff44" 
+                emissiveIntensity={getHandleEmissiveIntensity('scale')}
+                transparent
+                opacity={getHandleOpacity('scale')}
+                depthTest={false} 
+              />
             </mesh>
           </group>
         </group>
