@@ -11,8 +11,26 @@ import { useEditorContext, type ControlMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { Hammer, MousePointer2, Trash2, Image } from 'lucide-react'
 
-export function ControlModeMenu({ className }: { className?: string }) {
-  const { controlMode, setControlMode, activeTool } = useEditorContext()
+export function ControlModeMenu({ 
+  className,
+  onModeChange
+}: { 
+  className?: string
+  onModeChange?: () => void
+}) {
+  const { controlMode, setControlMode, activeTool, setActiveTool } = useEditorContext()
+  
+  const handleModeClick = (mode: ControlMode) => {
+    // Clear any in-progress placement states when switching modes
+    onModeChange?.()
+    
+    // If switching to building mode without an active tool, default to 'wall'
+    if (mode === 'building' && !activeTool) {
+      setActiveTool('wall')
+    } else {
+      setControlMode(mode)
+    }
+  }
 
   const modes: Array<{ id: ControlMode; icon: typeof MousePointer2; label: string; shortcut: string; color: string }> = [
     { id: 'select', icon: MousePointer2, label: 'Select', shortcut: 'V', color: 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-600/30 hover:text-blue-400' },
@@ -33,7 +51,6 @@ export function ControlModeMenu({ className }: { className?: string }) {
         {modes.map((mode) => {
           const Icon = mode.icon
           const isActive = controlMode === mode.id
-          const isDisabled = mode.id === 'building' && !activeTool
           
           return (
             <Tooltip key={mode.id}>
@@ -41,14 +58,12 @@ export function ControlModeMenu({ className }: { className?: string }) {
                 <Button
                   variant={isActive ? 'default' : 'ghost'}
                   size="icon"
-                  onClick={() => setControlMode(mode.id)}
+                  onClick={() => handleModeClick(mode.id)}
                   className={cn(
                     'h-8 w-8 transition-all',
                     'text-white hover:text-white hover:bg-gray-800',
-                    isActive && mode.color,
-                    isDisabled && 'opacity-50 cursor-not-allowed'
+                    isActive && mode.color
                   )}
-                  disabled={isDisabled}
                 >
                   <Icon className="h-4 w-4" />
                 </Button>
@@ -58,9 +73,7 @@ export function ControlModeMenu({ className }: { className?: string }) {
                   {mode.label} Mode
                   {mode.id === 'select' && ' (V)'}
                   {mode.id === 'delete' && ' (D)'}
-                  {mode.id === 'building' && !isActive && ' (B)'}
-                  {mode.id === 'building' && isActive && !activeTool && ' (Select a tool first)'}
-                  {mode.id === 'building' && isActive && activeTool && ' (Active)'}
+                  {mode.id === 'building' && ' (B)'}
                   {mode.id === 'guide' && ' (G)'}
                   {isActive && mode.id !== 'select' && ' • Press Esc to exit'}
                 </p>

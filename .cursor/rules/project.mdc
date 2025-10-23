@@ -125,7 +125,11 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - Real-time updates via `onUpdate()` callback → `setImages()` → localStorage sync
 - Click grid to deselect
 
-**Mode Switching**: `setActiveTool()` auto-switches to building, `Esc` cancels operations
+**Mode Switching**: 
+- `setActiveTool()` auto-switches to building mode, defaults to 'wall' tool if none active
+- `setControlMode()` clears active tool when leaving building mode (prevents mode leakage)
+- `Esc` or mode change (V/D/B/G) clears all placement states and selections (walls/images)
+- Building tool logic guarded by `controlMode === 'building'` check for strict mode isolation
 
 **Persistence**: `serializeLayout()` → JSON download, `loadLayout()` → parse + `setWalls()`, localStorage auto-sync via Zustand
 

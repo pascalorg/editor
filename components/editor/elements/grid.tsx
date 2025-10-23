@@ -60,6 +60,13 @@ export const GridTiles = memo(({
   const handlePointerMove = (e: any) => {
     e.stopPropagation()
 
+    // Don't show hover indicators in guide mode (reserved for image manipulation)
+    if (controlMode === 'guide') {
+      setHoveredIntersection(null)
+      onIntersectionHover(0, null)
+      return
+    }
+
     if (e.point && !disableBuild) {
       // e.point is in world coordinates
       // The parent group is offset by [-GRID_SIZE/2, 0, -GRID_SIZE/2]

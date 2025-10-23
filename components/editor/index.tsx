@@ -28,7 +28,7 @@ const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode } = useEditorContext()
+  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -48,6 +48,21 @@ export default function Editor({ className }: { className?: string }) {
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
+  
+  // Helper function to clear all placement states and selections
+  const clearPlacementStates = () => {
+    setWallStartPoint(null)
+    setWallPreviewEnd(null)
+    setRoomStartPoint(null)
+    setRoomPreviewEnd(null)
+    setCustomRoomPoints([])
+    setCustomRoomPreviewEnd(null)
+    setDeleteStartPoint(null)
+    setDeletePreviewEnd(null)
+    // Clear all selections (walls and images)
+    setSelectedWallIds(new Set([]))
+    setSelectedImageIds(new Set([]))
+  }
 
   useEffect(() => {
     setWallsGroupRef(wallsGroupRef.current)
@@ -66,14 +81,7 @@ export default function Editor({ className }: { className?: string }) {
         const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0 || deleteStartPoint !== null
 
         // Cancel all placement and delete modes
-        setWallStartPoint(null)
-        setWallPreviewEnd(null)
-        setRoomStartPoint(null)
-        setRoomPreviewEnd(null)
-        setCustomRoomPoints([])
-        setCustomRoomPreviewEnd(null)
-        setDeleteStartPoint(null)
-        setDeletePreviewEnd(null)
+        clearPlacementStates()
 
         // Only change mode to 'select' if there was no active placement/deletion
         if (!hasActivePlacement) {
@@ -81,15 +89,24 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
+        clearPlacementStates()
         setControlMode('select')
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
+        clearPlacementStates()
         setControlMode('delete')
       }  else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        setControlMode('building')
+        clearPlacementStates()
+        // Default to 'wall' tool if no active tool when entering building mode
+        if (!activeTool) {
+          setActiveTool('wall')
+        } else {
+          setControlMode('building')
+        }
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
+        clearPlacementStates()
         setControlMode('guide')
       }
        else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
@@ -104,7 +121,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, setControlMode, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, setWallStartPoint, setWallPreviewEnd, setRoomStartPoint, setRoomPreviewEnd, setCustomRoomPoints, setCustomRoomPreviewEnd, setDeleteStartPoint, setDeletePreviewEnd])
+  }, [undo, redo, setControlMode, setActiveTool, activeTool, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, clearPlacementStates])
 
   // Use constants instead of Leva controls
   const wallHeight = WALL_HEIGHT
@@ -331,8 +348,8 @@ export default function Editor({ className }: { className?: string }) {
       return
     }
 
-    // Building mode - check active tool
-    if (activeTool === 'wall') {
+    // Building mode - check active tool (only allow building in building mode)
+    if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: two-click line drawing
       if (wallStartPoint === null) {
         // First click: set start point
@@ -368,7 +385,7 @@ export default function Editor({ className }: { className?: string }) {
         setWallStartPoint(null)
         setWallPreviewEnd(null)
       }
-    } else if (activeTool === 'room') {
+    } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: two-click rectangle (4 walls)
       if (roomStartPoint === null) {
         // First click: set start corner
@@ -398,7 +415,7 @@ export default function Editor({ className }: { className?: string }) {
         setRoomStartPoint(null)
         setRoomPreviewEnd(null)
       }
-    } else if (activeTool === 'custom-room') {
+    } else if (controlMode === 'building' && activeTool === 'custom-room') {
       // Custom-room mode: multi-point polygon
       // Use the snapped preview position instead of raw x,y
       const snappedX = customRoomPreviewEnd ? customRoomPreviewEnd[0] : x
@@ -432,7 +449,7 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionDoubleClick = () => {
-    if (activeTool === 'custom-room' && customRoomPoints.length >= 1) {
+    if (controlMode === 'building' && activeTool === 'custom-room' && customRoomPoints.length >= 1) {
       // Add the current preview point (from the first click of the double-click)
       // But only if it's different from the last point
       let finalPoints = customRoomPoints
@@ -508,8 +525,8 @@ export default function Editor({ className }: { className?: string }) {
       return
     }
 
-    // Building mode - check active tool
-    if (activeTool === 'wall') {
+    // Building mode - check active tool (only allow previews in building mode)
+    if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: snap to horizontal, vertical, or 45° diagonal
       if (wallStartPoint && y !== null) {
         // Calculate projected point on same row, column, or 45° diagonal
@@ -549,14 +566,14 @@ export default function Editor({ className }: { className?: string }) {
       } else if (!wallStartPoint) {
         setWallPreviewEnd(null)
       }
-    } else if (activeTool === 'room') {
+    } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: show rectangle preview
       if (roomStartPoint && y !== null) {
         setRoomPreviewEnd([x, y])
       } else if (!roomStartPoint) {
         setRoomPreviewEnd(null)
       }
-    } else if (activeTool === 'custom-room') {
+    } else if (controlMode === 'building' && activeTool === 'custom-room') {
       // Custom-room mode: show preview line to current hover point with snapping
       if (y !== null) {
         if (customRoomPoints.length > 0) {
@@ -798,7 +815,7 @@ export default function Editor({ className }: { className?: string }) {
             deleteStartPoint={deleteStartPoint}
             deletePreviewEnd={deletePreviewEnd}
             opacity={gridOpacity}
-            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select'}
+            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
             wallHeight={wallHeight}
             controlMode={controlMode}
           />
@@ -849,7 +866,7 @@ export default function Editor({ className }: { className?: string }) {
         </div>
       )}
 
-      <ControlModeMenu />
+      <ControlModeMenu onModeChange={clearPlacementStates} />
       <BuildingMenu />
     </div>
   )

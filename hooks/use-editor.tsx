@@ -136,7 +136,13 @@ const useStore = create<StoreState>()(
           set({ controlMode: 'select' })
         }
       },
-      setControlMode: (mode) => set({ controlMode: mode }),
+      setControlMode: (mode) => {
+        set({ controlMode: mode })
+        // Clear activeTool when switching away from building mode to prevent mode leakage
+        if (mode !== 'building') {
+          set({ activeTool: null })
+        }
+      },
       getWallsSet: () => new Set(get().walls),
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),

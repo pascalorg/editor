@@ -81,25 +81,30 @@ export const Walls = memo(forwardRef(({
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                // Don't highlight walls in delete mode
-                if (controlMode !== 'delete') {
+                // Don't highlight walls in delete or guide mode
+                if (controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(i);
                 }
               }}
               onPointerLeave={(e) => {
-                // Don't highlight walls in delete mode
-                if (controlMode !== 'delete') {
+                // Don't highlight walls in delete or guide mode
+                if (controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(null);
                 }
               }}
               onPointerDown={(e) => {
-
                 // Delete mode: interactions now handled through grid intersections
                 if (controlMode === 'delete') {
                   return
                 }
+                
+                // Guide mode: no wall interactions while manipulating reference images
+                if (controlMode === 'guide') {
+                  return
+                }
+                
                 e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
@@ -130,6 +135,11 @@ export const Walls = memo(forwardRef(({
                 
                 // Delete mode: handled in onPointerDown/Up
                 if (controlMode === 'delete') {
+                  return
+                }
+                
+                // Guide mode: no wall selection while manipulating reference images
+                if (controlMode === 'guide') {
                   return
                 }
                 
