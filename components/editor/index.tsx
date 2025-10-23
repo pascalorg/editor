@@ -28,7 +28,7 @@ const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera } = useEditorContext()
+  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -801,7 +801,9 @@ export default function Editor({ className }: { className?: string }) {
             controlMode={controlMode}
             movingCamera={movingCamera}
             onSelect={() => setSelectedImageIds(new Set([image.id]))}
-            onUpdate={(updates) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i))}
+            onUpdate={(updates, pushToUndo = true) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i), pushToUndo)}
+            onManipulationStart={() => setIsManipulatingImage(true)}
+            onManipulationEnd={() => setIsManipulatingImage(false)}
           />
         ))}
 

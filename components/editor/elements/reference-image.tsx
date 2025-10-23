@@ -7,6 +7,7 @@ import type { ControlMode } from '@/hooks/use-editor'
 import { useThree } from '@react-three/fiber'
 
 const GRID_SIZE = 30 // 30m x 30m
+const TILE_SIZE = 0.5 // Grid spacing in meters (matches editor grid)
 
 const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles
@@ -40,10 +41,12 @@ type ReferenceImageProps = {
   controlMode: ControlMode
   movingCamera: boolean
   onSelect: () => void
-  onUpdate: (updates: Partial<{ position: [number, number]; rotation: number; scale: number }>) => void
+  onUpdate: (updates: Partial<{ position: [number, number]; rotation: number; scale: number }>, pushToUndo?: boolean) => void
+  onManipulationStart: () => void
+  onManipulationEnd: () => void
 }
 
-export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, isSelected, controlMode, movingCamera, onSelect, onUpdate }: ReferenceImageProps) => {
+export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, isSelected, controlMode, movingCamera, onSelect, onUpdate, onManipulationStart, onManipulationEnd }: ReferenceImageProps) => {
   const hitAreaOpacity = DEBUG ? 0.5 as const : 0
   const texture = useTexture(url)
   const { camera, gl } = useThree()
@@ -56,12 +59,12 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
-    return 0.1
+    return 0.6
   }
   
   const getHandleEmissiveIntensity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 0.5
-    return 0 // No emissive when inactive - prevents glow from overpowering opacity
+    return 0.05 // No emissive when inactive - prevents glow from overpowering opacity
   }
   
   // Calculate aspect-ratio-preserving dimensions
@@ -105,6 +108,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     e.stopPropagation()
     const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
     setActiveHandle(handleId)
+    onManipulationStart() // Start tracking manipulation
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const raycaster = new THREE.Raycaster()
@@ -115,6 +119,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const localDir = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
     const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
     const worldAxis = localDir.clone().applyMatrix4(groupRef.current.matrixWorld).sub(worldZero).normalize()
+    let lastPosition: [number, number] | null = null
     const handleMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect()
       const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
@@ -126,12 +131,27 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
       const delta = intersect.clone().sub(initialMouse)
       const projected = delta.dot(worldAxis)
       const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
-      onUpdate({ position: [newPos.x, newPos.z] })
+      
+      // Snap to grid when Shift is held
+      let finalX = newPos.x
+      let finalZ = newPos.z
+      if (ev.shiftKey) {
+        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
+        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+      }
+      
+      lastPosition = [finalX, finalZ]
+      onUpdate({ position: lastPosition }, false) // Don't push to undo during drag
     }
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
       setActiveHandle(null)
+      // Commit final state to undo stack
+      if (lastPosition) {
+        onUpdate({ position: lastPosition }, true)
+      }
+      onManipulationEnd()
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -143,12 +163,14 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (movingCamera) return;
     e.stopPropagation()
     setActiveHandle('translate-xz')
+    onManipulationStart() // Start tracking manipulation
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(e.pointer, camera)
     raycaster.ray.intersectPlane(plane, initialMouse)
     const initialPosition = groupRef.current.position.clone()
+    let lastPosition: [number, number] | null = null
     const handleMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect()
       const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
@@ -159,12 +181,27 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
       raycaster.ray.intersectPlane(plane, intersect)
       const delta = intersect.clone().sub(initialMouse)
       const newPos = initialPosition.clone().add(delta)
-      onUpdate({ position: [newPos.x, newPos.z] })
+      
+      // Snap to grid when Shift is held
+      let finalX = newPos.x
+      let finalZ = newPos.z
+      if (ev.shiftKey) {
+        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
+        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+      }
+      
+      lastPosition = [finalX, finalZ]
+      onUpdate({ position: lastPosition }, false) // Don't push to undo during drag
     }
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
       setActiveHandle(null)
+      // Commit final state to undo stack
+      if (lastPosition) {
+        onUpdate({ position: lastPosition }, true)
+      }
+      onManipulationEnd()
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -175,6 +212,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (movingCamera) return;
     e.stopPropagation()
     setActiveHandle('rotation')
+    onManipulationStart() // Start tracking manipulation
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -184,6 +222,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const initialVector = initialMouse.clone().sub(center)
     const initialAngle = Math.atan2(initialVector.z, initialVector.x)
     const initialRotation = rotation
+    let lastRotation: number | null = null
     const handleMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect()
       const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
@@ -202,12 +241,18 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
         newRotation = Math.round(newRotation / 45) * 45
       }
       
-      onUpdate({ rotation: newRotation })
+      lastRotation = newRotation
+      onUpdate({ rotation: lastRotation }, false) // Don't push to undo during drag
     }
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
       setActiveHandle(null)
+      // Commit final state to undo stack
+      if (lastRotation !== null) {
+        onUpdate({ rotation: lastRotation }, true)
+      }
+      onManipulationEnd()
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
@@ -218,6 +263,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     if (movingCamera) return;
     e.stopPropagation()
     setActiveHandle('scale')
+    onManipulationStart() // Start tracking manipulation
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -237,6 +283,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     const localDir = getLocalDir()
     const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
     const worldDir = localDir.clone().applyMatrix4(groupRef.current.matrixWorld).sub(worldZero).normalize()
+    let lastScale: number | null = null
     const handleMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect()
       const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
@@ -249,13 +296,25 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
       const projected = delta.dot(worldDir)
       const projectedPoint = initialMouse.clone().add(worldDir.clone().multiplyScalar(projected))
       const newDist = center.distanceTo(projectedPoint)
-      const newScale = initialScale * (newDist / initialDist)
-      onUpdate({ scale: Math.max(0.1, newScale) })
+      let newScale = initialScale * (newDist / initialDist)
+      
+      // Snap to 0.1 increments when Shift is held
+      if (ev.shiftKey) {
+        newScale = Math.round(newScale * 10) / 10
+      }
+      
+      lastScale = Math.max(0.1, newScale)
+      onUpdate({ scale: lastScale }, false) // Don't push to undo during drag
     }
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerup', handleUp)
       setActiveHandle(null)
+      // Commit final state to undo stack
+      if (lastScale !== null) {
+        onUpdate({ scale: lastScale }, true)
+      }
+      onManipulationEnd()
     }
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
