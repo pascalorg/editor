@@ -3,13 +3,15 @@
 import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 
 
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode);
+  const setMovingCamera = useEditor((state) => state.setMovingCamera);
   const controls = useThree((state) => state.controls);
+  const controlsRef = useRef<CameraControlsImpl>(null);
 
   useEffect(() => {
     if (!controls) return;
@@ -42,11 +44,14 @@ export function CustomControls() {
 
   return (
     <CameraControls
+      ref={controlsRef}
       minPolarAngle={0}
       maxPolarAngle={Math.PI / 2 - 0.1}
       minDistance={10}
       maxDistance={50}
       mouseButtons={mouseButtons}
+      onStart={() => setMovingCamera(true)}
+      onEnd={() => setMovingCamera(false)}
       makeDefault
     />
   )

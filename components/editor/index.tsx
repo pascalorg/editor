@@ -28,7 +28,7 @@ const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool } = useEditorContext()
+  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -325,6 +325,9 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionClick = (x: number, y: number) => {
+    // Don't handle clicks while camera is moving
+    if (movingCamera) return;
+    
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: two-click line selection
@@ -449,6 +452,9 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionDoubleClick = () => {
+    // Don't handle double-clicks while camera is moving
+    if (movingCamera) return;
+    
     if (controlMode === 'building' && activeTool === 'custom-room' && customRoomPoints.length >= 1) {
       // Add the current preview point (from the first click of the double-click)
       // But only if it's different from the last point
@@ -793,6 +799,7 @@ export default function Editor({ className }: { className?: string }) {
             rotation={image.rotation}
             isSelected={selectedImageIds.has(image.id)}
             controlMode={controlMode}
+            movingCamera={movingCamera}
             onSelect={() => setSelectedImageIds(new Set([image.id]))}
             onUpdate={(updates) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i))}
           />
@@ -831,6 +838,7 @@ export default function Editor({ className }: { className?: string }) {
             isCameraEnabled={isCameraEnabled}
             ref={wallsGroupRef}
             controlMode={controlMode}
+            movingCamera={movingCamera}
             onDeleteWalls={handleDeleteSelectedWalls}
           />
         </group>

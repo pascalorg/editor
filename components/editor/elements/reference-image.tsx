@@ -8,6 +8,8 @@ import { useThree, useFrame } from '@react-three/fiber'
 
 const GRID_SIZE = 30 // 30m x 30m
 
+const DEBUG = true
+
 type ReferenceImageProps = {
   id: string
   url: string
@@ -17,11 +19,13 @@ type ReferenceImageProps = {
   rotation: number // degrees
   isSelected: boolean
   controlMode: ControlMode
+  movingCamera: boolean
   onSelect: () => void
   onUpdate: (updates: Partial<{ position: [number, number]; rotation: number; scale: number }>) => void
 }
 
-export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, isSelected, controlMode, onSelect, onUpdate }: ReferenceImageProps) => {
+export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, isSelected, controlMode, movingCamera, onSelect, onUpdate }: ReferenceImageProps) => {
+  const hitAreaOpacity = DEBUG ? 0.5 as const : 0
   const texture = useTexture(url)
   const { camera, gl } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
@@ -56,6 +60,9 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
   }, [texture])
   
   const handleTranslateDown = (axis: 'x' | 'y') => (e: any) => {
+    // Only respond to left-click (button 0), ignore right-click (button 2) for camera
+    if (e.button !== 0) return;
+    if (movingCamera) return;
     e.stopPropagation()
     const initialMouse = new THREE.Vector3()
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -88,6 +95,9 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     document.addEventListener('pointerup', handleUp)
   }
   const handleRotationDown = (e: any) => {
+    // Only respond to left-click (button 0), ignore right-click (button 2) for camera
+    if (e.button !== 0) return;
+    if (movingCamera) return;
     e.stopPropagation()
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
@@ -109,7 +119,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
       const vector = intersect.clone().sub(center)
       const angle = Math.atan2(vector.z, vector.x)
       const delta = angle - initialAngle
-      const newRotation = initialRotation + delta * (180 / Math.PI)
+      const newRotation = initialRotation - delta * (180 / Math.PI)
       onUpdate({ rotation: newRotation })
     }
     const handleUp = () => {
@@ -120,6 +130,9 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     document.addEventListener('pointerup', handleUp)
   }
   const handleScaleDown = (edge: 'right' | 'left' | 'top' | 'bottom') => (e: any) => {
+    // Only respond to left-click (button 0), ignore right-click (button 2) for camera
+    if (e.button !== 0) return;
+    if (movingCamera) return;
     e.stopPropagation()
     const center = groupRef.current.position.clone()
     const initialMouse = new THREE.Vector3()
@@ -162,13 +175,17 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
     document.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerup', handleUp)
   }
+
+  
   
   return (
     <group ref={groupRef} position={[position[0], 0.001, position[1]]} rotation={[0, rotation * Math.PI / 180, 0]}>
       {/* Image plane - rotated to lie flat on XZ plane */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         <mesh scale={scale} onClick={(e) => {
-          if (controlMode === 'guide') {
+          // Only respond to left-click, ignore right-click for camera
+          if (e.button !== 0) return;
+          if (controlMode === 'guide' && !movingCamera) {
             e.stopPropagation()
             onSelect()
           }
@@ -191,43 +208,43 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
         <group>
           {/* Center origin marker for reference */}
           <mesh position={[0, 0, 0]} renderOrder={1000} scale={cameraScale}>
-            <sphereGeometry args={[0.08, 16, 16]} />
+            <boxGeometry args={[0.16, 0.16, 0.16]} />
             <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} depthTest={false} />
           </mesh>
           
           {/* Translate X (world X) - Red arrow pointing along X axis */}
-          <group position={[(planeWidth * scale) / 2 + 0.5, 0, 0]}>
+          <group position={[0, 0, 0]}>
             {/* Invisible larger hit target */}
-            <mesh rotation={[0, 0, Math.PI / 2]} onPointerDown={handleTranslateDown('x')} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[1.25, 0, 0]} rotation={[0, 0, Math.PI / 2]} onPointerDown={handleTranslateDown('x')} renderOrder={1000} scale={cameraScale}>
               <cylinderGeometry args={[0.15, 0.15, 2.5, 8]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             {/* Visible arrow shaft */}
-            <mesh rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[1, 0, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
               <cylinderGeometry args={[0.06, 0.06, 2, 16]} />
               <meshStandardMaterial color="#ff4444" emissive="#ff4444" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
             {/* Arrow head */}
-            <mesh position={[1.15, 0, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[2.15, 0, 0]} rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
               <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#ff4444" emissive="#ff4444" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
           </group>
           
           {/* Translate Z (world Z) - Green arrow pointing along Z axis */}
-          <group position={[0, 0, (planeHeight * scale) / 2 + 0.5]}>
+          <group position={[0, 0, 0]}>
             {/* Invisible larger hit target */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleTranslateDown('y')} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[0, 0, 1.25]} rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleTranslateDown('y')} renderOrder={1000} scale={cameraScale}>
               <cylinderGeometry args={[0.15, 0.15, 2.5, 8]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             {/* Visible arrow shaft */}
-            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[0, 0, 1]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
               <cylinderGeometry args={[0.06, 0.06, 2, 16]} />
               <meshStandardMaterial color="#44ff44" emissive="#44ff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
             {/* Arrow head */}
-            <mesh position={[0, 0, 1.15]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
+            <mesh position={[0, 0, 2.15]} rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
               <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#44ff44" emissive="#44ff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
@@ -237,7 +254,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
           <group position={[(planeWidth * scale) / 2, 0, (planeHeight * scale) / 2]}>
             <mesh rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleRotationDown} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
@@ -247,7 +264,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
           <group position={[-(planeWidth * scale) / 2, 0, (planeHeight * scale) / 2]}>
             <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} onPointerDown={handleRotationDown} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
@@ -257,7 +274,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
           <group position={[-(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
             <mesh rotation={[Math.PI / 2, 0, Math.PI]} onPointerDown={handleRotationDown} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, Math.PI]} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
@@ -267,7 +284,7 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
           <group position={[(planeWidth * scale) / 2, 0, -(planeHeight * scale) / 2]}>
             <mesh rotation={[Math.PI / 2, 0, -Math.PI / 2]} onPointerDown={handleRotationDown} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.12, 16, 32, Math.PI / 2]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
             <mesh rotation={[Math.PI / 2, 0, -Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
               <torusGeometry args={[0.4, 0.06, 16, 32, Math.PI / 2]} />
@@ -275,44 +292,44 @@ export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, is
             </mesh>
           </group>
           
-          {/* Scale handles at edge midpoints - Yellow spheres */}
+          {/* Scale handles at edge midpoints - Yellow cones pointing outward */}
           <group position={[(planeWidth * scale) / 2, 0, 0]}>
-            <mesh onPointerDown={handleScaleDown('right')} renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.18, 16, 16]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+            <mesh rotation={[0, 0, -Math.PI / 2]} onPointerDown={handleScaleDown('right')} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.18, 0.4, 16]} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            <mesh renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.12, 16, 16]} />
+            <mesh rotation={[0, 0, -Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
           </group>
           <group position={[-(planeWidth * scale) / 2, 0, 0]}>
-            <mesh onPointerDown={handleScaleDown('left')} renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.18, 16, 16]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+            <mesh rotation={[0, 0, Math.PI / 2]} onPointerDown={handleScaleDown('left')} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.18, 0.4, 16]} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            <mesh renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.12, 16, 16]} />
+            <mesh rotation={[0, 0, Math.PI / 2]} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
           </group>
           <group position={[0, 0, (planeHeight * scale) / 2]}>
-            <mesh onPointerDown={handleScaleDown('top')} renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.18, 16, 16]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+            <mesh rotation={[Math.PI / 2, 0, 0]} onPointerDown={handleScaleDown('top')} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.18, 0.4, 16]} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            <mesh renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.12, 16, 16]} />
+            <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
           </group>
           <group position={[0, 0, -(planeHeight * scale) / 2]}>
-            <mesh onPointerDown={handleScaleDown('bottom')} renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.18, 16, 16]} />
-              <meshStandardMaterial transparent opacity={0} depthTest={false} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} onPointerDown={handleScaleDown('bottom')} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.18, 0.4, 16]} />
+              <meshStandardMaterial transparent opacity={hitAreaOpacity} depthTest={false} />
             </mesh>
-            <mesh renderOrder={1000} scale={cameraScale}>
-              <sphereGeometry args={[0.12, 16, 16]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1000} scale={cameraScale}>
+              <coneGeometry args={[0.12, 0.3, 16]} />
               <meshStandardMaterial color="#ffff44" emissive="#ffff44" emissiveIntensity={0.3} depthTest={false} />
             </mesh>
           </group>

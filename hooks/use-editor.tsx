@@ -68,6 +68,7 @@ type StoreState = {
   redoStack: string[][]
   activeTool: Tool | null
   controlMode: ControlMode
+  movingCamera: boolean
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
@@ -79,6 +80,7 @@ type StoreState = {
   setWallsGroupRef: (ref: THREE.Group | null) => void
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
+  setMovingCamera: (moving: boolean) => void
   getWallsSet: () => Set<string>
   getSelectedWallIdsSet: () => Set<string>
   getSelectedImageIdsSet: () => Set<string>
@@ -109,6 +111,7 @@ const useStore = create<StoreState>()(
       redoStack: [],
       activeTool: 'wall',
       controlMode: 'building',
+      movingCamera: false,
       setWalls: (walls) => set(state => {
         const sortedNew = [...walls].sort()
         const sortedCurrent = [...state.walls].sort()
@@ -143,6 +146,7 @@ const useStore = create<StoreState>()(
           set({ activeTool: null })
         }
       },
+      setMovingCamera: (moving) => set({ movingCamera: moving }),
       getWallsSet: () => new Set(get().walls),
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
@@ -393,6 +397,8 @@ export const useEditorContext = () => {
     setActiveTool: store.setActiveTool,
     controlMode: store.controlMode,
     setControlMode: store.setControlMode,
+    movingCamera: store.movingCamera,
+    setMovingCamera: store.setMovingCamera,
     wallSegments: store.wallSegments(),
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,
