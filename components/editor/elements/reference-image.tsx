@@ -27,17 +27,30 @@ type ReferenceImageProps = {
 export const ReferenceImage = ({ id, url, opacity, scale, position, rotation, isSelected, controlMode, movingCamera, onSelect, onUpdate }: ReferenceImageProps) => {
   const hitAreaOpacity = DEBUG ? 0.5 as const : 0
   const texture = useTexture(url)
-  const { camera, gl } = useThree()
+  const { camera, gl, size } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
   const [cameraScale, setCameraScale] = useState(1)
   
-  // Update handle scale based on camera distance to maintain constant screen size
+  // Update handle scale based on camera to maintain constant screen size
   useFrame(() => {
     if (groupRef.current && isSelected && controlMode === 'guide') {
       const distance = camera.position.distanceTo(groupRef.current.position)
-      // Scale factor adjusted for perspective - tune the 0.08 multiplier to adjust handle size
-      const newScale = distance * 0.08
-      setCameraScale(newScale)
+      
+      if (camera.type === 'PerspectiveCamera') {
+        const perspCamera = camera as THREE.PerspectiveCamera
+        // Calculate world units per pixel at this distance
+        const vFOV = perspCamera.fov * (Math.PI / 180)
+        const worldHeight = 2 * Math.tan(vFOV / 2) * distance
+        const worldUnitsPerPixel = worldHeight / size.height
+        // Target ~40 pixels for handle size
+        const targetPixelSize = 80
+        const newScale = worldUnitsPerPixel * targetPixelSize
+        setCameraScale(newScale)
+      } else {
+        // Orthographic camera fallback
+        const newScale = distance * 0.08
+        setCameraScale(newScale)
+      }
     }
   })
   
