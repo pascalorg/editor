@@ -180,21 +180,38 @@ export const GridTiles = memo(({
       {wallStartPoint && activeTool === 'wall' && (
         <mesh position={[wallStartPoint[0] * tileSize, 0.01, wallStartPoint[1] * tileSize]}>
           <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
+          <meshStandardMaterial color="#44ff44" emissive="#22aa22" depthTest={false} />
         </mesh>
       )}
 
       {/* Preview line when placing wall */}
       {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
-        <Line
-          points={[
-            [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
-            [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
-          ]}
-          color="#44ff44"
-          lineWidth={3}
-          dashed={false}
-        />
+        <>
+          {/* Occluded version - dimmer */}
+          <Line
+            points={[
+              [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
+              [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
+            ]}
+            color="#336633"
+            lineWidth={2}
+            dashed={false}
+            depthTest={false}
+            transparent
+            opacity={0.3}
+          />
+          {/* Visible version - brighter */}
+          <Line
+            points={[
+              [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
+              [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
+            ]}
+            color="#44ff44"
+            lineWidth={3}
+            dashed={false}
+            depthTest={true}
+          />
+        </>
       )}
       
       {/* Wall shadow preview */}
@@ -213,10 +230,27 @@ export const GridTiles = memo(({
           {/* Start point indicator */}
           <mesh position={[roomStartPoint[0] * tileSize, 0.01, roomStartPoint[1] * tileSize]}>
             <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
+            <meshStandardMaterial color="#44ff44" emissive="#22aa22" depthTest={false} />
           </mesh>
 
           {/* Preview lines for the 4 walls */}
+          {/* Occluded version - dimmer */}
+          <Line
+            points={[
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+            ]}
+            color="#336633"
+            lineWidth={2}
+            dashed={false}
+            depthTest={false}
+            transparent
+            opacity={0.3}
+          />
+          {/* Visible version - brighter */}
           <Line
             points={[
               [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
@@ -228,6 +262,7 @@ export const GridTiles = memo(({
             color="#44ff44"
             lineWidth={3}
             dashed={false}
+            depthTest={true}
           />
 
           {/* Wall shadow previews for all 4 walls */}
@@ -276,6 +311,7 @@ export const GridTiles = memo(({
                 <meshStandardMaterial
                   color={isHoveringFirstPoint ? "#ffff44" : "#44ff44"}
                   emissive={isHoveringFirstPoint ? "#aaaa22" : "#22aa22"}
+                  depthTest={false}
                 />
               </mesh>
             )
@@ -288,16 +324,32 @@ export const GridTiles = memo(({
                 if (index === 0) return null
                 const prevPoint = customRoomPoints[index - 1]
                 return (
-                  <Line
-                    key={`line-${index}`}
-                    points={[
-                      [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
-                      [point[0] * tileSize, 0.1, point[1] * tileSize]
-                    ]}
-                    color="#44ff44"
-                    lineWidth={3}
-                    dashed={false}
-                  />
+                  <group key={`line-${index}`}>
+                    {/* Occluded version - dimmer */}
+                    <Line
+                      points={[
+                        [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
+                        [point[0] * tileSize, 0.1, point[1] * tileSize]
+                      ]}
+                      color="#336633"
+                      lineWidth={2}
+                      dashed={false}
+                      depthTest={false}
+                      transparent
+                      opacity={0.3}
+                    />
+                    {/* Visible version - brighter */}
+                    <Line
+                      points={[
+                        [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
+                        [point[0] * tileSize, 0.1, point[1] * tileSize]
+                      ]}
+                      color="#44ff44"
+                      lineWidth={3}
+                      dashed={false}
+                      depthTest={true}
+                    />
+                  </group>
                 )
               })}
             </>
@@ -315,28 +367,62 @@ export const GridTiles = memo(({
                 if (isHoveringFirstPoint) {
                   // Show closing line when hovering over first point
                   return (
-                    <Line
-                      points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
-                        [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
-                      ]}
-                      color="#ffff44"
-                      lineWidth={3}
-                      dashed={false}
-                    />
+                    <>
+                      {/* Occluded version - dimmer */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
+                        ]}
+                        color="#999922"
+                        lineWidth={2}
+                        dashed={false}
+                        depthTest={false}
+                        transparent
+                        opacity={0.3}
+                      />
+                      {/* Visible version - brighter */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
+                        ]}
+                        color="#ffff44"
+                        lineWidth={3}
+                        dashed={false}
+                        depthTest={true}
+                      />
+                    </>
                   )
                 } else {
                   // Normal preview line to cursor (no auto-closing line)
                   return (
-                    <Line
-                      points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
-                        [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
-                      ]}
-                      color="#44ff44"
-                      lineWidth={3}
-                      dashed={false}
-                    />
+                    <>
+                      {/* Occluded version - dimmer */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
+                        ]}
+                        color="#336633"
+                        lineWidth={2}
+                        dashed={false}
+                        depthTest={false}
+                        transparent
+                        opacity={0.3}
+                      />
+                      {/* Visible version - brighter */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
+                        ]}
+                        color="#44ff44"
+                        lineWidth={3}
+                        dashed={false}
+                        depthTest={true}
+                      />
+                    </>
                   )
                 }
               })()}

@@ -254,14 +254,30 @@ export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: Wal
 
   return (
     <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
-      <mesh>
+      {/* Occluded/behind version - dimmer, shows through everything */}
+      <mesh renderOrder={1}>
         <boxGeometry args={[length, height, thickness]} />
         <meshStandardMaterial
           color="#44ff44"
           transparent
-          opacity={0.4}
+          opacity={0.15}
           emissive="#22aa22"
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.1}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* Visible/front version - brighter, only shows when not occluded */}
+      <mesh renderOrder={2}>
+        <boxGeometry args={[length, height, thickness]} />
+        <meshStandardMaterial
+          color="#44ff44"
+          transparent
+          opacity={0.5}
+          emissive="#22aa22"
+          emissiveIntensity={0.4}
+          depthTest={true}
+          depthWrite={false}
         />
       </mesh>
     </group>
