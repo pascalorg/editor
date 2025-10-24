@@ -99,15 +99,15 @@ export const Walls = forwardRef(({
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                // Only allow hover on active floor walls, and not in delete or guide mode
-                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
+                // Only allow hover on active floor walls in select mode
+                if (isActive && controlMode === 'select') {
                   e.stopPropagation();
                   onWallHover(i);
                 }
               }}
               onPointerLeave={(e) => {
-                // Only allow hover on active floor walls, and not in delete or guide mode
-                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
+                // Only allow hover on active floor walls in select mode
+                if (isActive && controlMode === 'select') {
                   e.stopPropagation();
                   onWallHover(null);
                 }
@@ -119,6 +119,11 @@ export const Walls = forwardRef(({
                 // Don't handle interactions while camera is moving
                 if (movingCamera) return;
 
+                // Building mode: let clicks pass through to grid
+                if (controlMode === 'building') {
+                  return
+                }
+
                 // Delete mode: interactions now handled through grid intersections
                 if (controlMode === 'delete') {
                   return
@@ -129,6 +134,7 @@ export const Walls = forwardRef(({
                   return
                 }
 
+                // Only stop propagation in select mode where we handle the interaction
                 e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
@@ -159,9 +165,7 @@ export const Walls = forwardRef(({
                 // Don't handle clicks while camera is moving
                 if (movingCamera) return;
 
-                e.stopPropagation();
-
-                // Building mode: no wall selection while placing walls
+                // Building mode: let clicks pass through to grid
                 if (controlMode === 'building') {
                   return
                 }
@@ -175,6 +179,9 @@ export const Walls = forwardRef(({
                 if (controlMode === 'guide') {
                   return
                 }
+
+                // Only stop propagation in select mode where we handle the interaction
+                e.stopPropagation();
 
                 // Select mode: normal selection behavior
                 if (controlMode === 'select') {
