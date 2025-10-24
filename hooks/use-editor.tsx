@@ -124,13 +124,13 @@ const useStore = create<StoreState>()(
         color: '#ffffff',
         level: 1,
       }],
-      currentLevel: -1,
+      currentLevel: 1,
       addGroup: (group) => set(state => ({ groups: [...state.groups, group] })),
       deleteGroup: (groupId) => set(state => ({
         groups: state.groups.filter(group => group.id !== groupId),
         components: state.components.filter(comp => comp.group !== groupId)
       })),
-      selectedFloorId: null,
+      selectedFloorId: 'ground-floor',
       selectFloor: (floorId) => {
         const state = get()
 
@@ -501,6 +501,12 @@ const useStore = create<StoreState>()(
               color: '#ffffff',
               level: 1,
             }]
+          }
+
+          // Preselect ground floor if no floor is selected
+          if (!state.selectedFloorId) {
+            state.selectedFloorId = 'ground-floor'
+            state.currentLevel = 1
           }
         }
       },

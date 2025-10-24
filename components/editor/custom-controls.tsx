@@ -4,8 +4,7 @@ import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-
-
+import { FLOOR_SPACING } from './index'
 
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode);
@@ -28,7 +27,7 @@ export function CustomControls() {
     if (!selectedFloorId) {
       (controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true);
     } else {
-      (controls as CameraControlsImpl).setLookAt(10, 10 * currentLevel, 10, 0, 10 * (currentLevel - 1), 0, true);
+      (controls as CameraControlsImpl).setLookAt(10, FLOOR_SPACING * currentLevel, 10, 0, FLOOR_SPACING * (currentLevel - 1), 0, true);
     }
   }, [currentLevel, controls, selectedFloorId]);
 

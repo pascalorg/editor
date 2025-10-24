@@ -27,6 +27,8 @@ const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
+export const FLOOR_SPACING = 10 // 10m vertical spacing between floors
+
 export default function Editor({ className }: { className?: string }) {
   const { walls, setWalls, images, setImages, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage, groups, selectedFloorId } = useEditorContext()
 
@@ -800,7 +802,7 @@ export default function Editor({ className }: { className?: string }) {
           .filter(g => g.type === 'floor')
           .map((floor) => {
             const floorLevel = floor.level || 1
-            const yPosition = 10 * (floorLevel - 1) // 10m vertical spacing between floors
+            const yPosition = FLOOR_SPACING * (floorLevel - 1)
             const isActiveFloor = selectedFloorId === floor.id
 
             return (
@@ -808,20 +810,37 @@ export default function Editor({ className }: { className?: string }) {
                 {/* Drei Grid for visual reference only - not interactive */}
                 {showGrid && (
                   <group raycast={() => null}>
-                    <Grid
-                      position={[0, 0, 0]}
-                      args={[GRID_SIZE, GRID_SIZE]}
-                      cellSize={tileSize}
-                      cellThickness={0.5}
-                      cellColor="#aaaabf"
-                      sectionSize={tileSize * 2}
-                      sectionThickness={1}
-                      sectionColor="#9d4b4b"
-                      fadeDistance={GRID_SIZE * 2}
-                      fadeStrength={1}
-                      infiniteGrid={false}
-                      side={2}
-                    />
+                    {isActiveFloor ? (
+                      <Grid
+                        position={[0, 0, 0]}
+                        args={[GRID_SIZE, GRID_SIZE]}
+                        cellSize={tileSize}
+                        cellThickness={0.5}
+                        cellColor="#aaaabf"
+                        sectionSize={tileSize * 2}
+                        sectionThickness={1}
+                        sectionColor="#9d4b4b"
+                        fadeDistance={GRID_SIZE * 2}
+                        fadeStrength={1}
+                        infiniteGrid={false}
+                        side={2}
+                      />
+                    ) : (
+                      <Grid
+                        position={[0, 0, 0]}
+                        args={[GRID_SIZE, GRID_SIZE]}
+                        cellSize={tileSize}
+                        cellThickness={0.5}
+                        cellColor="#4a4a5a"
+                        sectionSize={tileSize * 2}
+                        sectionThickness={1}
+                        sectionColor="#5a4a4a"
+                        fadeDistance={GRID_SIZE * 2}
+                        fadeStrength={1}
+                        infiniteGrid={false}
+                        side={2}
+                      />
+                    )}
                   </group>
                 )}
 
@@ -852,7 +871,9 @@ export default function Editor({ className }: { className?: string }) {
 
                   {/* Walls component fetches its own data based on floorId */}
                   <Walls
+                    key={`${floor.id}-${isActiveFloor}`}
                     floorId={floor.id}
+                    isActive={isActiveFloor}
                     tileSize={tileSize}
                     wallHeight={wallHeight}
                     hoveredWallIndex={hoveredWallIndex}

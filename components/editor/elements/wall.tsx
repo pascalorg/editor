@@ -9,6 +9,7 @@ const WALL_THICKNESS = 0.2 // 20cm wall thickness
 
 type WallsProps = {
   floorId: string
+  isActive: boolean
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
@@ -22,8 +23,9 @@ type WallsProps = {
   onDeleteWalls: () => void
 }
 
-export const Walls = memo(forwardRef(({
+export const Walls = forwardRef(({
   floorId,
+  isActive,
   tileSize,
   wallHeight,
   hoveredWallIndex,
@@ -36,10 +38,11 @@ export const Walls = memo(forwardRef(({
   movingCamera,
   onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
-  // Fetch wall segments for this floor from the store
-  const components = useEditor(state => state.components)
-  const wallComponent = components.find(c => c.type === 'wall' && c.group === floorId)
-  const wallSegments = wallComponent?.data.segments || []
+  // Fetch wall segments for this floor from the store (optimized selector)
+  const wallSegments = useEditor(state => {
+    const wallComponent = state.components.find(c => c.type === 'wall' && c.group === floorId)
+    return wallComponent?.data.segments || []
+  })
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
@@ -81,6 +84,10 @@ export const Walls = memo(forwardRef(({
           color = "#ff6b6b"; // hovered
           emissive = "#331111";
         }
+
+        // Reduce opacity for inactive floors
+        const opacity = isActive ? 1 : 0.2
+        const transparent = opacity < 1
 
         return (
           <group key={seg.id} position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
@@ -183,6 +190,8 @@ export const Walls = memo(forwardRef(({
                 roughness={0.7}
                 metalness={0.1}
                 emissive={emissive}
+                transparent={transparent}
+                opacity={opacity}
               />
             </mesh>
           </group>
@@ -190,7 +199,7 @@ export const Walls = memo(forwardRef(({
       })}
     </group>
   );
-}));
+})
 
 Walls.displayName = 'Walls'
 
