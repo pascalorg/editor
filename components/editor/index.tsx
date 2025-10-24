@@ -28,7 +28,7 @@ const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, setImages, wallSegments, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage } = useEditorContext()
+  const { walls, setWalls, images, setImages, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage, groups, selectedFloorId } = useEditorContext()
 
   const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
@@ -698,8 +698,6 @@ export default function Editor({ className }: { className?: string }) {
   const imagePosition = IMAGE_POSITION
   const imageRotation = IMAGE_ROTATION
 
-  const currentLevel = useEditor(state => state.currentLevel);
-
   return (
     <div className="relative h-full w-full">
       <Canvas
@@ -741,28 +739,6 @@ export default function Editor({ className }: { className?: string }) {
           shadow-camera-bottom={-15}
         />
 
-        {/* LEVELS */}
-        <group position-y={10 * ((currentLevel|| 1) - 1) }>
-        {/* Drei Grid for visual reference only - not interactive */}
-        {showGrid && (
-          <group raycast={() => null}>
-            <Grid
-              position={[0, 0, 0]}
-              args={[GRID_SIZE, GRID_SIZE]}
-              cellSize={tileSize}
-              cellThickness={0.5}
-              cellColor="#aaaabf"
-              sectionSize={tileSize * 2}
-              sectionThickness={1}
-              sectionColor="#9d4b4b"
-              fadeDistance={GRID_SIZE * 2}
-              fadeStrength={1}
-              infiniteGrid={false}
-              side={2}
-            />
-          </group>
-        )}
-        
         {/* Infinite dashed axis lines - visual only, not interactive */}
         <group raycast={() => null}>
           {/* X axis (red) */}
@@ -799,9 +775,9 @@ export default function Editor({ className }: { className?: string }) {
             depthTest={false}
           />
         </group>
-        
+
         {images.map((image) => (
-          <ReferenceImage 
+          <ReferenceImage
             key={image.id}
             id={image.id}
             url={image.url}
@@ -819,44 +795,82 @@ export default function Editor({ className }: { className?: string }) {
           />
         ))}
 
-        <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
-          <GridTiles
-            intersections={intersections}
-            tileSize={tileSize}
-            walls={walls}
-            onIntersectionClick={handleIntersectionClick}
-            onIntersectionDoubleClick={handleIntersectionDoubleClick}
-            onIntersectionHover={handleIntersectionHover}
-            wallStartPoint={wallStartPoint}
-            wallPreviewEnd={wallPreviewEnd}
-            roomStartPoint={roomStartPoint}
-            roomPreviewEnd={roomPreviewEnd}
-            customRoomPoints={customRoomPoints}
-            customRoomPreviewEnd={customRoomPreviewEnd}
-            deleteStartPoint={deleteStartPoint}
-            deletePreviewEnd={deletePreviewEnd}
-            opacity={gridOpacity}
-            disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
-            wallHeight={wallHeight}
-            controlMode={controlMode}
-          />
-          <Walls
-            wallSegments={wallSegments}
-            tileSize={tileSize}
-            wallHeight={wallHeight}
-            hoveredWallIndex={hoveredWallIndex}
-            selectedWallIds={selectedWallIds}
-            setSelectedWallIds={setSelectedWallIds}
-            onWallHover={setHoveredWallIndex}
-            onWallRightClick={handleWallRightClick}
-            isCameraEnabled={isCameraEnabled}
-            ref={wallsGroupRef}
-            controlMode={controlMode}
-            movingCamera={movingCamera}
-            onDeleteWalls={handleDeleteSelectedWalls}
-          />
-        </group>
-        </group>
+        {/* Loop through all floors and render grid + walls for each */}
+        {groups
+          .filter(g => g.type === 'floor')
+          .map((floor) => {
+            const floorLevel = floor.level || 1
+            const yPosition = 10 * (floorLevel - 1) // 10m vertical spacing between floors
+            const isActiveFloor = selectedFloorId === floor.id
+
+            return (
+              <group key={floor.id} position-y={yPosition}>
+                {/* Drei Grid for visual reference only - not interactive */}
+                {showGrid && (
+                  <group raycast={() => null}>
+                    <Grid
+                      position={[0, 0, 0]}
+                      args={[GRID_SIZE, GRID_SIZE]}
+                      cellSize={tileSize}
+                      cellThickness={0.5}
+                      cellColor="#aaaabf"
+                      sectionSize={tileSize * 2}
+                      sectionThickness={1}
+                      sectionColor="#9d4b4b"
+                      fadeDistance={GRID_SIZE * 2}
+                      fadeStrength={1}
+                      infiniteGrid={false}
+                      side={2}
+                    />
+                  </group>
+                )}
+
+                <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
+                  {/* Only show interactive grid tiles for the active floor */}
+                  {isActiveFloor && (
+                    <GridTiles
+                      intersections={intersections}
+                      tileSize={tileSize}
+                      walls={walls}
+                      onIntersectionClick={handleIntersectionClick}
+                      onIntersectionDoubleClick={handleIntersectionDoubleClick}
+                      onIntersectionHover={handleIntersectionHover}
+                      wallStartPoint={wallStartPoint}
+                      wallPreviewEnd={wallPreviewEnd}
+                      roomStartPoint={roomStartPoint}
+                      roomPreviewEnd={roomPreviewEnd}
+                      customRoomPoints={customRoomPoints}
+                      customRoomPreviewEnd={customRoomPreviewEnd}
+                      deleteStartPoint={deleteStartPoint}
+                      deletePreviewEnd={deletePreviewEnd}
+                      opacity={gridOpacity}
+                      disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
+                      wallHeight={wallHeight}
+                      controlMode={controlMode}
+                    />
+                  )}
+
+                  {/* Walls component fetches its own data based on floorId */}
+                  <Walls
+                    floorId={floor.id}
+                    tileSize={tileSize}
+                    wallHeight={wallHeight}
+                    hoveredWallIndex={hoveredWallIndex}
+                    selectedWallIds={selectedWallIds}
+                    setSelectedWallIds={setSelectedWallIds}
+                    onWallHover={setHoveredWallIndex}
+                    onWallRightClick={handleWallRightClick}
+                    isCameraEnabled={isCameraEnabled}
+                    ref={isActiveFloor ? wallsGroupRef : null}
+                    controlMode={controlMode}
+                    movingCamera={movingCamera}
+                    onDeleteWalls={handleDeleteSelectedWalls}
+                  />
+                </group>
+              </group>
+            )
+          })
+        }
 
         <CustomControls />
         <Environment preset="city" />

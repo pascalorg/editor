@@ -1,13 +1,14 @@
 'use client'
 
 import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { forwardRef, memo, type Ref } from 'react'
 import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 
 type WallsProps = {
-  wallSegments: WallSegment[]
+  floorId: string
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
@@ -21,20 +22,24 @@ type WallsProps = {
   onDeleteWalls: () => void
 }
 
-export const Walls = memo(forwardRef(({ 
-  wallSegments, 
-  tileSize, 
-  wallHeight, 
-  hoveredWallIndex, 
-  selectedWallIds, 
-  setSelectedWallIds, 
-  onWallHover, 
-  onWallRightClick, 
-  isCameraEnabled, 
-  controlMode, 
+export const Walls = memo(forwardRef(({
+  floorId,
+  tileSize,
+  wallHeight,
+  hoveredWallIndex,
+  selectedWallIds,
+  setSelectedWallIds,
+  onWallHover,
+  onWallRightClick,
+  isCameraEnabled,
+  controlMode,
   movingCamera,
   onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
+  // Fetch wall segments for this floor from the store
+  const components = useEditor(state => state.components)
+  const wallComponent = components.find(c => c.type === 'wall' && c.group === floorId)
+  const wallSegments = wallComponent?.data.segments || []
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {

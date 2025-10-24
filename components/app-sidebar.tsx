@@ -21,7 +21,7 @@ import {
 import type { WallSegment } from "@/hooks/use-editor"
 import { useEditorContext } from "@/hooks/use-editor"
 import JsonView from '@uiw/react-json-view'
-import { ArrowLeft, ChevronDown, ChevronRight, Download, FileCode, HelpCircle, Layers, Plus, Save, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Download, FileCode, HelpCircle, Layers, Plus, Save, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
 export function AppSidebar() {
@@ -192,6 +192,8 @@ export function AppSidebar() {
     }
 
     addGroup(newFloor)
+    // Automatically select the newly created floor
+    selectFloor(newFloor.id)
   }
 
   const selectedFloor = selectedFloorId ? groups.find(g => g.id === selectedFloorId) : null
@@ -199,88 +201,80 @@ export function AppSidebar() {
   return (
     <Sidebar variant="floating">
       <SidebarHeader>
-        {selectedFloor ? (
-          <div className="px-2 space-y-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={() => selectFloor(null)}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to Floors</span>
-            </Button>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Layers className="h-5 w-5" />
-              {selectedFloor.name}
-            </h3>
-          </div>
-        ) : (
-          <h3 className="text-lg font-semibold px-2">Pascal Editor</h3>
-        )}
+        <h3 className="text-lg font-semibold px-2">Pascal Editor</h3>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {/* Floor List or Wall Segments based on selection */}
-          {!selectedFloor ? (
-            /* Floor List */
-            <SidebarMenuItem>
-              <div className="px-2 py-2">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Floors ({mounted ? groups.filter(g => g.type === 'floor').length : 0})
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={handleAddFloor}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1 select-none">
-                  {!mounted ? (
-                    <div className="text-xs text-muted-foreground italic">
-                      Loading...
-                    </div>
-                  ) : (
-                    groups
-                      .filter(g => g.type === 'floor')
-                      .map((floor) => (
-                        <div
-                          key={floor.id}
-                          className="p-2 rounded text-xs flex items-center justify-between bg-muted hover:bg-muted/80 cursor-pointer transition-colors"
-                        >
-                          <div
-                            className="flex-1"
-                            onClick={() => selectFloor(floor.id)}
-                          >
-                            <div className="font-medium flex items-center gap-2">
-                              <Layers className="h-3 w-3" />
-                              {floor.name}
-                            </div>
-                          </div>
-                          {floor.id !== 'ground-floor' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deleteGroup(floor.id)
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      ))
-                  )}
-                </div>
+          {/* Floor List - Always visible with highlighted selection */}
+          <SidebarMenuItem>
+            <div className="px-2 py-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Floors ({mounted ? groups.filter(g => g.type === 'floor').length : 0})
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={handleAddFloor}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
-            </SidebarMenuItem>
-          ) : (
+              <div className="max-h-48 overflow-y-auto space-y-1 select-none">
+                {!mounted ? (
+                  <div className="text-xs text-muted-foreground italic">
+                    Loading...
+                  </div>
+                ) : (
+                  groups
+                    .filter(g => g.type === 'floor')
+                    .sort((a, b) => (b.level || 0) - (a.level || 0)) // Reverse order: highest to lowest
+                    .map((floor) => (
+                      <div
+                        key={floor.id}
+                        className={`p-2 rounded text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                          selectedFloorId === floor.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted hover:bg-muted/80'
+                        }`}
+                        onClick={() => {
+                          // Toggle selection: clicking again deselects
+                          if (selectedFloorId === floor.id) {
+                            selectFloor(null)
+                          } else {
+                            selectFloor(floor.id)
+                          }
+                        }}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium flex items-center gap-2">
+                            <Layers className="h-3 w-3" />
+                            {floor.name}
+                          </div>
+                        </div>
+                        {floor.id !== 'ground-floor' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteGroup(floor.id)
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+          </SidebarMenuItem>
+
+          {/* Wall Segments and Images - Only visible when a floor is selected */}
+          {selectedFloor && (
             <>
               {/* Reference Image Upload */}
               <SidebarMenuItem>
