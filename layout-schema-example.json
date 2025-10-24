@@ -1,35 +1,100 @@
 {
-  "version": "1.0",
+  "version": "2.0",
   "grid": {
-    "size": 200
+    "size": 61
   },
+  "groups": [
+    {
+      "id": "level_0",
+      "name": "base level",
+      "type": "floor",
+      "color": "#ffffff",
+      "level": 0
+    },
+    {
+      "id": "level_1", 
+      "name": "level 1",
+      "type": "floor",
+      "color": "#e0e0e0",
+      "level": 1
+    },
+    {
+      "id": "living-room",
+      "name": "Living Room",
+      "type": "room", 
+      "color": "#ffeecc"
+    }
+  ],
   "components": [
     {
-      "id": "walls-default",
+      "id": "walls-level_0",
       "type": "wall",
-      "label": "All Walls",
-      "group": null,
+      "label": "Walls - base level",
+      "group": "level_0",
       "data": {
-        "tiles": [
-          [20, 10],
-          [21, 10],
-          [22, 10],
-          [23, 10]
-        ],
         "segments": [
           {
-            "isHorizontal": true,
-            "minFixed": 10,
-            "maxFixed": 10,
-            "startVarying": 20,
-            "endVarying": 23,
-            "id": "h-10-10-20-23"
+            "start": [10, 10],
+            "end": [20, 10], 
+            "id": "10,10-20,10",
+            "isHorizontal": true
+          },
+          {
+            "start": [20, 10],
+            "end": [20, 20],
+            "id": "20,10-20,20", 
+            "isHorizontal": false
+          },
+          {
+            "start": [20, 20],
+            "end": [10, 20],
+            "id": "20,20-10,20",
+            "isHorizontal": true
+          },
+          {
+            "start": [10, 20],
+            "end": [10, 10],
+            "id": "10,20-10,10",
+            "isHorizontal": false
           }
         ]
       },
-      "createdAt": "2025-10-17T12:00:00Z"
+      "createdAt": "2025-10-24T12:00:00Z"
+    },
+    {
+      "id": "walls-level_1",
+      "type": "wall", 
+      "label": "Walls - level 1",
+      "group": "level_1",
+      "data": {
+        "segments": [
+          {
+            "start": [15, 15],
+            "end": [25, 15],
+            "id": "15,15-25,15",
+            "isHorizontal": true
+          },
+          {
+            "start": [25, 15], 
+            "end": [25, 25],
+            "id": "25,15-25,25",
+            "isHorizontal": false
+          }
+        ]
+      },
+      "createdAt": "2025-10-24T12:05:00Z"
     }
   ],
-  "groups": []
+  "images": [
+    {
+      "id": "img-1729588800000",
+      "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "name": "reference-floorplan.png",
+      "createdAt": "2025-10-24T12:00:00Z",
+      "position": [0, 0],
+      "rotation": 0,
+      "scale": 1
+    }
+  ]
 }
 

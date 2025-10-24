@@ -118,19 +118,19 @@ const useStore = create<StoreState>()(
       images: [],
       components: [],
       groups: [{
-        id: 'ground-floor',
-        name: 'Ground Floor',
+        id: 'level_0',
+        name: 'base level',
         type: 'floor',
         color: '#ffffff',
-        level: 1,
+        level: 0,
       }],
-      currentLevel: 1,
+      currentLevel: 0,
       addGroup: (group) => set(state => ({ groups: [...state.groups, group] })),
       deleteGroup: (groupId) => set(state => ({
         groups: state.groups.filter(group => group.id !== groupId),
         components: state.components.filter(comp => comp.group !== groupId)
       })),
-      selectedFloorId: 'ground-floor',
+      selectedFloorId: 'level_0',
       selectFloor: (floorId) => {
         const state = get()
 
@@ -157,11 +157,11 @@ const useStore = create<StoreState>()(
 
           set({
             components: [...state.components, component],
-            currentLevel: group?.level || 1,
+            currentLevel: group?.level ?? 0,
             selectedFloorId: floorId
           })
         } else {
-          set({ selectedFloorId: floorId, currentLevel: group?.level || 1 })
+          set({ selectedFloorId: floorId, currentLevel: group?.level ?? 0 })
         }
       },
       selectedWallIds: [],
@@ -495,18 +495,18 @@ const useStore = create<StoreState>()(
           }
           if (!state.groups) {
             state.groups = [{
-              id: 'ground-floor',
-              name: 'Ground Floor',
+              id: 'level_0',
+              name: 'base level',
               type: 'floor',
               color: '#ffffff',
-              level: 1,
+              level: 0,
             }]
           }
 
-          // Preselect ground floor if no floor is selected
+          // Preselect base level if no level is selected
           if (!state.selectedFloorId) {
-            state.selectedFloorId = 'ground-floor'
-            state.currentLevel = 1
+            state.selectedFloorId = 'level_0'
+            state.currentLevel = 0
           }
         }
       },

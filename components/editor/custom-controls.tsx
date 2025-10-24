@@ -27,7 +27,8 @@ export function CustomControls() {
     if (!selectedFloorId) {
       (controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true);
     } else {
-      (controls as CameraControlsImpl).setLookAt(10, FLOOR_SPACING * currentLevel, 10, 0, FLOOR_SPACING * (currentLevel - 1), 0, true);
+      const floorY = FLOOR_SPACING * currentLevel;
+      (controls as CameraControlsImpl).setLookAt(10, floorY + 10, 10, 0, floorY, 0, true);
     }
   }, [currentLevel, controls, selectedFloorId]);
 

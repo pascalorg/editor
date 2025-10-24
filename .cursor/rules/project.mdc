@@ -1,11 +1,11 @@
 # House Builder Project
 
 ## Project Overview
-A 3D house builder inspired by The Sims' building mode. Users place walls between grid intersections using point-to-point placement, creating line segments that extrude into 3D walls in an isometric view. Features four control modes (Select/Delete/Building/Guide), multiple building tools (Wall, Room, Custom Room), reference image overlays with interactive manipulation, and GLB export.
+A 3D house builder inspired by The Sims' building mode. Users place walls between grid intersections using point-to-point placement, creating line segments that extrude into 3D walls in an isometric view. Features multi-floor building architecture, four control modes (Select/Delete/Building/Guide), multiple building tools (Wall, Room, Custom Room), reference image overlays with interactive manipulation, and GLB export.
 
 **Stack**: React 19, Next.js 15, React Three Fiber, Three.js, Zustand, Drei, Leva, Shadcn UI, Tailwind v4.
 
-**3D Coordinate System**: Uses Three.js default orientation - XZ plane for floor (ground), Y-axis for vertical (up).
+**3D Coordinate System**: Uses Three.js default orientation - XZ plane for floor (ground), Y-axis for vertical (up). Multi-floor architecture with 10m vertical spacing between levels.
 
 **Key Libraries**:
 - **Zustand**: Global state with persistence and undo/redo (50-state stack)
@@ -35,6 +35,16 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - Walls are **line segments** between intersections, supports H/V/diagonal
 - Visual feedback: down arrows at hover, green previews, start point spheres
 - Group offset: `[−15, 0, −15]` centers grid at world origin
+
+### Multi-Floor Architecture
+- **Hierarchical Building**: Components organized into floors/levels using `ComponentGroup` system
+- **Floor Spacing**: 10m vertical separation between levels (`FLOOR_SPACING = 10`)
+- **Y-Positioning**: Floor level N positioned at `Y = 10 × (N - 1)` (Ground Floor = Level 1 = Y = 0)
+- **Floor Types**: ComponentGroup supports `type: 'floor' | 'room' | 'outdoor'` with optional `level` number
+- **Active Floor**: Only one floor interactive at a time (`selectedFloorId`), others dimmed
+- **Per-Floor Components**: Each floor has its own wall component (`walls-floorId`) with isolated segment data
+- **Visual Hierarchy**: Active floors show full-color grid, inactive floors use muted colors
+- **Default Setup**: Ground Floor (level 1) created automatically on first load
 
 ### 3D Scene (Isometric View)
 - **Camera**: [10,10,10] perspective (FOV 50) or orthographic (zoom 20)
@@ -115,7 +125,10 @@ geometry.rotateX(-Math.PI / 2)
 **Zustand store** with localStorage persistence and Set-based API for components.
 
 **Core State**:
-- `walls`: Array<string> - wall keys ("x1,y1-x2,y2")
+- `components`: Array<Component> - wall components organized by floor with segment data
+- `groups`: Array<ComponentGroup> - floor/room/outdoor groupings with level info
+- `selectedFloorId`: string | null - currently active floor for building/editing
+- `currentLevel`: number - Y level of active floor (for camera/UI context)
 - `images`: Array<ReferenceImage> - each with id, url, name, createdAt, position [x,z], rotation (degrees), scale
 - `selectedWallIds`, `selectedImageIds`: Arrays for selection
 - `activeTool`: 'wall' | 'room' | 'custom-room' | null
@@ -124,14 +137,16 @@ geometry.rotateX(-Math.PI / 2)
 - `wallsGroupRef`: Three.js Group for export
 
 **Key Methods**:
-- `wallSegments()`: Computes `{ start: [x,y], end: [x,y], id, isHorizontal }[]` from wall keys
+- `wallSegments()`: Computes `{ start: [x,y], end: [x,y], id, isHorizontal }[]` from active floor's component
+- `selectFloor(floorId)`: Switches active floor, creates wall component if needed
+- `setWalls(wallKeys)`: Updates current floor's wall segments, pushes to undo stack
 - `setActiveTool()`: Auto-switches to building mode
-- `serializeLayout()` / `loadLayout()`: JSON persistence (version 2.0)
-- `undo()` / `redo()`: Stack-based history
-- `getWallsSet()`: Array → Set conversion for O(1) lookups
+- `serializeLayout()` / `loadLayout()`: JSON persistence (version 2.0) with multi-floor support
+- `undo()` / `redo()`: Stack-based history for components + images
+- `getWallsSet()`: Array → Set conversion for active floor's walls
 
 ### Main Editor (`components/editor/index.tsx`)
-**Constants**: `TILE_SIZE=0.5`, `WALL_HEIGHT=2.5`, `WALL_THICKNESS=0.2`, `GRID_SIZE=30`, `GRID_INTERSECTIONS=61`
+**Constants**: `TILE_SIZE=0.5`, `WALL_HEIGHT=2.5`, `WALL_THICKNESS=0.2`, `GRID_SIZE=30`, `GRID_INTERSECTIONS=61`, `FLOOR_SPACING=10`
 
 **Local State**: Placement previews for each tool (`wallStartPoint`, `roomStartPoint`, `customRoomPoints`, `deleteStartPoint`), camera/context menu state
 
@@ -143,7 +158,7 @@ geometry.rotateX(-Math.PI / 2)
 
 **Keyboard**: `Esc` cancel, `V/D/B/G` modes, `Space` orbit, `Cmd/Ctrl+Z` undo
 
-**Canvas**: Group offset `[−15,0,−15]` centers grid, renders GridTiles + Walls + ReferenceImage + CustomControls
+**Canvas**: Multi-floor rendering loop - each floor group positioned at Y = FLOOR_SPACING × (level - 1), active floor gets full-color grid + interactive GridTiles, inactive floors use muted colors. Group offset `[−15,0,−15]` centers each floor's grid. Renders per-floor: Grid + GridTiles + Walls + shared ReferenceImages + CustomControls
 
 ### UI Components
 **`control-mode-menu.tsx`**: Top-center, 4 buttons (Select/Delete/Building/Guide), color-coded active state (blue/red/green/purple), tooltips with shortcuts
@@ -218,8 +233,9 @@ geometry.rotateX(-Math.PI / 2)
 ```typescript
 type WallSegment = { start: [x, y], end: [x, y], id: string, isHorizontal: boolean }
 type Component = { id, type: 'wall', label, group, data: { segments }, createdAt }
-type ComponentGroup = { id, name, type: 'room' | 'floor' | 'outdoor', color }
-type LayoutJSON = { version: "2.0", grid: { size: 61 }, components, groups }
+type ComponentGroup = { id, name, type: 'room' | 'floor' | 'outdoor', color, level?: number }
+type ReferenceImage = { id, url, name, createdAt, position: [x, z], rotation, scale }
+type LayoutJSON = { version: "2.0", grid: { size: 61 }, components, groups, images? }
 ```
 
 **Example**:
@@ -227,15 +243,47 @@ type LayoutJSON = { version: "2.0", grid: { size: 61 }, components, groups }
 {
   "version": "2.0",
   "grid": { "size": 61 },
-  "components": [{
-    "id": "walls-default",
-    "type": "wall",
-    "data": {
-      "segments": [
-        { "start": [10, 10], "end": [20, 10], "id": "10,10-20,10", "isHorizontal": true }
-      ]
+  "groups": [
+    {
+      "id": "ground-floor",
+      "name": "Ground Floor", 
+      "type": "floor",
+      "color": "#ffffff",
+      "level": 1
+    },
+    {
+      "id": "second-floor",
+      "name": "Second Floor",
+      "type": "floor", 
+      "color": "#e0e0e0",
+      "level": 2
     }
-  }]
+  ],
+  "components": [
+    {
+      "id": "walls-ground-floor",
+      "type": "wall",
+      "label": "Walls - Ground Floor",
+      "group": "ground-floor",
+      "data": {
+        "segments": [
+          { "start": [10, 10], "end": [20, 10], "id": "10,10-20,10", "isHorizontal": true }
+        ]
+      },
+      "createdAt": "2025-10-22T12:30:00Z"
+    }
+  ],
+  "images": [
+    {
+      "id": "img-1729588800000",
+      "url": "data:image/png;base64,iVBOR...",
+      "name": "floorplan.png",
+      "createdAt": "2025-10-22T12:00:00Z", 
+      "position": [0, 0],
+      "rotation": 0,
+      "scale": 1
+    }
+  ]
 }
 ```
 
@@ -276,4 +324,4 @@ The JSON schema supports future component types:
 
 ## Future Enhancements
 
-Potential additions include: doors/windows with wall cutouts, room detection via flood-fill, multi-floor support, wall types/materials, measurements/labels, component library, mobile support, backend sync for collaboration, and various export formats (DXF/DWG/OBJ).
+Potential additions include: doors/windows with wall cutouts, room detection via flood-fill, wall types/materials, measurements/labels, component library, floor management UI (add/delete/rename floors), mobile support, backend sync for collaboration, and various export formats (DXF/DWG/OBJ).

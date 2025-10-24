@@ -801,8 +801,8 @@ export default function Editor({ className }: { className?: string }) {
         {groups
           .filter(g => g.type === 'floor')
           .map((floor) => {
-            const floorLevel = floor.level || 1
-            const yPosition = FLOOR_SPACING * (floorLevel - 1)
+            const floorLevel = floor.level || 0
+            const yPosition = FLOOR_SPACING * floorLevel
             const isActiveFloor = selectedFloorId === floor.id
 
             return (
