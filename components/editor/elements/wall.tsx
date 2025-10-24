@@ -3,6 +3,7 @@
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { forwardRef, memo, type Ref } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -39,10 +40,12 @@ export const Walls = forwardRef(({
   onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
   // Fetch wall segments for this floor from the store (optimized selector)
-  const wallSegments = useEditor(state => {
-    const wallComponent = state.components.find(c => c.type === 'wall' && c.group === floorId)
-    return wallComponent?.data.segments || []
-  })
+  const wallSegments = useEditor(
+    useShallow(state => {
+      const wallComponent = state.components.find(c => c.type === 'wall' && c.group === floorId)
+      return wallComponent?.data.segments || []
+    })
+  )
   return (
     <group ref={ref}>
       {wallSegments.map((seg, i) => {
