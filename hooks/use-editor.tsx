@@ -1,10 +1,10 @@
 'use client'
 
+import type { SetStateAction } from 'react'
 import * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SetStateAction } from 'react'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -45,6 +45,7 @@ export type ComponentGroup = {
   name: string
   type: 'room' | 'floor' | 'outdoor'
   color: string
+  level?: number
 }
 
 export type LayoutJSON = {
@@ -65,7 +66,9 @@ type HistoryState = {
 type StoreState = {
   walls: string[]
   images: ReferenceImage[]
+  components: Component[]
   groups: ComponentGroup[]
+  currentLevel: number
   selectedFloorId: string | null
   selectedWallIds: string[]
   selectedImageIds: string[]
@@ -115,16 +118,57 @@ const useStore = create<StoreState>()(
     (set, get) => ({
       walls: [],
       images: [],
+      components: [],
       groups: [{
         id: 'ground-floor',
         name: 'Ground Floor',
         type: 'floor',
-        color: '#ffffff'
+        color: '#ffffff',
+        level: 1,
       }],
+      currentLevel: -1,
       addGroup: (group) => set(state => ({ groups: [...state.groups, group] })),
-      deleteGroup: (groupId) => set(state => ({ groups: state.groups.filter(group => group.id !== groupId) })),
+      deleteGroup: (groupId) => set(state => ({
+        groups: state.groups.filter(group => group.id !== groupId),
+        components: state.components.filter(comp => comp.group !== groupId)
+      })),
       selectedFloorId: null,
-      selectFloor: (floorId) => set({ selectedFloorId: floorId }),
+      selectFloor: (floorId) => {
+        const state = get()
+
+        if (!floorId) {
+          set({ selectedFloorId: null, walls: [], currentLevel: -1 })
+          return
+        }
+
+        // Find or create the component for this floor
+        let component = state.components.find(c => c.type === 'wall' && c.group === floorId)
+
+        const group = state.groups.find(g => g.id === floorId)
+
+        if (!component) {
+          // Create a new wall component for this floor
+          component = {
+            id: `walls-${floorId}`,
+            type: 'wall',
+            label: `Walls - ${group?.name || floorId}`,
+            group: floorId,
+            data: { segments: [] },
+            createdAt: new Date().toISOString()
+          }
+
+          set({
+            components: [...state.components, component],
+            currentLevel: group?.level || 1,
+            selectedFloorId: floorId,
+            walls: []
+          })
+        } else {
+          // Load the walls from the existing component
+          const wallKeys = component.data.segments.map(seg => seg.id)
+          set({ selectedFloorId: floorId, walls: wallKeys, currentLevel: group?.level || 1 })
+        }
+      },
       selectedWallIds: [],
       selectedImageIds: [],
       isHelpOpen: false,
@@ -142,10 +186,41 @@ const useStore = create<StoreState>()(
         if (sortedNew.length === sortedCurrent.length && sortedNew.every((v, i) => v === sortedCurrent[i])) {
           return state
         }
+
+        // Update the component for the current floor
+        let updatedComponents = state.components
+        if (state.selectedFloorId) {
+          const wallSegments = get().wallSegments()
+
+          updatedComponents = state.components.map(comp => {
+            if (comp.type === 'wall' && comp.group === state.selectedFloorId) {
+              return {
+                ...comp,
+                data: { segments: wallSegments }
+              }
+            }
+            return comp
+          })
+
+          // If no component exists for this floor yet, create one
+          if (!state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)) {
+            const newComponent = {
+              id: `walls-${state.selectedFloorId}`,
+              type: 'wall' as const,
+              label: `Walls - ${state.groups.find(g => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
+              group: state.selectedFloorId,
+              data: { segments: wallSegments },
+              createdAt: new Date().toISOString()
+            }
+            updatedComponents = [...state.components, newComponent]
+          }
+        }
+
         return {
           undoStack: [...state.undoStack, { walls: state.walls, images: state.images }].slice(-50),
           redoStack: [],
-          walls
+          walls,
+          components: updatedComponents
         }
       }),
       setImages: (images, pushToUndo = true) => set(state => {
@@ -308,42 +383,63 @@ const useStore = create<StoreState>()(
         set({ selectedWallIds: [] })
       },
       serializeLayout: () => {
-        const wallSegments = get().wallSegments()
-        const images = get().images
+        const state = get()
+        const images = state.images
+
+        // Make sure current floor's walls are saved to components before serializing
+        if (state.selectedFloorId && state.walls.length > 0) {
+          const wallSegments = state.wallSegments()
+          const existingComponent = state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)
+
+          if (existingComponent) {
+            // Update existing component
+            state.components = state.components.map(comp =>
+              comp.id === existingComponent.id
+                ? { ...comp, data: { segments: wallSegments } }
+                : comp
+            )
+          } else {
+            // Create new component
+            const newComponent = {
+              id: `walls-${state.selectedFloorId}`,
+              type: 'wall' as const,
+              label: `Walls - ${state.groups.find(g => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
+              group: state.selectedFloorId,
+              data: { segments: wallSegments },
+              createdAt: new Date().toISOString()
+            }
+            state.components = [...state.components, newComponent]
+          }
+        }
 
         return {
           version: '2.0', // Updated version for intersection-based walls
           grid: { size: 61 }, // 61 intersections (60 divisions + 1)
-          components: [{
-            id: 'walls-default',
-            type: 'wall',
-            label: 'All Walls',
-            group: null,
-            data: {
-              segments: wallSegments
-            },
-            createdAt: new Date().toISOString()
-          }],
-          groups: [],
+          components: state.components,
+          groups: state.groups,
           images // Include reference images in the layout
         }
       },
       loadLayout: (json: LayoutJSON) => {
-        set({ selectedWallIds: [], selectedImageIds: [] })
-        
-        // Load walls
-        const wallComponent = json.components.find(c => c.type === 'wall')
-        if (wallComponent?.data.segments) {
-          const newWalls = wallComponent.data.segments.map(seg => 
-            `${seg.start[0]},${seg.start[1]}-${seg.end[0]},${seg.end[1]}`
-          )
-          get().setWalls(newWalls)
+        set({ selectedWallIds: [], selectedImageIds: [], selectedFloorId: null })
+
+        // Load groups (floors)
+        if (json.groups && Array.isArray(json.groups)) {
+          set({ groups: json.groups })
         }
-        
+
+        // Load all components
+        if (json.components && Array.isArray(json.components)) {
+          set({ components: json.components })
+        }
+
         // Load reference images (if present in the JSON)
         if (json.images && Array.isArray(json.images)) {
-          get().setImages(json.images)
+          get().setImages(json.images, false) // Don't push to undo stack
         }
+
+        // Clear current walls since no floor is selected
+        set({ walls: [] })
       },
       handleSaveLayout: () => {
         const layout = get().serializeLayout()
@@ -479,5 +575,10 @@ export const useEditorContext = () => {
     undo: store.undo,
     redo: store.redo,
     handleClear: store.handleClear,
+    groups: store.groups,
+    selectedFloorId: store.selectedFloorId,
+    selectFloor: store.selectFloor,
+    addGroup: store.addGroup,
+    deleteGroup: store.deleteGroup,
   }
 }

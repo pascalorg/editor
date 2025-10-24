@@ -12,13 +12,22 @@ export function CustomControls() {
   const setMovingCamera = useEditor((state) => state.setMovingCamera);
   const controls = useThree((state) => state.controls);
   const controlsRef = useRef<CameraControlsImpl>(null);
+  const currentLevel = useEditor(state => state.currentLevel);
 
   useEffect(() => {
     if (!controls) return;
 
+
     (controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false);
     (controls as CameraControlsImpl).setLookAt(10, 10, 10, 0, 0, 0, true);
   }, [controls]);
+
+
+  useEffect(() => {
+    if (!controls) return;
+
+    (controls as CameraControlsImpl).setLookAt(10, 10 * currentLevel, 10, 0, 10 * (currentLevel - 1), 0, true);
+  }, [currentLevel, controls]);
 
   // Configure mouse buttons based on control mode
   const mouseButtons = useMemo(() => {

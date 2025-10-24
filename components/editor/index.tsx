@@ -5,7 +5,7 @@ import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { GridTiles } from '@/components/editor/elements/grid'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Walls } from '@/components/editor/elements/wall'
-import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
+import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
@@ -698,6 +698,8 @@ export default function Editor({ className }: { className?: string }) {
   const imagePosition = IMAGE_POSITION
   const imageRotation = IMAGE_ROTATION
 
+  const currentLevel = useEditor(state => state.currentLevel);
+
   return (
     <div className="relative h-full w-full">
       <Canvas
@@ -738,7 +740,9 @@ export default function Editor({ className }: { className?: string }) {
           shadow-camera-top={15}
           shadow-camera-bottom={-15}
         />
-        
+
+        {/* LEVELS */}
+        <group position-y={10 * ((currentLevel|| 1) - 1) }>
         {/* Drei Grid for visual reference only - not interactive */}
         {showGrid && (
           <group raycast={() => null}>
@@ -851,6 +855,7 @@ export default function Editor({ className }: { className?: string }) {
             movingCamera={movingCamera}
             onDeleteWalls={handleDeleteSelectedWalls}
           />
+        </group>
         </group>
 
         <CustomControls />
