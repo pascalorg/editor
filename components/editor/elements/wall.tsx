@@ -2,11 +2,164 @@
 
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
-import { forwardRef, memo, type Ref } from 'react'
+import { forwardRef, memo, useMemo, type Ref } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
+
+// --- 2D Intersection Helper Functions (Ported from demo) ---
+// Note: These helpers operate in 2D space. We will use
+// the grid's (x, y) coordinates, which map to 3D (x, z).
+
+interface Point { x: number, y: number }
+interface Line { a: number, b: number, c: number }
+interface ProcessedWall {
+  angle: number
+  edgeA: Line // "Left" edge
+  edgeB: Line // "Right" edge
+  v: Point
+  wall_id: string
+  pA: Point // "Left" edge point
+  pB: Point // "Right" edge point
+}
+interface Junction {
+  meetingPoint: Point
+  connectedWalls: { wall: LiveWall, endType: 'start' | 'end' }[]
+}
+interface LiveWall {
+  id: string
+  start: Point
+  end: Point
+  thickness: number
+}
+
+/** Creates a unique string key for a point */
+function pointToKey(p: Point, tolerance = 1e-3): string {
+  const snap = 1 / tolerance
+  return `${Math.round(p.x * snap)},${Math.round(p.y * snap)}`
+}
+
+/** Gets the OUTGOING vector for a wall end at a junction */
+function getOutgoingVector(wall: LiveWall, endType: 'start' | 'end', meetingPoint: Point): Point {
+  if (endType === 'start') {
+    return { x: wall.end.x - wall.start.x, y: wall.end.y - wall.start.y }
+  } else {
+    return { x: wall.start.x - wall.end.x, y: wall.start.y - wall.end.y }
+  }
+}
+
+/** Creates a line equation (ax + by + c = 0) from a point and a vector */
+function createLineFromPointAndVector(p: Point, v: Point): Line {
+  const a = -v.y
+  const b = v.x
+  const c = -(a * p.x + b * p.y)
+  return { a, b, c }
+}
+
+/** Finds the intersection of two lines */
+function intersectLines(l1: Line, l2: Line): Point | null {
+  const det = l1.a * l2.b - l2.a * l1.b
+  if (Math.abs(det) < 1e-9) return null // Lines are parallel
+  const x = (l1.b * l2.c - l2.b * l1.c) / det
+  const y = (l2.a * l1.c - l1.a * l2.c) / det
+  return { x, y }
+}
+
+/** Finds all junctions (points where >= 2 walls meet) */
+function findJunctions(walls: LiveWall[]): Map<string, Junction> {
+  const junctions = new Map<string, Junction>()
+  
+  walls.forEach(wall => {
+    const keyStart = pointToKey(wall.start)
+    const keyEnd = pointToKey(wall.end)
+
+    if (!junctions.has(keyStart)) {
+      junctions.set(keyStart, { meetingPoint: wall.start, connectedWalls: [] })
+    }
+    junctions.get(keyStart)!.connectedWalls.push({ wall, endType: 'start' })
+
+    if (!junctions.has(keyEnd)) {
+      junctions.set(keyEnd, { meetingPoint: wall.end, connectedWalls: [] })
+    }
+    junctions.get(keyEnd)!.connectedWalls.push({ wall, endType: 'end' })
+  })
+
+  // Filter out points with only one wall end
+  const actualJunctions = new Map<string, Junction>()
+  for (const [key, junction] of junctions.entries()) {
+    if (junction.connectedWalls.length >= 2) {
+      actualJunctions.set(key, junction)
+    }
+  }
+  return actualJunctions
+}
+
+/** Calculates intersection points for a single junction */
+function calculateJunctionIntersections(junction: Junction) {
+  const { meetingPoint, connectedWalls } = junction
+  const processedWalls: ProcessedWall[] = []
+
+  for (const connected of connectedWalls) {
+    const { wall, endType } = connected
+    const halfThickness = wall.thickness / 2
+    const v = getOutgoingVector(wall, endType, meetingPoint)
+    const L = Math.sqrt(v.x * v.x + v.y * v.y)
+    
+    if (L < 1e-9) continue 
+
+    const n_unit = { x: -v.y / L, y: v.x / L } // "Left"
+    const pA = { x: meetingPoint.x + n_unit.x * halfThickness, y: meetingPoint.y + n_unit.y * halfThickness }
+    const pB = { x: meetingPoint.x - n_unit.x * halfThickness, y: meetingPoint.y - n_unit.y * halfThickness }
+
+    processedWalls.push({
+      angle: Math.atan2(v.y, v.x),
+      edgeA: createLineFromPointAndVector(pA, v), // "Left" edge
+      edgeB: createLineFromPointAndVector(pB, v), // "Right" edge
+      v: v,
+      wall_id: wall.id,
+      pA: pA, // Store "Left" edge point
+      pB: pB  // Store "Right" edge point
+    })
+  }
+
+  processedWalls.sort((a, b) => a.angle - b.angle)
+
+  const wallIntersections = new Map<string, { left: Point, right: Point }>()
+  const n = processedWalls.length
+  if (n < 2) return { wallIntersections }
+
+  for (let i = 0; i < n; i++) {
+    const wall1 = processedWalls[i]
+    const wall2 = processedWalls[(i + 1) % n]
+    
+    const intersection = intersectLines(wall1.edgeA, wall2.edgeB)
+    
+    let p: Point
+    if (intersection === null) {
+      // Lines are parallel (or co-linear).
+      // Use wall1's "left" edge point (pA) as the correct
+      // intersection point in this specific case.
+      p = wall1.pA
+    } else {
+      p = intersection
+    }
+    
+    if (!wallIntersections.has(wall1.wall_id)) {
+      wallIntersections.set(wall1.wall_id, {} as any)
+    }
+    wallIntersections.get(wall1.wall_id)!.left = p
+    
+    if (!wallIntersections.has(wall2.wall_id)) {
+      wallIntersections.set(wall2.wall_id, {} as any)
+    }
+    wallIntersections.get(wall2.wall_id)!.right = p
+  }
+  
+  return { wallIntersections }
+}
+// --- End of 2D Intersection Helper Functions ---
+
 
 type WallsProps = {
   floorId: string
@@ -39,175 +192,180 @@ export const Walls = forwardRef(({
   movingCamera,
   onDeleteWalls
 }: WallsProps, ref: Ref<THREE.Group>) => {
-  // Fetch wall segments for this floor from the store (optimized selector)
+  // Fetch wall segments for this floor from the store
   const wallSegments = useEditor(
     useShallow(state => {
       const wallComponent = state.components.find(c => c.type === 'wall' && c.group === floorId)
       return wallComponent?.data.segments || []
     })
   )
+
+  // --- Pre-calculate Wall Geometry ---
+  const wallGeometries = useMemo(() => {
+    // 1. Convert grid segments to "LiveWall" format (world coordinates)
+    // We use the grid's 'y' coordinate as our 2D 'y' (which maps to 3D 'z')
+    const liveWalls: LiveWall[] = wallSegments.map(seg => ({
+      id: seg.id,
+      start: { x: seg.start[0] * tileSize, y: seg.start[1] * tileSize },
+      end: { x: seg.end[0] * tileSize, y: seg.end[1] * tileSize },
+      thickness: WALL_THICKNESS
+    }))
+
+    // 2. Find all junctions
+    const junctions = findJunctions(liveWalls)
+    const junctionData = new Map<string, Map<string, { left: Point, right: Point }>>()
+    for (const [key, junction] of junctions.entries()) {
+      const { wallIntersections } = calculateJunctionIntersections(junction)
+      junctionData.set(key, wallIntersections)
+    }
+
+    // 3. Create extrusion geometry for each wall
+    return liveWalls.map(wall => {
+      const halfT = wall.thickness / 2
+        
+      const v = { x: wall.end.x - wall.start.x, y: wall.end.y - wall.start.y }
+      const L = Math.sqrt(v.x * v.x + v.y * v.y)
+      if (L < 1e-9) return null // Skip zero-length walls
+      
+      const n_unit = { x: -v.y / L, y: v.x / L } // "Left" of (start -> end) vector
+      
+      const key_start = pointToKey(wall.start)
+      const key_end = pointToKey(wall.end)
+
+      const startJunctionData = junctionData.get(key_start)?.get(wall.id)
+      const endJunctionData = junctionData.get(key_end)?.get(wall.id)
+
+      // Get 4 corners of the wall polygon
+      const p_start_L = startJunctionData ? startJunctionData.left : { x: wall.start.x + n_unit.x * halfT, y: wall.start.y + n_unit.y * halfT }
+      const p_start_R = startJunctionData ? startJunctionData.right : { x: wall.start.x - n_unit.x * halfT, y: wall.start.y - n_unit.y * halfT }
+      
+      const p_end_L = endJunctionData ? endJunctionData.right : { x: wall.end.x + n_unit.x * halfT, y: wall.end.y + n_unit.y * halfT }
+      const p_end_R = endJunctionData ? endJunctionData.left : { x: wall.end.x - n_unit.x * halfT, y: wall.end.y - n_unit.y * halfT }
+
+      // Build the polygon footprint
+      // These 2D (x, y) points map to 3D (x, z)
+      const polyPoints = [p_start_R, p_end_R]
+      if (endJunctionData) polyPoints.push(wall.end) // Add center point if at junction
+      polyPoints.push(p_end_L, p_start_L)
+      if (startJunctionData) polyPoints.push(wall.start) // Add center point if at junction
+      
+      // Create THREE.Shape
+      // Note: Negate y values because rotation by -π/2 around X flips Z sign
+      const shapePoints = polyPoints.map(p => new THREE.Vector2(p.x, -p.y))
+      const shape = new THREE.Shape(shapePoints)
+      
+      // Create Extrude Geometry
+      const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+      
+      // The geometry is created in the XY plane and extruded along Z.
+      // We need to rotate it to lie on the XZ plane and extrude along Y.
+      // Rotation by -90deg around X-axis transforms (x,y,z) to (x,z,-y).
+      // With our negated y-coordinates in the shape, a point at (x,-y,0) becomes (x,0,y).
+      // After rotation, the wall already sits from y=0 to y=wallHeight, so no translation needed.
+      geometry.rotateX(-Math.PI / 2)
+      
+      return geometry
+
+    }).filter(Boolean) as THREE.ExtrudeGeometry[]
+
+  }, [wallSegments, tileSize, wallHeight])
+  // --- End of Pre-calculation ---
+
+
   return (
     <group ref={ref}>
-      {wallSegments.map((seg, i) => {
-        const [x1, y1] = seg.start
-        const [x2, y2] = seg.end
-        
-        // Calculate wall dimensions
-        const dx = x2 - x1
-        const dz = y2 - y1  // y1, y2 from grid are now z coordinates in 3D space
-        const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
-        const thickness = WALL_THICKNESS
-        // Extend wall by half thickness on each end for perfect corners
-        // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
-        const length = baseLength + thickness
-        const height = wallHeight
+      {wallGeometries.map((geometry, i) => {
+        // Find the original segment data
+        const seg = wallSegments[i] 
+        if (!seg) return null
 
-        // Calculate center position (x-z plane is ground, y is up)
-        const centerX = (x1 + x2) / 2 * tileSize
-        const centerZ = (y1 + y2) / 2 * tileSize
-
-        // Calculate rotation around Y axis (vertical)
-        // Note: negative dz because Three.js Y-axis rotation transforms local X as (cos(θ), 0, -sin(θ))
-        const angle = Math.atan2(-dz, dx)
-        
         const isSelected = selectedWallIds.has(seg.id);
-        // Only apply hover effect if this floor is active
         const isHovered = isActive && hoveredWallIndex === i;
 
-        // Determine color based on selection and hover state
-        let color = "#aaaabf"; // default
+        let color = "#aaaabf";
         let emissive = "#000000";
 
         if (isSelected && isHovered) {
-          color = "#ff4444"; // selected and hovered
+          color = "#ff4444";
           emissive = "#441111";
         } else if (isSelected) {
-          color = "#ff8888"; // selected
+          color = "#ff8888";
           emissive = "#331111";
         } else if (isHovered) {
-          color = "#ff6b6b"; // hovered
+          color = "#ff6b6b";
           emissive = "#331111";
         }
 
-        // Reduce opacity for inactive floors
         const opacity = isActive ? 1 : 0.2
         const transparent = opacity < 1
 
         return (
-          <group key={seg.id} position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
-            <mesh
-              castShadow
-              receiveShadow
-              onPointerEnter={(e) => {
-                // Only allow hover on active floor walls, and not in delete or guide mode
-                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
-                  e.stopPropagation();
-                  onWallHover(i);
-                }
-              }}
-              onPointerLeave={(e) => {
-                // Only allow hover on active floor walls, and not in delete or guide mode
-                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
-                  e.stopPropagation();
-                  onWallHover(null);
-                }
-              }}
-              onPointerDown={(e) => {
-                // Only allow interactions on active floor
-                if (!isActive) return;
-
-                // Don't handle interactions while camera is moving
-                if (movingCamera) return;
-
-                // Delete mode: interactions now handled through grid intersections
-                if (controlMode === 'delete') {
-                  return
-                }
-
-                // Guide mode: no wall interactions while manipulating reference images
-                if (controlMode === 'guide') {
-                  return
-                }
-
+          // The geometry is now pre-rotated and in world space,
+          // so we don't need the <group> for rotation/positioning.
+          <mesh
+            key={seg.id}
+            geometry={geometry} // Use the new extruded geometry
+            castShadow
+            receiveShadow
+            onPointerEnter={(e) => {
+              if (isActive && controlMode === 'select') {
                 e.stopPropagation();
-
-                // Check for right-click (button 2) and camera not enabled and walls selected
-                if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
-                  // Prevent default browser context menu
-                  if (e.nativeEvent) {
-                    e.nativeEvent.preventDefault();
-                  }
-                  onWallRightClick?.(e, seg);
-                }
-              }}
-              onContextMenu={(e) => {
-                // Only allow context menu on active floor
-                if (!isActive) return;
-
-                // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
-                if (!isCameraEnabled && selectedWallIds.size > 0) {
-                  e.stopPropagation();
-                  if (e.nativeEvent) {
-                    e.nativeEvent.preventDefault();
-                  }
-                }
-              }}
-              onClick={(e) => {
-                // Only allow interactions on active floor
-                if (!isActive) return;
-
-                // Don't handle clicks while camera is moving
-                if (movingCamera) return;
-
+                onWallHover(i);
+              }
+            }}
+            onPointerLeave={(e) => {
+              if (isActive && controlMode === 'select') {
                 e.stopPropagation();
-
-                // Building mode: no wall selection while placing walls
-                if (controlMode === 'building') {
-                  return
-                }
-
-                // Delete mode: handled in onPointerDown/Up
-                if (controlMode === 'delete') {
-                  return
-                }
-
-                // Guide mode: no wall selection while manipulating reference images
-                if (controlMode === 'guide') {
-                  return
-                }
-
-                // Select mode: normal selection behavior
-                if (controlMode === 'select') {
-                  setSelectedWallIds(prev => {
-                    const next = new Set(prev);
-                    if (e.shiftKey) {
-                      // Shift+click: add/remove from selection
-                      if (next.has(seg.id)) {
-                        next.delete(seg.id);
-                      } else {
-                        next.add(seg.id);
-                      }
-                    } else {
-                      // Regular click: select only this wall
-                      next.clear();
-                      next.add(seg.id);
-                    }
-                    return next;
-                  });
-                }
-              }}
-            >
-              <boxGeometry args={[length, height, thickness]} />
-              <meshStandardMaterial
-                color={color}
-                roughness={0.7}
-                metalness={0.1}
-                emissive={emissive}
-                transparent={transparent}
-                opacity={opacity}
-              />
-            </mesh>
-          </group>
+                onWallHover(null);
+              }
+            }}
+            onPointerDown={(e) => {
+              if (!isActive || movingCamera || controlMode === 'building' || controlMode === 'delete' || controlMode === 'guide') {
+                return
+              }
+              e.stopPropagation();
+              if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
+                if (e.nativeEvent) e.nativeEvent.preventDefault();
+                onWallRightClick?.(e, seg);
+              }
+            }}
+            onContextMenu={(e) => {
+              if (!isActive) return;
+              if (!isCameraEnabled && selectedWallIds.size > 0) {
+                e.stopPropagation();
+                if (e.nativeEvent) e.nativeEvent.preventDefault();
+              }
+            }}
+            onClick={(e) => {
+              if (!isActive || movingCamera || controlMode === 'building' || controlMode === 'delete' || controlMode === 'guide') {
+                return
+              }
+              e.stopPropagation();
+              if (controlMode === 'select') {
+                setSelectedWallIds(prev => {
+                  const next = new Set(prev);
+                  if (e.shiftKey) {
+                    if (next.has(seg.id)) next.delete(seg.id);
+                    else next.add(seg.id);
+                  } else {
+                    next.clear();
+                    next.add(seg.id);
+                  }
+                  return next;
+                });
+              }
+            }}
+          >
+            <meshStandardMaterial
+              color={color}
+              roughness={0.7}
+              metalness={0.1}
+              emissive={emissive}
+              transparent={transparent}
+              opacity={opacity}
+            />
+          </mesh>
         );
       })}
     </group>
@@ -216,45 +374,120 @@ export const Walls = forwardRef(({
 
 Walls.displayName = 'Walls'
 
+
+// --- WallShadowPreview ---
+// This also needs to be updated to use the same geometry logic.
+// We pass it the `allWallSegments` so it can calculate its own geometry.
+
 type WallShadowPreviewProps = {
   start: [number, number]
   end: [number, number]
   tileSize: number
   wallHeight: number
+  // We need all other walls to check for junctions
+  allWallSegments: WallSegment[]
 }
 
-export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: WallShadowPreviewProps) => {
-  const [x1, y1] = start
-  const [x2, y2] = end
+export const WallShadowPreview = memo(({ 
+  start, 
+  end, 
+  tileSize, 
+  wallHeight, 
+  allWallSegments 
+}: WallShadowPreviewProps) => {
 
-  // Calculate wall dimensions
-  const dx = x2 - x1
-  const dz = y2 - y1  // y coordinates from grid are z in 3D space
-  const baseLength = Math.sqrt(dx * dx + dz * dz) * tileSize
-  const thickness = WALL_THICKNESS
-  // Extend wall by half thickness on each end for perfect corners
-  // Apply to all walls (horizontal, vertical, and diagonal) for clean connections
-  const length = baseLength + thickness
-  const height = wallHeight
+  const geometry = useMemo(() => {
+    const previewWall: LiveWall = {
+      id: 'preview',
+      start: { x: start[0] * tileSize, y: start[1] * tileSize },
+      end: { x: end[0] * tileSize, y: end[1] * tileSize },
+      thickness: WALL_THICKNESS
+    }
 
-  // Calculate center position (x-z plane is ground, y is up)
-  const centerX = (x1 + x2) / 2 * tileSize
-  const centerZ = (y1 + y2) / 2 * tileSize
+    const liveWalls: LiveWall[] = allWallSegments.map(seg => ({
+      id: seg.id,
+      start: { x: seg.start[0] * tileSize, y: seg.start[1] * tileSize },
+      end: { x: seg.end[0] * tileSize, y: seg.end[1] * tileSize },
+      thickness: WALL_THICKNESS
+    }))
+    
+    // Add the preview wall to the list to find junctions
+    const allWalls = [...liveWalls, previewWall]
 
-  // Calculate rotation around Y axis (vertical)
-  // Note: negative dz because Three.js Y-axis rotation transforms local X as (cos(θ), 0, -sin(θ))
-  const angle = Math.atan2(-dz, dx)
+    const junctions = findJunctions(allWalls)
+    const junctionData = new Map<string, Map<string, { left: Point, right: Point }>>()
+    for (const [key, junction] of junctions.entries()) {
+      const { wallIntersections } = calculateJunctionIntersections(junction)
+      junctionData.set(key, wallIntersections)
+    }
+
+    // Now, calculate the geometry just for the previewWall
+    const wall = previewWall
+    const halfT = wall.thickness / 2
+        
+    const v = { x: wall.end.x - wall.start.x, y: wall.end.y - wall.start.y }
+    const L = Math.sqrt(v.x * v.x + v.y * v.y)
+    if (L < 1e-9) return null
+    
+    const n_unit = { x: -v.y / L, y: v.x / L }
+    
+    const key_start = pointToKey(wall.start)
+    const key_end = pointToKey(wall.end)
+
+    const startJunctionData = junctionData.get(key_start)?.get(wall.id)
+    const endJunctionData = junctionData.get(key_end)?.get(wall.id)
+
+    const p_start_L = startJunctionData ? startJunctionData.left : { x: wall.start.x + n_unit.x * halfT, y: wall.start.y + n_unit.y * halfT }
+    const p_start_R = startJunctionData ? startJunctionData.right : { x: wall.start.x - n_unit.x * halfT, y: wall.start.y - n_unit.y * halfT }
+    const p_end_L = endJunctionData ? endJunctionData.right : { x: wall.end.x + n_unit.x * halfT, y: wall.end.y + n_unit.y * halfT }
+    const p_end_R = endJunctionData ? endJunctionData.left : { x: wall.end.x - n_unit.x * halfT, y: wall.end.y - n_unit.y * halfT }
+
+    const polyPoints = [p_start_R, p_end_R]
+    if (endJunctionData) polyPoints.push(wall.end)
+    polyPoints.push(p_end_L, p_start_L)
+    if (startJunctionData) polyPoints.push(wall.start)
+    
+    // Note: Negate y values because rotation by -π/2 around X flips Z sign
+    const shapePoints = polyPoints.map(p => new THREE.Vector2(p.x, -p.y))
+    const shape = new THREE.Shape(shapePoints)
+    
+    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+    
+    // Rotate to lie on XZ plane and extrude along Y
+    // After rotation, the wall sits from y=0 to y=wallHeight (no translation needed)
+    geometry.rotateX(-Math.PI / 2)
+    
+    return geometry
+
+  }, [start, end, tileSize, wallHeight, allWallSegments])
+
+  if (!geometry) return null
 
   return (
-    <group position={[centerX, height / 2, centerZ]} rotation={[0, angle, 0]}>
-      <mesh>
-        <boxGeometry args={[length, height, thickness]} />
+    <group>
+      {/* Occluded/behind version - dimmer, shows through everything */}
+      <mesh geometry={geometry} renderOrder={1}>
         <meshStandardMaterial
           color="#44ff44"
           transparent
-          opacity={0.4}
+          opacity={0.15}
           emissive="#22aa22"
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.1}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* Visible/front version - brighter, only shows when not occluded */}
+      <mesh geometry={geometry} renderOrder={2}>
+        <meshStandardMaterial
+          color="#44ff44"
+          transparent
+          opacity={0.5}
+          emissive="#22aa22"
+          emissiveIntensity={0.4}
+          depthTest={true}
+          depthWrite={false}
         />
       </mesh>
     </group>
@@ -262,4 +495,3 @@ export const WallShadowPreview = memo(({ start, end, tileSize, wallHeight }: Wal
 })
 
 WallShadowPreview.displayName = 'WallShadowPreview'
-

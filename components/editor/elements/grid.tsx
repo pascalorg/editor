@@ -4,7 +4,8 @@ import { Line } from '@react-three/drei'
 import { memo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { WallShadowPreview } from './wall'
-import { useEditorContext } from '@/hooks/use-editor'
+import { useEditor, useEditorContext } from '@/hooks/use-editor'
+import { useShallow } from 'zustand/react/shallow'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -49,11 +50,19 @@ export const GridTiles = memo(({
   wallHeight,
   controlMode
 }: GridTilesProps) => {
-  const { activeTool } = useEditorContext()
+  const { activeTool, selectedFloorId } = useEditorContext()
   const meshRef = useRef<THREE.Mesh>(null)
   const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(null)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastClickTimeRef = useRef<number>(0)
+
+  // Get all wall segments for the active floor (needed for mitered junction calculations in previews)
+  const allWallSegments = useEditor(
+    useShallow(state => {
+      const wallComponent = state.components.find(c => c.type === 'wall' && c.group === selectedFloorId)
+      return wallComponent?.data.segments || []
+    })
+  )
 
   const gridSize = (intersections - 1) * tileSize
 
@@ -180,21 +189,38 @@ export const GridTiles = memo(({
       {wallStartPoint && activeTool === 'wall' && (
         <mesh position={[wallStartPoint[0] * tileSize, 0.01, wallStartPoint[1] * tileSize]}>
           <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
+          <meshStandardMaterial color="#44ff44" emissive="#22aa22" depthTest={false} />
         </mesh>
       )}
 
       {/* Preview line when placing wall */}
       {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
-        <Line
-          points={[
-            [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
-            [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
-          ]}
-          color="#44ff44"
-          lineWidth={3}
-          dashed={false}
-        />
+        <>
+          {/* Occluded version - dimmer */}
+          <Line
+            points={[
+              [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
+              [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
+            ]}
+            color="#336633"
+            lineWidth={2}
+            dashed={false}
+            depthTest={false}
+            transparent
+            opacity={0.3}
+          />
+          {/* Visible version - brighter */}
+          <Line
+            points={[
+              [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
+              [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize]
+            ]}
+            color="#44ff44"
+            lineWidth={3}
+            dashed={false}
+            depthTest={true}
+          />
+        </>
       )}
       
       {/* Wall shadow preview */}
@@ -204,6 +230,7 @@ export const GridTiles = memo(({
           end={wallPreviewEnd}
           tileSize={tileSize}
           wallHeight={wallHeight}
+          allWallSegments={allWallSegments}
         />
       )}
 
@@ -213,10 +240,27 @@ export const GridTiles = memo(({
           {/* Start point indicator */}
           <mesh position={[roomStartPoint[0] * tileSize, 0.01, roomStartPoint[1] * tileSize]}>
             <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial color="#44ff44" emissive="#22aa22" />
+            <meshStandardMaterial color="#44ff44" emissive="#22aa22" depthTest={false} />
           </mesh>
 
           {/* Preview lines for the 4 walls */}
+          {/* Occluded version - dimmer */}
+          <Line
+            points={[
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+              [roomPreviewEnd[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
+              [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
+            ]}
+            color="#336633"
+            lineWidth={2}
+            dashed={false}
+            depthTest={false}
+            transparent
+            opacity={0.3}
+          />
+          {/* Visible version - brighter */}
           <Line
             points={[
               [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
@@ -228,6 +272,7 @@ export const GridTiles = memo(({
             color="#44ff44"
             lineWidth={3}
             dashed={false}
+            depthTest={true}
           />
 
           {/* Wall shadow previews for all 4 walls */}
@@ -236,24 +281,28 @@ export const GridTiles = memo(({
             end={[roomPreviewEnd[0], roomStartPoint[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomPreviewEnd[0], roomStartPoint[1]]}
             end={[roomPreviewEnd[0], roomPreviewEnd[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomPreviewEnd[0], roomPreviewEnd[1]]}
             end={[roomStartPoint[0], roomPreviewEnd[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomStartPoint[0], roomPreviewEnd[1]]}
             end={[roomStartPoint[0], roomStartPoint[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
         </>
       )}
@@ -276,6 +325,7 @@ export const GridTiles = memo(({
                 <meshStandardMaterial
                   color={isHoveringFirstPoint ? "#ffff44" : "#44ff44"}
                   emissive={isHoveringFirstPoint ? "#aaaa22" : "#22aa22"}
+                  depthTest={false}
                 />
               </mesh>
             )
@@ -288,16 +338,32 @@ export const GridTiles = memo(({
                 if (index === 0) return null
                 const prevPoint = customRoomPoints[index - 1]
                 return (
-                  <Line
-                    key={`line-${index}`}
-                    points={[
-                      [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
-                      [point[0] * tileSize, 0.1, point[1] * tileSize]
-                    ]}
-                    color="#44ff44"
-                    lineWidth={3}
-                    dashed={false}
-                  />
+                  <group key={`line-${index}`}>
+                    {/* Occluded version - dimmer */}
+                    <Line
+                      points={[
+                        [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
+                        [point[0] * tileSize, 0.1, point[1] * tileSize]
+                      ]}
+                      color="#336633"
+                      lineWidth={2}
+                      dashed={false}
+                      depthTest={false}
+                      transparent
+                      opacity={0.3}
+                    />
+                    {/* Visible version - brighter */}
+                    <Line
+                      points={[
+                        [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
+                        [point[0] * tileSize, 0.1, point[1] * tileSize]
+                      ]}
+                      color="#44ff44"
+                      lineWidth={3}
+                      dashed={false}
+                      depthTest={true}
+                    />
+                  </group>
                 )
               })}
             </>
@@ -315,28 +381,62 @@ export const GridTiles = memo(({
                 if (isHoveringFirstPoint) {
                   // Show closing line when hovering over first point
                   return (
-                    <Line
-                      points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
-                        [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
-                      ]}
-                      color="#ffff44"
-                      lineWidth={3}
-                      dashed={false}
-                    />
+                    <>
+                      {/* Occluded version - dimmer */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
+                        ]}
+                        color="#999922"
+                        lineWidth={2}
+                        dashed={false}
+                        depthTest={false}
+                        transparent
+                        opacity={0.3}
+                      />
+                      {/* Visible version - brighter */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPoints[0][0] * tileSize, 0.1, customRoomPoints[0][1] * tileSize]
+                        ]}
+                        color="#ffff44"
+                        lineWidth={3}
+                        dashed={false}
+                        depthTest={true}
+                      />
+                    </>
                   )
                 } else {
                   // Normal preview line to cursor (no auto-closing line)
                   return (
-                    <Line
-                      points={[
-                        [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
-                        [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
-                      ]}
-                      color="#44ff44"
-                      lineWidth={3}
-                      dashed={false}
-                    />
+                    <>
+                      {/* Occluded version - dimmer */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
+                        ]}
+                        color="#336633"
+                        lineWidth={2}
+                        dashed={false}
+                        depthTest={false}
+                        transparent
+                        opacity={0.3}
+                      />
+                      {/* Visible version - brighter */}
+                      <Line
+                        points={[
+                          [customRoomPoints[customRoomPoints.length - 1][0] * tileSize, 0.1, customRoomPoints[customRoomPoints.length - 1][1] * tileSize],
+                          [customRoomPreviewEnd[0] * tileSize, 0.1, customRoomPreviewEnd[1] * tileSize]
+                        ]}
+                        color="#44ff44"
+                        lineWidth={3}
+                        dashed={false}
+                        depthTest={true}
+                      />
+                    </>
                   )
                 }
               })()}
@@ -354,6 +454,7 @@ export const GridTiles = memo(({
                 end={point}
                 tileSize={tileSize}
                 wallHeight={wallHeight}
+                allWallSegments={allWallSegments}
               />
             )
           })}
