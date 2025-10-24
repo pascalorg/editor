@@ -4,7 +4,8 @@ import { Line } from '@react-three/drei'
 import { memo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { WallShadowPreview } from './wall'
-import { useEditorContext } from '@/hooks/use-editor'
+import { useEditor, useEditorContext } from '@/hooks/use-editor'
+import { useShallow } from 'zustand/react/shallow'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -49,11 +50,19 @@ export const GridTiles = memo(({
   wallHeight,
   controlMode
 }: GridTilesProps) => {
-  const { activeTool } = useEditorContext()
+  const { activeTool, selectedFloorId } = useEditorContext()
   const meshRef = useRef<THREE.Mesh>(null)
   const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(null)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastClickTimeRef = useRef<number>(0)
+
+  // Get all wall segments for the active floor (needed for mitered junction calculations in previews)
+  const allWallSegments = useEditor(
+    useShallow(state => {
+      const wallComponent = state.components.find(c => c.type === 'wall' && c.group === selectedFloorId)
+      return wallComponent?.data.segments || []
+    })
+  )
 
   const gridSize = (intersections - 1) * tileSize
 
@@ -221,6 +230,7 @@ export const GridTiles = memo(({
           end={wallPreviewEnd}
           tileSize={tileSize}
           wallHeight={wallHeight}
+          allWallSegments={allWallSegments}
         />
       )}
 
@@ -271,24 +281,28 @@ export const GridTiles = memo(({
             end={[roomPreviewEnd[0], roomStartPoint[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomPreviewEnd[0], roomStartPoint[1]]}
             end={[roomPreviewEnd[0], roomPreviewEnd[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomPreviewEnd[0], roomPreviewEnd[1]]}
             end={[roomStartPoint[0], roomPreviewEnd[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
           <WallShadowPreview
             start={[roomStartPoint[0], roomPreviewEnd[1]]}
             end={[roomStartPoint[0], roomStartPoint[1]]}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            allWallSegments={allWallSegments}
           />
         </>
       )}
@@ -440,6 +454,7 @@ export const GridTiles = memo(({
                 end={point}
                 tileSize={tileSize}
                 wallHeight={wallHeight}
+                allWallSegments={allWallSegments}
               />
             )
           })}

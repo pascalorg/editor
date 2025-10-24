@@ -1,8 +1,3 @@
----
-alwaysApply: true
----
-I am updating the project documentation to reflect the current codebase structure, including providers, sidebar, context, and editor components for better guidance to future developers and AI agents.
-
 # House Builder Project
 
 ## Project Overview
@@ -44,7 +39,7 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 ### 3D Scene (Isometric View)
 - **Camera**: [10,10,10] perspective (FOV 50) or orthographic (zoom 20)
 - **Lighting**: Ambient (0.5) + directional ([10,10,5]) with shadows
-- **Walls**: BoxGeometry (20cm thick), colors: default #aaaabf, selected #ff8888, hovered #ff6b6b
+- **Walls**: ExtrudeGeometry with mitered junctions (20cm thick), colors: default #aaaabf, selected #ff8888, hovered #ff6b6b
 - **Drei Grid**: 50cm cells, 5-cell sections highlighted, adjustable opacity
 - **Axes**: Infinite dashed X/Y/Z lines (subtle)
 
@@ -53,6 +48,66 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - **Reference Images**: Multiple PNG/JPEG overlays with per-image position, rotation (Y-axis), and scale. In Guide mode, interactive 3D handles appear on selected images for direct manipulation
 - **GLB Export**: Download walls group as binary GLB
 - **Layout Files**: Save/load as JSON (version 2.0, segment-based)
+
+## Wall Geometry System: Mitered Junctions
+
+### Overview
+Instead of rendering overlapping boxes, walls use **precise 2D polygon footprints** with mitered/embedded ends at junctions, extruded to create clean 3D geometry. This eliminates Z-fighting and visual artifacts where walls meet.
+
+### Implementation (`components/editor/elements/wall.tsx`)
+
+**1. Junction Detection**
+- Convert wall segments (grid coordinates) to `LiveWall` objects (world coordinates: `x = gridX × tileSize`)
+- `findJunctions()` identifies points where ≥2 walls meet using point-to-key mapping
+- Returns `Map<string, Junction>` containing meeting points and connected walls
+
+**2. Miter Calculation**
+- For each junction, `calculateJunctionIntersections()` computes precise edge intersections
+- Projects each wall's thickness edges (left/right) as lines in 2D space
+- Sorts walls by angle around junction point (using `atan2`)
+- Intersects adjacent wall edges (wall₁.leftEdge ∩ wall₂.rightEdge) to find miter points
+- Returns intersection coordinates for each wall's left/right ends
+
+**3. Polygon Construction**
+- For each wall, builds a 2D polygon footprint:
+  - **No junction**: Standard rectangle (4 corners at ±thickness/2)
+  - **With junction**: Mitered polygon (includes calculated intersection points + center point)
+- Example: T-junction creates a 6-point polygon (2 mitered ends + center embedding)
+
+**4. Extrusion & Transformation**
+```typescript
+// Build 2D shape with negated y-coords (fixes Z-axis flip after rotation)
+const shapePoints = polyPoints.map(p => new THREE.Vector2(p.x, -p.y))
+const shape = new THREE.Shape(shapePoints)
+
+// Extrude to height
+const geometry = new THREE.ExtrudeGeometry(shape, { depth: wallHeight })
+
+// Rotate from XY plane to XZ plane (ground)
+geometry.rotateX(-Math.PI / 2)
+// Wall now sits at y=0 to y=wallHeight (no translation needed)
+```
+
+**5. Preview Integration**
+- `WallShadowPreview` uses identical logic, receiving `allWallSegments` prop
+- Temporarily adds preview wall to junction calculations
+- Ensures preview matches final wall shape exactly
+
+### Key Functions
+| Function | Purpose | Location |
+|----------|---------|----------|
+| `findJunctions()` | Detects junction points | `wall.tsx` line ~95 |
+| `calculateJunctionIntersections()` | Computes miter points | `wall.tsx` line ~113 |
+| `intersectLines()` | 2D line intersection math | `wall.tsx` line ~59 |
+| `Walls` useMemo | Pre-calculates all geometries | `wall.tsx` line ~192 |
+| `WallShadowPreview` | Preview with junction awareness | `wall.tsx` line ~384 |
+
+### Coordinate System Notes
+- 2D calculations use grid coordinates mapped to world: `(gridX × tileSize, gridY × tileSize)`
+- Grid's `y` coordinate maps to 3D `z` (ground plane)
+- Shape points use negated y-values to compensate for rotation transform
+- Parent group offset `[-15, 0, -15]` centers grid at world origin
+- Final geometry positioned directly (no per-wall transform groups)
 
 ## File Structure & Key Components
 
@@ -95,9 +150,9 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 
 **`building-menu.tsx`**: Bottom-center, tool buttons with Phosphor icons, click to activate/deactivate, auto-switches mode
 
-**`elements/grid.tsx`**: Raycasting plane, down arrow hover indicators, preview rendering (green for build, red for delete), snapping logic
+**`elements/grid.tsx`**: Raycasting plane, down arrow hover indicators, preview rendering (green for build, red for delete), snapping logic. Fetches `allWallSegments` from store and passes to all `WallShadowPreview` instances for accurate junction calculations.
 
-**`elements/wall.tsx`**: BoxGeometry meshes, `atan2(-dz, dx)` rotation for any angle, color states (default/hover/selected), WallShadowPreview component
+**`elements/wall.tsx`**: ExtrudeGeometry with mitered junctions, 2D intersection math, color states (default/hover/selected), WallShadowPreview component with junction awareness
 
 **`elements/reference-image.tsx`**: Plane mesh with texture, per-image transforms (position, rotation, scale). In Guide mode, displays 3D manipulation handles when selected:
 - **Translation handles**: White arrow-cylinder pairs at center for X/Z movement (aligned to image rotation)
@@ -154,6 +209,7 @@ A 3D house builder inspired by The Sims' building mode. Users place walls betwee
 - **Versioned JSON**: Schema v2.0 with segment-based format - extensible for doors/windows/furniture
 - **Direct Manipulation Handles**: 3D gizmos for reference images - raycasting + pointer events for intuitive transformations, handles scale inversely to image scale for consistent size
 - **Mode-Aware Camera Controls**: Dynamic mouse button configuration - left-click reserved for mode actions (delete/build/guide) vs. camera panning (select), prevents conflicts between camera and tool interactions
+- **Mitered Wall Geometry**: 2D polygon footprints + extrusion vs. overlapping boxes - eliminates Z-fighting, supports proper GLB export, enables future wall features (cutouts, materials)
 
 ## Data Persistence & JSON Structure
 
@@ -221,4 +277,3 @@ The JSON schema supports future component types:
 ## Future Enhancements
 
 Potential additions include: doors/windows with wall cutouts, room detection via flood-fill, multi-floor support, wall types/materials, measurements/labels, component library, mobile support, backend sync for collaboration, and various export formats (DXF/DWG/OBJ).
-
