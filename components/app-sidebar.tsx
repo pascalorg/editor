@@ -1,17 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { Home, Settings, Upload, Download, HelpCircle, Trash2, Save, FolderOpen, FileCode, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -20,30 +9,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar"
 import type { WallSegment } from "@/hooks/use-editor"
 import { useEditorContext } from "@/hooks/use-editor"
 import JsonView from '@uiw/react-json-view'
+import { ChevronDown, ChevronRight, Download, FileCode, HelpCircle, Layers, Plus, Save, Trash2 } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export function AppSidebar() {
-  const { 
-    isHelpOpen, 
-    setIsHelpOpen, 
-    isJsonInspectorOpen, 
-    setIsJsonInspectorOpen, 
-    handleExport, 
-    handleUpload, 
-    wallSegments, 
-    selectedWallIds, 
-    setSelectedWallIds, 
-    handleDeleteSelectedWalls, 
-    handleSaveLayout, 
-    handleLoadLayout, 
-    serializeLayout, 
+  const {
+    isHelpOpen,
+    setIsHelpOpen,
+    isJsonInspectorOpen,
+    setIsJsonInspectorOpen,
+    handleExport,
+    handleUpload,
+    wallSegments,
+    selectedWallIds,
+    setSelectedWallIds,
+    handleDeleteSelectedWalls,
+    handleSaveLayout,
+    handleLoadLayout,
+    serializeLayout,
     handleClear,
     images,
     selectedImageIds,
     setSelectedImageIds,
     handleDeleteSelectedImages,
+    groups,
+    selectedFloorId,
+    selectFloor,
+    addGroup,
+    deleteGroup,
   } = useEditorContext()
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
@@ -151,16 +156,47 @@ export function AppSidebar() {
   const formatWallDescription = (segment: WallSegment) => {
     const [x1, y1] = segment.start
     const [x2, y2] = segment.end
-    
+
     const dx = Math.abs(x2 - x1)
     const dy = Math.abs(y2 - y1)
     const length = Math.sqrt(dx * dx + dy * dy) * 0.5 // 0.5m per grid spacing
-    
+
     const orientation = segment.isHorizontal ? 'Horizontal' : 'Vertical'
     const position = `(${x1},${y1}) → (${x2},${y2})`
-    
+
     return `${orientation} wall: ${length.toFixed(2)}m ${position}`
   }
+
+  const handleAddFloor = () => {
+    // Get all existing floor numbers
+    const floorNumbers = groups
+      .filter(g => g.type === 'floor')
+      .map(g => {
+        const match = g.name.match(/(\d+)f$/i)
+        return match ? parseInt(match[1]) : 0
+      })
+      .filter(n => n > 0)
+
+    // Find the next available number (starting from 2)
+    let nextNumber = 2
+    while (floorNumbers.includes(nextNumber)) {
+      nextNumber++
+    }
+
+    const newFloor = {
+      id: `floor-${nextNumber}`,
+      name: `${nextNumber}f`,
+      type: 'floor' as const,
+      color: '#ffffff',
+      level: nextNumber,
+    }
+
+    addGroup(newFloor)
+    // Automatically select the newly created floor
+    selectFloor(newFloor.id)
+  }
+
+  const selectedFloor = selectedFloorId ? groups.find(g => g.id === selectedFloorId) : null
 
   return (
     <Sidebar variant="floating">
@@ -169,128 +205,201 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {/* Editor Controls */}
+          {/* Floor List - Always visible with highlighted selection */}
           <SidebarMenuItem>
             <div className="px-2 py-2">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Reference Image
-              </label>
-              <Input
-                type="file"
-                accept="image/png,image/jpeg"
-                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file); }}
-                className="w-full text-xs"
-              />
-            </div>
-          </SidebarMenuItem>
-
-          {/* Reference Images List */}
-          <SidebarMenuItem>
-            <div className="px-2 py-2">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Reference Images ({mounted ? images.length : 0})
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Floors ({mounted ? groups.filter(g => g.type === 'floor').length : 0})
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={handleAddFloor}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
               <div className="max-h-48 overflow-y-auto space-y-1 select-none">
                 {!mounted ? (
                   <div className="text-xs text-muted-foreground italic">
                     Loading...
                   </div>
-                ) : images.length === 0 ? (
-                  <div className="text-xs text-muted-foreground italic">
-                    No images uploaded yet
-                  </div>
                 ) : (
-                  images.map((image, index) => (
-                    <div
-                      key={image.id}
-                      className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
-                        selectedImageIds.has(image.id)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/80'
-                      }`}
-                      onClick={(e) => handleImageSelect(image.id, e)}
-                    >
-                      <div className="font-medium truncate" title={image.name}>
-                        Image {index + 1}
+                  groups
+                    .filter(g => g.type === 'floor')
+                    .sort((a, b) => (b.level || 0) - (a.level || 0)) // Reverse order: highest to lowest
+                    .map((floor) => (
+                      <div
+                        key={floor.id}
+                        className={`p-2 rounded text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                          selectedFloorId === floor.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted hover:bg-muted/80'
+                        }`}
+                        onClick={() => {
+                          // Toggle selection: clicking again deselects
+                          if (selectedFloorId === floor.id) {
+                            selectFloor(null)
+                          } else {
+                            selectFloor(floor.id)
+                          }
+                        }}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium flex items-center gap-2">
+                            <Layers className="h-3 w-3" />
+                            {floor.name}
+                          </div>
+                        </div>
+                        {floor.id !== 'ground-floor' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteGroup(floor.id)
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
-                      <div className="text-muted-foreground truncate" title={image.name}>
-                        {image.name}
-                      </div>
-                    </div>
-                  ))
+                    ))
                 )}
               </div>
             </div>
           </SidebarMenuItem>
 
-          {/* Delete Selected Images Button */}
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={handleDeleteSelectedImages}
-                disabled={!mounted || selectedImageIds.size === 0}
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete Selected Images ({mounted ? selectedImageIds.size : 0})</span>
-              </Button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* Wall Segments and Images - Only visible when a floor is selected */}
+          {selectedFloor && (
+            <>
+              {/* Reference Image Upload */}
+              <SidebarMenuItem>
+                <div className="px-2 py-2">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Reference Image
+                  </label>
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file); }}
+                    className="w-full text-xs"
+                  />
+                </div>
+              </SidebarMenuItem>
 
-          {/* Wall Segments List */}
-          <SidebarMenuItem>
-            <div className="px-2 py-2">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Wall Segments ({mounted ? wallSegments.length : 0})
-              </label>
-              <div className="max-h-48 overflow-y-auto space-y-1 select-none">
-                {!mounted ? (
-                  <div className="text-xs text-muted-foreground italic">
-                    Loading...
-                  </div>
-                ) : wallSegments.length === 0 ? (
-                  <div className="text-xs text-muted-foreground italic">
-                    No walls placed yet
-                  </div>
-                ) : (
-                  wallSegments.map((segment, index) => (
-                    <div
-                      key={segment.id}
-                      className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
-                        selectedWallIds.has(segment.id)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/80'
-                      }`}
-                      onClick={(e) => handleWallSelect(segment.id, e)}
-                    >
-                      <div className="font-medium">
-                        Wall {index + 1}
+              {/* Reference Images List */}
+              <SidebarMenuItem>
+                <div className="px-2 py-2">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Reference Images ({mounted ? images.length : 0})
+                  </label>
+                  <div className="max-h-48 overflow-y-auto space-y-1 select-none">
+                    {!mounted ? (
+                      <div className="text-xs text-muted-foreground italic">
+                        Loading...
                       </div>
-                      <div className="text-muted-foreground">
-                        {formatWallDescription(segment)}
+                    ) : images.length === 0 ? (
+                      <div className="text-xs text-muted-foreground italic">
+                        No images uploaded yet
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </SidebarMenuItem>
+                    ) : (
+                      images.map((image, index) => (
+                        <div
+                          key={image.id}
+                          className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
+                            selectedImageIds.has(image.id)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted hover:bg-muted/80'
+                          }`}
+                          onClick={(e) => handleImageSelect(image.id, e)}
+                        >
+                          <div className="font-medium truncate" title={image.name}>
+                            Image {index + 1}
+                          </div>
+                          <div className="text-muted-foreground truncate" title={image.name}>
+                            {image.name}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </SidebarMenuItem>
 
-          {/* Delete Selected Walls Button */}
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={handleDeleteSelectedWalls}
-                disabled={!mounted || selectedWallIds.size === 0}
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete Selected ({mounted ? selectedWallIds.size : 0})</span>
-              </Button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+              {/* Delete Selected Images Button */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={handleDeleteSelectedImages}
+                    disabled={!mounted || selectedImageIds.size === 0}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete Selected Images ({mounted ? selectedImageIds.size : 0})</span>
+                  </Button>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Wall Segments List */}
+              <SidebarMenuItem>
+                <div className="px-2 py-2">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Wall Segments ({mounted ? wallSegments.length : 0})
+                  </label>
+                  <div className="max-h-48 overflow-y-auto space-y-1 select-none">
+                    {!mounted ? (
+                      <div className="text-xs text-muted-foreground italic">
+                        Loading...
+                      </div>
+                    ) : wallSegments.length === 0 ? (
+                      <div className="text-xs text-muted-foreground italic">
+                        No walls placed yet
+                      </div>
+                    ) : (
+                      wallSegments.map((segment, index) => (
+                        <div
+                          key={segment.id}
+                          className={`p-2 rounded text-xs cursor-pointer transition-colors select-none ${
+                            selectedWallIds.has(segment.id)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted hover:bg-muted/80'
+                          }`}
+                          onClick={(e) => handleWallSelect(segment.id, e)}
+                        >
+                          <div className="font-medium">
+                            Wall {index + 1}
+                          </div>
+                          <div className="text-muted-foreground">
+                            {formatWallDescription(segment)}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </SidebarMenuItem>
+
+              {/* Delete Selected Walls Button */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={handleDeleteSelectedWalls}
+                    disabled={!mounted || selectedWallIds.size === 0}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete Selected ({mounted ? selectedWallIds.size : 0})</span>
+                  </Button>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </>
+          )}
 
           <SidebarMenuItem>
             <SidebarMenuButton asChild>

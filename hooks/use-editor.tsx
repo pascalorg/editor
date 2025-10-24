@@ -1,10 +1,10 @@
 'use client'
 
+import type { SetStateAction } from 'react'
 import * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SetStateAction } from 'react'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -45,6 +45,7 @@ export type ComponentGroup = {
   name: string
   type: 'room' | 'floor' | 'outdoor'
   color: string
+  level?: number
 }
 
 export type LayoutJSON = {
@@ -58,13 +59,16 @@ export type LayoutJSON = {
 }
 
 type HistoryState = {
-  walls: string[]
   images: ReferenceImage[]
+  components: Component[]
 }
 
 type StoreState = {
-  walls: string[]
   images: ReferenceImage[]
+  components: Component[]
+  groups: ComponentGroup[]
+  currentLevel: number
+  selectedFloorId: string | null
   selectedWallIds: string[]
   selectedImageIds: string[]
   isHelpOpen: boolean
@@ -79,6 +83,9 @@ type StoreState = {
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
+  addGroup: (group: ComponentGroup) => void
+  deleteGroup: (groupId: string) => void
+  selectFloor: (floorId: string | null) => void
   setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
   setSelectedWallIds: (ids: string[]) => void
   setSelectedImageIds: (ids: string[]) => void
@@ -108,8 +115,55 @@ type StoreState = {
 const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
-      walls: [],
       images: [],
+      components: [],
+      groups: [{
+        id: 'ground-floor',
+        name: 'Ground Floor',
+        type: 'floor',
+        color: '#ffffff',
+        level: 1,
+      }],
+      currentLevel: 1,
+      addGroup: (group) => set(state => ({ groups: [...state.groups, group] })),
+      deleteGroup: (groupId) => set(state => ({
+        groups: state.groups.filter(group => group.id !== groupId),
+        components: state.components.filter(comp => comp.group !== groupId)
+      })),
+      selectedFloorId: 'ground-floor',
+      selectFloor: (floorId) => {
+        const state = get()
+
+        if (!floorId) {
+          set({ selectedFloorId: null, currentLevel: -1 })
+          return
+        }
+
+        // Find or create the component for this floor
+        let component = state.components.find(c => c.type === 'wall' && c.group === floorId)
+
+        const group = state.groups.find(g => g.id === floorId)
+
+        if (!component) {
+          // Create a new wall component for this floor
+          component = {
+            id: `walls-${floorId}`,
+            type: 'wall',
+            label: `Walls - ${group?.name || floorId}`,
+            group: floorId,
+            data: { segments: [] },
+            createdAt: new Date().toISOString()
+          }
+
+          set({
+            components: [...state.components, component],
+            currentLevel: group?.level || 1,
+            selectedFloorId: floorId
+          })
+        } else {
+          set({ selectedFloorId: floorId, currentLevel: group?.level || 1 })
+        }
+      },
       selectedWallIds: [],
       selectedImageIds: [],
       isHelpOpen: false,
@@ -122,43 +176,99 @@ const useStore = create<StoreState>()(
       movingCamera: false,
       isManipulatingImage: false,
       setWalls: (walls) => set(state => {
+        if (!state.selectedFloorId) {
+          return state
+        }
+
+        // Get current walls from component for comparison
+        const currentComponent = state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)
+        const currentWalls = currentComponent?.data.segments.map(seg => seg.id) || []
+
         const sortedNew = [...walls].sort()
-        const sortedCurrent = [...state.walls].sort()
+        const sortedCurrent = [...currentWalls].sort()
         if (sortedNew.length === sortedCurrent.length && sortedNew.every((v, i) => v === sortedCurrent[i])) {
           return state
         }
+
+        // Convert wall keys to segments
+        const segments: WallSegment[] = []
+        for (const wallKey of walls) {
+          if (!wallKey.includes('-')) continue
+          const parts = wallKey.split('-')
+          if (parts.length !== 2) continue
+
+          const [start, end] = parts
+          const [x1, y1] = start.split(',').map(Number)
+          const [x2, y2] = end.split(',').map(Number)
+
+          if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
+
+          const isHorizontal = y1 === y2
+
+          segments.push({
+            start: [x1, y1],
+            end: [x2, y2],
+            id: wallKey,
+            isHorizontal
+          })
+        }
+
+        // Update the component for the current floor
+        let updatedComponents = state.components.map(comp => {
+          if (comp.type === 'wall' && comp.group === state.selectedFloorId) {
+            return {
+              ...comp,
+              data: { segments }
+            }
+          }
+          return comp
+        })
+
+        // If no component exists for this floor yet, create one
+        if (!state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)) {
+          const newComponent = {
+            id: `walls-${state.selectedFloorId}`,
+            type: 'wall' as const,
+            label: `Walls - ${state.groups.find(g => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
+            group: state.selectedFloorId,
+            data: { segments },
+            createdAt: new Date().toISOString()
+          }
+          updatedComponents = [...state.components, newComponent]
+        }
+
         return {
-          undoStack: [...state.undoStack, { walls: state.walls, images: state.images }].slice(-50),
+          undoStack: [...state.undoStack, { images: state.images, components: state.components }].slice(-50),
           redoStack: [],
-          walls
+          components: updatedComponents
         }
       }),
       setImages: (images, pushToUndo = true) => set(state => {
         // Deep comparison to avoid unnecessary undo stack pushes
-        const areEqual = state.images.length === images.length && 
+        const areEqual = state.images.length === images.length &&
           state.images.every((img, i) => {
             const newImg = images[i]
-            return img.id === newImg.id && 
-              img.position[0] === newImg.position[0] && 
-              img.position[1] === newImg.position[1] && 
-              img.rotation === newImg.rotation && 
+            return img.id === newImg.id &&
+              img.position[0] === newImg.position[0] &&
+              img.position[1] === newImg.position[1] &&
+              img.rotation === newImg.rotation &&
               img.scale === newImg.scale &&
               img.url === newImg.url
           })
-        
+
         if (areEqual) {
           return state
         }
-        
+
         // Only push to undo stack if requested (used for final commit, not intermediate updates)
         if (pushToUndo) {
           return {
-            undoStack: [...state.undoStack, { walls: state.walls, images: state.images }].slice(-50),
+            undoStack: [...state.undoStack, { images: state.images, components: state.components }].slice(-50),
             redoStack: [],
             images
           }
         }
-        
+
         // Just update images without affecting undo stack (for intermediate drag updates)
         return { images }
       }),
@@ -185,42 +295,25 @@ const useStore = create<StoreState>()(
       },
       setMovingCamera: (moving) => set({ movingCamera: moving }),
       setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
-      getWallsSet: () => new Set(get().walls),
+      getWallsSet: () => {
+        const state = get()
+        if (!state.selectedFloorId) return new Set<string>()
+
+        const component = state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)
+        if (!component) return new Set<string>()
+
+        return new Set(component.data.segments.map(seg => seg.id))
+      },
       getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
       wallSegments: () => {
-        const walls = get().getWallsSet()
-        const segments: WallSegment[] = []
-        
-        for (const wallKey of walls) {
-          // Check if this is the new format "x1,y1-x2,y2" or old format "x,y"
-          if (!wallKey.includes('-')) {
-            // Skip old format tiles - they're incompatible with the new system
-            continue
-          }
-          
-          // Parse "x1,y1-x2,y2" format
-          const parts = wallKey.split('-')
-          if (parts.length !== 2) continue // Invalid format
-          
-          const [start, end] = parts
-          const [x1, y1] = start.split(',').map(Number)
-          const [x2, y2] = end.split(',').map(Number)
-          
-          // Validate all coordinates are numbers
-          if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
-          
-          const isHorizontal = y1 === y2
-          
-          segments.push({
-            start: [x1, y1],
-            end: [x2, y2],
-            id: wallKey,
-            isHorizontal
-          })
-        }
-        
-        return segments
+        const state = get()
+        if (!state.selectedFloorId) return []
+
+        const component = state.components.find(c => c.type === 'wall' && c.group === state.selectedFloorId)
+        if (!component) return []
+
+        return component.data.segments
       },
       handleExport: () => {
         const ref = get().wallsGroupRef
@@ -275,59 +368,55 @@ const useStore = create<StoreState>()(
         })
       },
       handleDeleteSelectedWalls: () => {
-        set(state => {
-          if (state.selectedWallIds.length === 0) return state
-          const newWallsSet = new Set(state.walls)
-          // segmentId is now the wall key in format "x1,y1-x2,y2"
-          for (const wallKey of state.selectedWallIds) {
-            newWallsSet.delete(wallKey)
-          }
-          const newWalls = Array.from(newWallsSet)
-          // Since setWalls will handle undoStack, call it
-          get().setWalls(newWalls)
-          return { selectedWallIds: [] }
-        })
+        const state = get()
+        if (state.selectedWallIds.length === 0) return
+
+        const currentWalls = state.getWallsSet()
+        const newWallsSet = new Set(currentWalls)
+
+        // Remove selected walls
+        for (const wallKey of state.selectedWallIds) {
+          newWallsSet.delete(wallKey)
+        }
+
+        const newWalls = Array.from(newWallsSet)
+        get().setWalls(newWalls)
+        set({ selectedWallIds: [] })
       },
       handleClear: () => {
         get().setWalls([])
         set({ selectedWallIds: [] })
       },
       serializeLayout: () => {
-        const wallSegments = get().wallSegments()
-        const images = get().images
+        const state = get()
+        const images = state.images
+
+        // Walls are already saved in components, no need to update
 
         return {
           version: '2.0', // Updated version for intersection-based walls
           grid: { size: 61 }, // 61 intersections (60 divisions + 1)
-          components: [{
-            id: 'walls-default',
-            type: 'wall',
-            label: 'All Walls',
-            group: null,
-            data: {
-              segments: wallSegments
-            },
-            createdAt: new Date().toISOString()
-          }],
-          groups: [],
+          components: state.components,
+          groups: state.groups,
           images // Include reference images in the layout
         }
       },
       loadLayout: (json: LayoutJSON) => {
-        set({ selectedWallIds: [], selectedImageIds: [] })
-        
-        // Load walls
-        const wallComponent = json.components.find(c => c.type === 'wall')
-        if (wallComponent?.data.segments) {
-          const newWalls = wallComponent.data.segments.map(seg => 
-            `${seg.start[0]},${seg.start[1]}-${seg.end[0]},${seg.end[1]}`
-          )
-          get().setWalls(newWalls)
+        set({ selectedWallIds: [], selectedImageIds: [], selectedFloorId: null })
+
+        // Load groups (floors)
+        if (json.groups && Array.isArray(json.groups)) {
+          set({ groups: json.groups })
         }
-        
+
+        // Load all components
+        if (json.components && Array.isArray(json.components)) {
+          set({ components: json.components })
+        }
+
         // Load reference images (if present in the JSON)
         if (json.images && Array.isArray(json.images)) {
-          get().setImages(json.images)
+          get().setImages(json.images, false) // Don't push to undo stack
         }
       },
       handleSaveLayout: () => {
@@ -358,10 +447,10 @@ const useStore = create<StoreState>()(
         if (state.undoStack.length === 0) return state
         const previous = state.undoStack[state.undoStack.length - 1]
         return {
-          walls: previous.walls,
+          components: previous.components,
           images: previous.images,
           undoStack: state.undoStack.slice(0, -1),
-          redoStack: [...state.redoStack, { walls: state.walls, images: state.images }],
+          redoStack: [...state.redoStack, { components: state.components, images: state.images }],
           selectedWallIds: [],
           selectedImageIds: []
         }
@@ -370,10 +459,10 @@ const useStore = create<StoreState>()(
         if (state.redoStack.length === 0) return state
         const next = state.redoStack[state.redoStack.length - 1]
         return {
-          walls: next.walls,
+          components: next.components,
           images: next.images,
           redoStack: state.redoStack.slice(0, -1),
-          undoStack: [...state.undoStack, { walls: state.walls, images: state.images }],
+          undoStack: [...state.undoStack, { components: state.components, images: state.images }],
           selectedWallIds: [],
           selectedImageIds: []
         }
@@ -382,22 +471,14 @@ const useStore = create<StoreState>()(
     {
       name: 'editor-storage',
       partialize: (state) => ({
-        walls: state.walls,
+        components: state.components,
+        groups: state.groups,
         images: state.images,
         selectedWallIds: state.selectedWallIds,
         selectedImageIds: state.selectedImageIds,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Migrate: Remove old format walls (tile-based "x,y" format)
-          // Keep only new format walls (line-based "x1,y1-x2,y2" format)
-          const validWalls = state.walls.filter(wallKey => wallKey.includes('-'))
-          if (validWalls.length !== state.walls.length) {
-            console.log(`Migrated: Removed ${state.walls.length - validWalls.length} old format walls`)
-            state.walls = validWalls
-            state.selectedWallIds = []
-          }
-          
           // Migrate: Add missing position, rotation, scale to existing images
           if (state.images && state.images.length > 0) {
             state.images = state.images.map((img: any) => ({
@@ -406,6 +487,26 @@ const useStore = create<StoreState>()(
               rotation: img.rotation ?? 0,
               scale: img.scale ?? 1
             }))
+          }
+
+          // Ensure components and groups are initialized
+          if (!state.components) {
+            state.components = []
+          }
+          if (!state.groups) {
+            state.groups = [{
+              id: 'ground-floor',
+              name: 'Ground Floor',
+              type: 'floor',
+              color: '#ffffff',
+              level: 1,
+            }]
+          }
+
+          // Preselect ground floor if no floor is selected
+          if (!state.selectedFloorId) {
+            state.selectedFloorId = 'ground-floor'
+            state.currentLevel = 1
           }
         }
       },
@@ -464,5 +565,10 @@ export const useEditorContext = () => {
     undo: store.undo,
     redo: store.redo,
     handleClear: store.handleClear,
+    groups: store.groups,
+    selectedFloorId: store.selectedFloorId,
+    selectFloor: store.selectFloor,
+    addGroup: store.addGroup,
+    deleteGroup: store.deleteGroup,
   }
 }
