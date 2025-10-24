@@ -65,6 +65,8 @@ type HistoryState = {
 type StoreState = {
   walls: string[]
   images: ReferenceImage[]
+  groups: ComponentGroup[]
+  selectedFloorId: string | null
   selectedWallIds: string[]
   selectedImageIds: string[]
   isHelpOpen: boolean
@@ -79,6 +81,9 @@ type StoreState = {
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
+  addGroup: (group: ComponentGroup) => void
+  deleteGroup: (groupId: string) => void
+  selectFloor: (floorId: string | null) => void
   setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
   setSelectedWallIds: (ids: string[]) => void
   setSelectedImageIds: (ids: string[]) => void
@@ -110,6 +115,16 @@ const useStore = create<StoreState>()(
     (set, get) => ({
       walls: [],
       images: [],
+      groups: [{
+        id: 'ground-floor',
+        name: 'Ground Floor',
+        type: 'floor',
+        color: '#ffffff'
+      }],
+      addGroup: (group) => set(state => ({ groups: [...state.groups, group] })),
+      deleteGroup: (groupId) => set(state => ({ groups: state.groups.filter(group => group.id !== groupId) })),
+      selectedFloorId: null,
+      selectFloor: (floorId) => set({ selectedFloorId: floorId }),
       selectedWallIds: [],
       selectedImageIds: [],
       isHelpOpen: false,
