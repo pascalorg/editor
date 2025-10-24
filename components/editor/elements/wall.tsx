@@ -68,7 +68,8 @@ export const Walls = forwardRef(({
         const angle = Math.atan2(-dz, dx)
         
         const isSelected = selectedWallIds.has(seg.id);
-        const isHovered = hoveredWallIndex === i;
+        // Only apply hover effect if this floor is active
+        const isHovered = isActive && hoveredWallIndex === i;
 
         // Determine color based on selection and hover state
         let color = "#aaaabf"; // default
@@ -95,33 +96,36 @@ export const Walls = forwardRef(({
               castShadow
               receiveShadow
               onPointerEnter={(e) => {
-                // Don't highlight walls in delete or guide mode
-                if (controlMode !== 'delete' && controlMode !== 'guide') {
+                // Only allow hover on active floor walls, and not in delete or guide mode
+                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(i);
                 }
               }}
               onPointerLeave={(e) => {
-                // Don't highlight walls in delete or guide mode
-                if (controlMode !== 'delete' && controlMode !== 'guide') {
+                // Only allow hover on active floor walls, and not in delete or guide mode
+                if (isActive && controlMode !== 'delete' && controlMode !== 'guide') {
                   e.stopPropagation();
                   onWallHover(null);
                 }
               }}
               onPointerDown={(e) => {
+                // Only allow interactions on active floor
+                if (!isActive) return;
+
                 // Don't handle interactions while camera is moving
                 if (movingCamera) return;
-                
+
                 // Delete mode: interactions now handled through grid intersections
                 if (controlMode === 'delete') {
                   return
                 }
-                
+
                 // Guide mode: no wall interactions while manipulating reference images
                 if (controlMode === 'guide') {
                   return
                 }
-                
+
                 e.stopPropagation();
 
                 // Check for right-click (button 2) and camera not enabled and walls selected
@@ -134,6 +138,9 @@ export const Walls = forwardRef(({
                 }
               }}
               onContextMenu={(e) => {
+                // Only allow context menu on active floor
+                if (!isActive) return;
+
                 // Prevent default browser context menu for walls (only when camera not enabled and walls selected)
                 if (!isCameraEnabled && selectedWallIds.size > 0) {
                   e.stopPropagation();
@@ -143,26 +150,29 @@ export const Walls = forwardRef(({
                 }
               }}
               onClick={(e) => {
+                // Only allow interactions on active floor
+                if (!isActive) return;
+
                 // Don't handle clicks while camera is moving
                 if (movingCamera) return;
-                
+
                 e.stopPropagation();
-                
+
                 // Building mode: no wall selection while placing walls
                 if (controlMode === 'building') {
                   return
                 }
-                
+
                 // Delete mode: handled in onPointerDown/Up
                 if (controlMode === 'delete') {
                   return
                 }
-                
+
                 // Guide mode: no wall selection while manipulating reference images
                 if (controlMode === 'guide') {
                   return
                 }
-                
+
                 // Select mode: normal selection behavior
                 if (controlMode === 'select') {
                   setSelectedWallIds(prev => {
