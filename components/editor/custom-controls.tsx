@@ -25,7 +25,7 @@ export function CustomControls() {
     // In select mode, left-click can pan the camera
     if (controlMode === 'select') {
       return {
-        left: CameraControlsImpl.ACTION.TRUCK,
+        left: CameraControlsImpl.ACTION.SCREEN_PAN, // Similar to the sims
         middle: CameraControlsImpl.ACTION.SCREEN_PAN,
         right: CameraControlsImpl.ACTION.ROTATE,
         wheel: CameraControlsImpl.ACTION.DOLLY,

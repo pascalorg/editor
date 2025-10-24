@@ -748,7 +748,7 @@ export default function Editor({ className }: { className?: string }) {
               cellSize={tileSize}
               cellThickness={0.5}
               cellColor="#aaaabf"
-              sectionSize={tileSize * 5}
+              sectionSize={tileSize * 2}
               sectionThickness={1}
               sectionColor="#9d4b4b"
               fadeDistance={GRID_SIZE * 2}
