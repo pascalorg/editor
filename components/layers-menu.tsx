@@ -23,6 +23,7 @@ import {
   TreeIcon,
   TreeLabel,
 } from "@/components/tree"
+import { cn } from "@/lib/utils"
 
 interface LayersMenuProps {
   mounted: boolean
@@ -170,7 +171,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   }
 
   return (
-    <div className="px-2 py-2">
+    <div className="px-2 py-2 flex flex-col flex-1">
       <div className="flex items-center justify-between mb-2">
         <label className="text-sm font-medium text-muted-foreground">
           Levels ({mounted ? groups.filter(g => g.type === 'floor').length : 0})
@@ -185,7 +186,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         </Button>
       </div>
       
-      <div className="max-h-96 overflow-y-auto">
+      <div className="flex-1 no-scrollbar">
         {!mounted ? (
           <div className="text-xs text-muted-foreground italic p-2">
             Loading...
@@ -211,7 +212,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   
                   return (
                     <TreeNode key={level.id} nodeId={level.id} isLast={isLastLevel}>
-                      <TreeNodeTrigger>
+                      <TreeNodeTrigger className={cn(
+                        isSelected && "sticky top-0 z-10 bg-background"
+                      )}>
                         <TreeExpander hasChildren={hasContent} />
                         <TreeIcon 
                           icon={<Layers className="h-4 w-4 text-blue-500" />} 
@@ -267,7 +270,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 isLast={index === walls.length - 1}
                               >
                                 <TreeNodeTrigger
-                                  className={selectedWallIds.has(segment.id) ? 'bg-primary/20' : ''}
+                                  className={selectedWallIds.has(segment.id) ? 'bg-primary/30 border-l-2 border-primary' : ''}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleWallSelect(segment.id, e as any)
@@ -336,7 +339,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 isLast={index === imgs.length - 1}
                               >
                                 <TreeNodeTrigger
-                                  className={selectedImageIds.has(image.id) ? 'bg-primary/20' : ''}
+                                  className={selectedImageIds.has(image.id) ? 'bg-primary/30 border-l-2 border-primary' : ''}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleImageSelect(image.id, e as any)

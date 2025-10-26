@@ -11,6 +11,7 @@ import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera
 import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import * as THREE from 'three'
 import { CustomControls } from './custom-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
@@ -32,8 +33,16 @@ export const FLOOR_SPACING = 10 // 10m vertical spacing between floors
 export default function Editor({ className }: { className?: string }) {
   const { walls, setWalls, images, setImages, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage, groups, selectedFloorId } = useEditorContext()
 
-  const wallsGroupRef = useRef(null)
   const { setWallsGroupRef } = useEditorContext()
+  
+  // Use a callback ref to ensure the store is updated when the group is attached
+  const allFloorsGroupCallback = (node: THREE.Group | null) => {
+    if (node) {
+      setWallsGroupRef(node)
+    } else {
+      console.log('All floors group ref detached')
+    }
+  }
 
   // State for two-click wall placement
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
@@ -65,10 +74,6 @@ export default function Editor({ className }: { className?: string }) {
     setSelectedWallIds(new Set([]))
     setSelectedImageIds(new Set([]))
   }
-
-  useEffect(() => {
-    setWallsGroupRef(wallsGroupRef.current)
-  }, [setWallsGroupRef])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -798,100 +803,101 @@ export default function Editor({ className }: { className?: string }) {
         ))}
 
         {/* Loop through all floors and render grid + walls for each */}
-        {groups
-          .filter(g => g.type === 'floor')
-          .map((floor) => {
-            const floorLevel = floor.level || 0
-            const yPosition = FLOOR_SPACING * floorLevel
-            const isActiveFloor = selectedFloorId === floor.id
+        <group ref={allFloorsGroupCallback}>
+          {groups
+            .filter(g => g.type === 'floor')
+            .map((floor) => {
+              const floorLevel = floor.level || 0
+              const yPosition = FLOOR_SPACING * floorLevel
+              const isActiveFloor = selectedFloorId === floor.id
 
-            return (
-              <group key={floor.id} position-y={yPosition}>
-                {/* Drei Grid for visual reference only - not interactive */}
-                {showGrid && (
-                  <group raycast={() => null}>
-                    {isActiveFloor ? (
-                      <Grid
-                        position={[0, 0, 0]}
-                        args={[GRID_SIZE, GRID_SIZE]}
-                        cellSize={tileSize}
-                        cellThickness={0.5}
-                        cellColor="#aaaabf"
-                        sectionSize={tileSize * 2}
-                        sectionThickness={1}
-                        sectionColor="#9d4b4b"
-                        fadeDistance={GRID_SIZE * 2}
-                        fadeStrength={1}
-                        infiniteGrid={false}
-                        side={2}
-                      />
-                    ) : (
-                      <Grid
-                        position={[0, 0, 0]}
-                        args={[GRID_SIZE, GRID_SIZE]}
-                        cellSize={tileSize}
-                        cellThickness={0.5}
-                        cellColor="#4a4a5a"
-                        sectionSize={tileSize * 2}
-                        sectionThickness={1}
-                        sectionColor="#5a4a4a"
-                        fadeDistance={GRID_SIZE * 2}
-                        fadeStrength={1}
-                        infiniteGrid={false}
-                        side={2}
-                      />
-                    )}
-                  </group>
-                )}
-
-                <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
-                  {/* Only show interactive grid tiles for the active floor */}
-                  {isActiveFloor && (
-                    <GridTiles
-                      intersections={intersections}
-                      tileSize={tileSize}
-                      walls={walls}
-                      onIntersectionClick={handleIntersectionClick}
-                      onIntersectionDoubleClick={handleIntersectionDoubleClick}
-                      onIntersectionHover={handleIntersectionHover}
-                      wallStartPoint={wallStartPoint}
-                      wallPreviewEnd={wallPreviewEnd}
-                      roomStartPoint={roomStartPoint}
-                      roomPreviewEnd={roomPreviewEnd}
-                      customRoomPoints={customRoomPoints}
-                      customRoomPreviewEnd={customRoomPreviewEnd}
-                      deleteStartPoint={deleteStartPoint}
-                      deletePreviewEnd={deletePreviewEnd}
-                      opacity={gridOpacity}
-                      disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
-                      wallHeight={wallHeight}
-                      controlMode={controlMode}
-                    />
+              return (
+                <group key={floor.id} position-y={yPosition}>
+                  {/* Drei Grid for visual reference only - not interactive */}
+                  {showGrid && (
+                    <group raycast={() => null}>
+                      {isActiveFloor ? (
+                        <Grid
+                          position={[0, 0, 0]}
+                          args={[GRID_SIZE, GRID_SIZE]}
+                          cellSize={tileSize}
+                          cellThickness={0.5}
+                          cellColor="#aaaabf"
+                          sectionSize={tileSize * 2}
+                          sectionThickness={1}
+                          sectionColor="#9d4b4b"
+                          fadeDistance={GRID_SIZE * 2}
+                          fadeStrength={1}
+                          infiniteGrid={false}
+                          side={2}
+                        />
+                      ) : (
+                        <Grid
+                          position={[0, 0, 0]}
+                          args={[GRID_SIZE, GRID_SIZE]}
+                          cellSize={tileSize}
+                          cellThickness={0.5}
+                          cellColor="#4a4a5a"
+                          sectionSize={tileSize * 2}
+                          sectionThickness={1}
+                          sectionColor="#5a4a4a"
+                          fadeDistance={GRID_SIZE * 2}
+                          fadeStrength={1}
+                          infiniteGrid={false}
+                          side={2}
+                        />
+                      )}
+                    </group>
                   )}
 
-                  {/* Walls component fetches its own data based on floorId */}
-                  <Walls
-                    key={`${floor.id}-${isActiveFloor}`}
-                    floorId={floor.id}
-                    isActive={isActiveFloor}
-                    tileSize={tileSize}
-                    wallHeight={wallHeight}
-                    hoveredWallIndex={hoveredWallIndex}
-                    selectedWallIds={selectedWallIds}
-                    setSelectedWallIds={setSelectedWallIds}
-                    onWallHover={setHoveredWallIndex}
-                    onWallRightClick={handleWallRightClick}
-                    isCameraEnabled={isCameraEnabled}
-                    ref={isActiveFloor ? wallsGroupRef : null}
-                    controlMode={controlMode}
-                    movingCamera={movingCamera}
-                    onDeleteWalls={handleDeleteSelectedWalls}
-                  />
+                  <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
+                    {/* Only show interactive grid tiles for the active floor */}
+                    {isActiveFloor && (
+                      <GridTiles
+                        intersections={intersections}
+                        tileSize={tileSize}
+                        walls={walls}
+                        onIntersectionClick={handleIntersectionClick}
+                        onIntersectionDoubleClick={handleIntersectionDoubleClick}
+                        onIntersectionHover={handleIntersectionHover}
+                        wallStartPoint={wallStartPoint}
+                        wallPreviewEnd={wallPreviewEnd}
+                        roomStartPoint={roomStartPoint}
+                        roomPreviewEnd={roomPreviewEnd}
+                        customRoomPoints={customRoomPoints}
+                        customRoomPreviewEnd={customRoomPreviewEnd}
+                        deleteStartPoint={deleteStartPoint}
+                        deletePreviewEnd={deletePreviewEnd}
+                        opacity={gridOpacity}
+                        disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
+                        wallHeight={wallHeight}
+                        controlMode={controlMode}
+                      />
+                    )}
+
+                    {/* Walls component fetches its own data based on floorId */}
+                    <Walls
+                      key={`${floor.id}-${isActiveFloor}`}
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
+                      hoveredWallIndex={hoveredWallIndex}
+                      selectedWallIds={selectedWallIds}
+                      setSelectedWallIds={setSelectedWallIds}
+                      onWallHover={setHoveredWallIndex}
+                      onWallRightClick={handleWallRightClick}
+                      isCameraEnabled={isCameraEnabled}
+                      controlMode={controlMode}
+                      movingCamera={movingCamera}
+                      onDeleteWalls={handleDeleteSelectedWalls}
+                    />
+                  </group>
                 </group>
-              </group>
-            )
-          })
-        }
+              )
+            })
+          }
+        </group>
 
         <CustomControls />
         <Environment preset="city" />
@@ -903,7 +909,7 @@ export default function Editor({ className }: { className?: string }) {
 
       {contextMenuState.isOpen && contextMenuState.type === 'wall' && selectedWallIds.size > 0 && (
         <div
-          className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-lg p-1 min-w-[8rem]"
+          className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-lg p-1 min-w-32"
           style={{
             top: `${contextMenuState.position.y}px`,
             left: `${contextMenuState.position.x}px`,

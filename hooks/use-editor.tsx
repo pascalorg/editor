@@ -108,6 +108,7 @@ type StoreState = {
   loadLayout: (json: LayoutJSON) => void
   handleSaveLayout: () => void
   handleLoadLayout: (file: File) => void
+  handleResetToDefault: () => void
   undo: () => void
   redo: () => void
 }
@@ -317,13 +318,20 @@ const useStore = create<StoreState>()(
       },
       handleExport: () => {
         const ref = get().wallsGroupRef
-        if (!ref) return;
+        console.log('Export called, ref:', ref)
+        
+        if (!ref) {
+          console.error('No walls group ref available for export')
+          return;
+        }
 
+        console.log('Starting export...')
         const exporter = new GLTFExporter();
 
         exporter.parse(
           ref,
           (result: ArrayBuffer | { [key: string]: unknown }) => {
+            console.log('Export successful, creating download...')
             const blob = new Blob([result as ArrayBuffer], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -442,6 +450,25 @@ const useStore = create<StoreState>()(
           }
           reader.readAsText(file)
         }
+      },
+      handleResetToDefault: () => {
+        set({
+          images: [],
+          components: [],
+          groups: [{
+            id: 'level_0',
+            name: 'base level',
+            type: 'floor',
+            color: '#ffffff',
+            level: 0,
+          }],
+          currentLevel: 0,
+          selectedFloorId: 'level_0',
+          selectedWallIds: [],
+          selectedImageIds: [],
+          undoStack: [],
+          redoStack: [],
+        })
       },
       undo: () => set(state => {
         if (state.undoStack.length === 0) return state
@@ -562,6 +589,7 @@ export const useEditorContext = () => {
     loadLayout: store.loadLayout,
     handleSaveLayout: store.handleSaveLayout,
     handleLoadLayout: store.handleLoadLayout,
+    handleResetToDefault: store.handleResetToDefault,
     undo: store.undo,
     redo: store.redo,
     handleClear: store.handleClear,
