@@ -511,7 +511,7 @@ export const GridTiles = memo(
             <mesh position={[deleteStartPoint[0] * tileSize, 0.01, deleteStartPoint[1] * tileSize]}>
               <sphereGeometry args={[0.1, 16, 16]} />
               <meshStandardMaterial color="#ff4444" depthTest={false} emissive="#aa2222" />
-            </mesh> 
+            </mesh>
 
             {/* Preview line and transparent red plane when selecting deletion area */}
             {deletePreviewEnd && (

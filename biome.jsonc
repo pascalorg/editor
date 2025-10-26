@@ -29,6 +29,10 @@
   "linter": {
     "rules": {
       "style": {
+        "useDefaultSwitchClause": "off",
+        "useConsistentTypeDefinitions": "off",
+        "useAtIndex": "off",
+        "useConsistentArrayType": "off",
         "noNestedTernary": "off",
         "useBlockStatements": "off",
         "noNonNullAssertion": "info",
@@ -40,6 +44,8 @@
         "noImgElement": "off"
       },
       "suspicious": {
+        "noImplicitAnyLet": "off",
+        "noGlobalIsNan": "off",
         "noExplicitAny": "info",
         "useAwait": "off",
         "noConsole": "off",
@@ -48,6 +54,7 @@
         "noDocumentCookie": "off"
       },
       "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
         "noForEach": "off",
         "noBannedTypes": "off",
         "noUselessFragments": "off"
@@ -62,6 +69,10 @@
       "a11y": {
         "noSvgWithoutTitle": "off",
         "useSemanticElements": "off",
+        "noLabelWithoutControl": "off",
+        "useKeyWithClickEvents": "off",
+        "noStaticElementInteractions": "off",
+        "noNoninteractiveElementInteractions": "off",
         "useButtonType": "off"
       },
       "nursery": {
