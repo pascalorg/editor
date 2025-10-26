@@ -866,6 +866,7 @@ export default function Editor({ className }: { className?: string }) {
             id={image.id}
             isSelected={selectedImageIds.has(image.id)}
             key={image.id}
+            level={image.level}
             movingCamera={movingCamera}
             onManipulationEnd={() => setIsManipulatingImage(false)}
             onManipulationStart={() => setIsManipulatingImage(true)}

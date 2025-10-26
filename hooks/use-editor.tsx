@@ -21,6 +21,7 @@ export interface ReferenceImage {
   position: [number, number]
   rotation: number
   scale: number
+  level: number // Floor level this image belongs to
 }
 
 export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
@@ -101,7 +102,7 @@ type StoreState = {
   getSelectedImageIdsSet: () => Set<string>
   wallSegments: () => WallSegment[]
   handleExport: () => void
-  handleUpload: (file: File) => void
+  handleUpload: (file: File, level: number) => void
   handleDeleteSelectedWalls: () => void
   handleDeleteSelectedImages: () => void
   serializeLayout: () => LayoutJSON
@@ -371,7 +372,7 @@ const useStore = create<StoreState>()(
           { binary: true },
         )
       },
-      handleUpload: (file: File) => {
+      handleUpload: (file: File, level: number) => {
         if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
           const reader = new FileReader()
           reader.onload = (event) => {
@@ -383,6 +384,7 @@ const useStore = create<StoreState>()(
               position: [0, 0],
               rotation: 0,
               scale: 1,
+              level,
             }
             set((state) => ({ images: [...state.images, newImage] }))
           }
@@ -535,13 +537,14 @@ const useStore = create<StoreState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Migrate: Add missing position, rotation, scale to existing images
+          // Migrate: Add missing position, rotation, scale, level to existing images
           if (state.images && state.images.length > 0) {
             state.images = state.images.map((img: any) => ({
               ...img,
               position: img.position ?? [0, 0],
               rotation: img.rotation ?? 0,
               scale: img.scale ?? 1,
+              level: img.level ?? 0, // Default to base level
             }))
           }
 

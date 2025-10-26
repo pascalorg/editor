@@ -1,6 +1,6 @@
 'use client'
 
-import { Building, Image, Layers, Plus, Square, Trash2, Upload } from 'lucide-react'
+import { Building, Image, Layers, Plus, Square, Trash2 } from 'lucide-react'
 import {
   TreeExpander,
   TreeIcon,
@@ -189,8 +189,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                 .map((level, levelIndex, levels) => {
                   const isSelected = selectedFloorId === level.id
                   const levelWalls = isSelected ? wallSegments : []
+                  const levelImages = images.filter((img) => img.level === (level.level || 0))
                   const isLastLevel = levelIndex === levels.length - 1
-                  const hasContent = isSelected && (levelWalls.length > 0 || images.length > 0)
+                  const hasContent = isSelected && (levelWalls.length > 0 || levelImages.length > 0)
 
                   return (
                     <TreeNode isLast={isLastLevel} key={level.id} nodeId={level.id}>
@@ -252,11 +253,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 nodeId={segment.id}
                               >
                                 <TreeNodeTrigger
-                                  className={
-                                    selectedWallIds.has(segment.id)
-                                      ? 'border-primary border-l-2 bg-primary/30'
-                                      : ''
-                                  }
+                                  className={cn(selectedWallIds.has(segment.id) && 'bg-accent')}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleWallSelect(segment.id, e as any)
@@ -274,50 +271,50 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                         {/* Guides Section */}
                         <TreeNode isLast level={1} nodeId={`${level.id}-guides`}>
                           <TreeNodeTrigger>
-                            <TreeExpander hasChildren={images.length > 0} />
+                            <TreeExpander hasChildren={levelImages.length > 0} />
                             <TreeIcon
-                              hasChildren={images.length > 0}
+                              hasChildren={levelImages.length > 0}
                               icon={<Image className="h-4 w-4 text-purple-500" />}
                             />
-                            <TreeLabel>Guides ({images.length})</TreeLabel>
-                            {images.length > 0 && selectedImageIds.size > 0 && (
+                            <TreeLabel>Guides ({levelImages.length})</TreeLabel>
+                            <div className="flex gap-1">
                               <Button
                                 className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleDeleteSelectedImages()
+                                  const input = document.createElement('input')
+                                  input.type = 'file'
+                                  input.accept = 'image/png,image/jpeg'
+                                  input.onchange = (event) => {
+                                    const file = (event.target as HTMLInputElement).files?.[0]
+                                    if (file) handleUpload(file, level.level || 0)
+                                  }
+                                  input.click()
                                 }}
                                 size="sm"
                                 variant="ghost"
                               >
-                                <Trash2 className="h-3 w-3" />
+                                <Plus className="h-3 w-3" />
                               </Button>
-                            )}
+                              {levelImages.length > 0 && selectedImageIds.size > 0 && (
+                                <Button
+                                  className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteSelectedImages()
+                                  }}
+                                  size="sm"
+                                  variant="ghost"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </TreeNodeTrigger>
 
-                          <TreeNodeContent hasChildren={images.length > 0}>
-                            {/* Reference Image Upload Node */}
-                            <TreeNode level={2} nodeId={`${level.id}-upload`}>
-                              <TreeNodeTrigger>
-                                <TreeExpander />
-                                <TreeIcon icon={<Upload className="h-4 w-4 text-orange-500" />} />
-                                <div className="flex-1">
-                                  <Input
-                                    accept="image/png,image/jpeg"
-                                    className="h-6 w-full cursor-pointer text-xs"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0]
-                                      if (file) handleUpload(file)
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    type="file"
-                                  />
-                                </div>
-                              </TreeNodeTrigger>
-                            </TreeNode>
-
+                          <TreeNodeContent hasChildren={levelImages.length > 0}>
                             {/* Reference Images */}
-                            {images.map((image, index, imgs) => (
+                            {levelImages.map((image, index, imgs) => (
                               <TreeNode
                                 isLast={index === imgs.length - 1}
                                 key={image.id}
@@ -325,11 +322,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 nodeId={image.id}
                               >
                                 <TreeNodeTrigger
-                                  className={
-                                    selectedImageIds.has(image.id)
-                                      ? 'border-primary border-l-2 bg-primary/30'
-                                      : ''
-                                  }
+                                  className={cn(selectedImageIds.has(image.id) && 'bg-accent')}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleImageSelect(image.id, e as any)
@@ -337,12 +330,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 >
                                   <TreeExpander />
                                   <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
-                                  <div className="flex-1">
-                                    <TreeLabel>Reference {index + 1}</TreeLabel>
-                                    <div className="truncate text-muted-foreground text-xs">
-                                      {image.name}
-                                    </div>
-                                  </div>
+                                  <TreeLabel>Reference {index + 1}</TreeLabel>
                                 </TreeNodeTrigger>
                               </TreeNode>
                             ))}

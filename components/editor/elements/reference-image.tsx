@@ -4,6 +4,7 @@ import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { FLOOR_SPACING } from '@/components/editor'
 import type { ControlMode } from '@/hooks/use-editor'
 
 const GRID_SIZE = 30 // 30m x 30m
@@ -37,6 +38,7 @@ type ReferenceImageProps = {
   scale: number
   position: [number, number]
   rotation: number // degrees
+  level: number // Floor level (Y position)
   isSelected: boolean
   controlMode: ControlMode
   movingCamera: boolean
@@ -56,6 +58,7 @@ export const ReferenceImage = ({
   scale,
   position,
   rotation,
+  level,
   isSelected,
   controlMode,
   movingCamera,
@@ -372,7 +375,7 @@ export const ReferenceImage = ({
 
   return (
     <group
-      position={[position[0], 0.001, position[1]]}
+      position={[position[0], level * FLOOR_SPACING + 0.001, position[1]]}
       ref={groupRef}
       rotation={[0, (rotation * Math.PI) / 180, 0]}
     >
