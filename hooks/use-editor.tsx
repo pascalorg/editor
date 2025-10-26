@@ -70,6 +70,7 @@ type StoreState = {
   groups: ComponentGroup[]
   currentLevel: number
   selectedFloorId: string | null
+  isOverviewMode: boolean // True when viewing all levels, false when editing a specific level
   selectedWallIds: string[]
   selectedImageIds: string[]
   isHelpOpen: boolean
@@ -136,21 +137,34 @@ const useStore = create<StoreState>()(
           components: state.components.filter((comp) => comp.group !== groupId),
         })),
       selectedFloorId: 'level_0',
+      isOverviewMode: false, // Start in edit mode with base level selected
       selectFloor: (floorId) => {
         const state = get()
 
         if (!floorId) {
-          set({ selectedFloorId: null, currentLevel: -1 })
+          // Switch to overview mode - viewing all levels without editing capability
+          set({
+            selectedFloorId: null,
+            currentLevel: -1,
+            isOverviewMode: true,
+            controlMode: 'select',
+            activeTool: null,
+          })
           return
         }
 
+        // Switch to edit mode - focusing on a specific level for editing
         // Find or create the component for this floor
         let component = state.components.find((c) => c.type === 'wall' && c.group === floorId)
 
         const group = state.groups.find((g) => g.id === floorId)
 
         if (component) {
-          set({ selectedFloorId: floorId, currentLevel: group?.level ?? 0 })
+          set({
+            selectedFloorId: floorId,
+            currentLevel: group?.level ?? 0,
+            isOverviewMode: false,
+          })
         } else {
           // Create a new wall component for this floor
           component = {
@@ -166,6 +180,7 @@ const useStore = create<StoreState>()(
             components: [...state.components, component],
             currentLevel: group?.level ?? 0,
             selectedFloorId: floorId,
+            isOverviewMode: false,
           })
         }
       },
@@ -437,7 +452,14 @@ const useStore = create<StoreState>()(
         }
       },
       loadLayout: (json: LayoutJSON) => {
-        set({ selectedWallIds: [], selectedImageIds: [], selectedFloorId: null })
+        set({
+          selectedWallIds: [],
+          selectedImageIds: [],
+          selectedFloorId: null,
+          isOverviewMode: true, // Start in overview mode when loading a layout
+          controlMode: 'select',
+          activeTool: null,
+        })
 
         // Load groups (floors)
         if (json.groups && Array.isArray(json.groups)) {
@@ -493,6 +515,7 @@ const useStore = create<StoreState>()(
           ],
           currentLevel: 0,
           selectedFloorId: 'level_0',
+          isOverviewMode: false,
           selectedWallIds: [],
           selectedImageIds: [],
           undoStack: [],
@@ -568,6 +591,14 @@ const useStore = create<StoreState>()(
           if (!state.selectedFloorId) {
             state.selectedFloorId = 'level_0'
             state.currentLevel = 0
+            state.isOverviewMode = false
+          }
+
+          // Ensure isOverviewMode is set correctly based on selectedFloorId
+          if (state.selectedFloorId === null) {
+            state.isOverviewMode = true
+          } else if (state.isOverviewMode === undefined) {
+            state.isOverviewMode = false
           }
         }
       },
@@ -629,6 +660,7 @@ export const useEditorContext = () => {
     handleClear: store.handleClear,
     groups: store.groups,
     selectedFloorId: store.selectedFloorId,
+    isOverviewMode: store.isOverviewMode,
     selectFloor: store.selectFloor,
     addGroup: store.addGroup,
     deleteGroup: store.deleteGroup,

@@ -175,6 +175,7 @@ function calculateJunctionIntersections(junction: Junction) {
 type WallsProps = {
   floorId: string
   isActive: boolean
+  isOverviewMode?: boolean
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
@@ -193,6 +194,7 @@ export const Walls = forwardRef(
     {
       floorId,
       isActive,
+      isOverviewMode = false,
       tileSize,
       wallHeight,
       hoveredWallIndex,
@@ -319,7 +321,9 @@ export const Walls = forwardRef(
             emissive = '#331111'
           }
 
-          const opacity = isActive ? 1 : 0.2
+          // In overview mode, show all walls at full opacity
+          // Otherwise, only active floor walls are at full opacity
+          const opacity = isOverviewMode || isActive ? 1 : 0.2
           const transparent = opacity < 1
 
           return (

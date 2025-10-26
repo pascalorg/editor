@@ -59,6 +59,7 @@ export default function Editor({ className }: { className?: string }) {
     setIsManipulatingImage,
     groups,
     selectedFloorId,
+    isOverviewMode,
   } = useEditorContext()
 
   const { setWallsGroupRef } = useEditorContext()
@@ -860,30 +861,32 @@ export default function Editor({ className }: { className?: string }) {
           />
         </group>
 
-        {images.map((image) => (
-          <ReferenceImage
-            controlMode={controlMode}
-            id={image.id}
-            isSelected={selectedImageIds.has(image.id)}
-            key={image.id}
-            level={image.level}
-            movingCamera={movingCamera}
-            onManipulationEnd={() => setIsManipulatingImage(false)}
-            onManipulationStart={() => setIsManipulatingImage(true)}
-            onSelect={() => setSelectedImageIds(new Set([image.id]))}
-            onUpdate={(updates, pushToUndo = true) =>
-              setImages(
-                images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
-                pushToUndo,
-              )
-            }
-            opacity={imageOpacity}
-            position={image.position}
-            rotation={image.rotation}
-            scale={image.scale}
-            url={image.url}
-          />
-        ))}
+        {/* Hide guides (reference images) in overview mode */}
+        {!isOverviewMode &&
+          images.map((image) => (
+            <ReferenceImage
+              controlMode={controlMode}
+              id={image.id}
+              isSelected={selectedImageIds.has(image.id)}
+              key={image.id}
+              level={image.level}
+              movingCamera={movingCamera}
+              onManipulationEnd={() => setIsManipulatingImage(false)}
+              onManipulationStart={() => setIsManipulatingImage(true)}
+              onSelect={() => setSelectedImageIds(new Set([image.id]))}
+              onUpdate={(updates, pushToUndo = true) =>
+                setImages(
+                  images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
+                  pushToUndo,
+                )
+              }
+              opacity={imageOpacity}
+              position={image.position}
+              rotation={image.rotation}
+              scale={image.scale}
+              url={image.url}
+            />
+          ))}
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
@@ -969,6 +972,7 @@ export default function Editor({ className }: { className?: string }) {
                       hoveredWallIndex={hoveredWallIndex}
                       isActive={isActiveFloor}
                       isCameraEnabled={isCameraEnabled}
+                      isOverviewMode={isOverviewMode}
                       key={`${floor.id}-${isActiveFloor}`}
                       movingCamera={movingCamera}
                       onDeleteWalls={handleDeleteSelectedWalls}
