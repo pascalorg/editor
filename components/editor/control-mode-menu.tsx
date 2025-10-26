@@ -1,29 +1,24 @@
 'use client'
 
+import { Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { useEditorContext, type ControlMode } from '@/hooks/use-editor'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { type ControlMode, useEditorContext } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { Hammer, MousePointer2, Trash2, Image } from 'lucide-react'
 
-export function ControlModeMenu({ 
+export function ControlModeMenu({
   className,
-  onModeChange
-}: { 
+  onModeChange,
+}: {
   className?: string
   onModeChange?: () => void
 }) {
   const { controlMode, setControlMode, activeTool, setActiveTool } = useEditorContext()
-  
+
   const handleModeClick = (mode: ControlMode) => {
     // Clear any in-progress placement states when switching modes
     onModeChange?.()
-    
+
     // If switching to building mode without an active tool, default to 'wall'
     if (mode === 'building' && !activeTool) {
       setActiveTool('wall')
@@ -32,38 +27,73 @@ export function ControlModeMenu({
     }
   }
 
-  const modes: Array<{ id: ControlMode; icon: typeof MousePointer2; label: string; shortcut: string; color: string }> = [
-    { id: 'select', icon: MousePointer2, label: 'Select', shortcut: 'V', color: 'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-600/30 hover:text-blue-400' },
-    { id: 'delete', icon: Trash2, label: 'Delete', shortcut: 'D', color: 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-600/30 hover:text-red-400' },
-    { id: 'building', icon: Hammer, label: 'Building', shortcut: 'B', color: 'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:text-green-400' },
-    { id: 'guide', icon: Image, label: 'Guide', shortcut: 'G', color: 'bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-600/30 hover:text-purple-400' },
+  const modes: Array<{
+    id: ControlMode
+    icon: typeof MousePointer2
+    label: string
+    shortcut: string
+    color: string
+  }> = [
+    {
+      id: 'select',
+      icon: MousePointer2,
+      label: 'Select',
+      shortcut: 'V',
+      color:
+        'bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-600/30 hover:text-blue-400',
+    },
+    {
+      id: 'delete',
+      icon: Trash2,
+      label: 'Delete',
+      shortcut: 'D',
+      color: 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-600/30 hover:text-red-400',
+    },
+    {
+      id: 'building',
+      icon: Hammer,
+      label: 'Building',
+      shortcut: 'B',
+      color:
+        'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:text-green-400',
+    },
+    {
+      id: 'guide',
+      icon: Image,
+      label: 'Guide',
+      shortcut: 'G',
+      color:
+        'bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-600/30 hover:text-purple-400',
+    },
   ]
 
   return (
     <TooltipProvider>
-      <div className={cn(
-        'fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 border rounded-lg p-1 ', 
-        'bg-[#1b1c1f] backdrop-blur-sm border-gray-800 shadow-lg',
-        'text-white',
-        'hover:opacity-100 transition-opacity opacity-70',
-        className,
-        )}> 
+      <div
+        className={cn(
+          '-translate-x-1/2 fixed top-4 left-1/2 z-50 flex items-center gap-1 rounded-lg border p-1',
+          'border-gray-800 bg-[#1b1c1f] shadow-lg backdrop-blur-sm',
+          'text-white',
+          'opacity-70 transition-opacity hover:opacity-100',
+          className,
+        )}
+      >
         {modes.map((mode) => {
           const Icon = mode.icon
           const isActive = controlMode === mode.id
-          
+
           return (
             <Tooltip key={mode.id}>
               <TooltipTrigger asChild>
                 <Button
-                  variant={isActive ? 'default' : 'ghost'}
-                  size="icon"
-                  onClick={() => handleModeClick(mode.id)}
                   className={cn(
                     'h-8 w-8 transition-all',
-                    'text-white hover:text-white hover:bg-gray-800',
-                    isActive && mode.color
+                    'text-white hover:bg-gray-800 hover:text-white',
+                    isActive && mode.color,
                   )}
+                  onClick={() => handleModeClick(mode.id)}
+                  size="icon"
+                  variant={isActive ? 'default' : 'ghost'}
                 >
                   <Icon className="h-4 w-4" />
                 </Button>
@@ -85,4 +115,3 @@ export function ControlModeMenu({
     </TooltipProvider>
   )
 }
-

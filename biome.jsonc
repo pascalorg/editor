@@ -1,0 +1,106 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite", "ultracite/core", "ultracite/next"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double"
+    }
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "useDefaultSwitchClause": "off",
+        "useConsistentTypeDefinitions": "off",
+        "useAtIndex": "off",
+        "useConsistentArrayType": "off",
+        "noNestedTernary": "off",
+        "useBlockStatements": "off",
+        "noNonNullAssertion": "info",
+        "useConst": "off",
+        "noMagicNumbers": "off"
+      },
+      "performance": {
+        "noNamespaceImport": "off",
+        "noImgElement": "off"
+      },
+      "suspicious": {
+        "noImplicitAnyLet": "off",
+        "noGlobalIsNan": "off",
+        "noExplicitAny": "info",
+        "useAwait": "off",
+        "noConsole": "off",
+        "noArrayIndexKey": "off",
+        "noEvolvingTypes": "off",
+        "noDocumentCookie": "off"
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
+        "noForEach": "off",
+        "noBannedTypes": "off",
+        "noUselessFragments": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "off",
+        "noUnusedFunctionParameters": "off",
+        "noUnusedImports": "off",
+        "useExhaustiveDependencies": "info",
+        "noPrecisionLoss": "off"
+      },
+      "a11y": {
+        "noSvgWithoutTitle": "off",
+        "useSemanticElements": "off",
+        "noLabelWithoutControl": "off",
+        "useKeyWithClickEvents": "off",
+        "noStaticElementInteractions": "off",
+        "noNoninteractiveElementInteractions": "off",
+        "useButtonType": "off"
+      },
+      "nursery": {
+        "noShadow": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "info"
+      }
+    }
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "apps/**/*.ts",
+      "apps/**/*.tsx",
+      "apps/**/*.js",
+      "apps/**/*.jsx",
+      "apps/**/*.json",
+      "apps/**/*.css",
+      "packages/**/*.ts",
+      "packages/**/*.tsx",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/dist",
+      "!**/build",
+      "!**/components/ui",
+      "!**/public",
+      "!**/.turbo"
+    ]
+  }
+}
