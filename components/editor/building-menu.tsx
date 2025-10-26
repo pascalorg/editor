@@ -1,49 +1,51 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { useEditorContext, type Tool } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
-import { BoundingBoxIcon, LineSegmentsIcon, WallIcon, type Icon } from '@phosphor-icons/react'
+import { BoundingBoxIcon, type Icon, LineSegmentsIcon, WallIcon } from '@phosphor-icons/react'
 import { Blinds, Circle, DoorOpen } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { type Tool, useEditorContext } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 export function BuildingMenu() {
   const { activeTool, setActiveTool, controlMode } = useEditorContext()
 
   const tools: Array<{ id: Tool; icon: Icon; label: string; enabled: boolean }> = [
-    { id: 'wall', icon: WallIcon, label: 'Wall' , enabled: true},
-    { id: 'room', icon: BoundingBoxIcon, label: 'Room' , enabled: true},
-    { id: 'custom-room', icon: LineSegmentsIcon, label: 'Custom Room' , enabled: true},
-    { id: 'door', icon: DoorOpen, label: 'Door' , enabled: false},
-    { id: 'window', icon: Blinds, label: 'Window' , enabled: false},
-    { id: 'dummy1', icon: Circle, label: 'Tool 1' , enabled: false},
-    { id: 'dummy2', icon: Circle, label: 'Tool 2' , enabled: false},
+    { id: 'wall', icon: WallIcon, label: 'Wall', enabled: true },
+    { id: 'room', icon: BoundingBoxIcon, label: 'Room', enabled: true },
+    { id: 'custom-room', icon: LineSegmentsIcon, label: 'Custom Room', enabled: true },
+    { id: 'door', icon: DoorOpen, label: 'Door', enabled: false },
+    { id: 'window', icon: Blinds, label: 'Window', enabled: false },
+    { id: 'dummy1', icon: Circle, label: 'Tool 1', enabled: false },
+    { id: 'dummy2', icon: Circle, label: 'Tool 2', enabled: false },
   ]
 
   return (
     <TooltipProvider>
-      <div className={cn(
-        "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2", 
-        'bg-background/95 backdrop-blur-sm border rounded-lg  shadow-lg',
-        'hover:opacity-100 transition-opacity opacity-70',
-        'p-2',
-        controlMode !== 'building' && 'cursor-not-allowed')}>
+      <div
+        className={cn(
+          '-translate-x-1/2 fixed bottom-8 left-1/2 z-50 flex items-center gap-2',
+          'rounded-lg border bg-background/95 shadow-lg backdrop-blur-sm',
+          'opacity-70 transition-opacity hover:opacity-100',
+          'p-2',
+          controlMode !== 'building' && 'cursor-not-allowed',
+        )}
+      >
         {tools.map((tool) => {
           const Icon = tool.icon
           // Only show as active if the tool is selected AND we're in building mode
           const isActive = activeTool === tool.id && controlMode === 'building'
-          
+
           return (
             <Tooltip key={tool.id}>
               <TooltipTrigger asChild>
                 <Button
+                  className={cn(
+                    'size-10 transition-all',
+                    tool.enabled ? 'font-extrabold text-primary' : 'text-gray-500',
+                    isActive && tool.enabled && 'bg-primary text-primary-foreground',
+                    controlMode !== 'building' && activeTool !== tool.id && 'opacity-50',
+                  )}
                   disabled={!tool.enabled}
-                  variant={isActive && tool.enabled ? 'default' : 'ghost'}
-                  size="icon"
                   onClick={() => {
                     // If clicking the currently active tool in building mode, deselect it
                     if (activeTool === tool.id && controlMode === 'building') {
@@ -56,12 +58,8 @@ export function BuildingMenu() {
                       return
                     }
                   }}
-                  className={cn(
-                    'size-10 transition-all',
-                    tool.enabled ? 'font-extrabold text-primary' : 'text-gray-500',
-                    isActive && tool.enabled && 'bg-primary text-primary-foreground',
-                    controlMode !== 'building' && activeTool !== tool.id && 'opacity-50'
-                  )}
+                  size="icon"
+                  variant={isActive && tool.enabled ? 'default' : 'ghost'}
                 >
                   <Icon className="h-5 w-5" />
                 </Button>
@@ -70,7 +68,9 @@ export function BuildingMenu() {
                 <p>
                   {tool.label}
                   {isActive && ' (Click to deselect)'}
-                  {controlMode !== 'building' && activeTool !== tool.id && ' (Click to switch to building mode)'}
+                  {controlMode !== 'building' &&
+                    activeTool !== tool.id &&
+                    ' (Click to switch to building mode)'}
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -80,4 +80,3 @@ export function BuildingMenu() {
     </TooltipProvider>
   )
 }
-

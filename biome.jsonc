@@ -1,6 +1,6 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
-  "extends": ["ultracite"],
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite", "ultracite/core", "ultracite/next"],
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -32,7 +32,8 @@
         "noNestedTernary": "off",
         "useBlockStatements": "off",
         "noNonNullAssertion": "info",
-        "useConst": "off"
+        "useConst": "off",
+        "noMagicNumbers": "off"
       },
       "performance": {
         "noNamespaceImport": "off",
@@ -49,12 +50,7 @@
       "complexity": {
         "noForEach": "off",
         "noBannedTypes": "off",
-        "noUselessFragments": "off",
-        "noExcessiveCognitiveComplexity": {
-          "options": {
-            "maxAllowedComplexity": 5
-          }
-        }
+        "noUselessFragments": "off"
       },
       "correctness": {
         "noUnusedVariables": "off",
@@ -69,9 +65,7 @@
         "useButtonType": "off"
       },
       "nursery": {
-        "noUnknownAtRule": "off",
-        "noShadow": "off",
-        "noImportantStyles": "off"
+        "noShadow": "off"
       },
       "security": {
         "noDangerouslySetInnerHtml": "info"

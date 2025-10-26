@@ -1,43 +1,43 @@
-"use client"
+'use client'
 
-import { Button } from "@/components/ui/button"
+import JsonView from '@uiw/react-json-view'
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileCode,
+  HelpCircle,
+  Save,
+  Settings,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { LayersMenu } from '@/components/layers-menu'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu'
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { useEditorContext } from "@/hooks/use-editor"
-import JsonView from '@uiw/react-json-view'
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Download, 
-  FileCode, 
-  HelpCircle, 
-  Save,
-  Settings,
-  Trash2,
-  Upload
-} from "lucide-react"
-import { useEffect, useRef, useState } from "react"
-import { LayersMenu } from "@/components/layers-menu"
-import { cn } from "@/lib/utils"
+} from '@/components/ui/sidebar'
+import { useEditorContext } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 
 export function AppSidebar() {
   const {
@@ -80,15 +80,13 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar variant="floating" className={cn(
-      'dark text-white',
-      )}>
+    <Sidebar className={cn('dark text-white')} variant="floating">
       <SidebarHeader className="flex-row items-center justify-between px-2 py-3">
-        <h3 className="text-lg font-semibold">Pascal Editor</h3>
-        
+        <h3 className="font-semibold text-lg">Pascal Editor</h3>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm">
+            <Button size="icon-sm" variant="ghost">
               <Settings className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -116,22 +114,21 @@ export function AppSidebar() {
               <span>Help</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={handleResetToDefault}
+            <DropdownMenuItem
               className="text-destructive focus:text-destructive"
+              onClick={handleResetToDefault}
             >
               <Trash2 className="h-4 w-4" />
               <span>Clear & Start New</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu> 
-      </SidebarHeader> 
+        </DropdownMenu>
+      </SidebarHeader>
 
-      <SidebarContent className={cn(
-      'flex-1 flex flex-col no-scrollbar')}>
+      <SidebarContent className={cn('no-scrollbar flex flex-1 flex-col')}>
         <SidebarMenu className="flex-1">
           {/* Tree-based Hierarchical Layers View */}
-          <SidebarMenuItem className="flex-1 flex flex-col">
+          <SidebarMenuItem className="flex flex-1 flex-col">
             <LayersMenu mounted={mounted} />
           </SidebarMenuItem>
         </SidebarMenu>
@@ -139,74 +136,75 @@ export function AppSidebar() {
 
       {/* Hidden file input for Load Build */}
       <input
-        ref={fileInputRef}
-        type="file"
         accept="application/json"
+        className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (file) handleLoadLayout(file)
         }}
-        className="hidden"
+        ref={fileInputRef}
+        type="file"
       />
 
       {/* Dialogs */}
-      <Dialog open={isJsonInspectorOpen} onOpenChange={setIsJsonInspectorOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+      <Dialog onOpenChange={setIsJsonInspectorOpen} open={isJsonInspectorOpen}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Build Data Inspector</span>
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setJsonCollapsed(false)}
                   className="gap-1"
+                  onClick={() => setJsonCollapsed(false)}
+                  size="sm"
+                  variant="outline"
                 >
                   <ChevronDown className="h-3 w-3" />
                   Expand All
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setJsonCollapsed(true)}
                   className="gap-1"
+                  onClick={() => setJsonCollapsed(true)}
+                  size="sm"
+                  variant="outline"
                 >
                   <ChevronRight className="h-3 w-3" />
                   Collapse All
                 </Button>
               </div>
             </DialogTitle>
-            <DialogDescription>
-              View the raw JSON structure of your current build
-            </DialogDescription>
+            <DialogDescription>View the raw JSON structure of your current build</DialogDescription>
           </DialogHeader>
           <div className="mt-4">
-            <JsonView 
-              value={serializeLayout()} 
+            <JsonView
               collapsed={jsonCollapsed}
               style={{
                 fontSize: '12px',
               }}
+              value={serializeLayout()}
             />
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isHelpOpen} onOpenChange={setIsHelpOpen}>
+      <Dialog onOpenChange={setIsHelpOpen} open={isHelpOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>House Builder Controls</DialogTitle>
             <DialogDescription>
-              - Click on grid intersections to place walls using the building tools.<br/>
-              - Hold spacebar to enable camera controls (orbit, pan, zoom).<br/>
-              - Use control modes (Select/Delete/Building) to switch between different interactions.<br/>
-              - Create multiple levels and organize your 3D objects and guides within each level.<br/>
-              - Click on level names to select them and expand/collapse with the chevron icons.<br/>
-              - Upload PNG/JPEG reference images as guides within each level.<br/>
-              - Save your build as JSON file for later use or database storage.<br/>
-              - Load previously saved builds from JSON files.<br/>
-              - Inspect data to view the raw JSON structure of your current build.<br/>
-              - Export your 3D model as GLB file.
+              - Click on grid intersections to place walls using the building tools.
+              <br />- Hold spacebar to enable camera controls (orbit, pan, zoom).
+              <br />- Use control modes (Select/Delete/Building) to switch between different
+              interactions.
+              <br />- Create multiple levels and organize your 3D objects and guides within each
+              level.
+              <br />- Click on level names to select them and expand/collapse with the chevron
+              icons.
+              <br />- Upload PNG/JPEG reference images as guides within each level.
+              <br />- Save your build as JSON file for later use or database storage.
+              <br />- Load previously saved builds from JSON files.
+              <br />- Inspect data to view the raw JSON structure of your current build.
+              <br />- Export your 3D model as GLB file.
             </DialogDescription>
           </DialogHeader>
         </DialogContent>

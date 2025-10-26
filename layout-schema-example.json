@@ -12,7 +12,7 @@
       "level": 0
     },
     {
-      "id": "level_1", 
+      "id": "level_1",
       "name": "level 1",
       "type": "floor",
       "color": "#e0e0e0",
@@ -21,7 +21,7 @@
     {
       "id": "living-room",
       "name": "Living Room",
-      "type": "room", 
+      "type": "room",
       "color": "#ffeecc"
     }
   ],
@@ -35,14 +35,14 @@
         "segments": [
           {
             "start": [10, 10],
-            "end": [20, 10], 
+            "end": [20, 10],
             "id": "10,10-20,10",
             "isHorizontal": true
           },
           {
             "start": [20, 10],
             "end": [20, 20],
-            "id": "20,10-20,20", 
+            "id": "20,10-20,20",
             "isHorizontal": false
           },
           {
@@ -63,7 +63,7 @@
     },
     {
       "id": "walls-level_1",
-      "type": "wall", 
+      "type": "wall",
       "label": "Walls - level 1",
       "group": "level_1",
       "data": {
@@ -75,7 +75,7 @@
             "isHorizontal": true
           },
           {
-            "start": [25, 15], 
+            "start": [25, 15],
             "end": [25, 25],
             "id": "25,15-25,25",
             "isHorizontal": false
@@ -97,4 +97,3 @@
     }
   ]
 }
-

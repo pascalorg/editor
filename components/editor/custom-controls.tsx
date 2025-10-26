@@ -1,36 +1,35 @@
 'use client'
 
-import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
+import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING } from './index'
 
 export function CustomControls() {
-  const controlMode = useEditor((state) => state.controlMode);
-  const setMovingCamera = useEditor((state) => state.setMovingCamera);
-  const controls = useThree((state) => state.controls);
-  const controlsRef = useRef<CameraControlsImpl>(null);
-  const currentLevel = useEditor(state => state.currentLevel);
-  const selectedFloorId = useEditor(state => state.selectedFloorId);
+  const controlMode = useEditor((state) => state.controlMode)
+  const setMovingCamera = useEditor((state) => state.setMovingCamera)
+  const controls = useThree((state) => state.controls)
+  const controlsRef = useRef<CameraControlsImpl>(null)
+  const currentLevel = useEditor((state) => state.currentLevel)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   useEffect(() => {
-    if (!controls) return;
+    if (!controls) return
 
-    (controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false);
-  }, [controls]);
-
+    ;(controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false)
+  }, [controls])
 
   useEffect(() => {
-    if (!controls) return;
+    if (!controls) return
 
-    if (!selectedFloorId) {
-      (controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true);
+    if (selectedFloorId) {
+      const floorY = FLOOR_SPACING * currentLevel
+      ;(controls as CameraControlsImpl).setLookAt(10, floorY + 10, 10, 0, floorY, 0, true)
     } else {
-      const floorY = FLOOR_SPACING * currentLevel;
-      (controls as CameraControlsImpl).setLookAt(10, floorY + 10, 10, 0, floorY, 0, true);
+      ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
     }
-  }, [currentLevel, controls, selectedFloorId]);
+  }, [currentLevel, controls, selectedFloorId])
 
   // Configure mouse buttons based on control mode
   const mouseButtons = useMemo(() => {
@@ -41,7 +40,7 @@ export function CustomControls() {
         middle: CameraControlsImpl.ACTION.SCREEN_PAN,
         right: CameraControlsImpl.ACTION.ROTATE,
         wheel: CameraControlsImpl.ACTION.DOLLY,
-      };
+      }
     }
 
     // In delete, build, and guide modes, disable left-click for camera
@@ -51,20 +50,20 @@ export function CustomControls() {
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: CameraControlsImpl.ACTION.DOLLY,
-    };
-  }, [controlMode]);
+    }
+  }, [controlMode])
 
   return (
     <CameraControls
-      ref={controlsRef}
-      minPolarAngle={0}
+      makeDefault
+      maxDistance={50}
       maxPolarAngle={Math.PI / 2 - 0.1}
       minDistance={10}
-      maxDistance={50}
+      minPolarAngle={0}
       mouseButtons={mouseButtons}
-      onStart={() => setMovingCamera(true)}
       onEnd={() => setMovingCamera(false)}
-      makeDefault
+      onStart={() => setMovingCamera(true)}
+      ref={controlsRef}
     />
   )
 }

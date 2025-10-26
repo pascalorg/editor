@@ -1,5 +1,18 @@
 'use client'
 
+import {
+  Environment,
+  GizmoHelper,
+  GizmoViewport,
+  Grid,
+  Line,
+  OrthographicCamera,
+  PerspectiveCamera,
+} from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { GridTiles } from '@/components/editor/elements/grid'
@@ -7,11 +20,6 @@ import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Walls } from '@/components/editor/elements/wall'
 import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { Environment, GizmoHelper, GizmoViewport, Grid, Line, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import * as THREE from 'three'
 import { CustomControls } from './custom-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
@@ -31,10 +39,30 @@ const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 export const FLOOR_SPACING = 10 // 10m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
-  const { walls, setWalls, images, setImages, selectedWallIds, setSelectedWallIds, selectedImageIds, setSelectedImageIds, handleDeleteSelectedWalls, undo, redo, activeTool, controlMode, setControlMode, setActiveTool, movingCamera, setIsManipulatingImage, groups, selectedFloorId } = useEditorContext()
+  const {
+    walls,
+    setWalls,
+    images,
+    setImages,
+    selectedWallIds,
+    setSelectedWallIds,
+    selectedImageIds,
+    setSelectedImageIds,
+    handleDeleteSelectedWalls,
+    undo,
+    redo,
+    activeTool,
+    controlMode,
+    setControlMode,
+    setActiveTool,
+    movingCamera,
+    setIsManipulatingImage,
+    groups,
+    selectedFloorId,
+  } = useEditorContext()
 
   const { setWallsGroupRef } = useEditorContext()
-  
+
   // Use a callback ref to ensure the store is updated when the group is attached
   const allFloorsGroupCallback = (node: THREE.Group | null) => {
     if (node) {
@@ -59,7 +87,7 @@ export default function Editor({ className }: { className?: string }) {
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
-  
+
   // Helper function to clear all placement states and selections
   const clearPlacementStates = () => {
     setWallStartPoint(null)
@@ -85,7 +113,11 @@ export default function Editor({ className }: { className?: string }) {
       if (e.key === 'Escape') {
         e.preventDefault()
         // Check if there's an active placement/deletion in progress
-        const hasActivePlacement = wallStartPoint !== null || roomStartPoint !== null || customRoomPoints.length > 0 || deleteStartPoint !== null
+        const hasActivePlacement =
+          wallStartPoint !== null ||
+          roomStartPoint !== null ||
+          customRoomPoints.length > 0 ||
+          deleteStartPoint !== null
 
         // Cancel all placement and delete modes
         clearPlacementStates()
@@ -102,21 +134,20 @@ export default function Editor({ className }: { className?: string }) {
         e.preventDefault()
         clearPlacementStates()
         setControlMode('delete')
-      }  else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         clearPlacementStates()
         // Default to 'wall' tool if no active tool when entering building mode
-        if (!activeTool) {
-          setActiveTool('wall')
-        } else {
+        if (activeTool) {
           setControlMode('building')
+        } else {
+          setActiveTool('wall')
         }
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         clearPlacementStates()
         setControlMode('guide')
-      }
-       else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
           e.preventDefault()
           redo()
@@ -128,7 +159,18 @@ export default function Editor({ className }: { className?: string }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, setControlMode, setActiveTool, activeTool, wallStartPoint, roomStartPoint, customRoomPoints, deleteStartPoint, clearPlacementStates])
+  }, [
+    undo,
+    redo,
+    setControlMode,
+    setActiveTool,
+    activeTool,
+    wallStartPoint,
+    roomStartPoint,
+    customRoomPoints,
+    deleteStartPoint,
+    clearPlacementStates,
+  ])
 
   // Use constants instead of Leva controls
   const wallHeight = WALL_HEIGHT
@@ -161,7 +203,7 @@ export default function Editor({ className }: { className?: string }) {
     }
 
     const handleClickOutside = () => {
-      setContextMenuState(prev => ({ ...prev, isOpen: false }))
+      setContextMenuState((prev) => ({ ...prev, isOpen: false }))
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -175,13 +217,12 @@ export default function Editor({ className }: { className?: string }) {
     }
   }, [])
 
-
   const intersections = GRID_INTERSECTIONS
 
   // Helper function to check if two line segments overlap (for collinear segments only)
   const getOverlappingSegment = (
     seg1: [[number, number], [number, number]],
-    seg2: [[number, number], [number, number]]
+    seg2: [[number, number], [number, number]],
   ): { overlap: boolean; remaining: Array<[[number, number], [number, number]]> } => {
     const [[x1, y1], [x2, y2]] = seg1
     const [[x3, y3], [x4, y4]] = seg2
@@ -198,8 +239,8 @@ export default function Editor({ className }: { className?: string }) {
     const dx2 = x4 - x3
     const dy2 = y4 - y3
 
-    const isDiagonal1 = !isHorizontal1 && !isVertical1 && Math.abs(dx1) === Math.abs(dy1)
-    const isDiagonal2 = !isHorizontal2 && !isVertical2 && Math.abs(dx2) === Math.abs(dy2)
+    const isDiagonal1 = !(isHorizontal1 || isVertical1) && Math.abs(dx1) === Math.abs(dy1)
+    const isDiagonal2 = !(isHorizontal2 || isVertical2) && Math.abs(dx2) === Math.abs(dy2)
 
     // For segments to overlap, they must be on the same line
     if (isHorizontal1 && isHorizontal2 && y1 === y3) {
@@ -218,10 +259,16 @@ export default function Editor({ className }: { className?: string }) {
         const remaining: Array<[[number, number], [number, number]]> = []
 
         if (minX1 < overlapStart) {
-          remaining.push([[minX1, y1], [overlapStart, y1]])
+          remaining.push([
+            [minX1, y1],
+            [overlapStart, y1],
+          ])
         }
         if (maxX1 > overlapEnd) {
-          remaining.push([[overlapEnd, y1], [maxX1, y1]])
+          remaining.push([
+            [overlapEnd, y1],
+            [maxX1, y1],
+          ])
         }
 
         return { overlap: true, remaining }
@@ -242,10 +289,16 @@ export default function Editor({ className }: { className?: string }) {
         const remaining: Array<[[number, number], [number, number]]> = []
 
         if (minY1 < overlapStart) {
-          remaining.push([[x1, minY1], [x1, overlapStart]])
+          remaining.push([
+            [x1, minY1],
+            [x1, overlapStart],
+          ])
         }
         if (maxY1 > overlapEnd) {
-          remaining.push([[x1, overlapEnd], [x1, maxY1]])
+          remaining.push([
+            [x1, overlapEnd],
+            [x1, maxY1],
+          ])
         }
 
         return { overlap: true, remaining }
@@ -278,12 +331,18 @@ export default function Editor({ className }: { className?: string }) {
             if (minX1 < overlapStartX) {
               const startY = y1 + slope1 * (minX1 - x1)
               const endY = y1 + slope1 * (overlapStartX - x1)
-              remaining.push([[minX1, Math.round(startY)], [overlapStartX, Math.round(endY)]])
+              remaining.push([
+                [minX1, Math.round(startY)],
+                [overlapStartX, Math.round(endY)],
+              ])
             }
             if (maxX1 > overlapEndX) {
               const startY = y1 + slope1 * (overlapEndX - x1)
               const endY = y1 + slope1 * (maxX1 - x1)
-              remaining.push([[overlapEndX, Math.round(startY)], [maxX1, Math.round(endY)]])
+              remaining.push([
+                [overlapEndX, Math.round(startY)],
+                [maxX1, Math.round(endY)],
+              ])
             }
 
             return { overlap: true, remaining }
@@ -296,9 +355,12 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleDeleteWallPortion = (x1: number, y1: number, x2: number, y2: number) => {
-    const deleteSegment: [[number, number], [number, number]] = [[x1, y1], [x2, y2]]
+    const deleteSegment: [[number, number], [number, number]] = [
+      [x1, y1],
+      [x2, y2],
+    ]
 
-    setWalls(prev => {
+    setWalls((prev) => {
       const next = new Set<string>()
 
       // Check each existing wall
@@ -310,7 +372,10 @@ export default function Editor({ className }: { className?: string }) {
         const [wx1, wy1] = start.split(',').map(Number)
         const [wx2, wy2] = end.split(',').map(Number)
 
-        const wallSegment: [[number, number], [number, number]] = [[wx1, wy1], [wx2, wy2]]
+        const wallSegment: [[number, number], [number, number]] = [
+          [wx1, wy1],
+          [wx2, wy2],
+        ]
 
         // Check if this wall overlaps with the deletion segment
         const result = getOverlappingSegment(wallSegment, deleteSegment)
@@ -333,14 +398,14 @@ export default function Editor({ className }: { className?: string }) {
 
   const handleIntersectionClick = (x: number, y: number) => {
     // Don't handle clicks while camera is moving
-    if (movingCamera) return;
-    
+    if (movingCamera) return
+
     // Guide mode: deselect images when clicking on the grid
     if (controlMode === 'guide') {
       setSelectedImageIds(new Set([]))
       return
     }
-    
+
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: two-click line selection
@@ -389,7 +454,7 @@ export default function Editor({ className }: { className?: string }) {
           if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
             // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
             const wallKey = `${x1},${y1}-${x2},${y2}`
-            setWalls(prev => {
+            setWalls((prev) => {
               const next = new Set(prev)
               next.add(wallKey)
               return next
@@ -413,7 +478,7 @@ export default function Editor({ className }: { className?: string }) {
           const [x2, y2] = roomPreviewEnd
 
           // Create 4 walls: top, bottom, left, right
-          setWalls(prev => {
+          setWalls((prev) => {
             const next = new Set(prev)
             // Top wall
             next.add(`${x1},${y2}-${x2},${y2}`)
@@ -438,9 +503,13 @@ export default function Editor({ className }: { className?: string }) {
       const snappedY = customRoomPreviewEnd ? customRoomPreviewEnd[1] : y
 
       // Check if clicking on the first point to close the shape
-      if (customRoomPoints.length >= 3 && snappedX === customRoomPoints[0][0] && snappedY === customRoomPoints[0][1]) {
+      if (
+        customRoomPoints.length >= 3 &&
+        snappedX === customRoomPoints[0][0] &&
+        snappedY === customRoomPoints[0][1]
+      ) {
         // Complete the custom room polygon by creating walls between all points
-        setWalls(prev => {
+        setWalls((prev) => {
           const next = new Set(prev)
           // Create walls between consecutive points (including closing wall)
           for (let i = 0; i < customRoomPoints.length; i++) {
@@ -455,7 +524,7 @@ export default function Editor({ className }: { className?: string }) {
         setCustomRoomPreviewEnd(null)
       } else {
         // Add snapped point to the list and reset preview
-        setCustomRoomPoints(prev => [...prev, [snappedX, snappedY]])
+        setCustomRoomPoints((prev) => [...prev, [snappedX, snappedY]])
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
@@ -464,15 +533,20 @@ export default function Editor({ className }: { className?: string }) {
 
   const handleIntersectionDoubleClick = () => {
     // Don't handle double-clicks while camera is moving
-    if (movingCamera) return;
-    
-    if (controlMode === 'building' && activeTool === 'custom-room' && customRoomPoints.length >= 1) {
+    if (movingCamera) return
+
+    if (
+      controlMode === 'building' &&
+      activeTool === 'custom-room' &&
+      customRoomPoints.length >= 1
+    ) {
       // Add the current preview point (from the first click of the double-click)
       // But only if it's different from the last point
       let finalPoints = customRoomPoints
       if (customRoomPreviewEnd) {
         const lastPoint = customRoomPoints[customRoomPoints.length - 1]
-        const isDifferent = lastPoint[0] !== customRoomPreviewEnd[0] || lastPoint[1] !== customRoomPreviewEnd[1]
+        const isDifferent =
+          lastPoint[0] !== customRoomPreviewEnd[0] || lastPoint[1] !== customRoomPreviewEnd[1]
         if (isDifferent) {
           finalPoints = [...customRoomPoints, customRoomPreviewEnd]
         }
@@ -480,7 +554,7 @@ export default function Editor({ className }: { className?: string }) {
 
       // Create walls between consecutive points (NOT closing the shape)
       if (finalPoints.length >= 2) {
-        setWalls(prev => {
+        setWalls((prev) => {
           const next = new Set(prev)
           // Create walls between consecutive points only (no closing wall)
           for (let i = 0; i < finalPoints.length - 1; i++) {
@@ -644,7 +718,7 @@ export default function Editor({ className }: { className?: string }) {
       setContextMenuState({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
-        type: 'wall'
+        type: 'wall',
       })
     }
     wallContextMenuTriggeredRef.current = false
@@ -671,8 +745,8 @@ export default function Editor({ className }: { className?: string }) {
       const canvas = document.querySelector('canvas')
       if (canvas) {
         const rect = canvas.getBoundingClientRect()
-        clientX = rect.left + (e.pointer.x + 1) * rect.width / 2
-        clientY = rect.top + (-e.pointer.y + 1) * rect.height / 2
+        clientX = rect.left + ((e.pointer.x + 1) * rect.width) / 2
+        clientY = rect.top + ((-e.pointer.y + 1) * rect.height) / 2
       }
     }
 
@@ -681,7 +755,7 @@ export default function Editor({ className }: { className?: string }) {
         isOpen: true,
         position: { x: clientX, y: clientY },
         type: 'wall',
-        wallSegment
+        wallSegment,
       })
     }
   }
@@ -692,11 +766,11 @@ export default function Editor({ className }: { className?: string }) {
       setSelectedWallIds(new Set([contextMenuState.wallSegment.id]))
       handleDeleteSelectedWalls()
     }
-    setContextMenuState(prev => ({ ...prev, isOpen: false }))
+    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
   }
 
   const handleCloseContextMenu = () => {
-    setContextMenuState(prev => ({ ...prev, isOpen: false }))
+    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
   }
 
   // Use constants for reference image
@@ -708,104 +782,112 @@ export default function Editor({ className }: { className?: string }) {
   return (
     <div className="relative h-full w-full">
       <Canvas
-        shadows
         className={cn('bg-[#303035]', className)}
         onContextMenu={(e) => {
           // Prevent browser context menu
-          e.preventDefault();
+          e.preventDefault()
         }}
+        shadows
       >
         {cameraType === 'perspective' ? (
-          <PerspectiveCamera
-            makeDefault
-            position={[10, 10, 10]}
-            fov={50}
-            near={0.1}
-            far={1000}
-          />
+          <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
         ) : (
           <OrthographicCamera
+            far={1000}
             makeDefault
+            near={-1000}
             position={[10, 10, 10]}
             zoom={20}
-            near={-1000}
-            far={1000}
           />
         )}
         {/* <fog attach="fog" args={['#17171b', 30, 40]} /> */}
-        <color attach="background" args={['#17171b']} />
+        <color args={['#17171b']} attach="background" />
         <ambientLight intensity={0.5} />
-        <directionalLight 
-          position={[10, 10, 5]} 
-          intensity={1} 
+        <directionalLight
           castShadow
-          shadow-mapSize={[1024, 1024]}
+          intensity={1}
+          position={[10, 10, 5]}
+          shadow-camera-bottom={-15}
           shadow-camera-left={-15}
           shadow-camera-right={15}
           shadow-camera-top={15}
-          shadow-camera-bottom={-15}
+          shadow-mapSize={[1024, 1024]}
         />
 
         {/* Infinite dashed axis lines - visual only, not interactive */}
         <group raycast={() => null}>
           {/* X axis (red) */}
           <Line
-            points={[[-1000, 0, 0], [1000, 0, 0]]}
-            lineWidth={1}
+            color="white"
             dashed
             dashSize={0.5}
-            gapSize={0.25}
-            color="white"
-            opacity={0.01}
             depthTest={false}
+            gapSize={0.25}
+            lineWidth={1}
+            opacity={0.01}
+            points={[
+              [-1000, 0, 0],
+              [1000, 0, 0],
+            ]}
           />
           {/* Y axis (green) - vertical */}
           <Line
-            points={[[0, -1000, 0], [0, 1000, 0]]}
-            lineWidth={1}
+            color="white"
             dashed
             dashSize={0.5}
-            gapSize={0.25}
-            color="white"
-            opacity={0.01}
             depthTest={false}
+            gapSize={0.25}
+            lineWidth={1}
+            opacity={0.01}
+            points={[
+              [0, -1000, 0],
+              [0, 1000, 0],
+            ]}
           />
           {/* Z axis (blue) */}
           <Line
-            points={[[0, 0, -1000], [0, 0, 1000]]}
-            lineWidth={1}
+            color="white"
             dashed
             dashSize={0.5}
-            gapSize={0.25}
-            color="white"
-            opacity={0.01}
             depthTest={false}
+            gapSize={0.25}
+            lineWidth={1}
+            opacity={0.01}
+            points={[
+              [0, 0, -1000],
+              [0, 0, 1000],
+            ]}
           />
         </group>
 
         {images.map((image) => (
           <ReferenceImage
-            key={image.id}
+            controlMode={controlMode}
             id={image.id}
-            url={image.url}
+            isSelected={selectedImageIds.has(image.id)}
+            key={image.id}
+            movingCamera={movingCamera}
+            onManipulationEnd={() => setIsManipulatingImage(false)}
+            onManipulationStart={() => setIsManipulatingImage(true)}
+            onSelect={() => setSelectedImageIds(new Set([image.id]))}
+            onUpdate={(updates, pushToUndo = true) =>
+              setImages(
+                images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
+                pushToUndo,
+              )
+            }
             opacity={imageOpacity}
-            scale={image.scale}
             position={image.position}
             rotation={image.rotation}
-            isSelected={selectedImageIds.has(image.id)}
-            controlMode={controlMode}
-            movingCamera={movingCamera}
-            onSelect={() => setSelectedImageIds(new Set([image.id]))}
-            onUpdate={(updates, pushToUndo = true) => setImages(images.map(i => i.id === image.id ? { ...i, ...updates } : i), pushToUndo)}
-            onManipulationStart={() => setIsManipulatingImage(true)}
-            onManipulationEnd={() => setIsManipulatingImage(false)}
+            scale={image.scale}
+            url={image.url}
           />
         ))}
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
           {groups
-            .filter(g => g.type === 'floor')
+            .filter((g) => g.type === 'floor')
             .map((floor) => {
               const floorLevel = floor.level || 0
               const yPosition = FLOOR_SPACING * floorLevel
@@ -818,85 +900,88 @@ export default function Editor({ className }: { className?: string }) {
                     <group raycast={() => null}>
                       {isActiveFloor ? (
                         <Grid
-                          position={[0, 0, 0]}
                           args={[GRID_SIZE, GRID_SIZE]}
+                          cellColor="#aaaabf"
                           cellSize={tileSize}
                           cellThickness={0.5}
-                          cellColor="#aaaabf"
-                          sectionSize={tileSize * 2}
-                          sectionThickness={1}
-                          sectionColor="#9d4b4b"
                           fadeDistance={GRID_SIZE * 2}
                           fadeStrength={1}
                           infiniteGrid={false}
+                          position={[0, 0, 0]}
+                          sectionColor="#9d4b4b"
+                          sectionSize={tileSize * 2}
+                          sectionThickness={1}
                           side={2}
                         />
                       ) : (
                         <Grid
-                          position={[0, 0, 0]}
                           args={[GRID_SIZE, GRID_SIZE]}
+                          cellColor="#4a4a5a"
                           cellSize={tileSize}
                           cellThickness={0.5}
-                          cellColor="#4a4a5a"
-                          sectionSize={tileSize * 2}
-                          sectionThickness={1}
-                          sectionColor="#5a4a4a"
                           fadeDistance={GRID_SIZE * 2}
                           fadeStrength={1}
                           infiniteGrid={false}
+                          position={[0, 0, 0]}
+                          sectionColor="#5a4a4a"
+                          sectionSize={tileSize * 2}
+                          sectionThickness={1}
                           side={2}
                         />
                       )}
                     </group>
                   )}
 
-                  <group position={[-(GRID_SIZE) / 2, 0, -(GRID_SIZE) / 2]}>
+                  <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                     {/* Only show interactive grid tiles for the active floor */}
                     {isActiveFloor && (
                       <GridTiles
+                        controlMode={controlMode}
+                        customRoomPoints={customRoomPoints}
+                        customRoomPreviewEnd={customRoomPreviewEnd}
+                        deletePreviewEnd={deletePreviewEnd}
+                        deleteStartPoint={deleteStartPoint}
+                        disableBuild={
+                          (controlMode === 'building' && !activeTool) ||
+                          controlMode === 'select' ||
+                          controlMode === 'guide'
+                        }
                         intersections={intersections}
-                        tileSize={tileSize}
-                        walls={walls}
                         onIntersectionClick={handleIntersectionClick}
                         onIntersectionDoubleClick={handleIntersectionDoubleClick}
                         onIntersectionHover={handleIntersectionHover}
-                        wallStartPoint={wallStartPoint}
-                        wallPreviewEnd={wallPreviewEnd}
-                        roomStartPoint={roomStartPoint}
-                        roomPreviewEnd={roomPreviewEnd}
-                        customRoomPoints={customRoomPoints}
-                        customRoomPreviewEnd={customRoomPreviewEnd}
-                        deleteStartPoint={deleteStartPoint}
-                        deletePreviewEnd={deletePreviewEnd}
                         opacity={gridOpacity}
-                        disableBuild={(controlMode === 'building' && !activeTool) || controlMode === 'select' || controlMode === 'guide'}
+                        roomPreviewEnd={roomPreviewEnd}
+                        roomStartPoint={roomStartPoint}
+                        tileSize={tileSize}
                         wallHeight={wallHeight}
-                        controlMode={controlMode}
+                        wallPreviewEnd={wallPreviewEnd}
+                        wallStartPoint={wallStartPoint}
+                        walls={walls}
                       />
                     )}
 
                     {/* Walls component fetches its own data based on floorId */}
                     <Walls
-                      key={`${floor.id}-${isActiveFloor}`}
-                      floorId={floor.id}
-                      isActive={isActiveFloor}
-                      tileSize={tileSize}
-                      wallHeight={wallHeight}
-                      hoveredWallIndex={hoveredWallIndex}
-                      selectedWallIds={selectedWallIds}
-                      setSelectedWallIds={setSelectedWallIds}
-                      onWallHover={setHoveredWallIndex}
-                      onWallRightClick={handleWallRightClick}
-                      isCameraEnabled={isCameraEnabled}
                       controlMode={controlMode}
+                      floorId={floor.id}
+                      hoveredWallIndex={hoveredWallIndex}
+                      isActive={isActiveFloor}
+                      isCameraEnabled={isCameraEnabled}
+                      key={`${floor.id}-${isActiveFloor}`}
                       movingCamera={movingCamera}
                       onDeleteWalls={handleDeleteSelectedWalls}
+                      onWallHover={setHoveredWallIndex}
+                      onWallRightClick={handleWallRightClick}
+                      selectedWallIds={selectedWallIds}
+                      setSelectedWallIds={setSelectedWallIds}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
                     />
                   </group>
                 </group>
               )
-            })
-          }
+            })}
         </group>
 
         <CustomControls />
@@ -909,7 +994,7 @@ export default function Editor({ className }: { className?: string }) {
 
       {contextMenuState.isOpen && contextMenuState.type === 'wall' && selectedWallIds.size > 0 && (
         <div
-          className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-lg p-1 min-w-32"
+          className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
           style={{
             top: `${contextMenuState.position.y}px`,
             left: `${contextMenuState.position.x}px`,
@@ -917,10 +1002,10 @@ export default function Editor({ className }: { className?: string }) {
         >
           {contextMenuState.wallSegment && (
             <div
-              className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
               onClick={() => {
-                handleDeleteSelectedWalls();
-                setContextMenuState({ ...contextMenuState, isOpen: false });
+                handleDeleteSelectedWalls()
+                setContextMenuState({ ...contextMenuState, isOpen: false })
               }}
             >
               <Trash2 className="h-4 w-4" />
