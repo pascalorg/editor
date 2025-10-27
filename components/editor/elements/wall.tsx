@@ -179,8 +179,8 @@ type WallsProps = {
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
-  selectedWallIds: Set<string>
-  setSelectedWallIds: React.Dispatch<React.SetStateAction<Set<string>>>
+  selectedWallIds: string[]
+  setSelectedWallIds: (ids: string[]) => void
   onWallHover: (index: number | null) => void
   onWallRightClick?: (e: any, wallSegment: WallSegment) => void
   isCameraEnabled?: boolean
@@ -304,7 +304,7 @@ export const Walls = forwardRef(
           const seg = wallSegments[i]
           if (!seg) return null
 
-          const isSelected = selectedWallIds.has(seg.id)
+          const isSelected = selectedWallIds.includes(seg.id)
           const isHovered = isActive && hoveredWallIndex === i
 
           let color = '#aaaabf'
@@ -345,22 +345,22 @@ export const Walls = forwardRef(
                 }
                 e.stopPropagation()
                 if (controlMode === 'select') {
-                  setSelectedWallIds((prev) => {
-                    const next = new Set(prev)
-                    if (e.shiftKey) {
-                      if (next.has(seg.id)) next.delete(seg.id)
-                      else next.add(seg.id)
+                  if (e.shiftKey) {
+                    // Toggle selection
+                    if (selectedWallIds.includes(seg.id)) {
+                      setSelectedWallIds(selectedWallIds.filter((id) => id !== seg.id))
                     } else {
-                      next.clear()
-                      next.add(seg.id)
+                      setSelectedWallIds([...selectedWallIds, seg.id])
                     }
-                    return next
-                  })
+                  } else {
+                    // Replace selection
+                    setSelectedWallIds([seg.id])
+                  }
                 }
               }}
               onContextMenu={(e) => {
                 if (!isActive) return
-                if (!isCameraEnabled && selectedWallIds.size > 0) {
+                if (!isCameraEnabled && selectedWallIds.length > 0) {
                   e.stopPropagation()
                   if (e.nativeEvent) e.nativeEvent.preventDefault()
                 }
@@ -376,7 +376,7 @@ export const Walls = forwardRef(
                   return
                 }
                 e.stopPropagation()
-                if (e.button === 2 && !isCameraEnabled && selectedWallIds.size > 0) {
+                if (e.button === 2 && !isCameraEnabled && selectedWallIds.length > 0) {
                   if (e.nativeEvent) e.nativeEvent.preventDefault()
                   onWallRightClick?.(e, seg)
                 }

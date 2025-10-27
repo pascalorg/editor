@@ -991,8 +991,8 @@ export default function Editor({ className }: { className?: string }) {
                       onDeleteWalls={handleDeleteSelectedWalls}
                       onWallHover={setHoveredWallIndex}
                       onWallRightClick={handleWallRightClick}
-                      selectedWallIds={new Set(selectedWallIds)}
-                      setSelectedWallIds={(ids) => setSelectedWallIds(Array.from(ids))}
+                      selectedWallIds={selectedWallIds}
+                      setSelectedWallIds={setSelectedWallIds}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />
