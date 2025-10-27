@@ -4,10 +4,12 @@ import { BoundingBoxIcon, type Icon, LineSegmentsIcon, WallIcon } from '@phospho
 import { Blinds, Circle, DoorOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { type Tool, useEditorContext } from '@/hooks/use-editor'
+import { type Tool, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 export function BuildingMenu() {
-  const { activeTool, setActiveTool, controlMode } = useEditorContext()
+  const activeTool = useEditor((state) => state.activeTool)
+  const setActiveTool = useEditor((state) => state.setActiveTool)
+  const controlMode = useEditor((state) => state.controlMode)
 
   const tools: Array<{ id: Tool; icon: Icon; label: string; enabled: boolean }> = [
     { id: 'wall', icon: WallIcon, label: 'Wall', enabled: true },

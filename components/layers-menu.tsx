@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WallSegment } from '@/hooks/use-editor'
-import { useEditorContext } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 interface LayersMenuProps {
@@ -23,110 +23,106 @@ interface LayersMenuProps {
 }
 
 export function LayersMenu({ mounted }: LayersMenuProps) {
-  const {
-    handleUpload,
-    wallSegments,
-    selectedWallIds,
-    setSelectedWallIds,
-    handleDeleteSelectedWalls,
-    images,
-    selectedImageIds,
-    setSelectedImageIds,
-    handleDeleteSelectedImages,
-    groups,
-    selectedFloorId,
-    selectFloor,
-    addGroup,
-    deleteGroup,
-    setControlMode,
-    toggleFloorVisibility,
-    toggleWallVisibility,
-    toggleImageVisibility,
-  } = useEditorContext()
+  const handleUpload = useEditor((state) => state.handleUpload)
+  const wallSegments = useEditor((state) => state.wallSegments())
+  const selectedWallIds = useEditor((state) => state.selectedWallIds)
+  const setSelectedWallIds = useEditor((state) => state.setSelectedWallIds)
+  const handleDeleteSelectedWalls = useEditor((state) => state.handleDeleteSelectedWalls)
+  const images = useEditor((state) => state.images)
+  const selectedImageIds = useEditor((state) => state.selectedImageIds)
+  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
+  const groups = useEditor((state) => state.groups)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectFloor = useEditor((state) => state.selectFloor)
+  const addGroup = useEditor((state) => state.addGroup)
+  const deleteGroup = useEditor((state) => state.deleteGroup)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
+  const toggleWallVisibility = useEditor((state) => state.toggleWallVisibility)
+  const toggleImageVisibility = useEditor((state) => state.toggleImageVisibility)
 
   const handleWallSelect = (wallId: string, event: React.MouseEvent) => {
-    setSelectedWallIds((prev) => {
-      const next = new Set(prev)
-      const clickedIndex = wallSegments.findIndex((seg) => seg.id === wallId)
+    const clickedIndex = wallSegments.findIndex((seg) => seg.id === wallId)
+    let next: string[]
 
-      if (event.metaKey || event.ctrlKey) {
-        // Cmd/Ctrl+click: add/remove from selection
-        if (next.has(wallId)) {
-          next.delete(wallId)
-        } else {
-          next.add(wallId)
-        }
-      } else if (event.shiftKey && next.size > 0) {
-        // Shift+click: select range between closest selected wall and clicked wall
-        const selectedIndices = Array.from(next)
-          .map((id) => wallSegments.findIndex((seg) => seg.id === id))
-          .filter((idx) => idx !== -1)
-
-        // Find closest selected wall index
-        const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-          const currentDist = Math.abs(current - clickedIndex)
-          const closestDist = Math.abs(closest - clickedIndex)
-          return currentDist < closestDist ? current : closest
-        })
-
-        // Select all walls between closest selected and clicked
-        const start = Math.min(closestSelectedIndex, clickedIndex)
-        const end = Math.max(closestSelectedIndex, clickedIndex)
-
-        for (let i = start; i <= end; i++) {
-          next.add(wallSegments[i].id)
-        }
+    if (event.metaKey || event.ctrlKey) {
+      // Cmd/Ctrl+click: add/remove from selection
+      if (selectedWallIds.includes(wallId)) {
+        next = selectedWallIds.filter((id) => id !== wallId)
       } else {
-        // Regular click: select only this wall
-        next.clear()
-        next.add(wallId)
+        next = [...selectedWallIds, wallId]
       }
+    } else if (event.shiftKey && selectedWallIds.length > 0) {
+      // Shift+click: select range between closest selected wall and clicked wall
+      const selectedIndices = selectedWallIds
+        .map((id) => wallSegments.findIndex((seg) => seg.id === id))
+        .filter((idx) => idx !== -1)
 
-      return next
-    })
+      // Find closest selected wall index
+      const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
+        const currentDist = Math.abs(current - clickedIndex)
+        const closestDist = Math.abs(closest - clickedIndex)
+        return currentDist < closestDist ? current : closest
+      })
+
+      // Select all walls between closest selected and clicked
+      const start = Math.min(closestSelectedIndex, clickedIndex)
+      const end = Math.max(closestSelectedIndex, clickedIndex)
+
+      const rangeIds = []
+      for (let i = start; i <= end; i++) {
+        rangeIds.push(wallSegments[i].id)
+      }
+      next = [...new Set([...selectedWallIds, ...rangeIds])]
+    } else {
+      // Regular click: select only this wall
+      next = [wallId]
+    }
+
+    setSelectedWallIds(next)
 
     // Automatically activate building mode when selecting a wall
     setControlMode('building')
   }
 
   const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
-    setSelectedImageIds((prev) => {
-      const next = new Set(prev)
-      const clickedIndex = images.findIndex((img) => img.id === imageId)
+    const clickedIndex = images.findIndex((img) => img.id === imageId)
+    let next: string[]
 
-      if (event.metaKey || event.ctrlKey) {
-        // Cmd/Ctrl+click: add/remove from selection
-        if (next.has(imageId)) {
-          next.delete(imageId)
-        } else {
-          next.add(imageId)
-        }
-      } else if (event.shiftKey && next.size > 0) {
-        // Shift+click: select range
-        const selectedIndices = Array.from(next)
-          .map((id) => images.findIndex((img) => img.id === id))
-          .filter((idx) => idx !== -1)
-
-        const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-          const currentDist = Math.abs(current - clickedIndex)
-          const closestDist = Math.abs(closest - clickedIndex)
-          return currentDist < closestDist ? current : closest
-        })
-
-        const start = Math.min(closestSelectedIndex, clickedIndex)
-        const end = Math.max(closestSelectedIndex, clickedIndex)
-
-        for (let i = start; i <= end; i++) {
-          next.add(images[i].id)
-        }
+    if (event.metaKey || event.ctrlKey) {
+      // Cmd/Ctrl+click: add/remove from selection
+      if (selectedImageIds.includes(imageId)) {
+        next = selectedImageIds.filter((id) => id !== imageId)
       } else {
-        // Regular click: select only this image
-        next.clear()
-        next.add(imageId)
+        next = [...selectedImageIds, imageId]
       }
+    } else if (event.shiftKey && selectedImageIds.length > 0) {
+      // Shift+click: select range
+      const selectedIndices = selectedImageIds
+        .map((id) => images.findIndex((img) => img.id === id))
+        .filter((idx) => idx !== -1)
 
-      return next
-    })
+      const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
+        const currentDist = Math.abs(current - clickedIndex)
+        const closestDist = Math.abs(closest - clickedIndex)
+        return currentDist < closestDist ? current : closest
+      })
+
+      const start = Math.min(closestSelectedIndex, clickedIndex)
+      const end = Math.max(closestSelectedIndex, clickedIndex)
+
+      const rangeIds = []
+      for (let i = start; i <= end; i++) {
+        rangeIds.push(images[i].id)
+      }
+      next = [...new Set([...selectedImageIds, ...rangeIds])]
+    } else {
+      // Regular click: select only this image
+      next = [imageId]
+    }
+
+    setSelectedImageIds(next)
 
     // Automatically activate guide mode when selecting an image
     setControlMode('guide')
@@ -268,7 +264,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               >
                                 <TreeNodeTrigger
                                   className={cn(
-                                    selectedWallIds.has(segment.id) && 'bg-accent',
+                                    selectedWallIds.includes(segment.id) && 'bg-accent',
                                     segment.visible === false && 'opacity-50',
                                   )}
                                   onClick={(e) => {
@@ -350,7 +346,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               >
                                 <TreeNodeTrigger
                                   className={cn(
-                                    selectedImageIds.has(image.id) && 'bg-accent',
+                                    selectedImageIds.includes(image.id) && 'bg-accent',
                                     image.visible === false && 'opacity-50',
                                   )}
                                   onClick={(e) => {

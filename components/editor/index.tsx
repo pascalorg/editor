@@ -4,7 +4,7 @@ import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Walls } from '@/components/editor/elements/wall'
-import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import {
   Environment,
@@ -17,7 +17,7 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
@@ -39,41 +39,45 @@ const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 export const FLOOR_SPACING = 10 // 10m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
-  const {
-    walls,
-    setWalls,
-    images,
-    setImages,
-    selectedWallIds,
-    setSelectedWallIds,
-    selectedImageIds,
-    setSelectedImageIds,
-    handleDeleteSelectedWalls,
-    undo,
-    redo,
-    activeTool,
-    controlMode,
-    setControlMode,
-    setActiveTool,
-    cameraMode,
-    setCameraMode,
-    movingCamera,
-    setIsManipulatingImage,
-    groups,
-    selectedFloorId,
-    isOverviewMode,
-  } = useEditorContext()
+  // Use individual selectors for better performance
+  const getWallsSet = useEditor((state) => state.getWallsSet)
+  const setWalls = useEditor((state) => state.setWalls)
+  const images = useEditor((state) => state.images)
+  const setImages = useEditor((state) => state.setImages)
+  const selectedWallIds = useEditor((state) => state.selectedWallIds)
+  const setSelectedWallIds = useEditor((state) => state.setSelectedWallIds)
+  const selectedImageIds = useEditor((state) => state.selectedImageIds)
+  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const handleDeleteSelectedWalls = useEditor((state) => state.handleDeleteSelectedWalls)
+  const undo = useEditor((state) => state.undo)
+  const redo = useEditor((state) => state.redo)
+  const activeTool = useEditor((state) => state.activeTool)
+  const controlMode = useEditor((state) => state.controlMode)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const setActiveTool = useEditor((state) => state.setActiveTool)
+  const cameraMode = useEditor((state) => state.cameraMode)
+  const setCameraMode = useEditor((state) => state.setCameraMode)
+  const movingCamera = useEditor((state) => state.movingCamera)
+  const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
+  const groups = useEditor((state) => state.groups)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const isOverviewMode = useEditor((state) => state.isOverviewMode)
+  const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
 
-  const { setWallsGroupRef } = useEditorContext()
+  // Get walls as a Set
+  const walls = getWallsSet()
 
   // Use a callback ref to ensure the store is updated when the group is attached
-  const allFloorsGroupCallback = (node: THREE.Group | null) => {
-    if (node) {
-      setWallsGroupRef(node)
-    } else {
-      console.log('All floors group ref detached')
-    }
-  }
+  const allFloorsGroupCallback = useCallback(
+    (node: THREE.Group | null) => {
+      if (node) {
+        setWallsGroupRef(node)
+      } else {
+        console.log('All floors group ref detached')
+      }
+    },
+    [setWallsGroupRef],
+  )
 
   // State for two-click wall placement
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
@@ -102,8 +106,8 @@ export default function Editor({ className }: { className?: string }) {
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     // Clear all selections (walls and images)
-    setSelectedWallIds(new Set([]))
-    setSelectedImageIds(new Set([]))
+    setSelectedWallIds([])
+    setSelectedImageIds([])
   }
 
   useEffect(() => {
@@ -367,40 +371,39 @@ export default function Editor({ className }: { className?: string }) {
       [x2, y2],
     ]
 
-    setWalls((prev) => {
-      const next = new Set<string>()
+    const currentWalls = walls
+    const next: string[] = []
 
-      // Check each existing wall
-      for (const wallKey of prev) {
-        const parts = wallKey.split('-')
-        if (parts.length !== 2) continue
+    // Check each existing wall
+    for (const wallKey of currentWalls) {
+      const parts = wallKey.split('-')
+      if (parts.length !== 2) continue
 
-        const [start, end] = parts
-        const [wx1, wy1] = start.split(',').map(Number)
-        const [wx2, wy2] = end.split(',').map(Number)
+      const [start, end] = parts
+      const [wx1, wy1] = start.split(',').map(Number)
+      const [wx2, wy2] = end.split(',').map(Number)
 
-        const wallSegment: [[number, number], [number, number]] = [
-          [wx1, wy1],
-          [wx2, wy2],
-        ]
+      const wallSegment: [[number, number], [number, number]] = [
+        [wx1, wy1],
+        [wx2, wy2],
+      ]
 
-        // Check if this wall overlaps with the deletion segment
-        const result = getOverlappingSegment(wallSegment, deleteSegment)
+      // Check if this wall overlaps with the deletion segment
+      const result = getOverlappingSegment(wallSegment, deleteSegment)
 
-        if (result.overlap) {
-          // Add remaining segments (if any)
-          for (const remaining of result.remaining) {
-            const [[rx1, ry1], [rx2, ry2]] = remaining
-            next.add(`${rx1},${ry1}-${rx2},${ry2}`)
-          }
-        } else {
-          // No overlap, keep the wall
-          next.add(wallKey)
+      if (result.overlap) {
+        // Add remaining segments (if any)
+        for (const remaining of result.remaining) {
+          const [[rx1, ry1], [rx2, ry2]] = remaining
+          next.push(`${rx1},${ry1}-${rx2},${ry2}`)
         }
+      } else {
+        // No overlap, keep the wall
+        next.push(wallKey)
       }
+    }
 
-      return next
-    })
+    setWalls(next)
   }
 
   const handleIntersectionClick = (x: number, y: number) => {
@@ -409,7 +412,7 @@ export default function Editor({ className }: { className?: string }) {
 
     // Guide mode: deselect images when clicking on the grid
     if (controlMode === 'guide') {
-      setSelectedImageIds(new Set([]))
+      setSelectedImageIds([])
       return
     }
 
@@ -461,11 +464,10 @@ export default function Editor({ className }: { className?: string }) {
           if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
             // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
             const wallKey = `${x1},${y1}-${x2},${y2}`
-            setWalls((prev) => {
-              const next = new Set(prev)
-              next.add(wallKey)
-              return next
-            })
+            const currentWalls = Array.from(walls)
+            if (!currentWalls.includes(wallKey)) {
+              setWalls([...currentWalls, wallKey])
+            }
           }
         }
 
@@ -485,18 +487,14 @@ export default function Editor({ className }: { className?: string }) {
           const [x2, y2] = roomPreviewEnd
 
           // Create 4 walls: top, bottom, left, right
-          setWalls((prev) => {
-            const next = new Set(prev)
-            // Top wall
-            next.add(`${x1},${y2}-${x2},${y2}`)
-            // Bottom wall
-            next.add(`${x1},${y1}-${x2},${y1}`)
-            // Left wall
-            next.add(`${x1},${y1}-${x1},${y2}`)
-            // Right wall
-            next.add(`${x2},${y1}-${x2},${y2}`)
-            return next
-          })
+          const currentWalls = Array.from(walls)
+          const newWalls = [
+            `${x1},${y2}-${x2},${y2}`, // Top wall
+            `${x1},${y1}-${x2},${y1}`, // Bottom wall
+            `${x1},${y1}-${x1},${y2}`, // Left wall
+            `${x2},${y1}-${x2},${y2}`, // Right wall
+          ]
+          setWalls([...currentWalls, ...newWalls])
         }
 
         // Reset placement state
@@ -516,16 +514,15 @@ export default function Editor({ className }: { className?: string }) {
         snappedY === customRoomPoints[0][1]
       ) {
         // Complete the custom room polygon by creating walls between all points
-        setWalls((prev) => {
-          const next = new Set(prev)
-          // Create walls between consecutive points (including closing wall)
-          for (let i = 0; i < customRoomPoints.length; i++) {
-            const [x1, y1] = customRoomPoints[i]
-            const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
-            next.add(`${x1},${y1}-${x2},${y2}`)
-          }
-          return next
-        })
+        const currentWalls = Array.from(walls)
+        const newWalls: string[] = []
+        // Create walls between consecutive points (including closing wall)
+        for (let i = 0; i < customRoomPoints.length; i++) {
+          const [x1, y1] = customRoomPoints[i]
+          const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
+          newWalls.push(`${x1},${y1}-${x2},${y2}`)
+        }
+        setWalls([...currentWalls, ...newWalls])
         // Reset custom room state
         setCustomRoomPoints([])
         setCustomRoomPreviewEnd(null)
@@ -561,16 +558,15 @@ export default function Editor({ className }: { className?: string }) {
 
       // Create walls between consecutive points (NOT closing the shape)
       if (finalPoints.length >= 2) {
-        setWalls((prev) => {
-          const next = new Set(prev)
-          // Create walls between consecutive points only (no closing wall)
-          for (let i = 0; i < finalPoints.length - 1; i++) {
-            const [x1, y1] = finalPoints[i]
-            const [x2, y2] = finalPoints[i + 1]
-            next.add(`${x1},${y1}-${x2},${y2}`)
-          }
-          return next
-        })
+        const currentWalls = Array.from(walls)
+        const newWalls: string[] = []
+        // Create walls between consecutive points only (no closing wall)
+        for (let i = 0; i < finalPoints.length - 1; i++) {
+          const [x1, y1] = finalPoints[i]
+          const [x2, y2] = finalPoints[i + 1]
+          newWalls.push(`${x1},${y1}-${x2},${y2}`)
+        }
+        setWalls([...currentWalls, ...newWalls])
       }
 
       // Reset custom room state
@@ -736,7 +732,7 @@ export default function Editor({ className }: { className?: string }) {
     wallContextMenuTriggeredRef.current = true
 
     // Only show context menu if there are selected walls to delete
-    if (selectedWallIds.size === 0) {
+    if (selectedWallIds.length === 0) {
       return
     }
 
@@ -770,7 +766,7 @@ export default function Editor({ className }: { className?: string }) {
   const handleDeleteWall = () => {
     if (contextMenuState.wallSegment) {
       // Select the wall segment and delete it
-      setSelectedWallIds(new Set([contextMenuState.wallSegment.id]))
+      setSelectedWallIds([contextMenuState.wallSegment.id])
       handleDeleteSelectedWalls()
     }
     setContextMenuState((prev) => ({ ...prev, isOpen: false }))
@@ -786,16 +782,16 @@ export default function Editor({ className }: { className?: string }) {
   const imagePosition = IMAGE_POSITION
   const imageRotation = IMAGE_ROTATION
 
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    // Prevent browser context menu
+    e.preventDefault()
+  }, [])
+
+  const disabledRaycast = useCallback(() => null, [])
+
   return (
     <div className="relative h-full w-full">
-      <Canvas
-        className={cn('bg-[#303035]', className)}
-        onContextMenu={(e) => {
-          // Prevent browser context menu
-          e.preventDefault()
-        }}
-        shadows
-      >
+      <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
         {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
         ) : (
@@ -822,7 +818,7 @@ export default function Editor({ className }: { className?: string }) {
         />
 
         {/* Infinite dashed axis lines - visual only, not interactive */}
-        <group raycast={() => null}>
+        <group raycast={disabledRaycast}>
           {/* X axis (red) */}
           <Line
             color="white"
@@ -875,13 +871,13 @@ export default function Editor({ className }: { className?: string }) {
               <ReferenceImage
                 controlMode={controlMode}
                 id={image.id}
-                isSelected={selectedImageIds.has(image.id)}
+                isSelected={selectedImageIds.includes(image.id)}
                 key={image.id}
                 level={image.level}
                 movingCamera={movingCamera}
                 onManipulationEnd={() => setIsManipulatingImage(false)}
                 onManipulationStart={() => setIsManipulatingImage(true)}
-                onSelect={() => setSelectedImageIds(new Set([image.id]))}
+                onSelect={() => setSelectedImageIds([image.id])}
                 onUpdate={(updates, pushToUndo = true) =>
                   setImages(
                     images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
@@ -986,8 +982,8 @@ export default function Editor({ className }: { className?: string }) {
                       onDeleteWalls={handleDeleteSelectedWalls}
                       onWallHover={setHoveredWallIndex}
                       onWallRightClick={handleWallRightClick}
-                      selectedWallIds={selectedWallIds}
-                      setSelectedWallIds={setSelectedWallIds}
+                      selectedWallIds={new Set(selectedWallIds)}
+                      setSelectedWallIds={(ids) => setSelectedWallIds(Array.from(ids))}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />
@@ -1005,28 +1001,30 @@ export default function Editor({ className }: { className?: string }) {
         {/* <Stats/> */}
       </Canvas>
 
-      {contextMenuState.isOpen && contextMenuState.type === 'wall' && selectedWallIds.size > 0 && (
-        <div
-          className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-          style={{
-            top: `${contextMenuState.position.y}px`,
-            left: `${contextMenuState.position.x}px`,
-          }}
-        >
-          {contextMenuState.wallSegment && (
-            <div
-              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-              onClick={() => {
-                handleDeleteSelectedWalls()
-                setContextMenuState({ ...contextMenuState, isOpen: false })
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected Walls
-            </div>
-          )}
-        </div>
-      )}
+      {contextMenuState.isOpen &&
+        contextMenuState.type === 'wall' &&
+        selectedWallIds.length > 0 && (
+          <div
+            className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+            style={{
+              top: `${contextMenuState.position.y}px`,
+              left: `${contextMenuState.position.x}px`,
+            }}
+          >
+            {contextMenuState.wallSegment && (
+              <div
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  handleDeleteSelectedWalls()
+                  setContextMenuState({ ...contextMenuState, isOpen: false })
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Selected Walls
+              </div>
+            )}
+          </div>
+        )}
 
       <ControlModeMenu onModeChange={clearPlacementStates} />
       <BuildingMenu />

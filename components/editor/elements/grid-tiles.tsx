@@ -1,6 +1,6 @@
 'use client'
 
-import { useEditor, useEditorContext } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { type CameraControlsImpl, Line } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { memo, useCallback, useRef, useState } from 'react'
@@ -52,7 +52,8 @@ export const GridTiles = memo(
     wallHeight,
     controlMode,
   }: GridTilesProps) => {
-    const { activeTool, selectedFloorId } = useEditorContext()
+    const activeTool = useEditor((state) => state.activeTool)
+    const selectedFloorId = useEditor((state) => state.selectedFloorId)
     const meshRef = useRef<THREE.Mesh>(null)
     const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(
       null,
@@ -166,8 +167,8 @@ export const GridTiles = memo(
         if (e.button === 2) {
           const now = Date.now()
           const timeHeld = now - rightClickDownAt.current
-          // If right-click was held for less than 100ms, treat it as a click to recenter
-          if (timeHeld < 100 && e.point) {
+          // If right-click was held for less than 200ms, treat it as a click to recenter
+          if (timeHeld < 200 && e.point) {
             ;(controls as CameraControlsImpl).moveTo(e.point.x, e.point.y, e.point.z, true)
           }
         }

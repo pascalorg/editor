@@ -3,7 +3,7 @@
 import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { type ControlMode, useEditorContext } from '@/hooks/use-editor'
+import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 export function ControlModeMenu({
@@ -13,8 +13,12 @@ export function ControlModeMenu({
   className?: string
   onModeChange?: () => void
 }) {
-  const { controlMode, setControlMode, activeTool, setActiveTool, cameraMode, setCameraMode } =
-    useEditorContext()
+  const controlMode = useEditor((state) => state.controlMode)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const activeTool = useEditor((state) => state.activeTool)
+  const setActiveTool = useEditor((state) => state.setActiveTool)
+  const cameraMode = useEditor((state) => state.cameraMode)
+  const setCameraMode = useEditor((state) => state.setCameraMode)
 
   const handleModeClick = (mode: ControlMode) => {
     // Clear any in-progress placement states when switching modes
