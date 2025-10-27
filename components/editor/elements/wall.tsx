@@ -1,10 +1,10 @@
 'use client'
 
+import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { forwardRef, memo, type Ref, useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import type { WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 

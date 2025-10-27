@@ -1,9 +1,10 @@
 'use client'
 
+import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { useEditor } from '@/hooks/use-editor'
+import { Vector3 } from 'three'
 import { FLOOR_SPACING } from './index'
 
 export function CustomControls() {
@@ -24,8 +25,12 @@ export function CustomControls() {
     if (!controls) return
 
     if (selectedFloorId) {
-      const floorY = FLOOR_SPACING * currentLevel
-      ;(controls as CameraControlsImpl).setLookAt(10, floorY + 10, 10, 0, floorY, 0, true)
+      const floorY = FLOOR_SPACING * currentLevel;
+      const currentPosition = new Vector3();
+      (controls as CameraControlsImpl).getPosition(currentPosition);
+      const currentTarget = new Vector3();
+      (controls as CameraControlsImpl).getTarget(currentTarget);
+      (controls as CameraControlsImpl).setLookAt(currentPosition.x, floorY + 10, currentPosition.z, currentTarget.x, floorY, currentTarget.z, true)
     } else {
       ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
     }
