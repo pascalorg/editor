@@ -1,6 +1,6 @@
 'use client'
 
-import { Building, Eye, EyeOff, Image, Layers, Plus, Square } from 'lucide-react'
+import { Building, Eye, EyeOff, Image, Layers, Plus, Square, Triangle } from 'lucide-react'
 import {
   TreeExpander,
   TreeIcon,
@@ -14,8 +14,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WallSegment } from '@/hooks/use-editor'
 import { useEditorContext } from '@/hooks/use-editor'
+import {
+  type BuildingElementType,
+  getElementIcon,
+  getElementLabel,
+  isElementSelected,
+  selectElementRange,
+  toggleElementSelection,
+} from '@/lib/building-elements'
 import { cn } from '@/lib/utils'
 
 interface LayersMenuProps {
@@ -26,9 +33,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const {
     handleUpload,
     wallSegments,
-    selectedWallIds,
-    setSelectedWallIds,
-    handleDeleteSelectedWalls,
+    roofSegments,
+    selectedElements,
+    setSelectedElements,
     images,
     selectedImageIds,
     setSelectedImageIds,
@@ -40,52 +47,32 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     deleteGroup,
     setControlMode,
     toggleFloorVisibility,
-    toggleWallVisibility,
+    toggleBuildingElementVisibility,
     toggleImageVisibility,
   } = useEditorContext()
 
-  const handleWallSelect = (wallId: string, event: React.MouseEvent) => {
-    setSelectedWallIds((prev) => {
-      const next = new Set(prev)
-      const clickedIndex = wallSegments.findIndex((seg) => seg.id === wallId)
+  const handleElementSelect = (
+    elementId: string,
+    type: BuildingElementType,
+    event: React.MouseEvent,
+  ) => {
+    const segments = type === 'wall' ? wallSegments : roofSegments
 
-      if (event.metaKey || event.ctrlKey) {
-        // Cmd/Ctrl+click: add/remove from selection
-        if (next.has(wallId)) {
-          next.delete(wallId)
-        } else {
-          next.add(wallId)
-        }
-      } else if (event.shiftKey && next.size > 0) {
-        // Shift+click: select range between closest selected wall and clicked wall
-        const selectedIndices = Array.from(next)
-          .map((id) => wallSegments.findIndex((seg) => seg.id === id))
-          .filter((idx) => idx !== -1)
+    if (event.metaKey || event.ctrlKey) {
+      // Cmd/Ctrl+click: toggle selection
+      const updatedSelection = toggleElementSelection(selectedElements, elementId, type, true)
+      setSelectedElements(updatedSelection)
+    } else if (event.shiftKey && selectedElements.length > 0) {
+      // Shift+click: select range
+      const updatedSelection = selectElementRange(selectedElements, segments, elementId, type)
+      setSelectedElements(updatedSelection)
+    } else {
+      // Regular click: single select
+      const updatedSelection = toggleElementSelection(selectedElements, elementId, type, false)
+      setSelectedElements(updatedSelection)
+    }
 
-        // Find closest selected wall index
-        const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-          const currentDist = Math.abs(current - clickedIndex)
-          const closestDist = Math.abs(closest - clickedIndex)
-          return currentDist < closestDist ? current : closest
-        })
-
-        // Select all walls between closest selected and clicked
-        const start = Math.min(closestSelectedIndex, clickedIndex)
-        const end = Math.max(closestSelectedIndex, clickedIndex)
-
-        for (let i = start; i <= end; i++) {
-          next.add(wallSegments[i].id)
-        }
-      } else {
-        // Regular click: select only this wall
-        next.clear()
-        next.add(wallId)
-      }
-
-      return next
-    })
-
-    // Automatically activate building mode when selecting a wall
+    // Automatically activate building mode when selecting a building element
     setControlMode('building')
   }
 
@@ -206,9 +193,12 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                 .map((level, levelIndex, levels) => {
                   const isSelected = selectedFloorId === level.id
                   const levelWalls = isSelected ? wallSegments : []
+                  const levelRoofs = isSelected ? roofSegments : []
                   const levelImages = images.filter((img) => img.level === (level.level || 0))
                   const isLastLevel = levelIndex === levels.length - 1
-                  const hasContent = isSelected && (levelWalls.length > 0 || levelImages.length > 0)
+                  const hasContent =
+                    isSelected &&
+                    (levelWalls.length > 0 || levelRoofs.length > 0 || levelImages.length > 0)
 
                   return (
                     <TreeNode isLast={isLastLevel} key={level.id} nodeId={level.id}>
@@ -250,35 +240,43 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                         {/* 3D Objects Section */}
                         <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
                           <TreeNodeTrigger>
-                            <TreeExpander hasChildren={levelWalls.length > 0} />
+                            <TreeExpander
+                              hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
+                            />
                             <TreeIcon
-                              hasChildren={levelWalls.length > 0}
+                              hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
                               icon={<Building className="h-4 w-4 text-green-500" />}
                             />
-                            <TreeLabel>3D Objects ({levelWalls.length})</TreeLabel>
+                            <TreeLabel>
+                              3D Objects ({levelWalls.length + levelRoofs.length})
+                            </TreeLabel>
                           </TreeNodeTrigger>
 
-                          <TreeNodeContent hasChildren={levelWalls.length > 0}>
+                          <TreeNodeContent
+                            hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
+                          >
+                            {/* Walls */}
                             {levelWalls.map((segment, index, walls) => (
                               <TreeNode
-                                isLast={index === walls.length - 1}
+                                isLast={index === walls.length - 1 && levelRoofs.length === 0}
                                 key={segment.id}
                                 level={2}
                                 nodeId={segment.id}
                               >
                                 <TreeNodeTrigger
                                   className={cn(
-                                    selectedWallIds.has(segment.id) && 'bg-accent',
+                                    isElementSelected(selectedElements, segment.id, 'wall') &&
+                                      'bg-accent',
                                     segment.visible === false && 'opacity-50',
                                   )}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    handleWallSelect(segment.id, e as any)
+                                    handleElementSelect(segment.id, 'wall', e as any)
                                   }}
                                 >
                                   <TreeExpander />
                                   <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
-                                  <TreeLabel>Wall {index + 1}</TreeLabel>
+                                  <TreeLabel>{getElementLabel('wall', index)}</TreeLabel>
                                   <Button
                                     className={cn(
                                       'h-5 w-5 p-0 transition-opacity',
@@ -288,7 +286,55 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                     )}
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      toggleWallVisibility(segment.id)
+                                      toggleBuildingElementVisibility(segment.id, 'wall')
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    {segment.visible === false ? (
+                                      <EyeOff className="h-3 w-3" />
+                                    ) : (
+                                      <Eye className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </TreeNodeTrigger>
+                              </TreeNode>
+                            ))}
+
+                            {/* Roofs */}
+                            {levelRoofs.map((segment, index, roofs) => (
+                              <TreeNode
+                                isLast={index === roofs.length - 1}
+                                key={segment.id}
+                                level={2}
+                                nodeId={segment.id}
+                              >
+                                <TreeNodeTrigger
+                                  className={cn(
+                                    isElementSelected(selectedElements, segment.id, 'roof') &&
+                                      'bg-accent',
+                                    segment.visible === false && 'opacity-50',
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleElementSelect(segment.id, 'roof', e as any)
+                                  }}
+                                >
+                                  <TreeExpander />
+                                  <TreeIcon
+                                    icon={<Triangle className="h-4 w-4 text-amber-600" />}
+                                  />
+                                  <TreeLabel>{getElementLabel('roof', index)}</TreeLabel>
+                                  <Button
+                                    className={cn(
+                                      'h-5 w-5 p-0 transition-opacity',
+                                      segment.visible === false
+                                        ? 'opacity-100'
+                                        : 'opacity-0 group-hover/item:opacity-100',
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleBuildingElementVisibility(segment.id, 'roof')
                                     }}
                                     size="sm"
                                     variant="ghost"

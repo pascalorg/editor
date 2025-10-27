@@ -1,7 +1,7 @@
 'use client'
 
 import { BoundingBoxIcon, type Icon, LineSegmentsIcon, WallIcon } from '@phosphor-icons/react'
-import { Blinds, Circle, DoorOpen } from 'lucide-react'
+import { Blinds, Circle, DoorOpen, Pyramid } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Tool, useEditorContext } from '@/hooks/use-editor'
@@ -9,10 +9,11 @@ import { cn } from '@/lib/utils'
 export function BuildingMenu() {
   const { activeTool, setActiveTool, controlMode } = useEditorContext()
 
-  const tools: Array<{ id: Tool; icon: Icon; label: string; enabled: boolean }> = [
+  const tools: Array<{ id: Tool; icon: Icon | typeof Pyramid; label: string; enabled: boolean }> = [
     { id: 'wall', icon: WallIcon, label: 'Wall', enabled: true },
     { id: 'room', icon: BoundingBoxIcon, label: 'Room', enabled: true },
     { id: 'custom-room', icon: LineSegmentsIcon, label: 'Custom Room', enabled: true },
+    { id: 'roof', icon: Pyramid, label: 'Gable Roof', enabled: true },
     { id: 'door', icon: DoorOpen, label: 'Door', enabled: false },
     { id: 'window', icon: Blinds, label: 'Window', enabled: false },
     { id: 'dummy1', icon: Circle, label: 'Tool 1', enabled: false },

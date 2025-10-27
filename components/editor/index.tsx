@@ -11,12 +11,13 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { GridTiles } from '@/components/editor/elements/grid'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
 import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
@@ -42,13 +43,16 @@ export default function Editor({ className }: { className?: string }) {
   const {
     walls,
     setWalls,
+    roofs,
+    setRoofs,
     images,
     setImages,
-    selectedWallIds,
-    setSelectedWallIds,
+    selectedElements,
+    setSelectedElements,
     selectedImageIds,
     setSelectedImageIds,
-    handleDeleteSelectedWalls,
+    handleDeleteSelectedElements,
+    handleDeleteSelectedImages,
     undo,
     redo,
     activeTool,
@@ -67,13 +71,14 @@ export default function Editor({ className }: { className?: string }) {
   const { setWallsGroupRef } = useEditorContext()
 
   // Use a callback ref to ensure the store is updated when the group is attached
-  const allFloorsGroupCallback = (node: THREE.Group | null) => {
-    if (node) {
-      setWallsGroupRef(node)
-    } else {
-      console.log('All floors group ref detached')
-    }
-  }
+  const allFloorsGroupCallback = useCallback(
+    (node: THREE.Group | null) => {
+      if (node) {
+        setWallsGroupRef(node)
+      }
+    },
+    [setWallsGroupRef],
+  )
 
   // State for two-click wall placement
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
@@ -87,6 +92,10 @@ export default function Editor({ className }: { className?: string }) {
   const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
   const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for roof mode (two-click ridge line)
+  const [roofStartPoint, setRoofStartPoint] = useState<[number, number] | null>(null)
+  const [roofPreviewEnd, setRoofPreviewEnd] = useState<[number, number] | null>(null)
+
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -99,10 +108,12 @@ export default function Editor({ className }: { className?: string }) {
     setRoomPreviewEnd(null)
     setCustomRoomPoints([])
     setCustomRoomPreviewEnd(null)
+    setRoofStartPoint(null)
+    setRoofPreviewEnd(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
-    // Clear all selections (walls and images)
-    setSelectedWallIds(new Set([]))
+    // Clear all selections (building elements and images)
+    setSelectedElements([])
     setSelectedImageIds(new Set([]))
   }
 
@@ -120,6 +131,7 @@ export default function Editor({ className }: { className?: string }) {
           wallStartPoint !== null ||
           roomStartPoint !== null ||
           customRoomPoints.length > 0 ||
+          roofStartPoint !== null ||
           deleteStartPoint !== null
 
         // Cancel all placement and delete modes
@@ -161,6 +173,14 @@ export default function Editor({ className }: { className?: string }) {
           e.preventDefault()
           undo()
         }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        if (selectedElements.length > 0) {
+          handleDeleteSelectedElements()
+        } else if (selectedImageIds.size > 0) {
+          // Handle image deletion separately (not building elements)
+          handleDeleteSelectedImages()
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -177,7 +197,12 @@ export default function Editor({ className }: { className?: string }) {
     roomStartPoint,
     customRoomPoints,
     deleteStartPoint,
+    roofStartPoint,
     clearPlacementStates,
+    selectedElements,
+    selectedImageIds,
+    handleDeleteSelectedElements,
+    handleDeleteSelectedImages,
   ])
 
   // Use constants instead of Leva controls
@@ -188,6 +213,7 @@ export default function Editor({ className }: { className?: string }) {
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
+  const [hoveredRoofIndex, setHoveredRoofIndex] = useState<number | null>(null)
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     position: { x: number; y: number }
@@ -473,6 +499,36 @@ export default function Editor({ className }: { className?: string }) {
         setWallStartPoint(null)
         setWallPreviewEnd(null)
       }
+    } else if (controlMode === 'building' && activeTool === 'roof') {
+      // Roof mode: two-click ridge line drawing
+      if (roofStartPoint === null) {
+        // First click: set start point
+        setRoofStartPoint([x, y])
+      } else {
+        // Second click: create roof using roofPreviewEnd (snapped position)
+        if (roofPreviewEnd) {
+          const [x1, y1] = roofStartPoint
+          const [x2, y2] = roofPreviewEnd
+          // Ensure roof is at least MIN_WALL_LENGTH
+          const dx = Math.abs(x2 - x1) * TILE_SIZE
+          const dy = Math.abs(y2 - y1) * TILE_SIZE
+          const length = Math.sqrt(dx * dx + dy * dy)
+
+          if (length >= MIN_WALL_LENGTH) {
+            // Roof is valid
+            const roofKey = `${x1},${y1}-${x2},${y2}`
+            setRoofs((prev) => {
+              const next = new Set(prev)
+              next.add(roofKey)
+              return next
+            })
+          }
+        }
+
+        // Reset placement state
+        setRoofStartPoint(null)
+        setRoofPreviewEnd(null)
+      }
     } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: two-click rectangle (4 walls)
       if (roomStartPoint === null) {
@@ -535,6 +591,16 @@ export default function Editor({ className }: { className?: string }) {
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
+    }
+    // Deselect in building mode if no placement action was taken
+    if (
+      controlMode === 'building' &&
+      wallStartPoint === null &&
+      roofStartPoint === null &&
+      roomStartPoint === null &&
+      customRoomPoints.length === 0
+    ) {
+      setSelectedElements([])
     }
   }
 
@@ -664,6 +730,13 @@ export default function Editor({ className }: { className?: string }) {
       } else if (!wallStartPoint) {
         setWallPreviewEnd(null)
       }
+    } else if (controlMode === 'building' && activeTool === 'roof') {
+      // Roof mode: no snapping (roofs can be placed at any angle)
+      if (roofStartPoint && y !== null) {
+        setRoofPreviewEnd([x, y])
+      } else if (!roofStartPoint) {
+        setRoofPreviewEnd(null)
+      }
     } else if (controlMode === 'building' && activeTool === 'room') {
       // Room mode: show rectangle preview
       if (roomStartPoint && y !== null) {
@@ -735,8 +808,8 @@ export default function Editor({ className }: { className?: string }) {
     e.stopPropagation()
     wallContextMenuTriggeredRef.current = true
 
-    // Only show context menu if there are selected walls to delete
-    if (selectedWallIds.size === 0) {
+    // Only show context menu if there are selected elements to delete
+    if (selectedElements.length === 0) {
       return
     }
 
@@ -770,8 +843,8 @@ export default function Editor({ className }: { className?: string }) {
   const handleDeleteWall = () => {
     if (contextMenuState.wallSegment) {
       // Select the wall segment and delete it
-      setSelectedWallIds(new Set([contextMenuState.wallSegment.id]))
-      handleDeleteSelectedWalls()
+      setSelectedElements([{ id: contextMenuState.wallSegment.id, type: 'wall' }])
+      handleDeleteSelectedElements()
     }
     setContextMenuState((prev) => ({ ...prev, isOpen: false }))
   }
@@ -983,13 +1056,34 @@ export default function Editor({ className }: { className?: string }) {
                       isOverviewMode={isOverviewMode}
                       key={`${floor.id}-${isActiveFloor}`}
                       movingCamera={movingCamera}
-                      onDeleteWalls={handleDeleteSelectedWalls}
+                      onDeleteWalls={handleDeleteSelectedElements}
                       onWallHover={setHoveredWallIndex}
                       onWallRightClick={handleWallRightClick}
-                      selectedWallIds={selectedWallIds}
-                      setSelectedWallIds={setSelectedWallIds}
+                      selectedElements={selectedElements}
+                      setControlMode={setControlMode}
+                      setSelectedElements={setSelectedElements}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
+                    />
+
+                    {/* Roofs component fetches its own data based on floorId */}
+                    <Roofs
+                      baseHeight={wallHeight}
+                      controlMode={controlMode}
+                      floorId={floor.id}
+                      hoveredRoofIndex={hoveredRoofIndex}
+                      isActive={isActiveFloor}
+                      isCameraEnabled={isCameraEnabled}
+                      isOverviewMode={isOverviewMode}
+                      key={`roof-${floor.id}-${isActiveFloor}`}
+                      movingCamera={movingCamera}
+                      onDeleteRoofs={handleDeleteSelectedElements}
+                      onRoofHover={setHoveredRoofIndex}
+                      onRoofRightClick={undefined}
+                      selectedElements={selectedElements}
+                      setControlMode={setControlMode}
+                      setSelectedElements={setSelectedElements}
+                      tileSize={tileSize}
                     />
                   </group>
                 </group>
@@ -1005,28 +1099,30 @@ export default function Editor({ className }: { className?: string }) {
         {/* <Stats/> */}
       </Canvas>
 
-      {contextMenuState.isOpen && contextMenuState.type === 'wall' && selectedWallIds.size > 0 && (
-        <div
-          className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-          style={{
-            top: `${contextMenuState.position.y}px`,
-            left: `${contextMenuState.position.x}px`,
-          }}
-        >
-          {contextMenuState.wallSegment && (
-            <div
-              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-              onClick={() => {
-                handleDeleteSelectedWalls()
-                setContextMenuState({ ...contextMenuState, isOpen: false })
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected Walls
-            </div>
-          )}
-        </div>
-      )}
+      {contextMenuState.isOpen &&
+        contextMenuState.type === 'wall' &&
+        selectedElements.length > 0 && (
+          <div
+            className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+            style={{
+              top: `${contextMenuState.position.y}px`,
+              left: `${contextMenuState.position.x}px`,
+            }}
+          >
+            {contextMenuState.wallSegment && (
+              <div
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  handleDeleteSelectedElements()
+                  setContextMenuState({ ...contextMenuState, isOpen: false })
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Selected Elements
+              </div>
+            )}
+          </div>
+        )}
 
       <ControlModeMenu onModeChange={clearPlacementStates} />
       <BuildingMenu />

@@ -46,8 +46,8 @@ export function AppSidebar() {
     isJsonInspectorOpen,
     setIsJsonInspectorOpen,
     handleExport,
-    selectedWallIds,
-    handleDeleteSelectedWalls,
+    selectedElements,
+    handleDeleteSelectedElements,
     handleSaveLayout,
     handleLoadLayout,
     handleResetToDefault,
@@ -62,18 +62,18 @@ export function AppSidebar() {
     setMounted(true)
   }, [])
 
-  // Handle backspace key to delete selected walls
+  // Handle backspace key to delete selected elements
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Backspace' && selectedWallIds.size > 0) {
+      if (event.key === 'Backspace' && selectedElements.length > 0) {
         event.preventDefault()
-        handleDeleteSelectedWalls()
+        handleDeleteSelectedElements()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedWallIds, handleDeleteSelectedWalls])
+  }, [selectedElements, handleDeleteSelectedElements])
 
   const handleLoadBuildClick = () => {
     fileInputRef.current?.click()

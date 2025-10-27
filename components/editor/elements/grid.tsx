@@ -65,7 +65,7 @@ export const GridTiles = memo(
         const wallComponent = state.components.find(
           (c) => c.type === 'wall' && c.group === selectedFloorId,
         )
-        return wallComponent?.data.segments || []
+        return wallComponent?.type === 'wall' ? wallComponent.data.segments : []
       }),
     )
 
