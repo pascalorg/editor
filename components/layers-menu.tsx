@@ -1,6 +1,6 @@
 'use client'
 
-import { Building, Image, Layers, Plus, Square, Trash2 } from 'lucide-react'
+import { Building, Eye, EyeOff, Image, Layers, Plus, Square } from 'lucide-react'
 import {
   TreeExpander,
   TreeIcon,
@@ -38,6 +38,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     addGroup,
     deleteGroup,
     setControlMode,
+    toggleFloorVisibility,
+    toggleWallVisibility,
+    toggleImageVisibility,
   } = useEditorContext()
 
   const handleWallSelect = (wallId: string, event: React.MouseEvent) => {
@@ -161,6 +164,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       type: 'floor' as const,
       color: '#ffffff',
       level: nextNumber,
+      visible: true,
     }
 
     addGroup(newLevel)
@@ -203,7 +207,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   return (
                     <TreeNode isLast={isLastLevel} key={level.id} nodeId={level.id}>
                       <TreeNodeTrigger
-                        className={cn(isSelected && 'sticky top-0 z-10 bg-background')}
+                        className={cn(
+                          isSelected && 'sticky top-0 z-10 bg-background',
+                          level.visible === false && 'opacity-50',
+                        )}
                       >
                         <TreeExpander hasChildren={hasContent} />
                         <TreeIcon
@@ -211,19 +218,26 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                           icon={<Layers className="h-4 w-4 text-blue-500" />}
                         />
                         <TreeLabel className="flex-1">{level.name}</TreeLabel>
-                        {level.id !== 'level_0' && (
-                          <Button
-                            className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteGroup(level.id)
-                            }}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <Button
+                          className={cn(
+                            'h-5 w-5 p-0 transition-opacity',
+                            level.visible === false
+                              ? 'opacity-100'
+                              : 'opacity-0 group-hover/item:opacity-100',
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleFloorVisibility(level.id)
+                          }}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          {level.visible === false ? (
+                            <EyeOff className="h-3 w-3" />
+                          ) : (
+                            <Eye className="h-3 w-3" />
+                          )}
+                        </Button>
                       </TreeNodeTrigger>
 
                       <TreeNodeContent hasChildren={hasContent}>
@@ -236,19 +250,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               icon={<Building className="h-4 w-4 text-green-500" />}
                             />
                             <TreeLabel>3D Objects ({levelWalls.length})</TreeLabel>
-                            {levelWalls.length > 0 && selectedWallIds.size > 0 && (
-                              <Button
-                                className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleDeleteSelectedWalls()
-                                }}
-                                size="sm"
-                                variant="ghost"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
                           </TreeNodeTrigger>
 
                           <TreeNodeContent hasChildren={levelWalls.length > 0}>
@@ -260,7 +261,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 nodeId={segment.id}
                               >
                                 <TreeNodeTrigger
-                                  className={cn(selectedWallIds.has(segment.id) && 'bg-accent')}
+                                  className={cn(
+                                    selectedWallIds.has(segment.id) && 'bg-accent',
+                                    segment.visible === false && 'opacity-50',
+                                  )}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleWallSelect(segment.id, e as any)
@@ -269,6 +273,26 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                   <TreeExpander />
                                   <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
                                   <TreeLabel>Wall {index + 1}</TreeLabel>
+                                  <Button
+                                    className={cn(
+                                      'h-5 w-5 p-0 transition-opacity',
+                                      segment.visible === false
+                                        ? 'opacity-100'
+                                        : 'opacity-0 group-hover/item:opacity-100',
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleWallVisibility(segment.id)
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    {segment.visible === false ? (
+                                      <EyeOff className="h-3 w-3" />
+                                    ) : (
+                                      <Eye className="h-3 w-3" />
+                                    )}
+                                  </Button>
                                 </TreeNodeTrigger>
                               </TreeNode>
                             ))}
@@ -284,39 +308,24 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               icon={<Image className="h-4 w-4 text-purple-500" />}
                             />
                             <TreeLabel>Guides ({levelImages.length})</TreeLabel>
-                            <div className="flex gap-1">
-                              <Button
-                                className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  const input = document.createElement('input')
-                                  input.type = 'file'
-                                  input.accept = 'image/png,image/jpeg'
-                                  input.onchange = (event) => {
-                                    const file = (event.target as HTMLInputElement).files?.[0]
-                                    if (file) handleUpload(file, level.level || 0)
-                                  }
-                                  input.click()
-                                }}
-                                size="sm"
-                                variant="ghost"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                              {levelImages.length > 0 && selectedImageIds.size > 0 && (
-                                <Button
-                                  className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDeleteSelectedImages()
-                                  }}
-                                  size="sm"
-                                  variant="ghost"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
+                            <Button
+                              className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const input = document.createElement('input')
+                                input.type = 'file'
+                                input.accept = 'image/png,image/jpeg'
+                                input.onchange = (event) => {
+                                  const file = (event.target as HTMLInputElement).files?.[0]
+                                  if (file) handleUpload(file, level.level || 0)
+                                }
+                                input.click()
+                              }}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
                           </TreeNodeTrigger>
 
                           <TreeNodeContent hasChildren={levelImages.length > 0}>
@@ -329,7 +338,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                 nodeId={image.id}
                               >
                                 <TreeNodeTrigger
-                                  className={cn(selectedImageIds.has(image.id) && 'bg-accent')}
+                                  className={cn(
+                                    selectedImageIds.has(image.id) && 'bg-accent',
+                                    image.visible === false && 'opacity-50',
+                                  )}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleImageSelect(image.id, e as any)
@@ -338,6 +350,26 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                   <TreeExpander />
                                   <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
                                   <TreeLabel>Reference {index + 1}</TreeLabel>
+                                  <Button
+                                    className={cn(
+                                      'h-5 w-5 p-0 transition-opacity',
+                                      image.visible === false
+                                        ? 'opacity-100'
+                                        : 'opacity-0 group-hover/item:opacity-100',
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleImageVisibility(image.id)
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    {image.visible === false ? (
+                                      <EyeOff className="h-3 w-3" />
+                                    ) : (
+                                      <Eye className="h-3 w-3" />
+                                    )}
+                                  </Button>
                                 </TreeNodeTrigger>
                               </TreeNode>
                             ))}

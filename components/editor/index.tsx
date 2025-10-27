@@ -863,35 +863,37 @@ export default function Editor({ className }: { className?: string }) {
 
         {/* Hide guides (reference images) in overview mode */}
         {!isOverviewMode &&
-          images.map((image) => (
-            <ReferenceImage
-              controlMode={controlMode}
-              id={image.id}
-              isSelected={selectedImageIds.has(image.id)}
-              key={image.id}
-              level={image.level}
-              movingCamera={movingCamera}
-              onManipulationEnd={() => setIsManipulatingImage(false)}
-              onManipulationStart={() => setIsManipulatingImage(true)}
-              onSelect={() => setSelectedImageIds(new Set([image.id]))}
-              onUpdate={(updates, pushToUndo = true) =>
-                setImages(
-                  images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
-                  pushToUndo,
-                )
-              }
-              opacity={imageOpacity}
-              position={image.position}
-              rotation={image.rotation}
-              scale={image.scale}
-              url={image.url}
-            />
-          ))}
+          images
+            .filter((image) => image.visible !== false)
+            .map((image) => (
+              <ReferenceImage
+                controlMode={controlMode}
+                id={image.id}
+                isSelected={selectedImageIds.has(image.id)}
+                key={image.id}
+                level={image.level}
+                movingCamera={movingCamera}
+                onManipulationEnd={() => setIsManipulatingImage(false)}
+                onManipulationStart={() => setIsManipulatingImage(true)}
+                onSelect={() => setSelectedImageIds(new Set([image.id]))}
+                onUpdate={(updates, pushToUndo = true) =>
+                  setImages(
+                    images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
+                    pushToUndo,
+                  )
+                }
+                opacity={imageOpacity}
+                position={image.position}
+                rotation={image.rotation}
+                scale={image.scale}
+                url={image.url}
+              />
+            ))}
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
           {groups
-            .filter((g) => g.type === 'floor')
+            .filter((g) => g.type === 'floor' && g.visible !== false)
             .map((floor) => {
               const floorLevel = floor.level || 0
               const yPosition = FLOOR_SPACING * floorLevel

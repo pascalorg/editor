@@ -209,11 +209,11 @@ export const Walls = forwardRef(
     }: WallsProps,
     ref: Ref<THREE.Group>,
   ) => {
-    // Fetch wall segments for this floor from the store
+    // Fetch wall segments for this floor from the store, filtering out invisible ones
     const wallSegments = useEditor(
       useShallow((state) => {
         const wallComponent = state.components.find((c) => c.type === 'wall' && c.group === floorId)
-        return wallComponent?.data.segments || []
+        return wallComponent?.data.segments.filter((seg) => seg.visible !== false) || []
       }),
     )
 
