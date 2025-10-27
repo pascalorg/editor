@@ -8,6 +8,7 @@ import { FLOOR_SPACING } from './index'
 
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode)
+  const cameraMode = useEditor((state) => state.cameraMode)
   const setMovingCamera = useEditor((state) => state.setMovingCamera)
   const controls = useThree((state) => state.controls)
   const controlsRef = useRef<CameraControlsImpl>(null)
@@ -31,15 +32,21 @@ export function CustomControls() {
     }
   }, [currentLevel, controls, selectedFloorId])
 
-  // Configure mouse buttons based on control mode
+  // Configure mouse buttons based on control mode and camera mode
   const mouseButtons = useMemo(() => {
+    // Use ZOOM for orthographic camera, DOLLY for perspective camera
+    const wheelAction =
+      cameraMode === 'orthographic'
+        ? CameraControlsImpl.ACTION.ZOOM
+        : CameraControlsImpl.ACTION.DOLLY
+
     // In select mode, left-click can pan the camera
     if (controlMode === 'select') {
       return {
         left: CameraControlsImpl.ACTION.SCREEN_PAN, // Similar to the sims
         middle: CameraControlsImpl.ACTION.SCREEN_PAN,
         right: CameraControlsImpl.ACTION.ROTATE,
-        wheel: CameraControlsImpl.ACTION.DOLLY,
+        wheel: wheelAction,
       }
     }
 
@@ -49,9 +56,9 @@ export function CustomControls() {
       left: CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
-      wheel: CameraControlsImpl.ACTION.DOLLY,
+      wheel: wheelAction,
     }
-  }, [controlMode])
+  }, [controlMode, cameraMode])
 
   return (
     <CameraControls
