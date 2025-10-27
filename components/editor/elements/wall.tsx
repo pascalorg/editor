@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+
 import {
   handleElementClick,
   isElementSelected,

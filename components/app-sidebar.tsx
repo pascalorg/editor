@@ -36,23 +36,21 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { useEditorContext } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 export function AppSidebar() {
-  const {
-    isHelpOpen,
-    setIsHelpOpen,
-    isJsonInspectorOpen,
-    setIsJsonInspectorOpen,
-    handleExport,
-    selectedElements,
-    handleDeleteSelectedElements,
-    handleSaveLayout,
-    handleLoadLayout,
-    handleResetToDefault,
-    serializeLayout,
-  } = useEditorContext()
+  const isHelpOpen = useEditor((state) => state.isHelpOpen)
+  const setIsHelpOpen = useEditor((state) => state.setIsHelpOpen)
+  const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
+  const setIsJsonInspectorOpen = useEditor((state) => state.setIsJsonInspectorOpen)
+  const handleExport = useEditor((state) => state.handleExport)
+  const selectedElements = useEditor((state) => state.selectedElements)
+  const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
+  const handleSaveLayout = useEditor((state) => state.handleSaveLayout)
+  const handleLoadLayout = useEditor((state) => state.handleLoadLayout)
+  const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
+  const serializeLayout = useEditor((state) => state.serializeLayout)
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
