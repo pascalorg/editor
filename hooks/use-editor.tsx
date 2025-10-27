@@ -31,6 +31,8 @@ export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
 export type CameraMode = 'perspective' | 'orthographic'
 
+export type LevelMode = 'stacked' | 'exploded'
+
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
@@ -85,6 +87,7 @@ type StoreState = {
   activeTool: Tool | null
   controlMode: ControlMode
   cameraMode: CameraMode
+  levelMode: LevelMode
   movingCamera: boolean
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   handleClear: () => void
@@ -102,6 +105,7 @@ type StoreState = {
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
   setCameraMode: (mode: CameraMode) => void
+  toggleLevelMode: () => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
@@ -204,6 +208,11 @@ const useStore = create<StoreState>()(
       activeTool: 'wall',
       controlMode: 'building',
       cameraMode: 'perspective',
+      levelMode: 'stacked',
+      toggleLevelMode: () =>
+        set((state) => ({
+          levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
+        })),
       movingCamera: false,
       isManipulatingImage: false,
       setWalls: (walls) =>

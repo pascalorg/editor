@@ -6,6 +6,7 @@ import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Walls } from '@/components/editor/elements/wall'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
   GizmoHelper,
@@ -23,7 +24,7 @@ import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
-const WALL_HEIGHT = 2.5 // 2.5m standard wall height
+export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 export const GRID_SIZE = 30 // 30m x 30m
 const SHOW_GRID = true // Show grid by default
@@ -36,7 +37,7 @@ const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
-export const FLOOR_SPACING = 10 // 10m vertical spacing between floors
+export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
   // Use individual selectors for better performance
@@ -63,6 +64,8 @@ export default function Editor({ className }: { className?: string }) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const isOverviewMode = useEditor((state) => state.isOverviewMode)
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
+  const levelMode = useEditor((state) => state.levelMode)
+  const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
   // Get walls as a Set
   const walls = getWallsSet()
@@ -157,6 +160,9 @@ export default function Editor({ className }: { className?: string }) {
       } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
+      } else if (e.key === 'l' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        toggleLevelMode()
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
           e.preventDefault()
@@ -898,11 +904,12 @@ export default function Editor({ className }: { className?: string }) {
             .filter((g) => g.type === 'floor' && g.visible !== false)
             .map((floor) => {
               const floorLevel = floor.level || 0
-              const yPosition = FLOOR_SPACING * floorLevel
+              const yPosition =
+                (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * floorLevel
               const isActiveFloor = selectedFloorId === floor.id
 
               return (
-                <group key={floor.id} position-y={yPosition}>
+                <AnimatedLevel key={floor.id} positionY={yPosition}>
                   {/* Drei Grid for visual reference only - not interactive */}
                   {showGrid && (
                     <group raycast={() => null}>
@@ -922,20 +929,22 @@ export default function Editor({ className }: { className?: string }) {
                           side={2}
                         />
                       ) : (
-                        <Grid
-                          args={[GRID_SIZE, GRID_SIZE]}
-                          cellColor="#4a4a5a"
-                          cellSize={tileSize}
-                          cellThickness={0.5}
-                          fadeDistance={GRID_SIZE * 2}
-                          fadeStrength={1}
-                          infiniteGrid={false}
-                          position={[0, 0, 0]}
-                          sectionColor="#5a4a4a"
-                          sectionSize={tileSize * 2}
-                          sectionThickness={1}
-                          side={2}
-                        />
+                        levelMode === 'exploded' && (
+                          <Grid
+                            args={[GRID_SIZE, GRID_SIZE]}
+                            cellColor="#4a4a5a"
+                            cellSize={tileSize}
+                            cellThickness={0.5}
+                            fadeDistance={GRID_SIZE * 2}
+                            fadeStrength={1}
+                            infiniteGrid={false}
+                            position={[0, 0, 0]}
+                            sectionColor="#5a4a4a"
+                            sectionSize={tileSize * 2}
+                            sectionThickness={1}
+                            side={2}
+                          />
+                        )
                       )}
                     </group>
                   )}
@@ -988,7 +997,7 @@ export default function Editor({ className }: { className?: string }) {
                       wallHeight={wallHeight}
                     />
                   </group>
-                </group>
+                </AnimatedLevel>
               )
             })}
         </group>
@@ -1030,4 +1039,18 @@ export default function Editor({ className }: { className?: string }) {
       <BuildingMenu />
     </div>
   )
+}
+
+interface AnimatedLevelProps {
+  children: React.ReactNode
+  positionY?: number
+}
+
+const AnimatedLevel: React.FC<AnimatedLevelProps> = ({ positionY, children }) => {
+  const animatedProps = useSpring({
+    positionY,
+    config: { mass: 1, tension: 170, friction: 26 },
+  })
+
+  return <animated.group position-y={animatedProps.positionY}>{children}</animated.group>
 }

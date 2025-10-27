@@ -189,7 +189,12 @@ export const GridTiles = memo(
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <planeGeometry args={[gridSize, gridSize]} />
-          <meshStandardMaterial color="#404045" opacity={opacity * 0.3} transparent />
+          <meshStandardMaterial
+            color="#404045"
+            depthWrite={false}
+            opacity={opacity * 0.3}
+            transparent
+          />
         </mesh>
 
         {/* Down arrow at hovered intersection or snapped preview position */}

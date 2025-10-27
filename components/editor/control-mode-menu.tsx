@@ -1,10 +1,11 @@
 'use client'
 
-import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import { StackIcon } from '@phosphor-icons/react'
+import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 
 export function ControlModeMenu({
   className,
@@ -19,6 +20,8 @@ export function ControlModeMenu({
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
+  const levelMode = useEditor((state) => state.levelMode)
+  const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
   const handleModeClick = (mode: ControlMode) => {
     // Clear any in-progress placement states when switching modes
@@ -139,6 +142,25 @@ export function ControlModeMenu({
           </TooltipTrigger>
           <TooltipContent>
             <p>Camera: {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'} (C)</p>
+          </TooltipContent>
+        </Tooltip>
+        {/* Exploded/Stacked toggle button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 w-8 transition-all',
+                'text-white hover:bg-gray-800 hover:text-white',
+              )}
+              onClick={toggleLevelMode}
+              size="icon"
+              variant="ghost"
+            >
+              <StackIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Level mode: {levelMode === 'stacked' ? 'Stacked' : 'Exploded'} (L)</p>
           </TooltipContent>
         </Tooltip>
       </div>
