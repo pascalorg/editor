@@ -27,25 +27,22 @@ export function CustomControls() {
     if (!controls) return
 
     if (selectedFloorId) {
-      const floorY = FLOOR_SPACING * currentLevel;
-      const currentPosition = new Vector3();
-      (controls as CameraControlsImpl).getPosition(currentPosition);
-      const currentTarget = new Vector3();
-      (controls as CameraControlsImpl).getTarget(currentTarget);
-      (controls as CameraControlsImpl).setLookAt(currentPosition.x, floorY + 10, currentPosition.z, currentTarget.x, floorY, currentTarget.z, true);
+      const floorY = FLOOR_SPACING * currentLevel
+      const currentTarget = new Vector3()
+      ;(controls as CameraControlsImpl).getTarget(currentTarget)
+      ;(controls as CameraControlsImpl).moveTo(currentTarget.x, floorY, currentTarget.z, true)
       const boundaryBox = new Box3(
         new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
-        new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2)
-      );
-      (controls as CameraControlsImpl).setBoundary(boundaryBox);
-      
+        new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
+      )
+      ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
+
       //  For debugging camera boundaries
       // const boxHelper = new Box3Helper(boundaryBox, 0xff0000);
       // scene.add(boxHelper);
-
     } else {
-      (controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true);
-      (controls as CameraControlsImpl).setBoundary(); // No argument to remove boundaries
+      ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
+      ;(controls as CameraControlsImpl).setBoundary() // No argument to remove boundaries
     }
   }, [currentLevel, controls, selectedFloorId])
 

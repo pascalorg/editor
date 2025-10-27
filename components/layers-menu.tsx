@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import { useShallow } from 'zustand/react/shallow'
 
 interface LayersMenuProps {
   mounted: boolean
@@ -24,7 +25,7 @@ interface LayersMenuProps {
 
 export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleUpload = useEditor((state) => state.handleUpload)
-  const wallSegments = useEditor((state) => state.wallSegments())
+  const wallSegments = useEditor(useShallow((state) => state.wallSegments()))
   const selectedWallIds = useEditor((state) => state.selectedWallIds)
   const setSelectedWallIds = useEditor((state) => state.setSelectedWallIds)
   const handleDeleteSelectedWalls = useEditor((state) => state.handleDeleteSelectedWalls)
