@@ -37,6 +37,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     selectFloor,
     addGroup,
     deleteGroup,
+    setControlMode,
   } = useEditorContext()
 
   const handleWallSelect = (wallId: string, event: React.MouseEvent) => {
@@ -79,6 +80,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
       return next
     })
+
+    // Automatically activate building mode when selecting a wall
+    setControlMode('building')
   }
 
   const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
@@ -119,6 +123,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
       return next
     })
+
+    // Automatically activate guide mode when selecting an image
+    setControlMode('guide')
   }
 
   const handleTreeSelectionChange = (selectedIds: string[]) => {
