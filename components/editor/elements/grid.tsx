@@ -501,6 +501,17 @@ export const GridTiles = memo(
                   />
                 )
               })}
+
+            {/* Wall shadow preview for current hover segment */}
+            {customRoomPreviewEnd && (
+              <WallShadowPreview
+                allWallSegments={allWallSegments}
+                end={customRoomPreviewEnd}
+                start={customRoomPoints[customRoomPoints.length - 1]}
+                tileSize={tileSize}
+                wallHeight={wallHeight}
+              />
+            )}
           </>
         )}
 

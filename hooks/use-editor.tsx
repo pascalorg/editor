@@ -11,6 +11,7 @@ export interface WallSegment {
   end: [number, number] // [x, y] intersection coordinates
   id: string
   isHorizontal: boolean
+  visible?: boolean // Optional for backward compatibility
 }
 
 export interface ReferenceImage {
@@ -22,11 +23,14 @@ export interface ReferenceImage {
   rotation: number
   scale: number
   level: number // Floor level this image belongs to
+  visible?: boolean // Optional for backward compatibility
 }
 
 export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
+
+export type CameraMode = 'perspective' | 'orthographic'
 
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
@@ -47,6 +51,7 @@ export type ComponentGroup = {
   type: 'room' | 'floor' | 'outdoor'
   color: string
   level?: number
+  visible?: boolean // Optional for backward compatibility
 }
 
 export type LayoutJSON = {
@@ -80,6 +85,7 @@ type StoreState = {
   redoStack: HistoryState[]
   activeTool: Tool | null
   controlMode: ControlMode
+  cameraMode: CameraMode
   movingCamera: boolean
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   handleClear: () => void
@@ -96,6 +102,7 @@ type StoreState = {
   setWallsGroupRef: (ref: THREE.Group | null) => void
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
+  setCameraMode: (mode: CameraMode) => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
@@ -113,6 +120,9 @@ type StoreState = {
   handleResetToDefault: () => void
   undo: () => void
   redo: () => void
+  toggleFloorVisibility: (floorId: string) => void
+  toggleWallVisibility: (wallId: string) => void
+  toggleImageVisibility: (imageId: string) => void
 }
 
 const useStore = create<StoreState>()(
@@ -127,6 +137,7 @@ const useStore = create<StoreState>()(
           type: 'floor',
           color: '#ffffff',
           level: 0,
+          visible: true,
         },
       ],
       currentLevel: 0,
@@ -193,6 +204,7 @@ const useStore = create<StoreState>()(
       redoStack: [],
       activeTool: 'wall',
       controlMode: 'building',
+      cameraMode: 'perspective',
       movingCamera: false,
       isManipulatingImage: false,
       setWalls: (walls) =>
@@ -236,6 +248,7 @@ const useStore = create<StoreState>()(
               end: [x2, y2],
               id: wallKey,
               isHorizontal,
+              visible: true,
             })
           }
 
@@ -331,6 +344,7 @@ const useStore = create<StoreState>()(
           set({ activeTool: null })
         }
       },
+      setCameraMode: (mode) => set({ cameraMode: mode }),
       setMovingCamera: (moving) => set({ movingCamera: moving }),
       setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
       getWallsSet: () => {
@@ -400,6 +414,7 @@ const useStore = create<StoreState>()(
               rotation: 0,
               scale: 1,
               level,
+              visible: true,
             }
             set((state) => ({ images: [...state.images, newImage] }))
           }
@@ -511,6 +526,7 @@ const useStore = create<StoreState>()(
               type: 'floor',
               color: '#ffffff',
               level: 0,
+              visible: true,
             },
           ],
           currentLevel: 0,
@@ -548,6 +564,34 @@ const useStore = create<StoreState>()(
             selectedImageIds: [],
           }
         }),
+      toggleFloorVisibility: (floorId) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g.id === floorId ? { ...g, visible: !(g.visible ?? true) } : g,
+          ),
+        })),
+      toggleWallVisibility: (wallId) =>
+        set((state) => ({
+          components: state.components.map((comp) => {
+            if (comp.type === 'wall' && comp.group === state.selectedFloorId) {
+              return {
+                ...comp,
+                data: {
+                  segments: comp.data.segments.map((seg) =>
+                    seg.id === wallId ? { ...seg, visible: !(seg.visible ?? true) } : seg,
+                  ),
+                },
+              }
+            }
+            return comp
+          }),
+        })),
+      toggleImageVisibility: (imageId) =>
+        set((state) => ({
+          images: state.images.map((img) =>
+            img.id === imageId ? { ...img, visible: !(img.visible ?? true) } : img,
+          ),
+        })),
     }),
     {
       name: 'editor-storage',
@@ -560,7 +604,7 @@ const useStore = create<StoreState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Migrate: Add missing position, rotation, scale, level to existing images
+          // Migrate: Add missing position, rotation, scale, level, visible to existing images
           if (state.images && state.images.length > 0) {
             state.images = state.images.map((img: any) => ({
               ...img,
@@ -568,12 +612,27 @@ const useStore = create<StoreState>()(
               rotation: img.rotation ?? 0,
               scale: img.scale ?? 1,
               level: img.level ?? 0, // Default to base level
+              visible: img.visible ?? true, // Default to visible
             }))
           }
 
           // Ensure components and groups are initialized
           if (!state.components) {
             state.components = []
+          }
+          // Migrate: Add missing visible to existing components
+          if (state.components && state.components.length > 0) {
+            state.components = state.components.map((comp: any) => ({
+              ...comp,
+              data: {
+                ...comp.data,
+                segments:
+                  comp.data.segments?.map((seg: any) => ({
+                    ...seg,
+                    visible: seg.visible ?? true,
+                  })) ?? [],
+              },
+            }))
           }
           if (!state.groups) {
             state.groups = [
@@ -583,8 +642,16 @@ const useStore = create<StoreState>()(
                 type: 'floor',
                 color: '#ffffff',
                 level: 0,
+                visible: true,
               },
             ]
+          }
+          // Migrate: Add missing visible to existing groups
+          if (state.groups && state.groups.length > 0) {
+            state.groups = state.groups.map((group: any) => ({
+              ...group,
+              visible: group.visible ?? true,
+            }))
           }
 
           // Preselect base level if no level is selected
@@ -641,6 +708,8 @@ export const useEditorContext = () => {
     setActiveTool: store.setActiveTool,
     controlMode: store.controlMode,
     setControlMode: store.setControlMode,
+    cameraMode: store.cameraMode,
+    setCameraMode: store.setCameraMode,
     movingCamera: store.movingCamera,
     setMovingCamera: store.setMovingCamera,
     isManipulatingImage: store.isManipulatingImage,
@@ -664,5 +733,8 @@ export const useEditorContext = () => {
     selectFloor: store.selectFloor,
     addGroup: store.addGroup,
     deleteGroup: store.deleteGroup,
+    toggleFloorVisibility: store.toggleFloorVisibility,
+    toggleWallVisibility: store.toggleWallVisibility,
+    toggleImageVisibility: store.toggleImageVisibility,
   }
 }

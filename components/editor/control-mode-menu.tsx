@@ -1,6 +1,6 @@
 'use client'
 
-import { Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
+import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, useEditorContext } from '@/hooks/use-editor'
@@ -13,7 +13,8 @@ export function ControlModeMenu({
   className?: string
   onModeChange?: () => void
 }) {
-  const { controlMode, setControlMode, activeTool, setActiveTool } = useEditorContext()
+  const { controlMode, setControlMode, activeTool, setActiveTool, cameraMode, setCameraMode } =
+    useEditorContext()
 
   const handleModeClick = (mode: ControlMode) => {
     // Clear any in-progress placement states when switching modes
@@ -111,6 +112,31 @@ export function ControlModeMenu({
             </Tooltip>
           )
         })}
+
+        {/* Separator */}
+        <div className="mx-1 h-6 w-px bg-gray-700" />
+
+        {/* Camera toggle button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 w-8 transition-all',
+                'text-white hover:bg-gray-800 hover:text-white',
+              )}
+              onClick={() =>
+                setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
+              }
+              size="icon"
+              variant="ghost"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Camera: {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'} (C)</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </TooltipProvider>
   )
