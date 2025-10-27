@@ -4,8 +4,8 @@ import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Vector3 } from 'three'
-import { FLOOR_SPACING } from './index'
+import { Box3, Vector3 } from 'three'
+import { FLOOR_SPACING, GRID_SIZE } from './index'
 
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode)
@@ -21,6 +21,8 @@ export function CustomControls() {
     ;(controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false)
   }, [controls])
 
+  // const scene = useThree((state) => state.scene)
+
   useEffect(() => {
     if (!controls) return
 
@@ -30,9 +32,20 @@ export function CustomControls() {
       (controls as CameraControlsImpl).getPosition(currentPosition);
       const currentTarget = new Vector3();
       (controls as CameraControlsImpl).getTarget(currentTarget);
-      (controls as CameraControlsImpl).setLookAt(currentPosition.x, floorY + 10, currentPosition.z, currentTarget.x, floorY, currentTarget.z, true)
+      (controls as CameraControlsImpl).setLookAt(currentPosition.x, floorY + 10, currentPosition.z, currentTarget.x, floorY, currentTarget.z, true);
+      const boundaryBox = new Box3(
+        new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
+        new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2)
+      );
+      (controls as CameraControlsImpl).setBoundary(boundaryBox);
+      
+      //  For debugging camera boundaries
+      // const boxHelper = new Box3Helper(boundaryBox, 0xff0000);
+      // scene.add(boxHelper);
+
     } else {
-      ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
+      (controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true);
+      (controls as CameraControlsImpl).setBoundary(); // No argument to remove boundaries
     }
   }, [currentLevel, controls, selectedFloorId])
 

@@ -1,5 +1,12 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { GridTiles } from '@/components/editor/elements/grid'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Walls } from '@/components/editor/elements/wall'
+import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 import {
   Environment,
   GizmoHelper,
@@ -13,19 +20,12 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { GridTiles } from '@/components/editor/elements/grid'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Walls } from '@/components/editor/elements/wall'
-import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
-const GRID_SIZE = 30 // 30m x 30m
+export const GRID_SIZE = 30 // 30m x 30m
 const SHOW_GRID = true // Show grid by default
 const GRID_OPACITY = 0.3 // Grid opacity
 const CAMERA_TYPE = 'perspective' as 'perspective' | 'orthographic' // Camera type
