@@ -13,6 +13,7 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditorContext } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
@@ -178,9 +179,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         <label className="font-medium text-muted-foreground text-sm">
           Levels ({mounted ? groups.filter((g) => g.type === 'floor').length : 0})
         </label>
-        <Button className="h-6 w-6 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
-          <Plus className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button className="h-6 w-6 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add new level</TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="no-scrollbar flex-1">
@@ -308,24 +314,29 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               icon={<Image className="h-4 w-4 text-purple-500" />}
                             />
                             <TreeLabel>Guides ({levelImages.length})</TreeLabel>
-                            <Button
-                              className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                const input = document.createElement('input')
-                                input.type = 'file'
-                                input.accept = 'image/png,image/jpeg'
-                                input.onchange = (event) => {
-                                  const file = (event.target as HTMLInputElement).files?.[0]
-                                  if (file) handleUpload(file, level.level || 0)
-                                }
-                                input.click()
-                              }}
-                              size="sm"
-                              variant="ghost"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const input = document.createElement('input')
+                                    input.type = 'file'
+                                    input.accept = 'image/png,image/jpeg'
+                                    input.onchange = (event) => {
+                                      const file = (event.target as HTMLInputElement).files?.[0]
+                                      if (file) handleUpload(file, level.level || 0)
+                                    }
+                                    input.click()
+                                  }}
+                                  size="sm"
+                                  variant="ghost"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Add reference image</TooltipContent>
+                            </Tooltip>
                           </TreeNodeTrigger>
 
                           <TreeNodeContent hasChildren={levelImages.length > 0}>
