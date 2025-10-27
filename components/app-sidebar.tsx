@@ -1,18 +1,5 @@
 'use client'
 
-import JsonView from '@uiw/react-json-view'
-import {
-  ChevronDown,
-  ChevronRight,
-  Download,
-  FileCode,
-  HelpCircle,
-  Save,
-  Settings,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,23 +23,34 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { useEditorContext } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import JsonView from '@uiw/react-json-view'
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileCode,
+  HelpCircle,
+  Save,
+  Settings,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 export function AppSidebar() {
-  const {
-    isHelpOpen,
-    setIsHelpOpen,
-    isJsonInspectorOpen,
-    setIsJsonInspectorOpen,
-    handleExport,
-    selectedWallIds,
-    handleDeleteSelectedWalls,
-    handleSaveLayout,
-    handleLoadLayout,
-    handleResetToDefault,
-    serializeLayout,
-  } = useEditorContext()
+  const isHelpOpen = useEditor((state) => state.isHelpOpen)
+  const setIsHelpOpen = useEditor((state) => state.setIsHelpOpen)
+  const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
+  const setIsJsonInspectorOpen = useEditor((state) => state.setIsJsonInspectorOpen)
+  const handleExport = useEditor((state) => state.handleExport)
+  const selectedWallIds = useEditor((state) => state.selectedWallIds)
+  const handleDeleteSelectedWalls = useEditor((state) => state.handleDeleteSelectedWalls)
+  const handleSaveLayout = useEditor((state) => state.handleSaveLayout)
+  const handleLoadLayout = useEditor((state) => state.handleLoadLayout)
+  const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
+  const serializeLayout = useEditor((state) => state.serializeLayout)
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -65,7 +63,7 @@ export function AppSidebar() {
   // Handle backspace key to delete selected walls
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Backspace' && selectedWallIds.size > 0) {
+      if (event.key === 'Backspace' && selectedWallIds.length > 0) {
         event.preventDefault()
         handleDeleteSelectedWalls()
       }

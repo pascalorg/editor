@@ -1,10 +1,11 @@
 'use client'
 
-import { Line } from '@react-three/drei'
-import { memo, useRef, useState } from 'react'
+import { useEditor } from '@/hooks/use-editor'
+import { type CameraControlsImpl, Line } from '@react-three/drei'
+import { type ThreeEvent, useThree } from '@react-three/fiber'
+import { memo, useCallback, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { useEditor, useEditorContext } from '@/hooks/use-editor'
 import { WallShadowPreview } from './wall'
 
 const GRID_SIZE = 30 // 30m x 30m
@@ -51,7 +52,8 @@ export const GridTiles = memo(
     wallHeight,
     controlMode,
   }: GridTilesProps) => {
-    const { activeTool, selectedFloorId } = useEditorContext()
+    const activeTool = useEditor((state) => state.activeTool)
+    const selectedFloorId = useEditor((state) => state.selectedFloorId)
     const meshRef = useRef<THREE.Mesh>(null)
     const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(
       null,
@@ -71,7 +73,12 @@ export const GridTiles = memo(
 
     const gridSize = (intersections - 1) * tileSize
 
-    const handlePointerMove = (e: any) => {
+    const handlePointerLeave = useCallback(() => {
+      setHoveredIntersection(null)
+      onIntersectionHover(0, null)
+    }, [onIntersectionHover])
+
+    const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
 
       // Don't show hover indicators in guide mode (reserved for image manipulation)
@@ -102,11 +109,17 @@ export const GridTiles = memo(
       }
     }
 
-    const handlePointerDown = (e: any) => {
-      e.stopPropagation()
+    const rightClickDownAt = useRef(0)
+
+    const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+      if (e.button === 2) {
+        rightClickDownAt.current = Date.now()
+      }
       // Only handle left-click (button 0) for wall placement
       // Right-click (button 2) and middle-click (button 1) are for camera controls
       if (e.button !== 0) return
+
+      e.stopPropagation()
 
       // Special handling for guide mode - allow clicks for deselection
       if (controlMode === 'guide') {
@@ -147,22 +160,41 @@ export const GridTiles = memo(
       }
     }
 
+    const controls = useThree((state) => state.controls)
+
+    const handlePointerUp = useCallback(
+      (e: ThreeEvent<PointerEvent>) => {
+        if (e.button === 2) {
+          const now = Date.now()
+          const timeHeld = now - rightClickDownAt.current
+          // If right-click was held for less than 200ms, treat it as a click to recenter
+          if (timeHeld < 200 && e.point) {
+            ;(controls as CameraControlsImpl).moveTo(e.point.x, e.point.y, e.point.z, true)
+          }
+        }
+      },
+      [controls],
+    )
+
     return (
       <>
         {/* Invisible plane for raycasting */}
         <mesh
           onPointerDown={handlePointerDown}
-          onPointerLeave={() => {
-            setHoveredIntersection(null)
-            onIntersectionHover(0, null)
-          }}
+          onPointerLeave={handlePointerLeave}
           onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           position={[gridSize / 2, 0.001, gridSize / 2]}
           ref={meshRef}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <planeGeometry args={[gridSize, gridSize]} />
-          <meshStandardMaterial color="#404045" opacity={opacity * 0.3} transparent />
+          <meshStandardMaterial
+            color="#404045"
+            depthWrite={false}
+            opacity={opacity * 0.3}
+            transparent
+          />
         </mesh>
 
         {/* Down arrow at hovered intersection or snapped preview position */}

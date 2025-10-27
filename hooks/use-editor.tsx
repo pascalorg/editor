@@ -1,6 +1,5 @@
 'use client'
 
-import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
@@ -31,6 +30,8 @@ export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
 export type CameraMode = 'perspective' | 'orthographic'
+
+export type LevelMode = 'stacked' | 'exploded'
 
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
@@ -86,6 +87,7 @@ type StoreState = {
   activeTool: Tool | null
   controlMode: ControlMode
   cameraMode: CameraMode
+  levelMode: LevelMode
   movingCamera: boolean
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   handleClear: () => void
@@ -103,6 +105,7 @@ type StoreState = {
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
   setCameraMode: (mode: CameraMode) => void
+  toggleLevelMode: () => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
@@ -205,6 +208,11 @@ const useStore = create<StoreState>()(
       activeTool: 'wall',
       controlMode: 'building',
       cameraMode: 'perspective',
+      levelMode: 'stacked',
+      toggleLevelMode: () =>
+        set((state) => ({
+          levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
+        })),
       movingCamera: false,
       isManipulatingImage: false,
       setWalls: (walls) =>
@@ -674,67 +682,3 @@ const useStore = create<StoreState>()(
 )
 
 export const useEditor = useStore
-
-export const useEditorContext = () => {
-  const store = useStore()
-  return {
-    walls: store.getWallsSet(),
-    setWalls: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getWallsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setWalls(Array.from(newSet))
-    },
-    images: store.images,
-    setImages: store.setImages,
-    selectedWallIds: store.getSelectedWallIdsSet(),
-    setSelectedWallIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedWallIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedWallIds(Array.from(newSet))
-    },
-    selectedImageIds: store.getSelectedImageIdsSet(),
-    setSelectedImageIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedImageIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedImageIds(Array.from(newSet))
-    },
-    isHelpOpen: store.isHelpOpen,
-    setIsHelpOpen: store.setIsHelpOpen,
-    isJsonInspectorOpen: store.isJsonInspectorOpen,
-    setIsJsonInspectorOpen: store.setIsJsonInspectorOpen,
-    wallsGroupRef: store.wallsGroupRef,
-    setWallsGroupRef: store.setWallsGroupRef,
-    activeTool: store.activeTool,
-    setActiveTool: store.setActiveTool,
-    controlMode: store.controlMode,
-    setControlMode: store.setControlMode,
-    cameraMode: store.cameraMode,
-    setCameraMode: store.setCameraMode,
-    movingCamera: store.movingCamera,
-    setMovingCamera: store.setMovingCamera,
-    isManipulatingImage: store.isManipulatingImage,
-    setIsManipulatingImage: store.setIsManipulatingImage,
-    wallSegments: store.wallSegments(),
-    handleExport: store.handleExport,
-    handleUpload: store.handleUpload,
-    handleDeleteSelectedWalls: store.handleDeleteSelectedWalls,
-    handleDeleteSelectedImages: store.handleDeleteSelectedImages,
-    serializeLayout: store.serializeLayout,
-    loadLayout: store.loadLayout,
-    handleSaveLayout: store.handleSaveLayout,
-    handleLoadLayout: store.handleLoadLayout,
-    handleResetToDefault: store.handleResetToDefault,
-    undo: store.undo,
-    redo: store.redo,
-    handleClear: store.handleClear,
-    groups: store.groups,
-    selectedFloorId: store.selectedFloorId,
-    isOverviewMode: store.isOverviewMode,
-    selectFloor: store.selectFloor,
-    addGroup: store.addGroup,
-    deleteGroup: store.deleteGroup,
-    toggleFloorVisibility: store.toggleFloorVisibility,
-    toggleWallVisibility: store.toggleWallVisibility,
-    toggleImageVisibility: store.toggleImageVisibility,
-  }
-}
