@@ -3,14 +3,13 @@
 ## Project Overview
 A 3D house builder inspired by The Sims' building mode. Users place walls between grid intersections using point-to-point placement, creating line segments that extrude into 3D walls in an isometric view. Features multi-floor building architecture, four control modes (Select/Delete/Building/Guide), multiple building tools (Wall, Room, Custom Room), reference image overlays with interactive manipulation, and GLB export.
 
-**Stack**: React 19, Next.js 15, React Three Fiber, Three.js, Zustand, Drei, Leva, Shadcn UI, Tailwind v4.
+**Stack**: React 19, Next.js 16, React Three Fiber, Three.js, Zustand, Drei, Shadcn UI, Tailwind v4.
 
 **3D Coordinate System**: Uses Three.js default orientation - XZ plane for floor (ground), Y-axis for vertical (up). Multi-floor architecture with 10m vertical spacing between levels.
 
 **Key Libraries**:
 - **Zustand**: Global state with persistence and undo/redo (50-state stack)
 - **Drei**: Grid, OrbitControls, GizmoHelper, Environment
-- **Leva**: Real-time parameter controls (wall height, tile size, grid opacity)
 - **Shadcn UI**: Buttons, tooltips, dialogs
 - **Phosphor Icons**: Building tool icons
 
