@@ -55,6 +55,8 @@ export default function Editor({ className }: { className?: string }) {
     controlMode,
     setControlMode,
     setActiveTool,
+    cameraMode,
+    setCameraMode,
     movingCamera,
     setIsManipulatingImage,
     groups,
@@ -148,6 +150,9 @@ export default function Editor({ className }: { className?: string }) {
         e.preventDefault()
         clearPlacementStates()
         setControlMode('guide')
+      } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (e.shiftKey) {
           e.preventDefault()
@@ -166,6 +171,8 @@ export default function Editor({ className }: { className?: string }) {
     setControlMode,
     setActiveTool,
     activeTool,
+    cameraMode,
+    setCameraMode,
     wallStartPoint,
     roomStartPoint,
     customRoomPoints,
@@ -178,7 +185,6 @@ export default function Editor({ className }: { className?: string }) {
   const tileSize = TILE_SIZE
   const showGrid = SHOW_GRID
   const gridOpacity = GRID_OPACITY
-  const cameraType = CAMERA_TYPE
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
@@ -790,7 +796,7 @@ export default function Editor({ className }: { className?: string }) {
         }}
         shadows
       >
-        {cameraType === 'perspective' ? (
+        {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
         ) : (
           <OrthographicCamera

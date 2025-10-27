@@ -30,6 +30,8 @@ export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
+export type CameraMode = 'perspective' | 'orthographic'
+
 export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
@@ -83,6 +85,7 @@ type StoreState = {
   redoStack: HistoryState[]
   activeTool: Tool | null
   controlMode: ControlMode
+  cameraMode: CameraMode
   movingCamera: boolean
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   handleClear: () => void
@@ -99,6 +102,7 @@ type StoreState = {
   setWallsGroupRef: (ref: THREE.Group | null) => void
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
+  setCameraMode: (mode: CameraMode) => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
@@ -200,6 +204,7 @@ const useStore = create<StoreState>()(
       redoStack: [],
       activeTool: 'wall',
       controlMode: 'building',
+      cameraMode: 'perspective',
       movingCamera: false,
       isManipulatingImage: false,
       setWalls: (walls) =>
@@ -339,6 +344,7 @@ const useStore = create<StoreState>()(
           set({ activeTool: null })
         }
       },
+      setCameraMode: (mode) => set({ cameraMode: mode }),
       setMovingCamera: (moving) => set({ movingCamera: moving }),
       setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
       getWallsSet: () => {
@@ -702,6 +708,8 @@ export const useEditorContext = () => {
     setActiveTool: store.setActiveTool,
     controlMode: store.controlMode,
     setControlMode: store.setControlMode,
+    cameraMode: store.cameraMode,
+    setCameraMode: store.setCameraMode,
     movingCamera: store.movingCamera,
     setMovingCamera: store.setMovingCamera,
     isManipulatingImage: store.isManipulatingImage,
