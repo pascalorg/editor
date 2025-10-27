@@ -2,7 +2,6 @@
 
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { GridTiles } from '@/components/editor/elements/grid'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Walls } from '@/components/editor/elements/wall'
 import { useEditorContext, type WallSegment } from '@/hooks/use-editor'
@@ -21,6 +20,7 @@ import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { CustomControls } from './custom-controls'
+import { GridTiles } from './elements/grid-tiles'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const WALL_HEIGHT = 2.5 // 2.5m standard wall height
