@@ -1129,7 +1129,7 @@ export default function Editor({ className }: { className?: string }) {
                     />
 
                     {/* Doors component renders placed doors */}
-                    <Doors floorId={floor.id} tileSize={tileSize} />
+                    <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
 
                     {/* Door placement preview */}
                     {isActiveFloor &&

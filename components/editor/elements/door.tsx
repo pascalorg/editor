@@ -3,7 +3,7 @@
 import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { Gltf } from '@react-three/drei'
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -61,6 +61,9 @@ export const DoorPlacementPreview = memo(
     floorId,
     onPlaced,
   }: DoorPlacementPreviewProps) => {
+    // Track the last valid rotation to maintain it when preview becomes invalid
+    const lastValidRotationRef = useRef<number>(0)
+
     // Calculate placement data based on mouse position and nearby walls
     const placement = useMemo(() => {
       if (!mouseGridPosition) return null
@@ -92,7 +95,7 @@ export const DoorPlacementPreview = memo(
         const dx = nearestWall.end[0] - nearestWall.start[0]
         const dz = nearestWall.end[1] - nearestWall.start[1]
         const wallAngle = Math.atan2(dz, dx)
-        rotation = wallAngle
+        rotation = -wallAngle
 
         canPlace = true // Start as true, will be checked further below
 
@@ -162,11 +165,16 @@ export const DoorPlacementPreview = memo(
         }
       }
 
+      // Update last valid rotation if we found a valid wall
+      if (shouldSnap && rotation !== 0) {
+        lastValidRotationRef.current = rotation
+      }
+
       return {
         gridPosition: shouldSnap ? nearestPoint : mouseGridPosition, // Only snap when close to wall
         centeredPosition: shouldSnap ? centeredPosition : mouseGridPosition, // Centered position for door model
         canPlace,
-        rotation: shouldSnap ? rotation : 0, // Don't rotate when not snapped
+        rotation: shouldSnap ? rotation : lastValidRotationRef.current, // Use last valid rotation when not snapped
         nearestWall: shouldSnap ? nearestWall : null,
       }
     }, [mouseGridPosition, wallSegments, existingDoors])
@@ -252,22 +260,34 @@ DoorPlacementPreview.displayName = 'DoorPlacementPreview'
 
 // Single door component
 type DoorProps = {
+  doorId: string
   position: [number, number]
   rotation: number
   tileSize: number
+  wallHeight: number
 }
 
-const Door = memo(({ position, rotation, tileSize }: DoorProps) => {
+const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorProps) => {
   const worldX = position[0] * tileSize
   const worldZ = position[1] * tileSize
+  const selectedElements = useEditor((state) => state.selectedElements)
 
-  console.log('door', worldX, worldZ, rotation)
+  // Check if this door is selected
+  const isSelected = selectedElements.some((el) => el.id === doorId && el.type === 'door')
 
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
       <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
         <Gltf src="/models/Door.glb" />
       </group>
+
+      {/* Box helper when selected - shows door bounds */}
+      {isSelected && (
+        <mesh position={[0, wallHeight / 2, 0]}>
+          <boxGeometry args={[tileSize * 2, wallHeight, tileSize * 2]} />
+          <meshBasicMaterial color="#44ff44" opacity={0.4} transparent wireframe />
+        </mesh>
+      )}
     </group>
   )
 })
@@ -278,9 +298,10 @@ Door.displayName = 'Door'
 type DoorsProps = {
   floorId: string
   tileSize: number
+  wallHeight: number
 }
 
-export const Doors = memo(({ floorId, tileSize }: DoorsProps) => {
+export const Doors = memo(({ floorId, tileSize, wallHeight }: DoorsProps) => {
   // Fetch door components for this floor from the store
   const doorComponents = useEditor(
     useShallow((state) => state.components.filter((c) => c.type === 'door' && c.group === floorId)),
@@ -296,7 +317,14 @@ export const Doors = memo(({ floorId, tileSize }: DoorsProps) => {
         const { position, rotation } = component.data
 
         return (
-          <Door key={component.id} position={position} rotation={rotation} tileSize={tileSize} />
+          <Door
+            doorId={component.id}
+            key={component.id}
+            position={position}
+            rotation={rotation}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+          />
         )
       })}
     </group>
