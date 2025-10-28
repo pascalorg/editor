@@ -146,6 +146,11 @@ interface ProximityGridProps {
   // Preview elements (for showing grid under elements being placed)
   previewWall?: { start: [number, number]; end: [number, number] } | null
   previewRoof?: { corner1: [number, number]; corner2: [number, number] } | null // Rectangle footprint
+  previewRoom?: { corner1: [number, number]; corner2: [number, number] } | null // Room with 4 walls
+  previewCustomRoom?: {
+    points: Array<[number, number]>
+    previewEnd: [number, number] | null
+  } | null // Custom room (multiline)
 }
 
 /**
@@ -166,6 +171,8 @@ export function ProximityGrid({
   cursorPosition = null,
   previewWall = null,
   previewRoof = null,
+  previewRoom = null,
+  previewCustomRoom = null,
 }: ProximityGridProps) {
   const materialRef = useRef<any>(null)
 
@@ -306,6 +313,60 @@ export function ProximityGrid({
       segments.push(new Vector2(worldMaxX, worldMaxY))
     }
 
+    // Add preview room (4 walls forming a rectangle)
+    if (previewRoom) {
+      const [x1, y1] = previewRoom.corner1
+      const [x2, y2] = previewRoom.corner2
+
+      // Calculate the four corners of the rectangle
+      const minX = Math.min(x1, x2)
+      const maxX = Math.max(x1, x2)
+      const minY = Math.min(y1, y2)
+      const maxY = Math.max(y1, y2)
+
+      // Convert to world coordinates
+      const worldMinX = minX * gridSize + offset[0]
+      const worldMaxX = maxX * gridSize + offset[0]
+      const worldMinY = minY * gridSize + offset[1]
+      const worldMaxY = maxY * gridSize + offset[1]
+
+      // Add all 4 edges of the rectangle
+      // Top edge
+      segments.push(new Vector2(worldMinX, worldMaxY))
+      segments.push(new Vector2(worldMaxX, worldMaxY))
+      // Bottom edge
+      segments.push(new Vector2(worldMinX, worldMinY))
+      segments.push(new Vector2(worldMaxX, worldMinY))
+      // Left edge
+      segments.push(new Vector2(worldMinX, worldMinY))
+      segments.push(new Vector2(worldMinX, worldMaxY))
+      // Right edge
+      segments.push(new Vector2(worldMaxX, worldMinY))
+      segments.push(new Vector2(worldMaxX, worldMaxY))
+    }
+
+    // Add preview custom room (multiline polygon)
+    if (previewCustomRoom && previewCustomRoom.points.length > 0) {
+      const allPoints = [...previewCustomRoom.points]
+
+      // If there's a preview end point, include it
+      if (previewCustomRoom.previewEnd) {
+        allPoints.push(previewCustomRoom.previewEnd)
+      }
+
+      // Add segments between consecutive points
+      for (let i = 0; i < allPoints.length - 1; i++) {
+        const [x1, y1] = allPoints[i]
+        const [x2, y2] = allPoints[i + 1]
+        const worldX1 = x1 * gridSize + offset[0]
+        const worldY1 = y1 * gridSize + offset[1]
+        const worldX2 = x2 * gridSize + offset[0]
+        const worldY2 = y2 * gridSize + offset[1]
+        segments.push(new Vector2(worldX1, worldY1))
+        segments.push(new Vector2(worldX2, worldY2))
+      }
+    }
+
     // Add cursor position as a point to reveal grid around it
     if (cursorPosition) {
       const [x, y] = cursorPosition
@@ -315,7 +376,17 @@ export function ProximityGrid({
     }
 
     return { segments, points }
-  }, [components, floorId, gridSize, offset, cursorPosition, previewWall, previewRoof])
+  }, [
+    components,
+    floorId,
+    gridSize,
+    offset,
+    cursorPosition,
+    previewWall,
+    previewRoof,
+    previewRoom,
+    previewCustomRoom,
+  ])
 
   // Update material uniforms
   useFrame(() => {

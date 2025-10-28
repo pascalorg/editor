@@ -1087,9 +1087,19 @@ export default function Editor({ className }: { className?: string }) {
                               offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                               opacity={0.3}
                               padding={1.5}
+                              previewCustomRoom={
+                                customRoomPoints.length > 0
+                                  ? { points: customRoomPoints, previewEnd: customRoomPreviewEnd }
+                                  : null
+                              }
                               previewRoof={
                                 roofStartPoint && roofPreviewEnd
                                   ? { corner1: roofStartPoint, corner2: roofPreviewEnd }
+                                  : null
+                              }
+                              previewRoom={
+                                roomStartPoint && roomPreviewEnd
+                                  ? { corner1: roomStartPoint, corner2: roomPreviewEnd }
                                   : null
                               }
                               previewWall={
@@ -1112,6 +1122,10 @@ export default function Editor({ className }: { className?: string }) {
                               offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                               opacity={0.15}
                               padding={1.5}
+                              previewCustomRoom={null}
+                              previewRoof={null}
+                              previewRoom={null}
+                              previewWall={null}
                             />
                           )}
                         </>
@@ -1141,7 +1155,9 @@ export default function Editor({ className }: { className?: string }) {
                           offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                           opacity={0.08}
                           padding={1.5}
+                          previewCustomRoom={null}
                           previewRoof={null}
+                          previewRoom={null}
                           previewWall={null}
                         />
                       </group>
