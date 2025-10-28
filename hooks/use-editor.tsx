@@ -57,7 +57,7 @@ export type CameraMode = 'perspective' | 'orthographic'
 
 export type LevelMode = 'stacked' | 'exploded'
 
-export type ComponentData = {
+export type WallComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
 
@@ -77,7 +77,7 @@ export type Component =
       type: 'wall'
       label: string
       group: string | null
-      data: ComponentData
+      data: WallComponentData
       createdAt: string
     }
   | {
@@ -289,7 +289,8 @@ const useStore = create<StoreState>()(
           const currentComponent = state.components.find(
             (c) => c.type === 'wall' && c.group === state.selectedFloorId,
           )
-          const currentWalls = currentComponent?.data.segments.map((seg) => seg.id) || []
+          const currentWalls =
+            (currentComponent?.data as WallComponentData).segments.map((seg) => seg.id) || []
 
           const sortedNew = [...walls].sort()
           const sortedCurrent = [...currentWalls].sort()
@@ -369,7 +370,8 @@ const useStore = create<StoreState>()(
           const currentComponent = state.components.find(
             (c) => c.type === 'roof' && c.group === state.selectedFloorId,
           )
-          const currentRoofs = currentComponent?.data.segments.map((seg) => seg.id) || []
+          const currentRoofs =
+            (currentComponent?.data as RoofComponentData).segments.map((seg) => seg.id) || []
 
           const sortedNew = [...roofs].sort()
           const sortedCurrent = [...currentRoofs].sort()
@@ -522,7 +524,7 @@ const useStore = create<StoreState>()(
         )
         if (!component) return new Set<string>()
 
-        return new Set(component.data.segments.map((seg) => seg.id))
+        return new Set((component.data as WallComponentData).segments.map((seg) => seg.id))
       },
       getRoofsSet: () => {
         const state = get()
@@ -533,7 +535,7 @@ const useStore = create<StoreState>()(
         )
         if (!component) return new Set<string>()
 
-        return new Set(component.data.segments.map((seg) => seg.id))
+        return new Set((component.data as RoofComponentData).segments.map((seg) => seg.id))
       },
       getSelectedElementsSet: () => new Set(get().selectedElements),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
@@ -546,7 +548,7 @@ const useStore = create<StoreState>()(
         )
         if (!component) return []
 
-        return component.data.segments as WallSegment[]
+        return (component.data as WallComponentData).segments as WallSegment[]
       },
       roofSegments: () => {
         const state = get()
@@ -557,7 +559,7 @@ const useStore = create<StoreState>()(
         )
         if (!component) return []
 
-        return component.data.segments as RoofSegment[]
+        return (component.data as RoofComponentData).segments as RoofSegment[]
       },
       handleExport: () => {
         const ref = get().wallsGroupRef

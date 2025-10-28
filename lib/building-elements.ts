@@ -1,5 +1,11 @@
+import type {
+  Component,
+  RoofComponentData,
+  RoofSegment,
+  WallComponentData,
+  WallSegment,
+} from '@/hooks/use-editor'
 import { DoorOpen, Square, Triangle } from 'lucide-react'
-import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
 
 /**
  * Building Element Abstraction Layer
@@ -79,9 +85,9 @@ export function getElementsOfType(
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return component.data.segments.filter((seg) => seg.visible !== false) as
-    | WallSegment[]
-    | RoofSegment[]
+  return (component.data as WallComponentData | RoofComponentData).segments.filter(
+    (seg) => seg.visible !== false,
+  ) as WallSegment[] | RoofSegment[]
 }
 
 /**
@@ -95,7 +101,9 @@ export function getAllElementsOfType(
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return component.data.segments as WallSegment[] | RoofSegment[]
+  return (component.data as WallComponentData | RoofComponentData).segments as
+    | WallSegment[]
+    | RoofSegment[]
 }
 
 /**
@@ -112,7 +120,7 @@ export function toggleElementVisibility(
       return {
         ...comp,
         data: {
-          segments: comp.data.segments.map((seg) =>
+          segments: (comp.data as WallComponentData | RoofComponentData).segments.map((seg) =>
             seg.id === elementId ? { ...seg, visible: !(seg.visible ?? true) } : seg,
           ),
         },
