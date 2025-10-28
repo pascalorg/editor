@@ -1087,6 +1087,16 @@ export default function Editor({ className }: { className?: string }) {
                               offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                               opacity={0.3}
                               padding={1.5}
+                              previewRoof={
+                                roofStartPoint && roofPreviewEnd
+                                  ? { corner1: roofStartPoint, corner2: roofPreviewEnd }
+                                  : null
+                              }
+                              previewWall={
+                                wallStartPoint && wallPreviewEnd
+                                  ? { start: wallStartPoint, end: wallPreviewEnd }
+                                  : null
+                              }
                             />
                           )}
                           {!isActiveFloor && levelMode === 'exploded' && (
@@ -1131,6 +1141,8 @@ export default function Editor({ className }: { className?: string }) {
                           offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                           opacity={0.08}
                           padding={1.5}
+                          previewRoof={null}
+                          previewWall={null}
                         />
                       </group>
                     )}

@@ -143,6 +143,9 @@ interface ProximityGridProps {
   offset?: [number, number] // Coordinate system offset
   maxSize?: number // Maximum grid size to render
   cursorPosition?: [number, number] | null // Current cursor position in grid coordinates
+  // Preview elements (for showing grid under elements being placed)
+  previewWall?: { start: [number, number]; end: [number, number] } | null
+  previewRoof?: { corner1: [number, number]; corner2: [number, number] } | null // Rectangle footprint
 }
 
 /**
@@ -161,6 +164,8 @@ export function ProximityGrid({
   offset = [0, 0],
   maxSize = 100, // 100m x 100m max
   cursorPosition = null,
+  previewWall = null,
+  previewRoof = null,
 }: ProximityGridProps) {
   const materialRef = useRef<any>(null)
 
@@ -186,19 +191,63 @@ export function ProximityGrid({
       }
     }
 
-    // Get roof segments (ridge lines)
+    // Get roof segments (calculate full rectangular footprint from ridge line and widths)
     const roofComponent = components.find((c) => c.type === 'roof' && c.group === floorId)
     if (roofComponent && roofComponent.type === 'roof') {
       for (const segment of roofComponent.data.segments) {
         if (segment.visible === false) continue
         const [x1, y1] = segment.start
         const [x2, y2] = segment.end
-        const worldX1 = x1 * gridSize + offset[0]
-        const worldY1 = y1 * gridSize + offset[1]
-        const worldX2 = x2 * gridSize + offset[0]
-        const worldY2 = y2 * gridSize + offset[1]
-        segments.push(new Vector2(worldX1, worldY1))
-        segments.push(new Vector2(worldX2, worldY2))
+        const leftWidth = segment.leftWidth || 0
+        const rightWidth = segment.rightWidth || 0
+
+        // Calculate perpendicular direction to ridge line
+        const dx = x2 - x1
+        const dy = y2 - y1
+        const length = Math.sqrt(dx * dx + dy * dy)
+
+        if (length > 0) {
+          // Perpendicular unit vector (rotate 90 degrees)
+          const perpX = -dy / length
+          const perpY = dx / length
+
+          // Convert widths from world units to grid units
+          const leftWidthGrid = leftWidth / gridSize
+          const rightWidthGrid = rightWidth / gridSize
+
+          // Calculate the 4 corners of the roof footprint
+          const corner1X = x1 - perpX * leftWidthGrid
+          const corner1Y = y1 - perpY * leftWidthGrid
+          const corner2X = x1 + perpX * rightWidthGrid
+          const corner2Y = y1 + perpY * rightWidthGrid
+          const corner3X = x2 + perpX * rightWidthGrid
+          const corner3Y = y2 + perpY * rightWidthGrid
+          const corner4X = x2 - perpX * leftWidthGrid
+          const corner4Y = y2 - perpY * leftWidthGrid
+
+          // Convert to world coordinates
+          const worldC1X = corner1X * gridSize + offset[0]
+          const worldC1Y = corner1Y * gridSize + offset[1]
+          const worldC2X = corner2X * gridSize + offset[0]
+          const worldC2Y = corner2Y * gridSize + offset[1]
+          const worldC3X = corner3X * gridSize + offset[0]
+          const worldC3Y = corner3Y * gridSize + offset[1]
+          const worldC4X = corner4X * gridSize + offset[0]
+          const worldC4Y = corner4Y * gridSize + offset[1]
+
+          // Add all 4 edges of the rectangular footprint
+          segments.push(new Vector2(worldC1X, worldC1Y))
+          segments.push(new Vector2(worldC2X, worldC2Y))
+
+          segments.push(new Vector2(worldC2X, worldC2Y))
+          segments.push(new Vector2(worldC3X, worldC3Y))
+
+          segments.push(new Vector2(worldC3X, worldC3Y))
+          segments.push(new Vector2(worldC4X, worldC4Y))
+
+          segments.push(new Vector2(worldC4X, worldC4Y))
+          segments.push(new Vector2(worldC1X, worldC1Y))
+        }
       }
     }
 
@@ -213,6 +262,50 @@ export function ProximityGrid({
       }
     }
 
+    // Add preview wall segment if it exists
+    if (previewWall) {
+      const [x1, y1] = previewWall.start
+      const [x2, y2] = previewWall.end
+      const worldX1 = x1 * gridSize + offset[0]
+      const worldY1 = y1 * gridSize + offset[1]
+      const worldX2 = x2 * gridSize + offset[0]
+      const worldY2 = y2 * gridSize + offset[1]
+      segments.push(new Vector2(worldX1, worldY1))
+      segments.push(new Vector2(worldX2, worldY2))
+    }
+
+    // Add preview roof rectangular footprint if it exists (all 4 edges)
+    if (previewRoof) {
+      const [x1, y1] = previewRoof.corner1
+      const [x2, y2] = previewRoof.corner2
+
+      // Calculate the four corners of the rectangle
+      const minX = Math.min(x1, x2)
+      const maxX = Math.max(x1, x2)
+      const minY = Math.min(y1, y2)
+      const maxY = Math.max(y1, y2)
+
+      // Convert to world coordinates
+      const worldMinX = minX * gridSize + offset[0]
+      const worldMaxX = maxX * gridSize + offset[0]
+      const worldMinY = minY * gridSize + offset[1]
+      const worldMaxY = maxY * gridSize + offset[1]
+
+      // Add all 4 edges of the rectangle
+      // Top edge
+      segments.push(new Vector2(worldMinX, worldMaxY))
+      segments.push(new Vector2(worldMaxX, worldMaxY))
+      // Bottom edge
+      segments.push(new Vector2(worldMinX, worldMinY))
+      segments.push(new Vector2(worldMaxX, worldMinY))
+      // Left edge
+      segments.push(new Vector2(worldMinX, worldMinY))
+      segments.push(new Vector2(worldMinX, worldMaxY))
+      // Right edge
+      segments.push(new Vector2(worldMaxX, worldMinY))
+      segments.push(new Vector2(worldMaxX, worldMaxY))
+    }
+
     // Add cursor position as a point to reveal grid around it
     if (cursorPosition) {
       const [x, y] = cursorPosition
@@ -222,7 +315,7 @@ export function ProximityGrid({
     }
 
     return { segments, points }
-  }, [components, floorId, gridSize, offset, cursorPosition])
+  }, [components, floorId, gridSize, offset, cursorPosition, previewWall, previewRoof])
 
   // Update material uniforms
   useFrame(() => {
