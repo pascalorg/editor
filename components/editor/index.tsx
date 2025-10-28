@@ -115,6 +115,9 @@ export default function Editor({ className }: { className?: string }) {
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for tracking mouse cursor position (for proximity grid)
+  const [cursorPosition, setCursorPosition] = useState<[number, number] | null>(null)
+
   // Helper function to clear all placement states and selections
   const clearPlacementStates = () => {
     setWallStartPoint(null)
@@ -128,10 +131,16 @@ export default function Editor({ className }: { className?: string }) {
     setDoorPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
+    setCursorPosition(null)
     // Clear all selections (building elements and images)
     setSelectedElements([])
     setSelectedImageIds([])
   }
+
+  // Clear cursor position when switching floors to prevent grid artifacts
+  useEffect(() => {
+    setCursorPosition(null)
+  }, [selectedFloorId])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -683,6 +692,22 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
+    // Only track cursor position for non-base levels (base level uses InfiniteGrid)
+    const currentFloor = groups.find((g) => g.id === selectedFloorId)
+    const currentLevel = currentFloor?.level || 0
+
+    if (currentLevel > 0) {
+      // Update cursor position for proximity grid on non-base levels
+      if (y !== null) {
+        setCursorPosition([x, y])
+      } else {
+        setCursorPosition(null)
+      }
+    } else {
+      // On base level, don't track cursor position
+      setCursorPosition(null)
+    }
+
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
@@ -1052,6 +1077,7 @@ export default function Editor({ className }: { className?: string }) {
                           {isActiveFloor && (
                             <ProximityGrid
                               components={components}
+                              cursorPosition={cursorPosition}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -1066,6 +1092,7 @@ export default function Editor({ className }: { className?: string }) {
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
                               components={components}
+                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -1082,26 +1109,31 @@ export default function Editor({ className }: { className?: string }) {
                     </group>
                   )}
 
-                  {/* Show grid from level below as reference for non-base levels */}
-                  {showGrid && floorLevel > 0 && isActiveFloor && floorBelow && (
-                    <group
-                      position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
-                      raycast={() => null}
-                    >
-                      <ProximityGrid
-                        components={components}
-                        fadeWidth={0.5}
-                        floorId={floorBelow.id}
-                        gridSize={tileSize}
-                        lineColor="#ffffff"
-                        lineWidth={1.0}
-                        maxSize={GRID_SIZE}
-                        offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                        opacity={0.08}
-                        padding={1.5}
-                      />
-                    </group>
-                  )}
+                  {/* Show grid from level below as reference for non-base levels (only in exploded mode) */}
+                  {showGrid &&
+                    floorLevel > 0 &&
+                    isActiveFloor &&
+                    floorBelow &&
+                    levelMode === 'exploded' && (
+                      <group
+                        position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
+                        raycast={() => null}
+                      >
+                        <ProximityGrid
+                          components={components}
+                          cursorPosition={null}
+                          fadeWidth={0.5}
+                          floorId={floorBelow.id}
+                          gridSize={tileSize}
+                          lineColor="#ffffff"
+                          lineWidth={1.0}
+                          maxSize={GRID_SIZE}
+                          offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                          opacity={0.08}
+                          padding={1.5}
+                        />
+                      </group>
+                    )}
 
                   <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                     {/* Only show interactive grid tiles for the active floor */}

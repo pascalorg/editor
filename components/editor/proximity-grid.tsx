@@ -142,6 +142,7 @@ interface ProximityGridProps {
   fadeWidth?: number // Width of fade falloff in world units
   offset?: [number, number] // Coordinate system offset
   maxSize?: number // Maximum grid size to render
+  cursorPosition?: [number, number] | null // Current cursor position in grid coordinates
 }
 
 /**
@@ -159,6 +160,7 @@ export function ProximityGrid({
   fadeWidth = 0.5, // 0.5m fade
   offset = [0, 0],
   maxSize = 100, // 100m x 100m max
+  cursorPosition = null,
 }: ProximityGridProps) {
   const materialRef = useRef<any>(null)
 
@@ -211,8 +213,16 @@ export function ProximityGrid({
       }
     }
 
+    // Add cursor position as a point to reveal grid around it
+    if (cursorPosition) {
+      const [x, y] = cursorPosition
+      const worldX = x * gridSize + offset[0]
+      const worldY = y * gridSize + offset[1]
+      points.push(new Vector2(worldX, worldY))
+    }
+
     return { segments, points }
-  }, [components, floorId, gridSize, offset])
+  }, [components, floorId, gridSize, offset, cursorPosition])
 
   // Update material uniforms
   useFrame(() => {
@@ -235,8 +245,8 @@ export function ProximityGrid({
     }
   })
 
-  // Don't render if no elements
-  if (segments.length === 0 && points.length === 0) {
+  // Don't render if no elements and no cursor
+  if (segments.length === 0 && points.length === 0 && !cursorPosition) {
     return null
   }
 
