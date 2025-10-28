@@ -1,36 +1,18 @@
 'use client'
 
-import { useControls } from 'leva'
+// Lighting constants
+const AMBIENT_INTENSITY = 0.5
+const DIRECTIONAL_INTENSITY = 1
+const DIRECTIONAL_POSITION: [number, number, number] = [10, 10, 5]
 
 export function LightingControls() {
-  const { ambientIntensity, directionalIntensity, directionalX, directionalY, directionalZ } =
-    useControls('Lighting', {
-      ambientIntensity: {
-        value: 0.5,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        label: 'Ambient Intensity',
-      },
-      directionalIntensity: {
-        value: 1,
-        min: 0,
-        max: 3,
-        step: 0.1,
-        label: 'Directional Intensity',
-      },
-      directionalX: { value: 10, min: -20, max: 20, step: 1, label: 'Light X' },
-      directionalY: { value: 10, min: 0, max: 30, step: 1, label: 'Light Y' },
-      directionalZ: { value: 5, min: -20, max: 20, step: 1, label: 'Light Z' },
-    })
-
   return (
     <>
-      <ambientLight intensity={ambientIntensity} />
+      <ambientLight intensity={AMBIENT_INTENSITY} />
       <directionalLight
         castShadow
-        intensity={directionalIntensity}
-        position={[directionalX, directionalY, directionalZ]}
+        intensity={DIRECTIONAL_INTENSITY}
+        position={DIRECTIONAL_POSITION}
         shadow-camera-bottom={-15}
         shadow-camera-left={-15}
         shadow-camera-right={15}
