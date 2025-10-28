@@ -1,9 +1,9 @@
 'use client'
 
-import type { WallSegment } from '@/hooks/use-editor'
+import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { Gltf } from '@react-three/drei'
-import { memo, useMemo } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -47,7 +47,8 @@ type DoorPlacementPreviewProps = {
   existingDoors: Array<{ position: [number, number]; rotation: number }>
   tileSize: number
   wallHeight: number
-  onValidPlacement?: (position: [number, number], rotation: number, wallId: string) => void
+  floorId: string
+  onPlaced?: () => void // Callback when door is placed
 }
 
 export const DoorPlacementPreview = memo(
@@ -57,6 +58,8 @@ export const DoorPlacementPreview = memo(
     existingDoors,
     tileSize,
     wallHeight,
+    floorId,
+    onPlaced,
   }: DoorPlacementPreviewProps) => {
     // Calculate placement data based on mouse position and nearby walls
     const placement = useMemo(() => {
@@ -178,6 +181,42 @@ export const DoorPlacementPreview = memo(
       return geometry
     }, [tileSize])
 
+    // Handle click to place door
+    const handleClick = useCallback(() => {
+      if (!(placement && placement.canPlace && placement.nearestWall)) {
+        return
+      }
+
+      // Create door component
+      const doorId = `door_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const doorComponent: Component = {
+        id: doorId,
+        type: 'door',
+        group: floorId,
+        label: 'Door',
+        createdAt: new Date().toISOString(),
+        data: {
+          position: placement.gridPosition,
+          rotation: placement.rotation,
+          width: 2,
+        } as DoorComponentData,
+      }
+
+      // Add door to components using functional setState
+      useEditor.setState((state) => ({
+        components: [...state.components, doorComponent],
+      }))
+
+      console.log('Door placed at:', {
+        centeredPosition: placement.gridPosition,
+        rotation: placement.rotation,
+        nearestWall: placement.nearestWall,
+      })
+
+      // Notify parent component
+      onPlaced?.()
+    }, [placement, floorId, onPlaced])
+
     if (!placement) {
       return null
     }
@@ -191,7 +230,11 @@ export const DoorPlacementPreview = memo(
 
     console.log('preview: worldX, worldZ, placement', worldX, worldZ, placement)
     return (
-      <group position={[worldX, 0, worldZ]} rotation={[0, placement.rotation, 0]}>
+      <group
+        onClick={handleClick}
+        position={[worldX, 0, worldZ]}
+        rotation={[0, placement.rotation, 0]}
+      >
         {/* Placement indicator rectangle on ground */}
         <mesh geometry={rectangleGeometry} position={[0, 0.01, 0]}>
           <meshStandardMaterial
@@ -214,7 +257,31 @@ export const DoorPlacementPreview = memo(
 
 DoorPlacementPreview.displayName = 'DoorPlacementPreview'
 
-// Component to render placed doors
+// Single door component
+type DoorProps = {
+  position: [number, number]
+  rotation: number
+  tileSize: number
+}
+
+const Door = memo(({ position, rotation, tileSize }: DoorProps) => {
+  const worldX = position[0] * tileSize
+  const worldZ = position[1] * tileSize
+
+  console.log('door', worldX, worldZ, rotation)
+
+  return (
+    <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
+      <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
+        <Gltf src="/models/Door.glb" />
+      </group>
+    </group>
+  )
+})
+
+Door.displayName = 'Door'
+
+// Component to render all placed doors for a floor
 type DoorsProps = {
   floorId: string
   tileSize: number
@@ -234,17 +301,9 @@ export const Doors = memo(({ floorId, tileSize }: DoorsProps) => {
         if (component.type !== 'door') return null
 
         const { position, rotation } = component.data
-        const worldX = position[0] * tileSize
-        const worldZ = position[1] * tileSize
-
-        console.log('door', worldX, worldZ, rotation)
 
         return (
-          <group key={component.id} position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
-            <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
-              <Gltf src="/models/Door.glb" />
-            </group>
-          </group>
+          <Door key={component.id} position={position} rotation={rotation} tileSize={tileSize} />
         )
       })}
     </group>
