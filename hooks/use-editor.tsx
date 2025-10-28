@@ -24,6 +24,8 @@ export interface RoofSegment {
   end: [number, number] // [x, y] ridge end coordinates
   id: string
   height: number // Peak height above base
+  leftWidth?: number // Distance from ridge to left edge (defaults to ROOF_WIDTH / 2)
+  rightWidth?: number // Distance from ridge to right edge (defaults to ROOF_WIDTH / 2)
   visible?: boolean // Optional for backward compatibility
 }
 

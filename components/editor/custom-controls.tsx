@@ -1,10 +1,10 @@
 'use client'
 
-import { useEditor } from '@/hooks/use-editor'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
+import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, GRID_SIZE, WALL_HEIGHT } from './index'
 
 export function CustomControls() {

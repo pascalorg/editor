@@ -17,15 +17,20 @@ const ROOF_THICKNESS = 0.05 // 5cm roof thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
 // Handle geometry dimensions
-const DEBUG = true
+const DEBUG = false
+const ORIGIN_MARKER_SIZE = 0.16
 const ARROW_SHAFT_RADIUS = 0.06
 const ARROW_SHAFT_LENGTH = 0.5
 const ARROW_HEAD_RADIUS = 0.12
 const ARROW_HEAD_LENGTH = 0.3
+const ROTATION_HANDLE_RADIUS = 0.4
+const ROTATION_HANDLE_THICKNESS = 0.06
 
 // Hit target scale factors
+const ORIGIN_HIT_SCALE = 2.5
 const ARROW_HIT_RADIUS_SCALE = 2.5
 const ARROW_HIT_LENGTH_SCALE = 1.7
+const ROTATION_HIT_SCALE = 2
 
 // Helper function to create a cylinder between two points
 function createEdgeCylinder(start: number[], end: number[]) {
@@ -212,8 +217,7 @@ export const Roofs = forwardRef(
             const newHeight = Math.max(0.5, Math.min(10, originalSegment.height + delta.y))
             updatedSegment = { ...originalSegment, height: newHeight }
           } else {
-            // Horizontal edge handle: displace the ridge line perpendicular to itself
-            // Extract edge direction from handleId (front, right, back, left)
+            // Extract edge type from handleId (front, right, back, left)
             const edgeType = handleId.split('-').pop()
 
             const startWorld = [
@@ -232,34 +236,368 @@ export const Roofs = forwardRef(
               const ridgeDir = { x: dx / ridgeLength, z: dz / ridgeLength }
               const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
 
-              // Project delta onto perpendicular direction
-              const projectedDelta = delta.x * perpDir.x + delta.z * perpDir.z
-
-              // Determine displacement direction based on edge type
-              // Front/Left edges: move ridge in +perpDir direction
-              // Back/Right edges: move ridge in -perpDir direction
-              let displacement = 0
-              if (edgeType === 'front' || edgeType === 'left') {
-                displacement = projectedDelta
-              } else if (edgeType === 'back' || edgeType === 'right') {
-                displacement = -projectedDelta
-              }
-
-              // Move both start and end points of the ridge
-              const newStartX = originalSegment.start[0] + (displacement * perpDir.x) / tileSize
-              const newStartY = originalSegment.start[1] + (displacement * perpDir.z) / tileSize
-              const newEndX = originalSegment.end[0] + (displacement * perpDir.x) / tileSize
-              const newEndY = originalSegment.end[1] + (displacement * perpDir.z) / tileSize
-
               // Snap to grid (0.1 precision)
               const snapToGrid = (val: number) => Math.round(val * 10) / 10
 
-              updatedSegment = {
-                ...originalSegment,
-                start: [snapToGrid(newStartX), snapToGrid(newStartY)],
-                end: [snapToGrid(newEndX), snapToGrid(newEndY)],
+              // Get current widths (use defaults if not set)
+              const currentLeftWidth = originalSegment.leftWidth ?? ROOF_WIDTH / 2
+              const currentRightWidth = originalSegment.rightWidth ?? ROOF_WIDTH / 2
+
+              if (edgeType === 'front') {
+                // Front edge: move the START point along the ridge direction
+                const projectedDelta = delta.x * ridgeDir.x + delta.z * ridgeDir.z
+                const newStartX =
+                  originalSegment.start[0] + (projectedDelta * ridgeDir.x) / tileSize
+                const newStartY =
+                  originalSegment.start[1] + (projectedDelta * ridgeDir.z) / tileSize
+
+                updatedSegment = {
+                  ...originalSegment,
+                  start: [snapToGrid(newStartX), snapToGrid(newStartY)],
+                }
+              } else if (edgeType === 'back') {
+                // Back edge: move the END point along the ridge direction
+                const projectedDelta = delta.x * ridgeDir.x + delta.z * ridgeDir.z
+                const newEndX = originalSegment.end[0] + (projectedDelta * ridgeDir.x) / tileSize
+                const newEndY = originalSegment.end[1] + (projectedDelta * ridgeDir.z) / tileSize
+
+                updatedSegment = {
+                  ...originalSegment,
+                  end: [snapToGrid(newEndX), snapToGrid(newEndY)],
+                }
+              } else if (edgeType === 'left') {
+                // Left edge: move the edge and shift ridge to stay centered
+                const projectedDelta = delta.x * perpDir.x + delta.z * perpDir.z
+                const newLeftWidth = Math.max(0.5, currentLeftWidth + projectedDelta)
+
+                // Ridge shifts by half the change to stay centered between edges
+                const ridgeShift = (newLeftWidth - currentLeftWidth) / 2
+                const newStartX = originalSegment.start[0] + (ridgeShift * perpDir.x) / tileSize
+                const newStartY = originalSegment.start[1] + (ridgeShift * perpDir.z) / tileSize
+                const newEndX = originalSegment.end[0] + (ridgeShift * perpDir.x) / tileSize
+                const newEndY = originalSegment.end[1] + (ridgeShift * perpDir.z) / tileSize
+
+                // Both widths change to keep ridge centered
+                const newRightWidth = currentRightWidth + ridgeShift
+
+                updatedSegment = {
+                  ...originalSegment,
+                  start: [snapToGrid(newStartX), snapToGrid(newStartY)],
+                  end: [snapToGrid(newEndX), snapToGrid(newEndY)],
+                  leftWidth: snapToGrid(newLeftWidth - ridgeShift),
+                  rightWidth: snapToGrid(newRightWidth),
+                }
+              } else if (edgeType === 'right') {
+                // Right edge: move the edge and shift ridge to stay centered
+                const projectedDelta = -(delta.x * perpDir.x + delta.z * perpDir.z)
+                const newRightWidth = Math.max(0.5, currentRightWidth + projectedDelta)
+
+                // Ridge shifts by half the change (in opposite direction) to stay centered
+                const ridgeShift = -(newRightWidth - currentRightWidth) / 2
+                const newStartX = originalSegment.start[0] + (ridgeShift * perpDir.x) / tileSize
+                const newStartY = originalSegment.start[1] + (ridgeShift * perpDir.z) / tileSize
+                const newEndX = originalSegment.end[0] + (ridgeShift * perpDir.x) / tileSize
+                const newEndY = originalSegment.end[1] + (ridgeShift * perpDir.z) / tileSize
+
+                // Both widths change to keep ridge centered
+                const newLeftWidth = currentLeftWidth - ridgeShift
+
+                updatedSegment = {
+                  ...originalSegment,
+                  start: [snapToGrid(newStartX), snapToGrid(newStartY)],
+                  end: [snapToGrid(newEndX), snapToGrid(newEndY)],
+                  leftWidth: snapToGrid(newLeftWidth),
+                  rightWidth: snapToGrid(newRightWidth + ridgeShift),
+                }
+              } else {
+                updatedSegment = originalSegment
               }
             }
+          }
+
+          // Update in store
+          const updatedSegments = roofSegments.map((s) => (s.id === segmentId ? updatedSegment : s))
+          setComponents(updatedSegments)
+          hasChanged = true
+        }
+
+        const onPointerUp = () => {
+          setIsDragging(false)
+          setActiveHandle(null)
+          document.removeEventListener('pointermove', onPointerMove)
+          document.removeEventListener('pointerup', onPointerUp)
+          gl.domElement.style.cursor = 'auto'
+
+          // Push to undo stack if there were changes
+          if (hasChanged) {
+            useEditor.setState((state) => ({
+              undoStack: [
+                ...state.undoStack,
+                { images: originalImages, components: originalComponents },
+              ].slice(-50),
+              redoStack: [],
+            }))
+          }
+        }
+
+        setIsDragging(true)
+        document.addEventListener('pointermove', onPointerMove)
+        document.addEventListener('pointerup', onPointerUp)
+        gl.domElement.style.cursor = 'grabbing'
+      },
+      [roofSegments, camera, gl, baseHeight, tileSize, setComponents],
+    )
+
+    // Handle rotation around base center
+    const handleRotationDrag = useCallback(
+      (segmentId: string) => {
+        const segment = roofSegments.find((s) => s.id === segmentId)
+        if (!segment) return
+
+        // Capture state for undo
+        const storeState = useEditor.getState()
+        const originalComponents = storeState.components
+        const originalImages = storeState.images
+
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -baseHeight)
+        const raycaster = new THREE.Raycaster()
+        const pointer = new THREE.Vector2()
+
+        const startWorld = [segment.start[0] * tileSize, segment.start[1] * tileSize]
+        const endWorld = [segment.end[0] * tileSize, segment.end[1] * tileSize]
+
+        let initialAngle = 0
+        let hasChanged = false
+        const originalSegment = segment
+        let finalSegment: RoofSegment | null = null
+
+        // Calculate geometric center
+        const dx = endWorld[0] - startWorld[0]
+        const dz = endWorld[1] - startWorld[1]
+        const ridgeLength = Math.sqrt(dx * dx + dz * dz)
+        if (ridgeLength < 0.1) return
+        const ridgeDir = { x: dx / ridgeLength, z: dz / ridgeLength }
+        const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
+        const leftWidth = originalSegment.leftWidth ?? ROOF_WIDTH / 2
+        const rightWidth = originalSegment.rightWidth ?? ROOF_WIDTH / 2
+        const bottomLeft = [
+          startWorld[0] + perpDir.x * leftWidth,
+          baseHeight,
+          startWorld[1] + perpDir.z * leftWidth,
+        ]
+        const bottomRight = [
+          startWorld[0] - perpDir.x * rightWidth,
+          baseHeight,
+          startWorld[1] - perpDir.z * rightWidth,
+        ]
+        const bottomLeftEnd = [
+          endWorld[0] + perpDir.x * leftWidth,
+          baseHeight,
+          endWorld[1] + perpDir.z * leftWidth,
+        ]
+        const bottomRightEnd = [
+          endWorld[0] - perpDir.x * rightWidth,
+          baseHeight,
+          endWorld[1] - perpDir.z * rightWidth,
+        ]
+        const centerX = (bottomLeft[0] + bottomRight[0] + bottomLeftEnd[0] + bottomRightEnd[0]) / 4
+        const centerZ = (bottomLeft[2] + bottomRight[2] + bottomLeftEnd[2] + bottomRightEnd[2]) / 4
+        const center = new THREE.Vector3(centerX, baseHeight, centerZ)
+
+        let previousAngle = 0
+        let totalDelta = 0
+
+        const onPointerMove = (event: PointerEvent) => {
+          if (!originalSegment) return
+
+          // Calculate pointer position in normalized device coordinates
+          const rect = gl.domElement.getBoundingClientRect()
+          pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+          pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+          raycaster.setFromCamera(pointer, camera)
+
+          const intersection = new THREE.Vector3()
+          if (!raycaster.ray.intersectPlane(plane, intersection)) return
+
+          const vector = intersection.clone().sub(center)
+          const currentAngle = Math.atan2(vector.z, vector.x)
+
+          if (!hasChanged) {
+            initialAngle = currentAngle
+            previousAngle = currentAngle
+            totalDelta = 0
+            hasChanged = true // Mark as started
+            return
+          }
+
+          // Compute smallest delta handling wrap-around
+          let delta = currentAngle - previousAngle
+          delta = ((delta + Math.PI) % (2 * Math.PI)) - Math.PI // Normalize to -pi to pi
+
+          totalDelta += delta
+          previousAngle = currentAngle
+
+          // Rotate using totalDelta (no snap during drag for fluidity)
+          const rotatePoint = (point: [number, number]) => {
+            const worldX = point[0] * tileSize
+            const worldZ = point[1] * tileSize
+            const dX = worldX - centerX
+            const dZ = worldZ - centerZ
+            const cos = Math.cos(totalDelta)
+            const sin = Math.sin(totalDelta)
+            const newX = centerX + dX * cos + dZ * sin
+            const newZ = centerZ - dX * sin + dZ * cos
+            return [newX / tileSize, newZ / tileSize] as [number, number]
+          }
+
+          const newStart = rotatePoint(originalSegment.start)
+          const newEnd = rotatePoint(originalSegment.end)
+
+          const updatedSegment: RoofSegment = {
+            ...originalSegment,
+            start: newStart,
+            end: newEnd,
+          }
+
+          finalSegment = updatedSegment
+
+          // Update in store (without snap for smooth preview)
+          const updatedSegments = roofSegments.map((s) => (s.id === segmentId ? updatedSegment : s))
+          setComponents(updatedSegments)
+        }
+
+        const onPointerUp = () => {
+          setIsDragging(false)
+          setActiveHandle(null)
+          document.removeEventListener('pointermove', onPointerMove)
+          document.removeEventListener('pointerup', onPointerUp)
+          gl.domElement.style.cursor = 'auto'
+
+          if (hasChanged && finalSegment) {
+            // Apply final snap on release
+            const snapToGrid = (val: number) => Math.round(val * 10) / 10
+
+            const snappedSegment: RoofSegment = {
+              ...finalSegment,
+              start: [snapToGrid(finalSegment.start[0]), snapToGrid(finalSegment.start[1])],
+              end: [snapToGrid(finalSegment.end[0]), snapToGrid(finalSegment.end[1])],
+            }
+
+            const snappedSegments = roofSegments.map((s) =>
+              s.id === segmentId ? snappedSegment : s,
+            )
+            setComponents(snappedSegments)
+
+            // Push to undo stack if there were changes
+            useEditor.setState((state) => ({
+              undoStack: [
+                ...state.undoStack,
+                { images: originalImages, components: originalComponents },
+              ].slice(-50),
+              redoStack: [],
+            }))
+          }
+        }
+
+        setIsDragging(true)
+        document.addEventListener('pointermove', onPointerMove)
+        document.addEventListener('pointerup', onPointerUp)
+        gl.domElement.style.cursor = 'grabbing'
+      },
+      [roofSegments, camera, gl, baseHeight, tileSize, setComponents],
+    )
+
+    // Handle translation for whole roof segment
+    const handleTranslationDrag = useCallback(
+      (segmentId: string, axis: 'ridge' | 'perp' | 'xz') => {
+        const segment = roofSegments.find((s) => s.id === segmentId)
+        if (!segment) return
+
+        // Capture state for undo
+        const storeState = useEditor.getState()
+        const originalComponents = storeState.components
+        const originalImages = storeState.images
+
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -baseHeight)
+        const raycaster = new THREE.Raycaster()
+        const pointer = new THREE.Vector2()
+
+        // Calculate roof orientation
+        const startWorld = [segment.start[0] * tileSize, segment.start[1] * tileSize]
+        const endWorld = [segment.end[0] * tileSize, segment.end[1] * tileSize]
+        const dx = endWorld[0] - startWorld[0]
+        const dz = endWorld[1] - startWorld[1]
+        const ridgeLength = Math.sqrt(dx * dx + dz * dz)
+
+        // Ridge and perpendicular directions in world space
+        const ridgeDir = new THREE.Vector3(dx / ridgeLength, 0, dz / ridgeLength)
+        const perpDir = new THREE.Vector3(-dz / ridgeLength, 0, dx / ridgeLength)
+
+        const intersection = new THREE.Vector3()
+        let startPoint: THREE.Vector3 | null = null
+        const originalSegment = segment
+        let hasChanged = false
+
+        const onPointerMove = (event: PointerEvent) => {
+          if (!originalSegment) return
+
+          // Calculate pointer position
+          const rect = gl.domElement.getBoundingClientRect()
+          pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+          pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+          raycaster.setFromCamera(pointer, camera)
+
+          if (!raycaster.ray.intersectPlane(plane, intersection)) return
+
+          if (!startPoint) {
+            startPoint = intersection.clone()
+            return
+          }
+
+          const delta = new THREE.Vector3().subVectors(intersection, startPoint)
+
+          // Project delta onto roof-aligned axes
+          let deltaX = 0
+          let deltaZ = 0
+
+          if (axis === 'ridge') {
+            // Move along ridge direction
+            const projectedDelta = delta.dot(ridgeDir)
+            deltaX = projectedDelta * ridgeDir.x
+            deltaZ = projectedDelta * ridgeDir.z
+          } else if (axis === 'perp') {
+            // Move perpendicular to ridge
+            const projectedDelta = delta.dot(perpDir)
+            deltaX = projectedDelta * perpDir.x
+            deltaZ = projectedDelta * perpDir.z
+          } else {
+            // Free movement on XZ plane
+            deltaX = delta.x
+            deltaZ = delta.z
+          }
+
+          // Snap to grid when Shift is held
+          if (event.shiftKey) {
+            deltaX = Math.round(deltaX / tileSize) * tileSize
+            deltaZ = Math.round(deltaZ / tileSize) * tileSize
+          }
+
+          // Update both start and end points
+          const newStart: [number, number] = [
+            originalSegment.start[0] + deltaX / tileSize,
+            originalSegment.start[1] + deltaZ / tileSize,
+          ]
+          const newEnd: [number, number] = [
+            originalSegment.end[0] + deltaX / tileSize,
+            originalSegment.end[1] + deltaZ / tileSize,
+          ]
+
+          const updatedSegment: RoofSegment = {
+            ...originalSegment,
+            start: newStart,
+            end: newEnd,
           }
 
           // Update in store
@@ -326,29 +664,31 @@ export const Roofs = forwardRef(
           const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
 
           // Calculate the 4 bottom corners and 2 top (ridge) points
-          const halfWidth = ROOF_WIDTH / 2
+          // Use asymmetric widths if specified, otherwise default to symmetric
+          const leftWidth = seg.leftWidth ?? ROOF_WIDTH / 2
+          const rightWidth = seg.rightWidth ?? ROOF_WIDTH / 2
           const roofHeight = seg.height || 2 // Default 2m peak height above base
 
           // Bottom corners (at baseHeight)
           const bottomLeft = [
-            startWorld[0] + perpDir.x * halfWidth,
+            startWorld[0] + perpDir.x * leftWidth,
             baseHeight,
-            startWorld[1] + perpDir.z * halfWidth,
+            startWorld[1] + perpDir.z * leftWidth,
           ]
           const bottomRight = [
-            startWorld[0] - perpDir.x * halfWidth,
+            startWorld[0] - perpDir.x * rightWidth,
             baseHeight,
-            startWorld[1] - perpDir.z * halfWidth,
+            startWorld[1] - perpDir.z * rightWidth,
           ]
           const bottomLeftEnd = [
-            endWorld[0] + perpDir.x * halfWidth,
+            endWorld[0] + perpDir.x * leftWidth,
             baseHeight,
-            endWorld[1] + perpDir.z * halfWidth,
+            endWorld[1] + perpDir.z * leftWidth,
           ]
           const bottomRightEnd = [
-            endWorld[0] - perpDir.x * halfWidth,
+            endWorld[0] - perpDir.x * rightWidth,
             baseHeight,
-            endWorld[1] - perpDir.z * halfWidth,
+            endWorld[1] - perpDir.z * rightWidth,
           ]
 
           // Ridge points (at baseHeight + roofHeight)
@@ -760,12 +1100,21 @@ export const Roofs = forwardRef(
                       ridgeEnd,
                     } = geom.points
 
-                    // Calculate derived dimensions
+                    // Calculate derived dimensions for edge handles
                     const arrowHitRadius = ARROW_SHAFT_RADIUS * ARROW_HIT_RADIUS_SCALE
                     const arrowHitLength = ARROW_SHAFT_LENGTH * ARROW_HIT_LENGTH_SCALE
                     const arrowShaftPos = ARROW_SHAFT_LENGTH / 2
                     const arrowHitPos = arrowHitLength / 2
                     const arrowHeadPos = ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
+
+                    // Calculate derived dimensions for translation handles
+                    const originHitSize = ORIGIN_MARKER_SIZE * ORIGIN_HIT_SCALE
+                    const originMarkerEdge = ORIGIN_MARKER_SIZE / 2
+                    const originHitEdge = originHitSize / 2
+                    const transArrowShaftPos = originMarkerEdge + ARROW_SHAFT_LENGTH / 2
+                    const transArrowHitPos = originHitEdge + arrowHitLength / 2
+                    const transArrowHeadPos =
+                      originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
 
                     // Define horizontal edge handles (on ZX plane)
                     const horizontalEdges = [
@@ -927,7 +1276,264 @@ export const Roofs = forwardRef(
                       </group>
                     )
 
-                    return [...horizontalHandles, ridgeHandle]
+                    // Calculate geometric center for rotation and translation
+                    const centerX =
+                      (bottomLeft[0] + bottomRight[0] + bottomLeftEnd[0] + bottomRightEnd[0]) / 4
+                    const centerY = baseHeight
+                    const centerZ =
+                      (bottomLeft[2] + bottomRight[2] + bottomLeftEnd[2] + bottomRightEnd[2]) / 4
+
+                    // Calculate roof ridge orientation for translation handles
+                    const startWorld = [seg.start[0] * tileSize, seg.start[1] * tileSize]
+                    const endWorld = [seg.end[0] * tileSize, seg.end[1] * tileSize]
+                    const dx = endWorld[0] - startWorld[0]
+                    const dz = endWorld[1] - startWorld[1]
+                    const ridgeAngle = Math.atan2(dz, dx)
+
+                    // Corner positions
+                    const corners = [bottomLeft, bottomRight, bottomLeftEnd, bottomRightEnd]
+
+                    // Rotation handle parameters
+                    const arcAngle = Math.PI / 2 // Fixed 90-degree arc
+                    const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
+                    const rotationHandleId = `${seg.id}-rotation`
+
+                    // Create small arc rotation handles at each corner
+                    const rotationHandles = corners.map((corner, idx) => {
+                      const cdx = corner[0] - centerX
+                      const cdz = corner[2] - centerZ
+                      const angle = Math.atan2(cdz, cdx)
+                      const groupRotation: [number, number, number] = [
+                        Math.PI / 2,
+                        0,
+                        angle - arcAngle / 2,
+                      ]
+                      return (
+                        <group
+                          key={`${rotationHandleId}-${idx}`}
+                          position={[corner[0], corner[1], corner[2]]}
+                        >
+                          {/* Invisible hit target */}
+                          <mesh
+                            onPointerDown={(e) => {
+                              if (e.button !== 0 || movingCamera || isDragging) return
+                              e.stopPropagation()
+                              setActiveHandle(rotationHandleId)
+                              handleRotationDrag(seg.id)
+                            }}
+                            onPointerEnter={() => !isDragging && setHoveredHandle(rotationHandleId)}
+                            onPointerLeave={() => !isDragging && setHoveredHandle(null)}
+                            renderOrder={1000}
+                            rotation={groupRotation}
+                          >
+                            <torusGeometry
+                              args={[
+                                ROTATION_HANDLE_RADIUS,
+                                rotationHitThickness,
+                                16,
+                                32,
+                                arcAngle,
+                              ]}
+                            />
+                            <HitMaterial />
+                          </mesh>
+
+                          {/* Visible torus */}
+                          <mesh renderOrder={1000} rotation={groupRotation}>
+                            <torusGeometry
+                              args={[
+                                ROTATION_HANDLE_RADIUS,
+                                ROTATION_HANDLE_THICKNESS,
+                                16,
+                                32,
+                                arcAngle,
+                              ]}
+                            />
+                            <HandleMaterial
+                              color="#4444ff"
+                              emissiveIntensity={getHandleEmissiveIntensity(rotationHandleId)}
+                              opacity={getHandleOpacity(rotationHandleId)}
+                            />
+                          </mesh>
+                        </group>
+                      )
+                    })
+
+                    // Translation handles at center (box + ridge/perp arrows) - rotated to align with roof
+                    // Rotation makes: local +X → ridge direction, local +Z → perpendicular direction
+                    const translationHandles = (
+                      <group
+                        key={`${seg.id}-translation`}
+                        position={[centerX, centerY, centerZ]}
+                        rotation={[0, -ridgeAngle, 0]}
+                      >
+                        {/* Center origin marker for XZ translation */}
+                        <group position={[0, 0, 0]}>
+                          {/* Invisible larger hit target for XZ translation */}
+                          <mesh
+                            onPointerDown={(e) => {
+                              if (e.button !== 0 || movingCamera || isDragging) return
+                              e.stopPropagation()
+                              setActiveHandle(`${seg.id}-translate-xz`)
+                              handleTranslationDrag(seg.id, 'xz')
+                            }}
+                            onPointerEnter={() =>
+                              !isDragging && setHoveredHandle(`${seg.id}-translate-xz`)
+                            }
+                            onPointerLeave={() => !isDragging && setHoveredHandle(null)}
+                            position={[0, 0, 0]}
+                            renderOrder={1000}
+                          >
+                            <boxGeometry args={[originHitSize, originHitSize, originHitSize]} />
+                            <HitMaterial />
+                          </mesh>
+                          {/* Visible origin marker */}
+                          <mesh position={[0, 0, 0]} renderOrder={1000}>
+                            <boxGeometry
+                              args={[ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE, ORIGIN_MARKER_SIZE]}
+                            />
+                            <HandleMaterial
+                              color="white"
+                              emissiveIntensity={getHandleEmissiveIntensity(
+                                `${seg.id}-translate-xz`,
+                              )}
+                              opacity={getHandleOpacity(`${seg.id}-translate-xz`)}
+                            />
+                          </mesh>
+                        </group>
+
+                        {/* Translate along ridge - Green arrow pointing along local X (ridge direction) */}
+                        <group position={[0, 0, 0]}>
+                          {/* Invisible larger hit target */}
+                          <mesh
+                            onPointerDown={(e) => {
+                              if (e.button !== 0 || movingCamera || isDragging) return
+                              e.stopPropagation()
+                              setActiveHandle(`${seg.id}-translate-ridge`)
+                              handleTranslationDrag(seg.id, 'ridge')
+                            }}
+                            onPointerEnter={() =>
+                              !isDragging && setHoveredHandle(`${seg.id}-translate-ridge`)
+                            }
+                            onPointerLeave={() => !isDragging && setHoveredHandle(null)}
+                            position={[transArrowHitPos, 0, 0]}
+                            renderOrder={1000}
+                            rotation={[0, 0, Math.PI / 2]}
+                          >
+                            <cylinderGeometry
+                              args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]}
+                            />
+                            <HitMaterial />
+                          </mesh>
+                          {/* Visible arrow shaft */}
+                          <mesh
+                            position={[transArrowShaftPos, 0, 0]}
+                            renderOrder={1000}
+                            rotation={[0, 0, Math.PI / 2]}
+                          >
+                            <cylinderGeometry
+                              args={[
+                                ARROW_SHAFT_RADIUS,
+                                ARROW_SHAFT_RADIUS,
+                                ARROW_SHAFT_LENGTH,
+                                16,
+                              ]}
+                            />
+                            <HandleMaterial
+                              color="#44ff44"
+                              emissiveIntensity={getHandleEmissiveIntensity(
+                                `${seg.id}-translate-ridge`,
+                              )}
+                              opacity={getHandleOpacity(`${seg.id}-translate-ridge`)}
+                            />
+                          </mesh>
+                          {/* Arrow head */}
+                          <mesh
+                            position={[transArrowHeadPos, 0, 0]}
+                            renderOrder={1000}
+                            rotation={[0, 0, -Math.PI / 2]}
+                          >
+                            <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
+                            <HandleMaterial
+                              color="#44ff44"
+                              emissiveIntensity={getHandleEmissiveIntensity(
+                                `${seg.id}-translate-ridge`,
+                              )}
+                              opacity={getHandleOpacity(`${seg.id}-translate-ridge`)}
+                            />
+                          </mesh>
+                        </group>
+
+                        {/* Translate perpendicular to ridge - Red arrow pointing along local Z (perpendicular direction) */}
+                        <group position={[0, 0, 0]}>
+                          {/* Invisible larger hit target */}
+                          <mesh
+                            onPointerDown={(e) => {
+                              if (e.button !== 0 || movingCamera || isDragging) return
+                              e.stopPropagation()
+                              setActiveHandle(`${seg.id}-translate-perp`)
+                              handleTranslationDrag(seg.id, 'perp')
+                            }}
+                            onPointerEnter={() =>
+                              !isDragging && setHoveredHandle(`${seg.id}-translate-perp`)
+                            }
+                            onPointerLeave={() => !isDragging && setHoveredHandle(null)}
+                            position={[0, 0, transArrowHitPos]}
+                            renderOrder={1000}
+                            rotation={[Math.PI / 2, 0, 0]}
+                          >
+                            <cylinderGeometry
+                              args={[arrowHitRadius, arrowHitRadius, arrowHitLength, 8]}
+                            />
+                            <HitMaterial />
+                          </mesh>
+                          {/* Visible arrow shaft */}
+                          <mesh
+                            position={[0, 0, transArrowShaftPos]}
+                            renderOrder={1000}
+                            rotation={[Math.PI / 2, 0, 0]}
+                          >
+                            <cylinderGeometry
+                              args={[
+                                ARROW_SHAFT_RADIUS,
+                                ARROW_SHAFT_RADIUS,
+                                ARROW_SHAFT_LENGTH,
+                                16,
+                              ]}
+                            />
+                            <HandleMaterial
+                              color="#ff4444"
+                              emissiveIntensity={getHandleEmissiveIntensity(
+                                `${seg.id}-translate-perp`,
+                              )}
+                              opacity={getHandleOpacity(`${seg.id}-translate-perp`)}
+                            />
+                          </mesh>
+                          {/* Arrow head */}
+                          <mesh
+                            position={[0, 0, transArrowHeadPos]}
+                            renderOrder={1000}
+                            rotation={[Math.PI / 2, 0, 0]}
+                          >
+                            <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
+                            <HandleMaterial
+                              color="#ff4444"
+                              emissiveIntensity={getHandleEmissiveIntensity(
+                                `${seg.id}-translate-perp`,
+                              )}
+                              opacity={getHandleOpacity(`${seg.id}-translate-perp`)}
+                            />
+                          </mesh>
+                        </group>
+                      </group>
+                    )
+
+                    return [
+                      ...horizontalHandles,
+                      ridgeHandle,
+                      ...rotationHandles,
+                      translationHandles,
+                    ]
                   })()}
                 </>
               )}
@@ -948,10 +1554,20 @@ type RoofShadowPreviewProps = {
   tileSize: number
   baseHeight: number
   height?: number
+  leftWidth?: number
+  rightWidth?: number
 }
 
 export const RoofShadowPreview = memo(
-  ({ start, end, tileSize, baseHeight, height = 2 }: RoofShadowPreviewProps) => {
+  ({
+    start,
+    end,
+    tileSize,
+    baseHeight,
+    height = 2,
+    leftWidth,
+    rightWidth,
+  }: RoofShadowPreviewProps) => {
     const geometries = useMemo(() => {
       const startWorld = [start[0] * tileSize, start[1] * tileSize]
       const endWorld = [end[0] * tileSize, end[1] * tileSize]
@@ -965,27 +1581,29 @@ export const RoofShadowPreview = memo(
       const ridgeDir = { x: dx / ridgeLength, z: dz / ridgeLength }
       const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
 
-      const halfWidth = ROOF_WIDTH / 2
+      // Use provided widths or default to symmetric
+      const finalLeftWidth = leftWidth ?? ROOF_WIDTH / 2
+      const finalRightWidth = rightWidth ?? ROOF_WIDTH / 2
 
       const bottomLeft = [
-        startWorld[0] + perpDir.x * halfWidth,
+        startWorld[0] + perpDir.x * finalLeftWidth,
         baseHeight,
-        startWorld[1] + perpDir.z * halfWidth,
+        startWorld[1] + perpDir.z * finalLeftWidth,
       ]
       const bottomRight = [
-        startWorld[0] - perpDir.x * halfWidth,
+        startWorld[0] - perpDir.x * finalRightWidth,
         baseHeight,
-        startWorld[1] - perpDir.z * halfWidth,
+        startWorld[1] - perpDir.z * finalRightWidth,
       ]
       const bottomLeftEnd = [
-        endWorld[0] + perpDir.x * halfWidth,
+        endWorld[0] + perpDir.x * finalLeftWidth,
         baseHeight,
-        endWorld[1] + perpDir.z * halfWidth,
+        endWorld[1] + perpDir.z * finalLeftWidth,
       ]
       const bottomRightEnd = [
-        endWorld[0] - perpDir.x * halfWidth,
+        endWorld[0] - perpDir.x * finalRightWidth,
         baseHeight,
-        endWorld[1] - perpDir.z * halfWidth,
+        endWorld[1] - perpDir.z * finalRightWidth,
       ]
 
       const ridgeStart = [startWorld[0], baseHeight + height, startWorld[1]]
@@ -1033,7 +1651,7 @@ export const RoofShadowPreview = memo(
       leftRoofGeometry.computeVertexNormals()
 
       return { frontGable: frontGableGeometry, leftRoof: leftRoofGeometry }
-    }, [start, end, tileSize, baseHeight, height])
+    }, [start, end, tileSize, baseHeight, height, leftWidth, rightWidth])
 
     if (!geometries) return null
 
