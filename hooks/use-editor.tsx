@@ -360,7 +360,10 @@ const useStore = create<StoreState>()(
           const segments: RoofSegment[] = []
           for (const roofKey of roofs) {
             if (!roofKey.includes('-')) continue
-            const parts = roofKey.split('-')
+
+            // Parse roof key format: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
+            const [coordPart, widthPart] = roofKey.split(':')
+            const parts = coordPart.split('-')
             if (parts.length !== 2) continue
 
             const [start, end] = parts
@@ -369,11 +372,24 @@ const useStore = create<StoreState>()(
 
             if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
 
+            // Parse optional widths
+            let leftWidth: number | undefined
+            let rightWidth: number | undefined
+            if (widthPart) {
+              const widths = widthPart.split(',').map(Number)
+              if (widths.length === 2 && !isNaN(widths[0]) && !isNaN(widths[1])) {
+                leftWidth = widths[0]
+                rightWidth = widths[1]
+              }
+            }
+
             segments.push({
               start: [x1, y1],
               end: [x2, y2],
               id: roofKey,
               height: 2, // Default 2m peak height
+              leftWidth,
+              rightWidth,
               visible: true,
             })
           }

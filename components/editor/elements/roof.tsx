@@ -1609,7 +1609,7 @@ export const RoofShadowPreview = memo(
       const ridgeStart = [startWorld[0], baseHeight + height, startWorld[1]]
       const ridgeEnd = [endWorld[0], baseHeight + height, endWorld[1]]
 
-      // Create simplified preview geometries
+      // Create complete preview geometries (all 4 faces)
       const frontGableGeometry = new THREE.BufferGeometry()
       const frontGableVertices = new Float32Array([
         bottomLeft[0],
@@ -1624,6 +1624,21 @@ export const RoofShadowPreview = memo(
       ])
       frontGableGeometry.setAttribute('position', new THREE.BufferAttribute(frontGableVertices, 3))
       frontGableGeometry.computeVertexNormals()
+
+      const backGableGeometry = new THREE.BufferGeometry()
+      const backGableVertices = new Float32Array([
+        bottomLeftEnd[0],
+        bottomLeftEnd[1],
+        bottomLeftEnd[2],
+        ridgeEnd[0],
+        ridgeEnd[1],
+        ridgeEnd[2],
+        bottomRightEnd[0],
+        bottomRightEnd[1],
+        bottomRightEnd[2],
+      ])
+      backGableGeometry.setAttribute('position', new THREE.BufferAttribute(backGableVertices, 3))
+      backGableGeometry.computeVertexNormals()
 
       const leftRoofGeometry = new THREE.BufferGeometry()
       const leftRoofVertices = new Float32Array([
@@ -1650,15 +1665,57 @@ export const RoofShadowPreview = memo(
       leftRoofGeometry.setAttribute('position', new THREE.BufferAttribute(leftRoofVertices, 3))
       leftRoofGeometry.computeVertexNormals()
 
-      return { frontGable: frontGableGeometry, leftRoof: leftRoofGeometry }
+      const rightRoofGeometry = new THREE.BufferGeometry()
+      const rightRoofVertices = new Float32Array([
+        bottomRight[0],
+        bottomRight[1],
+        bottomRight[2],
+        ridgeStart[0],
+        ridgeStart[1],
+        ridgeStart[2],
+        ridgeEnd[0],
+        ridgeEnd[1],
+        ridgeEnd[2],
+
+        bottomRight[0],
+        bottomRight[1],
+        bottomRight[2],
+        ridgeEnd[0],
+        ridgeEnd[1],
+        ridgeEnd[2],
+        bottomRightEnd[0],
+        bottomRightEnd[1],
+        bottomRightEnd[2],
+      ])
+      rightRoofGeometry.setAttribute('position', new THREE.BufferAttribute(rightRoofVertices, 3))
+      rightRoofGeometry.computeVertexNormals()
+
+      return {
+        frontGable: frontGableGeometry,
+        backGable: backGableGeometry,
+        leftRoof: leftRoofGeometry,
+        rightRoof: rightRoofGeometry,
+      }
     }, [start, end, tileSize, baseHeight, height, leftWidth, rightWidth])
 
     if (!geometries) return null
 
     return (
       <group>
-        {/* Occluded version */}
+        {/* Occluded version - all 4 faces */}
         <mesh geometry={geometries.frontGable} renderOrder={1}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={false}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.1}
+            opacity={0.15}
+            side={THREE.DoubleSide}
+            transparent
+          />
+        </mesh>
+        <mesh geometry={geometries.backGable} renderOrder={1}>
           <meshStandardMaterial
             color="#44ff44"
             depthTest={false}
@@ -1682,8 +1739,20 @@ export const RoofShadowPreview = memo(
             transparent
           />
         </mesh>
+        <mesh geometry={geometries.rightRoof} renderOrder={1}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={false}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.1}
+            opacity={0.15}
+            side={THREE.DoubleSide}
+            transparent
+          />
+        </mesh>
 
-        {/* Visible version */}
+        {/* Visible version - all 4 faces */}
         <mesh geometry={geometries.frontGable} renderOrder={2}>
           <meshStandardMaterial
             color="#44ff44"
@@ -1696,7 +1765,31 @@ export const RoofShadowPreview = memo(
             transparent
           />
         </mesh>
+        <mesh geometry={geometries.backGable} renderOrder={2}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={true}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.4}
+            opacity={0.5}
+            side={THREE.DoubleSide}
+            transparent
+          />
+        </mesh>
         <mesh geometry={geometries.leftRoof} renderOrder={2}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={true}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.4}
+            opacity={0.5}
+            side={THREE.DoubleSide}
+            transparent
+          />
+        </mesh>
+        <mesh geometry={geometries.rightRoof} renderOrder={2}>
           <meshStandardMaterial
             color="#44ff44"
             depthTest={true}

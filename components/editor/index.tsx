@@ -505,23 +505,49 @@ export default function Editor({ className }: { className?: string }) {
         setWallPreviewEnd(null)
       }
     } else if (controlMode === 'building' && activeTool === 'roof') {
-      // Roof mode: two-click ridge line drawing
+      // Roof mode: two-click rectangle (defines base footprint)
       if (roofStartPoint === null) {
-        // First click: set start point
+        // First click: set start corner
         setRoofStartPoint([x, y])
       } else {
-        // Second click: create roof using roofPreviewEnd (snapped position)
+        // Second click: create roof from base rectangle
         if (roofPreviewEnd) {
           const [x1, y1] = roofStartPoint
           const [x2, y2] = roofPreviewEnd
-          // Ensure roof is at least MIN_WALL_LENGTH
-          const dx = Math.abs(x2 - x1) * TILE_SIZE
-          const dy = Math.abs(y2 - y1) * TILE_SIZE
-          const length = Math.sqrt(dx * dx + dy * dy)
 
-          if (length >= MIN_WALL_LENGTH) {
-            // Roof is valid
-            const roofKey = `${x1},${y1}-${x2},${y2}`
+          // Calculate base dimensions
+          const width = Math.abs(x2 - x1)
+          const depth = Math.abs(y2 - y1)
+
+          // Ensure roof base is at least MIN_WALL_LENGTH
+          if (width * TILE_SIZE >= MIN_WALL_LENGTH && depth * TILE_SIZE >= MIN_WALL_LENGTH) {
+            // Calculate ridge line along the longer axis
+            // Ridge runs parallel to the longer side, centered in the rectangle
+            const minX = Math.min(x1, x2)
+            const maxX = Math.max(x1, x2)
+            const minY = Math.min(y1, y2)
+            const maxY = Math.max(y1, y2)
+            const centerX = (minX + maxX) / 2
+            const centerY = (minY + maxY) / 2
+
+            let ridgeStart: [number, number]
+            let ridgeEnd: [number, number]
+            let roofWidth: number // Distance from ridge to each edge in grid units
+
+            if (width >= depth) {
+              // Ridge runs along X axis (longer side)
+              ridgeStart = [minX, centerY]
+              ridgeEnd = [maxX, centerY]
+              roofWidth = depth / 2
+            } else {
+              // Ridge runs along Y axis (longer side)
+              ridgeStart = [centerX, minY]
+              ridgeEnd = [centerX, maxY]
+              roofWidth = width / 2
+            }
+
+            // Store roof with widths: "x1,y1-x2,y2:leftWidth,rightWidth"
+            const roofKey = `${ridgeStart[0]},${ridgeStart[1]}-${ridgeEnd[0]},${ridgeEnd[1]}:${roofWidth * TILE_SIZE},${roofWidth * TILE_SIZE}`
             const currentRoofs = Array.from(getRoofsSet())
             if (!currentRoofs.includes(roofKey)) {
               setRoofs([...currentRoofs, roofKey])
@@ -729,7 +755,7 @@ export default function Editor({ className }: { className?: string }) {
         setWallPreviewEnd(null)
       }
     } else if (controlMode === 'building' && activeTool === 'roof') {
-      // Roof mode: no snapping (roofs can be placed at any angle)
+      // Roof mode: show rectangle preview (base footprint snaps to grid)
       if (roofStartPoint && y !== null) {
         setRoofPreviewEnd([x, y])
       } else if (!roofStartPoint) {
@@ -1037,6 +1063,8 @@ export default function Editor({ className }: { className?: string }) {
                         onIntersectionDoubleClick={handleIntersectionDoubleClick}
                         onIntersectionHover={handleIntersectionHover}
                         opacity={gridOpacity}
+                        roofPreviewEnd={roofPreviewEnd}
+                        roofStartPoint={roofStartPoint}
                         roomPreviewEnd={roomPreviewEnd}
                         roomStartPoint={roomStartPoint}
                         tileSize={tileSize}
