@@ -1,6 +1,6 @@
 'use client'
 
-import { Building, Eye, EyeOff, Image, Layers, Plus, Square, Triangle } from 'lucide-react'
+import { Building, DoorOpen, Eye, EyeOff, Image, Layers, Plus, Square, Triangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   TreeExpander,
@@ -33,6 +33,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleUpload = useEditor((state) => state.handleUpload)
   const wallSegments = useEditor(useShallow((state) => state.wallSegments()))
   const roofSegments = useEditor(useShallow((state) => state.roofSegments()))
+  const components = useEditor((state) => state.components)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const images = useEditor((state) => state.images)
@@ -193,11 +194,17 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   const isSelected = selectedFloorId === level.id
                   const levelWalls = isSelected ? wallSegments : []
                   const levelRoofs = isSelected ? roofSegments : []
+                  const levelDoors = isSelected
+                    ? components.filter((c) => c.type === 'door' && c.group === level.id)
+                    : []
                   const levelImages = images.filter((img) => img.level === (level.level || 0))
                   const isLastLevel = levelIndex === levels.length - 1
                   const hasContent =
                     isSelected &&
-                    (levelWalls.length > 0 || levelRoofs.length > 0 || levelImages.length > 0)
+                    (levelWalls.length > 0 ||
+                      levelRoofs.length > 0 ||
+                      levelDoors.length > 0 ||
+                      levelImages.length > 0)
 
                   return (
                     <TreeNode isLast={isLastLevel} key={level.id} nodeId={level.id}>
@@ -240,24 +247,38 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                         <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
                           <TreeNodeTrigger>
                             <TreeExpander
-                              hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
+                              hasChildren={
+                                levelWalls.length > 0 ||
+                                levelRoofs.length > 0 ||
+                                levelDoors.length > 0
+                              }
                             />
                             <TreeIcon
-                              hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
+                              hasChildren={
+                                levelWalls.length > 0 ||
+                                levelRoofs.length > 0 ||
+                                levelDoors.length > 0
+                              }
                               icon={<Building className="h-4 w-4 text-green-500" />}
                             />
                             <TreeLabel>
-                              3D Objects ({levelWalls.length + levelRoofs.length})
+                              3D Objects ({levelWalls.length + levelRoofs.length + levelDoors.length})
                             </TreeLabel>
                           </TreeNodeTrigger>
 
                           <TreeNodeContent
-                            hasChildren={levelWalls.length > 0 || levelRoofs.length > 0}
+                            hasChildren={
+                              levelWalls.length > 0 || levelRoofs.length > 0 || levelDoors.length > 0
+                            }
                           >
                             {/* Walls */}
                             {levelWalls.map((segment, index, walls) => (
                               <TreeNode
-                                isLast={index === walls.length - 1 && levelRoofs.length === 0}
+                                isLast={
+                                  index === walls.length - 1 &&
+                                  levelRoofs.length === 0 &&
+                                  levelDoors.length === 0
+                                }
                                 key={segment.id}
                                 level={2}
                                 nodeId={segment.id}
@@ -303,7 +324,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                             {/* Roofs */}
                             {levelRoofs.map((segment, index, roofs) => (
                               <TreeNode
-                                isLast={index === roofs.length - 1}
+                                isLast={index === roofs.length - 1 && levelDoors.length === 0}
                                 key={segment.id}
                                 level={2}
                                 nodeId={segment.id}
@@ -344,6 +365,32 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                       <Eye className="h-3 w-3" />
                                     )}
                                   </Button>
+                                </TreeNodeTrigger>
+                              </TreeNode>
+                            ))}
+
+                            {/* Doors */}
+                            {levelDoors.map((door, index, doors) => (
+                              <TreeNode
+                                isLast={index === doors.length - 1}
+                                key={door.id}
+                                level={2}
+                                nodeId={door.id}
+                              >
+                                <TreeNodeTrigger
+                                  className={cn(
+                                    selectedElements.find((el) => el.id === door.id) && 'bg-accent',
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    // Select door for deletion
+                                    setSelectedElements([{ id: door.id, type: 'door' }])
+                                    setControlMode('building')
+                                  }}
+                                >
+                                  <TreeExpander />
+                                  <TreeIcon icon={<DoorOpen className="h-4 w-4 text-orange-600" />} />
+                                  <TreeLabel>Door {index + 1}</TreeLabel>
                                 </TreeNodeTrigger>
                               </TreeNode>
                             ))}

@@ -182,6 +182,8 @@ export const DoorPlacementPreview = memo(
     }, [tileSize])
 
     // Handle click to place door
+    const addComponent = useEditor((state) => state.addComponent)
+
     const handleClick = useCallback(() => {
       if (!(placement && placement.canPlace && placement.nearestWall)) {
         return
@@ -202,20 +204,12 @@ export const DoorPlacementPreview = memo(
         } as DoorComponentData,
       }
 
-      // Add door to components using functional setState
-      useEditor.setState((state) => ({
-        components: [...state.components, doorComponent],
-      }))
-
-      console.log('Door placed at:', {
-        centeredPosition: placement.gridPosition,
-        rotation: placement.rotation,
-        nearestWall: placement.nearestWall,
-      })
+      // Add door to components using store method
+      addComponent(doorComponent)
 
       // Notify parent component
       onPlaced?.()
-    }, [placement, floorId, onPlaced])
+    }, [placement, floorId, onPlaced, addComponent])
 
     if (!placement) {
       return null
@@ -228,7 +222,6 @@ export const DoorPlacementPreview = memo(
     // Color based on whether we can place
     const color = placement.canPlace ? '#44ff44' : '#ff4444'
 
-    console.log('preview: worldX, worldZ, placement', worldX, worldZ, placement)
     return (
       <group
         onClick={handleClick}

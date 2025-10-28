@@ -145,6 +145,7 @@ type StoreState = {
 } & {
   setWalls: (walls: string[]) => void
   setRoofs: (roofs: string[]) => void
+  addComponent: (component: Component) => void
   addGroup: (group: ComponentGroup) => void
   deleteGroup: (groupId: string) => void
   selectFloor: (floorId: string | null) => void
@@ -198,6 +199,15 @@ const useStore = create<StoreState>()(
         },
       ],
       currentLevel: 0,
+      addComponent: (component) =>
+        set((state) => ({
+          undoStack: [
+            ...state.undoStack,
+            { images: state.images, components: state.components },
+          ].slice(-50),
+          redoStack: [],
+          components: [...state.components, component],
+        })),
       addGroup: (group) => set((state) => ({ groups: [...state.groups, group] })),
       deleteGroup: (groupId) =>
         set((state) => ({
@@ -912,6 +922,7 @@ export const useEditorContext = () => {
     selectedFloorId: store.selectedFloorId,
     isOverviewMode: store.isOverviewMode,
     selectFloor: store.selectFloor,
+    addComponent: store.addComponent,
     addGroup: store.addGroup,
     deleteGroup: store.deleteGroup,
     toggleFloorVisibility: store.toggleFloorVisibility,
