@@ -148,6 +148,7 @@ type StoreState = {
   addComponent: (component: Component) => void
   addGroup: (group: ComponentGroup) => void
   deleteGroup: (groupId: string) => void
+  reorderGroups: (groups: ComponentGroup[]) => void
   selectFloor: (floorId: string | null) => void
   setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
   setSelectedElements: (elements: SelectedElement[]) => void
@@ -214,6 +215,7 @@ const useStore = create<StoreState>()(
           groups: state.groups.filter((group) => group.id !== groupId),
           components: state.components.filter((comp) => comp.group !== groupId),
         })),
+      reorderGroups: (groups) => set({ groups }),
       selectedFloorId: 'level_0',
       isOverviewMode: false, // Start in edit mode with base level selected
       selectedElements: [],
@@ -929,6 +931,7 @@ export const useEditorContext = () => {
     addComponent: store.addComponent,
     addGroup: store.addGroup,
     deleteGroup: store.deleteGroup,
+    reorderGroups: store.reorderGroups,
     toggleFloorVisibility: store.toggleFloorVisibility,
     toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
     toggleImageVisibility: store.toggleImageVisibility,

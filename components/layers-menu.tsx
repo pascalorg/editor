@@ -5,12 +5,14 @@ import {
   DoorOpen,
   Eye,
   EyeOff,
+  GripVertical,
   Image,
   Layers,
   Plus,
   Square,
   Triangle,
 } from 'lucide-react'
+import { Reorder, useDragControls } from 'motion/react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   TreeExpander,
@@ -25,6 +27,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import {
   type BuildingElementType,
@@ -34,6 +37,336 @@ import {
   toggleElementSelection,
 } from '@/lib/building-elements'
 import { cn } from '@/lib/utils'
+
+interface LayersMenuProps {
+  mounted: boolean
+}
+
+interface DraggableLevelItemProps {
+  level: ComponentGroup
+  levelIndex: number
+  levelsCount: number
+  isSelected: boolean
+  wallSegments: any[]
+  roofSegments: any[]
+  levelDoors: any[]
+  levelImages: any[]
+  selectedElements: any[]
+  selectedImageIds: string[]
+  handleElementSelect: (id: string, type: any, event: React.MouseEvent) => void
+  handleImageSelect: (id: string, event: React.MouseEvent) => void
+  toggleFloorVisibility: (id: string) => void
+  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof') => void
+  toggleImageVisibility: (id: string) => void
+  handleUpload: (file: File, level: number) => void
+  setSelectedElements: (elements: any[]) => void
+  setControlMode: (mode: any) => void
+  controls: ReturnType<typeof useDragControls>
+}
+
+function DraggableLevelItem({
+  level,
+  levelIndex,
+  levelsCount,
+  isSelected,
+  wallSegments,
+  roofSegments,
+  levelDoors,
+  levelImages,
+  selectedElements,
+  selectedImageIds,
+  handleElementSelect,
+  handleImageSelect,
+  toggleFloorVisibility,
+  toggleBuildingElementVisibility,
+  toggleImageVisibility,
+  handleUpload,
+  setSelectedElements,
+  setControlMode,
+  controls,
+}: DraggableLevelItemProps) {
+  const isLastLevel = levelIndex === levelsCount - 1
+  const hasContent =
+    isSelected &&
+    (wallSegments.length > 0 ||
+      roofSegments.length > 0 ||
+      levelDoors.length > 0 ||
+      levelImages.length > 0)
+
+  return (
+    <TreeNode isLast={isLastLevel} nodeId={level.id}>
+      <TreeNodeTrigger
+        className={cn(
+          'group/drag-item',
+          isSelected && 'sticky top-0 z-10 bg-background',
+          level.visible === false && 'opacity-50',
+        )}
+      >
+        <div
+          className="cursor-grab touch-none p-1 hover:bg-accent active:cursor-grabbing"
+          onPointerDown={(e) => controls.start(e)}
+        >
+          <GripVertical className="h-3 w-3 text-muted-foreground" />
+        </div>
+        <TreeExpander hasChildren={hasContent} />
+        <TreeIcon hasChildren={hasContent} icon={<Layers className="h-4 w-4 text-blue-500" />} />
+        <TreeLabel className="flex-1">{level.name}</TreeLabel>
+        <Button
+          className={cn(
+            'h-5 w-5 p-0 transition-opacity',
+            level.visible === false ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleFloorVisibility(level.id)
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {level.visible === false ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        </Button>
+      </TreeNodeTrigger>
+
+      <TreeNodeContent hasChildren={hasContent}>
+        {/* 3D Objects Section */}
+        <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
+          <TreeNodeTrigger>
+            <TreeExpander
+              hasChildren={
+                wallSegments.length > 0 || roofSegments.length > 0 || levelDoors.length > 0
+              }
+            />
+            <TreeIcon
+              hasChildren={
+                wallSegments.length > 0 || roofSegments.length > 0 || levelDoors.length > 0
+              }
+              icon={<Building className="h-4 w-4 text-green-500" />}
+            />
+            <TreeLabel>
+              3D Objects ({wallSegments.length + roofSegments.length + levelDoors.length})
+            </TreeLabel>
+          </TreeNodeTrigger>
+
+          <TreeNodeContent
+            hasChildren={
+              wallSegments.length > 0 || roofSegments.length > 0 || levelDoors.length > 0
+            }
+          >
+            {/* Walls */}
+            {wallSegments.map((segment, index, walls) => (
+              <TreeNode
+                isLast={
+                  index === walls.length - 1 && roofSegments.length === 0 && levelDoors.length === 0
+                }
+                key={segment.id}
+                level={2}
+                nodeId={segment.id}
+              >
+                <TreeNodeTrigger
+                  className={cn(
+                    isElementSelected(selectedElements, segment.id, 'wall') && 'bg-accent',
+                    segment.visible === false && 'opacity-50',
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleElementSelect(segment.id, 'wall', e as any)
+                  }}
+                >
+                  <TreeExpander />
+                  <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
+                  <TreeLabel>{getElementLabel('wall', index)}</TreeLabel>
+                  <Button
+                    className={cn(
+                      'h-5 w-5 p-0 transition-opacity',
+                      segment.visible === false
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover/item:opacity-100',
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleBuildingElementVisibility(segment.id, 'wall')
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {segment.visible === false ? (
+                      <EyeOff className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TreeNodeTrigger>
+              </TreeNode>
+            ))}
+
+            {/* Roofs */}
+            {roofSegments.map((segment, index, roofs) => (
+              <TreeNode
+                isLast={index === roofs.length - 1 && levelDoors.length === 0}
+                key={segment.id}
+                level={2}
+                nodeId={segment.id}
+              >
+                <TreeNodeTrigger
+                  className={cn(
+                    isElementSelected(selectedElements, segment.id, 'roof') && 'bg-accent',
+                    segment.visible === false && 'opacity-50',
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleElementSelect(segment.id, 'roof', e as any)
+                  }}
+                >
+                  <TreeExpander />
+                  <TreeIcon icon={<Triangle className="h-4 w-4 text-amber-600" />} />
+                  <TreeLabel>{getElementLabel('roof', index)}</TreeLabel>
+                  <Button
+                    className={cn(
+                      'h-5 w-5 p-0 transition-opacity',
+                      segment.visible === false
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover/item:opacity-100',
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleBuildingElementVisibility(segment.id, 'roof')
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {segment.visible === false ? (
+                      <EyeOff className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TreeNodeTrigger>
+              </TreeNode>
+            ))}
+
+            {/* Doors */}
+            {levelDoors.map((door, index, doors) => (
+              <TreeNode
+                isLast={index === doors.length - 1}
+                key={door.id}
+                level={2}
+                nodeId={door.id}
+              >
+                <TreeNodeTrigger
+                  className={cn(selectedElements.find((el) => el.id === door.id) && 'bg-accent')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Select door for deletion
+                    setSelectedElements([{ id: door.id, type: 'door' }])
+                    setControlMode('building')
+                  }}
+                >
+                  <TreeExpander />
+                  <TreeIcon icon={<DoorOpen className="h-4 w-4 text-orange-600" />} />
+                  <TreeLabel>Door {index + 1}</TreeLabel>
+                </TreeNodeTrigger>
+              </TreeNode>
+            ))}
+          </TreeNodeContent>
+        </TreeNode>
+
+        {/* Guides Section */}
+        <TreeNode isLast level={1} nodeId={`${level.id}-guides`}>
+          <TreeNodeTrigger>
+            <TreeExpander hasChildren={levelImages.length > 0} />
+            <TreeIcon
+              hasChildren={levelImages.length > 0}
+              icon={<Image className="h-4 w-4 text-purple-500" />}
+            />
+            <TreeLabel>Guides ({levelImages.length})</TreeLabel>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/png,image/jpeg'
+                    input.onchange = (event) => {
+                      const file = (event.target as HTMLInputElement).files?.[0]
+                      if (file) handleUpload(file, level.level || 0)
+                    }
+                    input.click()
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Add reference image</TooltipContent>
+            </Tooltip>
+          </TreeNodeTrigger>
+
+          <TreeNodeContent hasChildren={levelImages.length > 0}>
+            {/* Reference Images */}
+            {levelImages.map((image, index, imgs) => (
+              <TreeNode
+                isLast={index === imgs.length - 1}
+                key={image.id}
+                level={2}
+                nodeId={image.id}
+              >
+                <TreeNodeTrigger
+                  className={cn(
+                    selectedImageIds.includes(image.id) && 'bg-accent',
+                    image.visible === false && 'opacity-50',
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleImageSelect(image.id, e as any)
+                  }}
+                >
+                  <TreeExpander />
+                  <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
+                  <TreeLabel>Reference {index + 1}</TreeLabel>
+                  <Button
+                    className={cn(
+                      'h-5 w-5 p-0 transition-opacity',
+                      image.visible === false
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover/item:opacity-100',
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleImageVisibility(image.id)
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {image.visible === false ? (
+                      <EyeOff className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TreeNodeTrigger>
+              </TreeNode>
+            ))}
+          </TreeNodeContent>
+        </TreeNode>
+      </TreeNodeContent>
+    </TreeNode>
+  )
+}
+
+interface LevelReorderItemProps extends Omit<DraggableLevelItemProps, 'controls'> {}
+
+function LevelReorderItem(props: LevelReorderItemProps) {
+  const controls = useDragControls()
+
+  return (
+    <Reorder.Item as="div" dragControls={controls} dragListener={false} value={props.level}>
+      <DraggableLevelItem {...props} controls={controls} />
+    </Reorder.Item>
+  )
+}
 
 interface LayersMenuProps {
   mounted: boolean
@@ -55,6 +388,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const selectFloor = useEditor((state) => state.selectFloor)
   const addGroup = useEditor((state) => state.addGroup)
   const deleteGroup = useEditor((state) => state.deleteGroup)
+  const reorderGroups = useEditor((state) => state.reorderGroups)
   const setControlMode = useEditor((state) => state.setControlMode)
   const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
   const toggleBuildingElementVisibility = useEditor(
@@ -170,6 +504,55 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     selectFloor(newLevel.id)
   }
 
+  const handleReorder = (newOrder: typeof groups) => {
+    // Reassign level numbers based on new order (highest in list = highest level)
+    // The visual order is reversed (highest level shown first), so we reverse the array
+    // when assigning numbers
+    const reversedOrder = [...newOrder].reverse()
+    const updatedFloorGroups = reversedOrder.map((group, index) => ({
+      ...group,
+      level: index,
+    }))
+
+    // Create a map of floor ID to old level and new level
+    const oldLevelMap = new Map(
+      groups.filter((g) => g.type === 'floor').map((g) => [g.id, g.level || 0]),
+    )
+    const newLevelMap = new Map(updatedFloorGroups.map((g) => [g.id, g.level!]))
+
+    // Update images to use new level numbers
+    const updatedImages = images.map((img) => {
+      // Find which floor this image belongs to (by matching old level)
+      const floorGroup = groups.find((g) => g.type === 'floor' && g.level === img.level)
+      if (floorGroup && newLevelMap.has(floorGroup.id)) {
+        return { ...img, level: newLevelMap.get(floorGroup.id)! }
+      }
+      return img
+    })
+
+    // Combine updated floor groups with non-floor groups
+    const nonFloorGroups = groups.filter((g) => g.type !== 'floor')
+    const allUpdatedGroups = [...updatedFloorGroups, ...nonFloorGroups]
+
+    // Update groups and images in store
+    reorderGroups(allUpdatedGroups)
+    useEditor.getState().setImages(updatedImages, false)
+
+    // Update currentLevel if the selected floor's level changed
+    if (selectedFloorId) {
+      const newLevel = updatedFloorGroups.find((g) => g.id === selectedFloorId)?.level
+      if (newLevel !== undefined) {
+        // Trigger selectFloor to ensure currentLevel is updated
+        useEditor.getState().selectFloor(selectedFloorId)
+      }
+    }
+  }
+
+  // Get sorted floor groups for rendering
+  const floorGroups = groups
+    .filter((g) => g.type === 'floor')
+    .sort((a, b) => (b.level || 0) - (a.level || 0))
+
   return (
     <div className="flex flex-1 flex-col px-2 py-2">
       <div className="mb-2 flex items-center justify-between">
@@ -197,10 +580,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             showLines={true}
           >
             <TreeView className="p-0">
-              {groups
-                .filter((g) => g.type === 'floor')
-                .sort((a, b) => (b.level || 0) - (a.level || 0)) // Reverse order: highest to lowest
-                .map((level, levelIndex, levels) => {
+              <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
+                {floorGroups.map((level, levelIndex) => {
                   const isSelected = selectedFloorId === level.id
                   const levelWalls = isSelected ? wallSegments : []
                   const levelRoofs = isSelected ? roofSegments : []
@@ -208,295 +589,32 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                     ? components.filter((c) => c.type === 'door' && c.group === level.id)
                     : []
                   const levelImages = images.filter((img) => img.level === (level.level || 0))
-                  const isLastLevel = levelIndex === levels.length - 1
-                  const hasContent =
-                    isSelected &&
-                    (levelWalls.length > 0 ||
-                      levelRoofs.length > 0 ||
-                      levelDoors.length > 0 ||
-                      levelImages.length > 0)
 
                   return (
-                    <TreeNode isLast={isLastLevel} key={level.id} nodeId={level.id}>
-                      <TreeNodeTrigger
-                        className={cn(
-                          isSelected && 'sticky top-0 z-10 bg-background',
-                          level.visible === false && 'opacity-50',
-                        )}
-                      >
-                        <TreeExpander hasChildren={hasContent} />
-                        <TreeIcon
-                          hasChildren={hasContent}
-                          icon={<Layers className="h-4 w-4 text-blue-500" />}
-                        />
-                        <TreeLabel className="flex-1">{level.name}</TreeLabel>
-                        <Button
-                          className={cn(
-                            'h-5 w-5 p-0 transition-opacity',
-                            level.visible === false
-                              ? 'opacity-100'
-                              : 'opacity-0 group-hover/item:opacity-100',
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleFloorVisibility(level.id)
-                          }}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          {level.visible === false ? (
-                            <EyeOff className="h-3 w-3" />
-                          ) : (
-                            <Eye className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </TreeNodeTrigger>
-
-                      <TreeNodeContent hasChildren={hasContent}>
-                        {/* 3D Objects Section */}
-                        <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
-                          <TreeNodeTrigger>
-                            <TreeExpander
-                              hasChildren={
-                                levelWalls.length > 0 ||
-                                levelRoofs.length > 0 ||
-                                levelDoors.length > 0
-                              }
-                            />
-                            <TreeIcon
-                              hasChildren={
-                                levelWalls.length > 0 ||
-                                levelRoofs.length > 0 ||
-                                levelDoors.length > 0
-                              }
-                              icon={<Building className="h-4 w-4 text-green-500" />}
-                            />
-                            <TreeLabel>
-                              3D Objects (
-                              {levelWalls.length + levelRoofs.length + levelDoors.length})
-                            </TreeLabel>
-                          </TreeNodeTrigger>
-
-                          <TreeNodeContent
-                            hasChildren={
-                              levelWalls.length > 0 ||
-                              levelRoofs.length > 0 ||
-                              levelDoors.length > 0
-                            }
-                          >
-                            {/* Walls */}
-                            {levelWalls.map((segment, index, walls) => (
-                              <TreeNode
-                                isLast={
-                                  index === walls.length - 1 &&
-                                  levelRoofs.length === 0 &&
-                                  levelDoors.length === 0
-                                }
-                                key={segment.id}
-                                level={2}
-                                nodeId={segment.id}
-                              >
-                                <TreeNodeTrigger
-                                  className={cn(
-                                    isElementSelected(selectedElements, segment.id, 'wall') &&
-                                      'bg-accent',
-                                    segment.visible === false && 'opacity-50',
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleElementSelect(segment.id, 'wall', e as any)
-                                  }}
-                                >
-                                  <TreeExpander />
-                                  <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
-                                  <TreeLabel>{getElementLabel('wall', index)}</TreeLabel>
-                                  <Button
-                                    className={cn(
-                                      'h-5 w-5 p-0 transition-opacity',
-                                      segment.visible === false
-                                        ? 'opacity-100'
-                                        : 'opacity-0 group-hover/item:opacity-100',
-                                    )}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleBuildingElementVisibility(segment.id, 'wall')
-                                    }}
-                                    size="sm"
-                                    variant="ghost"
-                                  >
-                                    {segment.visible === false ? (
-                                      <EyeOff className="h-3 w-3" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </TreeNodeTrigger>
-                              </TreeNode>
-                            ))}
-
-                            {/* Roofs */}
-                            {levelRoofs.map((segment, index, roofs) => (
-                              <TreeNode
-                                isLast={index === roofs.length - 1 && levelDoors.length === 0}
-                                key={segment.id}
-                                level={2}
-                                nodeId={segment.id}
-                              >
-                                <TreeNodeTrigger
-                                  className={cn(
-                                    isElementSelected(selectedElements, segment.id, 'roof') &&
-                                      'bg-accent',
-                                    segment.visible === false && 'opacity-50',
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleElementSelect(segment.id, 'roof', e as any)
-                                  }}
-                                >
-                                  <TreeExpander />
-                                  <TreeIcon
-                                    icon={<Triangle className="h-4 w-4 text-amber-600" />}
-                                  />
-                                  <TreeLabel>{getElementLabel('roof', index)}</TreeLabel>
-                                  <Button
-                                    className={cn(
-                                      'h-5 w-5 p-0 transition-opacity',
-                                      segment.visible === false
-                                        ? 'opacity-100'
-                                        : 'opacity-0 group-hover/item:opacity-100',
-                                    )}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleBuildingElementVisibility(segment.id, 'roof')
-                                    }}
-                                    size="sm"
-                                    variant="ghost"
-                                  >
-                                    {segment.visible === false ? (
-                                      <EyeOff className="h-3 w-3" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </TreeNodeTrigger>
-                              </TreeNode>
-                            ))}
-
-                            {/* Doors */}
-                            {levelDoors.map((door, index, doors) => (
-                              <TreeNode
-                                isLast={index === doors.length - 1}
-                                key={door.id}
-                                level={2}
-                                nodeId={door.id}
-                              >
-                                <TreeNodeTrigger
-                                  className={cn(
-                                    selectedElements.find((el) => el.id === door.id) && 'bg-accent',
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    // Select door for deletion
-                                    setSelectedElements([{ id: door.id, type: 'door' }])
-                                    setControlMode('building')
-                                  }}
-                                >
-                                  <TreeExpander />
-                                  <TreeIcon
-                                    icon={<DoorOpen className="h-4 w-4 text-orange-600" />}
-                                  />
-                                  <TreeLabel>Door {index + 1}</TreeLabel>
-                                </TreeNodeTrigger>
-                              </TreeNode>
-                            ))}
-                          </TreeNodeContent>
-                        </TreeNode>
-
-                        {/* Guides Section */}
-                        <TreeNode isLast level={1} nodeId={`${level.id}-guides`}>
-                          <TreeNodeTrigger>
-                            <TreeExpander hasChildren={levelImages.length > 0} />
-                            <TreeIcon
-                              hasChildren={levelImages.length > 0}
-                              icon={<Image className="h-4 w-4 text-purple-500" />}
-                            />
-                            <TreeLabel>Guides ({levelImages.length})</TreeLabel>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    const input = document.createElement('input')
-                                    input.type = 'file'
-                                    input.accept = 'image/png,image/jpeg'
-                                    input.onchange = (event) => {
-                                      const file = (event.target as HTMLInputElement).files?.[0]
-                                      if (file) handleUpload(file, level.level || 0)
-                                    }
-                                    input.click()
-                                  }}
-                                  size="sm"
-                                  variant="ghost"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Add reference image</TooltipContent>
-                            </Tooltip>
-                          </TreeNodeTrigger>
-
-                          <TreeNodeContent hasChildren={levelImages.length > 0}>
-                            {/* Reference Images */}
-                            {levelImages.map((image, index, imgs) => (
-                              <TreeNode
-                                isLast={index === imgs.length - 1}
-                                key={image.id}
-                                level={2}
-                                nodeId={image.id}
-                              >
-                                <TreeNodeTrigger
-                                  className={cn(
-                                    selectedImageIds.includes(image.id) && 'bg-accent',
-                                    image.visible === false && 'opacity-50',
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleImageSelect(image.id, e as any)
-                                  }}
-                                >
-                                  <TreeExpander />
-                                  <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
-                                  <TreeLabel>Reference {index + 1}</TreeLabel>
-                                  <Button
-                                    className={cn(
-                                      'h-5 w-5 p-0 transition-opacity',
-                                      image.visible === false
-                                        ? 'opacity-100'
-                                        : 'opacity-0 group-hover/item:opacity-100',
-                                    )}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleImageVisibility(image.id)
-                                    }}
-                                    size="sm"
-                                    variant="ghost"
-                                  >
-                                    {image.visible === false ? (
-                                      <EyeOff className="h-3 w-3" />
-                                    ) : (
-                                      <Eye className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </TreeNodeTrigger>
-                              </TreeNode>
-                            ))}
-                          </TreeNodeContent>
-                        </TreeNode>
-                      </TreeNodeContent>
-                    </TreeNode>
+                    <LevelReorderItem
+                      handleElementSelect={handleElementSelect}
+                      handleImageSelect={handleImageSelect}
+                      handleUpload={handleUpload}
+                      isSelected={isSelected}
+                      key={level.id}
+                      level={level}
+                      levelDoors={levelDoors}
+                      levelImages={levelImages}
+                      levelIndex={levelIndex}
+                      levelsCount={floorGroups.length}
+                      roofSegments={levelRoofs}
+                      selectedElements={selectedElements}
+                      selectedImageIds={selectedImageIds}
+                      setControlMode={setControlMode}
+                      setSelectedElements={setSelectedElements}
+                      toggleBuildingElementVisibility={toggleBuildingElementVisibility}
+                      toggleFloorVisibility={toggleFloorVisibility}
+                      toggleImageVisibility={toggleImageVisibility}
+                      wallSegments={levelWalls}
+                    />
                   )
                 })}
+              </Reorder.Group>
             </TreeView>
           </TreeProvider>
         ) : (
