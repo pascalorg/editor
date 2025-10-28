@@ -129,3 +129,8 @@
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
 }
+
+/* Leva debug controls */
+.leva-c-kWgxhW {
+  z-index: 9999 !important;
+}

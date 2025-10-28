@@ -189,15 +189,16 @@ export const GridTiles = memo(
           onPointerLeave={handlePointerLeave}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          position={[gridSize / 2, 0.001, gridSize / 2]}
+          position={[gridSize / 2, 0.002, gridSize / 2]}
           ref={meshRef}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <planeGeometry args={[gridSize, gridSize]} />
           <meshStandardMaterial
             color="#404045"
+            colorWrite={false}
             depthWrite={false}
-            opacity={opacity * 0.3}
+            opacity={0}
             transparent
           />
         </mesh>

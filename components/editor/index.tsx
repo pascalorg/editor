@@ -5,7 +5,6 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
-  Grid,
   Line,
   OrthographicCamera,
   PerspectiveCamera,
@@ -24,6 +23,9 @@ import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
+import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
+import { InfiniteGrid } from './infinite-grid'
+import { LightingControls } from './lighting-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -71,6 +73,9 @@ export default function Editor({ className }: { className?: string }) {
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+
+  // Grid fade controls for infinite base floor
+  const { fadeDistance, fadeStrength } = useGridFadeControls()
 
   // Get walls as a Set
   const walls = getWallsSet()
@@ -917,19 +922,9 @@ export default function Editor({ className }: { className?: string }) {
             zoom={20}
           />
         )}
-        {/* <fog attach="fog" args={['#17171b', 30, 40]} /> */}
-        <color args={['#17171b']} attach="background" />
-        <ambientLight intensity={0.5} />
-        <directionalLight
-          castShadow
-          intensity={1}
-          position={[10, 10, 5]}
-          shadow-camera-bottom={-15}
-          shadow-camera-left={-15}
-          shadow-camera-right={15}
-          shadow-camera-top={15}
-          shadow-mapSize={[1024, 1024]}
-        />
+        {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
+        <color args={['#212134']} attach="background" />
+        {/* <LightingControls /> */}
 
         {/* Infinite dashed axis lines - visual only, not interactive */}
         <group raycast={disabledRaycast}>
@@ -1018,39 +1013,28 @@ export default function Editor({ className }: { className?: string }) {
 
               return (
                 <AnimatedLevel key={floor.id} positionY={yPosition}>
-                  {/* Drei Grid for visual reference only - not interactive */}
+                  {/* Solid dark purple floor for lowest level only - infinite appearance */}
+                  {floorLevel === 0 && <InfiniteFloor />}
+
+                  {/* Grid for visual reference only - not interactive */}
                   {showGrid && (
                     <group raycast={() => null}>
                       {isActiveFloor ? (
-                        <Grid
-                          args={[GRID_SIZE, GRID_SIZE]}
-                          cellColor="#aaaabf"
-                          cellSize={tileSize}
-                          cellThickness={0.5}
-                          fadeDistance={GRID_SIZE * 2}
-                          fadeStrength={1}
-                          infiniteGrid={false}
-                          position={[0, 0, 0]}
-                          sectionColor="#9d4b4b"
-                          sectionSize={tileSize * 2}
-                          sectionThickness={1}
-                          side={2}
+                        <InfiniteGrid
+                          fadeDistance={fadeDistance}
+                          fadeStrength={fadeStrength}
+                          gridSize={tileSize}
+                          lineColor="#ffffff"
+                          lineWidth={1.0}
                         />
                       ) : (
                         levelMode === 'exploded' && (
-                          <Grid
-                            args={[GRID_SIZE, GRID_SIZE]}
-                            cellColor="#4a4a5a"
-                            cellSize={tileSize}
-                            cellThickness={0.5}
-                            fadeDistance={GRID_SIZE * 2}
-                            fadeStrength={1}
-                            infiniteGrid={false}
-                            position={[0, 0, 0]}
-                            sectionColor="#5a4a4a"
-                            sectionSize={tileSize * 2}
-                            sectionThickness={1}
-                            side={2}
+                          <InfiniteGrid
+                            fadeDistance={fadeDistance}
+                            fadeStrength={fadeStrength}
+                            gridSize={tileSize}
+                            lineColor="#ffffff"
+                            lineWidth={1.0}
                           />
                         )
                       )}
