@@ -1,5 +1,18 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { Walls } from '@/components/editor/elements/wall'
+import {
+  type Component,
+  type DoorComponentData,
+  useEditor,
+  type WallSegment,
+} from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -14,13 +27,6 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 
@@ -100,6 +106,9 @@ export default function Editor({ className }: { className?: string }) {
   const [roofStartPoint, setRoofStartPoint] = useState<[number, number] | null>(null)
   const [roofPreviewEnd, setRoofPreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for door mode (one-click placement with preview)
+  const [doorPreviewPosition, setDoorPreviewPosition] = useState<[number, number] | null>(null)
+
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -114,6 +123,7 @@ export default function Editor({ className }: { className?: string }) {
     setCustomRoomPreviewEnd(null)
     setRoofStartPoint(null)
     setRoofPreviewEnd(null)
+    setDoorPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     // Clear all selections (building elements and images)
@@ -616,6 +626,175 @@ export default function Editor({ className }: { className?: string }) {
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
+    } else if (controlMode === 'building' && activeTool === 'door') {
+      // Door mode: one-click placement
+      // Use the clicked grid position [x, y] directly, not doorPreviewPosition state
+      const clickedPosition: [number, number] = [x, y]
+
+      // Get wall segments for current floor to find nearest wall
+      const wallComponent = useEditor
+        .getState()
+        .components.find((c) => c.type === 'wall' && c.group === selectedFloorId)
+      const wallSegments = wallComponent?.type === 'wall' ? wallComponent.data.segments : []
+
+      // Find nearest wall to snap to
+      const closestPointOnSegment = (
+        point: [number, number],
+        segStart: [number, number],
+        segEnd: [number, number],
+      ): { point: [number, number]; distance: number } => {
+        const px = point[0]
+        const py = point[1]
+        const x1 = segStart[0]
+        const y1 = segStart[1]
+        const x2 = segEnd[0]
+        const y2 = segEnd[1]
+
+        const dx = x2 - x1
+        const dy = y2 - y1
+        const lengthSquared = dx * dx + dy * dy
+
+        if (lengthSquared === 0) {
+          const dist = Math.sqrt((px - x1) ** 2 + (py - y1) ** 2)
+          return { point: [x1, y1], distance: dist }
+        }
+
+        let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared
+        t = Math.max(0, Math.min(1, t))
+
+        const closestX = x1 + t * dx
+        const closestY = y1 + t * dy
+        const distance = Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2)
+
+        return { point: [closestX, closestY], distance }
+      }
+
+      let nearestWall: WallSegment | null = null
+      let nearestPoint: [number, number] = clickedPosition
+      let minDistance = Number.POSITIVE_INFINITY
+
+      for (const wall of wallSegments) {
+        const result = closestPointOnSegment(clickedPosition, wall.start, wall.end)
+        if (result.distance < minDistance) {
+          minDistance = result.distance
+          nearestPoint = result.point
+          nearestWall = wall
+        }
+      }
+
+      const SNAP_THRESHOLD = 0.5
+      const shouldSnap = nearestWall !== null && minDistance <= SNAP_THRESHOLD
+
+      if (shouldSnap && nearestWall) {
+        // Calculate door rotation from wall orientation
+        const dx = nearestWall.end[0] - nearestWall.start[0]
+        const dz = nearestWall.end[1] - nearestWall.start[1]
+        const wallAngle = Math.atan2(dz, dx)
+        const doorRotation = wallAngle
+
+        // Door needs 2 cells width - check if there's continuous wall coverage
+        const wallLength = Math.sqrt(dx * dx + dz * dz)
+        let canPlace = false
+        let centeredPosition = nearestPoint
+
+        if (wallLength > 0) {
+          const wallDirX = dx / wallLength
+          const wallDirZ = dz / wallLength
+
+          // Check continuous wall coverage over 2-cell span
+          const numCheckPoints = 5
+          let hasContinuousWall = true
+
+          for (let i = 0; i <= numCheckPoints; i++) {
+            const t = i / numCheckPoints
+            const checkPoint: [number, number] = [
+              nearestPoint[0] + wallDirX * t,
+              nearestPoint[1] + wallDirZ * t,
+            ]
+
+            // Check if there's a wall at this point with the same orientation
+            let foundWallAtPoint = false
+            for (const wall of wallSegments) {
+              const result = closestPointOnSegment(checkPoint, wall.start, wall.end)
+              if (result.distance <= SNAP_THRESHOLD) {
+                // Check if this wall has the same orientation
+                const adjDx = wall.end[0] - wall.start[0]
+                const adjDz = wall.end[1] - wall.start[1]
+                const adjAngle = Math.atan2(adjDz, adjDx)
+                const angleDiff = Math.abs(wallAngle - adjAngle)
+                const normalizedDiff = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2))
+                if (normalizedDiff < 0.1) {
+                  foundWallAtPoint = true
+                  break
+                }
+              }
+            }
+
+            if (!foundWallAtPoint) {
+              hasContinuousWall = false
+              break
+            }
+          }
+
+          canPlace = hasContinuousWall
+
+          // Always calculate centered position (even if can't place yet)
+          // Center the door on the 2-cell width (offset by 0.5 cells along wall)
+          centeredPosition = [nearestPoint[0] + wallDirX * 0.5, nearestPoint[1] + wallDirZ * 0.5]
+
+          if (canPlace) {
+            // Check if there's already a door at or near this position
+            const existingDoors = useEditor
+              .getState()
+              .components.filter((c) => c.type === 'door' && c.group === selectedFloorId)
+            const DOOR_COLLISION_THRESHOLD = 1.5
+            for (const existingDoor of existingDoors) {
+              if (existingDoor.type === 'door') {
+                const dx = centeredPosition[0] - existingDoor.data.position[0]
+                const dz = centeredPosition[1] - existingDoor.data.position[1]
+                const distance = Math.sqrt(dx * dx + dz * dz)
+                if (distance < DOOR_COLLISION_THRESHOLD) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+          }
+        }
+
+        if (canPlace) {
+          // Create door component
+          const doorId = `door_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          const doorComponent: Component = {
+            id: doorId,
+            type: 'door',
+            group: selectedFloorId || 'level_0',
+            label: 'Door',
+            createdAt: new Date().toISOString(),
+            data: {
+              position: centeredPosition,
+              rotation: doorRotation,
+              width: 2,
+            } as DoorComponentData,
+          }
+
+          // Add door to components using functional setState
+          useEditor.setState((state) => ({
+            components: [...state.components, doorComponent],
+          }))
+
+          // Clear preview
+          setDoorPreviewPosition(null)
+
+          console.log('Door placed at:', {
+            clickedPosition,
+            nearestPoint,
+            centeredPosition,
+            nearestWallStart: nearestWall.start,
+            nearestWallEnd: nearestWall.end,
+          })
+        }
+      }
     }
     // Deselect in building mode if no placement action was taken
     if (
@@ -812,6 +991,13 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else {
         setCustomRoomPreviewEnd(null)
+      }
+    } else if (controlMode === 'building' && activeTool === 'door') {
+      // Door mode: show preview at current grid position
+      if (y !== null) {
+        setDoorPreviewPosition([x, y])
+      } else {
+        setDoorPreviewPosition(null)
       }
     }
   }
@@ -1114,6 +1300,45 @@ export default function Editor({ className }: { className?: string }) {
                       setSelectedElements={setSelectedElements}
                       tileSize={tileSize}
                     />
+
+                    {/* Doors component renders placed doors */}
+                    <Doors floorId={floor.id} tileSize={tileSize} />
+
+                    {/* Door placement preview */}
+                    {isActiveFloor &&
+                      controlMode === 'building' &&
+                      activeTool === 'door' &&
+                      doorPreviewPosition && (
+                        <DoorPlacementPreview
+                          existingDoors={(() => {
+                            const doorComponents = useEditor
+                              .getState()
+                              .components.filter((c) => c.type === 'door' && c.group === floor.id)
+                            return doorComponents
+                              .map((c) => {
+                                if (c.type === 'door') {
+                                  return { position: c.data.position, rotation: c.data.rotation }
+                                }
+                                return null
+                              })
+                              .filter(Boolean) as Array<{
+                              position: [number, number]
+                              rotation: number
+                            }>
+                          })()}
+                          mouseGridPosition={doorPreviewPosition}
+                          tileSize={tileSize}
+                          wallHeight={wallHeight}
+                          wallSegments={(() => {
+                            const wallComponent = useEditor
+                              .getState()
+                              .components.find((c) => c.type === 'wall' && c.group === floor.id)
+                            return wallComponent?.type === 'wall'
+                              ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
+                              : []
+                          })()}
+                        />
+                      )}
                   </group>
                 </AnimatedLevel>
               )

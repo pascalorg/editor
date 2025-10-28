@@ -1,15 +1,15 @@
 'use client'
 
-import type { SetStateAction } from 'react'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import {
   deleteElements,
   type SelectedElement,
   toggleElementVisibility,
 } from '@/lib/building-elements'
+import type { SetStateAction } from 'react'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -65,6 +65,12 @@ export type RoofComponentData = {
   segments: RoofSegment[]
 }
 
+export type DoorComponentData = {
+  position: [number, number]
+  rotation: number
+  width: number
+}
+
 export type Component =
   | {
       id: string
@@ -80,6 +86,14 @@ export type Component =
       label: string
       group: string | null
       data: RoofComponentData
+      createdAt: string
+    }
+  | {
+      id: string
+      type: 'door'
+      label: string
+      group: string | null
+      data: DoorComponentData
       createdAt: string
     }
 
