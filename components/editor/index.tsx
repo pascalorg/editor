@@ -1,5 +1,13 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { Walls } from '@/components/editor/elements/wall'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -14,13 +22,6 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { useEditor, useEditorContext, type WallSegment } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 
@@ -100,6 +101,9 @@ export default function Editor({ className }: { className?: string }) {
   const [roofStartPoint, setRoofStartPoint] = useState<[number, number] | null>(null)
   const [roofPreviewEnd, setRoofPreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for door mode (one-click placement with preview)
+  const [doorPreviewPosition, setDoorPreviewPosition] = useState<[number, number] | null>(null)
+
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -114,6 +118,7 @@ export default function Editor({ className }: { className?: string }) {
     setCustomRoomPreviewEnd(null)
     setRoofStartPoint(null)
     setRoofPreviewEnd(null)
+    setDoorPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     // Clear all selections (building elements and images)
@@ -617,6 +622,7 @@ export default function Editor({ className }: { className?: string }) {
         setCustomRoomPreviewEnd(null)
       }
     }
+    // Door placement is now handled by DoorPlacementPreview component's onClick
     // Deselect in building mode if no placement action was taken
     if (
       controlMode === 'building' &&
@@ -812,6 +818,13 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else {
         setCustomRoomPreviewEnd(null)
+      }
+    } else if (controlMode === 'building' && activeTool === 'door') {
+      // Door mode: show preview at current grid position
+      if (y !== null) {
+        setDoorPreviewPosition([x, y])
+      } else {
+        setDoorPreviewPosition(null)
       }
     }
   }
@@ -1114,6 +1127,47 @@ export default function Editor({ className }: { className?: string }) {
                       setSelectedElements={setSelectedElements}
                       tileSize={tileSize}
                     />
+
+                    {/* Doors component renders placed doors */}
+                    <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+
+                    {/* Door placement preview */}
+                    {isActiveFloor &&
+                      controlMode === 'building' &&
+                      activeTool === 'door' &&
+                      doorPreviewPosition && (
+                        <DoorPlacementPreview
+                          existingDoors={(() => {
+                            const doorComponents = useEditor
+                              .getState()
+                              .components.filter((c) => c.type === 'door' && c.group === floor.id)
+                            return doorComponents
+                              .map((c) => {
+                                if (c.type === 'door') {
+                                  return { position: c.data.position, rotation: c.data.rotation }
+                                }
+                                return null
+                              })
+                              .filter(Boolean) as Array<{
+                              position: [number, number]
+                              rotation: number
+                            }>
+                          })()}
+                          floorId={floor.id}
+                          mouseGridPosition={doorPreviewPosition}
+                          onPlaced={() => setDoorPreviewPosition(null)}
+                          tileSize={tileSize}
+                          wallHeight={wallHeight}
+                          wallSegments={(() => {
+                            const wallComponent = useEditor
+                              .getState()
+                              .components.find((c) => c.type === 'wall' && c.group === floor.id)
+                            return wallComponent?.type === 'wall'
+                              ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
+                              : []
+                          })()}
+                        />
+                      )}
                   </group>
                 </AnimatedLevel>
               )

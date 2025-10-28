@@ -1,14 +1,20 @@
-import { Square, Triangle } from 'lucide-react'
-import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
+import type {
+  Component,
+  RoofComponentData,
+  RoofSegment,
+  WallComponentData,
+  WallSegment,
+} from '@/hooks/use-editor'
+import { DoorOpen, Square, Triangle } from 'lucide-react'
 
 /**
  * Building Element Abstraction Layer
  *
- * Provides polymorphic operations for building elements (walls, roofs, etc.)
+ * Provides polymorphic operations for building elements (walls, roofs, doors, etc.)
  * to ensure consistent behavior across selection, deletion, and visibility.
  */
 
-export type BuildingElementType = 'wall' | 'roof'
+export type BuildingElementType = 'wall' | 'roof' | 'door'
 
 export interface SelectedElement {
   id: string
@@ -17,7 +23,7 @@ export interface SelectedElement {
 
 export interface ElementDescriptor {
   type: BuildingElementType
-  icon: typeof Square | typeof Triangle
+  icon: typeof Square | typeof Triangle | typeof DoorOpen
   labelSingular: string
   labelPlural: string
 }
@@ -37,6 +43,12 @@ export const ELEMENT_DESCRIPTORS: Record<BuildingElementType, ElementDescriptor>
     icon: Triangle,
     labelSingular: 'Roof',
     labelPlural: 'Roofs',
+  },
+  door: {
+    type: 'door',
+    icon: DoorOpen,
+    labelSingular: 'Door',
+    labelPlural: 'Doors',
   },
 }
 
@@ -73,9 +85,9 @@ export function getElementsOfType(
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return component.data.segments.filter((seg) => seg.visible !== false) as
-    | WallSegment[]
-    | RoofSegment[]
+  return (component.data as WallComponentData | RoofComponentData).segments.filter(
+    (seg) => seg.visible !== false,
+  ) as WallSegment[] | RoofSegment[]
 }
 
 /**
@@ -89,7 +101,9 @@ export function getAllElementsOfType(
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return component.data.segments as WallSegment[] | RoofSegment[]
+  return (component.data as WallComponentData | RoofComponentData).segments as
+    | WallSegment[]
+    | RoofSegment[]
 }
 
 /**
@@ -106,7 +120,7 @@ export function toggleElementVisibility(
       return {
         ...comp,
         data: {
-          segments: comp.data.segments.map((seg) =>
+          segments: (comp.data as WallComponentData | RoofComponentData).segments.map((seg) =>
             seg.id === elementId ? { ...seg, visible: !(seg.visible ?? true) } : seg,
           ),
         },
@@ -134,8 +148,15 @@ export function deleteElements(
     {} as Record<string, Set<string>>,
   )
 
-  return components.map((comp) => {
-    if (comp.group === floorId && elementsByType[comp.type]) {
+  // First, filter out door components entirely (doors are individual components, not segments)
+  const doorIdsToDelete = elementsByType['door'] || new Set()
+  let filteredComponents = components.filter(
+    (comp) => !(comp.type === 'door' && comp.group === floorId && doorIdsToDelete.has(comp.id)),
+  )
+
+  // Then, handle walls and roofs which are segments within components
+  return filteredComponents.map((comp) => {
+    if (comp.group === floorId && elementsByType[comp.type] && comp.type !== 'door') {
       const idsToDelete = elementsByType[comp.type]
       return {
         ...comp,

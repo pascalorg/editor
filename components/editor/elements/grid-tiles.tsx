@@ -203,7 +203,7 @@ export const GridTiles = memo(
         </mesh>
 
         {/* Down arrow at hovered intersection or snapped preview position */}
-        {hoveredIntersection && !disableBuild && (
+        {hoveredIntersection && !disableBuild && activeTool !== 'door' && (
           <group
             position={[
               // For wall mode, use wallPreviewEnd for snapped position
