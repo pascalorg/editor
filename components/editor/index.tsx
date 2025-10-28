@@ -1,13 +1,5 @@
 'use client'
 
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -22,6 +14,14 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { Walls } from '@/components/editor/elements/wall'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 

@@ -1,6 +1,16 @@
 'use client'
 
-import { Building, DoorOpen, Eye, EyeOff, Image, Layers, Plus, Square, Triangle } from 'lucide-react'
+import {
+  Building,
+  DoorOpen,
+  Eye,
+  EyeOff,
+  Image,
+  Layers,
+  Plus,
+  Square,
+  Triangle,
+} from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   TreeExpander,
@@ -262,13 +272,16 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                               icon={<Building className="h-4 w-4 text-green-500" />}
                             />
                             <TreeLabel>
-                              3D Objects ({levelWalls.length + levelRoofs.length + levelDoors.length})
+                              3D Objects (
+                              {levelWalls.length + levelRoofs.length + levelDoors.length})
                             </TreeLabel>
                           </TreeNodeTrigger>
 
                           <TreeNodeContent
                             hasChildren={
-                              levelWalls.length > 0 || levelRoofs.length > 0 || levelDoors.length > 0
+                              levelWalls.length > 0 ||
+                              levelRoofs.length > 0 ||
+                              levelDoors.length > 0
                             }
                           >
                             {/* Walls */}
@@ -389,7 +402,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                                   }}
                                 >
                                   <TreeExpander />
-                                  <TreeIcon icon={<DoorOpen className="h-4 w-4 text-orange-600" />} />
+                                  <TreeIcon
+                                    icon={<DoorOpen className="h-4 w-4 text-orange-600" />}
+                                  />
                                   <TreeLabel>Door {index + 1}</TreeLabel>
                                 </TreeNodeTrigger>
                               </TreeNode>

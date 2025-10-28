@@ -70,7 +70,7 @@ export const ReferenceImage = ({
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
   const texture = useTexture(url)
   const { camera, gl } = useThree()
-  const groupRef = useRef<THREE.Group>(null!)
+  const groupRef = useRef<THREE.Group>(null)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -147,6 +147,7 @@ export const ReferenceImage = ({
     if (e.button !== 0) return
     if (movingCamera) return
     e.stopPropagation()
+    if (!groupRef.current) return
     const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
     setActiveHandle(handleId)
     onManipulationStart() // Start tracking manipulation
@@ -207,6 +208,7 @@ export const ReferenceImage = ({
     if (e.button !== 0) return
     if (movingCamera) return
     e.stopPropagation()
+    if (!groupRef.current) return
     setActiveHandle('translate-xz')
     onManipulationStart() // Start tracking manipulation
     const initialMouse = new THREE.Vector3()
@@ -256,6 +258,7 @@ export const ReferenceImage = ({
     if (e.button !== 0) return
     if (movingCamera) return
     e.stopPropagation()
+    if (!groupRef.current) return
     setActiveHandle('rotation')
     onManipulationStart() // Start tracking manipulation
     const center = groupRef.current.position.clone()
@@ -307,6 +310,7 @@ export const ReferenceImage = ({
     if (e.button !== 0) return
     if (movingCamera) return
     e.stopPropagation()
+    if (!groupRef.current) return
     setActiveHandle('scale')
     onManipulationStart() // Start tracking manipulation
     const center = groupRef.current.position.clone()

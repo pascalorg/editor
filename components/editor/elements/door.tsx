@@ -1,11 +1,11 @@
 'use client'
 
-import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
 import { Gltf } from '@react-three/drei'
 import { memo, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 
 // Helper function to find the closest point on a line segment
 function closestPointOnSegment(
@@ -193,7 +193,7 @@ export const DoorPlacementPreview = memo(
     const addComponent = useEditor((state) => state.addComponent)
 
     const handleClick = useCallback(() => {
-      if (!(placement && placement.canPlace && placement.nearestWall)) {
+      if (!(placement?.canPlace && placement?.nearestWall)) {
         return
       }
 

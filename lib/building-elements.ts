@@ -1,3 +1,4 @@
+import { DoorOpen, Square, Triangle } from 'lucide-react'
 import type {
   Component,
   RoofComponentData,
@@ -5,7 +6,6 @@ import type {
   WallComponentData,
   WallSegment,
 } from '@/hooks/use-editor'
-import { DoorOpen, Square, Triangle } from 'lucide-react'
 
 /**
  * Building Element Abstraction Layer

@@ -57,7 +57,8 @@
         "noExcessiveCognitiveComplexity": "off",
         "noForEach": "off",
         "noBannedTypes": "off",
-        "noUselessFragments": "off"
+        "noUselessFragments": "off",
+        "useLiteralKeys": "off"
       },
       "correctness": {
         "noUnusedVariables": "off",

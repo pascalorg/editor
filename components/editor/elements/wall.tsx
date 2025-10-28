@@ -112,12 +112,12 @@ function findJunctions(walls: LiveWall[]): Map<string, Junction> {
     if (!junctions.has(keyStart)) {
       junctions.set(keyStart, { meetingPoint: wall.start, connectedWalls: [] })
     }
-    junctions.get(keyStart)!.connectedWalls.push({ wall, endType: 'start' })
+    junctions.get(keyStart)?.connectedWalls.push({ wall, endType: 'start' })
 
     if (!junctions.has(keyEnd)) {
       junctions.set(keyEnd, { meetingPoint: wall.end, connectedWalls: [] })
     }
-    junctions.get(keyEnd)!.connectedWalls.push({ wall, endType: 'end' })
+    junctions.get(keyEnd)?.connectedWalls.push({ wall, endType: 'end' })
   })
 
   // Filter out points with only one wall end
