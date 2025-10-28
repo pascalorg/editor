@@ -121,13 +121,15 @@ type HistoryState = {
   components: Component[]
 }
 
+export type ViewMode = 'full' | 'level'
+
 type StoreState = {
   images: ReferenceImage[]
   components: Component[]
   groups: ComponentGroup[]
   currentLevel: number
   selectedFloorId: string | null
-  isOverviewMode: boolean // True when viewing all levels, false when editing a specific level
+  viewMode: ViewMode // 'full' for viewing all levels, 'level' for editing a specific level
   selectedElements: SelectedElement[] // Unified selection for building elements (walls, roofs)
   selectedImageIds: string[]
   isHelpOpen: boolean
@@ -217,24 +219,24 @@ const useStore = create<StoreState>()(
         })),
       reorderGroups: (groups) => set({ groups }),
       selectedFloorId: 'level_0',
-      isOverviewMode: false, // Start in edit mode with base level selected
+      viewMode: 'level', // Start in level mode with base level selected
       selectedElements: [],
       selectFloor: (floorId) => {
         const state = get()
 
         if (!floorId) {
-          // Switch to overview mode - viewing all levels without editing capability
+          // Switch to full view mode - viewing all levels without editing capability
           set({
             selectedFloorId: null,
             currentLevel: -1,
-            isOverviewMode: true,
+            viewMode: 'full',
             controlMode: 'select',
             activeTool: null,
           })
           return
         }
 
-        // Switch to edit mode - focusing on a specific level for editing
+        // Switch to level mode - focusing on a specific level for editing
         // Find or create the component for this floor
         let component = state.components.find((c) => c.type === 'wall' && c.group === floorId)
 
@@ -244,7 +246,7 @@ const useStore = create<StoreState>()(
           set({
             selectedFloorId: floorId,
             currentLevel: group?.level ?? 0,
-            isOverviewMode: false,
+            viewMode: 'level',
           })
         } else {
           // Create a new wall component for this floor
@@ -261,7 +263,7 @@ const useStore = create<StoreState>()(
             components: [...state.components, component],
             currentLevel: group?.level ?? 0,
             selectedFloorId: floorId,
-            isOverviewMode: false,
+            viewMode: 'level',
           })
         }
       },
@@ -669,7 +671,7 @@ const useStore = create<StoreState>()(
           selectedElements: [],
           selectedImageIds: [],
           selectedFloorId: null,
-          isOverviewMode: true, // Start in overview mode when loading a layout
+          viewMode: 'full', // Start in full view mode when loading a layout
           controlMode: 'select',
           activeTool: null,
         })
@@ -729,7 +731,7 @@ const useStore = create<StoreState>()(
           ],
           currentLevel: 0,
           selectedFloorId: 'level_0',
-          isOverviewMode: false,
+          viewMode: 'level',
           selectedElements: [],
           selectedImageIds: [],
           undoStack: [],
@@ -852,14 +854,21 @@ const useStore = create<StoreState>()(
           if (!state.selectedFloorId) {
             state.selectedFloorId = 'level_0'
             state.currentLevel = 0
-            state.isOverviewMode = false
+            state.viewMode = 'level'
           }
 
-          // Ensure isOverviewMode is set correctly based on selectedFloorId
+          // Migrate: isOverviewMode -> viewMode
+          if ('isOverviewMode' in state) {
+            const oldState = state as any
+            state.viewMode = oldState.isOverviewMode ? 'full' : 'level'
+            oldState.isOverviewMode = undefined
+          }
+
+          // Ensure viewMode is set correctly based on selectedFloorId
           if (state.selectedFloorId === null) {
-            state.isOverviewMode = true
-          } else if (state.isOverviewMode === undefined) {
-            state.isOverviewMode = false
+            state.viewMode = 'full'
+          } else if (state.viewMode === undefined) {
+            state.viewMode = 'level'
           }
         }
       },
@@ -926,7 +935,7 @@ export const useEditorContext = () => {
     handleClear: store.handleClear,
     groups: store.groups,
     selectedFloorId: store.selectedFloorId,
-    isOverviewMode: store.isOverviewMode,
+    viewMode: store.viewMode,
     selectFloor: store.selectFloor,
     addComponent: store.addComponent,
     addGroup: store.addGroup,

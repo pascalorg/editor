@@ -85,7 +85,7 @@ const HandleMaterial = ({
 type RoofsProps = {
   floorId: string
   isActive: boolean
-  isOverviewMode?: boolean
+  isFullView?: boolean
   tileSize: number
   baseHeight: number // Height at which the roof starts (typically wall height)
   hoveredRoofIndex: number | null
@@ -105,7 +105,7 @@ export const Roofs = forwardRef(
     {
       floorId,
       isActive,
-      isOverviewMode = false,
+      isFullView = false,
       tileSize,
       baseHeight,
       hoveredRoofIndex,
@@ -856,7 +856,7 @@ export const Roofs = forwardRef(
             emissiveIntensity = 0.3
           }
 
-          const opacity = isOverviewMode || isActive ? 1 : 0.2
+          const opacity = isFullView || isActive ? 1 : 0.2
           const transparent = opacity < 1
 
           const material = (

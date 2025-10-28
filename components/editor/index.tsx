@@ -70,7 +70,7 @@ export default function Editor({ className }: { className?: string }) {
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
   const groups = useEditor((state) => state.groups)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const isOverviewMode = useEditor((state) => state.isOverviewMode)
+  const viewMode = useEditor((state) => state.viewMode)
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
@@ -996,8 +996,8 @@ export default function Editor({ className }: { className?: string }) {
           />
         </group>
 
-        {/* Hide guides (reference images) in overview mode */}
-        {!isOverviewMode &&
+        {/* Hide guides (reference images) in full view mode */}
+        {viewMode === 'level' &&
           images
             .filter((image) => image.visible !== false)
             .map((image) => (
@@ -1201,7 +1201,7 @@ export default function Editor({ className }: { className?: string }) {
                       hoveredWallIndex={hoveredWallIndex}
                       isActive={isActiveFloor}
                       isCameraEnabled={isCameraEnabled}
-                      isOverviewMode={isOverviewMode}
+                      isFullView={viewMode === 'full'}
                       key={`${floor.id}-${isActiveFloor}`}
                       movingCamera={movingCamera}
                       onDeleteWalls={handleDeleteSelectedElements}
@@ -1222,7 +1222,7 @@ export default function Editor({ className }: { className?: string }) {
                       hoveredRoofIndex={hoveredRoofIndex}
                       isActive={isActiveFloor}
                       isCameraEnabled={isCameraEnabled}
-                      isOverviewMode={isOverviewMode}
+                      isFullView={viewMode === 'full'}
                       key={`roof-${floor.id}-${isActiveFloor}`}
                       movingCamera={movingCamera}
                       onDeleteRoofs={handleDeleteSelectedElements}
