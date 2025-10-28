@@ -289,8 +289,9 @@ const useStore = create<StoreState>()(
           const currentComponent = state.components.find(
             (c) => c.type === 'wall' && c.group === state.selectedFloorId,
           )
-          const currentWalls =
-            (currentComponent?.data as WallComponentData).segments.map((seg) => seg.id) || []
+          const currentWalls = currentComponent
+            ? (currentComponent.data as WallComponentData).segments.map((seg) => seg.id)
+            : []
 
           const sortedNew = [...walls].sort()
           const sortedCurrent = [...currentWalls].sort()
@@ -370,8 +371,9 @@ const useStore = create<StoreState>()(
           const currentComponent = state.components.find(
             (c) => c.type === 'roof' && c.group === state.selectedFloorId,
           )
-          const currentRoofs =
-            (currentComponent?.data as RoofComponentData).segments.map((seg) => seg.id) || []
+          const currentRoofs = currentComponent
+            ? (currentComponent.data as RoofComponentData).segments.map((seg) => seg.id)
+            : []
 
           const sortedNew = [...roofs].sort()
           const sortedCurrent = [...currentRoofs].sort()
