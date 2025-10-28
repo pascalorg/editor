@@ -214,7 +214,13 @@ export const Roofs = forwardRef(
 
           if (handleType === 'ridge') {
             // Ridge handle: adjust height
-            const newHeight = Math.max(0.5, Math.min(10, originalSegment.height + delta.y))
+            let newHeight = Math.max(0.5, Math.min(10, originalSegment.height + delta.y))
+
+            // Snap to 0.1 increments when Shift is held
+            if (event.shiftKey) {
+              newHeight = Math.round(newHeight * 10) / 10
+            }
+
             updatedSegment = { ...originalSegment, height: newHeight }
           } else {
             // Extract edge type from handleId (front, right, back, left)
@@ -236,8 +242,8 @@ export const Roofs = forwardRef(
               const ridgeDir = { x: dx / ridgeLength, z: dz / ridgeLength }
               const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
 
-              // Snap to grid (0.1 precision)
-              const snapToGrid = (val: number) => Math.round(val * 10) / 10
+              // Snap to whole grid units when Shift is held
+              const snapToGrid = (val: number) => (event.shiftKey ? Math.round(val) : val)
 
               // Get current widths (use defaults if not set)
               const currentLeftWidth = originalSegment.leftWidth ?? ROOF_WIDTH / 2
@@ -438,14 +444,22 @@ export const Roofs = forwardRef(
           totalDelta += delta
           previousAngle = currentAngle
 
-          // Rotate using totalDelta (no snap during drag for fluidity)
+          // Apply snapping when Shift is held (snap to 45-degree increments)
+          let effectiveDelta = totalDelta
+          if (event.shiftKey) {
+            const degrees = (totalDelta * 180) / Math.PI
+            const snappedDegrees = Math.round(degrees / 45) * 45
+            effectiveDelta = (snappedDegrees * Math.PI) / 180
+          }
+
+          // Rotate using effectiveDelta
           const rotatePoint = (point: [number, number]) => {
             const worldX = point[0] * tileSize
             const worldZ = point[1] * tileSize
             const dX = worldX - centerX
             const dZ = worldZ - centerZ
-            const cos = Math.cos(totalDelta)
-            const sin = Math.sin(totalDelta)
+            const cos = Math.cos(effectiveDelta)
+            const sin = Math.sin(effectiveDelta)
             const newX = centerX + dX * cos + dZ * sin
             const newZ = centerZ - dX * sin + dZ * cos
             return [newX / tileSize, newZ / tileSize] as [number, number]
@@ -462,7 +476,7 @@ export const Roofs = forwardRef(
 
           finalSegment = updatedSegment
 
-          // Update in store (without snap for smooth preview)
+          // Update in store
           const updatedSegments = roofSegments.map((s) => (s.id === segmentId ? updatedSegment : s))
           setComponents(updatedSegments)
         }
