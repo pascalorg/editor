@@ -1,5 +1,18 @@
 'use client'
 
+import JsonView from '@uiw/react-json-view'
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileCode,
+  HelpCircle,
+  Save,
+  Settings,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,19 +38,6 @@ import {
 } from '@/components/ui/sidebar'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import JsonView from '@uiw/react-json-view'
-import {
-  ChevronDown,
-  ChevronRight,
-  Download,
-  FileCode,
-  HelpCircle,
-  Save,
-  Settings,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
 
 export function AppSidebar() {
   const isHelpOpen = useEditor((state) => state.isHelpOpen)
@@ -45,8 +45,8 @@ export function AppSidebar() {
   const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
   const setIsJsonInspectorOpen = useEditor((state) => state.setIsJsonInspectorOpen)
   const handleExport = useEditor((state) => state.handleExport)
-  const selectedWallIds = useEditor((state) => state.selectedWallIds)
-  const handleDeleteSelectedWalls = useEditor((state) => state.handleDeleteSelectedWalls)
+  const selectedElements = useEditor((state) => state.selectedElements)
+  const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
   const handleSaveLayout = useEditor((state) => state.handleSaveLayout)
   const handleLoadLayout = useEditor((state) => state.handleLoadLayout)
   const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
@@ -60,18 +60,18 @@ export function AppSidebar() {
     setMounted(true)
   }, [])
 
-  // Handle backspace key to delete selected walls
+  // Handle backspace key to delete selected elements
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Backspace' && selectedWallIds.length > 0) {
+      if (event.key === 'Backspace' && selectedElements.length > 0) {
         event.preventDefault()
-        handleDeleteSelectedWalls()
+        handleDeleteSelectedElements()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedWallIds, handleDeleteSelectedWalls])
+  }, [selectedElements, handleDeleteSelectedElements])
 
   const handleLoadBuildClick = () => {
     fileInputRef.current?.click()

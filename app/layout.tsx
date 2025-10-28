@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AppSidebar } from '@/components/app-sidebar'
+import { ReactScan } from '@/components/debug/react-scan'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 
 const geistSans = Geist({
@@ -26,6 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <ReactScan />
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <SidebarProvider>
           <main className="h-screen w-full">

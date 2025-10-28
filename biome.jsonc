@@ -102,5 +102,17 @@
       "!**/public",
       "!**/.turbo"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["components/debug/react-scan.tsx"],
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

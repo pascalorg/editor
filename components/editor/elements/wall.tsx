@@ -1,12 +1,41 @@
 'use client'
 
-import type { WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
 import { forwardRef, memo, type Ref, useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+
+import {
+  handleElementClick,
+  isElementSelected,
+  type SelectedElement,
+} from '@/lib/building-elements'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
+const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
+
+// Helper function to create a cylinder between two points
+function createEdgeCylinder(start: number[], end: number[]) {
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const dz = end[2] - start[2]
+  const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+  const geometry = new THREE.CylinderGeometry(OUTLINE_RADIUS, OUTLINE_RADIUS, length, 8)
+  const midpoint = new THREE.Vector3(
+    (start[0] + end[0]) / 2,
+    (start[1] + end[1]) / 2,
+    (start[2] + end[2]) / 2,
+  )
+
+  // Calculate rotation to align cylinder with edge
+  const direction = new THREE.Vector3(dx, dy, dz).normalize()
+  const axis = new THREE.Vector3(0, 1, 0).cross(direction).normalize()
+  const angle = Math.acos(new THREE.Vector3(0, 1, 0).dot(direction))
+
+  return { geometry, midpoint, axis, angle }
+}
 
 // --- 2D Intersection Helper Functions (Ported from demo) ---
 // Note: These helpers operate in 2D space. We will use
@@ -179,12 +208,13 @@ type WallsProps = {
   tileSize: number
   wallHeight: number
   hoveredWallIndex: number | null
-  selectedWallIds: string[]
-  setSelectedWallIds: (ids: string[]) => void
+  selectedElements: SelectedElement[]
+  setSelectedElements: (elements: SelectedElement[]) => void
   onWallHover: (index: number | null) => void
   onWallRightClick?: (e: any, wallSegment: WallSegment) => void
   isCameraEnabled?: boolean
   controlMode: string
+  setControlMode: (mode: 'select' | 'building' | 'delete' | 'guide') => void
   movingCamera: boolean
   onDeleteWalls: () => void
 }
@@ -198,12 +228,13 @@ export const Walls = forwardRef(
       tileSize,
       wallHeight,
       hoveredWallIndex,
-      selectedWallIds,
-      setSelectedWallIds,
+      selectedElements,
+      setSelectedElements,
       onWallHover,
       onWallRightClick,
       isCameraEnabled,
       controlMode,
+      setControlMode,
       movingCamera,
       onDeleteWalls,
     }: WallsProps,
@@ -213,7 +244,9 @@ export const Walls = forwardRef(
     const wallSegments = useEditor(
       useShallow((state) => {
         const wallComponent = state.components.find((c) => c.type === 'wall' && c.group === floorId)
-        return wallComponent?.data.segments.filter((seg) => seg.visible !== false) || []
+        return wallComponent?.type === 'wall'
+          ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
+          : []
       }),
     )
 
@@ -291,34 +324,52 @@ export const Walls = forwardRef(
           // After rotation, the wall already sits from y=0 to y=wallHeight, so no translation needed.
           geometry.rotateX(-Math.PI / 2)
 
-          return geometry
+          // Store the 3D corner points for outline rendering
+          // Bottom corners (y=0)
+          const bottomCorners = [
+            [p_start_R.x, 0, p_start_R.y],
+            [p_end_R.x, 0, p_end_R.y],
+            [p_end_L.x, 0, p_end_L.y],
+            [p_start_L.x, 0, p_start_L.y],
+          ]
+          // Top corners (y=wallHeight)
+          const topCorners = [
+            [p_start_R.x, wallHeight, p_start_R.y],
+            [p_end_R.x, wallHeight, p_end_R.y],
+            [p_end_L.x, wallHeight, p_end_L.y],
+            [p_start_L.x, wallHeight, p_start_L.y],
+          ]
+
+          return { geometry, bottomCorners, topCorners }
         })
-        .filter(Boolean) as THREE.ExtrudeGeometry[]
+        .filter(Boolean) as Array<{
+        geometry: THREE.ExtrudeGeometry
+        bottomCorners: number[][]
+        topCorners: number[][]
+      }>
     }, [wallSegments, tileSize, wallHeight])
     // --- End of Pre-calculation ---
 
     return (
       <group ref={ref}>
-        {wallGeometries.map((geometry, i) => {
+        {wallGeometries.map((wallData, i) => {
           // Find the original segment data
           const seg = wallSegments[i]
           if (!seg) return null
 
-          const isSelected = selectedWallIds.includes(seg.id)
+          const isSelected = isElementSelected(selectedElements, seg.id, 'wall')
           const isHovered = isActive && hoveredWallIndex === i
 
-          let color = '#aaaabf'
-          let emissive = '#000000'
+          const color = '#aaaabf'
+          const emissive = '#aaaabf' // Same as base color for emissive
+          let emissiveIntensity = 0
 
           if (isSelected && isHovered) {
-            color = '#ff4444'
-            emissive = '#441111'
+            emissiveIntensity = 0.6
           } else if (isSelected) {
-            color = '#ff8888'
-            emissive = '#331111'
+            emissiveIntensity = 0.4
           } else if (isHovered) {
-            color = '#ff6b6b'
-            emissive = '#331111'
+            emissiveIntensity = 0.3
           }
 
           // In overview mode, show all walls at full opacity
@@ -327,83 +378,123 @@ export const Walls = forwardRef(
           const transparent = opacity < 1
 
           return (
-            // The geometry is now pre-rotated and in world space,
-            // so we don't need the <group> for rotation/positioning.
-            <mesh
-              castShadow
-              geometry={geometry} // Use the new extruded geometry
-              key={seg.id}
-              onClick={(e) => {
-                if (
-                  !isActive ||
-                  movingCamera ||
-                  controlMode === 'building' ||
-                  controlMode === 'delete' ||
-                  controlMode === 'guide'
-                ) {
-                  return
-                }
-                e.stopPropagation()
-                if (controlMode === 'select') {
-                  if (e.shiftKey) {
-                    // Toggle selection
-                    if (selectedWallIds.includes(seg.id)) {
-                      setSelectedWallIds(selectedWallIds.filter((id) => id !== seg.id))
-                    } else {
-                      setSelectedWallIds([...selectedWallIds, seg.id])
-                    }
-                  } else {
-                    // Replace selection
-                    setSelectedWallIds([seg.id])
+            <group key={seg.id}>
+              {/* The geometry is now pre-rotated and in world space,
+              so we don't need the <group> for rotation/positioning. */}
+              <mesh
+                castShadow
+                geometry={wallData.geometry} // Use the new extruded geometry
+                onClick={(e) => {
+                  if (!isActive || movingCamera || controlMode === 'delete') {
+                    return
                   }
-                }
-              }}
-              onContextMenu={(e) => {
-                if (!isActive) return
-                if (!isCameraEnabled && selectedWallIds.length > 0) {
                   e.stopPropagation()
-                  if (e.nativeEvent) e.nativeEvent.preventDefault()
-                }
-              }}
-              onPointerDown={(e) => {
-                if (
-                  !isActive ||
-                  movingCamera ||
-                  controlMode === 'building' ||
-                  controlMode === 'delete' ||
-                  controlMode === 'guide'
-                ) {
-                  return
-                }
-                e.stopPropagation()
-                if (e.button === 2 && !isCameraEnabled && selectedWallIds.length > 0) {
-                  if (e.nativeEvent) e.nativeEvent.preventDefault()
-                  onWallRightClick?.(e, seg)
-                }
-              }}
-              onPointerEnter={(e) => {
-                if (isActive && controlMode === 'select') {
+
+                  // Handle element selection using the shared handler
+                  const updatedSelection = handleElementClick({
+                    selectedElements,
+                    segments: wallSegments,
+                    elementId: seg.id,
+                    type: 'wall',
+                    event: e,
+                  })
+                  setSelectedElements(updatedSelection)
+
+                  // Automatically activate building mode when selecting a building element
+                  setControlMode('building')
+                }}
+                onContextMenu={(e) => {
+                  if (!isActive) return
+                  if (!isCameraEnabled && selectedElements.length > 0) {
+                    e.stopPropagation()
+                    if (e.nativeEvent) e.nativeEvent.preventDefault()
+                  }
+                }}
+                onPointerDown={(e) => {
+                  if (!isActive || movingCamera || controlMode === 'delete') {
+                    return
+                  }
+                  // Stop propagation to prevent camera controls from intercepting
                   e.stopPropagation()
-                  onWallHover(i)
-                }
-              }}
-              onPointerLeave={(e) => {
-                if (isActive && controlMode === 'select') {
-                  e.stopPropagation()
-                  onWallHover(null)
-                }
-              }}
-              receiveShadow
-            >
-              <meshStandardMaterial
-                color={color}
-                emissive={emissive}
-                metalness={0.1}
-                opacity={opacity}
-                roughness={0.7}
-                transparent={transparent}
-              />
-            </mesh>
+
+                  if (e.button === 2 && !isCameraEnabled && selectedElements.length > 0) {
+                    if (e.nativeEvent) e.nativeEvent.preventDefault()
+                    onWallRightClick?.(e, seg)
+                  }
+                }}
+                onPointerEnter={(e) => {
+                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                    e.stopPropagation()
+                    onWallHover(i)
+                  }
+                }}
+                onPointerLeave={(e) => {
+                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                    e.stopPropagation()
+                    onWallHover(null)
+                  }
+                }}
+                receiveShadow
+              >
+                <meshStandardMaterial
+                  color={color}
+                  emissive={emissive}
+                  emissiveIntensity={emissiveIntensity}
+                  metalness={0.1}
+                  opacity={opacity}
+                  roughness={0.7}
+                  transparent={transparent}
+                />
+              </mesh>
+
+              {/* Selection outline - 3D cylinders */}
+              {isSelected && (
+                <>
+                  {(() => {
+                    const { bottomCorners, topCorners } = wallData
+
+                    const edges = []
+                    // Bottom rectangle edges
+                    for (let j = 0; j < bottomCorners.length; j++) {
+                      edges.push([bottomCorners[j], bottomCorners[(j + 1) % bottomCorners.length]])
+                    }
+                    // Top rectangle edges
+                    for (let j = 0; j < topCorners.length; j++) {
+                      edges.push([topCorners[j], topCorners[(j + 1) % topCorners.length]])
+                    }
+                    // Vertical edges connecting bottom to top
+                    for (let j = 0; j < bottomCorners.length; j++) {
+                      edges.push([bottomCorners[j], topCorners[j]])
+                    }
+
+                    return edges.map((edge, idx) => {
+                      const {
+                        geometry: cylGeom,
+                        midpoint,
+                        axis,
+                        angle,
+                      } = createEdgeCylinder(edge[0], edge[1])
+                      return (
+                        <mesh
+                          geometry={cylGeom}
+                          key={idx}
+                          position={midpoint}
+                          quaternion={new THREE.Quaternion().setFromAxisAngle(axis, angle)}
+                          renderOrder={999}
+                        >
+                          <meshStandardMaterial
+                            color="#ffffff"
+                            depthTest={false}
+                            emissive="#ffffff"
+                            emissiveIntensity={0.5}
+                          />
+                        </mesh>
+                      )
+                    })
+                  })()}
+                </>
+              )}
+            </group>
           )
         })}
       </group>

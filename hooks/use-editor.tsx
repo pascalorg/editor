@@ -1,15 +1,31 @@
 'use client'
 
+import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import {
+  deleteElements,
+  type SelectedElement,
+  toggleElementVisibility,
+} from '@/lib/building-elements'
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
   end: [number, number] // [x, y] intersection coordinates
   id: string
   isHorizontal: boolean
+  visible?: boolean // Optional for backward compatibility
+}
+
+export interface RoofSegment {
+  start: [number, number] // [x, y] ridge start coordinates
+  end: [number, number] // [x, y] ridge end coordinates
+  id: string
+  height: number // Peak height above base
+  leftWidth?: number // Distance from ridge to left edge (defaults to ROOF_WIDTH / 2)
+  rightWidth?: number // Distance from ridge to right edge (defaults to ROOF_WIDTH / 2)
   visible?: boolean // Optional for backward compatibility
 }
 
@@ -25,7 +41,15 @@ export interface ReferenceImage {
   visible?: boolean // Optional for backward compatibility
 }
 
-export type Tool = 'wall' | 'room' | 'custom-room' | 'door' | 'window' | 'dummy1' | 'dummy2'
+export type Tool =
+  | 'wall'
+  | 'room'
+  | 'custom-room'
+  | 'door'
+  | 'window'
+  | 'roof'
+  | 'dummy1'
+  | 'dummy2'
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 
@@ -37,14 +61,27 @@ export type ComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
 
-export type Component = {
-  id: string
-  type: 'wall'
-  label: string
-  group: string | null
-  data: ComponentData
-  createdAt: string
+export type RoofComponentData = {
+  segments: RoofSegment[]
 }
+
+export type Component =
+  | {
+      id: string
+      type: 'wall'
+      label: string
+      group: string | null
+      data: ComponentData
+      createdAt: string
+    }
+  | {
+      id: string
+      type: 'roof'
+      label: string
+      group: string | null
+      data: RoofComponentData
+      createdAt: string
+    }
 
 export type ComponentGroup = {
   id: string
@@ -77,7 +114,7 @@ type StoreState = {
   currentLevel: number
   selectedFloorId: string | null
   isOverviewMode: boolean // True when viewing all levels, false when editing a specific level
-  selectedWallIds: string[]
+  selectedElements: SelectedElement[] // Unified selection for building elements (walls, roofs)
   selectedImageIds: string[]
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
@@ -93,11 +130,12 @@ type StoreState = {
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
+  setRoofs: (roofs: string[]) => void
   addGroup: (group: ComponentGroup) => void
   deleteGroup: (groupId: string) => void
   selectFloor: (floorId: string | null) => void
   setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
-  setSelectedWallIds: (ids: string[]) => void
+  setSelectedElements: (elements: SelectedElement[]) => void
   setSelectedImageIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
@@ -109,12 +147,14 @@ type StoreState = {
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
-  getSelectedWallIdsSet: () => Set<string>
+  getRoofsSet: () => Set<string>
+  getSelectedElementsSet: () => Set<SelectedElement>
   getSelectedImageIdsSet: () => Set<string>
   wallSegments: () => WallSegment[]
+  roofSegments: () => RoofSegment[]
   handleExport: () => void
   handleUpload: (file: File, level: number) => void
-  handleDeleteSelectedWalls: () => void
+  handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   serializeLayout: () => LayoutJSON
   loadLayout: (json: LayoutJSON) => void
@@ -124,7 +164,7 @@ type StoreState = {
   undo: () => void
   redo: () => void
   toggleFloorVisibility: (floorId: string) => void
-  toggleWallVisibility: (wallId: string) => void
+  toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof') => void
   toggleImageVisibility: (imageId: string) => void
 }
 
@@ -152,6 +192,7 @@ const useStore = create<StoreState>()(
         })),
       selectedFloorId: 'level_0',
       isOverviewMode: false, // Start in edit mode with base level selected
+      selectedElements: [],
       selectFloor: (floorId) => {
         const state = get()
 
@@ -198,7 +239,6 @@ const useStore = create<StoreState>()(
           })
         }
       },
-      selectedWallIds: [],
       selectedImageIds: [],
       isHelpOpen: false,
       isJsonInspectorOpen: false,
@@ -295,6 +335,100 @@ const useStore = create<StoreState>()(
             components: updatedComponents,
           }
         }),
+      setRoofs: (roofs) =>
+        set((state) => {
+          if (!state.selectedFloorId) {
+            return state
+          }
+
+          // Get current roofs from component for comparison
+          const currentComponent = state.components.find(
+            (c) => c.type === 'roof' && c.group === state.selectedFloorId,
+          )
+          const currentRoofs = currentComponent?.data.segments.map((seg) => seg.id) || []
+
+          const sortedNew = [...roofs].sort()
+          const sortedCurrent = [...currentRoofs].sort()
+          if (
+            sortedNew.length === sortedCurrent.length &&
+            sortedNew.every((v, i) => v === sortedCurrent[i])
+          ) {
+            return state
+          }
+
+          // Convert roof keys to segments
+          const segments: RoofSegment[] = []
+          for (const roofKey of roofs) {
+            if (!roofKey.includes('-')) continue
+
+            // Parse roof key format: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
+            const [coordPart, widthPart] = roofKey.split(':')
+            const parts = coordPart.split('-')
+            if (parts.length !== 2) continue
+
+            const [start, end] = parts
+            const [x1, y1] = start.split(',').map(Number)
+            const [x2, y2] = end.split(',').map(Number)
+
+            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
+
+            // Parse optional widths
+            let leftWidth: number | undefined
+            let rightWidth: number | undefined
+            if (widthPart) {
+              const widths = widthPart.split(',').map(Number)
+              if (widths.length === 2 && !isNaN(widths[0]) && !isNaN(widths[1])) {
+                leftWidth = widths[0]
+                rightWidth = widths[1]
+              }
+            }
+
+            segments.push({
+              start: [x1, y1],
+              end: [x2, y2],
+              id: roofKey,
+              height: 2, // Default 2m peak height
+              leftWidth,
+              rightWidth,
+              visible: true,
+            })
+          }
+
+          // Update the component for the current floor
+          let updatedComponents = state.components.map((comp) => {
+            if (comp.type === 'roof' && comp.group === state.selectedFloorId) {
+              return {
+                ...comp,
+                data: { segments },
+              }
+            }
+            return comp
+          })
+
+          // If no component exists for this floor yet, create one
+          if (
+            !state.components.find((c) => c.type === 'roof' && c.group === state.selectedFloorId)
+          ) {
+            const newComponent = {
+              id: `roofs-${state.selectedFloorId}`,
+              type: 'roof' as const,
+              label: `Roofs - ${state.groups.find((g) => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
+              group: state.selectedFloorId,
+              data: { segments },
+              createdAt: new Date().toISOString(),
+            }
+            updatedComponents = [...state.components, newComponent]
+          }
+
+          return {
+            undoStack: [
+              ...state.undoStack,
+              { images: state.images, components: state.components },
+            ].slice(-50),
+            redoStack: [],
+            components: updatedComponents,
+          }
+        }),
       setImages: (images, pushToUndo = true) =>
         set((state) => {
           // Deep comparison to avoid unnecessary undo stack pushes
@@ -331,7 +465,7 @@ const useStore = create<StoreState>()(
           // Just update images without affecting undo stack (for intermediate drag updates)
           return { images }
         }),
-      setSelectedWallIds: (ids) => set({ selectedWallIds: ids }),
+      setSelectedElements: (elements) => set({ selectedElements: elements }),
       setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
       setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
@@ -366,7 +500,18 @@ const useStore = create<StoreState>()(
 
         return new Set(component.data.segments.map((seg) => seg.id))
       },
-      getSelectedWallIdsSet: () => new Set(get().selectedWallIds),
+      getRoofsSet: () => {
+        const state = get()
+        if (!state.selectedFloorId) return new Set<string>()
+
+        const component = state.components.find(
+          (c) => c.type === 'roof' && c.group === state.selectedFloorId,
+        )
+        if (!component) return new Set<string>()
+
+        return new Set(component.data.segments.map((seg) => seg.id))
+      },
+      getSelectedElementsSet: () => new Set(get().selectedElements),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
       wallSegments: () => {
         const state = get()
@@ -377,7 +522,18 @@ const useStore = create<StoreState>()(
         )
         if (!component) return []
 
-        return component.data.segments
+        return component.data.segments as WallSegment[]
+      },
+      roofSegments: () => {
+        const state = get()
+        if (!state.selectedFloorId) return []
+
+        const component = state.components.find(
+          (c) => c.type === 'roof' && c.group === state.selectedFloorId,
+        )
+        if (!component) return []
+
+        return component.data.segments as RoofSegment[]
       },
       handleExport: () => {
         const ref = get().wallsGroupRef
@@ -440,25 +596,29 @@ const useStore = create<StoreState>()(
           }
         })
       },
-      handleDeleteSelectedWalls: () => {
+      handleDeleteSelectedElements: () => {
         const state = get()
-        if (state.selectedWallIds.length === 0) return
+        if (state.selectedElements.length === 0 || !state.selectedFloorId) return
 
-        const currentWalls = state.getWallsSet()
-        const newWallsSet = new Set(currentWalls)
+        const updatedComponents = deleteElements(
+          state.components,
+          state.selectedElements,
+          state.selectedFloorId,
+        )
 
-        // Remove selected walls
-        for (const wallKey of state.selectedWallIds) {
-          newWallsSet.delete(wallKey)
-        }
-
-        const newWalls = Array.from(newWallsSet)
-        get().setWalls(newWalls)
-        set({ selectedWallIds: [] })
+        set({
+          undoStack: [
+            ...state.undoStack,
+            { images: state.images, components: state.components },
+          ].slice(-50),
+          redoStack: [],
+          components: updatedComponents,
+          selectedElements: [],
+        })
       },
       handleClear: () => {
         get().setWalls([])
-        set({ selectedWallIds: [] })
+        set({ selectedElements: [] })
       },
       serializeLayout: () => {
         const state = get()
@@ -476,7 +636,7 @@ const useStore = create<StoreState>()(
       },
       loadLayout: (json: LayoutJSON) => {
         set({
-          selectedWallIds: [],
+          selectedElements: [],
           selectedImageIds: [],
           selectedFloorId: null,
           isOverviewMode: true, // Start in overview mode when loading a layout
@@ -540,7 +700,7 @@ const useStore = create<StoreState>()(
           currentLevel: 0,
           selectedFloorId: 'level_0',
           isOverviewMode: false,
-          selectedWallIds: [],
+          selectedElements: [],
           selectedImageIds: [],
           undoStack: [],
           redoStack: [],
@@ -555,7 +715,7 @@ const useStore = create<StoreState>()(
             images: previous.images,
             undoStack: state.undoStack.slice(0, -1),
             redoStack: [...state.redoStack, { components: state.components, images: state.images }],
-            selectedWallIds: [],
+            selectedElements: [],
             selectedImageIds: [],
           }
         }),
@@ -568,7 +728,7 @@ const useStore = create<StoreState>()(
             images: next.images,
             redoStack: state.redoStack.slice(0, -1),
             undoStack: [...state.undoStack, { components: state.components, images: state.images }],
-            selectedWallIds: [],
+            selectedElements: [],
             selectedImageIds: [],
           }
         }),
@@ -578,22 +738,18 @@ const useStore = create<StoreState>()(
             g.id === floorId ? { ...g, visible: !(g.visible ?? true) } : g,
           ),
         })),
-      toggleWallVisibility: (wallId) =>
-        set((state) => ({
-          components: state.components.map((comp) => {
-            if (comp.type === 'wall' && comp.group === state.selectedFloorId) {
-              return {
-                ...comp,
-                data: {
-                  segments: comp.data.segments.map((seg) =>
-                    seg.id === wallId ? { ...seg, visible: !(seg.visible ?? true) } : seg,
-                  ),
-                },
-              }
-            }
-            return comp
-          }),
-        })),
+      toggleBuildingElementVisibility: (elementId, type) =>
+        set((state) => {
+          if (!state.selectedFloorId) return state
+          return {
+            components: toggleElementVisibility(
+              state.components,
+              elementId,
+              type,
+              state.selectedFloorId,
+            ),
+          }
+        }),
       toggleImageVisibility: (imageId) =>
         set((state) => ({
           images: state.images.map((img) =>
@@ -607,7 +763,7 @@ const useStore = create<StoreState>()(
         components: state.components,
         groups: state.groups,
         images: state.images,
-        selectedWallIds: state.selectedWallIds,
+        selectedElements: state.selectedElements,
         selectedImageIds: state.selectedImageIds,
       }),
       onRehydrateStorage: () => (state) => {
@@ -682,3 +838,70 @@ const useStore = create<StoreState>()(
 )
 
 export const useEditor = useStore
+
+export const useEditorContext = () => {
+  const store = useStore()
+  return {
+    walls: store.getWallsSet(),
+    setWalls: (action: SetStateAction<Set<string>>) => {
+      const currentSet = store.getWallsSet()
+      const newSet = typeof action === 'function' ? action(currentSet) : action
+      store.setWalls(Array.from(newSet))
+    },
+    roofs: store.getRoofsSet(),
+    setRoofs: (action: SetStateAction<Set<string>>) => {
+      const currentSet = store.getRoofsSet()
+      const newSet = typeof action === 'function' ? action(currentSet) : action
+      store.setRoofs(Array.from(newSet))
+    },
+    images: store.images,
+    setImages: store.setImages,
+    selectedElements: store.selectedElements,
+    setSelectedElements: store.setSelectedElements,
+    selectedImageIds: store.getSelectedImageIdsSet(),
+    setSelectedImageIds: (action: SetStateAction<Set<string>>) => {
+      const currentSet = store.getSelectedImageIdsSet()
+      const newSet = typeof action === 'function' ? action(currentSet) : action
+      store.setSelectedImageIds(Array.from(newSet))
+    },
+    isHelpOpen: store.isHelpOpen,
+    setIsHelpOpen: store.setIsHelpOpen,
+    isJsonInspectorOpen: store.isJsonInspectorOpen,
+    setIsJsonInspectorOpen: store.setIsJsonInspectorOpen,
+    wallsGroupRef: store.wallsGroupRef,
+    setWallsGroupRef: store.setWallsGroupRef,
+    activeTool: store.activeTool,
+    setActiveTool: store.setActiveTool,
+    controlMode: store.controlMode,
+    setControlMode: store.setControlMode,
+    cameraMode: store.cameraMode,
+    setCameraMode: store.setCameraMode,
+    movingCamera: store.movingCamera,
+    setMovingCamera: store.setMovingCamera,
+    isManipulatingImage: store.isManipulatingImage,
+    setIsManipulatingImage: store.setIsManipulatingImage,
+    wallSegments: store.wallSegments(),
+    roofSegments: store.roofSegments(),
+    handleExport: store.handleExport,
+    handleUpload: store.handleUpload,
+    handleDeleteSelectedElements: store.handleDeleteSelectedElements,
+    handleDeleteSelectedImages: store.handleDeleteSelectedImages,
+    serializeLayout: store.serializeLayout,
+    loadLayout: store.loadLayout,
+    handleSaveLayout: store.handleSaveLayout,
+    handleLoadLayout: store.handleLoadLayout,
+    handleResetToDefault: store.handleResetToDefault,
+    undo: store.undo,
+    redo: store.redo,
+    handleClear: store.handleClear,
+    groups: store.groups,
+    selectedFloorId: store.selectedFloorId,
+    isOverviewMode: store.isOverviewMode,
+    selectFloor: store.selectFloor,
+    addGroup: store.addGroup,
+    deleteGroup: store.deleteGroup,
+    toggleFloorVisibility: store.toggleFloorVisibility,
+    toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
+    toggleImageVisibility: store.toggleImageVisibility,
+  }
+}
