@@ -176,12 +176,12 @@ export const Roofs = forwardRef(
           camera.getWorldDirection(cameraDirection)
           cameraDirection.y = 0
           cameraDirection.normalize()
-          plane.setFromNormalAndCoplanarPoint(cameraDirection, new THREE.Vector3(0, baseHeight, 0))
+          plane.setFromNormalAndCoplanarPoint(cameraDirection, new THREE.Vector3(0, 0, 0))
         } else {
           // Horizontal edge handle moves on the ZX plane (ground plane)
           plane.setFromNormalAndCoplanarPoint(
             new THREE.Vector3(0, 1, 0),
-            new THREE.Vector3(0, baseHeight, 0),
+            new THREE.Vector3(0, 0, 0),
           )
         }
 
@@ -365,7 +365,7 @@ export const Roofs = forwardRef(
         const originalComponents = storeState.components
         const originalImages = storeState.images
 
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -baseHeight)
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
         const pointer = new THREE.Vector2()
 
@@ -388,27 +388,27 @@ export const Roofs = forwardRef(
         const rightWidth = originalSegment.rightWidth ?? ROOF_WIDTH / 2
         const bottomLeft = [
           startWorld[0] + perpDir.x * leftWidth,
-          baseHeight,
+          0,
           startWorld[1] + perpDir.z * leftWidth,
         ]
         const bottomRight = [
           startWorld[0] - perpDir.x * rightWidth,
-          baseHeight,
+          0,
           startWorld[1] - perpDir.z * rightWidth,
         ]
         const bottomLeftEnd = [
           endWorld[0] + perpDir.x * leftWidth,
-          baseHeight,
+          0,
           endWorld[1] + perpDir.z * leftWidth,
         ]
         const bottomRightEnd = [
           endWorld[0] - perpDir.x * rightWidth,
-          baseHeight,
+          0,
           endWorld[1] - perpDir.z * rightWidth,
         ]
         const centerX = (bottomLeft[0] + bottomRight[0] + bottomLeftEnd[0] + bottomRightEnd[0]) / 4
         const centerZ = (bottomLeft[2] + bottomRight[2] + bottomLeftEnd[2] + bottomRightEnd[2]) / 4
-        const center = new THREE.Vector3(centerX, baseHeight, centerZ)
+        const center = new THREE.Vector3(centerX, 0, centerZ)
 
         let previousAngle = 0
         let totalDelta = 0
@@ -533,7 +533,7 @@ export const Roofs = forwardRef(
         const originalComponents = storeState.components
         const originalImages = storeState.images
 
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -baseHeight)
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
         const pointer = new THREE.Vector2()
 
@@ -683,31 +683,31 @@ export const Roofs = forwardRef(
           const rightWidth = seg.rightWidth ?? ROOF_WIDTH / 2
           const roofHeight = seg.height || 2 // Default 2m peak height above base
 
-          // Bottom corners (at baseHeight)
+          // Bottom corners (at grid level y = 0)
           const bottomLeft = [
             startWorld[0] + perpDir.x * leftWidth,
-            baseHeight,
+            0,
             startWorld[1] + perpDir.z * leftWidth,
           ]
           const bottomRight = [
             startWorld[0] - perpDir.x * rightWidth,
-            baseHeight,
+            0,
             startWorld[1] - perpDir.z * rightWidth,
           ]
           const bottomLeftEnd = [
             endWorld[0] + perpDir.x * leftWidth,
-            baseHeight,
+            0,
             endWorld[1] + perpDir.z * leftWidth,
           ]
           const bottomRightEnd = [
             endWorld[0] - perpDir.x * rightWidth,
-            baseHeight,
+            0,
             endWorld[1] - perpDir.z * rightWidth,
           ]
 
-          // Ridge points (at baseHeight + roofHeight)
-          const ridgeStart = [startWorld[0], baseHeight + roofHeight, startWorld[1]]
-          const ridgeEnd = [endWorld[0], baseHeight + roofHeight, endWorld[1]]
+          // Ridge points (at roofHeight above grid)
+          const ridgeStart = [startWorld[0], roofHeight, startWorld[1]]
+          const ridgeEnd = [endWorld[0], roofHeight, endWorld[1]]
 
           // Create two triangular faces for the gable ends
           const frontGableGeometry = new THREE.BufferGeometry()
@@ -1293,7 +1293,7 @@ export const Roofs = forwardRef(
                     // Calculate geometric center for rotation and translation
                     const centerX =
                       (bottomLeft[0] + bottomRight[0] + bottomLeftEnd[0] + bottomRightEnd[0]) / 4
-                    const centerY = baseHeight
+                    const centerY = 0
                     const centerZ =
                       (bottomLeft[2] + bottomRight[2] + bottomLeftEnd[2] + bottomRightEnd[2]) / 4
 
@@ -1601,27 +1601,27 @@ export const RoofShadowPreview = memo(
 
       const bottomLeft = [
         startWorld[0] + perpDir.x * finalLeftWidth,
-        baseHeight,
+        0,
         startWorld[1] + perpDir.z * finalLeftWidth,
       ]
       const bottomRight = [
         startWorld[0] - perpDir.x * finalRightWidth,
-        baseHeight,
+        0,
         startWorld[1] - perpDir.z * finalRightWidth,
       ]
       const bottomLeftEnd = [
         endWorld[0] + perpDir.x * finalLeftWidth,
-        baseHeight,
+        0,
         endWorld[1] + perpDir.z * finalLeftWidth,
       ]
       const bottomRightEnd = [
         endWorld[0] - perpDir.x * finalRightWidth,
-        baseHeight,
+        0,
         endWorld[1] - perpDir.z * finalRightWidth,
       ]
 
-      const ridgeStart = [startWorld[0], baseHeight + height, startWorld[1]]
-      const ridgeEnd = [endWorld[0], baseHeight + height, endWorld[1]]
+      const ridgeStart = [startWorld[0], height, startWorld[1]]
+      const ridgeEnd = [endWorld[0], height, endWorld[1]]
 
       // Create complete preview geometries (all 4 faces)
       const frontGableGeometry = new THREE.BufferGeometry()

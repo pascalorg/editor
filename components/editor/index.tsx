@@ -5,7 +5,6 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
-  Grid,
   Line,
   OrthographicCamera,
   PerspectiveCamera,
@@ -24,6 +23,10 @@ import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
+import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
+import { InfiniteGrid } from './infinite-grid'
+import { LightingControls } from './lighting-controls'
+import { ProximityGrid } from './proximity-grid'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -71,6 +74,10 @@ export default function Editor({ className }: { className?: string }) {
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const components = useEditor((state) => state.components)
+
+  // Grid fade controls for infinite base floor
+  const { fadeDistance, fadeStrength } = useGridFadeControls()
 
   // Get walls as a Set
   const walls = getWallsSet()
@@ -108,6 +115,9 @@ export default function Editor({ className }: { className?: string }) {
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
 
+  // State for tracking mouse cursor position (for proximity grid)
+  const [cursorPosition, setCursorPosition] = useState<[number, number] | null>(null)
+
   // Helper function to clear all placement states and selections
   const clearPlacementStates = () => {
     setWallStartPoint(null)
@@ -121,10 +131,16 @@ export default function Editor({ className }: { className?: string }) {
     setDoorPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
+    setCursorPosition(null)
     // Clear all selections (building elements and images)
     setSelectedElements([])
     setSelectedImageIds([])
   }
+
+  // Clear cursor position when switching floors to prevent grid artifacts
+  useEffect(() => {
+    setCursorPosition(null)
+  }, [selectedFloorId])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -676,6 +692,22 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
+    // Only track cursor position for non-base levels (base level uses InfiniteGrid)
+    const currentFloor = groups.find((g) => g.id === selectedFloorId)
+    const currentLevel = currentFloor?.level || 0
+
+    if (currentLevel > 0) {
+      // Update cursor position for proximity grid on non-base levels
+      if (y !== null) {
+        setCursorPosition([x, y])
+      } else {
+        setCursorPosition(null)
+      }
+    } else {
+      // On base level, don't track cursor position
+      setCursorPosition(null)
+    }
+
     // Check control mode first - delete mode takes priority
     if (controlMode === 'delete') {
       // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
@@ -917,19 +949,9 @@ export default function Editor({ className }: { className?: string }) {
             zoom={20}
           />
         )}
-        {/* <fog attach="fog" args={['#17171b', 30, 40]} /> */}
-        <color args={['#17171b']} attach="background" />
-        <ambientLight intensity={0.5} />
-        <directionalLight
-          castShadow
-          intensity={1}
-          position={[10, 10, 5]}
-          shadow-camera-bottom={-15}
-          shadow-camera-left={-15}
-          shadow-camera-right={15}
-          shadow-camera-top={15}
-          shadow-mapSize={[1024, 1024]}
-        />
+        {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
+        <color args={['#212134']} attach="background" />
+        {/* <LightingControls /> */}
 
         {/* Infinite dashed axis lines - visual only, not interactive */}
         <group raycast={disabledRaycast}>
@@ -938,10 +960,9 @@ export default function Editor({ className }: { className?: string }) {
             color="white"
             dashed
             dashSize={0.5}
-            depthTest={false}
             gapSize={0.25}
             lineWidth={1}
-            opacity={0.01}
+            opacity={0.4}
             points={[
               [-1000, 0, 0],
               [1000, 0, 0],
@@ -952,10 +973,9 @@ export default function Editor({ className }: { className?: string }) {
             color="white"
             dashed
             dashSize={0.5}
-            depthTest={false}
             gapSize={0.25}
             lineWidth={1}
-            opacity={0.01}
+            opacity={0.4}
             points={[
               [0, -1000, 0],
               [0, 1000, 0],
@@ -966,10 +986,9 @@ export default function Editor({ className }: { className?: string }) {
             color="white"
             dashed
             dashSize={0.5}
-            depthTest={false}
             gapSize={0.25}
             lineWidth={1}
-            opacity={0.01}
+            opacity={0.4}
             points={[
               [0, 0, -1000],
               [0, 0, 1000],
@@ -1016,46 +1035,133 @@ export default function Editor({ className }: { className?: string }) {
                 (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * floorLevel
               const isActiveFloor = selectedFloorId === floor.id
 
+              // Find the level directly below (for reference grid)
+              const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
+              const floorBelow =
+                levelBelow !== null
+                  ? groups.find((g) => g.type === 'floor' && g.level === levelBelow)
+                  : null
+
               return (
                 <AnimatedLevel key={floor.id} positionY={yPosition}>
-                  {/* Drei Grid for visual reference only - not interactive */}
+                  {/* Solid dark purple floor for lowest level only - infinite appearance */}
+                  {floorLevel === 0 && <InfiniteFloor />}
+
+                  {/* Grid for visual reference only - not interactive */}
                   {showGrid && (
                     <group raycast={() => null}>
-                      {isActiveFloor ? (
-                        <Grid
-                          args={[GRID_SIZE, GRID_SIZE]}
-                          cellColor="#aaaabf"
-                          cellSize={tileSize}
-                          cellThickness={0.5}
-                          fadeDistance={GRID_SIZE * 2}
-                          fadeStrength={1}
-                          infiniteGrid={false}
-                          position={[0, 0, 0]}
-                          sectionColor="#9d4b4b"
-                          sectionSize={tileSize * 2}
-                          sectionThickness={1}
-                          side={2}
-                        />
-                      ) : (
-                        levelMode === 'exploded' && (
-                          <Grid
-                            args={[GRID_SIZE, GRID_SIZE]}
-                            cellColor="#4a4a5a"
-                            cellSize={tileSize}
-                            cellThickness={0.5}
-                            fadeDistance={GRID_SIZE * 2}
-                            fadeStrength={1}
-                            infiniteGrid={false}
-                            position={[0, 0, 0]}
-                            sectionColor="#5a4a4a"
-                            sectionSize={tileSize * 2}
-                            sectionThickness={1}
-                            side={2}
+                      {floorLevel === 0 ? (
+                        // Base level: show infinite grid
+                        isActiveFloor ? (
+                          <InfiniteGrid
+                            fadeDistance={fadeDistance}
+                            fadeStrength={fadeStrength}
+                            gridSize={tileSize}
+                            lineColor="#ffffff"
+                            lineWidth={1.0}
                           />
+                        ) : (
+                          levelMode === 'exploded' && (
+                            <InfiniteGrid
+                              fadeDistance={fadeDistance}
+                              fadeStrength={fadeStrength}
+                              gridSize={tileSize}
+                              lineColor="#ffffff"
+                              lineWidth={1.0}
+                            />
+                          )
                         )
+                      ) : (
+                        // Non-base level: show proximity-based grid around elements
+                        <>
+                          {isActiveFloor && (
+                            <ProximityGrid
+                              components={components}
+                              cursorPosition={cursorPosition}
+                              fadeWidth={0.5}
+                              floorId={floor.id}
+                              gridSize={tileSize}
+                              lineColor="#ffffff"
+                              lineWidth={1.0}
+                              maxSize={GRID_SIZE}
+                              offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                              opacity={0.3}
+                              padding={1.5}
+                              previewCustomRoom={
+                                customRoomPoints.length > 0
+                                  ? { points: customRoomPoints, previewEnd: customRoomPreviewEnd }
+                                  : null
+                              }
+                              previewRoof={
+                                roofStartPoint && roofPreviewEnd
+                                  ? { corner1: roofStartPoint, corner2: roofPreviewEnd }
+                                  : null
+                              }
+                              previewRoom={
+                                roomStartPoint && roomPreviewEnd
+                                  ? { corner1: roomStartPoint, corner2: roomPreviewEnd }
+                                  : null
+                              }
+                              previewWall={
+                                wallStartPoint && wallPreviewEnd
+                                  ? { start: wallStartPoint, end: wallPreviewEnd }
+                                  : null
+                              }
+                            />
+                          )}
+                          {!isActiveFloor && levelMode === 'exploded' && (
+                            <ProximityGrid
+                              components={components}
+                              cursorPosition={null}
+                              fadeWidth={0.5}
+                              floorId={floor.id}
+                              gridSize={tileSize}
+                              lineColor="#ffffff"
+                              lineWidth={1.0}
+                              maxSize={GRID_SIZE}
+                              offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                              opacity={0.15}
+                              padding={1.5}
+                              previewCustomRoom={null}
+                              previewRoof={null}
+                              previewRoom={null}
+                              previewWall={null}
+                            />
+                          )}
+                        </>
                       )}
                     </group>
                   )}
+
+                  {/* Show grid from level below as reference for non-base levels (only in exploded mode) */}
+                  {showGrid &&
+                    floorLevel > 0 &&
+                    isActiveFloor &&
+                    floorBelow &&
+                    levelMode === 'exploded' && (
+                      <group
+                        position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
+                        raycast={() => null}
+                      >
+                        <ProximityGrid
+                          components={components}
+                          cursorPosition={null}
+                          fadeWidth={0.5}
+                          floorId={floorBelow.id}
+                          gridSize={tileSize}
+                          lineColor="#ffffff"
+                          lineWidth={1.0}
+                          maxSize={GRID_SIZE}
+                          offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                          opacity={0.08}
+                          padding={1.5}
+                          previewCustomRoom={null}
+                          previewRoof={null}
+                          previewRoom={null}
+                          previewWall={null}
+                        />
+                      </group>
+                    )}
 
                   <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                     {/* Only show interactive grid tiles for the active floor */}
