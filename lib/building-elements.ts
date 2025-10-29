@@ -1,5 +1,7 @@
+import { CylinderIcon } from '@phosphor-icons/react'
 import { DoorOpen, RectangleVertical, Square, Triangle } from 'lucide-react'
 import type {
+  ColumnComponentData,
   Component,
   RoofComponentData,
   RoofSegment,
@@ -10,11 +12,11 @@ import type {
 /**
  * Building Element Abstraction Layer
  *
- * Provides polymorphic operations for building elements (walls, roofs, doors, windows, etc.)
+ * Provides polymorphic operations for building elements (walls, roofs, doors, windows, columns, etc.)
  * to ensure consistent behavior across selection, deletion, and visibility.
  */
 
-export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window'
+export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column'
 
 export interface SelectedElement {
   id: string
@@ -23,9 +25,15 @@ export interface SelectedElement {
 
 export interface ElementDescriptor {
   type: BuildingElementType
-  icon: typeof Square | typeof Triangle | typeof DoorOpen | typeof RectangleVertical
+  icon:
+    | typeof Square
+    | typeof Triangle
+    | typeof DoorOpen
+    | typeof RectangleVertical
+    | typeof CylinderIcon
   labelSingular: string
   labelPlural: string
+  itemsKey: 'segments' | 'columns'
 }
 
 /**
@@ -37,24 +45,35 @@ export const ELEMENT_DESCRIPTORS: Record<BuildingElementType, ElementDescriptor>
     icon: Square,
     labelSingular: 'Wall',
     labelPlural: 'Walls',
+    itemsKey: 'segments',
   },
   roof: {
     type: 'roof',
     icon: Triangle,
     labelSingular: 'Roof',
     labelPlural: 'Roofs',
+    itemsKey: 'segments',
   },
   door: {
     type: 'door',
     icon: DoorOpen,
     labelSingular: 'Door',
     labelPlural: 'Doors',
+    itemsKey: 'segments', // Doors don't have segments but this is for type consistency
   },
   window: {
     type: 'window',
     icon: RectangleVertical,
     labelSingular: 'Window',
     labelPlural: 'Windows',
+    itemsKey: 'segments', // Windows don't have segments but this is for type consistency
+  },
+  column: {
+    type: 'column',
+    icon: CylinderIcon,
+    labelSingular: 'Column',
+    labelPlural: 'Columns',
+    itemsKey: 'columns',
   },
 }
 
@@ -87,13 +106,22 @@ export function getElementsOfType(
   components: Component[],
   floorId: string,
   type: BuildingElementType,
-): WallSegment[] | RoofSegment[] {
+): WallSegment[] | RoofSegment[] | any[] {
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return (component.data as WallComponentData | RoofComponentData).segments.filter(
-    (seg) => seg.visible !== false,
-  ) as WallSegment[] | RoofSegment[]
+  const descriptor = ELEMENT_DESCRIPTORS[type]
+  if (
+    descriptor.itemsKey &&
+    component.data &&
+    typeof component.data === 'object' &&
+    descriptor.itemsKey in component.data
+  ) {
+    const data = component.data as { [key: string]: any }
+    return (data[descriptor.itemsKey] as any[]).filter((item: any) => item.visible !== false)
+  }
+
+  return []
 }
 
 /**
@@ -103,13 +131,22 @@ export function getAllElementsOfType(
   components: Component[],
   floorId: string,
   type: BuildingElementType,
-): WallSegment[] | RoofSegment[] {
+): WallSegment[] | RoofSegment[] | any[] {
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
-  return (component.data as WallComponentData | RoofComponentData).segments as
-    | WallSegment[]
-    | RoofSegment[]
+  const descriptor = ELEMENT_DESCRIPTORS[type]
+  if (
+    descriptor.itemsKey &&
+    component.data &&
+    typeof component.data === 'object' &&
+    descriptor.itemsKey in component.data
+  ) {
+    const data = component.data as { [key: string]: any }
+    return data[descriptor.itemsKey] as any[]
+  }
+
+  return []
 }
 
 /**
@@ -123,14 +160,23 @@ export function toggleElementVisibility(
 ): Component[] {
   return components.map((comp) => {
     if (comp.type === type && comp.group === floorId) {
-      return {
-        ...comp,
-        data: {
-          segments: (comp.data as WallComponentData | RoofComponentData).segments.map((seg) =>
-            seg.id === elementId ? { ...seg, visible: !(seg.visible ?? true) } : seg,
+      const descriptor = ELEMENT_DESCRIPTORS[type]
+      const { itemsKey } = descriptor
+      if (
+        itemsKey &&
+        comp.data &&
+        typeof comp.data === 'object' &&
+        itemsKey in comp.data &&
+        Array.isArray((comp.data as any)[itemsKey])
+      ) {
+        const updatedData = {
+          ...comp.data,
+          [itemsKey]: (comp.data as any)[itemsKey].map((item: any) =>
+            item.id === elementId ? { ...item, visible: !(item.visible ?? true) } : item,
           ),
-        },
-      } as Component
+        }
+        return { ...comp, data: updatedData } as Component
+      }
     }
     return comp
   })
@@ -165,7 +211,7 @@ export function deleteElements(
       ),
   )
 
-  // Then, handle walls and roofs which are segments within components
+  // Then, handle walls, roofs, and columns which are segments/items within components
   return filteredComponents.map((comp) => {
     if (
       comp.group === floorId &&
@@ -174,12 +220,22 @@ export function deleteElements(
       comp.type !== 'window'
     ) {
       const idsToDelete = elementsByType[comp.type]
-      return {
-        ...comp,
-        data: {
-          segments: comp.data.segments.filter((seg) => !idsToDelete.has(seg.id)),
-        },
-      } as Component
+      const descriptor = ELEMENT_DESCRIPTORS[comp.type as BuildingElementType]
+      const { itemsKey } = descriptor
+
+      if (
+        itemsKey &&
+        comp.data &&
+        typeof comp.data === 'object' &&
+        itemsKey in comp.data &&
+        Array.isArray((comp.data as any)[itemsKey])
+      ) {
+        const updatedData = {
+          ...comp.data,
+          [itemsKey]: (comp.data as any)[itemsKey].filter((item: any) => !idsToDelete.has(item.id)),
+        }
+        return { ...comp, data: updatedData } as Component
+      }
     }
     return comp
   })
@@ -228,7 +284,7 @@ export function toggleElementSelection(
  */
 export function selectElementRange(
   selectedElements: SelectedElement[],
-  segments: Array<WallSegment | RoofSegment>,
+  segments: Array<{ id: string }>,
   clickedId: string,
   type: BuildingElementType,
 ): SelectedElement[] {
@@ -302,7 +358,7 @@ export function getSelectedIdsOfType(
  */
 export function handleElementClick(options: {
   selectedElements: SelectedElement[]
-  segments: Array<WallSegment | RoofSegment>
+  segments: Array<{ id: string }>
   elementId: string
   type: BuildingElementType
   event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }

@@ -1,5 +1,21 @@
 'use client'
 
+import { CylinderIcon } from '@phosphor-icons/react'
+import {
+  Box,
+  Building,
+  DoorOpen,
+  GripVertical,
+  Image,
+  Layers,
+  Plus,
+  RectangleVertical,
+  Square,
+  Triangle,
+} from 'lucide-react'
+import { Reorder, useDragControls } from 'motion/react'
+import type { ReactNode } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   TreeExpander,
   TreeIcon,
@@ -17,26 +33,35 @@ import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import {
   type BuildingElementType,
+  getAllElementsOfType,
   getElementLabel,
+  getElementsOfType,
   isElementSelected,
   selectElementRange,
   toggleElementSelection,
 } from '@/lib/building-elements'
 import { cn } from '@/lib/utils'
-import {
-  Box,
-  Building,
-  DoorOpen,
-  GripVertical,
-  Image,
-  Layers,
-  Plus,
-  RectangleVertical,
-  Square,
-  Triangle,
-} from 'lucide-react'
-import { Reorder, useDragControls } from 'motion/react'
-import { useShallow } from 'zustand/react/shallow'
+
+const buildingElementConfig: Record<
+  'wall' | 'roof' | 'column',
+  {
+    icon: ReactNode
+    getLabel: (index: number) => string
+  }
+> = {
+  wall: {
+    icon: <Square className="h-4 w-4 text-gray-600" />,
+    getLabel: (index) => getElementLabel('wall', index),
+  },
+  roof: {
+    icon: <Triangle className="h-4 w-4 text-amber-600" />,
+    getLabel: (index) => getElementLabel('roof', index),
+  },
+  column: {
+    icon: <CylinderIcon className="h-4 w-4 text-gray-500" />,
+    getLabel: (index) => getElementLabel('column', index),
+  },
+}
 
 interface LayersMenuProps {
   mounted: boolean
@@ -47,8 +72,7 @@ interface DraggableLevelItemProps {
   levelIndex: number
   levelsCount: number
   isSelected: boolean
-  wallSegments: any[]
-  roofSegments: any[]
+  elements: Record<string, any[]>
   levelDoors: any[]
   levelWindows: any[]
   levelImages: any[]
@@ -60,11 +84,11 @@ interface DraggableLevelItemProps {
   handleImageSelect: (id: string, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
   toggleFloorVisibility: (id: string) => void
-  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof') => void
+  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof' | 'column') => void
   toggleImageVisibility: (id: string) => void
   toggleScanVisibility: (id: string) => void
   setFloorOpacity: (id: string, opacity: number) => void
-  setBuildingElementOpacity: (id: string, type: 'wall' | 'roof', opacity: number) => void
+  setBuildingElementOpacity: (id: string, type: 'wall' | 'roof' | 'column', opacity: number) => void
   setImageOpacity: (id: string, opacity: number) => void
   setScanOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, level: number) => void
@@ -79,8 +103,7 @@ function DraggableLevelItem({
   levelIndex,
   levelsCount,
   isSelected,
-  wallSegments,
-  roofSegments,
+  elements,
   levelDoors,
   levelWindows,
   levelImages,
@@ -106,10 +129,12 @@ function DraggableLevelItem({
   controls,
 }: DraggableLevelItemProps) {
   const isLastLevel = levelIndex === levelsCount - 1
+  const elementTypes = Object.keys(elements) as (keyof typeof buildingElementConfig)[]
+  const totalElements = elementTypes.reduce((acc, type) => acc + elements[type].length, 0)
+
   const hasContent =
     isSelected &&
-    (wallSegments.length > 0 ||
-      roofSegments.length > 0 ||
+    (totalElements > 0 ||
       levelDoors.length > 0 ||
       levelWindows.length > 0 ||
       levelImages.length > 0)
@@ -145,108 +170,62 @@ function DraggableLevelItem({
         <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
           <TreeNodeTrigger>
             <TreeExpander
-              hasChildren={
-                wallSegments.length > 0 ||
-                roofSegments.length > 0 ||
-                levelDoors.length > 0 ||
-                levelWindows.length > 0
-              }
+              hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
             />
             <TreeIcon
-              hasChildren={
-                wallSegments.length > 0 ||
-                roofSegments.length > 0 ||
-                levelDoors.length > 0 ||
-                levelWindows.length > 0
-              }
+              hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
               icon={<Building className="h-4 w-4 text-green-500" />}
             />
             <TreeLabel>
-              3D Objects (
-              {wallSegments.length + roofSegments.length + levelDoors.length + levelWindows.length})
+              3D Objects ({totalElements + levelDoors.length + levelWindows.length})
             </TreeLabel>
           </TreeNodeTrigger>
 
           <TreeNodeContent
-            hasChildren={
-              wallSegments.length > 0 ||
-              roofSegments.length > 0 ||
-              levelDoors.length > 0 ||
-              levelWindows.length > 0
-            }
+            hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
           >
-            {/* Walls */}
-            {wallSegments.map((segment, index, walls) => (
-              <TreeNode
-                isLast={
-                  index === walls.length - 1 &&
-                  roofSegments.length === 0 &&
-                  levelDoors.length === 0 &&
-                  levelWindows.length === 0
-                }
-                key={segment.id}
-                level={2}
-                nodeId={segment.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(
-                    isElementSelected(selectedElements, segment.id, 'wall') && 'bg-accent',
-                    segment.visible === false && 'opacity-50',
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleElementSelect(segment.id, 'wall', e as any)
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
-                  <TreeLabel>{getElementLabel('wall', index)}</TreeLabel>
-                  <OpacityControl
-                    onOpacityChange={(opacity) =>
-                      setBuildingElementOpacity(segment.id, 'wall', opacity)
+            {elementTypes.map((type) =>
+              elements[type].map((element, index, all) => {
+                const config = buildingElementConfig[type]
+                if (!config) return null
+                return (
+                  <TreeNode
+                    isLast={
+                      index === all.length - 1 &&
+                      elementTypes.indexOf(type) === elementTypes.length - 1 &&
+                      levelDoors.length === 0 &&
+                      levelWindows.length === 0
                     }
-                    onVisibilityToggle={() => toggleBuildingElementVisibility(segment.id, 'wall')}
-                    opacity={segment.opacity}
-                    visible={segment.visible}
-                  />
-                </TreeNodeTrigger>
-              </TreeNode>
-            ))}
-
-            {/* Roofs */}
-            {roofSegments.map((segment, index, roofs) => (
-              <TreeNode
-                isLast={
-                  index === roofs.length - 1 && levelDoors.length === 0 && levelWindows.length === 0
-                }
-                key={segment.id}
-                level={2}
-                nodeId={segment.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(
-                    isElementSelected(selectedElements, segment.id, 'roof') && 'bg-accent',
-                    segment.visible === false && 'opacity-50',
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleElementSelect(segment.id, 'roof', e as any)
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<Triangle className="h-4 w-4 text-amber-600" />} />
-                  <TreeLabel>{getElementLabel('roof', index)}</TreeLabel>
-                  <OpacityControl
-                    onOpacityChange={(opacity) =>
-                      setBuildingElementOpacity(segment.id, 'roof', opacity)
-                    }
-                    onVisibilityToggle={() => toggleBuildingElementVisibility(segment.id, 'roof')}
-                    opacity={segment.opacity}
-                    visible={segment.visible}
-                  />
-                </TreeNodeTrigger>
-              </TreeNode>
-            ))}
+                    key={element.id}
+                    level={2}
+                    nodeId={element.id}
+                  >
+                    <TreeNodeTrigger
+                      className={cn(
+                        isElementSelected(selectedElements, element.id, type) && 'bg-accent',
+                        element.visible === false && 'opacity-50',
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleElementSelect(element.id, type, e as any)
+                      }}
+                    >
+                      <TreeExpander />
+                      <TreeIcon icon={config.icon} />
+                      <TreeLabel>{config.getLabel(index)}</TreeLabel>
+                      <OpacityControl
+                        onOpacityChange={(opacity) =>
+                          setBuildingElementOpacity(element.id, type, opacity)
+                        }
+                        onVisibilityToggle={() => toggleBuildingElementVisibility(element.id, type)}
+                        opacity={element.opacity}
+                        visible={element.visible}
+                      />
+                    </TreeNodeTrigger>
+                  </TreeNode>
+                )
+              }),
+            )}
 
             {/* Doors */}
             {levelDoors.map((door, index, doors) => (
@@ -457,8 +436,6 @@ interface LayersMenuProps {
 export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleUpload = useEditor((state) => state.handleUpload)
   const handleScanUpload = useEditor((state) => state.handleScanUpload)
-  const wallSegments = useEditor(useShallow((state) => state.wallSegments()))
-  const roofSegments = useEditor(useShallow((state) => state.roofSegments()))
   const components = useEditor((state) => state.components)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
@@ -493,7 +470,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     type: BuildingElementType,
     event: React.MouseEvent,
   ) => {
-    const segments = type === 'wall' ? wallSegments : roofSegments
+    const segments = getAllElementsOfType(components, selectedFloorId || '', type)
 
     if (event.metaKey || event.ctrlKey) {
       // Cmd/Ctrl+click: toggle selection
@@ -717,8 +694,16 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
               <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
                 {floorGroups.map((level, levelIndex) => {
                   const isSelected = selectedFloorId === level.id
-                  const levelWalls = isSelected ? wallSegments : []
-                  const levelRoofs = isSelected ? roofSegments : []
+                  const levelElements = (
+                    Object.keys(buildingElementConfig) as (keyof typeof buildingElementConfig)[]
+                  ).reduce(
+                    (acc, type) => {
+                      acc[type] = isSelected ? getElementsOfType(components, level.id, type) : []
+                      return acc
+                    },
+                    {} as Record<string, any[]>,
+                  )
+
                   const levelDoors = isSelected
                     ? components.filter((c) => c.type === 'door' && c.group === level.id)
                     : []
@@ -731,6 +716,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
                   return (
                     <LevelReorderItem
+                      elements={levelElements}
                       handleElementSelect={handleElementSelect}
                       handleImageSelect={handleImageSelect}
                       handleScanSelect={handleScanSelect}
@@ -745,7 +731,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       levelScans={levelScans}
                       levelsCount={floorGroups.length}
                       levelWindows={levelWindows}
-                      roofSegments={levelRoofs}
                       selectedElements={selectedElements}
                       selectedImageIds={selectedImageIds}
                       selectedScanIds={selectedScanIds}
@@ -759,7 +744,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       toggleFloorVisibility={toggleFloorVisibility}
                       toggleImageVisibility={toggleImageVisibility}
                       toggleScanVisibility={toggleScanVisibility}
-                      wallSegments={levelWalls}
                     />
                   )
                 })}

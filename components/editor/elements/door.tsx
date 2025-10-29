@@ -1,12 +1,12 @@
 'use client'
 
-import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
-import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { Gltf } from '@react-three/drei'
 import { memo, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 

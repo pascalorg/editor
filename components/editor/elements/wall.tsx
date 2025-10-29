@@ -1,5 +1,9 @@
 'use client'
 
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { forwardRef, memo, type Ref, useMemo } from 'react'
+import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import {
@@ -7,10 +11,6 @@ import {
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { forwardRef, memo, type Ref, useMemo } from 'react'
-import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders

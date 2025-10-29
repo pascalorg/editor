@@ -1,6 +1,12 @@
 'use client'
 
-import { BoundingBoxIcon, type Icon, LineSegmentsIcon, WallIcon } from '@phosphor-icons/react'
+import {
+  BoundingBoxIcon,
+  CylinderIcon,
+  type Icon,
+  LineSegmentsIcon,
+  WallIcon,
+} from '@phosphor-icons/react'
 import { Blinds, Circle, DoorOpen, Pyramid } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,6 +24,7 @@ export function BuildingMenu() {
     { id: 'roof', icon: Pyramid, label: 'Gable Roof', enabled: true },
     { id: 'door', icon: DoorOpen, label: 'Door', enabled: true },
     { id: 'window', icon: Blinds, label: 'Window', enabled: true },
+    { id: 'column', icon: CylinderIcon, label: 'Column', enabled: true },
     { id: 'dummy1', icon: Circle, label: 'Tool 1', enabled: false },
     { id: 'dummy2', icon: Circle, label: 'Tool 2', enabled: false },
   ]

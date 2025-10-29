@@ -204,33 +204,36 @@ export const GridTiles = memo(
         </mesh>
 
         {/* Down arrow at hovered intersection or snapped preview position */}
-        {hoveredIntersection && !disableBuild && activeTool !== 'door' && activeTool !== 'window' && (
-          <group
-            position={[
-              // For wall mode, use wallPreviewEnd for snapped position
-              // For custom-room mode, use customRoomPreviewEnd for snapped position
-              // For delete mode, use deletePreviewEnd for snapped position
-              // For other modes, use the raw hovered intersection
-              activeTool === 'wall' && wallPreviewEnd
-                ? wallPreviewEnd[0] * tileSize
-                : activeTool === 'custom-room' && customRoomPreviewEnd
-                  ? customRoomPreviewEnd[0] * tileSize
-                  : controlMode === 'delete' && deletePreviewEnd
-                    ? deletePreviewEnd[0] * tileSize
-                    : hoveredIntersection.x * tileSize,
-              2,
-              activeTool === 'wall' && wallPreviewEnd
-                ? wallPreviewEnd[1] * tileSize
-                : activeTool === 'custom-room' && customRoomPreviewEnd
-                  ? customRoomPreviewEnd[1] * tileSize
-                  : controlMode === 'delete' && deletePreviewEnd
-                    ? deletePreviewEnd[1] * tileSize
-                    : hoveredIntersection.y * tileSize,
-            ]}
-          >
-            <DownArrow />
-          </group>
-        )}
+        {hoveredIntersection &&
+          !disableBuild &&
+          activeTool !== 'door' &&
+          activeTool !== 'window' && (
+            <group
+              position={[
+                // For wall mode, use wallPreviewEnd for snapped position
+                // For custom-room mode, use customRoomPreviewEnd for snapped position
+                // For delete mode, use deletePreviewEnd for snapped position
+                // For other modes, use the raw hovered intersection
+                activeTool === 'wall' && wallPreviewEnd
+                  ? wallPreviewEnd[0] * tileSize
+                  : activeTool === 'custom-room' && customRoomPreviewEnd
+                    ? customRoomPreviewEnd[0] * tileSize
+                    : controlMode === 'delete' && deletePreviewEnd
+                      ? deletePreviewEnd[0] * tileSize
+                      : hoveredIntersection.x * tileSize,
+                2,
+                activeTool === 'wall' && wallPreviewEnd
+                  ? wallPreviewEnd[1] * tileSize
+                  : activeTool === 'custom-room' && customRoomPreviewEnd
+                    ? customRoomPreviewEnd[1] * tileSize
+                    : controlMode === 'delete' && deletePreviewEnd
+                      ? deletePreviewEnd[1] * tileSize
+                      : hoveredIntersection.y * tileSize,
+              ]}
+            >
+              <DownArrow />
+            </group>
+          )}
 
         {/* Start point indicator for wall mode */}
         {wallStartPoint && activeTool === 'wall' && (

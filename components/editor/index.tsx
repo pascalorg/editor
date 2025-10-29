@@ -15,12 +15,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
 import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { type Component, useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
@@ -122,6 +123,9 @@ export default function Editor({ className }: { className?: string }) {
   // State for window mode (one-click placement with preview)
   const [windowPreviewPosition, setWindowPreviewPosition] = useState<[number, number] | null>(null)
 
+  // State for column mode (one-click placement with preview)
+  const [columnPreviewPosition, setColumnPreviewPosition] = useState<[number, number] | null>(null)
+
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -141,6 +145,7 @@ export default function Editor({ className }: { className?: string }) {
     setRoofPreviewEnd(null)
     setDoorPreviewPosition(null)
     setWindowPreviewPosition(null)
+    setColumnPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setCursorPosition(null)
@@ -655,6 +660,73 @@ export default function Editor({ className }: { className?: string }) {
         // Reset preview so it recalculates from the new point on next hover
         setCustomRoomPreviewEnd(null)
       }
+    } else if (controlMode === 'building' && activeTool === 'column') {
+      // Column mode: one-click placement at intersection
+      // Check if there's already a column at this position
+      const columnComponent = components.find(
+        (c) => c.type === 'column' && c.group === selectedFloorId,
+      )
+      const existingColumns = columnComponent?.type === 'column' ? columnComponent.data.columns : []
+
+      // Check if a column already exists at this grid position
+      const columnExists = existingColumns.some(
+        (col) => col.position[0] === x && col.position[1] === y,
+      )
+
+      if (!columnExists) {
+        // Create a new column component or add to existing one
+        const columnId = `${x},${y}`
+
+        if (columnComponent) {
+          // Update existing column component
+          const newColumns = [
+            ...existingColumns,
+            { id: columnId, position: [x, y] as [number, number], visible: true },
+          ]
+
+          const updatedComponents = components.map((comp): Component => {
+            if (comp.id === columnComponent.id && comp.type === 'column') {
+              return {
+                ...comp,
+                type: 'column' as const,
+                data: { columns: newColumns },
+              }
+            }
+            return comp
+          })
+
+          useEditor.setState((state) => ({
+            undoStack: [
+              ...state.undoStack,
+              { images: state.images, scans: state.scans, components: state.components },
+            ].slice(-50),
+            redoStack: [],
+            components: updatedComponents,
+          }))
+        } else {
+          // Create a new column component
+          const floorName = groups.find((g) => g.id === selectedFloorId)?.name || selectedFloorId
+          const newComponent: Component = {
+            id: `columns-${selectedFloorId}`,
+            type: 'column' as const,
+            label: `Columns - ${floorName}`,
+            group: selectedFloorId,
+            data: {
+              columns: [{ id: columnId, position: [x, y] as [number, number], visible: true }],
+            },
+            createdAt: new Date().toISOString(),
+          }
+
+          useEditor.setState((state) => ({
+            undoStack: [
+              ...state.undoStack,
+              { images: state.images, scans: state.scans, components: state.components },
+            ].slice(-50),
+            redoStack: [],
+            components: [...state.components, newComponent],
+          }))
+        }
+      }
     }
     // Door placement is now handled by DoorPlacementPreview component's onClick
     // Deselect in building mode if no placement action was taken
@@ -882,6 +954,13 @@ export default function Editor({ className }: { className?: string }) {
         setWindowPreviewPosition([x, y])
       } else {
         setWindowPreviewPosition(null)
+      }
+    } else if (controlMode === 'building' && activeTool === 'column') {
+      // Column mode: show preview at current grid position
+      if (y !== null) {
+        setColumnPreviewPosition([x, y])
+      } else {
+        setColumnPreviewPosition(null)
       }
     }
   }
@@ -1316,6 +1395,33 @@ export default function Editor({ className }: { className?: string }) {
                       setSelectedElements={setSelectedElements}
                       tileSize={tileSize}
                     />
+
+                    {/* Columns component fetches its own data based on floorId */}
+                    <Columns
+                      columnHeight={wallHeight}
+                      controlMode={controlMode}
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      isFullView={viewMode === 'full'}
+                      key={`column-${floor.id}-${isActiveFloor}`}
+                      movingCamera={movingCamera}
+                      selectedElements={selectedElements}
+                      setControlMode={setControlMode}
+                      setSelectedElements={setSelectedElements}
+                      tileSize={tileSize}
+                    />
+
+                    {/* Column placement preview */}
+                    {isActiveFloor &&
+                      controlMode === 'building' &&
+                      activeTool === 'column' &&
+                      columnPreviewPosition && (
+                        <ColumnShadowPreview
+                          columnHeight={wallHeight}
+                          position={columnPreviewPosition}
+                          tileSize={tileSize}
+                        />
+                      )}
 
                     {/* Doors component renders placed doors */}
                     <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
