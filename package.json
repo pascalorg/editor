@@ -25,6 +25,8 @@
     "@react-three/fiber": "^9.4.0",
     "@types/three": "^0.180.0",
     "@uiw/react-json-view": "^2.0.0-alpha.39",
+    "@vercel/analytics": "^1.5.0",
+    "@vercel/speed-insights": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "idb-keyval": "^6.2.2",
