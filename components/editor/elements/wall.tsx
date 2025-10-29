@@ -1,16 +1,16 @@
 'use client'
 
-import { forwardRef, memo, type Ref, useMemo } from 'react'
-import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
-
 import {
   handleElementClick,
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { forwardRef, memo, type Ref, useMemo } from 'react'
+import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -250,6 +250,34 @@ export const Walls = forwardRef(
       }),
     )
 
+    // Fetch doors and windows for this floor to create holes in walls
+    const doorComponents = useEditor(
+      useShallow((state) =>
+        state.components.filter((c) => c.type === 'door' && c.group === floorId),
+      ),
+    )
+    const windowComponents = useEditor(
+      useShallow((state) =>
+        state.components.filter((c) => c.type === 'window' && c.group === floorId),
+      ),
+    )
+
+    const wallOpenings = useMemo(() => {
+      const doors = doorComponents.map((c) => ({
+        type: 'door' as const,
+        position: c.type === 'door' ? c.data.position : ([0, 0] as [number, number]),
+        rotation: c.type === 'door' ? c.data.rotation : 0,
+      }))
+      const windows = windowComponents.map((c) => ({
+        type: 'window' as const,
+        position: c.type === 'window' ? c.data.position : ([0, 0] as [number, number]),
+        rotation: c.type === 'window' ? c.data.rotation : 0,
+      }))
+      return [...doors, ...windows]
+    }, [doorComponents, windowComponents])
+
+    const activeTool = useEditor((state) => state.activeTool)
+
     // --- Pre-calculate Wall Geometry ---
     const wallGeometries = useMemo(() => {
       // 1. Convert grid segments to "LiveWall" format (world coordinates)
@@ -396,7 +424,6 @@ export const Walls = forwardRef(
               so we don't need the <group> for rotation/positioning. */}
               <mesh
                 castShadow
-                geometry={wallData.geometry} // Use the new extruded geometry
                 onClick={(e) => {
                   if (!isActive || movingCamera || controlMode === 'delete') {
                     return
@@ -424,7 +451,7 @@ export const Walls = forwardRef(
                   }
                 }}
                 onPointerDown={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (!isActive || movingCamera || controlMode !== 'select') {
                     return
                   }
                   // Stop propagation to prevent camera controls from intercepting
@@ -436,19 +463,42 @@ export const Walls = forwardRef(
                   }
                 }}
                 onPointerEnter={(e) => {
-                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                  if (isActive && controlMode === 'select' && !movingCamera) {
                     e.stopPropagation()
                     onWallHover(i)
                   }
                 }}
                 onPointerLeave={(e) => {
-                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                  if (isActive && controlMode === 'select' && !movingCamera) {
                     e.stopPropagation()
                     onWallHover(null)
                   }
                 }}
                 receiveShadow
               >
+                <Geometry>
+                  <Base
+                    geometry={wallData.geometry} // Use the new extruded geometry
+                  />
+                  {/* Create holes for doors and windows */}
+                  {wallOpenings.map((opening, idx) => {
+                    const worldX = opening.position[0] * tileSize
+                    const worldZ = opening.position[1] * tileSize
+                    const scale: [number, number, number] =
+                      opening.type === 'door' ? [0.9, 4, 1] : [0.9, 1.2, 1] // Adjust scale based on type
+                    return (
+                      <Subtraction
+                        key={idx}
+                        position-x={worldX}
+                        position-y={opening.type === 'window' ? 1.1 : 0}
+                        position-z={worldZ}
+                        scale={scale}
+                      >
+                        <boxGeometry />
+                      </Subtraction>
+                    )
+                  })}
+                </Geometry>
                 <meshStandardMaterial
                   color={color}
                   emissive={emissive}
@@ -459,7 +509,6 @@ export const Walls = forwardRef(
                   transparent={transparent}
                 />
               </mesh>
-
               {/* Selection outline - 3D cylinders */}
               {isSelected && (
                 <>

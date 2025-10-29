@@ -1,4 +1,4 @@
-import { DoorOpen, Square, Triangle } from 'lucide-react'
+import { DoorOpen, RectangleVertical, Square, Triangle } from 'lucide-react'
 import type {
   Component,
   RoofComponentData,
@@ -10,11 +10,11 @@ import type {
 /**
  * Building Element Abstraction Layer
  *
- * Provides polymorphic operations for building elements (walls, roofs, doors, etc.)
+ * Provides polymorphic operations for building elements (walls, roofs, doors, windows, etc.)
  * to ensure consistent behavior across selection, deletion, and visibility.
  */
 
-export type BuildingElementType = 'wall' | 'roof' | 'door'
+export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window'
 
 export interface SelectedElement {
   id: string
@@ -23,7 +23,7 @@ export interface SelectedElement {
 
 export interface ElementDescriptor {
   type: BuildingElementType
-  icon: typeof Square | typeof Triangle | typeof DoorOpen
+  icon: typeof Square | typeof Triangle | typeof DoorOpen | typeof RectangleVertical
   labelSingular: string
   labelPlural: string
 }
@@ -49,6 +49,12 @@ export const ELEMENT_DESCRIPTORS: Record<BuildingElementType, ElementDescriptor>
     icon: DoorOpen,
     labelSingular: 'Door',
     labelPlural: 'Doors',
+  },
+  window: {
+    type: 'window',
+    icon: RectangleVertical,
+    labelSingular: 'Window',
+    labelPlural: 'Windows',
   },
 }
 
@@ -148,15 +154,25 @@ export function deleteElements(
     {} as Record<string, Set<string>>,
   )
 
-  // First, filter out door components entirely (doors are individual components, not segments)
+  // First, filter out door and window components entirely (they are individual components, not segments)
   const doorIdsToDelete = elementsByType['door'] || new Set()
+  const windowIdsToDelete = elementsByType['window'] || new Set()
   let filteredComponents = components.filter(
-    (comp) => !(comp.type === 'door' && comp.group === floorId && doorIdsToDelete.has(comp.id)),
+    (comp) =>
+      !(
+        (comp.type === 'door' && comp.group === floorId && doorIdsToDelete.has(comp.id)) ||
+        (comp.type === 'window' && comp.group === floorId && windowIdsToDelete.has(comp.id))
+      ),
   )
 
   // Then, handle walls and roofs which are segments within components
   return filteredComponents.map((comp) => {
-    if (comp.group === floorId && elementsByType[comp.type] && comp.type !== 'door') {
+    if (
+      comp.group === floorId &&
+      elementsByType[comp.type] &&
+      comp.type !== 'door' &&
+      comp.type !== 'window'
+    ) {
       const idsToDelete = elementsByType[comp.type]
       return {
         ...comp,

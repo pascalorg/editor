@@ -103,6 +103,12 @@ export type DoorComponentData = {
   width: number
 }
 
+export type WindowComponentData = {
+  position: [number, number]
+  rotation: number
+  width: number
+}
+
 export type Component =
   | {
       id: string
@@ -126,6 +132,14 @@ export type Component =
       label: string
       group: string | null
       data: DoorComponentData
+      createdAt: string
+    }
+  | {
+      id: string
+      type: 'window'
+      label: string
+      group: string | null
+      data: WindowComponentData
       createdAt: string
     }
 

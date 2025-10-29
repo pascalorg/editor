@@ -1,19 +1,6 @@
 'use client'
 
 import {
-  Box,
-  Building,
-  DoorOpen,
-  GripVertical,
-  Image,
-  Layers,
-  Plus,
-  Square,
-  Triangle,
-} from 'lucide-react'
-import { Reorder, useDragControls } from 'motion/react'
-import { useShallow } from 'zustand/react/shallow'
-import {
   TreeExpander,
   TreeIcon,
   TreeLabel,
@@ -24,7 +11,6 @@ import {
   TreeView,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ComponentGroup } from '@/hooks/use-editor'
@@ -37,6 +23,20 @@ import {
   toggleElementSelection,
 } from '@/lib/building-elements'
 import { cn } from '@/lib/utils'
+import {
+  Box,
+  Building,
+  DoorOpen,
+  GripVertical,
+  Image,
+  Layers,
+  Plus,
+  RectangleVertical,
+  Square,
+  Triangle,
+} from 'lucide-react'
+import { Reorder, useDragControls } from 'motion/react'
+import { useShallow } from 'zustand/react/shallow'
 
 interface LayersMenuProps {
   mounted: boolean
@@ -50,6 +50,7 @@ interface DraggableLevelItemProps {
   wallSegments: any[]
   roofSegments: any[]
   levelDoors: any[]
+  levelWindows: any[]
   levelImages: any[]
   levelScans: any[]
   selectedElements: any[]
@@ -81,6 +82,7 @@ function DraggableLevelItem({
   wallSegments,
   roofSegments,
   levelDoors,
+  levelWindows,
   levelImages,
   levelScans,
   selectedElements,
@@ -104,8 +106,13 @@ function DraggableLevelItem({
   controls,
 }: DraggableLevelItemProps) {
   const isLastLevel = levelIndex === levelsCount - 1
-  // Always show content when selected, even if empty
-  const hasContent = isSelected
+  const hasContent =
+    isSelected &&
+    (wallSegments.length > 0 ||
+      roofSegments.length > 0 ||
+      levelDoors.length > 0 ||
+      levelWindows.length > 0 ||
+      levelImages.length > 0)
 
   return (
     <TreeNode isLast={isLastLevel} nodeId={level.id}>
@@ -139,26 +146,43 @@ function DraggableLevelItem({
           <TreeNodeTrigger>
             <TreeExpander
               hasChildren={
-                wallSegments.length > 0 || roofSegments.length > 0 || levelDoors.length > 0
+                wallSegments.length > 0 ||
+                roofSegments.length > 0 ||
+                levelDoors.length > 0 ||
+                levelWindows.length > 0
               }
             />
             <TreeIcon
               hasChildren={
-                wallSegments.length > 0 || roofSegments.length > 0 || levelDoors.length > 0
+                wallSegments.length > 0 ||
+                roofSegments.length > 0 ||
+                levelDoors.length > 0 ||
+                levelWindows.length > 0
               }
               icon={<Building className="h-4 w-4 text-green-500" />}
             />
             <TreeLabel>
-              3D Objects ({wallSegments.length + roofSegments.length + levelDoors.length})
+              3D Objects (
+              {wallSegments.length + roofSegments.length + levelDoors.length + levelWindows.length})
             </TreeLabel>
           </TreeNodeTrigger>
 
-          <TreeNodeContent hasChildren={true}>
+          <TreeNodeContent
+            hasChildren={
+              wallSegments.length > 0 ||
+              roofSegments.length > 0 ||
+              levelDoors.length > 0 ||
+              levelWindows.length > 0
+            }
+          >
             {/* Walls */}
             {wallSegments.map((segment, index, walls) => (
               <TreeNode
                 isLast={
-                  index === walls.length - 1 && roofSegments.length === 0 && levelDoors.length === 0
+                  index === walls.length - 1 &&
+                  roofSegments.length === 0 &&
+                  levelDoors.length === 0 &&
+                  levelWindows.length === 0
                 }
                 key={segment.id}
                 level={2}
@@ -192,7 +216,9 @@ function DraggableLevelItem({
             {/* Roofs */}
             {roofSegments.map((segment, index, roofs) => (
               <TreeNode
-                isLast={index === roofs.length - 1 && levelDoors.length === 0}
+                isLast={
+                  index === roofs.length - 1 && levelDoors.length === 0 && levelWindows.length === 0
+                }
                 key={segment.id}
                 level={2}
                 nodeId={segment.id}
@@ -225,7 +251,7 @@ function DraggableLevelItem({
             {/* Doors */}
             {levelDoors.map((door, index, doors) => (
               <TreeNode
-                isLast={index === doors.length - 1}
+                isLast={index === doors.length - 1 && levelWindows.length === 0}
                 key={door.id}
                 level={2}
                 nodeId={door.id}
@@ -242,6 +268,30 @@ function DraggableLevelItem({
                   <TreeExpander />
                   <TreeIcon icon={<DoorOpen className="h-4 w-4 text-orange-600" />} />
                   <TreeLabel>Door {index + 1}</TreeLabel>
+                </TreeNodeTrigger>
+              </TreeNode>
+            ))}
+
+            {/* Windows */}
+            {levelWindows.map((window, index, windows) => (
+              <TreeNode
+                isLast={index === windows.length - 1}
+                key={window.id}
+                level={2}
+                nodeId={window.id}
+              >
+                <TreeNodeTrigger
+                  className={cn(selectedElements.find((el) => el.id === window.id) && 'bg-accent')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Select window for deletion
+                    setSelectedElements([{ id: window.id, type: 'window' }])
+                    setControlMode('building')
+                  }}
+                >
+                  <TreeExpander />
+                  <TreeIcon icon={<RectangleVertical className="h-4 w-4 text-blue-500" />} />
+                  <TreeLabel>Window {index + 1}</TreeLabel>
                 </TreeNodeTrigger>
               </TreeNode>
             ))}
@@ -672,6 +722,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   const levelDoors = isSelected
                     ? components.filter((c) => c.type === 'door' && c.group === level.id)
                     : []
+                  const levelWindows = isSelected
+                    ? components.filter((c) => c.type === 'window' && c.group === level.id)
+                    : []
                   const levelImages = images.filter((img) => img.level === (level.level || 0))
 
                   const levelScans = scans.filter((scan) => scan.level === (level.level || 0))
@@ -691,6 +744,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       levelIndex={levelIndex}
                       levelScans={levelScans}
                       levelsCount={floorGroups.length}
+                      levelWindows={levelWindows}
                       roofSegments={levelRoofs}
                       selectedElements={selectedElements}
                       selectedImageIds={selectedImageIds}

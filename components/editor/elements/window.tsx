@@ -1,6 +1,6 @@
 'use client'
 
-import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
+import type { Component, WallSegment, WindowComponentData } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { Gltf } from '@react-three/drei'
@@ -32,41 +32,41 @@ function createEdgeCylinder(start: number[], end: number[]) {
   return { geometry, midpoint, axis, angle }
 }
 
-type DoorPlacementPreviewProps = {
+type WindowPlacementPreviewProps = {
   mouseGridPosition: [number, number] | null // Mouse position in grid coordinates
   wallSegments: WallSegment[]
-  existingDoors: Array<{ position: [number, number]; rotation: number }>
   existingWindows: Array<{ position: [number, number]; rotation: number }>
+  existingDoors: Array<{ position: [number, number]; rotation: number }>
   tileSize: number
   wallHeight: number
   floorId: string
-  onPlaced?: () => void // Callback when door is placed
+  onPlaced?: () => void // Callback when window is placed
 }
 
-export const DoorPlacementPreview = memo(
+export const WindowPlacementPreview = memo(
   ({
     mouseGridPosition,
     wallSegments,
-    existingDoors,
     existingWindows,
+    existingDoors,
     tileSize,
     wallHeight,
     floorId,
     onPlaced,
-  }: DoorPlacementPreviewProps) => {
+  }: WindowPlacementPreviewProps) => {
     // Track the last valid rotation to maintain it when preview becomes invalid
     const lastValidRotationRef = useRef<number>(0)
 
     // Calculate placement data based on mouse position and nearby walls
     const placement = useMemo(() => {
-      // Combine existing doors and windows to check for conflicts with both
-      const existingElements = [...existingDoors, ...existingWindows]
+      // Combine existing windows and doors to check for conflicts with both
+      const existingElements = [...existingWindows, ...existingDoors]
 
       const result = validateWallElementPlacement({
         mouseGridPosition,
         wallSegments,
         existingElements,
-        elementWidth: 2, // Doors are 2 cells wide
+        elementWidth: 2, // Windows are 2 cells wide
       })
 
       if (!result) return null
@@ -83,7 +83,7 @@ export const DoorPlacementPreview = memo(
         rotation: result.nearestWall ? result.rotation : lastValidRotationRef.current,
         nearestWall: result.nearestWall,
       }
-    }, [mouseGridPosition, wallSegments, existingDoors, existingWindows])
+    }, [mouseGridPosition, wallSegments, existingWindows, existingDoors])
 
     // Create rectangle geometry (2 cells along wall, 2 cells perpendicular)
     // Must be before early return to avoid conditional hooks
@@ -95,7 +95,7 @@ export const DoorPlacementPreview = memo(
       return geometry
     }, [tileSize])
 
-    // Handle click to place door
+    // Handle click to place window
     const addComponent = useEditor((state) => state.addComponent)
 
     const handleClick = useCallback(() => {
@@ -103,23 +103,23 @@ export const DoorPlacementPreview = memo(
         return
       }
 
-      // Create door component
-      const doorId = `door_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const doorComponent: Component = {
-        id: doorId,
-        type: 'door',
+      // Create window component
+      const windowId = `window_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const windowComponent: Component = {
+        id: windowId,
+        type: 'window',
         group: floorId,
-        label: 'Door',
+        label: 'Window',
         createdAt: new Date().toISOString(),
         data: {
           position: placement.gridPosition,
           rotation: placement.rotation,
           width: 2,
-        } as DoorComponentData,
+        } as WindowComponentData,
       }
 
-      // Add door to components using store method
-      addComponent(doorComponent)
+      // Add window to components using store method
+      addComponent(windowComponent)
 
       // Notify parent component
       onPlaced?.()
@@ -153,34 +153,32 @@ export const DoorPlacementPreview = memo(
           />
         </mesh>
 
-        <group scale={[2, 2, 5]}>
-          <Gltf src="/models/Door.glb" />
-        </group>
+        <Gltf position-y={0.5} scale={[1, 1, 5]} src="/models/Window.glb" />
       </group>
     )
   },
 )
 
-DoorPlacementPreview.displayName = 'DoorPlacementPreview'
+WindowPlacementPreview.displayName = 'WindowPlacementPreview'
 
-// Single door component
-type DoorProps = {
-  doorId: string
+// Single window component
+type WindowProps = {
+  windowId: string
   position: [number, number]
   rotation: number
   tileSize: number
   wallHeight: number
 }
 
-const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorProps) => {
+const Window = memo(({ windowId, position, rotation, tileSize, wallHeight }: WindowProps) => {
   const worldX = position[0] * tileSize
   const worldZ = position[1] * tileSize
   const selectedElements = useEditor((state) => state.selectedElements)
 
-  // Check if this door is selected
-  const isSelected = selectedElements.some((el) => el.id === doorId && el.type === 'door')
+  // Check if this window is selected
+  const isSelected = selectedElements.some((el) => el.id === windowId && el.type === 'window')
 
-  // Calculate corners for edge rendering (door occupies 2x2 cells)
+  // Calculate corners for edge rendering (window occupies 2x2 cells)
   const halfWidth = tileSize
   const halfDepth = tileSize
 
@@ -200,11 +198,9 @@ const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorPro
 
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
-      <group position={[0, 0, 0]} scale={[2, 2, 2]}>
-        <Gltf src="/models/Door.glb" />
-      </group>
+      <Gltf position-y={0.5} scale={[1, 1, 2]} src="/models/Window.glb" />
 
-      {/* Selection outline - 3D cylinders (same as walls) */}
+      {/* Selection outline - 3D cylinders (same as walls and doors) */}
       {isSelected && (
         <>
           {(() => {
@@ -253,38 +249,40 @@ const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorPro
   )
 })
 
-Door.displayName = 'Door'
+Window.displayName = 'Window'
 
-// Component to render all placed doors for a floor
-type DoorsProps = {
+// Component to render all placed windows for a floor
+type WindowsProps = {
   floorId: string
   tileSize: number
   wallHeight: number
 }
 
-export const Doors = memo(({ floorId, tileSize, wallHeight }: DoorsProps) => {
-  // Fetch door components for this floor from the store
-  const doorComponents = useEditor(
-    useShallow((state) => state.components.filter((c) => c.type === 'door' && c.group === floorId)),
+export const Windows = memo(({ floorId, tileSize, wallHeight }: WindowsProps) => {
+  // Fetch window components for this floor from the store
+  const windowComponents = useEditor(
+    useShallow((state) =>
+      state.components.filter((c) => c.type === 'window' && c.group === floorId),
+    ),
   )
 
-  if (doorComponents.length === 0) return null
+  if (windowComponents.length === 0) return null
 
   return (
     <group>
-      {doorComponents.map((component) => {
-        if (component.type !== 'door') return null
+      {windowComponents.map((component) => {
+        if (component.type !== 'window') return null
 
         const { position, rotation } = component.data
 
         return (
-          <Door
-            doorId={component.id}
+          <Window
             key={component.id}
             position={position}
             rotation={rotation}
             tileSize={tileSize}
             wallHeight={wallHeight}
+            windowId={component.id}
           />
         )
       })}
@@ -292,4 +290,4 @@ export const Doors = memo(({ floorId, tileSize, wallHeight }: DoorsProps) => {
   )
 })
 
-Doors.displayName = 'Doors'
+Windows.displayName = 'Windows'
