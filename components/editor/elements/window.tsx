@@ -175,15 +175,6 @@ const Window = memo(({ windowId, position, rotation, tileSize, wallHeight }: Win
   const worldZ = position[1] * tileSize
   const selectedElements = useEditor((state) => state.selectedElements)
 
-  console.log('Window component rendering:', {
-    windowId,
-    position,
-    rotation,
-    worldX,
-    worldZ,
-    tileSize,
-  })
-
   // Check if this window is selected
   const isSelected = selectedElements.some((el) => el.id === windowId && el.type === 'window')
 
@@ -204,10 +195,6 @@ const Window = memo(({ windowId, position, rotation, tileSize, wallHeight }: Win
     [halfWidth, wallHeight, halfDepth],
     [-halfWidth, wallHeight, halfDepth],
   ]
-  console.log('Window THREE.js group will render at:', {
-    position: [worldX, 0, worldZ],
-    rotation: [0, rotation, 0],
-  })
 
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
@@ -279,17 +266,6 @@ export const Windows = memo(({ floorId, tileSize, wallHeight }: WindowsProps) =>
     ),
   )
 
-  // DEBUG: Log what we're rendering
-  console.log('Windows render:', {
-    floorId,
-    count: windowComponents.length,
-    components: windowComponents.map((c) => ({
-      id: c.id,
-      type: c.type,
-      data: c.type === 'window' ? c.data : null,
-    })),
-  })
-
   if (windowComponents.length === 0) return null
 
   return (
@@ -298,8 +274,6 @@ export const Windows = memo(({ floorId, tileSize, wallHeight }: WindowsProps) =>
         if (component.type !== 'window') return null
 
         const { position, rotation } = component.data
-
-        console.log('Rendering individual window:', { id: component.id, position, rotation })
 
         return (
           <Window

@@ -197,36 +197,46 @@ export function validateWallElementPlacement({
       centeredPosition = [(gridPoint1[0] + gridPoint2[0]) / 2, (gridPoint1[1] + gridPoint2[1]) / 2]
 
       if (canPlace) {
-        // Check if there's already an element occupying either of our two grid points
+        // Check if there's already an element occupying any of our three grid points
+        // Each element occupies 3 grid points: 2 endpoints + 1 center
         for (const existingElement of existingElements) {
-          // Calculate the two ENDPOINT grid points occupied by the existing element
-          // The element is centered at position and extends ±1 cell in wall direction
+          // Calculate the three grid points occupied by the existing element
           // rotation = -wallAngle, so wallAngle = -rotation
           // wallDir = [cos(wallAngle), sin(wallAngle)] = [cos(-rotation), sin(-rotation)]
           const existingWallDirX = Math.cos(-existingElement.rotation)
           const existingWallDirZ = Math.sin(-existingElement.rotation)
 
-          const existingGridPoint1: [number, number] = [
-            existingElement.position[0] + Math.round(existingWallDirX),
-            existingElement.position[1] + Math.round(existingWallDirZ),
+          const existingCenter = existingElement.position
+          const existingEndpoint1: [number, number] = [
+            existingCenter[0] + Math.round(existingWallDirX),
+            existingCenter[1] + Math.round(existingWallDirZ),
           ]
-          const existingGridPoint2: [number, number] = [
-            existingElement.position[0] - Math.round(existingWallDirX),
-            existingElement.position[1] - Math.round(existingWallDirZ),
+          const existingEndpoint2: [number, number] = [
+            existingCenter[0] - Math.round(existingWallDirX),
+            existingCenter[1] - Math.round(existingWallDirZ),
           ]
 
-          // Check if any of the existing element's grid points overlap with our grid points
-          const overlap =
-            (Math.abs(existingGridPoint1[0] - gridPoint1[0]) < 0.01 &&
-              Math.abs(existingGridPoint1[1] - gridPoint1[1]) < 0.01) ||
-            (Math.abs(existingGridPoint1[0] - gridPoint2[0]) < 0.01 &&
-              Math.abs(existingGridPoint1[1] - gridPoint2[1]) < 0.01) ||
-            (Math.abs(existingGridPoint2[0] - gridPoint1[0]) < 0.01 &&
-              Math.abs(existingGridPoint2[1] - gridPoint1[1]) < 0.01) ||
-            (Math.abs(existingGridPoint2[0] - gridPoint2[0]) < 0.01 &&
-              Math.abs(existingGridPoint2[1] - gridPoint2[1]) < 0.01)
+          // Our new element occupies: gridPoint1, gridPoint2 (endpoints), and snappedGridPoint (center)
+          const newPoints = [gridPoint1, gridPoint2, snappedGridPoint]
+          const existingPoints = [existingEndpoint1, existingEndpoint2, existingCenter]
 
-          if (overlap) {
+          // Count how many points overlap
+          // If 1 point overlaps: Adjacent placement (OK - they share an endpoint)
+          // If 2+ points overlap: Actual collision (NOT OK)
+          let overlapCount = 0
+
+          for (const newPoint of newPoints) {
+            for (const existingPoint of existingPoints) {
+              if (
+                Math.abs(newPoint[0] - existingPoint[0]) < 0.01 &&
+                Math.abs(newPoint[1] - existingPoint[1]) < 0.01
+              ) {
+                overlapCount++
+              }
+            }
+          }
+
+          if (overlapCount >= 2) {
             canPlace = false
             break
           }

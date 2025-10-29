@@ -1342,6 +1342,22 @@ export default function Editor({ className }: { className?: string }) {
                               rotation: number
                             }>
                           })()}
+                          existingWindows={(() => {
+                            const windowComponents = useEditor
+                              .getState()
+                              .components.filter((c) => c.type === 'window' && c.group === floor.id)
+                            return windowComponents
+                              .map((c) => {
+                                if (c.type === 'window') {
+                                  return { position: c.data.position, rotation: c.data.rotation }
+                                }
+                                return null
+                              })
+                              .filter(Boolean) as Array<{
+                              position: [number, number]
+                              rotation: number
+                            }>
+                          })()}
                           floorId={floor.id}
                           mouseGridPosition={doorPreviewPosition}
                           onPlaced={() => setDoorPreviewPosition(null)}
