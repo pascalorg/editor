@@ -173,7 +173,15 @@ type WindowProps = {
 }
 
 const Window = memo(
-  ({ windowId, position, rotation, tileSize, wallHeight, isActive, isFullView = false }: WindowProps) => {
+  ({
+    windowId,
+    position,
+    rotation,
+    tileSize,
+    wallHeight,
+    isActive,
+    isFullView = false,
+  }: WindowProps) => {
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
@@ -209,10 +217,10 @@ const Window = memo(
 
       // Apply immediately
       applyOpacity()
-      
+
       // Also apply after a short delay to catch late-loading GLTF materials
       const timeoutId = setTimeout(applyOpacity, 50)
-      
+
       return () => clearTimeout(timeoutId)
     }, [opacity])
 
@@ -220,19 +228,19 @@ const Window = memo(
     const halfWidth = tileSize
     const halfDepth = tileSize
 
-  const bottomCorners = [
-    [-halfWidth, 0, -halfDepth],
-    [halfWidth, 0, -halfDepth],
-    [halfWidth, 0, halfDepth],
-    [-halfWidth, 0, halfDepth],
-  ]
+    const bottomCorners = [
+      [-halfWidth, 0, -halfDepth],
+      [halfWidth, 0, -halfDepth],
+      [halfWidth, 0, halfDepth],
+      [-halfWidth, 0, halfDepth],
+    ]
 
-  const topCorners = [
-    [-halfWidth, wallHeight, -halfDepth],
-    [halfWidth, wallHeight, -halfDepth],
-    [halfWidth, wallHeight, halfDepth],
-    [-halfWidth, wallHeight, halfDepth],
-  ]
+    const topCorners = [
+      [-halfWidth, wallHeight, -halfDepth],
+      [halfWidth, wallHeight, -halfDepth],
+      [halfWidth, wallHeight, halfDepth],
+      [-halfWidth, wallHeight, halfDepth],
+    ]
 
     return (
       <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
