@@ -80,6 +80,7 @@ export type Tool =
   | 'door'
   | 'window'
   | 'roof'
+  | 'column'
   | 'dummy1'
   | 'dummy2'
 
@@ -107,6 +108,15 @@ export type WindowComponentData = {
   position: [number, number]
   rotation: number
   width: number
+}
+
+export type ColumnComponentData = {
+  columns: Array<{
+    id: string
+    position: [number, number]
+    visible?: boolean
+    opacity?: number // 0-100, defaults to 100 if undefined
+  }>
 }
 
 export type Component =
@@ -140,6 +150,14 @@ export type Component =
       label: string
       group: string | null
       data: WindowComponentData
+      createdAt: string
+    }
+  | {
+      id: string
+      type: 'column'
+      label: string
+      group: string | null
+      data: ColumnComponentData
       createdAt: string
     }
 
@@ -224,8 +242,6 @@ type StoreState = {
   getSelectedElementsSet: () => Set<SelectedElement>
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
-  wallSegments: () => WallSegment[]
-  roofSegments: () => RoofSegment[]
   handleExport: () => void
   handleUpload: (file: File, level: number) => void
   handleScanUpload: (file: File, level: number) => void
@@ -240,11 +256,15 @@ type StoreState = {
   undo: () => void
   redo: () => void
   toggleFloorVisibility: (floorId: string) => void
-  toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof') => void
+  toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof' | 'column') => void
   toggleImageVisibility: (imageId: string) => void
   toggleScanVisibility: (scanId: string) => void
   setFloorOpacity: (floorId: string, opacity: number) => void
-  setBuildingElementOpacity: (elementId: string, type: 'wall' | 'roof', opacity: number) => void
+  setBuildingElementOpacity: (
+    elementId: string,
+    type: 'wall' | 'roof' | 'column',
+    opacity: number,
+  ) => void
   setImageOpacity: (imageId: string, opacity: number) => void
   setScanOpacity: (scanId: string, opacity: number) => void
 }
@@ -651,28 +671,6 @@ const useStore = create<StoreState>()(
       getSelectedElementsSet: () => new Set(get().selectedElements),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
       getSelectedScanIdsSet: () => new Set(get().selectedScanIds),
-      wallSegments: () => {
-        const state = get()
-        if (!state.selectedFloorId) return []
-
-        const component = state.components.find(
-          (c) => c.type === 'wall' && c.group === state.selectedFloorId,
-        )
-        if (!component) return []
-
-        return (component.data as WallComponentData).segments as WallSegment[]
-      },
-      roofSegments: () => {
-        const state = get()
-        if (!state.selectedFloorId) return []
-
-        const component = state.components.find(
-          (c) => c.type === 'roof' && c.group === state.selectedFloorId,
-        )
-        if (!component) return []
-
-        return (component.data as RoofComponentData).segments as RoofSegment[]
-      },
       handleExport: () => {
         const ref = get().wallsGroupRef
         console.log('Export called, ref:', ref)
@@ -973,23 +971,27 @@ const useStore = create<StoreState>()(
           const clampedOpacity = Math.max(0, Math.min(100, opacity))
 
           const updatedComponents = state.components.map((comp): Component => {
-            if (comp.type === type && comp.group === state.selectedFloorId) {
-              if (type === 'wall' && comp.type === 'wall') {
-                const data = comp.data as WallComponentData
-                const segments = data.segments.map((seg) =>
-                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
-                )
-                return { ...comp, data: { segments } }
-              }
-              if (type === 'roof' && comp.type === 'roof') {
-                const data = comp.data as RoofComponentData
-                const segments = data.segments.map((seg) =>
-                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
-                )
-                return { ...comp, data: { segments } }
-              }
+            if (comp.group !== state.selectedFloorId || comp.type !== type) {
+              return comp
             }
-            return comp
+
+            const updateData = (data: any) => {
+              const itemsKey =
+                type === 'column'
+                  ? 'columns'
+                  : type === 'wall' || type === 'roof'
+                    ? 'segments'
+                    : null
+              if (!(itemsKey && Array.isArray(data[itemsKey]))) {
+                return data
+              }
+              const updatedItems = data[itemsKey].map((item: any) =>
+                item.id === elementId ? { ...item, opacity: clampedOpacity } : item,
+              )
+              return { ...data, [itemsKey]: updatedItems }
+            }
+
+            return { ...comp, data: updateData(comp.data) }
           })
 
           return { components: updatedComponents }
@@ -1171,8 +1173,6 @@ export const useEditorContext = () => {
     setIsManipulatingImage: store.setIsManipulatingImage,
     isManipulatingScan: store.isManipulatingScan,
     setIsManipulatingScan: store.setIsManipulatingScan,
-    wallSegments: store.wallSegments(),
-    roofSegments: store.roofSegments(),
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,
     handleScanUpload: store.handleScanUpload,
