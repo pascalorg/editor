@@ -2,15 +2,15 @@
 
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
-import { forwardRef, memo, type Ref, useMemo } from 'react'
-import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-
 import {
   handleElementClick,
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { forwardRef, memo, type Ref, useMemo } from 'react'
+import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -398,7 +398,6 @@ export const Walls = forwardRef(
               so we don't need the <group> for rotation/positioning. */}
               <mesh
                 castShadow
-                geometry={wallData.geometry} // Use the new extruded geometry
                 onClick={(e) => {
                   if (!isActive || movingCamera || controlMode === 'delete') {
                     return
@@ -451,6 +450,14 @@ export const Walls = forwardRef(
                 }}
                 receiveShadow
               >
+                <Geometry>
+                  <Base
+                    geometry={wallData.geometry} // Use the new extruded geometry
+                  />
+                  <Subtraction position-x={18} position-y={0.5} position-z={10} scale={3}>
+                    <boxGeometry />
+                  </Subtraction>
+                </Geometry>
                 <meshStandardMaterial
                   color={color}
                   emissive={emissive}
@@ -461,7 +468,6 @@ export const Walls = forwardRef(
                   transparent={transparent}
                 />
               </mesh>
-
               {/* Selection outline - 3D cylinders */}
               {isSelected && (
                 <>
