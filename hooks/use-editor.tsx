@@ -1,15 +1,30 @@
 'use client'
 
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
 import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import {
   deleteElements,
   type SelectedElement,
   toggleElementVisibility,
 } from '@/lib/building-elements'
+
+// IndexedDB storage adapter for Zustand persist middleware
+const indexedDBStorage: StateStorage = {
+  getItem: async (name: string) => {
+    const value = await idbGet<string>(name)
+    return value ?? null
+  },
+  setItem: async (name: string, value: string) => {
+    await idbSet(name, value)
+  },
+  removeItem: async (name: string) => {
+    await idbDel(name)
+  },
+}
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -926,15 +941,15 @@ const useStore = create<StoreState>()(
     }),
     {
       name: 'editor-storage',
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         components: state.components,
         groups: state.groups,
         images: state.images,
-        // Exclude scans from localStorage - they're too large and should be stored elsewhere
-        // scans: state.scans,
+        scans: state.scans, // Now persisted in IndexedDB which can handle large data
         selectedElements: state.selectedElements,
         selectedImageIds: state.selectedImageIds,
-        // selectedScanIds: state.selectedScanIds, // Don't persist scan selection
+        selectedScanIds: state.selectedScanIds, // Now persisting scan selection
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -950,10 +965,26 @@ const useStore = create<StoreState>()(
             }))
           }
 
-          // Initialize scans (not persisted due to size)
-          // Scans need to be re-uploaded after page refresh
-          state.scans = []
-          state.selectedScanIds = []
+          // Migrate: Add missing position, rotation, scale, level, yOffset, visible to existing scans
+          if (state.scans && state.scans.length > 0) {
+            state.scans = state.scans.map((scan: any) => ({
+              ...scan,
+              position: scan.position ?? [0, 0],
+              rotation: scan.rotation ?? 0,
+              scale: scan.scale ?? 1,
+              level: scan.level ?? 0, // Default to base level
+              yOffset: scan.yOffset ?? 0, // Default to no offset
+              visible: scan.visible ?? true, // Default to visible
+            }))
+          }
+
+          // Initialize scans and selectedScanIds if not present
+          if (!state.scans) {
+            state.scans = []
+          }
+          if (!state.selectedScanIds) {
+            state.selectedScanIds = []
+          }
 
           // Ensure components and groups are initialized
           if (!state.components) {
