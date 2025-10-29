@@ -250,6 +250,32 @@ export const Walls = forwardRef(
       }),
     )
 
+    // Fetch doors and windows for this floor to create holes in walls
+    const doorComponents = useEditor(
+      useShallow((state) =>
+        state.components.filter((c) => c.type === 'door' && c.group === floorId),
+      ),
+    )
+    const windowComponents = useEditor(
+      useShallow((state) =>
+        state.components.filter((c) => c.type === 'window' && c.group === floorId),
+      ),
+    )
+
+    const wallOpenings = useMemo(() => {
+      const doors = doorComponents.map((c) => ({
+        type: 'door' as const,
+        position: c.type === 'door' ? c.data.position : ([0, 0] as [number, number]),
+        rotation: c.type === 'door' ? c.data.rotation : 0,
+      }))
+      const windows = windowComponents.map((c) => ({
+        type: 'window' as const,
+        position: c.type === 'window' ? c.data.position : ([0, 0] as [number, number]),
+        rotation: c.type === 'window' ? c.data.rotation : 0,
+      }))
+      return [...doors, ...windows]
+    }, [doorComponents, windowComponents])
+
     const activeTool = useEditor((state) => state.activeTool)
 
     // --- Pre-calculate Wall Geometry ---
@@ -454,9 +480,24 @@ export const Walls = forwardRef(
                   <Base
                     geometry={wallData.geometry} // Use the new extruded geometry
                   />
-                  <Subtraction position-x={18} position-y={0.5} position-z={10} scale={3}>
-                    <boxGeometry />
-                  </Subtraction>
+                  {/* Create holes for doors and windows */}
+                  {wallOpenings.map((opening, idx) => {
+                    const worldX = opening.position[0] * tileSize
+                    const worldZ = opening.position[1] * tileSize
+                    const scale: [number, number, number] =
+                      opening.type === 'door' ? [0.9, 4, 1] : [0.9, 1.2, 1] // Adjust scale based on type
+                    return (
+                      <Subtraction
+                        key={idx}
+                        position-x={worldX}
+                        position-y={opening.type === 'window' ? 1.1 : 0}
+                        position-z={worldZ}
+                        scale={scale}
+                      >
+                        <boxGeometry />
+                      </Subtraction>
+                    )
+                  })}
                 </Geometry>
                 <meshStandardMaterial
                   color={color}

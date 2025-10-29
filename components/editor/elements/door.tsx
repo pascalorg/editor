@@ -1,12 +1,12 @@
 'use client'
 
+import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { Gltf } from '@react-three/drei'
 import { memo, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
-import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -153,8 +153,7 @@ export const DoorPlacementPreview = memo(
           />
         </mesh>
 
-        {/* Door model - offset to center on 2-cell width (X-axis only) */}
-        <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
+        <group scale={[2, 2, 5]}>
           <Gltf src="/models/Door.glb" />
         </group>
       </group>
@@ -201,7 +200,7 @@ const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorPro
 
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
-      <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
+      <group position={[0, 0, 0]} scale={[2, 2, 2]}>
         <Gltf src="/models/Door.glb" />
       </group>
 
@@ -224,7 +223,12 @@ const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorPro
             }
 
             return edges.map((edge, idx) => {
-              const { geometry: cylGeom, midpoint, axis, angle } = createEdgeCylinder(edge[0], edge[1])
+              const {
+                geometry: cylGeom,
+                midpoint,
+                axis,
+                angle,
+              } = createEdgeCylinder(edge[0], edge[1])
               return (
                 <mesh
                   geometry={cylGeom}

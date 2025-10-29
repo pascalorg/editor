@@ -198,7 +198,7 @@ const Window = memo(({ windowId, position, rotation, tileSize, wallHeight }: Win
 
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
-      <Gltf position-y={0.5} scale={[1, 1, 5]} src="/models/Window.glb" />
+      <Gltf position-y={0.5} scale={[1, 1, 2]} src="/models/Window.glb" />
 
       {/* Selection outline - 3D cylinders (same as walls and doors) */}
       {isSelected && (
