@@ -7,6 +7,30 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 
+const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
+
+// Helper function to create a cylinder between two points
+function createEdgeCylinder(start: number[], end: number[]) {
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const dz = end[2] - start[2]
+  const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+  const geometry = new THREE.CylinderGeometry(OUTLINE_RADIUS, OUTLINE_RADIUS, length, 8)
+  const midpoint = new THREE.Vector3(
+    (start[0] + end[0]) / 2,
+    (start[1] + end[1]) / 2,
+    (start[2] + end[2]) / 2,
+  )
+
+  // Calculate rotation to align cylinder with edge
+  const direction = new THREE.Vector3(dx, dy, dz).normalize()
+  const axis = new THREE.Vector3(0, 1, 0).cross(direction).normalize()
+  const angle = Math.acos(new THREE.Vector3(0, 1, 0).dot(direction))
+
+  return { geometry, midpoint, axis, angle }
+}
+
 // Helper function to find the closest point on a line segment
 function closestPointOnSegment(
   point: [number, number],
@@ -275,18 +299,69 @@ const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorPro
   // Check if this door is selected
   const isSelected = selectedElements.some((el) => el.id === doorId && el.type === 'door')
 
+  // Calculate corners for edge rendering (door occupies 2x2 cells)
+  const halfWidth = tileSize
+  const halfDepth = tileSize
+
+  const bottomCorners = [
+    [-halfWidth, 0, -halfDepth],
+    [halfWidth, 0, -halfDepth],
+    [halfWidth, 0, halfDepth],
+    [-halfWidth, 0, halfDepth],
+  ]
+
+  const topCorners = [
+    [-halfWidth, wallHeight, -halfDepth],
+    [halfWidth, wallHeight, -halfDepth],
+    [halfWidth, wallHeight, halfDepth],
+    [-halfWidth, wallHeight, halfDepth],
+  ]
+
   return (
     <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
       <group position={[0.42, 0, 0]} scale={[0.5, 0.5, 1.2]}>
         <Gltf src="/models/Door.glb" />
       </group>
 
-      {/* Box helper when selected - shows door bounds */}
+      {/* Selection outline - 3D cylinders (same as walls) */}
       {isSelected && (
-        <mesh position={[0, wallHeight / 2, 0]}>
-          <boxGeometry args={[tileSize * 2, wallHeight, tileSize * 2]} />
-          <meshBasicMaterial color="#44ff44" opacity={0.4} transparent wireframe />
-        </mesh>
+        <>
+          {(() => {
+            const edges = []
+            // Bottom rectangle edges
+            for (let j = 0; j < bottomCorners.length; j++) {
+              edges.push([bottomCorners[j], bottomCorners[(j + 1) % bottomCorners.length]])
+            }
+            // Top rectangle edges
+            for (let j = 0; j < topCorners.length; j++) {
+              edges.push([topCorners[j], topCorners[(j + 1) % topCorners.length]])
+            }
+            // Vertical edges connecting bottom to top
+            for (let j = 0; j < bottomCorners.length; j++) {
+              edges.push([bottomCorners[j], topCorners[j]])
+            }
+
+            return edges.map((edge, idx) => {
+              const { geometry: cylGeom, midpoint, axis, angle } = createEdgeCylinder(edge[0], edge[1])
+              return (
+                <mesh
+                  geometry={cylGeom}
+                  key={idx}
+                  position={midpoint}
+                  quaternion={new THREE.Quaternion().setFromAxisAngle(axis, angle)}
+                  renderOrder={999}
+                >
+                  <meshStandardMaterial
+                    color="#ffffff"
+                    depthTest={false}
+                    emissive="#ffffff"
+                    emissiveIntensity={0.5}
+                  />
+                </mesh>
+              )
+            })
+          })()}
+        </>
       )}
     </group>
   )

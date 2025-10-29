@@ -1,10 +1,10 @@
 'use client'
 
+import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { forwardRef, memo, type Ref, useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import type { WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
 
 import {
   handleElementClick,
@@ -250,6 +250,8 @@ export const Walls = forwardRef(
       }),
     )
 
+    const activeTool = useEditor((state) => state.activeTool)
+
     // --- Pre-calculate Wall Geometry ---
     const wallGeometries = useMemo(() => {
       // 1. Convert grid segments to "LiveWall" format (world coordinates)
@@ -424,7 +426,7 @@ export const Walls = forwardRef(
                   }
                 }}
                 onPointerDown={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (!isActive || movingCamera || controlMode !== 'select') {
                     return
                   }
                   // Stop propagation to prevent camera controls from intercepting
@@ -436,13 +438,13 @@ export const Walls = forwardRef(
                   }
                 }}
                 onPointerEnter={(e) => {
-                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                  if (isActive && controlMode === 'select' && !movingCamera) {
                     e.stopPropagation()
                     onWallHover(i)
                   }
                 }}
                 onPointerLeave={(e) => {
-                  if (isActive && controlMode !== 'delete' && !movingCamera) {
+                  if (isActive && controlMode === 'select' && !movingCamera) {
                     e.stopPropagation()
                     onWallHover(null)
                   }
