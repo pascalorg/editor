@@ -65,6 +65,38 @@ function closestPointOnSegment(
   return { point: [closestX, closestY], distance }
 }
 
+// Helper function to check if a grid point lies on a wall segment
+function isPointOnSegment(
+  point: [number, number],
+  segStart: [number, number],
+  segEnd: [number, number],
+): boolean {
+  const EPSILON = 0.001 // Tiny tolerance for floating point errors
+
+  const px = point[0]
+  const py = point[1]
+  const x1 = segStart[0]
+  const y1 = segStart[1]
+  const x2 = segEnd[0]
+  const y2 = segEnd[1]
+
+  // Check if point is within the bounding box of the segment
+  const minX = Math.min(x1, x2) - EPSILON
+  const maxX = Math.max(x1, x2) + EPSILON
+  const minY = Math.min(y1, y2) - EPSILON
+  const maxY = Math.max(y1, y2) + EPSILON
+
+  if (px < minX || px > maxX || py < minY || py > maxY) {
+    return false
+  }
+
+  // Check if point is collinear with the segment
+  // Using cross product: if (p - start) × (end - start) ≈ 0, then collinear
+  const crossProduct = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1)
+
+  return Math.abs(crossProduct) < EPSILON
+}
+
 type DoorPlacementPreviewProps = {
   mouseGridPosition: [number, number] | null // Mouse position in grid coordinates
   wallSegments: WallSegment[]
@@ -121,66 +153,114 @@ export const DoorPlacementPreview = memo(
         const wallAngle = Math.atan2(dz, dx)
         rotation = -wallAngle
 
-        canPlace = true // Start as true, will be checked further below
-
-        // Door needs 2 cells width - check if there's continuous wall coverage
         // Calculate the direction along the wall (normalized)
         const wallLength = Math.sqrt(dx * dx + dz * dz)
         if (wallLength > 0) {
           const wallDirX = dx / wallLength
           const wallDirZ = dz / wallLength
 
-          // Define the 2-cell span we need to cover (check multiple points along the span)
-          const numCheckPoints = 5 // Check 5 points along the 2-cell span for continuous coverage
-          let hasContinuousWall = true
+          // Snap nearestPoint to the nearest grid point
+          const snappedGridPoint: [number, number] = [
+            Math.round(nearestPoint[0]),
+            Math.round(nearestPoint[1]),
+          ]
 
-          for (let i = 0; i <= numCheckPoints; i++) {
-            const t = (i / numCheckPoints) * 1.0 // 0 to 1.0 (checking 1 full cell span)
-            const checkPoint: [number, number] = [
-              nearestPoint[0] + wallDirX * t,
-              nearestPoint[1] + wallDirZ * t,
-            ]
+          // Door visual is centered at gridPosition and extends 1 cell in EACH direction
+          // So we need to check BOTH endpoints: gridPosition ± 1 in wall direction
+          const gridPoint1: [number, number] = [
+            snappedGridPoint[0] + Math.round(wallDirX),
+            snappedGridPoint[1] + Math.round(wallDirZ),
+          ]
+          const gridPoint2: [number, number] = [
+            snappedGridPoint[0] - Math.round(wallDirX),
+            snappedGridPoint[1] - Math.round(wallDirZ),
+          ]
 
-            // Check if there's a wall at this point with the same orientation
-            let foundWallAtPoint = false
+          // Check that door placement is valid:
+          // 1. Both endpoints must have a wall in the correct direction
+          // 2. No point (endpoints OR center) should have a conflicting perpendicular wall
+          canPlace = true
+
+          // Check all 3 points: both endpoints AND the center
+          const pointsToCheck = [gridPoint1, gridPoint2, snappedGridPoint]
+          const endpointIndices = [0, 1] // First two are endpoints
+
+          for (let i = 0; i < pointsToCheck.length; i++) {
+            const gridPoint = pointsToCheck[i]
+            const isEndpoint = endpointIndices.includes(i)
+            let hasCorrectWall = false
+            let hasConflictingWall = false
+
+            // Check all wall segments at this grid point
             for (const wall of wallSegments) {
-              const result = closestPointOnSegment(checkPoint, wall.start, wall.end)
-              if (result.distance <= SNAP_THRESHOLD) {
-                // Check if this wall has the same orientation
-                const adjDx = wall.end[0] - wall.start[0]
-                const adjDz = wall.end[1] - wall.start[1]
-                const adjAngle = Math.atan2(adjDz, adjDx)
-                const angleDiff = Math.abs(wallAngle - adjAngle)
-                // Allow small angle difference (normalize for angles wrapping around)
+              // Check if the grid point lies exactly on this wall segment
+              if (isPointOnSegment(gridPoint, wall.start, wall.end)) {
+                // Check wall orientation
+                const segDx = wall.end[0] - wall.start[0]
+                const segDz = wall.end[1] - wall.start[1]
+                const segAngle = Math.atan2(segDz, segDx)
+                const angleDiff = Math.abs(wallAngle - segAngle)
+                // Normalize angle difference to [0, PI]
                 const normalizedDiff = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2))
-                if (normalizedDiff < 0.1) {
-                  // ~5.7 degrees tolerance
-                  foundWallAtPoint = true
-                  break
+
+                if (normalizedDiff < 0.1 || Math.abs(normalizedDiff - Math.PI) < 0.1) {
+                  // Wall is parallel (same or opposite direction)
+                  hasCorrectWall = true
+                } else {
+                  // Wall has a different direction - conflict!
+                  hasConflictingWall = true
                 }
               }
             }
 
-            if (!foundWallAtPoint) {
-              hasContinuousWall = false
+            // Endpoints must have correct wall, all points must not have conflicting walls
+            if (isEndpoint && !hasCorrectWall) {
+              canPlace = false
+              break
+            }
+            if (hasConflictingWall) {
+              canPlace = false
               break
             }
           }
 
-          canPlace = canPlace && hasContinuousWall
-
-          // Always calculate centered position when snapped (even if can't place, for visualization)
-          // Center position for door placement (offset by 0.5 cells along wall)
-          centeredPosition = [nearestPoint[0] + wallDirX * 0.5, nearestPoint[1] + wallDirZ * 0.5]
+          // Calculate centered position (average of the two endpoints = snappedGridPoint)
+          centeredPosition = [
+            (gridPoint1[0] + gridPoint2[0]) / 2,
+            (gridPoint1[1] + gridPoint2[1]) / 2,
+          ]
 
           if (canPlace) {
-            // Check if there's already a door at or near this position
-            const DOOR_COLLISION_THRESHOLD = 1.5 // 1.5 grid units
+            // Check if there's already a door occupying either of our two grid points
             for (const existingDoor of existingDoors) {
-              const dx = centeredPosition[0] - existingDoor.position[0]
-              const dz = centeredPosition[1] - existingDoor.position[1]
-              const distance = Math.sqrt(dx * dx + dz * dz)
-              if (distance < DOOR_COLLISION_THRESHOLD) {
+              // Calculate the two ENDPOINT grid points occupied by the existing door
+              // The door is centered at position and extends ±1 cell in wall direction
+              // rotation = -wallAngle, so wallAngle = -rotation
+              // wallDir = [cos(wallAngle), sin(wallAngle)] = [cos(-rotation), sin(-rotation)]
+              const existingWallDirX = Math.cos(-existingDoor.rotation)
+              const existingWallDirZ = Math.sin(-existingDoor.rotation)
+
+              const existingGridPoint1: [number, number] = [
+                existingDoor.position[0] + Math.round(existingWallDirX),
+                existingDoor.position[1] + Math.round(existingWallDirZ),
+              ]
+              const existingGridPoint2: [number, number] = [
+                existingDoor.position[0] - Math.round(existingWallDirX),
+                existingDoor.position[1] - Math.round(existingWallDirZ),
+              ]
+
+              // Check if any of the existing door's grid points overlap with our grid points
+              const overlap =
+                (Math.abs(existingGridPoint1[0] - gridPoint1[0]) < 0.01 &&
+                  Math.abs(existingGridPoint1[1] - gridPoint1[1]) < 0.01) ||
+                (Math.abs(existingGridPoint1[0] - gridPoint2[0]) < 0.01 &&
+                  Math.abs(existingGridPoint1[1] - gridPoint2[1]) < 0.01) ||
+                (Math.abs(existingGridPoint2[0] - gridPoint1[0]) < 0.01 &&
+                  Math.abs(existingGridPoint2[1] - gridPoint1[1]) < 0.01) ||
+                (Math.abs(existingGridPoint2[0] - gridPoint2[0]) < 0.01 &&
+                  Math.abs(existingGridPoint2[1] - gridPoint2[1]) < 0.01)
+
+              if (overlap) {
                 canPlace = false
                 break
               }
@@ -195,7 +275,7 @@ export const DoorPlacementPreview = memo(
       }
 
       return {
-        gridPosition: shouldSnap ? nearestPoint : mouseGridPosition, // Only snap when close to wall
+        gridPosition: shouldSnap ? [Math.round(nearestPoint[0]), Math.round(nearestPoint[1])] as [number, number] : mouseGridPosition, // Snapped grid point
         centeredPosition: shouldSnap ? centeredPosition : mouseGridPosition, // Centered position for door model
         canPlace,
         rotation: shouldSnap ? rotation : lastValidRotationRef.current, // Use last valid rotation when not snapped
