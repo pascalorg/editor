@@ -17,7 +17,7 @@ export function BuildingMenu() {
     { id: 'custom-room', icon: LineSegmentsIcon, label: 'Custom Room', enabled: true },
     { id: 'roof', icon: Pyramid, label: 'Gable Roof', enabled: true },
     { id: 'door', icon: DoorOpen, label: 'Door', enabled: true },
-    { id: 'window', icon: Blinds, label: 'Window', enabled: false },
+    { id: 'window', icon: Blinds, label: 'Window', enabled: true },
     { id: 'dummy1', icon: Circle, label: 'Tool 1', enabled: false },
     { id: 'dummy2', icon: Circle, label: 'Tool 2', enabled: false },
   ]

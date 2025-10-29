@@ -19,6 +19,7 @@ import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
+import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
@@ -118,6 +119,9 @@ export default function Editor({ className }: { className?: string }) {
   // State for door mode (one-click placement with preview)
   const [doorPreviewPosition, setDoorPreviewPosition] = useState<[number, number] | null>(null)
 
+  // State for window mode (one-click placement with preview)
+  const [windowPreviewPosition, setWindowPreviewPosition] = useState<[number, number] | null>(null)
+
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -136,6 +140,7 @@ export default function Editor({ className }: { className?: string }) {
     setRoofStartPoint(null)
     setRoofPreviewEnd(null)
     setDoorPreviewPosition(null)
+    setWindowPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setCursorPosition(null)
@@ -871,6 +876,13 @@ export default function Editor({ className }: { className?: string }) {
       } else {
         setDoorPreviewPosition(null)
       }
+    } else if (controlMode === 'building' && activeTool === 'window') {
+      // Window mode: show preview at current grid position
+      if (y !== null) {
+        setWindowPreviewPosition([x, y])
+      } else {
+        setWindowPreviewPosition(null)
+      }
     }
   }
 
@@ -1333,6 +1345,63 @@ export default function Editor({ className }: { className?: string }) {
                           floorId={floor.id}
                           mouseGridPosition={doorPreviewPosition}
                           onPlaced={() => setDoorPreviewPosition(null)}
+                          tileSize={tileSize}
+                          wallHeight={wallHeight}
+                          wallSegments={(() => {
+                            const wallComponent = useEditor
+                              .getState()
+                              .components.find((c) => c.type === 'wall' && c.group === floor.id)
+                            return wallComponent?.type === 'wall'
+                              ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
+                              : []
+                          })()}
+                        />
+                      )}
+
+                    {/* Windows component renders placed windows */}
+                    <Windows floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+
+                    {/* Window placement preview */}
+                    {isActiveFloor &&
+                      controlMode === 'building' &&
+                      activeTool === 'window' &&
+                      windowPreviewPosition && (
+                        <WindowPlacementPreview
+                          existingDoors={(() => {
+                            const doorComponents = useEditor
+                              .getState()
+                              .components.filter((c) => c.type === 'door' && c.group === floor.id)
+                            return doorComponents
+                              .map((c) => {
+                                if (c.type === 'door') {
+                                  return { position: c.data.position, rotation: c.data.rotation }
+                                }
+                                return null
+                              })
+                              .filter(Boolean) as Array<{
+                              position: [number, number]
+                              rotation: number
+                            }>
+                          })()}
+                          existingWindows={(() => {
+                            const windowComponents = useEditor
+                              .getState()
+                              .components.filter((c) => c.type === 'window' && c.group === floor.id)
+                            return windowComponents
+                              .map((c) => {
+                                if (c.type === 'window') {
+                                  return { position: c.data.position, rotation: c.data.rotation }
+                                }
+                                return null
+                              })
+                              .filter(Boolean) as Array<{
+                              position: [number, number]
+                              rotation: number
+                            }>
+                          })()}
+                          floorId={floor.id}
+                          mouseGridPosition={windowPreviewPosition}
+                          onPlaced={() => setWindowPreviewPosition(null)}
                           tileSize={tileSize}
                           wallHeight={wallHeight}
                           wallSegments={(() => {

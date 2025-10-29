@@ -15,6 +15,7 @@ import type * as THREE from 'three'
 import { Doors } from '@/components/editor/elements/door'
 import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
+import { Windows } from '@/components/editor/elements/window'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
@@ -356,6 +357,9 @@ export default function Viewer({ className }: { className?: string }) {
 
                     {/* Doors component renders placed doors */}
                     <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+
+                    {/* Windows component renders placed windows */}
+                    <Windows floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
                   </group>
                 </AnimatedLevel>
               )
