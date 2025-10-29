@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Eye,
   FileCode,
   HelpCircle,
   Save,
@@ -12,6 +13,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
@@ -80,7 +82,14 @@ export function AppSidebar() {
   return (
     <Sidebar className={cn('dark text-white')} variant="floating">
       <SidebarHeader className="flex-row items-center justify-between px-2 py-3">
-        <h3 className="font-semibold text-lg">Pascal Editor</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-lg">Pascal Editor</h3>
+          <Button asChild size="icon-sm" variant="ghost">
+            <Link href="/viewer">
+              <Eye className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

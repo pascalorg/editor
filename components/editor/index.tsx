@@ -1424,7 +1424,13 @@ export default function Editor({ className }: { className?: string }) {
                       )}
 
                     {/* Doors component renders placed doors */}
-                    <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+                    <Doors
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      isFullView={viewMode === 'full'}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
+                    />
 
                     {/* Door placement preview */}
                     {isActiveFloor &&
@@ -1481,7 +1487,13 @@ export default function Editor({ className }: { className?: string }) {
                       )}
 
                     {/* Windows component renders placed windows */}
-                    <Windows floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+                    <Windows
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      isFullView={viewMode === 'full'}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
+                    />
 
                     {/* Window placement preview */}
                     {isActiveFloor &&

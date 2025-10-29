@@ -190,6 +190,8 @@ type HistoryState = {
 
 export type ViewMode = 'full' | 'level'
 
+export type ViewerDisplayMode = 'scans' | 'objects'
+
 type StoreState = {
   images: ReferenceImage[]
   scans: Scan[]
@@ -198,6 +200,7 @@ type StoreState = {
   currentLevel: number
   selectedFloorId: string | null
   viewMode: ViewMode // 'full' for viewing all levels, 'level' for editing a specific level
+  viewerDisplayMode: ViewerDisplayMode // 'scans' to show scans only, 'objects' to show 3D objects
   selectedElements: SelectedElement[] // Unified selection for building elements (walls, roofs)
   selectedImageIds: string[]
   selectedScanIds: string[]
@@ -234,6 +237,7 @@ type StoreState = {
   setControlMode: (mode: ControlMode) => void
   setCameraMode: (mode: CameraMode) => void
   toggleLevelMode: () => void
+  setViewerDisplayMode: (mode: ViewerDisplayMode) => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   setIsManipulatingScan: (manipulating: boolean) => void
@@ -304,6 +308,7 @@ const useStore = create<StoreState>()(
       reorderGroups: (groups) => set({ groups }),
       selectedFloorId: 'level_0',
       viewMode: 'level', // Start in level mode with base level selected
+      viewerDisplayMode: 'objects', // Start with 3D objects visible in viewer
       selectedElements: [],
       selectFloor: (floorId) => {
         const state = get()
@@ -366,6 +371,7 @@ const useStore = create<StoreState>()(
         set((state) => ({
           levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
         })),
+      setViewerDisplayMode: (mode) => set({ viewerDisplayMode: mode }),
       movingCamera: false,
       isManipulatingImage: false,
       isManipulatingScan: false,
@@ -1167,6 +1173,8 @@ export const useEditorContext = () => {
     setControlMode: store.setControlMode,
     cameraMode: store.cameraMode,
     setCameraMode: store.setCameraMode,
+    viewerDisplayMode: store.viewerDisplayMode,
+    setViewerDisplayMode: store.setViewerDisplayMode,
     movingCamera: store.movingCamera,
     setMovingCamera: store.setMovingCamera,
     isManipulatingImage: store.isManipulatingImage,
