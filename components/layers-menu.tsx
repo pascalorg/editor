@@ -4,8 +4,6 @@ import {
   Box,
   Building,
   DoorOpen,
-  Eye,
-  EyeOff,
   GripVertical,
   Image,
   Layers,
@@ -27,6 +25,7 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
@@ -63,6 +62,10 @@ interface DraggableLevelItemProps {
   toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof') => void
   toggleImageVisibility: (id: string) => void
   toggleScanVisibility: (id: string) => void
+  setFloorOpacity: (id: string, opacity: number) => void
+  setBuildingElementOpacity: (id: string, type: 'wall' | 'roof', opacity: number) => void
+  setImageOpacity: (id: string, opacity: number) => void
+  setScanOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, level: number) => void
   handleScanUpload: (file: File, level: number) => void
   setSelectedElements: (elements: any[]) => void
@@ -90,6 +93,10 @@ function DraggableLevelItem({
   toggleBuildingElementVisibility,
   toggleImageVisibility,
   toggleScanVisibility,
+  setFloorOpacity,
+  setBuildingElementOpacity,
+  setImageOpacity,
+  setScanOpacity,
   handleUpload,
   handleScanUpload,
   setSelectedElements,
@@ -118,20 +125,12 @@ function DraggableLevelItem({
         <TreeExpander hasChildren={hasContent} />
         <TreeIcon hasChildren={hasContent} icon={<Layers className="h-4 w-4 text-blue-500" />} />
         <TreeLabel className="flex-1">{level.name}</TreeLabel>
-        <Button
-          className={cn(
-            'h-5 w-5 p-0 transition-opacity',
-            level.visible === false ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100',
-          )}
-          onClick={(e) => {
-            e.stopPropagation()
-            toggleFloorVisibility(level.id)
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          {level.visible === false ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-        </Button>
+        <OpacityControl
+          onOpacityChange={(opacity) => setFloorOpacity(level.id, opacity)}
+          onVisibilityToggle={() => toggleFloorVisibility(level.id)}
+          opacity={level.opacity}
+          visible={level.visible}
+        />
       </TreeNodeTrigger>
 
       <TreeNodeContent hasChildren={hasContent}>
@@ -178,26 +177,14 @@ function DraggableLevelItem({
                   <TreeExpander />
                   <TreeIcon icon={<Square className="h-4 w-4 text-gray-600" />} />
                   <TreeLabel>{getElementLabel('wall', index)}</TreeLabel>
-                  <Button
-                    className={cn(
-                      'h-5 w-5 p-0 transition-opacity',
-                      segment.visible === false
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/item:opacity-100',
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleBuildingElementVisibility(segment.id, 'wall')
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {segment.visible === false ? (
-                      <EyeOff className="h-3 w-3" />
-                    ) : (
-                      <Eye className="h-3 w-3" />
-                    )}
-                  </Button>
+                  <OpacityControl
+                    onOpacityChange={(opacity) =>
+                      setBuildingElementOpacity(segment.id, 'wall', opacity)
+                    }
+                    onVisibilityToggle={() => toggleBuildingElementVisibility(segment.id, 'wall')}
+                    opacity={segment.opacity}
+                    visible={segment.visible}
+                  />
                 </TreeNodeTrigger>
               </TreeNode>
             ))}
@@ -223,26 +210,14 @@ function DraggableLevelItem({
                   <TreeExpander />
                   <TreeIcon icon={<Triangle className="h-4 w-4 text-amber-600" />} />
                   <TreeLabel>{getElementLabel('roof', index)}</TreeLabel>
-                  <Button
-                    className={cn(
-                      'h-5 w-5 p-0 transition-opacity',
-                      segment.visible === false
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/item:opacity-100',
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleBuildingElementVisibility(segment.id, 'roof')
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {segment.visible === false ? (
-                      <EyeOff className="h-3 w-3" />
-                    ) : (
-                      <Eye className="h-3 w-3" />
-                    )}
-                  </Button>
+                  <OpacityControl
+                    onOpacityChange={(opacity) =>
+                      setBuildingElementOpacity(segment.id, 'roof', opacity)
+                    }
+                    onVisibilityToggle={() => toggleBuildingElementVisibility(segment.id, 'roof')}
+                    opacity={segment.opacity}
+                    visible={segment.visible}
+                  />
                 </TreeNodeTrigger>
               </TreeNode>
             ))}
@@ -329,26 +304,12 @@ function DraggableLevelItem({
                   <TreeExpander />
                   <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
                   <TreeLabel>Reference {index + 1}</TreeLabel>
-                  <Button
-                    className={cn(
-                      'h-5 w-5 p-0 transition-opacity',
-                      image.visible === false
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/item:opacity-100',
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleImageVisibility(image.id)
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {image.visible === false ? (
-                      <EyeOff className="h-3 w-3" />
-                    ) : (
-                      <Eye className="h-3 w-3" />
-                    )}
-                  </Button>
+                  <OpacityControl
+                    onOpacityChange={(opacity) => setImageOpacity(image.id, opacity)}
+                    onVisibilityToggle={() => toggleImageVisibility(image.id)}
+                    opacity={image.opacity}
+                    visible={image.visible}
+                  />
                 </TreeNodeTrigger>
               </TreeNode>
             ))}
@@ -411,26 +372,12 @@ function DraggableLevelItem({
                   <TreeExpander />
                   <TreeIcon icon={<Box className="h-4 w-4 text-cyan-400" />} />
                   <TreeLabel>Scan {index + 1}</TreeLabel>
-                  <Button
-                    className={cn(
-                      'h-5 w-5 p-0 transition-opacity',
-                      scan.visible === false
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/item:opacity-100',
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleScanVisibility(scan.id)
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {scan.visible === false ? (
-                      <EyeOff className="h-3 w-3" />
-                    ) : (
-                      <Eye className="h-3 w-3" />
-                    )}
-                  </Button>
+                  <OpacityControl
+                    onOpacityChange={(opacity) => setScanOpacity(scan.id, opacity)}
+                    onVisibilityToggle={() => toggleScanVisibility(scan.id)}
+                    opacity={scan.opacity}
+                    visible={scan.visible}
+                  />
                 </TreeNodeTrigger>
               </TreeNode>
             ))}
@@ -486,6 +433,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   )
   const toggleImageVisibility = useEditor((state) => state.toggleImageVisibility)
   const toggleScanVisibility = useEditor((state) => state.toggleScanVisibility)
+  const setFloorOpacity = useEditor((state) => state.setFloorOpacity)
+  const setBuildingElementOpacity = useEditor((state) => state.setBuildingElementOpacity)
+  const setImageOpacity = useEditor((state) => state.setImageOpacity)
+  const setScanOpacity = useEditor((state) => state.setScanOpacity)
 
   const handleElementSelect = (
     elementId: string,
@@ -744,7 +695,11 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       selectedElements={selectedElements}
                       selectedImageIds={selectedImageIds}
                       selectedScanIds={selectedScanIds}
+                      setBuildingElementOpacity={setBuildingElementOpacity}
                       setControlMode={setControlMode}
+                      setFloorOpacity={setFloorOpacity}
+                      setImageOpacity={setImageOpacity}
+                      setScanOpacity={setScanOpacity}
                       setSelectedElements={setSelectedElements}
                       toggleBuildingElementVisibility={toggleBuildingElementVisibility}
                       toggleFloorVisibility={toggleFloorVisibility}

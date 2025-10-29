@@ -1012,65 +1012,90 @@ export default function Editor({ className }: { className?: string }) {
         {/* Hide guides (reference images and scans) in full view mode */}
         {viewMode === 'level' &&
           images
-            .filter((image) => image.visible !== false)
-            .map((image) => (
-              <ReferenceImage
-                controlMode={controlMode}
-                id={image.id}
-                isSelected={selectedImageIds.includes(image.id)}
-                key={image.id}
-                level={image.level}
-                movingCamera={movingCamera}
-                onManipulationEnd={() => setIsManipulatingImage(false)}
-                onManipulationStart={() => setIsManipulatingImage(true)}
-                onSelect={() => setSelectedImageIds([image.id])}
-                onUpdate={(updates, pushToUndo = true) =>
-                  setImages(
-                    images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
-                    pushToUndo,
-                  )
-                }
-                opacity={imageOpacity}
-                position={image.position}
-                rotation={image.rotation}
-                scale={image.scale}
-                url={image.url}
-              />
-            ))}
+            .filter((image) => {
+              // Filter out hidden images (visible === false or opacity === 0)
+              const isHidden =
+                image.visible === false || (image.opacity !== undefined && image.opacity === 0)
+              return !isHidden
+            })
+            .map((image) => {
+              // Calculate opacity: use custom opacity if set, otherwise use default IMAGE_OPACITY
+              const opacity = image.opacity !== undefined ? image.opacity / 100 : imageOpacity
+
+              return (
+                <ReferenceImage
+                  controlMode={controlMode}
+                  id={image.id}
+                  isSelected={selectedImageIds.includes(image.id)}
+                  key={image.id}
+                  level={image.level}
+                  movingCamera={movingCamera}
+                  onManipulationEnd={() => setIsManipulatingImage(false)}
+                  onManipulationStart={() => setIsManipulatingImage(true)}
+                  onSelect={() => setSelectedImageIds([image.id])}
+                  onUpdate={(updates, pushToUndo = true) =>
+                    setImages(
+                      images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
+                      pushToUndo,
+                    )
+                  }
+                  opacity={opacity}
+                  position={image.position}
+                  rotation={image.rotation}
+                  scale={image.scale}
+                  url={image.url}
+                />
+              )
+            })}
 
         {/* Render 3D scans */}
         {viewMode === 'level' &&
           scans
-            .filter((scan) => scan.visible !== false)
-            .map((scan) => (
-              <Scan
-                controlMode={controlMode}
-                id={scan.id}
-                isSelected={selectedScanIds.includes(scan.id)}
-                key={scan.id}
-                level={scan.level}
-                movingCamera={movingCamera}
-                onManipulationEnd={() => setIsManipulatingScan(false)}
-                onManipulationStart={() => setIsManipulatingScan(true)}
-                onSelect={() => setSelectedScanIds([scan.id])}
-                onUpdate={(updates, pushToUndo = true) =>
-                  setScans(
-                    scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
-                    pushToUndo,
-                  )
-                }
-                position={scan.position}
-                rotation={scan.rotation}
-                scale={scan.scale}
-                url={scan.url}
-                yOffset={scan.yOffset}
-              />
-            ))}
+            .filter((scan) => {
+              // Filter out hidden scans (visible === false or opacity === 0)
+              const isHidden =
+                scan.visible === false || (scan.opacity !== undefined && scan.opacity === 0)
+              return !isHidden
+            })
+            .map((scan) => {
+              // Calculate opacity: use custom opacity if set, otherwise use 1 (fully visible)
+              const scanOpacity = scan.opacity !== undefined ? scan.opacity / 100 : 1
+
+              return (
+                <Scan
+                  controlMode={controlMode}
+                  id={scan.id}
+                  isSelected={selectedScanIds.includes(scan.id)}
+                  key={scan.id}
+                  level={scan.level}
+                  movingCamera={movingCamera}
+                  onManipulationEnd={() => setIsManipulatingScan(false)}
+                  onManipulationStart={() => setIsManipulatingScan(true)}
+                  onSelect={() => setSelectedScanIds([scan.id])}
+                  onUpdate={(updates, pushToUndo = true) =>
+                    setScans(
+                      scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
+                      pushToUndo,
+                    )
+                  }
+                  opacity={scanOpacity}
+                  position={scan.position}
+                  rotation={scan.rotation}
+                  scale={scan.scale}
+                  url={scan.url}
+                  yOffset={scan.yOffset}
+                />
+              )
+            })}
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
           {groups
-            .filter((g) => g.type === 'floor' && g.visible !== false)
+            .filter((g) => {
+              // Filter out hidden floors (visible === false or opacity === 0)
+              const isHidden = g.visible === false || (g.opacity !== undefined && g.opacity === 0)
+              return g.type === 'floor' && !isHidden
+            })
             .map((floor) => {
               const floorLevel = floor.level || 0
               const yPosition =
@@ -1223,7 +1248,11 @@ export default function Editor({ className }: { className?: string }) {
                         onIntersectionClick={handleIntersectionClick}
                         onIntersectionDoubleClick={handleIntersectionDoubleClick}
                         onIntersectionHover={handleIntersectionHover}
-                        opacity={gridOpacity}
+                        opacity={
+                          floor.opacity !== undefined
+                            ? (floor.opacity / 100) * gridOpacity
+                            : gridOpacity
+                        }
                         roofPreviewEnd={roofPreviewEnd}
                         roofStartPoint={roofStartPoint}
                         roomPreviewEnd={roomPreviewEnd}

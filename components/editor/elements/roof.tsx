@@ -859,8 +859,23 @@ export const Roofs = forwardRef(
             emissiveIntensity = 0.3
           }
 
-          const opacity = isFullView || isActive ? 1 : 0.2
+          // Check if element should be visible
+          const isHidden = seg.visible === false || (seg.opacity !== undefined && seg.opacity === 0)
+
+          // In full view mode, show all roofs at full opacity
+          // Otherwise, only active floor roofs are at full opacity
+          let baseOpacity = isFullView || isActive ? 1 : 0.2
+
+          // Apply custom opacity if set (convert from 0-100 to 0-1)
+          if (seg.opacity !== undefined && seg.opacity < 100) {
+            baseOpacity *= seg.opacity / 100
+          }
+
+          const opacity = baseOpacity
           const transparent = opacity < 1
+
+          // Don't render if hidden
+          if (isHidden) return null
 
           const material = (
             <meshStandardMaterial

@@ -32,6 +32,7 @@ export interface WallSegment {
   id: string
   isHorizontal: boolean
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export interface RoofSegment {
@@ -42,6 +43,7 @@ export interface RoofSegment {
   leftWidth?: number // Distance from ridge to left edge (defaults to ROOF_WIDTH / 2)
   rightWidth?: number // Distance from ridge to right edge (defaults to ROOF_WIDTH / 2)
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export interface ReferenceImage {
@@ -54,6 +56,7 @@ export interface ReferenceImage {
   scale: number
   level: number // Floor level this image belongs to
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export interface Scan {
@@ -67,6 +70,7 @@ export interface Scan {
   level: number // Floor level this scan belongs to
   yOffset?: number // Additional Y offset from floor level
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export type Tool =
@@ -132,6 +136,7 @@ export type ComponentGroup = {
   color: string
   level?: number
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export type LayoutJSON = {
@@ -224,6 +229,10 @@ type StoreState = {
   toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof') => void
   toggleImageVisibility: (imageId: string) => void
   toggleScanVisibility: (scanId: string) => void
+  setFloorOpacity: (floorId: string, opacity: number) => void
+  setBuildingElementOpacity: (elementId: string, type: 'wall' | 'roof', opacity: number) => void
+  setImageOpacity: (imageId: string, opacity: number) => void
+  setScanOpacity: (scanId: string, opacity: number) => void
 }
 
 const useStore = create<StoreState>()(
@@ -938,6 +947,51 @@ const useStore = create<StoreState>()(
             scan.id === scanId ? { ...scan, visible: !(scan.visible ?? true) } : scan,
           ),
         })),
+      setFloorOpacity: (floorId, opacity) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g.id === floorId ? { ...g, opacity: Math.max(0, Math.min(100, opacity)) } : g,
+          ),
+        })),
+      setBuildingElementOpacity: (elementId, type, opacity) =>
+        set((state) => {
+          if (!state.selectedFloorId) return state
+          const clampedOpacity = Math.max(0, Math.min(100, opacity))
+
+          const updatedComponents = state.components.map((comp): Component => {
+            if (comp.type === type && comp.group === state.selectedFloorId) {
+              if (type === 'wall' && comp.type === 'wall') {
+                const data = comp.data as WallComponentData
+                const segments = data.segments.map((seg) =>
+                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
+                )
+                return { ...comp, data: { segments } }
+              }
+              if (type === 'roof' && comp.type === 'roof') {
+                const data = comp.data as RoofComponentData
+                const segments = data.segments.map((seg) =>
+                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
+                )
+                return { ...comp, data: { segments } }
+              }
+            }
+            return comp
+          })
+
+          return { components: updatedComponents }
+        }),
+      setImageOpacity: (imageId, opacity) =>
+        set((state) => ({
+          images: state.images.map((img) =>
+            img.id === imageId ? { ...img, opacity: Math.max(0, Math.min(100, opacity)) } : img,
+          ),
+        })),
+      setScanOpacity: (scanId, opacity) =>
+        set((state) => ({
+          scans: state.scans.map((scan) =>
+            scan.id === scanId ? { ...scan, opacity: Math.max(0, Math.min(100, opacity)) } : scan,
+          ),
+        })),
     }),
     {
       name: 'editor-storage',
@@ -1131,5 +1185,9 @@ export const useEditorContext = () => {
     toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
     toggleImageVisibility: store.toggleImageVisibility,
     toggleScanVisibility: store.toggleScanVisibility,
+    setFloorOpacity: store.setFloorOpacity,
+    setBuildingElementOpacity: store.setBuildingElementOpacity,
+    setImageOpacity: store.setImageOpacity,
+    setScanOpacity: store.setScanOpacity,
   }
 }

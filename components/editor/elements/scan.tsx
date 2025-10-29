@@ -2,7 +2,7 @@
 
 import { useGLTF } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { FLOOR_SPACING } from '@/components/editor'
 import type { ControlMode } from '@/hooks/use-editor'
@@ -33,6 +33,7 @@ const TILE_SIZE = 0.5 // Grid spacing in meters (matches editor grid)
 type ScanProps = {
   id: string
   url: string
+  opacity: number
   scale: number
   position: [number, number]
   rotation: number // degrees
@@ -58,6 +59,7 @@ type ScanProps = {
 export const Scan = ({
   id,
   url,
+  opacity,
   scale,
   position,
   rotation,
@@ -82,6 +84,17 @@ export const Scan = ({
 
   // Track hover state for the scan itself
   const [isHovered, setIsHovered] = useState(false)
+
+  // Apply opacity to scan materials
+  useMemo(() => {
+    scene.traverse((child: any) => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone()
+        child.material.transparent = opacity < 1
+        child.material.opacity = opacity
+      }
+    })
+  }, [scene, opacity])
 
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
