@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   TreeExpander,
   TreeIcon,

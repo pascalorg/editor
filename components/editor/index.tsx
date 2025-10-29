@@ -1100,6 +1100,9 @@ export default function Editor({ className }: { className?: string }) {
           />
         </group>
 
+        {/* Infinite floor - rendered outside export group */}
+        <InfiniteFloor />
+
         {/* Hide guides (reference images and scans) in full view mode */}
         {viewMode === 'level' &&
           images
@@ -1202,9 +1205,6 @@ export default function Editor({ className }: { className?: string }) {
 
               return (
                 <AnimatedLevel key={floor.id} positionY={yPosition}>
-                  {/* Solid dark purple floor for lowest level only - infinite appearance */}
-                  {floorLevel === 0 && <InfiniteFloor />}
-
                   {/* Grid for visual reference only - not interactive */}
                   {showGrid && (
                     <group raycast={() => null}>
@@ -1424,7 +1424,13 @@ export default function Editor({ className }: { className?: string }) {
                       )}
 
                     {/* Doors component renders placed doors */}
-                    <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+                    <Doors
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      isFullView={viewMode === 'full'}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
+                    />
 
                     {/* Door placement preview */}
                     {isActiveFloor &&
@@ -1481,7 +1487,13 @@ export default function Editor({ className }: { className?: string }) {
                       )}
 
                     {/* Windows component renders placed windows */}
-                    <Windows floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
+                    <Windows
+                      floorId={floor.id}
+                      isActive={isActiveFloor}
+                      isFullView={viewMode === 'full'}
+                      tileSize={tileSize}
+                      wallHeight={wallHeight}
+                    />
 
                     {/* Window placement preview */}
                     {isActiveFloor &&

@@ -1,7 +1,7 @@
 'use client'
 
 import { StackIcon } from '@phosphor-icons/react'
-import { Camera, Eye } from 'lucide-react'
+import { Box, Camera, Eye, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
@@ -12,6 +12,8 @@ export function ViewerControls({ className }: { className?: string }) {
   const setCameraMode = useEditor((state) => state.setCameraMode)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
+  const setViewerDisplayMode = useEditor((state) => state.setViewerDisplayMode)
 
   return (
     <TooltipProvider>
@@ -72,6 +74,36 @@ export function ViewerControls({ className }: { className?: string }) {
           </TooltipTrigger>
           <TooltipContent>
             <p>Level mode: {levelMode === 'stacked' ? 'Stacked' : 'Exploded'} (L)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Separator */}
+        <div className="mx-1 h-6 w-px bg-gray-700" />
+
+        {/* Scans/3D Objects toggle button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 w-8 transition-all',
+                viewerDisplayMode === 'scans' && 'bg-blue-600/20 text-blue-400',
+                'text-white hover:bg-gray-800 hover:text-white',
+              )}
+              onClick={() =>
+                setViewerDisplayMode(viewerDisplayMode === 'scans' ? 'objects' : 'scans')
+              }
+              size="icon"
+              variant="ghost"
+            >
+              {viewerDisplayMode === 'scans' ? (
+                <ScanLine className="h-4 w-4" />
+              ) : (
+                <Box className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Display: {viewerDisplayMode === 'scans' ? 'Scans' : '3D Objects'}</p>
           </TooltipContent>
         </Tooltip>
       </div>

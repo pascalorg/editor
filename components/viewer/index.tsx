@@ -12,16 +12,14 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useState } from 'react'
 import type * as THREE from 'three'
-import { Doors } from '@/components/editor/elements/door'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { Windows } from '@/components/editor/elements/window'
+import { Scan } from '@/components/editor/elements/scan'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
 import { calculateFloorBounds } from '@/lib/grid-bounds'
 import { cn } from '@/lib/utils'
+import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -42,7 +40,13 @@ export default function Viewer({ className }: { className?: string }) {
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const components = useEditor((state) => state.components)
+  const scans = useEditor((state) => state.scans)
+  const setScans = useEditor((state) => state.setScans)
+  const selectedScanIds = useEditor((state) => state.selectedScanIds)
+  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
+  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const selectFloor = useEditor((state) => state.selectFloor)
   const movingCamera = useEditor((state) => state.movingCamera)
 
@@ -306,61 +310,61 @@ export default function Viewer({ className }: { className?: string }) {
                       </group>
                     )}
 
-                  <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                    {/* Walls component fetches its own data based on floorId */}
-                    <Walls
-                      controlMode={controlMode}
-                      floorId={floor.id}
-                      hoveredWallIndex={null}
-                      isActive={isActiveFloor}
-                      isCameraEnabled={false}
-                      isFullView={viewMode === 'full'}
-                      key={`${floor.id}-${isActiveFloor}`}
-                      movingCamera={movingCamera}
-                      onDeleteWalls={() => {
-                        // No-op in viewer mode
-                      }}
-                      onWallHover={() => {
-                        // No-op in viewer mode
-                      }}
-                      onWallRightClick={undefined}
-                      selectedElements={viewerSelectedElements}
-                      setControlMode={noopSetControlMode}
-                      setSelectedElements={noopSetSelectedElements}
-                      tileSize={tileSize}
-                      wallHeight={wallHeight}
-                    />
+                  {/* 3D Objects - only show when viewerDisplayMode is 'objects' */}
+                  {viewerDisplayMode === 'objects' && (
+                    <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                      <BuildingElementsRenderer
+                        components={components}
+                        floorId={floor.id}
+                        isActiveFloor={isActiveFloor}
+                        movingCamera={movingCamera}
+                        tileSize={tileSize}
+                        viewMode={viewMode}
+                        wallHeight={wallHeight}
+                      />
+                    </group>
+                  )}
 
-                    {/* Roofs component fetches its own data based on floorId */}
-                    <Roofs
-                      baseHeight={wallHeight}
-                      controlMode={controlMode}
-                      floorId={floor.id}
-                      hoveredRoofIndex={null}
-                      isActive={isActiveFloor}
-                      isCameraEnabled={false}
-                      isFullView={viewMode === 'full'}
-                      key={`roof-${floor.id}-${isActiveFloor}`}
-                      movingCamera={movingCamera}
-                      onDeleteRoofs={() => {
-                        // No-op in viewer mode
-                      }}
-                      onRoofHover={() => {
-                        // No-op in viewer mode
-                      }}
-                      onRoofRightClick={undefined}
-                      selectedElements={viewerSelectedElements}
-                      setControlMode={noopSetControlMode}
-                      setSelectedElements={noopSetSelectedElements}
-                      tileSize={tileSize}
-                    />
-
-                    {/* Doors component renders placed doors */}
-                    <Doors floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
-
-                    {/* Windows component renders placed windows */}
-                    <Windows floorId={floor.id} tileSize={tileSize} wallHeight={wallHeight} />
-                  </group>
+                  {/* Scans - only show when viewerDisplayMode is 'scans' */}
+                  {viewerDisplayMode === 'scans' &&
+                    scans
+                      .filter((scan) => {
+                        // Only show scans for this floor level
+                        if (scan.level !== floorLevel) return false
+                        // Filter out hidden scans
+                        const isHidden =
+                          scan.visible === false ||
+                          (scan.opacity !== undefined && scan.opacity === 0)
+                        return !isHidden
+                      })
+                      .map((scan) => {
+                        const scanOpacity = scan.opacity !== undefined ? scan.opacity / 100 : 1
+                        return (
+                          <Scan
+                            controlMode="select"
+                            id={scan.id}
+                            isSelected={selectedScanIds.includes(scan.id)}
+                            key={scan.id}
+                            level={scan.level}
+                            movingCamera={movingCamera}
+                            onManipulationEnd={() => setIsManipulatingScan(false)}
+                            onManipulationStart={() => setIsManipulatingScan(true)}
+                            onSelect={() => setSelectedScanIds([scan.id])}
+                            onUpdate={(updates, pushToUndo = true) =>
+                              setScans(
+                                scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
+                                pushToUndo,
+                              )
+                            }
+                            opacity={scanOpacity}
+                            position={scan.position}
+                            rotation={scan.rotation}
+                            scale={scan.scale}
+                            url={scan.url}
+                            yOffset={scan.yOffset}
+                          />
+                        )
+                      })}
                 </AnimatedLevel>
               )
             })}

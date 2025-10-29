@@ -1,7 +1,7 @@
 'use client'
 
 import { Gltf } from '@react-three/drei'
-import { memo, useCallback, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
@@ -170,88 +170,137 @@ type DoorProps = {
   rotation: number
   tileSize: number
   wallHeight: number
+  isActive: boolean
+  isFullView?: boolean
 }
 
-const Door = memo(({ doorId, position, rotation, tileSize, wallHeight }: DoorProps) => {
-  const worldX = position[0] * tileSize
-  const worldZ = position[1] * tileSize
-  const selectedElements = useEditor((state) => state.selectedElements)
+const Door = memo(
+  ({
+    doorId,
+    position,
+    rotation,
+    tileSize,
+    wallHeight,
+    isActive,
+    isFullView = false,
+  }: DoorProps) => {
+    const worldX = position[0] * tileSize
+    const worldZ = position[1] * tileSize
+    const selectedElements = useEditor((state) => state.selectedElements)
+    const doorRef = useRef<THREE.Group>(null)
 
-  // Check if this door is selected
-  const isSelected = selectedElements.some((el) => el.id === doorId && el.type === 'door')
+    // Check if this door is selected
+    const isSelected = selectedElements.some((el) => el.id === doorId && el.type === 'door')
 
-  // Calculate corners for edge rendering (door occupies 2x2 cells)
-  const halfWidth = tileSize
-  const halfDepth = tileSize
+    // Calculate opacity based on active floor (same logic as walls)
+    const opacity = isFullView || isActive ? 1 : 0.2
 
-  const bottomCorners = [
-    [-halfWidth, 0, -halfDepth],
-    [halfWidth, 0, -halfDepth],
-    [halfWidth, 0, halfDepth],
-    [-halfWidth, 0, halfDepth],
-  ]
+    // Apply opacity to all materials in the door model
+    useEffect(() => {
+      if (!doorRef.current) return
 
-  const topCorners = [
-    [-halfWidth, wallHeight, -halfDepth],
-    [halfWidth, wallHeight, -halfDepth],
-    [halfWidth, wallHeight, halfDepth],
-    [-halfWidth, wallHeight, halfDepth],
-  ]
+      // Use a small delay to ensure GLTF is fully loaded
+      const applyOpacity = () => {
+        if (!doorRef.current) return
 
-  return (
-    <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
-      <group position={[0, 0, 0]} scale={[2, 2, 2]}>
-        <Gltf src="/models/Door.glb" />
+        doorRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const material = child.material as THREE.Material
+            if ('opacity' in material && 'transparent' in material && 'depthWrite' in material) {
+              material.opacity = opacity
+              material.transparent = opacity < 1
+              // Keep depthWrite enabled to maintain proper depth sorting
+              material.depthWrite = true
+              material.side = THREE.DoubleSide
+            }
+          }
+        })
+      }
+
+      // Apply immediately
+      applyOpacity()
+
+      // Also apply after a short delay to catch late-loading GLTF materials
+      const timeoutId = setTimeout(applyOpacity, 50)
+
+      return () => clearTimeout(timeoutId)
+    }, [opacity])
+
+    // Calculate corners for edge rendering (door occupies 2x2 cells)
+    const halfWidth = tileSize
+    const halfDepth = tileSize
+
+    const bottomCorners = [
+      [-halfWidth, 0, -halfDepth],
+      [halfWidth, 0, -halfDepth],
+      [halfWidth, 0, halfDepth],
+      [-halfWidth, 0, halfDepth],
+    ]
+
+    const topCorners = [
+      [-halfWidth, wallHeight, -halfDepth],
+      [halfWidth, wallHeight, -halfDepth],
+      [halfWidth, wallHeight, halfDepth],
+      [-halfWidth, wallHeight, halfDepth],
+    ]
+
+    return (
+      <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
+        <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
+          <Gltf src="/models/Door.glb" />
+        </group>
+
+        {/* Selection outline - 3D cylinders (same as walls) */}
+        {isSelected && (
+          <>
+            {(() => {
+              const edges = []
+              // Bottom rectangle edges
+              for (let j = 0; j < bottomCorners.length; j++) {
+                edges.push([bottomCorners[j], bottomCorners[(j + 1) % bottomCorners.length]])
+              }
+              // Top rectangle edges
+              for (let j = 0; j < topCorners.length; j++) {
+                edges.push([topCorners[j], topCorners[(j + 1) % topCorners.length]])
+              }
+              // Vertical edges connecting bottom to top
+              for (let j = 0; j < bottomCorners.length; j++) {
+                edges.push([bottomCorners[j], topCorners[j]])
+              }
+
+              return edges.map((edge, idx) => {
+                const {
+                  geometry: cylGeom,
+                  midpoint,
+                  axis,
+                  angle,
+                } = createEdgeCylinder(edge[0], edge[1])
+                return (
+                  <mesh
+                    geometry={cylGeom}
+                    key={idx}
+                    position={midpoint}
+                    quaternion={new THREE.Quaternion().setFromAxisAngle(axis, angle)}
+                    renderOrder={999}
+                  >
+                    <meshStandardMaterial
+                      color="#ffffff"
+                      depthTest={false}
+                      emissive="#ffffff"
+                      emissiveIntensity={0.5}
+                      opacity={opacity}
+                      transparent
+                    />
+                  </mesh>
+                )
+              })
+            })()}
+          </>
+        )}
       </group>
-
-      {/* Selection outline - 3D cylinders (same as walls) */}
-      {isSelected && (
-        <>
-          {(() => {
-            const edges = []
-            // Bottom rectangle edges
-            for (let j = 0; j < bottomCorners.length; j++) {
-              edges.push([bottomCorners[j], bottomCorners[(j + 1) % bottomCorners.length]])
-            }
-            // Top rectangle edges
-            for (let j = 0; j < topCorners.length; j++) {
-              edges.push([topCorners[j], topCorners[(j + 1) % topCorners.length]])
-            }
-            // Vertical edges connecting bottom to top
-            for (let j = 0; j < bottomCorners.length; j++) {
-              edges.push([bottomCorners[j], topCorners[j]])
-            }
-
-            return edges.map((edge, idx) => {
-              const {
-                geometry: cylGeom,
-                midpoint,
-                axis,
-                angle,
-              } = createEdgeCylinder(edge[0], edge[1])
-              return (
-                <mesh
-                  geometry={cylGeom}
-                  key={idx}
-                  position={midpoint}
-                  quaternion={new THREE.Quaternion().setFromAxisAngle(axis, angle)}
-                  renderOrder={999}
-                >
-                  <meshStandardMaterial
-                    color="#ffffff"
-                    depthTest={false}
-                    emissive="#ffffff"
-                    emissiveIntensity={0.5}
-                  />
-                </mesh>
-              )
-            })
-          })()}
-        </>
-      )}
-    </group>
-  )
-})
+    )
+  },
+)
 
 Door.displayName = 'Door'
 
@@ -260,36 +309,44 @@ type DoorsProps = {
   floorId: string
   tileSize: number
   wallHeight: number
+  isActive: boolean
+  isFullView?: boolean
 }
 
-export const Doors = memo(({ floorId, tileSize, wallHeight }: DoorsProps) => {
-  // Fetch door components for this floor from the store
-  const doorComponents = useEditor(
-    useShallow((state) => state.components.filter((c) => c.type === 'door' && c.group === floorId)),
-  )
+export const Doors = memo(
+  ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: DoorsProps) => {
+    // Fetch door components for this floor from the store
+    const doorComponents = useEditor(
+      useShallow((state) =>
+        state.components.filter((c) => c.type === 'door' && c.group === floorId),
+      ),
+    )
 
-  if (doorComponents.length === 0) return null
+    if (doorComponents.length === 0) return null
 
-  return (
-    <group>
-      {doorComponents.map((component) => {
-        if (component.type !== 'door') return null
+    return (
+      <group>
+        {doorComponents.map((component) => {
+          if (component.type !== 'door') return null
 
-        const { position, rotation } = component.data
+          const { position, rotation } = component.data
 
-        return (
-          <Door
-            doorId={component.id}
-            key={component.id}
-            position={position}
-            rotation={rotation}
-            tileSize={tileSize}
-            wallHeight={wallHeight}
-          />
-        )
-      })}
-    </group>
-  )
-})
+          return (
+            <Door
+              doorId={component.id}
+              isActive={isActive}
+              isFullView={isFullView}
+              key={component.id}
+              position={position}
+              rotation={rotation}
+              tileSize={tileSize}
+              wallHeight={wallHeight}
+            />
+          )
+        })}
+      </group>
+    )
+  },
+)
 
 Doors.displayName = 'Doors'
