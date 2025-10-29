@@ -163,6 +163,7 @@ export const Roofs = forwardRef(
         const storeState = useEditor.getState()
         const originalComponents = storeState.components
         const originalImages = storeState.images
+        const originalScans = storeState.scans
 
         const plane = new THREE.Plane()
         const raycaster = new THREE.Raycaster()
@@ -339,7 +340,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents },
+                { images: originalImages, components: originalComponents, scans: originalScans },
               ].slice(-50),
               redoStack: [],
             }))
@@ -364,6 +365,7 @@ export const Roofs = forwardRef(
         const storeState = useEditor.getState()
         const originalComponents = storeState.components
         const originalImages = storeState.images
+        const originalScans = storeState.scans
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -507,7 +509,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents },
+                { images: originalImages, components: originalComponents, scans: originalScans },
               ].slice(-50),
               redoStack: [],
             }))
@@ -532,6 +534,7 @@ export const Roofs = forwardRef(
         const storeState = useEditor.getState()
         const originalComponents = storeState.components
         const originalImages = storeState.images
+        const originalScans = storeState.scans
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -632,7 +635,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents },
+                { images: originalImages, components: originalComponents, scans: originalScans },
               ].slice(-50),
               redoStack: [],
             }))

@@ -23,6 +23,7 @@ import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
+import { Scan } from './elements/scan'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { LightingControls } from './lighting-controls'
@@ -52,12 +53,17 @@ export default function Editor({ className }: { className?: string }) {
   const setRoofs = useEditor((state) => state.setRoofs)
   const images = useEditor((state) => state.images)
   const setImages = useEditor((state) => state.setImages)
+  const scans = useEditor((state) => state.scans)
+  const setScans = useEditor((state) => state.setScans)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
   const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const selectedScanIds = useEditor((state) => state.selectedScanIds)
+  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
   const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
+  const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
   const undo = useEditor((state) => state.undo)
   const redo = useEditor((state) => state.redo)
   const activeTool = useEditor((state) => state.activeTool)
@@ -68,6 +74,7 @@ export default function Editor({ className }: { className?: string }) {
   const setCameraMode = useEditor((state) => state.setCameraMode)
   const movingCamera = useEditor((state) => state.movingCamera)
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
+  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const groups = useEditor((state) => state.groups)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
@@ -132,9 +139,10 @@ export default function Editor({ className }: { className?: string }) {
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setCursorPosition(null)
-    // Clear all selections (building elements and images)
+    // Clear all selections (building elements, images, and scans)
     setSelectedElements([])
     setSelectedImageIds([])
+    setSelectedScanIds([])
   }
 
   // Clear cursor position when switching floors to prevent grid artifacts
@@ -208,6 +216,9 @@ export default function Editor({ className }: { className?: string }) {
         } else if (selectedImageIds.length > 0) {
           // Handle image deletion separately (not building elements)
           handleDeleteSelectedImages()
+        } else if (selectedScanIds.length > 0) {
+          // Handle scan deletion separately
+          handleDeleteSelectedScans()
         }
       }
     }
@@ -229,8 +240,10 @@ export default function Editor({ className }: { className?: string }) {
     clearPlacementStates,
     selectedElements,
     selectedImageIds,
+    selectedScanIds,
     handleDeleteSelectedElements,
     handleDeleteSelectedImages,
+    handleDeleteSelectedScans,
   ])
 
   // Use constants instead of Leva controls
@@ -996,7 +1009,7 @@ export default function Editor({ className }: { className?: string }) {
           />
         </group>
 
-        {/* Hide guides (reference images) in full view mode */}
+        {/* Hide guides (reference images and scans) in full view mode */}
         {viewMode === 'level' &&
           images
             .filter((image) => image.visible !== false)
@@ -1022,6 +1035,35 @@ export default function Editor({ className }: { className?: string }) {
                 rotation={image.rotation}
                 scale={image.scale}
                 url={image.url}
+              />
+            ))}
+
+        {/* Render 3D scans */}
+        {viewMode === 'level' &&
+          scans
+            .filter((scan) => scan.visible !== false)
+            .map((scan) => (
+              <Scan
+                controlMode={controlMode}
+                id={scan.id}
+                isSelected={selectedScanIds.includes(scan.id)}
+                key={scan.id}
+                level={scan.level}
+                movingCamera={movingCamera}
+                onManipulationEnd={() => setIsManipulatingScan(false)}
+                onManipulationStart={() => setIsManipulatingScan(true)}
+                onSelect={() => setSelectedScanIds([scan.id])}
+                onUpdate={(updates, pushToUndo = true) =>
+                  setScans(
+                    scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
+                    pushToUndo,
+                  )
+                }
+                position={scan.position}
+                rotation={scan.rotation}
+                scale={scan.scale}
+                url={scan.url}
+                yOffset={scan.yOffset}
               />
             ))}
 
