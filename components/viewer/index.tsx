@@ -44,10 +44,16 @@ export default function Viewer({ className }: { className?: string }) {
   const components = useEditor((state) => state.components)
   const selectFloor = useEditor((state) => state.selectFloor)
   const movingCamera = useEditor((state) => state.movingCamera)
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const setSelectedElements = useEditor((state) => state.setSelectedElements)
-  const setControlMode = useEditor((state) => state.setControlMode)
-  const controlMode = useEditor((state) => state.controlMode)
+
+  // Viewer-specific state (isolated from editor)
+  const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
+  const noopSetSelectedElements = () => {
+    /* No-op in viewer mode */
+  }
+  const noopSetControlMode = () => {
+    /* No-op in viewer mode */
+  }
+  const controlMode = 'select' as const
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -62,9 +68,7 @@ export default function Viewer({ className }: { className?: string }) {
     [setWallsGroupRef],
   )
 
-  // State for hover effects (read-only in viewer)
-  const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
-  const [hoveredRoofIndex, setHoveredRoofIndex] = useState<number | null>(null)
+  // State for hover effects (floor hover only in viewer)
   const [hoveredFloorId, setHoveredFloorId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -306,7 +310,7 @@ export default function Viewer({ className }: { className?: string }) {
                     <Walls
                       controlMode={controlMode}
                       floorId={floor.id}
-                      hoveredWallIndex={hoveredWallIndex}
+                      hoveredWallIndex={null}
                       isActive={isActiveFloor}
                       isCameraEnabled={false}
                       isFullView={viewMode === 'full'}
@@ -315,11 +319,13 @@ export default function Viewer({ className }: { className?: string }) {
                       onDeleteWalls={() => {
                         // No-op in viewer mode
                       }}
-                      onWallHover={setHoveredWallIndex}
+                      onWallHover={() => {
+                        // No-op in viewer mode
+                      }}
                       onWallRightClick={undefined}
-                      selectedElements={selectedElements}
-                      setControlMode={setControlMode}
-                      setSelectedElements={setSelectedElements}
+                      selectedElements={viewerSelectedElements}
+                      setControlMode={noopSetControlMode}
+                      setSelectedElements={noopSetSelectedElements}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />
@@ -329,7 +335,7 @@ export default function Viewer({ className }: { className?: string }) {
                       baseHeight={wallHeight}
                       controlMode={controlMode}
                       floorId={floor.id}
-                      hoveredRoofIndex={hoveredRoofIndex}
+                      hoveredRoofIndex={null}
                       isActive={isActiveFloor}
                       isCameraEnabled={false}
                       isFullView={viewMode === 'full'}
@@ -338,11 +344,13 @@ export default function Viewer({ className }: { className?: string }) {
                       onDeleteRoofs={() => {
                         // No-op in viewer mode
                       }}
-                      onRoofHover={setHoveredRoofIndex}
+                      onRoofHover={() => {
+                        // No-op in viewer mode
+                      }}
                       onRoofRightClick={undefined}
-                      selectedElements={selectedElements}
-                      setControlMode={setControlMode}
-                      setSelectedElements={setSelectedElements}
+                      selectedElements={viewerSelectedElements}
+                      setControlMode={noopSetControlMode}
+                      setSelectedElements={noopSetSelectedElements}
                       tileSize={tileSize}
                     />
 

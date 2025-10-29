@@ -1,15 +1,30 @@
 'use client'
 
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
 import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import {
   deleteElements,
   type SelectedElement,
   toggleElementVisibility,
 } from '@/lib/building-elements'
+
+// IndexedDB storage adapter for Zustand persist middleware
+const indexedDBStorage: StateStorage = {
+  getItem: async (name: string) => {
+    const value = await idbGet<string>(name)
+    return value ?? null
+  },
+  setItem: async (name: string, value: string) => {
+    await idbSet(name, value)
+  },
+  removeItem: async (name: string) => {
+    await idbDel(name)
+  },
+}
 
 export interface WallSegment {
   start: [number, number] // [x, y] intersection coordinates
@@ -17,6 +32,7 @@ export interface WallSegment {
   id: string
   isHorizontal: boolean
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export interface RoofSegment {
@@ -27,6 +43,7 @@ export interface RoofSegment {
   leftWidth?: number // Distance from ridge to left edge (defaults to ROOF_WIDTH / 2)
   rightWidth?: number // Distance from ridge to right edge (defaults to ROOF_WIDTH / 2)
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export interface ReferenceImage {
@@ -39,6 +56,21 @@ export interface ReferenceImage {
   scale: number
   level: number // Floor level this image belongs to
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
+}
+
+export interface Scan {
+  id: string
+  url: string
+  name: string
+  createdAt: string
+  position: [number, number]
+  rotation: number
+  scale: number
+  level: number // Floor level this scan belongs to
+  yOffset?: number // Additional Y offset from floor level
+  visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export type Tool =
@@ -104,6 +136,7 @@ export type ComponentGroup = {
   color: string
   level?: number
   visible?: boolean // Optional for backward compatibility
+  opacity?: number // 0-100, defaults to 100 if undefined
 }
 
 export type LayoutJSON = {
@@ -114,10 +147,12 @@ export type LayoutJSON = {
   components: Component[]
   groups: ComponentGroup[]
   images?: ReferenceImage[] // Optional for backward compatibility
+  scans?: Scan[] // Optional for backward compatibility
 }
 
 type HistoryState = {
   images: ReferenceImage[]
+  scans: Scan[]
   components: Component[]
 }
 
@@ -125,6 +160,7 @@ export type ViewMode = 'full' | 'level'
 
 type StoreState = {
   images: ReferenceImage[]
+  scans: Scan[]
   components: Component[]
   groups: ComponentGroup[]
   currentLevel: number
@@ -132,6 +168,7 @@ type StoreState = {
   viewMode: ViewMode // 'full' for viewing all levels, 'level' for editing a specific level
   selectedElements: SelectedElement[] // Unified selection for building elements (walls, roofs)
   selectedImageIds: string[]
+  selectedScanIds: string[]
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
@@ -143,6 +180,7 @@ type StoreState = {
   levelMode: LevelMode
   movingCamera: boolean
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
+  isManipulatingScan: boolean // Flag to prevent undo stack during scan manipulation
   handleClear: () => void
 } & {
   setWalls: (walls: string[]) => void
@@ -153,8 +191,10 @@ type StoreState = {
   reorderGroups: (groups: ComponentGroup[]) => void
   selectFloor: (floorId: string | null) => void
   setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
+  setScans: (scans: Scan[], pushToUndo?: boolean) => void
   setSelectedElements: (elements: SelectedElement[]) => void
   setSelectedImageIds: (ids: string[]) => void
+  setSelectedScanIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
   setWallsGroupRef: (ref: THREE.Group | null) => void
@@ -164,16 +204,20 @@ type StoreState = {
   toggleLevelMode: () => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
+  setIsManipulatingScan: (manipulating: boolean) => void
   getWallsSet: () => Set<string>
   getRoofsSet: () => Set<string>
   getSelectedElementsSet: () => Set<SelectedElement>
   getSelectedImageIdsSet: () => Set<string>
+  getSelectedScanIdsSet: () => Set<string>
   wallSegments: () => WallSegment[]
   roofSegments: () => RoofSegment[]
   handleExport: () => void
   handleUpload: (file: File, level: number) => void
+  handleScanUpload: (file: File, level: number) => void
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
+  handleDeleteSelectedScans: () => void
   serializeLayout: () => LayoutJSON
   loadLayout: (json: LayoutJSON) => void
   handleSaveLayout: () => void
@@ -184,12 +228,18 @@ type StoreState = {
   toggleFloorVisibility: (floorId: string) => void
   toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof') => void
   toggleImageVisibility: (imageId: string) => void
+  toggleScanVisibility: (scanId: string) => void
+  setFloorOpacity: (floorId: string, opacity: number) => void
+  setBuildingElementOpacity: (elementId: string, type: 'wall' | 'roof', opacity: number) => void
+  setImageOpacity: (imageId: string, opacity: number) => void
+  setScanOpacity: (scanId: string, opacity: number) => void
 }
 
 const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
       images: [],
+      scans: [],
       components: [],
       groups: [
         {
@@ -206,7 +256,7 @@ const useStore = create<StoreState>()(
         set((state) => ({
           undoStack: [
             ...state.undoStack,
-            { images: state.images, components: state.components },
+            { images: state.images, scans: state.scans, components: state.components },
           ].slice(-50),
           redoStack: [],
           components: [...state.components, component],
@@ -268,6 +318,7 @@ const useStore = create<StoreState>()(
         }
       },
       selectedImageIds: [],
+      selectedScanIds: [],
       isHelpOpen: false,
       isJsonInspectorOpen: false,
       wallsGroupRef: null,
@@ -283,6 +334,7 @@ const useStore = create<StoreState>()(
         })),
       movingCamera: false,
       isManipulatingImage: false,
+      isManipulatingScan: false,
       setWalls: (walls) =>
         set((state) => {
           if (!state.selectedFloorId) {
@@ -359,7 +411,7 @@ const useStore = create<StoreState>()(
           return {
             undoStack: [
               ...state.undoStack,
-              { images: state.images, components: state.components },
+              { images: state.images, scans: state.scans, components: state.components },
             ].slice(-50),
             redoStack: [],
             components: updatedComponents,
@@ -455,7 +507,7 @@ const useStore = create<StoreState>()(
           return {
             undoStack: [
               ...state.undoStack,
-              { images: state.images, components: state.components },
+              { images: state.images, scans: state.scans, components: state.components },
             ].slice(-50),
             redoStack: [],
             components: updatedComponents,
@@ -487,7 +539,7 @@ const useStore = create<StoreState>()(
             return {
               undoStack: [
                 ...state.undoStack,
-                { images: state.images, components: state.components },
+                { images: state.images, scans: state.scans, components: state.components },
               ].slice(-50),
               redoStack: [],
               images,
@@ -497,8 +549,46 @@ const useStore = create<StoreState>()(
           // Just update images without affecting undo stack (for intermediate drag updates)
           return { images }
         }),
+      setScans: (scans, pushToUndo = true) =>
+        set((state) => {
+          // Deep comparison to avoid unnecessary undo stack pushes
+          const areEqual =
+            state.scans.length === scans.length &&
+            state.scans.every((scan, i) => {
+              const newScan = scans[i]
+              return (
+                scan.id === newScan.id &&
+                scan.position[0] === newScan.position[0] &&
+                scan.position[1] === newScan.position[1] &&
+                scan.rotation === newScan.rotation &&
+                scan.scale === newScan.scale &&
+                scan.url === newScan.url &&
+                (scan.yOffset ?? 0) === (newScan.yOffset ?? 0)
+              )
+            })
+
+          if (areEqual) {
+            return state
+          }
+
+          // Only push to undo stack if requested (used for final commit, not intermediate updates)
+          if (pushToUndo) {
+            return {
+              undoStack: [
+                ...state.undoStack,
+                { images: state.images, scans: state.scans, components: state.components },
+              ].slice(-50),
+              redoStack: [],
+              scans,
+            }
+          }
+
+          // Just update scans without affecting undo stack (for intermediate drag updates)
+          return { scans }
+        }),
       setSelectedElements: (elements) => set({ selectedElements: elements }),
       setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
+      setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
       setIsHelpOpen: (open) => set({ isHelpOpen: open }),
       setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
       setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
@@ -521,6 +611,7 @@ const useStore = create<StoreState>()(
       setCameraMode: (mode) => set({ cameraMode: mode }),
       setMovingCamera: (moving) => set({ movingCamera: moving }),
       setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
+      setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
       getWallsSet: () => {
         const state = get()
         if (!state.selectedFloorId) return new Set<string>()
@@ -545,6 +636,7 @@ const useStore = create<StoreState>()(
       },
       getSelectedElementsSet: () => new Set(get().selectedElements),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
+      getSelectedScanIdsSet: () => new Set(get().selectedScanIds),
       wallSegments: () => {
         const state = get()
         if (!state.selectedFloorId) return []
@@ -617,6 +709,36 @@ const useStore = create<StoreState>()(
           reader.readAsDataURL(file)
         }
       },
+      handleScanUpload: (file: File, level: number) => {
+        const validTypes = [
+          'model/gltf-binary',
+          'model/gltf+json',
+          'application/octet-stream', // .glb files might use this
+        ]
+        const validExtensions = ['.glb', '.gltf', '.ply']
+        const hasValidExtension = validExtensions.some((ext) =>
+          file.name.toLowerCase().endsWith(ext),
+        )
+
+        if (validTypes.includes(file.type) || hasValidExtension) {
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            const newScan: Scan = {
+              id: `scan-${Date.now()}`,
+              url: event.target?.result as string,
+              name: file.name,
+              createdAt: new Date().toISOString(),
+              position: [0, 0],
+              rotation: 0,
+              scale: 1,
+              level,
+              visible: true,
+            }
+            set((state) => ({ scans: [...state.scans, newScan] }))
+          }
+          reader.readAsDataURL(file)
+        }
+      },
       handleDeleteSelectedImages: () => {
         set((state) => {
           if (state.selectedImageIds.length === 0) return state
@@ -625,6 +747,17 @@ const useStore = create<StoreState>()(
           return {
             images: newImages,
             selectedImageIds: [],
+          }
+        })
+      },
+      handleDeleteSelectedScans: () => {
+        set((state) => {
+          if (state.selectedScanIds.length === 0) return state
+          const idsToDelete = new Set(state.selectedScanIds)
+          const newScans = state.scans.filter((scan) => !idsToDelete.has(scan.id))
+          return {
+            scans: newScans,
+            selectedScanIds: [],
           }
         })
       },
@@ -641,7 +774,7 @@ const useStore = create<StoreState>()(
         set({
           undoStack: [
             ...state.undoStack,
-            { images: state.images, components: state.components },
+            { images: state.images, scans: state.scans, components: state.components },
           ].slice(-50),
           redoStack: [],
           components: updatedComponents,
@@ -655,6 +788,7 @@ const useStore = create<StoreState>()(
       serializeLayout: () => {
         const state = get()
         const images = state.images
+        const scans = state.scans
 
         // Walls are already saved in components, no need to update
 
@@ -664,12 +798,14 @@ const useStore = create<StoreState>()(
           components: state.components,
           groups: state.groups,
           images, // Include reference images in the layout
+          scans, // Include 3D scans in the layout
         }
       },
       loadLayout: (json: LayoutJSON) => {
         set({
           selectedElements: [],
           selectedImageIds: [],
+          selectedScanIds: [],
           selectedFloorId: null,
           viewMode: 'full', // Start in full view mode when loading a layout
           controlMode: 'select',
@@ -689,6 +825,11 @@ const useStore = create<StoreState>()(
         // Load reference images (if present in the JSON)
         if (json.images && Array.isArray(json.images)) {
           get().setImages(json.images, false) // Don't push to undo stack
+        }
+
+        // Load 3D scans (if present in the JSON)
+        if (json.scans && Array.isArray(json.scans)) {
+          get().setScans(json.scans, false) // Don't push to undo stack
         }
       },
       handleSaveLayout: () => {
@@ -718,6 +859,7 @@ const useStore = create<StoreState>()(
       handleResetToDefault: () => {
         set({
           images: [],
+          scans: [],
           components: [],
           groups: [
             {
@@ -734,6 +876,7 @@ const useStore = create<StoreState>()(
           viewMode: 'level',
           selectedElements: [],
           selectedImageIds: [],
+          selectedScanIds: [],
           undoStack: [],
           redoStack: [],
         })
@@ -745,10 +888,15 @@ const useStore = create<StoreState>()(
           return {
             components: previous.components,
             images: previous.images,
+            scans: previous.scans,
             undoStack: state.undoStack.slice(0, -1),
-            redoStack: [...state.redoStack, { components: state.components, images: state.images }],
+            redoStack: [
+              ...state.redoStack,
+              { components: state.components, images: state.images, scans: state.scans },
+            ],
             selectedElements: [],
             selectedImageIds: [],
+            selectedScanIds: [],
           }
         }),
       redo: () =>
@@ -758,10 +906,15 @@ const useStore = create<StoreState>()(
           return {
             components: next.components,
             images: next.images,
+            scans: next.scans,
             redoStack: state.redoStack.slice(0, -1),
-            undoStack: [...state.undoStack, { components: state.components, images: state.images }],
+            undoStack: [
+              ...state.undoStack,
+              { components: state.components, images: state.images, scans: state.scans },
+            ],
             selectedElements: [],
             selectedImageIds: [],
+            selectedScanIds: [],
           }
         }),
       toggleFloorVisibility: (floorId) =>
@@ -788,15 +941,69 @@ const useStore = create<StoreState>()(
             img.id === imageId ? { ...img, visible: !(img.visible ?? true) } : img,
           ),
         })),
+      toggleScanVisibility: (scanId) =>
+        set((state) => ({
+          scans: state.scans.map((scan) =>
+            scan.id === scanId ? { ...scan, visible: !(scan.visible ?? true) } : scan,
+          ),
+        })),
+      setFloorOpacity: (floorId, opacity) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g.id === floorId ? { ...g, opacity: Math.max(0, Math.min(100, opacity)) } : g,
+          ),
+        })),
+      setBuildingElementOpacity: (elementId, type, opacity) =>
+        set((state) => {
+          if (!state.selectedFloorId) return state
+          const clampedOpacity = Math.max(0, Math.min(100, opacity))
+
+          const updatedComponents = state.components.map((comp): Component => {
+            if (comp.type === type && comp.group === state.selectedFloorId) {
+              if (type === 'wall' && comp.type === 'wall') {
+                const data = comp.data as WallComponentData
+                const segments = data.segments.map((seg) =>
+                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
+                )
+                return { ...comp, data: { segments } }
+              }
+              if (type === 'roof' && comp.type === 'roof') {
+                const data = comp.data as RoofComponentData
+                const segments = data.segments.map((seg) =>
+                  seg.id === elementId ? { ...seg, opacity: clampedOpacity } : seg,
+                )
+                return { ...comp, data: { segments } }
+              }
+            }
+            return comp
+          })
+
+          return { components: updatedComponents }
+        }),
+      setImageOpacity: (imageId, opacity) =>
+        set((state) => ({
+          images: state.images.map((img) =>
+            img.id === imageId ? { ...img, opacity: Math.max(0, Math.min(100, opacity)) } : img,
+          ),
+        })),
+      setScanOpacity: (scanId, opacity) =>
+        set((state) => ({
+          scans: state.scans.map((scan) =>
+            scan.id === scanId ? { ...scan, opacity: Math.max(0, Math.min(100, opacity)) } : scan,
+          ),
+        })),
     }),
     {
       name: 'editor-storage',
+      storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         components: state.components,
         groups: state.groups,
         images: state.images,
+        scans: state.scans, // Now persisted in IndexedDB which can handle large data
         selectedElements: state.selectedElements,
         selectedImageIds: state.selectedImageIds,
+        selectedScanIds: state.selectedScanIds, // Now persisting scan selection
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -810,6 +1017,27 @@ const useStore = create<StoreState>()(
               level: img.level ?? 0, // Default to base level
               visible: img.visible ?? true, // Default to visible
             }))
+          }
+
+          // Migrate: Add missing position, rotation, scale, level, yOffset, visible to existing scans
+          if (state.scans && state.scans.length > 0) {
+            state.scans = state.scans.map((scan: any) => ({
+              ...scan,
+              position: scan.position ?? [0, 0],
+              rotation: scan.rotation ?? 0,
+              scale: scan.scale ?? 1,
+              level: scan.level ?? 0, // Default to base level
+              yOffset: scan.yOffset ?? 0, // Default to no offset
+              visible: scan.visible ?? true, // Default to visible
+            }))
+          }
+
+          // Initialize scans and selectedScanIds if not present
+          if (!state.scans) {
+            state.scans = []
+          }
+          if (!state.selectedScanIds) {
+            state.selectedScanIds = []
           }
 
           // Ensure components and groups are initialized
@@ -895,6 +1123,8 @@ export const useEditorContext = () => {
     },
     images: store.images,
     setImages: store.setImages,
+    scans: store.scans,
+    setScans: store.setScans,
     selectedElements: store.selectedElements,
     setSelectedElements: store.setSelectedElements,
     selectedImageIds: store.getSelectedImageIdsSet(),
@@ -902,6 +1132,12 @@ export const useEditorContext = () => {
       const currentSet = store.getSelectedImageIdsSet()
       const newSet = typeof action === 'function' ? action(currentSet) : action
       store.setSelectedImageIds(Array.from(newSet))
+    },
+    selectedScanIds: store.getSelectedScanIdsSet(),
+    setSelectedScanIds: (action: SetStateAction<Set<string>>) => {
+      const currentSet = store.getSelectedScanIdsSet()
+      const newSet = typeof action === 'function' ? action(currentSet) : action
+      store.setSelectedScanIds(Array.from(newSet))
     },
     isHelpOpen: store.isHelpOpen,
     setIsHelpOpen: store.setIsHelpOpen,
@@ -919,12 +1155,16 @@ export const useEditorContext = () => {
     setMovingCamera: store.setMovingCamera,
     isManipulatingImage: store.isManipulatingImage,
     setIsManipulatingImage: store.setIsManipulatingImage,
+    isManipulatingScan: store.isManipulatingScan,
+    setIsManipulatingScan: store.setIsManipulatingScan,
     wallSegments: store.wallSegments(),
     roofSegments: store.roofSegments(),
     handleExport: store.handleExport,
     handleUpload: store.handleUpload,
+    handleScanUpload: store.handleScanUpload,
     handleDeleteSelectedElements: store.handleDeleteSelectedElements,
     handleDeleteSelectedImages: store.handleDeleteSelectedImages,
+    handleDeleteSelectedScans: store.handleDeleteSelectedScans,
     serializeLayout: store.serializeLayout,
     loadLayout: store.loadLayout,
     handleSaveLayout: store.handleSaveLayout,
@@ -944,5 +1184,10 @@ export const useEditorContext = () => {
     toggleFloorVisibility: store.toggleFloorVisibility,
     toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
     toggleImageVisibility: store.toggleImageVisibility,
+    toggleScanVisibility: store.toggleScanVisibility,
+    setFloorOpacity: store.setFloorOpacity,
+    setBuildingElementOpacity: store.setBuildingElementOpacity,
+    setImageOpacity: store.setImageOpacity,
+    setScanOpacity: store.setScanOpacity,
   }
 }
