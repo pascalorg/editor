@@ -59,7 +59,7 @@ export function OpacityControl({
         >
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Opacity</span>
+              <span className="font-medium text-sm">Opacity</span>
               <span className="text-muted-foreground text-xs">{actualOpacity}%</span>
             </div>
             <Slider
@@ -77,4 +77,3 @@ export function OpacityControl({
     </Popover>
   )
 }
-
