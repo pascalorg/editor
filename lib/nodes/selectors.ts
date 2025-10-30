@@ -7,15 +7,15 @@
 
 import type {
   BaseNode,
-  LevelNode,
-  WallNode,
-  DoorNode,
-  WindowNode,
   ColumnNode,
-  RoofNode,
-  ReferenceImageNode,
-  ScanNode,
+  DoorNode,
+  LevelNode,
   NodeType,
+  ReferenceImageNode,
+  RoofNode,
+  ScanNode,
+  WallNode,
+  WindowNode,
 } from './types'
 
 import { findNodeById, findNodesByType } from './utils'
@@ -27,54 +27,46 @@ import { findNodeById, findNodesByType } from './utils'
 /**
  * Select all levels from store state
  */
-export const selectLevels = (state: { levels: LevelNode[] }): LevelNode[] => {
-  return state.levels
-}
+export const selectLevels = (state: { levels: LevelNode[] }): LevelNode[] => state.levels
 
 /**
  * Select a specific level by ID
  */
 export const selectLevelById =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): LevelNode | null => {
-    return state.levels.find((l) => l.id === levelId) || null
-  }
+  (state: { levels: LevelNode[] }): LevelNode | null =>
+    state.levels.find((l) => l.id === levelId) || null
 
 /**
  * Select a specific level by number
  */
 export const selectLevelByNumber =
   (levelNumber: number) =>
-  (state: { levels: LevelNode[] }): LevelNode | null => {
-    return state.levels.find((l) => l.level === levelNumber) || null
-  }
+  (state: { levels: LevelNode[] }): LevelNode | null =>
+    state.levels.find((l) => l.level === levelNumber) || null
 
 /**
  * Select a node by ID from levels
  */
 export const selectNodeById =
   (nodeId: string) =>
-  (state: { levels: LevelNode[] }): BaseNode | null => {
-    return findNodeById(state.levels, nodeId)
-  }
+  (state: { levels: LevelNode[] }): BaseNode | null =>
+    findNodeById(state.levels, nodeId)
 
 /**
  * Select node index from store
  */
 export const selectNodeIndex = (state: {
   nodeIndex: Map<string, BaseNode>
-}): Map<string, BaseNode> => {
-  return state.nodeIndex
-}
+}): Map<string, BaseNode> => state.nodeIndex
 
 /**
  * Select a node by ID from index (faster)
  */
 export const selectNodeByIdFromIndex =
   (nodeId: string) =>
-  (state: { nodeIndex: Map<string, BaseNode> }): BaseNode | undefined => {
-    return state.nodeIndex.get(nodeId)
-  }
+  (state: { nodeIndex: Map<string, BaseNode> }): BaseNode | undefined =>
+    state.nodeIndex.get(nodeId)
 
 // ============================================================================
 // LEVEL CHILDREN SELECTORS
@@ -109,45 +101,40 @@ export const selectNodesOfTypeFromLevel =
  */
 export const selectWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] => {
-    return selectNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
-  }
+  (state: { levels: LevelNode[] }): WallNode[] =>
+    selectNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
 
 /**
  * Select all columns from a level
  */
 export const selectColumnsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ColumnNode[] => {
-    return selectNodesOfTypeFromLevel<ColumnNode>(levelId, 'column')(state)
-  }
+  (state: { levels: LevelNode[] }): ColumnNode[] =>
+    selectNodesOfTypeFromLevel<ColumnNode>(levelId, 'column')(state)
 
 /**
  * Select all roofs from a level
  */
 export const selectRoofsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): RoofNode[] => {
-    return selectNodesOfTypeFromLevel<RoofNode>(levelId, 'roof')(state)
-  }
+  (state: { levels: LevelNode[] }): RoofNode[] =>
+    selectNodesOfTypeFromLevel<RoofNode>(levelId, 'roof')(state)
 
 /**
  * Select all reference images from a level
  */
 export const selectReferenceImagesFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ReferenceImageNode[] => {
-    return selectNodesOfTypeFromLevel<ReferenceImageNode>(levelId, 'reference-image')(state)
-  }
+  (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+    selectNodesOfTypeFromLevel<ReferenceImageNode>(levelId, 'reference-image')(state)
 
 /**
  * Select all scans from a level
  */
 export const selectScansFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ScanNode[] => {
-    return selectNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
-  }
+  (state: { levels: LevelNode[] }): ScanNode[] =>
+    selectNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
 
 // ============================================================================
 // DOORS & WINDOWS (FROM WALLS)
@@ -250,30 +237,24 @@ export const selectVisibleNodesOfTypeFromLevel =
  */
 export const selectVisibleWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] => {
-    return selectVisibleNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
-  }
+  (state: { levels: LevelNode[] }): WallNode[] =>
+    selectVisibleNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
 
 /**
  * Select visible reference images from a level
  */
 export const selectVisibleReferenceImagesFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ReferenceImageNode[] => {
-    return selectVisibleNodesOfTypeFromLevel<ReferenceImageNode>(
-      levelId,
-      'reference-image',
-    )(state)
-  }
+  (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+    selectVisibleNodesOfTypeFromLevel<ReferenceImageNode>(levelId, 'reference-image')(state)
 
 /**
  * Select visible scans from a level
  */
 export const selectVisibleScansFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ScanNode[] => {
-    return selectVisibleNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
-  }
+  (state: { levels: LevelNode[] }): ScanNode[] =>
+    selectVisibleNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
 
 // ============================================================================
 // COUNT SELECTORS
@@ -294,9 +275,8 @@ export const selectNodeCountByType =
  */
 export const selectWallCountInLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): number => {
-    return selectNodeCountByType(levelId, 'wall')(state)
-  }
+  (state: { levels: LevelNode[] }): number =>
+    selectNodeCountByType(levelId, 'wall')(state)
 
 /**
  * Select total door count in a level (including those in walls)
@@ -317,32 +297,26 @@ export const selectDoorCountInLevel =
  */
 export const selectAllNodesOfType =
   <T extends BaseNode>(type: NodeType) =>
-  (state: { levels: LevelNode[] }): T[] => {
-    return findNodesByType<T>(state.levels, type)
-  }
+  (state: { levels: LevelNode[] }): T[] =>
+    findNodesByType<T>(state.levels, type)
 
 /**
  * Select all walls across all levels
  */
-export const selectAllWalls = (state: { levels: LevelNode[] }): WallNode[] => {
-  return selectAllNodesOfType<WallNode>('wall')(state)
-}
+export const selectAllWalls = (state: { levels: LevelNode[] }): WallNode[] =>
+  selectAllNodesOfType<WallNode>('wall')(state)
 
 /**
  * Select all reference images across all levels
  */
-export const selectAllReferenceImages = (state: {
-  levels: LevelNode[]
-}): ReferenceImageNode[] => {
-  return selectAllNodesOfType<ReferenceImageNode>('reference-image')(state)
-}
+export const selectAllReferenceImages = (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+  selectAllNodesOfType<ReferenceImageNode>('reference-image')(state)
 
 /**
  * Select all scans across all levels
  */
-export const selectAllScans = (state: { levels: LevelNode[] }): ScanNode[] => {
-  return selectAllNodesOfType<ScanNode>('scan')(state)
-}
+export const selectAllScans = (state: { levels: LevelNode[] }): ScanNode[] =>
+  selectAllNodesOfType<ScanNode>('scan')(state)
 
 // ============================================================================
 // SELECTION HELPERS
@@ -367,7 +341,6 @@ export function createNodeSelector<T extends BaseNode>(levelId: string, type: No
  * Create a selector for a single node by ID
  */
 export function createSingleNodeSelector(nodeId: string) {
-  return (state: { nodeIndex: Map<string, BaseNode> }): BaseNode | undefined => {
-    return state.nodeIndex.get(nodeId)
-  }
+  return (state: { nodeIndex: Map<string, BaseNode> }): BaseNode | undefined =>
+    state.nodeIndex.get(nodeId)
 }

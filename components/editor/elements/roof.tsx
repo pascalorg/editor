@@ -136,7 +136,7 @@ export const Roofs = forwardRef(
     // Convert RoofNodes to RoofSegment format for rendering
     const roofSegments: RoofSegment[] = useMemo(() => {
       return roofNodes
-        .filter(node => {
+        .filter((node) => {
           // Filter out invalid nodes
           return (
             node.position &&
@@ -150,7 +150,7 @@ export const Roofs = forwardRef(
             !isNaN(node.rotation)
           )
         })
-        .map(node => {
+        .map((node) => {
           // Node position and size are in grid coordinates
           // Calculate end point from start position, rotation, and length
           const [x1, y1] = node.position
@@ -364,10 +364,7 @@ export const Roofs = forwardRef(
           // Push to undo stack if there were changes
           if (hasChanged) {
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { levels: originalLevels },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }
@@ -532,10 +529,7 @@ export const Roofs = forwardRef(
 
             // Push to undo stack if there were changes
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { levels: originalLevels },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }
@@ -657,10 +651,7 @@ export const Roofs = forwardRef(
           // Push to undo stack if there were changes
           if (hasChanged) {
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { levels: originalLevels },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }

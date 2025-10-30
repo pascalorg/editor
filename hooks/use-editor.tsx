@@ -1,34 +1,36 @@
 'use client'
 
-import {
-  deleteElements,
-  type SelectedElement,
-  toggleElementVisibility,
-} from '@/lib/building-elements'
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
 import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-
-// Node-based architecture imports
-import type { BaseNode, LevelNode } from '@/lib/nodes/types'
-import type { NodeIndexes } from '@/lib/nodes/indexes'
-import { buildNodeIndexes, buildNodeIndex } from '@/lib/nodes/indexes'
-import { componentsToNodeTree, associateDoorsAndWindowsWithWalls } from '@/lib/migration/legacy-to-nodes'
-import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import {
-  setNodeVisibility,
+  deleteElements,
+  type SelectedElement,
+  toggleElementVisibility,
+} from '@/lib/building-elements'
+import {
+  associateDoorsAndWindowsWithWalls,
+  componentsToNodeTree,
+} from '@/lib/migration/legacy-to-nodes'
+import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
+import type { NodeIndexes } from '@/lib/nodes/indexes'
+import { buildNodeIndex, buildNodeIndexes } from '@/lib/nodes/indexes'
+import {
+  addReferenceImageToLevel,
+  addScanToLevel,
+  deleteNode,
+  deleteNodes,
   setNodeOpacity,
   setNodePosition,
   setNodeRotation,
-  deleteNode,
-  deleteNodes,
-  addReferenceImageToLevel,
-  addScanToLevel,
+  setNodeVisibility,
   updateNodeProperties,
 } from '@/lib/nodes/operations'
+// Node-based architecture imports
+import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
 // IndexedDB storage adapter for Zustand persist middleware
 const indexedDBStorage: StateStorage = {
@@ -112,17 +114,17 @@ export type LevelMode = 'stacked' | 'exploded'
 // Re-export them here for backward compatibility
 export type {
   BaseNode,
-  LevelNode,
+  ColumnNode,
+  DoorNode,
   GridItem,
-  WallNode,
+  GroupNode,
+  LevelNode,
+  ReferenceImageNode,
   RoofNode,
   RoofSegmentNode,
-  ReferenceImageNode,
   ScanNode,
-  DoorNode,
+  WallNode,
   WindowNode,
-  ColumnNode,
-  GroupNode,
 } from '@/lib/nodes/types'
 
 export type WallComponentData = {

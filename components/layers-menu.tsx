@@ -30,7 +30,6 @@ import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { LevelNode } from '@/lib/nodes/types'
 import {
   type BuildingElementType,
   getAllElementsOfType,
@@ -40,6 +39,7 @@ import {
   selectElementRange,
   toggleElementSelection,
 } from '@/lib/building-elements'
+import type { LevelNode } from '@/lib/nodes/types'
 import { cn } from '@/lib/utils'
 
 const buildingElementConfig: Record<
@@ -546,7 +546,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         type: 'column',
         group: level.id,
         data: {
-          columns: columns,
+          columns,
         },
       })
     }
@@ -693,9 +693,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   const handleAddLevel = () => {
     // Get all existing level numbers (excluding base level which is 0)
-    const levelNumbers = levels
-      .map((l) => l.level || 0)
-      .filter((n) => n > 0)
+    const levelNumbers = levels.map((l) => l.level || 0).filter((n) => n > 0)
 
     // Find the next available number (starting from 1)
     let nextNumber = 1
@@ -740,8 +738,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   }
 
   // Get sorted levels for rendering
-  const floorGroups = levels
-    .sort((a, b) => (b.level || 0) - (a.level || 0))
+  const floorGroups = levels.sort((a, b) => (b.level || 0) - (a.level || 0))
 
   return (
     <div className="flex flex-1 flex-col px-2 py-2">

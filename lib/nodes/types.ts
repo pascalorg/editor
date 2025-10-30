@@ -188,16 +188,16 @@ export type GridNode =
  * Extract node type from node type string
  */
 export type NodeTypeMap = {
-  'level': LevelNode
-  'wall': WallNode
-  'door': DoorNode
-  'window': WindowNode
-  'column': ColumnNode
-  'roof': RoofNode
+  level: LevelNode
+  wall: WallNode
+  door: DoorNode
+  window: WindowNode
+  column: ColumnNode
+  roof: RoofNode
   'roof-segment': RoofSegmentNode
   'reference-image': ReferenceImageNode
-  'scan': ScanNode
-  'group': GroupNode
+  scan: ScanNode
+  group: GroupNode
 }
 
 /**
@@ -230,8 +230,7 @@ export interface CreateNodeOptions<T extends BaseNode> {
 /**
  * Options for creating a grid item node
  */
-export interface CreateGridNodeOptions<T extends BaseNode & GridItem>
-  extends CreateNodeOptions<T> {
+export interface CreateGridNodeOptions<T extends BaseNode & GridItem> extends CreateNodeOptions<T> {
   position?: [number, number]
   rotation?: number
   size?: [number, number]

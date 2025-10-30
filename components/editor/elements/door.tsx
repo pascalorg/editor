@@ -1,12 +1,12 @@
 'use client'
 
+import { Gltf, useGLTF } from '@react-three/drei'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useDoors } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
-import { Gltf, useGLTF } from '@react-three/drei'
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -327,14 +327,14 @@ export const Doors = memo(
       <>
         {doorNodes.map((doorNode) => (
           <Door
-            key={doorNode.id}
             doorId={doorNode.id}
+            isActive={isActive}
+            isFullView={isFullView}
+            key={doorNode.id}
             position={doorNode.position}
             rotation={doorNode.rotation}
             tileSize={tileSize}
             wallHeight={wallHeight}
-            isActive={isActive}
-            isFullView={isFullView}
           />
         ))}
       </>

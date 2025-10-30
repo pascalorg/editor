@@ -1,11 +1,11 @@
 'use client'
 
-import { FLOOR_SPACING } from '@/components/editor'
-import type { ControlMode } from '@/hooks/use-editor'
 import { useGLTF } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { FLOOR_SPACING } from '@/components/editor'
+import type { ControlMode } from '@/hooks/use-editor'
 
 const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles

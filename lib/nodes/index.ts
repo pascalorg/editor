@@ -4,32 +4,6 @@
  * Public API for working with the node-based data structure.
  */
 
-// Re-export types
-export type {
-  AnyNode,
-  BaseNode,
-  BuildingElementNode,
-  ColumnNode,
-  CreateGridNodeOptions,
-  CreateNodeOptions,
-  DoorNode,
-  GetNodeType,
-  GridItem,
-  GridNode,
-  GroupNode,
-  LevelChildNode,
-  LevelNode,
-  NodeType,
-  NodeTypeMap,
-  ReferenceImageNode,
-  RoofNode,
-  RoofSegmentNode,
-  ScanNode,
-  WallChildNode,
-  WallNode,
-  WindowNode,
-} from './types'
-
 // Re-export guards
 export {
   assertNode,
@@ -55,40 +29,8 @@ export {
   validateNode,
   validateNodeTree,
 } from './guards'
-
-// Re-export utilities
-export {
-  addNode,
-  cloneNode,
-  countNodes,
-  countNodesByType,
-  filterTree,
-  findAncestors,
-  findDescendants,
-  findNodeById,
-  findNodes,
-  findNodesByType,
-  findParentNode,
-  findSiblings,
-  flattenTree,
-  getLeafNodes,
-  getNodeAtPath,
-  getNodePath,
-  getParentNodes,
-  getTreeDepth,
-  hasCircularReferences,
-  mapTree,
-  moveNode,
-  removeNode,
-  traverseTree,
-  traverseTreeBreadthFirst,
-  updateNode,
-  validateParentReferences,
-} from './utils'
-
 // Re-export indexes
 export type { NodeIndexes } from './indexes'
-
 export {
   addNodeToIndexes,
   buildNodeIndex,
@@ -98,14 +40,13 @@ export {
   getLevelNode,
   getNodeById,
   getNodeLevel,
+  getNodesByType,
   getNodesInLevel,
   getNodesInLevelByType,
-  getNodesByType,
   removeNodeFromIndexes,
   updateNodeInIndexes,
   validateIndexes,
 } from './indexes'
-
 // Re-export operations
 export {
   addColumnToLevel,
@@ -135,13 +76,12 @@ export {
   setNodePosition,
   setNodeRotation,
   setNodeSize,
-  setNodeVisibility,
   setNodesOpacity,
   setNodesVisibility,
+  setNodeVisibility,
   updateLevel,
   updateNodeProperties,
 } from './operations'
-
 // Re-export selectors
 export {
   createNodeSelector,
@@ -175,3 +115,57 @@ export {
   selectWindowsFromLevel,
   selectWindowsFromWall,
 } from './selectors'
+// Re-export types
+export type {
+  AnyNode,
+  BaseNode,
+  BuildingElementNode,
+  ColumnNode,
+  CreateGridNodeOptions,
+  CreateNodeOptions,
+  DoorNode,
+  GetNodeType,
+  GridItem,
+  GridNode,
+  GroupNode,
+  LevelChildNode,
+  LevelNode,
+  NodeType,
+  NodeTypeMap,
+  ReferenceImageNode,
+  RoofNode,
+  RoofSegmentNode,
+  ScanNode,
+  WallChildNode,
+  WallNode,
+  WindowNode,
+} from './types'
+// Re-export utilities
+export {
+  addNode,
+  cloneNode,
+  countNodes,
+  countNodesByType,
+  filterTree,
+  findAncestors,
+  findDescendants,
+  findNodeById,
+  findNodes,
+  findNodesByType,
+  findParentNode,
+  findSiblings,
+  flattenTree,
+  getLeafNodes,
+  getNodeAtPath,
+  getNodePath,
+  getParentNodes,
+  getTreeDepth,
+  hasCircularReferences,
+  mapTree,
+  moveNode,
+  removeNode,
+  traverseTree,
+  traverseTreeBreadthFirst,
+  updateNode,
+  validateParentReferences,
+} from './utils'

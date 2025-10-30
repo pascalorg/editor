@@ -5,8 +5,8 @@
  * searching, and manipulation.
  */
 
-import type { AnyNode, BaseNode, NodeType } from './types'
 import { isNode } from './guards'
+import type { AnyNode, BaseNode, NodeType } from './types'
 
 // ============================================================================
 // TREE TRAVERSAL
@@ -19,7 +19,7 @@ export function traverseTree(
   nodes: BaseNode | BaseNode[],
   visitor: (node: BaseNode, parent: BaseNode | null, depth: number) => void | boolean,
   parent: BaseNode | null = null,
-  depth: number = 0,
+  depth = 0,
 ): void {
   const nodeArray = Array.isArray(nodes) ? nodes : [nodes]
 
@@ -72,7 +72,7 @@ export function mapTree<T extends BaseNode>(
   nodes: T | T[],
   mapper: (node: T, parent: T | null, depth: number) => T,
   parent: T | null = null,
-  depth: number = 0,
+  depth = 0,
 ): T | T[] {
   const nodeArray = Array.isArray(nodes) ? nodes : [nodes]
   const isArray = Array.isArray(nodes)
@@ -167,7 +167,7 @@ export function findAncestors(nodes: BaseNode | BaseNode[], nodeId: string): Bas
   const ancestors: BaseNode[] = []
   const node = findNodeById(nodes, nodeId)
 
-  if (!node || !node.parent) {
+  if (!(node && node.parent)) {
     return ancestors
   }
 
@@ -252,11 +252,7 @@ export function getNodeAtPath(nodes: BaseNode | BaseNode[], path: string[]): Bas
 /**
  * Add a node to the tree at a specific parent
  */
-export function addNode(
-  nodes: BaseNode[],
-  parentId: string | null,
-  newNode: BaseNode,
-): BaseNode[] {
+export function addNode(nodes: BaseNode[], parentId: string | null, newNode: BaseNode): BaseNode[] {
   if (parentId === null) {
     // Add to root level
     return [...nodes, newNode]
@@ -277,12 +273,10 @@ export function addNode(
  * Remove a node from the tree
  */
 export function removeNode(nodes: BaseNode[], nodeId: string): BaseNode[] {
-  const result = mapTree(nodes, (node) => {
-    return {
-      ...node,
-      children: node.children.filter((child) => child.id !== nodeId),
-    }
-  }) as BaseNode[]
+  const result = mapTree(nodes, (node) => ({
+    ...node,
+    children: node.children.filter((child) => child.id !== nodeId),
+  })) as BaseNode[]
   return result.filter((node) => node.id !== nodeId)
 }
 
@@ -461,10 +455,8 @@ export function filterTree(
 ): BaseNode[] {
   const nodeArray = Array.isArray(nodes) ? nodes : [nodes]
 
-  return nodeArray
-    .filter(predicate)
-    .map((node) => ({
-      ...node,
-      children: filterTree(node.children, predicate),
-    }))
+  return nodeArray.filter(predicate).map((node) => ({
+    ...node,
+    children: filterTree(node.children, predicate),
+  }))
 }

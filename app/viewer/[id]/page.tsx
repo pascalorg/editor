@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
-import { useEditor, type LayoutJSON } from '@/hooks/use-editor'
+import { type LayoutJSON, useEditor } from '@/hooks/use-editor'
 
 export default function DynamicViewerPage() {
   const params = useParams()
@@ -25,13 +25,13 @@ export default function DynamicViewerPage() {
       try {
         setIsLoading(true)
         setError(null)
-        
+
         const response = await fetch(`/demos/${id}.json`)
-        
+
         if (!response.ok) {
           throw new Error(`Failed to load demo: ${response.statusText}`)
         }
-        
+
         const data: LayoutJSON = await response.json()
         loadLayout(data)
         setIsLoading(false)
@@ -83,4 +83,3 @@ export default function DynamicViewerPage() {
     </main>
   )
 }
-

@@ -8,22 +8,22 @@ import type {
   Component,
   ComponentGroup,
   ReferenceImage,
+  RoofSegment,
   Scan,
   WallSegment,
-  RoofSegment,
 } from '../../hooks/use-editor'
 
 import type {
-  LevelNode,
-  WallNode,
-  DoorNode,
-  WindowNode,
+  BaseNode,
   ColumnNode,
+  DoorNode,
+  LevelNode,
+  ReferenceImageNode,
   RoofNode,
   RoofSegmentNode,
-  ReferenceImageNode,
   ScanNode,
-  BaseNode,
+  WallNode,
+  WindowNode,
 } from '../nodes/types'
 
 // ============================================================================
@@ -493,8 +493,7 @@ function findWallForDoorOrWindow(
 
     // Check if rotation matches (door/window perpendicular to wall or aligned)
     const rotationDiff = Math.abs(element.rotation - rotation)
-    const rotationMatches =
-      rotationDiff < 0.1 || Math.abs(rotationDiff - Math.PI / 2) < 0.1
+    const rotationMatches = rotationDiff < 0.1 || Math.abs(rotationDiff - Math.PI / 2) < 0.1
 
     if (isOnWall && rotationMatches) {
       return wall

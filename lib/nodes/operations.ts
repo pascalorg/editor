@@ -5,36 +5,28 @@
  * These operations maintain immutability and return updated trees.
  */
 
+import { canBeChildOf, isDoorNode, isLevelNode, isWallNode, isWindowNode } from './guards'
 import type {
   BaseNode,
-  LevelNode,
-  WallNode,
-  DoorNode,
-  WindowNode,
   ColumnNode,
+  DoorNode,
+  GroupNode,
+  LevelNode,
+  ReferenceImageNode,
   RoofNode,
   RoofSegmentNode,
-  ReferenceImageNode,
   ScanNode,
-  GroupNode,
+  WallNode,
+  WindowNode,
 } from './types'
-
 import {
   addNode as addNodeUtil,
-  removeNode as removeNodeUtil,
-  updateNode as updateNodeUtil,
-  moveNode as moveNodeUtil,
   findNodeById,
   mapTree,
+  moveNode as moveNodeUtil,
+  removeNode as removeNodeUtil,
+  updateNode as updateNodeUtil,
 } from './utils'
-
-import {
-  isLevelNode,
-  isWallNode,
-  isDoorNode,
-  isWindowNode,
-  canBeChildOf,
-} from './guards'
 
 // ============================================================================
 // LEVEL OPERATIONS
@@ -70,11 +62,7 @@ export function updateLevel(
   levelId: string,
   updates: Partial<Omit<LevelNode, 'id' | 'type' | 'children'>>,
 ): LevelNode[] {
-  return levels.map((level) =>
-    level.id === levelId
-      ? { ...level, ...updates }
-      : level
-  )
+  return levels.map((level) => (level.id === levelId ? { ...level, ...updates } : level))
 }
 
 /**
@@ -312,11 +300,7 @@ export function setNodeVisibility(
 /**
  * Update node opacity
  */
-export function setNodeOpacity(
-  levels: LevelNode[],
-  nodeId: string,
-  opacity: number,
-): LevelNode[] {
+export function setNodeOpacity(levels: LevelNode[], nodeId: string, opacity: number): LevelNode[] {
   const clampedOpacity = Math.max(0, Math.min(100, opacity))
   return updateNodeUtil(levels, nodeId, { opacity: clampedOpacity }) as LevelNode[]
 }
@@ -379,11 +363,7 @@ export function setNodeSize(
 /**
  * Delete a node and optionally its children
  */
-export function deleteNode(
-  levels: LevelNode[],
-  nodeId: string,
-  cascade: boolean = true,
-): LevelNode[] {
+export function deleteNode(levels: LevelNode[], nodeId: string, cascade = true): LevelNode[] {
   if (!cascade) {
     // Check if node has children
     const node = findNodeById(levels, nodeId)
@@ -398,11 +378,7 @@ export function deleteNode(
 /**
  * Delete multiple nodes
  */
-export function deleteNodes(
-  levels: LevelNode[],
-  nodeIds: string[],
-  cascade: boolean = true,
-): LevelNode[] {
+export function deleteNodes(levels: LevelNode[], nodeIds: string[], cascade = true): LevelNode[] {
   return nodeIds.reduce(
     (updatedLevels, nodeId) => deleteNode(updatedLevels, nodeId, cascade),
     levels,

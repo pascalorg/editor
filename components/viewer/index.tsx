@@ -50,7 +50,7 @@ export default function Viewer({ className }: { className?: string }) {
 
   // Get scans from node tree for the current level
   const nodeScans = useScans(selectedFloorId || 'level_0')
-  const scans = nodeScans.map(node => ({
+  const scans = nodeScans.map((node) => ({
     id: node.id,
     url: node.url,
     name: node.name,
@@ -367,7 +367,10 @@ export default function Viewer({ className }: { className?: string }) {
                             onSelect={() => setSelectedScanIds([scan.id])}
                             onUpdate={(updates, pushToUndo = true) => {
                               // TODO: Implement node update operations for scans
-                              console.warn('Scan update not yet implemented with node operations', updates)
+                              console.warn(
+                                'Scan update not yet implemented with node operations',
+                                updates,
+                              )
                             }}
                             opacity={scanOpacity}
                             position={scan.position}

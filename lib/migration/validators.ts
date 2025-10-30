@@ -6,9 +6,9 @@
  */
 
 import type { Component, ComponentGroup, ReferenceImage, Scan } from '../../hooks/use-editor'
-import type { LevelNode, BaseNode } from '../nodes/types'
 import { validateNodeTree } from '../nodes/guards'
-import { traverseTree, countNodes, countNodesByType } from '../nodes/utils'
+import type { BaseNode, LevelNode } from '../nodes/types'
+import { countNodes, countNodesByType, traverseTree } from '../nodes/utils'
 
 // ============================================================================
 // VALIDATION RESULTS
@@ -62,28 +62,30 @@ export function validateLegacyFormat(
     // Validate component data structure
     switch (component.type) {
       case 'wall':
-        if (!component.data || !('segments' in component.data)) {
+        if (!(component.data && 'segments' in component.data)) {
           errors.push(`Wall component ${component.id} missing segments data`)
         }
         break
       case 'roof':
-        if (!component.data || !('segments' in component.data)) {
+        if (!(component.data && 'segments' in component.data)) {
           errors.push(`Roof component ${component.id} missing segments data`)
         }
         break
       case 'door':
       case 'window':
         if (
-          !component.data ||
-          !('position' in component.data) ||
-          !('rotation' in component.data) ||
-          !('width' in component.data)
+          !(
+            component.data &&
+            'position' in component.data &&
+            'rotation' in component.data &&
+            'width' in component.data
+          )
         ) {
           errors.push(`${component.type} component ${component.id} missing required data`)
         }
         break
       case 'column':
-        if (!component.data || !('columns' in component.data)) {
+        if (!(component.data && 'columns' in component.data)) {
           errors.push(`Column component ${component.id} missing columns data`)
         }
         break
@@ -107,10 +109,13 @@ export function validateLegacyFormat(
   // Calculate stats
   const stats = {
     componentCount: components.length,
-    typeBreakdown: components.reduce((acc, c) => {
-      acc[c.type] = (acc[c.type] || 0) + 1
-      return acc
-    }, {} as Record<string, number>),
+    typeBreakdown: components.reduce(
+      (acc, c) => {
+        acc[c.type] = (acc[c.type] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    ),
   }
 
   return {
@@ -164,10 +169,11 @@ export function validateNodeFormat(levels: LevelNode[]): ValidationResult {
       }
 
       // Validate opacity
-      if (node.opacity !== undefined) {
-        if (typeof node.opacity !== 'number' || node.opacity < 0 || node.opacity > 100) {
-          errors.push(`Node ${node.id} has invalid opacity value (must be 0-100)`)
-        }
+      if (
+        node.opacity !== undefined &&
+        (typeof node.opacity !== 'number' || node.opacity < 0 || node.opacity > 100)
+      ) {
+        errors.push(`Node ${node.id} has invalid opacity value (must be 0-100)`)
       }
 
       // Validate grid items
@@ -209,13 +215,16 @@ export function validateNodeFormat(levels: LevelNode[]): ValidationResult {
   // Calculate stats
   const stats = {
     nodeCount: levels.reduce((sum, level) => sum + countNodes(level), 0),
-    typeBreakdown: levels.reduce((acc, level) => {
-      const counts = countNodesByType(level)
-      for (const [type, count] of Object.entries(counts)) {
-        acc[type] = (acc[type] || 0) + count
-      }
-      return acc
-    }, {} as Record<string, number>),
+    typeBreakdown: levels.reduce(
+      (acc, level) => {
+        const counts = countNodesByType(level)
+        for (const [type, count] of Object.entries(counts)) {
+          acc[type] = (acc[type] || 0) + count
+        }
+        return acc
+      },
+      {} as Record<string, number>,
+    ),
   }
 
   return {
@@ -265,13 +274,16 @@ export function validateRoundTrip(
   }
 
   // Count node types
-  const nodeTypeCounts = convertedLevels.reduce((acc, level) => {
-    const counts = countNodesByType(level)
-    for (const [type, count] of Object.entries(counts)) {
-      acc[type] = (acc[type] || 0) + count
-    }
-    return acc
-  }, {} as Record<string, number>)
+  const nodeTypeCounts = convertedLevels.reduce(
+    (acc, level) => {
+      const counts = countNodesByType(level)
+      for (const [type, count] of Object.entries(counts)) {
+        acc[type] = (acc[type] || 0) + count
+      }
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 
   // Validate wall segments converted correctly
   const wallComponentSegmentCount = originalComponents
@@ -386,9 +398,7 @@ export function validateDataIntegrity(levels: LevelNode[]): ValidationResult {
   // Check for orphaned nodes
   const orphans = findOrphanedNodes(levels)
   if (orphans.length > 0) {
-    errors.push(
-      `Found ${orphans.length} orphaned nodes: ${orphans.map((n) => n.id).join(', ')}`,
-    )
+    errors.push(`Found ${orphans.length} orphaned nodes: ${orphans.map((n) => n.id).join(', ')}`)
   }
 
   // Check for duplicate IDs

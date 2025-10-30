@@ -7,38 +7,37 @@
 
 'use client'
 
-import { useEditor } from './use-editor'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  selectColumnsFromLevel,
+  selectDoorsFromLevel,
+  selectLevelById,
+  selectLevels,
+  selectNodeById,
+  selectNodesOfTypeFromLevel,
+  selectReferenceImagesFromLevel,
+  selectRoofsFromLevel,
+  selectScansFromLevel,
+  selectVisibleReferenceImagesFromLevel,
+  selectVisibleScansFromLevel,
+  selectVisibleWallsFromLevel,
+  selectWallsFromLevel,
+  selectWindowsFromLevel,
+} from '../lib/nodes/selectors'
 
 import type {
   BaseNode,
-  LevelNode,
-  WallNode,
-  DoorNode,
-  WindowNode,
   ColumnNode,
-  RoofNode,
-  ReferenceImageNode,
-  ScanNode,
+  DoorNode,
+  LevelNode,
   NodeType,
+  ReferenceImageNode,
+  RoofNode,
+  ScanNode,
+  WallNode,
+  WindowNode,
 } from '../lib/nodes/types'
-
-import {
-  selectLevels,
-  selectLevelById,
-  selectNodeById,
-  selectNodesOfTypeFromLevel,
-  selectWallsFromLevel,
-  selectColumnsFromLevel,
-  selectRoofsFromLevel,
-  selectReferenceImagesFromLevel,
-  selectScansFromLevel,
-  selectDoorsFromLevel,
-  selectWindowsFromLevel,
-  selectVisibleWallsFromLevel,
-  selectVisibleReferenceImagesFromLevel,
-  selectVisibleScansFromLevel,
-} from '../lib/nodes/selectors'
+import { useEditor } from './use-editor'
 
 // ============================================================================
 // BASIC HOOKS
@@ -91,10 +90,7 @@ export function useLevelChildren(levelId: string): BaseNode[] {
  * @example
  * const walls = useNodesOfType<WallNode>(levelId, 'wall')
  */
-export function useNodesOfType<T extends BaseNode>(
-  levelId: string,
-  type: NodeType,
-): T[] {
+export function useNodesOfType<T extends BaseNode>(levelId: string, type: NodeType): T[] {
   return useEditor(useShallow(selectNodesOfTypeFromLevel<T>(levelId, type)))
 }
 

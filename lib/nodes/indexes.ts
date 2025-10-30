@@ -118,10 +118,7 @@ export function getNodeById(indexes: NodeIndexes, id: string): BaseNode | undefi
 /**
  * Get all nodes of a specific type
  */
-export function getNodesByType<T extends BaseNode>(
-  indexes: NodeIndexes,
-  type: NodeType,
-): T[] {
+export function getNodesByType<T extends BaseNode>(indexes: NodeIndexes, type: NodeType): T[] {
   const ids = indexes.byType.get(type)
   if (!ids) {
     return []
@@ -164,7 +161,7 @@ export function getChildrenOfNode(indexes: NodeIndexes, parentId: string): BaseN
 export function getLevelNode(indexes: NodeIndexes, level: number): LevelNode | undefined {
   const levelId = indexes.byLevel.get(level)
   if (!levelId) {
-    return undefined
+    return
   }
 
   return indexes.byId.get(levelId) as LevelNode | undefined

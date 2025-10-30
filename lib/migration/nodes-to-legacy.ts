@@ -6,29 +6,29 @@
  */
 
 import type {
+  ColumnComponentData,
   Component,
   ComponentGroup,
-  ReferenceImage,
-  Scan,
-  WallSegment,
-  RoofSegment,
-  WallComponentData,
-  RoofComponentData,
   DoorComponentData,
+  ReferenceImage,
+  RoofComponentData,
+  RoofSegment,
+  Scan,
+  WallComponentData,
+  WallSegment,
   WindowComponentData,
-  ColumnComponentData,
 } from '../../hooks/use-editor'
 
 import type {
-  LevelNode,
-  WallNode,
-  DoorNode,
-  WindowNode,
   ColumnNode,
+  DoorNode,
+  LevelNode,
+  ReferenceImageNode,
   RoofNode,
   RoofSegmentNode,
-  ReferenceImageNode,
   ScanNode,
+  WallNode,
+  WindowNode,
 } from '../nodes/types'
 
 import { traverseTree } from '../nodes/utils'
@@ -210,8 +210,7 @@ export function wallNodeToWallSegment(wall: WallNode): WallSegment {
 
   // Generate ID from coordinates
   const id =
-    wall.metadata?.legacyId ||
-    `${x1.toFixed(1)},${y1.toFixed(1)}-${x2.toFixed(1)},${y2.toFixed(1)}`
+    wall.metadata?.legacyId || `${x1.toFixed(1)},${y1.toFixed(1)}-${x2.toFixed(1)},${y2.toFixed(1)}`
 
   return {
     id,

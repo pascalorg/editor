@@ -22,6 +22,18 @@ import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
 import { type Component, useEditor, type WallSegment } from '@/hooks/use-editor'
+// Node-based API imports for Phase 3 migration
+import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
+import {
+  addColumnToLevel,
+  deleteNode,
+  setNodeOpacity,
+  setNodePosition,
+  setNodeRotation,
+  setNodeSize,
+  setNodeVisibility,
+} from '@/lib/nodes'
+import { buildNodeIndex } from '@/lib/nodes/indexes'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
@@ -30,11 +42,6 @@ import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { LightingControls } from './lighting-controls'
 import { ProximityGrid } from './proximity-grid'
-
-// Node-based API imports for Phase 3 migration
-import { useReferenceImages, useScans, useWalls, useDoors, useWindows } from '@/hooks/use-nodes'
-import { setNodeVisibility, setNodeOpacity, setNodePosition, setNodeRotation, setNodeSize, deleteNode, addColumnToLevel } from '@/lib/nodes'
-import { buildNodeIndex } from '@/lib/nodes/indexes'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -91,7 +98,7 @@ export default function Editor({ className }: { className?: string }) {
   const nodeScans = useScans(selectedFloorId || 'level_0')
 
   // Map node data to the format expected by rendering components
-  const images = nodeImages.map(node => ({
+  const images = nodeImages.map((node) => ({
     id: node.id,
     url: node.url,
     name: node.name,
@@ -104,7 +111,7 @@ export default function Editor({ className }: { className?: string }) {
     opacity: node.opacity,
   }))
 
-  const scans = nodeScans.map(node => ({
+  const scans = nodeScans.map((node) => ({
     id: node.id,
     url: node.url,
     name: node.name,
@@ -119,23 +126,25 @@ export default function Editor({ className }: { className?: string }) {
   }))
 
   // Helper function to convert wall nodes to wall segments
-  const convertWallNodesToSegments = useCallback((wallNodes: any[]): WallSegment[] => {
-    return wallNodes.map(node => {
-      const [x1, y1] = node.position
-      const length = node.size[0]
-      const x2 = x1 + Math.cos(node.rotation) * length
-      const y2 = y1 + Math.sin(node.rotation) * length
+  const convertWallNodesToSegments = useCallback(
+    (wallNodes: any[]): WallSegment[] =>
+      wallNodes.map((node) => {
+        const [x1, y1] = node.position
+        const length = node.size[0]
+        const x2 = x1 + Math.cos(node.rotation) * length
+        const y2 = y1 + Math.sin(node.rotation) * length
 
-      return {
-        start: [x1, y1] as [number, number],
-        end: [x2, y2] as [number, number],
-        id: node.id,
-        isHorizontal: Math.abs(node.rotation) < 0.1 || Math.abs(node.rotation - Math.PI) < 0.1,
-        visible: node.visible ?? true,
-        opacity: node.opacity ?? 100,
-      }
-    })
-  }, [])
+        return {
+          start: [x1, y1] as [number, number],
+          end: [x2, y2] as [number, number],
+          id: node.id,
+          isHorizontal: Math.abs(node.rotation) < 0.1 || Math.abs(node.rotation - Math.PI) < 0.1,
+          visible: node.visible ?? true,
+          opacity: node.opacity ?? 100,
+        }
+      }),
+    [],
+  )
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -150,23 +159,25 @@ export default function Editor({ className }: { className?: string }) {
 
   const currentFloorWallSegments = useMemo(
     () => convertWallNodesToSegments(currentFloorWallNodes),
-    [currentFloorWallNodes, convertWallNodesToSegments]
+    [currentFloorWallNodes, convertWallNodesToSegments],
   )
 
   const currentFloorExistingDoors = useMemo(
-    () => currentFloorDoorNodes.map(node => ({
-      position: node.position,
-      rotation: node.rotation,
-    })),
-    [currentFloorDoorNodes]
+    () =>
+      currentFloorDoorNodes.map((node) => ({
+        position: node.position,
+        rotation: node.rotation,
+      })),
+    [currentFloorDoorNodes],
   )
 
   const currentFloorExistingWindows = useMemo(
-    () => currentFloorWindowNodes.map(node => ({
-      position: node.position,
-      rotation: node.rotation,
-    })),
-    [currentFloorWindowNodes]
+    () =>
+      currentFloorWindowNodes.map((node) => ({
+        position: node.position,
+        rotation: node.rotation,
+      })),
+    [currentFloorWindowNodes],
   )
 
   // Use a callback ref to ensure the store is updated when the group is attached
@@ -743,14 +754,14 @@ export default function Editor({ className }: { className?: string }) {
       if (!selectedFloorId) return
 
       // Check if column already exists at this position
-      const level = levels.find(l => l.id === selectedFloorId)
+      const level = levels.find((l) => l.id === selectedFloorId)
       if (!level) return
 
       const existingColumn = level.children.find(
-        child =>
+        (child) =>
           child.type === 'column' &&
           (child as any).position[0] === x &&
-          (child as any).position[1] === y
+          (child as any).position[1] === y,
       )
 
       if (!existingColumn) {
@@ -1183,7 +1194,10 @@ export default function Editor({ className }: { className?: string }) {
                       updatedLevels = setNodeRotation(updatedLevels, image.id, updates.rotation)
                     }
                     if (updates.scale !== undefined) {
-                      updatedLevels = setNodeSize(updatedLevels, image.id, [updates.scale, updates.scale])
+                      updatedLevels = setNodeSize(updatedLevels, image.id, [
+                        updates.scale,
+                        updates.scale,
+                      ])
                     }
 
                     updateLevels(updatedLevels, pushToUndo)
@@ -1232,7 +1246,10 @@ export default function Editor({ className }: { className?: string }) {
                       updatedLevels = setNodeRotation(updatedLevels, scan.id, updates.rotation)
                     }
                     if (updates.scale !== undefined) {
-                      updatedLevels = setNodeSize(updatedLevels, scan.id, [updates.scale, updates.scale])
+                      updatedLevels = setNodeSize(updatedLevels, scan.id, [
+                        updates.scale,
+                        updates.scale,
+                      ])
                     }
 
                     updateLevels(updatedLevels, pushToUndo)
@@ -1252,7 +1269,8 @@ export default function Editor({ className }: { className?: string }) {
           {levels
             .filter((level) => {
               // Filter out hidden floors (visible === false or opacity === 0)
-              const isHidden = level.visible === false || (level.opacity !== undefined && level.opacity === 0)
+              const isHidden =
+                level.visible === false || (level.opacity !== undefined && level.opacity === 0)
               return level.type === 'level' && !isHidden
             })
             .map((floor) => {

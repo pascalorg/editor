@@ -211,10 +211,11 @@ export function validateNode(node: unknown): node is BaseNode {
   }
 
   // Validate opacity if present
-  if (node.opacity !== undefined) {
-    if (typeof node.opacity !== 'number' || node.opacity < 0 || node.opacity > 100) {
-      return false
-    }
+  if (
+    node.opacity !== undefined &&
+    (typeof node.opacity !== 'number' || node.opacity < 0 || node.opacity > 100)
+  ) {
+    return false
   }
 
   // Validate locked if present
@@ -234,7 +235,7 @@ export function validateNode(node: unknown): node is BaseNode {
  * Validate grid positioning data
  */
 export function validateGridItem(node: BaseNode & Partial<GridItem>): node is GridNode {
-  if (!node.position || !Array.isArray(node.position) || node.position.length !== 2) {
+  if (!(node.position && Array.isArray(node.position)) || node.position.length !== 2) {
     return false
   }
 
@@ -246,7 +247,7 @@ export function validateGridItem(node: BaseNode & Partial<GridItem>): node is Gr
     return false
   }
 
-  if (!node.size || !Array.isArray(node.size) || node.size.length !== 2) {
+  if (!(node.size && Array.isArray(node.size)) || node.size.length !== 2) {
     return false
   }
 
