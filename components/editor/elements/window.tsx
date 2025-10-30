@@ -1,12 +1,12 @@
 'use client'
 
-import { Gltf } from '@react-three/drei'
+import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import { useWindows } from '@/hooks/use-nodes'
+import { validateWallElementPlacement } from '@/lib/wall-element-validation'
+import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import type { Component, WallSegment, WindowComponentData } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
-import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -96,34 +96,37 @@ export const WindowPlacementPreview = memo(
     }, [tileSize])
 
     // Handle click to place window
-    const addComponent = useEditor((state) => state.addComponent)
+    const levels = useEditor((state) => state.levels)
+    const updateLevels = useEditor((state) => state.updateLevels)
 
     const handleClick = useCallback(() => {
       if (!(placement?.canPlace && placement?.nearestWall)) {
         return
       }
 
-      // Create window component
-      const windowId = `window_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const windowComponent: Component = {
+      // Create window node
+      const windowId = `window-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      const windowNode = {
         id: windowId,
-        type: 'window',
-        group: floorId,
-        label: 'Window',
-        createdAt: new Date().toISOString(),
-        data: {
-          position: placement.gridPosition,
-          rotation: placement.rotation,
-          width: 2,
-        } as WindowComponentData,
+        type: 'window' as const,
+        name: 'Window',
+        position: placement.gridPosition,
+        rotation: placement.rotation,
+        size: [1, 1.2] as [number, number], // 1m x 1.2m window
+        visible: true,
+        opacity: 100,
+        children: [] as [],
       }
 
-      // Add window to components using store method
-      addComponent(windowComponent)
+      // Add window to the nearest wall using node operations
+      const wallId = placement.nearestWall.id
+      const { addWindowToWall } = require('@/lib/nodes/operations')
+      const updatedLevels = addWindowToWall(levels, wallId, windowNode)
+      updateLevels(updatedLevels)
 
       // Notify parent component
       onPlaced?.()
-    }, [placement, floorId, onPlaced, addComponent])
+    }, [placement, floorId, levels, updateLevels, onPlaced])
 
     if (!placement) {
       return null
@@ -313,38 +316,31 @@ type WindowsProps = {
 
 export const Windows = memo(
   ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: WindowsProps) => {
-    // Fetch window components for this floor from the store
-    const windowComponents = useEditor(
-      useShallow((state) =>
-        state.components.filter((c) => c.type === 'window' && c.group === floorId),
-      ),
-    )
+    // Fetch window nodes for this floor from the node tree
+    const windowNodes = useWindows(floorId)
 
-    if (windowComponents.length === 0) return null
+    if (windowNodes.length === 0) return null
 
     return (
-      <group>
-        {windowComponents.map((component) => {
-          if (component.type !== 'window') return null
-
-          const { position, rotation } = component.data
-
-          return (
-            <Window
-              isActive={isActive}
-              isFullView={isFullView}
-              key={component.id}
-              position={position}
-              rotation={rotation}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-              windowId={component.id}
-            />
-          )
-        })}
-      </group>
+      <>
+        {windowNodes.map((windowNode) => (
+          <Window
+            key={windowNode.id}
+            windowId={windowNode.id}
+            position={windowNode.position}
+            rotation={windowNode.rotation}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+            isActive={isActive}
+            isFullView={isFullView}
+          />
+        ))}
+      </>
     )
   },
 )
 
 Windows.displayName = 'Windows'
+
+// Preload GLTFs
+useGLTF.preload('/models/Window.glb')

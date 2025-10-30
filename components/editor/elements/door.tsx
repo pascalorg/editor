@@ -1,12 +1,12 @@
 'use client'
 
-import { Gltf } from '@react-three/drei'
+import type { WallSegment } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import { useDoors } from '@/hooks/use-nodes'
+import { validateWallElementPlacement } from '@/lib/wall-element-validation'
+import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import type { Component, DoorComponentData, WallSegment } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
-import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -96,34 +96,37 @@ export const DoorPlacementPreview = memo(
     }, [tileSize])
 
     // Handle click to place door
-    const addComponent = useEditor((state) => state.addComponent)
+    const levels = useEditor((state) => state.levels)
+    const updateLevels = useEditor((state) => state.updateLevels)
 
     const handleClick = useCallback(() => {
       if (!(placement?.canPlace && placement?.nearestWall)) {
         return
       }
 
-      // Create door component
-      const doorId = `door_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const doorComponent: Component = {
+      // Create door node
+      const doorId = `door-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      const doorNode = {
         id: doorId,
-        type: 'door',
-        group: floorId,
-        label: 'Door',
-        createdAt: new Date().toISOString(),
-        data: {
-          position: placement.gridPosition,
-          rotation: placement.rotation,
-          width: 2,
-        } as DoorComponentData,
+        type: 'door' as const,
+        name: 'Door',
+        position: placement.gridPosition,
+        rotation: placement.rotation,
+        size: [1, 2] as [number, number], // 1m x 2m door
+        visible: true,
+        opacity: 100,
+        children: [] as [],
       }
 
-      // Add door to components using store method
-      addComponent(doorComponent)
+      // Add door to the nearest wall using node operations
+      const wallId = placement.nearestWall.id
+      const { addDoorToWall } = require('@/lib/nodes/operations')
+      const updatedLevels = addDoorToWall(levels, wallId, doorNode)
+      updateLevels(updatedLevels)
 
       // Notify parent component
       onPlaced?.()
-    }, [placement, floorId, onPlaced, addComponent])
+    }, [placement, floorId, levels, updateLevels, onPlaced])
 
     if (!placement) {
       return null
@@ -315,38 +318,31 @@ type DoorsProps = {
 
 export const Doors = memo(
   ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: DoorsProps) => {
-    // Fetch door components for this floor from the store
-    const doorComponents = useEditor(
-      useShallow((state) =>
-        state.components.filter((c) => c.type === 'door' && c.group === floorId),
-      ),
-    )
+    // Fetch door nodes for this floor from the node tree
+    const doorNodes = useDoors(floorId)
 
-    if (doorComponents.length === 0) return null
+    if (doorNodes.length === 0) return null
 
     return (
-      <group>
-        {doorComponents.map((component) => {
-          if (component.type !== 'door') return null
-
-          const { position, rotation } = component.data
-
-          return (
-            <Door
-              doorId={component.id}
-              isActive={isActive}
-              isFullView={isFullView}
-              key={component.id}
-              position={position}
-              rotation={rotation}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-            />
-          )
-        })}
-      </group>
+      <>
+        {doorNodes.map((doorNode) => (
+          <Door
+            key={doorNode.id}
+            doorId={doorNode.id}
+            position={doorNode.position}
+            rotation={doorNode.rotation}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+            isActive={isActive}
+            isFullView={isFullView}
+          />
+        ))}
+      </>
     )
   },
 )
 
 Doors.displayName = 'Doors'
+
+// Preload GLTFs
+useGLTF.preload('/models/Door.glb')

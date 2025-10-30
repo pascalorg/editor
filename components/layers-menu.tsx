@@ -30,6 +30,7 @@ import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import type { LevelNode } from '@/lib/nodes/types'
 import {
   type BuildingElementType,
   getAllElementsOfType,
@@ -67,7 +68,7 @@ interface LayersMenuProps {
 }
 
 interface DraggableLevelItemProps {
-  level: ComponentGroup
+  level: LevelNode
   levelIndex: number
   levelsCount: number
   isSelected: boolean
@@ -435,23 +436,126 @@ interface LayersMenuProps {
 export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleUpload = useEditor((state) => state.handleUpload)
   const handleScanUpload = useEditor((state) => state.handleScanUpload)
-  const components = useEditor((state) => state.components)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
-  const images = useEditor((state) => state.images)
-  const scans = useEditor((state) => state.scans)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
   const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
   const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
-  const groups = useEditor((state) => state.groups)
+  const levels = useEditor((state) => state.levels)
+
+  // Extract data from node tree for hierarchy display
+  const components: any[] = []
+  const images: any[] = []
+  const scans: any[] = []
+
+  levels.forEach((level) => {
+    // Group walls, roofs, and columns by type for the legacy format
+    const walls: any[] = []
+    const roofs: any[] = []
+    const columns: any[] = []
+
+    level.children.forEach((child) => {
+      if (child.type === 'wall') {
+        walls.push({
+          id: child.id,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
+
+        // Extract doors and windows from walls
+        if (child.children) {
+          child.children.forEach((wallChild: any) => {
+            if (wallChild.type === 'door' || wallChild.type === 'window') {
+              components.push({
+                id: wallChild.id,
+                type: wallChild.type,
+                group: level.id,
+                data: {
+                  position: wallChild.position,
+                  rotation: wallChild.rotation,
+                  visible: wallChild.visible ?? true,
+                  opacity: wallChild.opacity ?? 100,
+                },
+              })
+            }
+          })
+        }
+      } else if (child.type === 'roof') {
+        roofs.push({
+          id: child.id,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
+      } else if (child.type === 'column') {
+        columns.push({
+          id: child.id,
+          position: (child as any).position,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
+      } else if (child.type === 'reference-image') {
+        images.push({
+          id: child.id,
+          url: (child as any).url,
+          name: child.name,
+          level: level.level || 0,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
+      } else if (child.type === 'scan') {
+        scans.push({
+          id: child.id,
+          url: (child as any).url,
+          name: child.name,
+          level: level.level || 0,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
+      }
+    })
+
+    // Create aggregated components for walls, roofs, and columns
+    if (walls.length > 0) {
+      components.push({
+        id: `${level.id}-walls`,
+        type: 'wall',
+        group: level.id,
+        data: {
+          segments: walls,
+        },
+      })
+    }
+
+    if (roofs.length > 0) {
+      components.push({
+        id: `${level.id}-roofs`,
+        type: 'roof',
+        group: level.id,
+        data: {
+          segments: roofs,
+        },
+      })
+    }
+
+    if (columns.length > 0) {
+      components.push({
+        id: `${level.id}-columns`,
+        type: 'column',
+        group: level.id,
+        data: {
+          columns: columns,
+        },
+      })
+    }
+  })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)
-  const addGroup = useEditor((state) => state.addGroup)
-  const deleteGroup = useEditor((state) => state.deleteGroup)
-  const reorderGroups = useEditor((state) => state.reorderGroups)
+  const addLevel = useEditor((state) => state.addLevel)
+  const deleteLevel = useEditor((state) => state.deleteLevel)
+  const reorderLevels = useEditor((state) => state.reorderLevels)
   const setControlMode = useEditor((state) => state.setControlMode)
   const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
   const toggleBuildingElementVisibility = useEditor(
@@ -581,7 +685,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     }
 
     // Check if it's a level/floor ID
-    const isLevel = groups.some((g) => g.id === selectedId)
+    const isLevel = levels.some((level) => level.id === selectedId)
     if (isLevel) {
       selectFloor(selectedId)
     }
@@ -589,9 +693,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   const handleAddLevel = () => {
     // Get all existing level numbers (excluding base level which is 0)
-    const levelNumbers = groups
-      .filter((g) => g.type === 'floor')
-      .map((g) => g.level || 0)
+    const levelNumbers = levels
+      .map((l) => l.level || 0)
       .filter((n) => n > 0)
 
     // Find the next available number (starting from 1)
@@ -602,55 +705,33 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
     const newLevel = {
       id: `level_${nextNumber}`,
+      type: 'level' as const,
       name: `level ${nextNumber}`,
-      type: 'floor' as const,
-      color: '#ffffff',
       level: nextNumber,
       visible: true,
     }
 
-    addGroup(newLevel)
+    addLevel(newLevel)
     // Automatically select the newly created level
     selectFloor(newLevel.id)
   }
 
-  const handleReorder = (newOrder: typeof groups) => {
+  const handleReorder = (newOrder: typeof levels) => {
     // Reassign level numbers based on new order (highest in list = highest level)
     // The visual order is reversed (highest level shown first), so we reverse the array
     // when assigning numbers
     const reversedOrder = [...newOrder].reverse()
-    const updatedFloorGroups = reversedOrder.map((group, index) => ({
-      ...group,
+    const updatedLevels = reversedOrder.map((level, index) => ({
+      ...level,
       level: index,
     }))
 
-    // Create a map of floor ID to old level and new level
-    const oldLevelMap = new Map(
-      groups.filter((g) => g.type === 'floor').map((g) => [g.id, g.level || 0]),
-    )
-    const newLevelMap = new Map(updatedFloorGroups.map((g) => [g.id, g.level!]))
-
-    // Update images to use new level numbers
-    const updatedImages = images.map((img) => {
-      // Find which floor this image belongs to (by matching old level)
-      const floorGroup = groups.find((g) => g.type === 'floor' && g.level === img.level)
-      if (floorGroup && newLevelMap.has(floorGroup.id)) {
-        return { ...img, level: newLevelMap.get(floorGroup.id)! }
-      }
-      return img
-    })
-
-    // Combine updated floor groups with non-floor groups
-    const nonFloorGroups = groups.filter((g) => g.type !== 'floor')
-    const allUpdatedGroups = [...updatedFloorGroups, ...nonFloorGroups]
-
-    // Update groups and images in store
-    reorderGroups(allUpdatedGroups)
-    useEditor.getState().setImages(updatedImages, false)
+    // Update levels in store
+    reorderLevels(updatedLevels)
 
     // Update currentLevel if the selected floor's level changed
     if (selectedFloorId) {
-      const newLevel = updatedFloorGroups.find((g) => g.id === selectedFloorId)?.level
+      const newLevel = updatedLevels.find((l) => l.id === selectedFloorId)?.level
       if (newLevel !== undefined) {
         // Trigger selectFloor to ensure currentLevel is updated
         useEditor.getState().selectFloor(selectedFloorId)
@@ -658,16 +739,15 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     }
   }
 
-  // Get sorted floor groups for rendering
-  const floorGroups = groups
-    .filter((g) => g.type === 'floor')
+  // Get sorted levels for rendering
+  const floorGroups = levels
     .sort((a, b) => (b.level || 0) - (a.level || 0))
 
   return (
     <div className="flex flex-1 flex-col px-2 py-2">
       <div className="mb-2 flex items-center justify-between">
         <label className="font-medium text-muted-foreground text-sm">
-          Levels ({mounted ? groups.filter((g) => g.type === 'floor').length : 0})
+          Levels ({mounted ? levels.length : 0})
         </label>
         <Tooltip>
           <TooltipTrigger asChild>

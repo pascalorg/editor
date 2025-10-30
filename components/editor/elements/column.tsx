@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import type { Component } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import { useColumns } from '@/hooks/use-nodes'
 import {
   handleElementClick,
   isElementSelected,
@@ -72,17 +73,9 @@ export const Columns = forwardRef(
     }: ColumnsProps,
     ref: Ref<THREE.Group>,
   ) => {
-    // Fetch columns for this floor from the store
-    const columns = useEditor(
-      useShallow((state) => {
-        const columnComponent = state.components.find(
-          (c) => c.type === 'column' && c.group === floorId,
-        )
-        return columnComponent?.type === 'column'
-          ? columnComponent.data.columns.filter((col) => col.visible !== false)
-          : []
-      }),
-    )
+    // Fetch columns for this floor from the node tree
+    const columnNodes = useColumns(floorId)
+    const columns = columnNodes.filter((col) => col.visible !== false)
 
     // Create cylinder geometry once for all columns
     const cylinderGeometry = useMemo(

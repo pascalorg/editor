@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import type { RoofSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import { useRoofs } from '@/hooks/use-nodes'
 import {
   handleElementClick,
   isElementSelected,
@@ -129,26 +130,52 @@ export const Roofs = forwardRef(
     // Three.js scene utilities
     const { camera, gl } = useThree()
 
-    // Fetch roof segments for this floor from the store
-    const roofSegments = useEditor(
-      useShallow((state) => {
-        const roofComponent = state.components.find((c) => c.type === 'roof' && c.group === floorId)
-        return roofComponent?.type === 'roof'
-          ? roofComponent.data.segments.filter((seg) => seg.visible !== false)
-          : []
-      }),
-    )
+    // Fetch roof nodes for this floor from the node tree
+    const roofNodes = useRoofs(floorId)
+
+    // Convert RoofNodes to RoofSegment format for rendering
+    const roofSegments: RoofSegment[] = useMemo(() => {
+      return roofNodes
+        .filter(node => {
+          // Filter out invalid nodes
+          return (
+            node.position &&
+            node.position.length === 2 &&
+            node.size &&
+            node.size.length >= 1 &&
+            typeof node.rotation === 'number' &&
+            !isNaN(node.position[0]) &&
+            !isNaN(node.position[1]) &&
+            !isNaN(node.size[0]) &&
+            !isNaN(node.rotation)
+          )
+        })
+        .map(node => {
+          // Node position and size are in grid coordinates
+          // Calculate end point from start position, rotation, and length
+          const [x1, y1] = node.position
+          const length = node.size[0]
+          const x2 = x1 + Math.cos(node.rotation) * length
+          const y2 = y1 + Math.sin(node.rotation) * length
+
+          return {
+            start: [x1, y1] as [number, number],
+            end: [x2, y2] as [number, number],
+            id: node.id,
+            height: (node as any).height ?? 2.5, // Peak height above base
+            leftWidth: (node as any).leftWidth ?? ROOF_WIDTH / 2,
+            rightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
+            visible: node.visible ?? true,
+            opacity: node.opacity ?? 100,
+          }
+        })
+    }, [roofNodes])
 
     // Update roof segment in the store
     const setComponents = useCallback(
       (updatedSegments: RoofSegment[]) => {
-        useEditor.setState((state) => ({
-          components: state.components.map((comp) =>
-            comp.type === 'roof' && comp.group === floorId
-              ? { ...comp, data: { segments: updatedSegments } }
-              : comp,
-          ),
-        }))
+        // TODO: Migrate to node operations - update RoofNode children
+        console.warn('setComponents for roofs not yet migrated to node API')
       },
       [floorId],
     )
@@ -161,9 +188,8 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        // TODO: Migrate undo to use node tree snapshot
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane()
         const raycaster = new THREE.Raycaster()
@@ -340,7 +366,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
+                { levels: originalLevels },
               ].slice(-50),
               redoStack: [],
             }))
@@ -363,9 +389,8 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        // TODO: Migrate undo to use node tree snapshot
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -509,7 +534,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
+                { levels: originalLevels },
               ].slice(-50),
               redoStack: [],
             }))
@@ -532,9 +557,8 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        // TODO: Migrate undo to use node tree snapshot
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -635,7 +659,7 @@ export const Roofs = forwardRef(
             useEditor.setState((state) => ({
               undoStack: [
                 ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
+                { levels: originalLevels },
               ].slice(-50),
               redoStack: [],
             }))

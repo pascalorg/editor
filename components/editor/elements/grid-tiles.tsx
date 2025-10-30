@@ -6,6 +6,7 @@ import { memo, useCallback, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import { RoofShadowPreview } from './roof'
 import { WallShadowPreview } from './wall'
 
@@ -66,15 +67,11 @@ export const GridTiles = memo(
     const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const lastClickTimeRef = useRef<number>(0)
 
-    // Get all wall segments for the active floor (needed for mitered junction calculations in previews)
-    const allWallSegments = useEditor(
-      useShallow((state) => {
-        const wallComponent = state.components.find(
-          (c) => c.type === 'wall' && c.group === selectedFloorId,
-        )
-        return wallComponent?.type === 'wall' ? wallComponent.data.segments : []
-      }),
-    )
+    // Get all wall nodes for the active floor
+    const wallNodes = useWalls(selectedFloorId || '')
+    // TODO: Convert WallNodes to WallSegments format for mitered junction calculations
+    // For now, using empty array until wall rendering is migrated
+    const allWallSegments: any[] = []
 
     const gridSize = (intersections - 1) * tileSize
 

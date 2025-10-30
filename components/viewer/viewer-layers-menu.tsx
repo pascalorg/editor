@@ -10,14 +10,14 @@ interface ViewerLayersMenuProps {
 }
 
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
-  const groups = useEditor((state) => state.groups)
+  const levels = useEditor((state) => state.levels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)
   const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
 
-  // Get sorted floor groups for rendering (highest level first)
-  const floorGroups = groups
-    .filter((g) => g.type === 'floor')
+  // Get sorted floor levels for rendering (highest level first)
+  const floorGroups = levels
+    .filter((level) => level.type === 'level')
     .sort((a, b) => (b.level || 0) - (a.level || 0))
 
   const handleFloorClick = (floorId: string) => {

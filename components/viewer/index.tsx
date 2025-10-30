@@ -17,6 +17,7 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
+import { useScans } from '@/hooks/use-nodes'
 import { calculateFloorBounds } from '@/lib/grid-bounds'
 import { cn } from '@/lib/utils'
 import { BuildingElementsRenderer } from './building-elements-renderer'
@@ -32,7 +33,7 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
-  const groups = useEditor((state) => state.groups)
+  const levels = useEditor((state) => state.levels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -41,14 +42,27 @@ export default function Viewer({ className }: { className?: string }) {
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
-  const components = useEditor((state) => state.components)
-  const scans = useEditor((state) => state.scans)
-  const setScans = useEditor((state) => state.setScans)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const selectFloor = useEditor((state) => state.selectFloor)
   const movingCamera = useEditor((state) => state.movingCamera)
+
+  // Get scans from node tree for the current level
+  const nodeScans = useScans(selectedFloorId || 'level_0')
+  const scans = nodeScans.map(node => ({
+    id: node.id,
+    url: node.url,
+    name: node.name,
+    createdAt: node.createdAt,
+    position: node.position,
+    rotation: node.rotation,
+    scale: node.scale,
+    level: 0, // TODO: Get from parent level
+    yOffset: node.yOffset,
+    visible: node.visible,
+    opacity: node.opacity,
+  }))
 
   // Viewer-specific state (isolated from editor)
   const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
@@ -138,8 +152,8 @@ export default function Viewer({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
-          {groups
-            .filter((g) => g.type === 'floor' && g.visible !== false)
+          {levels
+            .filter((level) => level.type === 'level' && level.visible !== false)
             .map((floor, index, visibleFloors) => {
               const floorLevel = floor.level || 0
               const yPosition =
@@ -153,7 +167,8 @@ export default function Viewer({ className }: { className?: string }) {
               const hitBoxHeight = nextFloor ? heightPerLevel : heightPerLevel
 
               // Calculate bounds for this floor (in grid units)
-              const bounds = calculateFloorBounds(components, floor.id, 6)
+              // TODO: Migrate to use node tree
+              const bounds = calculateFloorBounds([], floor.id, 6)
 
               // Convert bounds to world units and add padding
               const PADDING = 1.5 // padding in grid units
@@ -170,7 +185,7 @@ export default function Viewer({ className }: { className?: string }) {
               const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
               const floorBelow =
                 levelBelow !== null
-                  ? groups.find((g) => g.type === 'floor' && g.level === levelBelow)
+                  ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
                   : null
 
               return (
@@ -239,7 +254,7 @@ export default function Viewer({ className }: { className?: string }) {
                         <>
                           {isActiveFloor && (
                             <ProximityGrid
-                              components={components}
+                              components={[]} // TODO: Migrate to use node tree
                               cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -258,7 +273,7 @@ export default function Viewer({ className }: { className?: string }) {
                           )}
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
-                              components={components}
+                              components={[]} // TODO: Migrate to use node tree
                               cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -291,7 +306,7 @@ export default function Viewer({ className }: { className?: string }) {
                         raycast={() => null}
                       >
                         <ProximityGrid
-                          components={components}
+                          components={[]} // TODO: Migrate to use node tree
                           cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
@@ -314,7 +329,7 @@ export default function Viewer({ className }: { className?: string }) {
                   {viewerDisplayMode === 'objects' && (
                     <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                       <BuildingElementsRenderer
-                        components={components}
+                        components={[]} // TODO: Migrate to use node tree
                         floorId={floor.id}
                         isActiveFloor={isActiveFloor}
                         movingCamera={movingCamera}
@@ -350,12 +365,10 @@ export default function Viewer({ className }: { className?: string }) {
                             onManipulationEnd={() => setIsManipulatingScan(false)}
                             onManipulationStart={() => setIsManipulatingScan(true)}
                             onSelect={() => setSelectedScanIds([scan.id])}
-                            onUpdate={(updates, pushToUndo = true) =>
-                              setScans(
-                                scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
-                                pushToUndo,
-                              )
-                            }
+                            onUpdate={(updates, pushToUndo = true) => {
+                              // TODO: Implement node update operations for scans
+                              console.warn('Scan update not yet implemented with node operations', updates)
+                            }}
                             opacity={scanOpacity}
                             position={scan.position}
                             rotation={scan.rotation}
