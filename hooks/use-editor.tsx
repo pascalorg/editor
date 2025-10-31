@@ -291,8 +291,8 @@ type StoreState = {
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
   handleExport: () => void
-  handleUpload: (file: File, level: number) => void
-  handleScanUpload: (file: File, level: number) => void
+  handleUpload: (file: File, level: number) => Promise<void>
+  handleScanUpload: (file: File, level: number) => Promise<void>
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
@@ -650,13 +650,19 @@ const useStore = create<StoreState>()(
           { binary: true },
         )
       },
-      handleUpload: (file: File, level: number) =>
+      handleUpload: async (file: File, level: number) => {
+        // Convert file to data URL (persists across reloads)
+        const reader = new FileReader()
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
         set((state) => {
           // Find the level to add the image to
           const levelId = `level_${level}`
 
-          // Create object URL for the file
-          const url = URL.createObjectURL(file)
           const imageId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
           // Create ReferenceImageNode
@@ -664,7 +670,7 @@ const useStore = create<StoreState>()(
             id: imageId,
             type: 'reference-image' as const,
             name: file.name,
-            url,
+            url: dataUrl, // Use data URL instead of blob URL
             createdAt: new Date().toISOString(),
             position: [0, 0] as [number, number],
             rotation: 0,
@@ -685,14 +691,21 @@ const useStore = create<StoreState>()(
             undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
             redoStack: [],
           }
-        }),
-      handleScanUpload: (file: File, level: number) =>
+        })
+      },
+      handleScanUpload: async (file: File, level: number) => {
+        // Convert file to data URL (persists across reloads)
+        const reader = new FileReader()
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
         set((state) => {
           // Find the level to add the scan to
           const levelId = `level_${level}`
 
-          // Create object URL for the file
-          const url = URL.createObjectURL(file)
           const scanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
           // Create ScanNode
@@ -700,7 +713,7 @@ const useStore = create<StoreState>()(
             id: scanId,
             type: 'scan' as const,
             name: file.name,
-            url,
+            url: dataUrl, // Use data URL instead of blob URL
             createdAt: new Date().toISOString(),
             position: [0, 0] as [number, number],
             rotation: 0,
@@ -722,7 +735,8 @@ const useStore = create<StoreState>()(
             undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
             redoStack: [],
           }
-        }),
+        })
+      },
       handleDeleteSelectedImages: () =>
         set((state) => {
           if (state.selectedImageIds.length === 0) return state
@@ -975,6 +989,7 @@ const useStore = create<StoreState>()(
     }),
     {
       name: 'editor-storage',
+      version: 1, // Increment this when storage format changes
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
         // Node-based state (single source of truth)
@@ -988,6 +1003,47 @@ const useStore = create<StoreState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // Migrate blob URLs to prevent errors (cleanup from v0 -> v1)
+          const cleanBlobUrls = (nodes: BaseNode[]): BaseNode[] => {
+            return nodes
+              .map((node) => {
+                // Clean reference-image and scan nodes with blob URLs
+                if (
+                  (node.type === 'reference-image' || node.type === 'scan') &&
+                  'url' in node &&
+                  typeof node.url === 'string' &&
+                  node.url.startsWith('blob:')
+                ) {
+                  console.warn(`[Migration] Removing invalid blob URL for ${node.type} ${node.id}`)
+                  // Remove the node by filtering it out (return null and filter later)
+                  return null as any
+                }
+
+                // Recursively clean children if present
+                if (
+                  'children' in node &&
+                  Array.isArray(node.children) &&
+                  node.children.length > 0
+                ) {
+                  return {
+                    ...node,
+                    children: cleanBlobUrls(node.children),
+                  }
+                }
+
+                return node
+              })
+              .filter((node): node is BaseNode => node !== null)
+          }
+
+          // Clean blob URLs from all levels
+          if (state.levels && Array.isArray(state.levels)) {
+            state.levels = state.levels.map((level) => ({
+              ...level,
+              children: cleanBlobUrls(level.children) as LevelNode['children'],
+            }))
+          }
+
           // Initialize levels array if not present
           if (!state.levels || state.levels.length === 0) {
             state.levels = [

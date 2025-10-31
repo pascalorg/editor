@@ -91,8 +91,8 @@ interface DraggableLevelItemProps {
   setBuildingElementOpacity: (id: string, type: 'wall' | 'roof' | 'column', opacity: number) => void
   setImageOpacity: (id: string, opacity: number) => void
   setScanOpacity: (id: string, opacity: number) => void
-  handleUpload: (file: File, level: number) => void
-  handleScanUpload: (file: File, level: number) => void
+  handleUpload: (file: File, level: number) => Promise<void>
+  handleScanUpload: (file: File, level: number) => Promise<void>
   setSelectedElements: (elements: any[]) => void
   setControlMode: (mode: any) => void
   controls: ReturnType<typeof useDragControls>
@@ -297,7 +297,11 @@ function DraggableLevelItem({
                     input.accept = 'image/png,image/jpeg'
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
-                      if (file) handleUpload(file, level.level || 0)
+                      if (file) {
+                        handleUpload(file, level.level || 0).catch((error: unknown) => {
+                          console.error('Failed to upload image:', error)
+                        })
+                      }
                     }
                     input.click()
                   }}
@@ -365,7 +369,11 @@ function DraggableLevelItem({
                     input.accept = '.glb,.gltf,.ply,model/gltf-binary,model/gltf+json'
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
-                      if (file) handleScanUpload(file, level.level || 0)
+                      if (file) {
+                        handleScanUpload(file, level.level || 0).catch((error: unknown) => {
+                          console.error('Failed to upload scan:', error)
+                        })
+                      }
                     }
                     input.click()
                   }}
