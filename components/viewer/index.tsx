@@ -30,6 +30,11 @@ const SHOW_GRID = true // Show grid by default
 
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
+// Viewer zoom configuration - adjust these to control default zoom level
+export const VIEWER_DEFAULT_ZOOM = 80 // Orthographic camera zoom level (higher = more zoomed in)
+export const VIEWER_INITIAL_CAMERA_DISTANCE = 8 // Initial camera distance from origin
+export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no floor is selected
+
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
   const groups = useEditor((state) => state.groups)
@@ -125,7 +130,7 @@ export default function Viewer({ className }: { className?: string }) {
             makeDefault
             near={-1000}
             position={[10, 10, 10]}
-            zoom={20}
+            zoom={VIEWER_DEFAULT_ZOOM}
           />
         )}
         <color args={['#212134']} attach="background" />

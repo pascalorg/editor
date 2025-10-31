@@ -5,7 +5,12 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import { FLOOR_SPACING, WALL_HEIGHT } from '../editor'
+import {
+  FLOOR_SPACING,
+  VIEWER_DESELECTED_CAMERA_DISTANCE,
+  VIEWER_INITIAL_CAMERA_DISTANCE,
+  WALL_HEIGHT,
+} from './index'
 
 const GRID_SIZE = 30 // Match the grid size from the viewer
 
@@ -21,7 +26,8 @@ export function ViewerCustomControls() {
   useEffect(() => {
     if (!controls) return
 
-    ;(controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false)
+    const d = VIEWER_INITIAL_CAMERA_DISTANCE
+    ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, false)
   }, [controls])
 
   useEffect(() => {
@@ -38,7 +44,8 @@ export function ViewerCustomControls() {
       )
       ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
     } else {
-      ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
+      const d = VIEWER_DESELECTED_CAMERA_DISTANCE
+      ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
       ;(controls as CameraControlsImpl).setBoundary() // No argument to remove boundaries
     }
   }, [currentLevel, controls, selectedFloorId, levelMode])
