@@ -12,6 +12,8 @@ import {
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
+import { updateNodeProperties } from '@/lib/nodes/operations'
+import type { RoofSegmentNode } from '@/lib/nodes/types'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const ROOF_THICKNESS = 0.05 // 5cm roof thickness
@@ -174,8 +176,63 @@ export const Roofs = forwardRef(
     // Update roof segment in the store
     const setComponents = useCallback(
       (updatedSegments: RoofSegment[]) => {
-        // TODO: Migrate to node operations - update RoofNode children
-        console.warn('setComponents for roofs not yet migrated to node API')
+        const state = useEditor.getState()
+        let updatedLevels = state.levels
+
+        // Update each segment individually
+        for (const segment of updatedSegments) {
+          // Calculate position, rotation, and size from start/end coordinates
+          const [x1, y1] = segment.start
+          const [x2, y2] = segment.end
+          const dx = x2 - x1
+          const dy = y2 - y1
+          const length = Math.sqrt(dx * dx + dy * dy)
+          const rotation = Math.atan2(dy, dx)
+
+          // Check if this is a roof-segment (child of roof) or a roof node (flat structure)
+          const existingNode = state.nodeIndex.get(segment.id)
+          if (!existingNode) {
+            continue
+          }
+
+          if (existingNode.type === 'roof-segment') {
+            // Segment is a child of a roof - update it
+            const updates: Partial<RoofSegmentNode> = {
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, 0] as [number, number],
+              height: segment.height,
+              leftWidth: segment.leftWidth,
+              rightWidth: segment.rightWidth,
+              visible: segment.visible ?? true,
+              opacity: segment.opacity ?? 100,
+            }
+            updatedLevels = updateNodeProperties(updatedLevels, segment.id, updates)
+          } else if (existingNode.type === 'roof') {
+            // Node is a roof - update it directly (flat structure)
+            const updates: Record<string, unknown> = {
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, 0] as [number, number],
+              visible: segment.visible ?? true,
+              opacity: segment.opacity ?? 100,
+            }
+            // Also update roof-specific properties if they exist
+            if (segment.height !== undefined) {
+              updates.height = segment.height
+            }
+            if (segment.leftWidth !== undefined) {
+              updates.leftWidth = segment.leftWidth
+            }
+            if (segment.rightWidth !== undefined) {
+              updates.rightWidth = segment.rightWidth
+            }
+            updatedLevels = updateNodeProperties(updatedLevels, segment.id, updates)
+          }
+        }
+
+        // Update the store
+        state.updateLevels(updatedLevels, false) // Don't push to undo - handled by drag handlers
       },
       [floorId],
     )
