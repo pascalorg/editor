@@ -61,7 +61,7 @@ export function buildNodeIndexes(levels: LevelNode[]): NodeIndexes {
     indexes.byType.get('level')!.add(level.id)
 
     // Traverse all nodes in the level
-    traverseTree(level, (node, parent) => {
+    traverseTree(level, ((node, parent) => {
       // Index by ID
       indexes.byId.set(node.id, node)
 
@@ -81,7 +81,7 @@ export function buildNodeIndexes(levels: LevelNode[]): NodeIndexes {
 
       // Index node to level mapping
       indexes.nodeToLevel.set(node.id, level.level)
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   return indexes
@@ -96,9 +96,9 @@ export function buildNodeIndex(levels: LevelNode[]): Map<string, BaseNode> {
   for (const level of levels) {
     index.set(level.id, level)
 
-    traverseTree(level, (node) => {
+    traverseTree(level, ((node) => {
       index.set(node.id, node)
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   return index
@@ -184,12 +184,12 @@ export function getNodesInLevel(indexes: NodeIndexes, level: number): BaseNode[]
   }
 
   const nodes: BaseNode[] = []
-  traverseTree(levelNode, (node) => {
+  traverseTree(levelNode, ((node) => {
     if (node.id !== levelNode.id) {
       // Don't include the level node itself
       nodes.push(node)
     }
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return nodes
 }
@@ -208,11 +208,11 @@ export function getNodesInLevelByType<T extends BaseNode>(
   }
 
   const nodes: T[] = []
-  traverseTree(levelNode, (node) => {
+  traverseTree(levelNode, ((node) => {
     if (node.type === type && node.id !== levelNode.id) {
       nodes.push(node as T)
     }
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return nodes
 }
@@ -251,9 +251,9 @@ export function addNodeToIndexes(
   indexes.nodeToLevel.set(node.id, level)
 
   // Recursively add children
-  traverseTree(node.children, (child) => {
+  traverseTree(node.children, ((child) => {
     addNodeToIndexes(indexes, child, child.parent || null, level)
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 }
 
 /**

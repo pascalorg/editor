@@ -24,6 +24,7 @@ import { WindowPlacementPreview, Windows } from '@/components/editor/elements/wi
 import { type Component, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
+import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addColumnToLevel,
   deleteNode,
@@ -32,8 +33,7 @@ import {
   setNodeRotation,
   setNodeSize,
   setNodeVisibility,
-} from '@/lib/nodes'
-import { buildNodeIndex } from '@/lib/nodes/indexes'
+} from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'

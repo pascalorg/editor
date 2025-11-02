@@ -155,7 +155,7 @@ export function validateNodeFormat(levels: LevelNode[]): ValidationResult {
     }
 
     // Validate children types
-    traverseTree(level, (node, parent) => {
+    traverseTree(level, ((node, parent) => {
       // Validate parent references
       if (parent && node.parent !== parent.id) {
         errors.push(
@@ -209,7 +209,7 @@ export function validateNodeFormat(levels: LevelNode[]): ValidationResult {
           }
         }
       }
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   // Calculate stats
@@ -242,13 +242,16 @@ export function validateNodeFormat(levels: LevelNode[]): ValidationResult {
 /**
  * Validate that a round-trip conversion preserves data
  */
-export function validateRoundTrip(
-  originalComponents: Component[],
-  originalGroups: ComponentGroup[],
-  originalImages: ReferenceImage[],
-  originalScans: Scan[],
-  convertedLevels: LevelNode[],
-): ValidationResult {
+export function validateRoundTrip(params: {
+  originalComponents: Component[]
+  originalGroups: ComponentGroup[]
+  originalImages: ReferenceImage[]
+  originalScans: Scan[]
+  convertedLevels: LevelNode[]
+}): ValidationResult {
+  const { originalComponents, originalGroups, originalImages, originalScans, convertedLevels } =
+    params
+
   const errors: string[] = []
   const warnings: string[] = []
 
@@ -352,18 +355,18 @@ export function findOrphanedNodes(levels: LevelNode[]): BaseNode[] {
 
   // Collect all node IDs
   for (const level of levels) {
-    traverseTree(level, (node) => {
+    traverseTree(level, ((node) => {
       allNodeIds.add(node.id)
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   // Find nodes with parent references to non-existent nodes
   for (const level of levels) {
-    traverseTree(level, (node) => {
+    traverseTree(level, ((node) => {
       if (node.parent && !allNodeIds.has(node.parent)) {
         orphans.push(node)
       }
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   return orphans
@@ -377,12 +380,12 @@ export function findDuplicateNodeIds(levels: LevelNode[]): string[] {
   const duplicates = new Set<string>()
 
   for (const level of levels) {
-    traverseTree(level, (node) => {
+    traverseTree(level, ((node) => {
       if (seen.has(node.id)) {
         duplicates.add(node.id)
       }
       seen.add(node.id)
-    })
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
   return Array.from(duplicates)

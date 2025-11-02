@@ -17,7 +17,7 @@ import type { AnyNode, BaseNode, NodeType } from './types'
  */
 export function traverseTree(
   nodes: BaseNode | BaseNode[],
-  visitor: (node: BaseNode, parent: BaseNode | null, depth: number) => void | boolean,
+  visitor: (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined,
   parent: BaseNode | null = null,
   depth = 0,
 ): void {
@@ -25,7 +25,7 @@ export function traverseTree(
 
   for (const node of nodeArray) {
     // Call visitor, if it returns false, stop traversal
-    const result = visitor(node, parent, depth)
+    const result = visitor(node, parent, depth) as boolean | undefined
     if (result === false) {
       return
     }
@@ -42,7 +42,7 @@ export function traverseTree(
  */
 export function traverseTreeBreadthFirst(
   nodes: BaseNode | BaseNode[],
-  visitor: (node: BaseNode, parent: BaseNode | null, depth: number) => void | boolean,
+  visitor: (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined,
 ): void {
   const nodeArray = Array.isArray(nodes) ? nodes : [nodes]
   const queue: Array<{ node: BaseNode; parent: BaseNode | null; depth: number }> = nodeArray.map(
@@ -53,7 +53,7 @@ export function traverseTreeBreadthFirst(
     const { node, parent, depth } = queue.shift()!
 
     // Call visitor, if it returns false, stop traversal
-    const result = visitor(node, parent, depth)
+    const result = visitor(node, parent, depth) as boolean | undefined
     if (result === false) {
       return
     }
@@ -125,11 +125,11 @@ export function findNodes(
 ): BaseNode[] {
   const results: BaseNode[] = []
 
-  traverseTree(nodes, (node) => {
+  traverseTree(nodes, ((node) => {
     if (predicate(node)) {
       results.push(node)
     }
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return results
 }
@@ -167,7 +167,7 @@ export function findAncestors(nodes: BaseNode | BaseNode[], nodeId: string): Bas
   const ancestors: BaseNode[] = []
   const node = findNodeById(nodes, nodeId)
 
-  if (!(node && node.parent)) {
+  if (!node?.parent) {
     return ancestors
   }
 
@@ -191,9 +191,9 @@ export function findAncestors(nodes: BaseNode | BaseNode[], nodeId: string): Bas
 export function findDescendants(node: BaseNode): BaseNode[] {
   const descendants: BaseNode[] = []
 
-  traverseTree(node.children, (child) => {
+  traverseTree(node.children, ((child) => {
     descendants.push(child)
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return descendants
 }
@@ -338,9 +338,9 @@ export function cloneNode<T extends BaseNode>(node: T, newId?: string): T {
  */
 export function countNodes(nodes: BaseNode | BaseNode[]): number {
   let count = 0
-  traverseTree(nodes, () => {
+  traverseTree(nodes, (() => {
     count++
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   return count
 }
 
@@ -349,9 +349,9 @@ export function countNodes(nodes: BaseNode | BaseNode[]): number {
  */
 export function getTreeDepth(nodes: BaseNode | BaseNode[]): number {
   let maxDepth = 0
-  traverseTree(nodes, (_node, _parent, depth) => {
+  traverseTree(nodes, ((_node, _parent, depth) => {
     maxDepth = Math.max(maxDepth, depth)
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   return maxDepth
 }
 
@@ -361,9 +361,9 @@ export function getTreeDepth(nodes: BaseNode | BaseNode[]): number {
 export function countNodesByType(nodes: BaseNode | BaseNode[]): Record<string, number> {
   const counts: Record<string, number> = {}
 
-  traverseTree(nodes, (node) => {
+  traverseTree(nodes, ((node) => {
     counts[node.type] = (counts[node.type] || 0) + 1
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return counts
 }
@@ -407,12 +407,12 @@ export function hasCircularReferences(nodes: BaseNode | BaseNode[]): boolean {
 export function validateParentReferences(nodes: BaseNode | BaseNode[]): boolean {
   let isValid = true
 
-  traverseTree(nodes, (node, parent) => {
+  traverseTree(nodes, ((node, parent) => {
     if (parent && node.parent !== parent.id) {
       console.error(`Parent reference mismatch for node ${node.id}`)
       isValid = false
     }
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
 
   return isValid
 }
@@ -426,9 +426,9 @@ export function validateParentReferences(nodes: BaseNode | BaseNode[]): boolean 
  */
 export function flattenTree(nodes: BaseNode | BaseNode[]): BaseNode[] {
   const result: BaseNode[] = []
-  traverseTree(nodes, (node) => {
+  traverseTree(nodes, ((node) => {
     result.push(node)
-  })
+  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   return result
 }
 
