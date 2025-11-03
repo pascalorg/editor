@@ -389,13 +389,13 @@ export const ReferenceImage = ({
           onPointerDown={(e) => {
             // Only respond to left-click, ignore right-click for camera
             if (e.button !== 0) return
-            if (controlMode === 'guide' && !movingCamera) {
+            if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               e.stopPropagation()
               onSelect()
             }
           }}
           onPointerEnter={(e) => {
-            if (controlMode === 'guide' && !movingCamera) {
+            if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               setIsHovered(true)
             }
           }}
@@ -406,8 +406,16 @@ export const ReferenceImage = ({
         >
           <planeGeometry args={[planeWidth, planeHeight]} />
           <meshStandardMaterial
-            emissive={controlMode === 'guide' && (isHovered || isSelected) ? '#ffffff' : '#000000'}
-            emissiveIntensity={controlMode === 'guide' && (isHovered || isSelected) ? 0.2 : 0}
+            emissive={
+              (controlMode === 'guide' || controlMode === 'select') && (isHovered || isSelected)
+                ? '#ffffff'
+                : '#000000'
+            }
+            emissiveIntensity={
+              (controlMode === 'guide' || controlMode === 'select') && (isHovered || isSelected)
+                ? 0.2
+                : 0
+            }
             map={texture}
             opacity={opacity}
             polygonOffset

@@ -10,14 +10,16 @@ import {
   PerspectiveCamera,
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type * as THREE from 'three'
 import { Scan } from '@/components/editor/elements/scan'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import { calculateFloorBounds } from '@/lib/grid-bounds'
+import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
+import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
+import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
@@ -37,7 +39,8 @@ export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no f
 
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
-  const groups = useEditor((state) => state.groups)
+  const levels = useEditor((state) => state.levels)
+  const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -46,14 +49,14 @@ export default function Viewer({ className }: { className?: string }) {
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
-  const components = useEditor((state) => state.components)
-  const scans = useEditor((state) => state.scans)
-  const setScans = useEditor((state) => state.setScans)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const selectFloor = useEditor((state) => state.selectFloor)
   const movingCamera = useEditor((state) => state.movingCamera)
+
+  // Convert node tree to legacy component format for rendering
+  const { components, scans } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
 
   // Viewer-specific state (isolated from editor)
   const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
@@ -143,8 +146,8 @@ export default function Viewer({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
-          {groups
-            .filter((g) => g.type === 'floor' && g.visible !== false)
+          {levels
+            .filter((level) => level.type === 'level' && level.visible !== false)
             .map((floor, index, visibleFloors) => {
               const floorLevel = floor.level || 0
               const yPosition =
@@ -157,8 +160,16 @@ export default function Viewer({ className }: { className?: string }) {
               const nextFloor = visibleFloors.find((f) => (f.level || 0) === floorLevel + 1)
               const hitBoxHeight = nextFloor ? heightPerLevel : heightPerLevel
 
-              // Calculate bounds for this floor (in grid units)
-              const bounds = calculateFloorBounds(components, floor.id, 6)
+              // Calculate bounds for this floor (in grid units) using node tree
+              const bounds = calculateLevelBoundsById(levels, floor.id, 6)
+
+              // Debug logging
+              if (bounds) {
+                console.log(`Floor ${floor.id} (level ${floor.level}) bounds:`, bounds)
+                console.log(
+                  `  Grid: minX=${bounds.minX}, maxX=${bounds.maxX}, minZ=${bounds.minZ}, maxZ=${bounds.maxZ}`,
+                )
+              }
 
               // Convert bounds to world units and add padding
               const PADDING = 1.5 // padding in grid units
@@ -166,51 +177,58 @@ export default function Viewer({ className }: { className?: string }) {
                 ? (bounds.maxX - bounds.minX + PADDING * 2) * tileSize
                 : GRID_SIZE
               const hitBoxDepth = bounds
-                ? (bounds.maxY - bounds.minY + PADDING * 2) * tileSize
+                ? (bounds.maxZ - bounds.minZ + PADDING * 2) * tileSize
                 : GRID_SIZE
               const hitBoxCenterX = bounds ? ((bounds.minX + bounds.maxX) / 2) * tileSize : 0
-              const hitBoxCenterZ = bounds ? ((bounds.minY + bounds.maxY) / 2) * tileSize : 0
+              const hitBoxCenterZ = bounds ? ((bounds.minZ + bounds.maxZ) / 2) * tileSize : 0
+
+              // Debug logging continued
+              if (bounds && floor.level === 2) {
+                console.log(`  Hit box: width=${hitBoxWidth}, depth=${hitBoxDepth}`)
+                console.log(`  Center (before offset): x=${hitBoxCenterX}, z=${hitBoxCenterZ}`)
+                console.log(
+                  `  Final position: x=${hitBoxCenterX - GRID_SIZE / 2}, z=${hitBoxCenterZ - GRID_SIZE / 2}`,
+                )
+              }
 
               // Find the level directly below (for reference grid)
               const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
               const floorBelow =
                 levelBelow !== null
-                  ? groups.find((g) => g.type === 'floor' && g.level === levelBelow)
+                  ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
                   : null
 
               return (
                 <AnimatedLevel key={floor.id} positionY={yPosition}>
                   {/* Clickable hit target box for floor selection */}
-                  {bounds && (
-                    <mesh
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        selectFloor(floor.id)
-                      }}
-                      onPointerEnter={(e) => {
-                        e.stopPropagation()
-                        setHoveredFloorId(floor.id)
-                        document.body.style.cursor = 'pointer'
-                      }}
-                      onPointerLeave={(e) => {
-                        e.stopPropagation()
-                        setHoveredFloorId(null)
-                        document.body.style.cursor = 'default'
-                      }}
-                      position={[
-                        hitBoxCenterX - GRID_SIZE / 2,
-                        hitBoxHeight / 2,
-                        hitBoxCenterZ - GRID_SIZE / 2,
-                      ]}
-                    >
-                      <boxGeometry args={[hitBoxWidth, hitBoxHeight, hitBoxDepth]} />
-                      <meshBasicMaterial
-                        color="#ffffff"
-                        opacity={hoveredFloorId === floor.id ? 0.08 : 0}
-                        transparent
-                      />
-                    </mesh>
-                  )}
+                  <mesh
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      selectFloor(floor.id)
+                    }}
+                    onPointerEnter={(e) => {
+                      e.stopPropagation()
+                      setHoveredFloorId(floor.id)
+                      document.body.style.cursor = 'pointer'
+                    }}
+                    onPointerLeave={(e) => {
+                      e.stopPropagation()
+                      setHoveredFloorId(null)
+                      document.body.style.cursor = 'default'
+                    }}
+                    position={[
+                      hitBoxCenterX - GRID_SIZE / 2,
+                      hitBoxHeight / 2,
+                      hitBoxCenterZ - GRID_SIZE / 2,
+                    ]}
+                  >
+                    <boxGeometry args={[hitBoxWidth, hitBoxHeight, hitBoxDepth]} />
+                    <meshBasicMaterial
+                      color="#ffffff"
+                      opacity={hoveredFloorId === floor.id ? 0.15 : 0}
+                      transparent
+                    />
+                  </mesh>
 
                   {/* Solid dark purple floor for lowest level only - infinite appearance */}
                   {floorLevel === 0 && <InfiniteFloor />}
@@ -355,12 +373,44 @@ export default function Viewer({ className }: { className?: string }) {
                             onManipulationEnd={() => setIsManipulatingScan(false)}
                             onManipulationStart={() => setIsManipulatingScan(true)}
                             onSelect={() => setSelectedScanIds([scan.id])}
-                            onUpdate={(updates, pushToUndo = true) =>
-                              setScans(
-                                scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
-                                pushToUndo,
-                              )
-                            }
+                            onUpdate={(updates, pushToUndo = true) => {
+                              let updatedLevels = levels
+
+                              // Apply each update operation
+                              if (updates.position !== undefined) {
+                                updatedLevels = setNodePosition(
+                                  updatedLevels,
+                                  scan.id,
+                                  updates.position,
+                                )
+                              }
+                              if (updates.rotation !== undefined) {
+                                updatedLevels = setNodeRotation(
+                                  updatedLevels,
+                                  scan.id,
+                                  updates.rotation,
+                                )
+                              }
+                              if (updates.scale !== undefined || updates.yOffset !== undefined) {
+                                // Use updateNodeProperties with proper typing for scan-specific properties
+                                const scanUpdates: Partial<{
+                                  scale: number
+                                  yOffset: number
+                                }> = {}
+                                if (updates.scale !== undefined) scanUpdates.scale = updates.scale
+                                if (updates.yOffset !== undefined)
+                                  scanUpdates.yOffset = updates.yOffset
+
+                                // Type assertion is safe here as we know the node is a ScanNode
+                                updatedLevels = updateNodeProperties(
+                                  updatedLevels,
+                                  scan.id,
+                                  scanUpdates as any,
+                                )
+                              }
+
+                              updateLevels(updatedLevels, pushToUndo)
+                            }}
                             opacity={scanOpacity}
                             position={scan.position}
                             rotation={scan.rotation}

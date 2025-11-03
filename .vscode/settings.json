@@ -30,6 +30,7 @@
   "[css]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
+  "css.lint.unknownAtRules": "ignore",
   "[graphql]": {
     "editor.defaultFormatter": "biomejs.biome"
   }

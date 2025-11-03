@@ -11,7 +11,7 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
@@ -21,14 +21,22 @@ import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { type Component, useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+// Node-based API imports for Phase 3 migration
+import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
+import {
+  addColumnToLevel,
+  setNodePosition,
+  setNodeRotation,
+  setNodeSize,
+  updateNodeProperties,
+} from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
-import { LightingControls } from './lighting-controls'
 import { ProximityGrid } from './proximity-grid'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
@@ -53,10 +61,6 @@ export default function Editor({ className }: { className?: string }) {
   const getRoofsSet = useEditor((state) => state.getRoofsSet)
   const setWalls = useEditor((state) => state.setWalls)
   const setRoofs = useEditor((state) => state.setRoofs)
-  const images = useEditor((state) => state.images)
-  const setImages = useEditor((state) => state.setImages)
-  const scans = useEditor((state) => state.scans)
-  const setScans = useEditor((state) => state.setScans)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
@@ -77,19 +81,101 @@ export default function Editor({ className }: { className?: string }) {
   const movingCamera = useEditor((state) => state.movingCamera)
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
-  const groups = useEditor((state) => state.groups)
+  const levels = useEditor((state) => state.levels)
+
+  const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
-  const components = useEditor((state) => state.components)
+
+  // Get reference images and scans from node tree for the current level
+  const nodeImages = useReferenceImages(selectedFloorId || 'level_0')
+  const nodeScans = useScans(selectedFloorId || 'level_0')
+
+  // Map node data to the format expected by rendering components
+  const images = nodeImages.map((node) => ({
+    id: node.id,
+    url: node.url,
+    name: node.name,
+    createdAt: node.createdAt,
+    position: node.position,
+    rotation: node.rotation,
+    scale: node.scale,
+    level: 0, // TODO: Get from parent level
+    visible: node.visible,
+    opacity: node.opacity,
+  }))
+
+  const scans = nodeScans.map((node) => ({
+    id: node.id,
+    url: node.url,
+    name: node.name,
+    createdAt: node.createdAt,
+    position: node.position,
+    rotation: node.rotation,
+    scale: node.scale,
+    level: 0, // TODO: Get from parent level
+    yOffset: node.yOffset,
+    visible: node.visible,
+    opacity: node.opacity,
+  }))
+
+  // Helper function to convert wall nodes to wall segments
+  const convertWallNodesToSegments = useCallback(
+    (wallNodes: any[]): WallSegment[] =>
+      wallNodes.map((node) => {
+        const [x1, y1] = node.position
+        const length = node.size[0]
+        const x2 = x1 + Math.cos(node.rotation) * length
+        const y2 = y1 + Math.sin(node.rotation) * length
+
+        return {
+          start: [x1, y1] as [number, number],
+          end: [x2, y2] as [number, number],
+          id: node.id,
+          isHorizontal: Math.abs(node.rotation) < 0.1 || Math.abs(node.rotation - Math.PI) < 0.1,
+          visible: node.visible ?? true,
+          opacity: node.opacity ?? 100,
+        }
+      }),
+    [],
+  )
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
 
   // Get walls as a Set
   const walls = getWallsSet()
+
+  // Get wall/door/window data for the currently selected floor (for placement validation)
+  const currentFloorWallNodes = useWalls(selectedFloorId || 'level_0')
+  const currentFloorDoorNodes = useDoors(selectedFloorId || 'level_0')
+  const currentFloorWindowNodes = useWindows(selectedFloorId || 'level_0')
+
+  const currentFloorWallSegments = useMemo(
+    () => convertWallNodesToSegments(currentFloorWallNodes),
+    [currentFloorWallNodes, convertWallNodesToSegments],
+  )
+
+  const currentFloorExistingDoors = useMemo(
+    () =>
+      currentFloorDoorNodes.map((node) => ({
+        position: node.position,
+        rotation: node.rotation,
+      })),
+    [currentFloorDoorNodes],
+  )
+
+  const currentFloorExistingWindows = useMemo(
+    () =>
+      currentFloorWindowNodes.map((node) => ({
+        position: node.position,
+        rotation: node.rotation,
+      })),
+    [currentFloorWindowNodes],
+  )
 
   // Use a callback ref to ensure the store is updated when the group is attached
   const allFloorsGroupCallback = useCallback(
@@ -604,25 +690,80 @@ export default function Editor({ className }: { className?: string }) {
         setRoofPreviewEnd(null)
       }
     } else if (controlMode === 'building' && activeTool === 'room') {
-      // Room mode: two-click rectangle (4 walls)
+      // Room mode: two-click rectangle (4 walls in a group)
       if (roomStartPoint === null) {
         // First click: set start corner
         setRoomStartPoint([x, y])
       } else {
-        // Second click: create 4 walls forming a rectangle
-        if (roomPreviewEnd) {
+        // Second click: create a room group with 4 walls
+        if (roomPreviewEnd && selectedFloorId) {
           const [x1, y1] = roomStartPoint
           const [x2, y2] = roomPreviewEnd
 
-          // Create 4 walls: top, bottom, left, right
-          const currentWalls = Array.from(walls)
-          const newWalls = [
+          // Create wall keys for the 4 walls
+          const wallKeys = [
             `${x1},${y2}-${x2},${y2}`, // Top wall
             `${x1},${y1}-${x2},${y1}`, // Bottom wall
             `${x1},${y1}-${x1},${y2}`, // Left wall
             `${x2},${y1}-${x2},${y2}`, // Right wall
           ]
-          setWalls([...currentWalls, ...newWalls])
+
+          // Create wall nodes for the group
+          const wallNodes = wallKeys.map((wallKey) => {
+            const [start, end] = wallKey.split('-')
+            const [wx1, wy1] = start.split(',').map(Number)
+            const [wx2, wy2] = end.split(',').map(Number)
+            const dx = wx2 - wx1
+            const dy = wy2 - wy1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            return {
+              id: wallKey,
+              type: 'wall' as const,
+              name: `Wall ${wallKey}`,
+              position: [wx1, wy1] as [number, number],
+              rotation,
+              size: [length, 0.2] as [number, number],
+              visible: true,
+              opacity: 100,
+              children: [],
+            }
+          })
+
+          // Count existing rooms to auto-increment the number
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const existingRooms =
+            currentLevel?.children.filter(
+              (child) => child.type === 'group' && (child as any).groupType === 'room',
+            ) || []
+          const roomNumber = existingRooms.length + 1
+
+          // Create a group node containing the walls
+          const groupId = `room_${Date.now()}`
+          const groupNode = {
+            id: groupId,
+            type: 'group' as const,
+            name: `Room ${roomNumber}`,
+            groupType: 'room' as const,
+            visible: true,
+            opacity: 100,
+            children: wallNodes,
+            parent: selectedFloorId,
+          }
+
+          // Add the group to the current level
+          const updatedLevels = levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              return {
+                ...level,
+                children: [...level.children, groupNode],
+              }
+            }
+            return level
+          })
+
+          updateLevels(updatedLevels)
         }
 
         // Reset placement state
@@ -641,16 +782,74 @@ export default function Editor({ className }: { className?: string }) {
         snappedX === customRoomPoints[0][0] &&
         snappedY === customRoomPoints[0][1]
       ) {
-        // Complete the custom room polygon by creating walls between all points
-        const currentWalls = Array.from(walls)
-        const newWalls: string[] = []
-        // Create walls between consecutive points (including closing wall)
-        for (let i = 0; i < customRoomPoints.length; i++) {
-          const [x1, y1] = customRoomPoints[i]
-          const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
-          newWalls.push(`${x1},${y1}-${x2},${y2}`)
+        // Complete the custom room polygon by creating a group with walls
+        if (selectedFloorId) {
+          const wallKeys: string[] = []
+          // Create walls between consecutive points (including closing wall)
+          for (let i = 0; i < customRoomPoints.length; i++) {
+            const [x1, y1] = customRoomPoints[i]
+            const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
+            wallKeys.push(`${x1},${y1}-${x2},${y2}`)
+          }
+
+          // Create wall nodes for the group
+          const wallNodes = wallKeys.map((wallKey) => {
+            const [start, end] = wallKey.split('-')
+            const [wx1, wy1] = start.split(',').map(Number)
+            const [wx2, wy2] = end.split(',').map(Number)
+            const dx = wx2 - wx1
+            const dy = wy2 - wy1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            return {
+              id: wallKey,
+              type: 'wall' as const,
+              name: `Wall ${wallKey}`,
+              position: [wx1, wy1] as [number, number],
+              rotation,
+              size: [length, 0.2] as [number, number],
+              visible: true,
+              opacity: 100,
+              children: [],
+            }
+          })
+
+          // Count existing rooms to auto-increment the number
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const existingRooms =
+            currentLevel?.children.filter(
+              (child) => child.type === 'group' && (child as any).groupType === 'room',
+            ) || []
+          const roomNumber = existingRooms.length + 1
+
+          // Create a group node containing the walls
+          const groupId = `room_${Date.now()}`
+          const groupNode = {
+            id: groupId,
+            type: 'group' as const,
+            name: `Room ${roomNumber}`,
+            groupType: 'room' as const,
+            visible: true,
+            opacity: 100,
+            children: wallNodes,
+            parent: selectedFloorId,
+          }
+
+          // Add the group to the current level
+          const updatedLevels = levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              return {
+                ...level,
+                children: [...level.children, groupNode],
+              }
+            }
+            return level
+          })
+
+          updateLevels(updatedLevels)
         }
-        setWalls([...currentWalls, ...newWalls])
+
         // Reset custom room state
         setCustomRoomPoints([])
         setCustomRoomPreviewEnd(null)
@@ -662,70 +861,37 @@ export default function Editor({ className }: { className?: string }) {
       }
     } else if (controlMode === 'building' && activeTool === 'column') {
       // Column mode: one-click placement at intersection
-      // Check if there's already a column at this position
-      const columnComponent = components.find(
-        (c) => c.type === 'column' && c.group === selectedFloorId,
+      if (!selectedFloorId) return
+
+      // Check if column already exists at this position
+      const level = levels.find((l) => l.id === selectedFloorId)
+      if (!level) return
+
+      const existingColumn = level.children.find(
+        (child) =>
+          child.type === 'column' &&
+          (child as any).position[0] === x &&
+          (child as any).position[1] === y,
       )
-      const existingColumns = columnComponent?.type === 'column' ? columnComponent.data.columns : []
 
-      // Check if a column already exists at this grid position
-      const columnExists = existingColumns.some(
-        (col) => col.position[0] === x && col.position[1] === y,
-      )
-
-      if (!columnExists) {
-        // Create a new column component or add to existing one
-        const columnId = `${x},${y}`
-
-        if (columnComponent) {
-          // Update existing column component
-          const newColumns = [
-            ...existingColumns,
-            { id: columnId, position: [x, y] as [number, number], visible: true },
-          ]
-
-          const updatedComponents = components.map((comp): Component => {
-            if (comp.id === columnComponent.id && comp.type === 'column') {
-              return {
-                ...comp,
-                type: 'column' as const,
-                data: { columns: newColumns },
-              }
-            }
-            return comp
-          })
-
-          useEditor.setState((state) => ({
-            undoStack: [
-              ...state.undoStack,
-              { images: state.images, scans: state.scans, components: state.components },
-            ].slice(-50),
-            redoStack: [],
-            components: updatedComponents,
-          }))
-        } else {
-          // Create a new column component
-          const floorName = groups.find((g) => g.id === selectedFloorId)?.name || selectedFloorId
-          const newComponent: Component = {
-            id: `columns-${selectedFloorId}`,
-            type: 'column' as const,
-            label: `Columns - ${floorName}`,
-            group: selectedFloorId,
-            data: {
-              columns: [{ id: columnId, position: [x, y] as [number, number], visible: true }],
-            },
-            createdAt: new Date().toISOString(),
-          }
-
-          useEditor.setState((state) => ({
-            undoStack: [
-              ...state.undoStack,
-              { images: state.images, scans: state.scans, components: state.components },
-            ].slice(-50),
-            redoStack: [],
-            components: [...state.components, newComponent],
-          }))
+      if (!existingColumn) {
+        // Create column node
+        const columnId = `col-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        const columnNode = {
+          id: columnId,
+          type: 'column' as const,
+          name: `Column at ${x},${y}`,
+          position: [x, y] as [number, number],
+          rotation: 0,
+          size: [0.3, 0.3] as [number, number], // 30cm x 30cm column
+          visible: true,
+          opacity: 100,
+          children: [] as [],
         }
+
+        // Add column to level using node operation
+        const updatedLevels = addColumnToLevel(levels, selectedFloorId, columnNode)
+        updateLevels(updatedLevels)
       }
     }
     // Door placement is now handled by DoorPlacementPreview component's onClick
@@ -783,7 +949,7 @@ export default function Editor({ className }: { className?: string }) {
 
   const handleIntersectionHover = (x: number, y: number | null) => {
     // Only track cursor position for non-base levels (base level uses InfiniteGrid)
-    const currentFloor = groups.find((g) => g.id === selectedFloorId)
+    const currentFloor = levels.find((level) => level.id === selectedFloorId)
     const currentLevel = currentFloor?.level || 0
 
     if (currentLevel > 0) {
@@ -1013,19 +1179,6 @@ export default function Editor({ className }: { className?: string }) {
     }
   }
 
-  const handleDeleteWall = () => {
-    if (contextMenuState.wallSegment) {
-      // Select the wall segment and delete it
-      setSelectedElements([{ id: contextMenuState.wallSegment.id, type: 'wall' }])
-      handleDeleteSelectedElements()
-    }
-    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
-  }
-
-  const handleCloseContextMenu = () => {
-    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
-  }
-
   // Use constants for reference image
   const imageOpacity = IMAGE_OPACITY
   const imageScale = IMAGE_SCALE
@@ -1127,12 +1280,25 @@ export default function Editor({ className }: { className?: string }) {
                   onManipulationEnd={() => setIsManipulatingImage(false)}
                   onManipulationStart={() => setIsManipulatingImage(true)}
                   onSelect={() => setSelectedImageIds([image.id])}
-                  onUpdate={(updates, pushToUndo = true) =>
-                    setImages(
-                      images.map((i) => (i.id === image.id ? { ...i, ...updates } : i)),
-                      pushToUndo,
-                    )
-                  }
+                  onUpdate={(updates, pushToUndo = true) => {
+                    let updatedLevels = levels
+
+                    // Apply each update operation
+                    if (updates.position !== undefined) {
+                      updatedLevels = setNodePosition(updatedLevels, image.id, updates.position)
+                    }
+                    if (updates.rotation !== undefined) {
+                      updatedLevels = setNodeRotation(updatedLevels, image.id, updates.rotation)
+                    }
+                    if (updates.scale !== undefined) {
+                      updatedLevels = setNodeSize(updatedLevels, image.id, [
+                        updates.scale,
+                        updates.scale,
+                      ])
+                    }
+
+                    updateLevels(updatedLevels, pushToUndo)
+                  }}
                   opacity={opacity}
                   position={image.position}
                   rotation={image.rotation}
@@ -1166,12 +1332,35 @@ export default function Editor({ className }: { className?: string }) {
                   onManipulationEnd={() => setIsManipulatingScan(false)}
                   onManipulationStart={() => setIsManipulatingScan(true)}
                   onSelect={() => setSelectedScanIds([scan.id])}
-                  onUpdate={(updates, pushToUndo = true) =>
-                    setScans(
-                      scans.map((s) => (s.id === scan.id ? { ...s, ...updates } : s)),
-                      pushToUndo,
-                    )
-                  }
+                  onUpdate={(updates, pushToUndo = true) => {
+                    let updatedLevels = levels
+
+                    // Apply each update operation
+                    if (updates.position !== undefined) {
+                      updatedLevels = setNodePosition(updatedLevels, scan.id, updates.position)
+                    }
+                    if (updates.rotation !== undefined) {
+                      updatedLevels = setNodeRotation(updatedLevels, scan.id, updates.rotation)
+                    }
+                    if (updates.scale !== undefined || updates.yOffset !== undefined) {
+                      // Use updateNodeProperties with proper typing for scan-specific properties
+                      const scanUpdates: Partial<{
+                        scale: number
+                        yOffset: number
+                      }> = {}
+                      if (updates.scale !== undefined) scanUpdates.scale = updates.scale
+                      if (updates.yOffset !== undefined) scanUpdates.yOffset = updates.yOffset
+
+                      // Type assertion is safe here as we know the node is a ScanNode
+                      updatedLevels = updateNodeProperties(
+                        updatedLevels,
+                        scan.id,
+                        scanUpdates as any,
+                      )
+                    }
+
+                    updateLevels(updatedLevels, pushToUndo)
+                  }}
                   opacity={scanOpacity}
                   position={scan.position}
                   rotation={scan.rotation}
@@ -1184,11 +1373,12 @@ export default function Editor({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
-          {groups
-            .filter((g) => {
+          {levels
+            .filter((level) => {
               // Filter out hidden floors (visible === false or opacity === 0)
-              const isHidden = g.visible === false || (g.opacity !== undefined && g.opacity === 0)
-              return g.type === 'floor' && !isHidden
+              const isHidden =
+                level.visible === false || (level.opacity !== undefined && level.opacity === 0)
+              return level.type === 'level' && !isHidden
             })
             .map((floor) => {
               const floorLevel = floor.level || 0
@@ -1200,7 +1390,7 @@ export default function Editor({ className }: { className?: string }) {
               const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
               const floorBelow =
                 levelBelow !== null
-                  ? groups.find((g) => g.type === 'floor' && g.level === levelBelow)
+                  ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
                   : null
 
               return (
@@ -1234,7 +1424,7 @@ export default function Editor({ className }: { className?: string }) {
                         <>
                           {isActiveFloor && (
                             <ProximityGrid
-                              components={components}
+                              components={[]} // TODO: Migrate to use node tree
                               cursorPosition={cursorPosition}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -1269,7 +1459,7 @@ export default function Editor({ className }: { className?: string }) {
                           )}
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
-                              components={components}
+                              components={[]} // TODO: Migrate to use node tree
                               cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -1302,7 +1492,7 @@ export default function Editor({ className }: { className?: string }) {
                         raycast={() => null}
                       >
                         <ProximityGrid
-                          components={components}
+                          components={[]} // TODO: Migrate to use node tree
                           cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
@@ -1352,7 +1542,6 @@ export default function Editor({ className }: { className?: string }) {
                         wallHeight={wallHeight}
                         wallPreviewEnd={wallPreviewEnd}
                         wallStartPoint={wallStartPoint}
-                        walls={walls}
                       />
                     )}
 
@@ -1438,51 +1627,14 @@ export default function Editor({ className }: { className?: string }) {
                       activeTool === 'door' &&
                       doorPreviewPosition && (
                         <DoorPlacementPreview
-                          existingDoors={(() => {
-                            const doorComponents = useEditor
-                              .getState()
-                              .components.filter((c) => c.type === 'door' && c.group === floor.id)
-                            return doorComponents
-                              .map((c) => {
-                                if (c.type === 'door') {
-                                  return { position: c.data.position, rotation: c.data.rotation }
-                                }
-                                return null
-                              })
-                              .filter(Boolean) as Array<{
-                              position: [number, number]
-                              rotation: number
-                            }>
-                          })()}
-                          existingWindows={(() => {
-                            const windowComponents = useEditor
-                              .getState()
-                              .components.filter((c) => c.type === 'window' && c.group === floor.id)
-                            return windowComponents
-                              .map((c) => {
-                                if (c.type === 'window') {
-                                  return { position: c.data.position, rotation: c.data.rotation }
-                                }
-                                return null
-                              })
-                              .filter(Boolean) as Array<{
-                              position: [number, number]
-                              rotation: number
-                            }>
-                          })()}
+                          existingDoors={currentFloorExistingDoors}
+                          existingWindows={currentFloorExistingWindows}
                           floorId={floor.id}
                           mouseGridPosition={doorPreviewPosition}
                           onPlaced={() => setDoorPreviewPosition(null)}
                           tileSize={tileSize}
                           wallHeight={wallHeight}
-                          wallSegments={(() => {
-                            const wallComponent = useEditor
-                              .getState()
-                              .components.find((c) => c.type === 'wall' && c.group === floor.id)
-                            return wallComponent?.type === 'wall'
-                              ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
-                              : []
-                          })()}
+                          wallSegments={currentFloorWallSegments}
                         />
                       )}
 
@@ -1501,51 +1653,14 @@ export default function Editor({ className }: { className?: string }) {
                       activeTool === 'window' &&
                       windowPreviewPosition && (
                         <WindowPlacementPreview
-                          existingDoors={(() => {
-                            const doorComponents = useEditor
-                              .getState()
-                              .components.filter((c) => c.type === 'door' && c.group === floor.id)
-                            return doorComponents
-                              .map((c) => {
-                                if (c.type === 'door') {
-                                  return { position: c.data.position, rotation: c.data.rotation }
-                                }
-                                return null
-                              })
-                              .filter(Boolean) as Array<{
-                              position: [number, number]
-                              rotation: number
-                            }>
-                          })()}
-                          existingWindows={(() => {
-                            const windowComponents = useEditor
-                              .getState()
-                              .components.filter((c) => c.type === 'window' && c.group === floor.id)
-                            return windowComponents
-                              .map((c) => {
-                                if (c.type === 'window') {
-                                  return { position: c.data.position, rotation: c.data.rotation }
-                                }
-                                return null
-                              })
-                              .filter(Boolean) as Array<{
-                              position: [number, number]
-                              rotation: number
-                            }>
-                          })()}
+                          existingDoors={currentFloorExistingDoors}
+                          existingWindows={currentFloorExistingWindows}
                           floorId={floor.id}
                           mouseGridPosition={windowPreviewPosition}
                           onPlaced={() => setWindowPreviewPosition(null)}
                           tileSize={tileSize}
                           wallHeight={wallHeight}
-                          wallSegments={(() => {
-                            const wallComponent = useEditor
-                              .getState()
-                              .components.find((c) => c.type === 'wall' && c.group === floor.id)
-                            return wallComponent?.type === 'wall'
-                              ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
-                              : []
-                          })()}
+                          wallSegments={currentFloorWallSegments}
                         />
                       )}
                   </group>

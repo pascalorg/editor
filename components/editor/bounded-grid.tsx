@@ -60,11 +60,19 @@ declare module '@react-three/fiber' {
   }
 }
 
+/**
+ * Bounds in 3D space matching Three.js coordinate system:
+ * - X: horizontal (east-west)
+ * - Y: vertical (up-down) - determined by floor level
+ * - Z: horizontal depth (north-south)
+ *
+ * For 2D floor footprints, Y is implicit (floor level)
+ */
 export interface Bounds {
   minX: number
   maxX: number
-  minY: number
-  maxY: number
+  minZ: number
+  maxZ: number
 }
 
 interface BoundedGridProps {
@@ -94,14 +102,14 @@ export function BoundedGrid({
   const dimensions = useMemo(() => {
     const paddedMinX = (bounds.minX - padding) * gridSize
     const paddedMaxX = (bounds.maxX + padding) * gridSize
-    const paddedMinY = (bounds.minY - padding) * gridSize
-    const paddedMaxY = (bounds.maxY + padding) * gridSize
+    const paddedMinZ = (bounds.minZ - padding) * gridSize
+    const paddedMaxZ = (bounds.maxZ + padding) * gridSize
 
     const width = paddedMaxX - paddedMinX
-    const depth = paddedMaxY - paddedMinY
+    const depth = paddedMaxZ - paddedMinZ
     // Apply offset to center position to convert from local to world coordinates
     const centerX = (paddedMinX + paddedMaxX) / 2 + offset[0]
-    const centerZ = (paddedMinY + paddedMaxY) / 2 + offset[1]
+    const centerZ = (paddedMinZ + paddedMaxZ) / 2 + offset[1]
 
     return { width, depth, centerX, centerZ }
   }, [bounds, padding, gridSize, offset])

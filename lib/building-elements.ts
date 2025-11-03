@@ -16,7 +16,7 @@ import type {
  * to ensure consistent behavior across selection, deletion, and visibility.
  */
 
-export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column'
+export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group'
 
 export interface SelectedElement {
   id: string
@@ -33,7 +33,7 @@ export interface ElementDescriptor {
     | typeof CylinderIcon
   labelSingular: string
   labelPlural: string
-  itemsKey: 'segments' | 'columns'
+  itemsKey: 'segments' | 'columns' | 'walls'
 }
 
 /**
@@ -75,6 +75,13 @@ export const ELEMENT_DESCRIPTORS: Record<BuildingElementType, ElementDescriptor>
     labelPlural: 'Columns',
     itemsKey: 'columns',
   },
+  group: {
+    type: 'group',
+    icon: Square, // Using Square as placeholder, actual icon is defined in layers-menu
+    labelSingular: 'Room',
+    labelPlural: 'Rooms',
+    itemsKey: 'walls',
+  },
 }
 
 /**
@@ -107,6 +114,11 @@ export function getElementsOfType(
   floorId: string,
   type: BuildingElementType,
 ): WallSegment[] | RoofSegment[] | any[] {
+  // For groups, return the group components themselves
+  if (type === 'group') {
+    return components.filter((c) => c.type === 'group' && c.group === floorId)
+  }
+
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
@@ -132,6 +144,11 @@ export function getAllElementsOfType(
   floorId: string,
   type: BuildingElementType,
 ): WallSegment[] | RoofSegment[] | any[] {
+  // For groups, return the group components themselves (including invisible)
+  if (type === 'group') {
+    return components.filter((c) => c.type === 'group' && c.group === floorId)
+  }
+
   const component = components.find((c) => c.type === type && c.group === floorId)
   if (!component) return []
 
@@ -271,10 +288,10 @@ export function toggleElementSelection(
     return [...selectedElements, { id: elementId, type }]
   }
 
-  // Single select: replace selection
-  if (isSelected && selectedElements.length === 1) {
-    // Deselect if it's the only selected element
-    return []
+  // Single select: replace selection (keep selection if clicking same item)
+  if (isSelected) {
+    // Keep the current selection if clicking the same item
+    return selectedElements
   }
   return [{ id: elementId, type }]
 }

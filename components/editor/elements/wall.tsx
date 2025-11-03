@@ -3,9 +3,9 @@
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { forwardRef, memo, type Ref, useMemo } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import {
   handleElementClick,
   isElementSelected,
@@ -240,41 +240,58 @@ export const Walls = forwardRef(
     }: WallsProps,
     ref: Ref<THREE.Group>,
   ) => {
-    // Fetch wall segments for this floor from the store, filtering out invisible ones
-    const wallSegments = useEditor(
-      useShallow((state) => {
-        const wallComponent = state.components.find((c) => c.type === 'wall' && c.group === floorId)
-        return wallComponent?.type === 'wall'
-          ? wallComponent.data.segments.filter((seg) => seg.visible !== false)
-          : []
-      }),
-    )
+    // Fetch wall nodes for this floor from the node tree
+    const wallNodes = useWalls(floorId)
 
-    // Fetch doors and windows for this floor to create holes in walls
-    const doorComponents = useEditor(
-      useShallow((state) =>
-        state.components.filter((c) => c.type === 'door' && c.group === floorId),
-      ),
-    )
-    const windowComponents = useEditor(
-      useShallow((state) =>
-        state.components.filter((c) => c.type === 'window' && c.group === floorId),
-      ),
-    )
+    // Convert WallNodes to WallSegment format for rendering
+    const wallSegments: WallSegment[] = useMemo(() => {
+      return wallNodes.map((node) => {
+        // Node position and size are in grid coordinates
+        // Calculate end point from start position, rotation, and length
+        const [x1, y1] = node.position
+        const length = node.size[0]
+        const x2 = x1 + Math.cos(node.rotation) * length
+        const y2 = y1 + Math.sin(node.rotation) * length
 
+        return {
+          start: [x1, y1] as [number, number],
+          end: [x2, y2] as [number, number],
+          id: node.id,
+          isHorizontal: Math.abs(node.rotation) < 0.1 || Math.abs(node.rotation - Math.PI) < 0.1,
+          visible: node.visible ?? true,
+          opacity: node.opacity ?? 100,
+        }
+      })
+    }, [wallNodes])
+
+    // Extract door and window nodes from wall children
     const wallOpenings = useMemo(() => {
-      const doors = doorComponents.map((c) => ({
-        type: 'door' as const,
-        position: c.type === 'door' ? c.data.position : ([0, 0] as [number, number]),
-        rotation: c.type === 'door' ? c.data.rotation : 0,
-      }))
-      const windows = windowComponents.map((c) => ({
-        type: 'window' as const,
-        position: c.type === 'window' ? c.data.position : ([0, 0] as [number, number]),
-        rotation: c.type === 'window' ? c.data.rotation : 0,
-      }))
+      const doors: Array<{ type: 'door'; position: [number, number]; rotation: number }> = []
+      const windows: Array<{ type: 'window'; position: [number, number]; rotation: number }> = []
+
+      // Iterate through all walls and extract their children
+      wallNodes.forEach((wallNode) => {
+        if (wallNode.children && wallNode.children.length > 0) {
+          wallNode.children.forEach((child: any) => {
+            if (child.type === 'door') {
+              doors.push({
+                type: 'door',
+                position: child.position,
+                rotation: child.rotation,
+              })
+            } else if (child.type === 'window') {
+              windows.push({
+                type: 'window',
+                position: child.position,
+                rotation: child.rotation,
+              })
+            }
+          })
+        }
+      })
+
       return [...doors, ...windows]
-    }, [doorComponents, windowComponents])
+    }, [wallNodes])
 
     const activeTool = useEditor((state) => state.activeTool)
 
@@ -425,7 +442,12 @@ export const Walls = forwardRef(
               <mesh
                 castShadow
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
@@ -440,8 +462,10 @@ export const Walls = forwardRef(
                   })
                   setSelectedElements(updatedSelection)
 
-                  // Automatically activate building mode when selecting a building element
-                  setControlMode('building')
+                  // Switch to building mode unless we're in select mode
+                  if (controlMode !== 'select') {
+                    setControlMode('building')
+                  }
                 }}
                 onContextMenu={(e) => {
                   if (!isActive) return
@@ -485,12 +509,12 @@ export const Walls = forwardRef(
                     const worldX = opening.position[0] * tileSize
                     const worldZ = opening.position[1] * tileSize
                     const scale: [number, number, number] =
-                      opening.type === 'door' ? [0.9, 4, 1] : [0.9, 1.2, 1] // Adjust scale based on type
+                      opening.type === 'door' ? [1, 4, 0.95] : [0.9, 1.22, 0.9] // Adjust scale based on type
                     return (
                       <Subtraction
                         key={idx}
                         position-x={worldX}
-                        position-y={opening.type === 'window' ? 1.1 : 0}
+                        position-y={opening.type === 'window' ? 1.12 : 0}
                         position-z={worldZ}
                         scale={scale}
                       >

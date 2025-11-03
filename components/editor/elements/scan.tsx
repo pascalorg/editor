@@ -397,13 +397,13 @@ export const Scan = ({
           object={scene.clone()}
           onPointerDown={(e: any) => {
             if (e.button !== 0) return
-            if (controlMode === 'guide' && !movingCamera) {
+            if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               e.stopPropagation()
               onSelect()
             }
           }}
           onPointerEnter={() => {
-            if (controlMode === 'guide' && !movingCamera) {
+            if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               setIsHovered(true)
             }
           }}
@@ -412,7 +412,7 @@ export const Scan = ({
           }}
         />
         {/* Add emissive highlight when selected or hovered */}
-        {controlMode === 'guide' && (isHovered || isSelected) && (
+        {(controlMode === 'guide' || controlMode === 'select') && (isHovered || isSelected) && (
           <meshStandardMaterial
             attach="material"
             emissive="#ffffff"
@@ -701,6 +701,3 @@ export const Scan = ({
     </group>
   )
 }
-
-// Preload GLTFs
-useGLTF.preload('/models/Door.glb')

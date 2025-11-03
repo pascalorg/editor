@@ -1,16 +1,21 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type { SetStateAction } from 'react'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import type { SelectedElement } from '@/lib/building-elements'
+import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
-  deleteElements,
-  type SelectedElement,
-  toggleElementVisibility,
-} from '@/lib/building-elements'
+  addReferenceImageToLevel,
+  addScanToLevel,
+  deleteNode,
+  setNodeOpacity,
+  setNodeVisibility,
+} from '@/lib/nodes/operations'
+// Node-based architecture imports
+import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
 // IndexedDB storage adapter for Zustand persist middleware
 const indexedDBStorage: StateStorage = {
@@ -90,6 +95,23 @@ export type CameraMode = 'perspective' | 'orthographic'
 
 export type LevelMode = 'stacked' | 'exploded'
 
+// Note: Node type definitions moved to @/lib/nodes/types.ts to avoid duplication
+// Re-export them here for backward compatibility
+export type {
+  BaseNode,
+  ColumnNode,
+  DoorNode,
+  GridItem,
+  GroupNode,
+  LevelNode,
+  ReferenceImageNode,
+  RoofNode,
+  RoofSegmentNode,
+  ScanNode,
+  WallNode,
+  WindowNode,
+} from '@/lib/nodes/types'
+
 export type WallComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
@@ -160,6 +182,18 @@ export type Component =
       data: ColumnComponentData
       createdAt: string
     }
+  | {
+      id: string
+      type: 'group'
+      group: string | null
+      data: {
+        name: string
+        groupType: 'room' | 'floor' | 'outdoor'
+        visible: boolean
+        opacity: number
+        walls: any[]
+      }
+    }
 
 export type ComponentGroup = {
   id: string
@@ -176,16 +210,15 @@ export type LayoutJSON = {
   grid: {
     size: number
   }
-  components: Component[]
-  groups: ComponentGroup[]
-  images?: ReferenceImage[] // Optional for backward compatibility
-  scans?: Scan[] // Optional for backward compatibility
+  levels: LevelNode[]
+  // components: Component[]
+  // groups: ComponentGroup[]
+  // images?: ReferenceImage[] // Optional for backward compatibility
+  // scans?: Scan[] // Optional for backward compatibility
 }
 
 type HistoryState = {
-  images: ReferenceImage[]
-  scans: Scan[]
-  components: Component[]
+  levels: LevelNode[]
 }
 
 export type ViewMode = 'full' | 'level'
@@ -193,10 +226,15 @@ export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 
 type StoreState = {
-  images: ReferenceImage[]
-  scans: Scan[]
-  components: Component[]
-  groups: ComponentGroup[]
+  // ============================================================================
+  // NODE-BASED STATE (single source of truth)
+  // ============================================================================
+  levels: LevelNode[] // Node tree hierarchy
+  nodeIndex: Map<string, BaseNode> // Fast lookup by ID
+
+  // ============================================================================
+  // UI STATE
+  // ============================================================================
   currentLevel: number
   selectedFloorId: string | null
   viewMode: ViewMode // 'full' for viewing all levels, 'level' for editing a specific level
@@ -218,15 +256,16 @@ type StoreState = {
   isManipulatingScan: boolean // Flag to prevent undo stack during scan manipulation
   handleClear: () => void
 } & {
+  // Node-based operations
+  updateLevels: (levels: LevelNode[], pushToUndo?: boolean) => void
+  addLevel: (level: Omit<LevelNode, 'children'>) => void
+  deleteLevel: (levelId: string) => void
+  reorderLevels: (levels: LevelNode[]) => void
+  selectFloor: (floorId: string | null) => void
+
   setWalls: (walls: string[]) => void
   setRoofs: (roofs: string[]) => void
-  addComponent: (component: Component) => void
-  addGroup: (group: ComponentGroup) => void
-  deleteGroup: (groupId: string) => void
-  reorderGroups: (groups: ComponentGroup[]) => void
-  selectFloor: (floorId: string | null) => void
-  setImages: (images: ReferenceImage[], pushToUndo?: boolean) => void
-  setScans: (scans: Scan[], pushToUndo?: boolean) => void
+
   setSelectedElements: (elements: SelectedElement[]) => void
   setSelectedImageIds: (ids: string[]) => void
   setSelectedScanIds: (ids: string[]) => void
@@ -247,8 +286,8 @@ type StoreState = {
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
   handleExport: () => void
-  handleUpload: (file: File, level: number) => void
-  handleScanUpload: (file: File, level: number) => void
+  handleUpload: (file: File, level: number) => Promise<void>
+  handleScanUpload: (file: File, level: number) => Promise<void>
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
@@ -276,36 +315,216 @@ type StoreState = {
 const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
-      images: [],
-      scans: [],
-      components: [],
-      groups: [
+      // Node-based state initialization with default base level
+      levels: [
         {
           id: 'level_0',
+          type: 'level',
           name: 'base level',
-          type: 'floor',
-          color: '#ffffff',
           level: 0,
           visible: true,
+          children: [],
         },
       ],
+      nodeIndex: new Map(), // Will be built from levels
+
+      // UI state initialization
       currentLevel: 0,
-      addComponent: (component) =>
-        set((state) => ({
-          undoStack: [
-            ...state.undoStack,
-            { images: state.images, scans: state.scans, components: state.components },
-          ].slice(-50),
-          redoStack: [],
-          components: [...state.components, component],
-        })),
-      addGroup: (group) => set((state) => ({ groups: [...state.groups, group] })),
-      deleteGroup: (groupId) =>
-        set((state) => ({
-          groups: state.groups.filter((group) => group.id !== groupId),
-          components: state.components.filter((comp) => comp.group !== groupId),
-        })),
-      reorderGroups: (groups) => set({ groups }),
+      updateLevels: (levels, pushToUndo = true) =>
+        set((state) => {
+          const newIndex = buildNodeIndex(levels)
+          if (pushToUndo) {
+            return {
+              levels,
+              nodeIndex: newIndex,
+              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+              redoStack: [],
+            }
+          }
+          return { levels, nodeIndex: newIndex }
+        }),
+      addLevel: (level) =>
+        set((state) => {
+          const newLevel: LevelNode = { ...level, children: [] }
+          const updatedLevels = [...state.levels, newLevel]
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
+      deleteLevel: (levelId) =>
+        set((state) => {
+          const updatedLevels = state.levels.filter((l) => l.id !== levelId)
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
+      reorderLevels: (levels) =>
+        set({
+          levels,
+          nodeIndex: buildNodeIndex(levels),
+        }),
+
+      // Building element operations
+      setWalls: (wallKeys) =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) {
+            console.warn('No floor selected, cannot set walls')
+            return state
+          }
+
+          // Get existing walls to preserve their children (doors/windows)
+          const level = state.levels.find((l) => l.id === selectedFloorId)
+          if (!level) return state
+
+          const existingWalls = level.children.filter((child) => child.type === 'wall') as any[]
+          const existingWallsMap = new Map(existingWalls.map((w) => [w.id, w]))
+
+          // Convert wall keys to WallNode objects
+          const wallNodes: any[] = wallKeys.map((wallKey) => {
+            // Check if this wall already exists
+            const existingWall = existingWallsMap.get(wallKey)
+            if (existingWall) {
+              // Preserve existing wall with its children
+              return existingWall
+            }
+
+            // Parse wall key: "x1,y1-x2,y2"
+            const [start, end] = wallKey.split('-')
+            const [x1, y1] = start.split(',').map(Number)
+            const [x2, y2] = end.split(',').map(Number)
+
+            // Calculate wall properties
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            // Create new WallNode
+            return {
+              id: wallKey, // Use wall key as ID for consistency
+              type: 'wall',
+              name: `Wall ${wallKey}`,
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, 0.2] as [number, number], // 0.2m thickness
+              visible: true,
+              opacity: 100,
+              children: [],
+              parent: selectedFloorId,
+            }
+          })
+
+          // Update the current level's walls
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              // Remove existing walls and add new/updated ones
+              const nonWalls = level.children.filter((child) => child.type !== 'wall')
+              return {
+                ...level,
+                children: [...nonWalls, ...wallNodes],
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
+      setRoofs: (roofKeys) =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) {
+            console.warn('No floor selected, cannot set roofs')
+            return state
+          }
+
+          // Get existing roofs to preserve their children (roof segments)
+          const level = state.levels.find((l) => l.id === selectedFloorId)
+          if (!level) return state
+
+          const existingRoofs = level.children.filter((child) => child.type === 'roof') as any[]
+          const existingRoofsMap = new Map(existingRoofs.map((r) => [r.id, r]))
+
+          // Convert roof keys to RoofNode objects
+          const roofNodes: any[] = roofKeys.map((roofKey) => {
+            // Check if this roof already exists
+            const existingRoof = existingRoofsMap.get(roofKey)
+            if (existingRoof) {
+              // Preserve existing roof with its children
+              return existingRoof
+            }
+
+            // Parse roof key: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
+            // First check if there are width parameters
+            let coordsPart = roofKey
+            let leftWidth = 3 // Default 3m
+            let rightWidth = 3 // Default 3m
+
+            if (roofKey.includes(':')) {
+              const [coords, widths] = roofKey.split(':')
+              coordsPart = coords
+              const [left, right] = widths.split(',').map(Number)
+              if (!isNaN(left)) leftWidth = left
+              if (!isNaN(right)) rightWidth = right
+            }
+
+            // Parse coordinates
+            const [start, end] = coordsPart.split('-')
+            const [x1, y1] = start.split(',').map(Number)
+            const [x2, y2] = end.split(',').map(Number)
+
+            // Calculate roof properties
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            // Create new RoofNode
+            return {
+              id: roofKey,
+              type: 'roof',
+              name: `Roof ${roofKey}`,
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, leftWidth + rightWidth] as [number, number],
+              height: 2.5, // 2.5m peak height
+              leftWidth,
+              rightWidth,
+              visible: true,
+              opacity: 100,
+              children: [],
+              parent: selectedFloorId,
+            }
+          })
+
+          // Update the current level's roofs
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              // Remove existing roofs and add new/updated ones
+              const nonRoofs = level.children.filter((child) => child.type !== 'roof')
+              return {
+                ...level,
+                children: [...nonRoofs, ...roofNodes],
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
+
       selectedFloorId: 'level_0',
       viewMode: 'level', // Start in level mode with base level selected
       viewerDisplayMode: 'objects', // Start with 3D objects visible in viewer
@@ -326,32 +545,12 @@ const useStore = create<StoreState>()(
         }
 
         // Switch to level mode - focusing on a specific level for editing
-        // Find or create the component for this floor
-        let component = state.components.find((c) => c.type === 'wall' && c.group === floorId)
+        const level = state.levels.find((l) => l.id === floorId)
 
-        const group = state.groups.find((g) => g.id === floorId)
-
-        if (component) {
+        if (level) {
           set({
             selectedFloorId: floorId,
-            currentLevel: group?.level ?? 0,
-            viewMode: 'level',
-          })
-        } else {
-          // Create a new wall component for this floor
-          component = {
-            id: `walls-${floorId}`,
-            type: 'wall',
-            label: `Walls - ${group?.name || floorId}`,
-            group: floorId,
-            data: { segments: [] },
-            createdAt: new Date().toISOString(),
-          }
-
-          set({
-            components: [...state.components, component],
-            currentLevel: group?.level ?? 0,
-            selectedFloorId: floorId,
+            currentLevel: level.level,
             viewMode: 'level',
           })
         }
@@ -375,257 +574,6 @@ const useStore = create<StoreState>()(
       movingCamera: false,
       isManipulatingImage: false,
       isManipulatingScan: false,
-      setWalls: (walls) =>
-        set((state) => {
-          if (!state.selectedFloorId) {
-            return state
-          }
-
-          // Get current walls from component for comparison
-          const currentComponent = state.components.find(
-            (c) => c.type === 'wall' && c.group === state.selectedFloorId,
-          )
-          const currentWalls = currentComponent
-            ? (currentComponent.data as WallComponentData).segments.map((seg) => seg.id)
-            : []
-
-          const sortedNew = [...walls].sort()
-          const sortedCurrent = [...currentWalls].sort()
-          if (
-            sortedNew.length === sortedCurrent.length &&
-            sortedNew.every((v, i) => v === sortedCurrent[i])
-          ) {
-            return state
-          }
-
-          // Convert wall keys to segments
-          const segments: WallSegment[] = []
-          for (const wallKey of walls) {
-            if (!wallKey.includes('-')) continue
-            const parts = wallKey.split('-')
-            if (parts.length !== 2) continue
-
-            const [start, end] = parts
-            const [x1, y1] = start.split(',').map(Number)
-            const [x2, y2] = end.split(',').map(Number)
-
-            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
-
-            const isHorizontal = y1 === y2
-
-            segments.push({
-              start: [x1, y1],
-              end: [x2, y2],
-              id: wallKey,
-              isHorizontal,
-              visible: true,
-            })
-          }
-
-          // Update the component for the current floor
-          let updatedComponents = state.components.map((comp) => {
-            if (comp.type === 'wall' && comp.group === state.selectedFloorId) {
-              return {
-                ...comp,
-                data: { segments },
-              }
-            }
-            return comp
-          })
-
-          // If no component exists for this floor yet, create one
-          if (
-            !state.components.find((c) => c.type === 'wall' && c.group === state.selectedFloorId)
-          ) {
-            const newComponent = {
-              id: `walls-${state.selectedFloorId}`,
-              type: 'wall' as const,
-              label: `Walls - ${state.groups.find((g) => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
-              group: state.selectedFloorId,
-              data: { segments },
-              createdAt: new Date().toISOString(),
-            }
-            updatedComponents = [...state.components, newComponent]
-          }
-
-          return {
-            undoStack: [
-              ...state.undoStack,
-              { images: state.images, scans: state.scans, components: state.components },
-            ].slice(-50),
-            redoStack: [],
-            components: updatedComponents,
-          }
-        }),
-      setRoofs: (roofs) =>
-        set((state) => {
-          if (!state.selectedFloorId) {
-            return state
-          }
-
-          // Get current roofs from component for comparison
-          const currentComponent = state.components.find(
-            (c) => c.type === 'roof' && c.group === state.selectedFloorId,
-          )
-          const currentRoofs = currentComponent
-            ? (currentComponent.data as RoofComponentData).segments.map((seg) => seg.id)
-            : []
-
-          const sortedNew = [...roofs].sort()
-          const sortedCurrent = [...currentRoofs].sort()
-          if (
-            sortedNew.length === sortedCurrent.length &&
-            sortedNew.every((v, i) => v === sortedCurrent[i])
-          ) {
-            return state
-          }
-
-          // Convert roof keys to segments
-          const segments: RoofSegment[] = []
-          for (const roofKey of roofs) {
-            if (!roofKey.includes('-')) continue
-
-            // Parse roof key format: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
-            const [coordPart, widthPart] = roofKey.split(':')
-            const parts = coordPart.split('-')
-            if (parts.length !== 2) continue
-
-            const [start, end] = parts
-            const [x1, y1] = start.split(',').map(Number)
-            const [x2, y2] = end.split(',').map(Number)
-
-            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) continue
-
-            // Parse optional widths
-            let leftWidth: number | undefined
-            let rightWidth: number | undefined
-            if (widthPart) {
-              const widths = widthPart.split(',').map(Number)
-              if (widths.length === 2 && !isNaN(widths[0]) && !isNaN(widths[1])) {
-                leftWidth = widths[0]
-                rightWidth = widths[1]
-              }
-            }
-
-            segments.push({
-              start: [x1, y1],
-              end: [x2, y2],
-              id: roofKey,
-              height: 2, // Default 2m peak height
-              leftWidth,
-              rightWidth,
-              visible: true,
-            })
-          }
-
-          // Update the component for the current floor
-          let updatedComponents = state.components.map((comp) => {
-            if (comp.type === 'roof' && comp.group === state.selectedFloorId) {
-              return {
-                ...comp,
-                data: { segments },
-              }
-            }
-            return comp
-          })
-
-          // If no component exists for this floor yet, create one
-          if (
-            !state.components.find((c) => c.type === 'roof' && c.group === state.selectedFloorId)
-          ) {
-            const newComponent = {
-              id: `roofs-${state.selectedFloorId}`,
-              type: 'roof' as const,
-              label: `Roofs - ${state.groups.find((g) => g.id === state.selectedFloorId)?.name || state.selectedFloorId}`,
-              group: state.selectedFloorId,
-              data: { segments },
-              createdAt: new Date().toISOString(),
-            }
-            updatedComponents = [...state.components, newComponent]
-          }
-
-          return {
-            undoStack: [
-              ...state.undoStack,
-              { images: state.images, scans: state.scans, components: state.components },
-            ].slice(-50),
-            redoStack: [],
-            components: updatedComponents,
-          }
-        }),
-      setImages: (images, pushToUndo = true) =>
-        set((state) => {
-          // Deep comparison to avoid unnecessary undo stack pushes
-          const areEqual =
-            state.images.length === images.length &&
-            state.images.every((img, i) => {
-              const newImg = images[i]
-              return (
-                img.id === newImg.id &&
-                img.position[0] === newImg.position[0] &&
-                img.position[1] === newImg.position[1] &&
-                img.rotation === newImg.rotation &&
-                img.scale === newImg.scale &&
-                img.url === newImg.url
-              )
-            })
-
-          if (areEqual) {
-            return state
-          }
-
-          // Only push to undo stack if requested (used for final commit, not intermediate updates)
-          if (pushToUndo) {
-            return {
-              undoStack: [
-                ...state.undoStack,
-                { images: state.images, scans: state.scans, components: state.components },
-              ].slice(-50),
-              redoStack: [],
-              images,
-            }
-          }
-
-          // Just update images without affecting undo stack (for intermediate drag updates)
-          return { images }
-        }),
-      setScans: (scans, pushToUndo = true) =>
-        set((state) => {
-          // Deep comparison to avoid unnecessary undo stack pushes
-          const areEqual =
-            state.scans.length === scans.length &&
-            state.scans.every((scan, i) => {
-              const newScan = scans[i]
-              return (
-                scan.id === newScan.id &&
-                scan.position[0] === newScan.position[0] &&
-                scan.position[1] === newScan.position[1] &&
-                scan.rotation === newScan.rotation &&
-                scan.scale === newScan.scale &&
-                scan.url === newScan.url &&
-                (scan.yOffset ?? 0) === (newScan.yOffset ?? 0)
-              )
-            })
-
-          if (areEqual) {
-            return state
-          }
-
-          // Only push to undo stack if requested (used for final commit, not intermediate updates)
-          if (pushToUndo) {
-            return {
-              undoStack: [
-                ...state.undoStack,
-                { images: state.images, scans: state.scans, components: state.components },
-              ].slice(-50),
-              redoStack: [],
-              scans,
-            }
-          }
-
-          // Just update scans without affecting undo stack (for intermediate drag updates)
-          return { scans }
-        }),
       setSelectedElements: (elements) => set({ selectedElements: elements }),
       setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
       setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
@@ -654,25 +602,39 @@ const useStore = create<StoreState>()(
       setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
       getWallsSet: () => {
         const state = get()
-        if (!state.selectedFloorId) return new Set<string>()
+        const selectedFloorId = state.selectedFloorId
+        if (!selectedFloorId) return new Set<string>()
 
-        const component = state.components.find(
-          (c) => c.type === 'wall' && c.group === state.selectedFloorId,
-        )
-        if (!component) return new Set<string>()
+        const level = state.levels.find((l) => l.id === selectedFloorId)
+        if (!level) return new Set<string>()
 
-        return new Set((component.data as WallComponentData).segments.map((seg) => seg.id))
+        // Convert WallNode objects back to wall keys
+        const wallKeys = level.children
+          .filter((child) => child.type === 'wall')
+          .map((wall: any) => {
+            // Wall ID is the wall key (x1,y1-x2,y2)
+            return wall.id
+          })
+
+        return new Set(wallKeys)
       },
       getRoofsSet: () => {
         const state = get()
-        if (!state.selectedFloorId) return new Set<string>()
+        const selectedFloorId = state.selectedFloorId
+        if (!selectedFloorId) return new Set<string>()
 
-        const component = state.components.find(
-          (c) => c.type === 'roof' && c.group === state.selectedFloorId,
-        )
-        if (!component) return new Set<string>()
+        const level = state.levels.find((l) => l.id === selectedFloorId)
+        if (!level) return new Set<string>()
 
-        return new Set((component.data as RoofComponentData).segments.map((seg) => seg.id))
+        // Convert RoofNode objects back to roof keys
+        const roofKeys = level.children
+          .filter((child) => child.type === 'roof')
+          .map((roof: any) => {
+            // Roof ID is the roof key (x1,y1-x2,y2)
+            return roof.id
+          })
+
+        return new Set(roofKeys)
       },
       getSelectedElementsSet: () => new Set(get().selectedElements),
       getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
@@ -707,116 +669,159 @@ const useStore = create<StoreState>()(
           { binary: true },
         )
       },
-      handleUpload: (file: File, level: number) => {
-        if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            const newImage: ReferenceImage = {
-              id: `img-${Date.now()}`,
-              url: event.target?.result as string,
-              name: file.name,
-              createdAt: new Date().toISOString(),
-              position: [0, 0],
-              rotation: 0,
-              scale: 1,
-              level,
-              visible: true,
-            }
-            set((state) => ({ images: [...state.images, newImage] }))
-          }
+      handleUpload: async (file: File, level: number) => {
+        // Convert file to data URL (persists across reloads)
+        const reader = new FileReader()
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
           reader.readAsDataURL(file)
-        }
-      },
-      handleScanUpload: (file: File, level: number) => {
-        const validTypes = [
-          'model/gltf-binary',
-          'model/gltf+json',
-          'application/octet-stream', // .glb files might use this
-        ]
-        const validExtensions = ['.glb', '.gltf', '.ply']
-        const hasValidExtension = validExtensions.some((ext) =>
-          file.name.toLowerCase().endsWith(ext),
-        )
+        })
 
-        if (validTypes.includes(file.type) || hasValidExtension) {
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            const newScan: Scan = {
-              id: `scan-${Date.now()}`,
-              url: event.target?.result as string,
-              name: file.name,
-              createdAt: new Date().toISOString(),
-              position: [0, 0],
-              rotation: 0,
-              scale: 1,
-              level,
-              visible: true,
-            }
-            set((state) => ({ scans: [...state.scans, newScan] }))
+        set((state) => {
+          // Find the level to add the image to
+          const levelId = `level_${level}`
+
+          const imageId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+          // Create ReferenceImageNode
+          const imageNode = {
+            id: imageId,
+            type: 'reference-image' as const,
+            name: file.name,
+            url: dataUrl, // Use data URL instead of blob URL
+            createdAt: new Date().toISOString(),
+            position: [0, 0] as [number, number],
+            rotation: 0,
+            size: [10, 10] as [number, number], // Default 10m x 10m
+            scale: 1,
+            visible: true,
+            opacity: 50, // Default to 50% opacity for reference images
+            children: [] as [],
+            parent: levelId,
           }
-          reader.readAsDataURL(file)
-        }
+
+          // Add to the appropriate level
+          const updatedLevels = addReferenceImageToLevel(state.levels, levelId, imageNode)
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        })
       },
-      handleDeleteSelectedImages: () => {
+      handleScanUpload: async (file: File, level: number) => {
+        // Convert file to data URL (persists across reloads)
+        const reader = new FileReader()
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
+        set((state) => {
+          // Find the level to add the scan to
+          const levelId = `level_${level}`
+
+          const scanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+          // Create ScanNode
+          const scanNode = {
+            id: scanId,
+            type: 'scan' as const,
+            name: file.name,
+            url: dataUrl, // Use data URL instead of blob URL
+            createdAt: new Date().toISOString(),
+            position: [0, 0] as [number, number],
+            rotation: 0,
+            size: [10, 10] as [number, number], // Default 10m x 10m
+            scale: 1,
+            yOffset: 0,
+            visible: true,
+            opacity: 100,
+            children: [] as [],
+            parent: levelId,
+          }
+
+          // Add to the appropriate level
+          const updatedLevels = addScanToLevel(state.levels, levelId, scanNode)
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        })
+      },
+      handleDeleteSelectedImages: () =>
         set((state) => {
           if (state.selectedImageIds.length === 0) return state
-          const idsToDelete = new Set(state.selectedImageIds)
-          const newImages = state.images.filter((img) => !idsToDelete.has(img.id))
-          return {
-            images: newImages,
-            selectedImageIds: [],
+
+          // Delete all selected image nodes
+          let updatedLevels = state.levels
+          for (const imageId of state.selectedImageIds) {
+            updatedLevels = deleteNode(updatedLevels, imageId)
           }
-        })
-      },
-      handleDeleteSelectedScans: () => {
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            selectedImageIds: [],
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
+      handleDeleteSelectedScans: () =>
         set((state) => {
           if (state.selectedScanIds.length === 0) return state
-          const idsToDelete = new Set(state.selectedScanIds)
-          const newScans = state.scans.filter((scan) => !idsToDelete.has(scan.id))
-          return {
-            scans: newScans,
-            selectedScanIds: [],
+
+          // Delete all selected scan nodes
+          let updatedLevels = state.levels
+          for (const scanId of state.selectedScanIds) {
+            updatedLevels = deleteNode(updatedLevels, scanId)
           }
-        })
-      },
-      handleDeleteSelectedElements: () => {
-        const state = get()
-        if (state.selectedElements.length === 0 || !state.selectedFloorId) return
 
-        const updatedComponents = deleteElements(
-          state.components,
-          state.selectedElements,
-          state.selectedFloorId,
-        )
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            selectedScanIds: [],
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
+      handleDeleteSelectedElements: () =>
+        set((state) => {
+          if (state.selectedElements.length === 0) return state
 
-        set({
-          undoStack: [
-            ...state.undoStack,
-            { images: state.images, scans: state.scans, components: state.components },
-          ].slice(-50),
-          redoStack: [],
-          components: updatedComponents,
-          selectedElements: [],
-        })
-      },
+          // Delete all selected building element nodes
+          let updatedLevels = state.levels
+          for (const element of state.selectedElements) {
+            updatedLevels = deleteNode(updatedLevels, element.id)
+          }
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            selectedElements: [],
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
       handleClear: () => {
         get().setWalls([])
         set({ selectedElements: [] })
       },
       serializeLayout: () => {
         const state = get()
-        const images = state.images
-        const scans = state.scans
 
-        // Walls are already saved in components, no need to update
-
+        // PHASE 3 MIGRATION: Serialize using node tree format
         return {
           version: '2.0', // Updated version for intersection-based walls
           grid: { size: 61 }, // 61 intersections (60 divisions + 1)
-          components: state.components,
-          groups: state.groups,
-          images, // Include reference images in the layout
-          scans, // Include 3D scans in the layout
+          levels: state.levels, // Use node tree as source of truth
         }
       },
       loadLayout: (json: LayoutJSON) => {
@@ -830,24 +835,12 @@ const useStore = create<StoreState>()(
           activeTool: null,
         })
 
-        // Load groups (floors)
-        if (json.groups && Array.isArray(json.groups)) {
-          set({ groups: json.groups })
-        }
-
-        // Load all components
-        if (json.components && Array.isArray(json.components)) {
-          set({ components: json.components })
-        }
-
-        // Load reference images (if present in the JSON)
-        if (json.images && Array.isArray(json.images)) {
-          get().setImages(json.images, false) // Don't push to undo stack
-        }
-
-        // Load 3D scans (if present in the JSON)
-        if (json.scans && Array.isArray(json.scans)) {
-          get().setScans(json.scans, false) // Don't push to undo stack
+        // Load from node tree format
+        if (json.levels && Array.isArray(json.levels)) {
+          set({
+            levels: json.levels,
+            nodeIndex: buildNodeIndex(json.levels),
+          })
         }
       },
       handleSaveLayout: () => {
@@ -875,20 +868,19 @@ const useStore = create<StoreState>()(
         }
       },
       handleResetToDefault: () => {
+        const defaultLevels: LevelNode[] = [
+          {
+            id: 'level_0',
+            type: 'level',
+            name: 'base level',
+            level: 0,
+            visible: true,
+            children: [],
+          },
+        ]
         set({
-          images: [],
-          scans: [],
-          components: [],
-          groups: [
-            {
-              id: 'level_0',
-              name: 'base level',
-              type: 'floor',
-              color: '#ffffff',
-              level: 0,
-              visible: true,
-            },
-          ],
+          levels: defaultLevels,
+          nodeIndex: buildNodeIndex(defaultLevels),
           currentLevel: 0,
           selectedFloorId: 'level_0',
           viewMode: 'level',
@@ -904,14 +896,10 @@ const useStore = create<StoreState>()(
           if (state.undoStack.length === 0) return state
           const previous = state.undoStack[state.undoStack.length - 1]
           return {
-            components: previous.components,
-            images: previous.images,
-            scans: previous.scans,
+            levels: previous.levels,
+            nodeIndex: buildNodeIndex(previous.levels),
             undoStack: state.undoStack.slice(0, -1),
-            redoStack: [
-              ...state.redoStack,
-              { components: state.components, images: state.images, scans: state.scans },
-            ],
+            redoStack: [...state.redoStack, { levels: state.levels }],
             selectedElements: [],
             selectedImageIds: [],
             selectedScanIds: [],
@@ -922,183 +910,179 @@ const useStore = create<StoreState>()(
           if (state.redoStack.length === 0) return state
           const next = state.redoStack[state.redoStack.length - 1]
           return {
-            components: next.components,
-            images: next.images,
-            scans: next.scans,
+            levels: next.levels,
+            nodeIndex: buildNodeIndex(next.levels),
             redoStack: state.redoStack.slice(0, -1),
-            undoStack: [
-              ...state.undoStack,
-              { components: state.components, images: state.images, scans: state.scans },
-            ],
+            undoStack: [...state.undoStack, { levels: state.levels }],
             selectedElements: [],
             selectedImageIds: [],
             selectedScanIds: [],
           }
         }),
       toggleFloorVisibility: (floorId) =>
-        set((state) => ({
-          groups: state.groups.map((g) =>
-            g.id === floorId ? { ...g, visible: !(g.visible ?? true) } : g,
-          ),
-        })),
+        set((state) => {
+          const updatedLevels = state.levels.map((level) =>
+            level.id === floorId ? { ...level, visible: !(level.visible ?? true) } : level,
+          )
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
       toggleBuildingElementVisibility: (elementId, type) =>
         set((state) => {
           if (!state.selectedFloorId) return state
+
+          // Find the node and toggle its visibility
+          const node = state.nodeIndex.get(elementId)
+          if (!node) return state
+
+          const currentVisibility = node.visible ?? true
+          const updatedLevels = setNodeVisibility(state.levels, elementId, !currentVisibility)
+
           return {
-            components: toggleElementVisibility(
-              state.components,
-              elementId,
-              type,
-              state.selectedFloorId,
-            ),
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
           }
         }),
       toggleImageVisibility: (imageId) =>
-        set((state) => ({
-          images: state.images.map((img) =>
-            img.id === imageId ? { ...img, visible: !(img.visible ?? true) } : img,
-          ),
-        })),
+        set((state) => {
+          const node = state.nodeIndex.get(imageId)
+          if (!node) return state
+
+          const currentVisibility = node.visible ?? true
+          const updatedLevels = setNodeVisibility(state.levels, imageId, !currentVisibility)
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
       toggleScanVisibility: (scanId) =>
-        set((state) => ({
-          scans: state.scans.map((scan) =>
-            scan.id === scanId ? { ...scan, visible: !(scan.visible ?? true) } : scan,
-          ),
-        })),
+        set((state) => {
+          const node = state.nodeIndex.get(scanId)
+          if (!node) return state
+
+          const currentVisibility = node.visible ?? true
+          const updatedLevels = setNodeVisibility(state.levels, scanId, !currentVisibility)
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
       setFloorOpacity: (floorId, opacity) =>
-        set((state) => ({
-          groups: state.groups.map((g) =>
-            g.id === floorId ? { ...g, opacity: Math.max(0, Math.min(100, opacity)) } : g,
-          ),
-        })),
+        set((state) => {
+          const updatedLevels = setNodeOpacity(state.levels, floorId, opacity)
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
       setBuildingElementOpacity: (elementId, type, opacity) =>
         set((state) => {
           if (!state.selectedFloorId) return state
-          const clampedOpacity = Math.max(0, Math.min(100, opacity))
 
-          const updatedComponents = state.components.map((comp): Component => {
-            if (comp.group !== state.selectedFloorId || comp.type !== type) {
-              return comp
-            }
-
-            const updateData = (data: any) => {
-              const itemsKey =
-                type === 'column'
-                  ? 'columns'
-                  : type === 'wall' || type === 'roof'
-                    ? 'segments'
-                    : null
-              if (!(itemsKey && Array.isArray(data[itemsKey]))) {
-                return data
-              }
-              const updatedItems = data[itemsKey].map((item: any) =>
-                item.id === elementId ? { ...item, opacity: clampedOpacity } : item,
-              )
-              return { ...data, [itemsKey]: updatedItems }
-            }
-
-            return { ...comp, data: updateData(comp.data) }
-          })
-
-          return { components: updatedComponents }
+          const updatedLevels = setNodeOpacity(state.levels, elementId, opacity)
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
         }),
       setImageOpacity: (imageId, opacity) =>
-        set((state) => ({
-          images: state.images.map((img) =>
-            img.id === imageId ? { ...img, opacity: Math.max(0, Math.min(100, opacity)) } : img,
-          ),
-        })),
+        set((state) => {
+          const updatedLevels = setNodeOpacity(state.levels, imageId, opacity)
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
       setScanOpacity: (scanId, opacity) =>
-        set((state) => ({
-          scans: state.scans.map((scan) =>
-            scan.id === scanId ? { ...scan, opacity: Math.max(0, Math.min(100, opacity)) } : scan,
-          ),
-        })),
+        set((state) => {
+          const updatedLevels = setNodeOpacity(state.levels, scanId, opacity)
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
     }),
     {
       name: 'editor-storage',
+      version: 1, // Increment this when storage format changes
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => ({
-        components: state.components,
-        groups: state.groups,
-        images: state.images,
-        scans: state.scans, // Now persisted in IndexedDB which can handle large data
+        // Node-based state (single source of truth)
+        levels: state.levels,
+        // Note: nodeIndex is NOT persisted - it's rebuilt from levels on load
+
+        // Selection state
         selectedElements: state.selectedElements,
         selectedImageIds: state.selectedImageIds,
-        selectedScanIds: state.selectedScanIds, // Now persisting scan selection
+        selectedScanIds: state.selectedScanIds,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Migrate: Add missing position, rotation, scale, level, visible to existing images
-          if (state.images && state.images.length > 0) {
-            state.images = state.images.map((img: any) => ({
-              ...img,
-              position: img.position ?? [0, 0],
-              rotation: img.rotation ?? 0,
-              scale: img.scale ?? 1,
-              level: img.level ?? 0, // Default to base level
-              visible: img.visible ?? true, // Default to visible
+          // Migrate blob URLs to prevent errors (cleanup from v0 -> v1)
+          const cleanBlobUrls = (nodes: BaseNode[]): BaseNode[] => {
+            return nodes
+              .map((node) => {
+                // Clean reference-image and scan nodes with blob URLs
+                if (
+                  (node.type === 'reference-image' || node.type === 'scan') &&
+                  'url' in node &&
+                  typeof node.url === 'string' &&
+                  node.url.startsWith('blob:')
+                ) {
+                  console.warn(`[Migration] Removing invalid blob URL for ${node.type} ${node.id}`)
+                  // Remove the node by filtering it out (return null and filter later)
+                  return null as any
+                }
+
+                // Recursively clean children if present
+                if (
+                  'children' in node &&
+                  Array.isArray(node.children) &&
+                  node.children.length > 0
+                ) {
+                  return {
+                    ...node,
+                    children: cleanBlobUrls(node.children),
+                  }
+                }
+
+                return node
+              })
+              .filter((node): node is BaseNode => node !== null)
+          }
+
+          // Clean blob URLs from all levels
+          if (state.levels && Array.isArray(state.levels)) {
+            state.levels = state.levels.map((level) => ({
+              ...level,
+              children: cleanBlobUrls(level.children) as LevelNode['children'],
             }))
           }
 
-          // Migrate: Add missing position, rotation, scale, level, yOffset, visible to existing scans
-          if (state.scans && state.scans.length > 0) {
-            state.scans = state.scans.map((scan: any) => ({
-              ...scan,
-              position: scan.position ?? [0, 0],
-              rotation: scan.rotation ?? 0,
-              scale: scan.scale ?? 1,
-              level: scan.level ?? 0, // Default to base level
-              yOffset: scan.yOffset ?? 0, // Default to no offset
-              visible: scan.visible ?? true, // Default to visible
-            }))
-          }
-
-          // Initialize scans and selectedScanIds if not present
-          if (!state.scans) {
-            state.scans = []
-          }
-          if (!state.selectedScanIds) {
-            state.selectedScanIds = []
-          }
-
-          // Ensure components and groups are initialized
-          if (!state.components) {
-            state.components = []
-          }
-          // Migrate: Add missing visible to existing components
-          if (state.components && state.components.length > 0) {
-            state.components = state.components.map((comp: any) => ({
-              ...comp,
-              data: {
-                ...comp.data,
-                segments:
-                  comp.data.segments?.map((seg: any) => ({
-                    ...seg,
-                    visible: seg.visible ?? true,
-                  })) ?? [],
-              },
-            }))
-          }
-          if (!state.groups) {
-            state.groups = [
+          // Initialize levels array if not present
+          if (!state.levels || state.levels.length === 0) {
+            state.levels = [
               {
                 id: 'level_0',
+                type: 'level',
                 name: 'base level',
-                type: 'floor',
-                color: '#ffffff',
                 level: 0,
                 visible: true,
+                children: [],
               },
             ]
           }
-          // Migrate: Add missing visible to existing groups
-          if (state.groups && state.groups.length > 0) {
-            state.groups = state.groups.map((group: any) => ({
-              ...group,
-              visible: group.visible ?? true,
-            }))
-          }
+
+          // Always rebuild node index from levels (Maps can't be persisted)
+          state.nodeIndex = buildNodeIndex(state.levels)
+          console.log('[Rehydration] Built node index:', {
+            nodes: state.nodeIndex.size,
+            levels: state.levels.length,
+          })
 
           // Preselect base level if no level is selected
           if (!state.selectedFloorId) {
@@ -1107,18 +1091,16 @@ const useStore = create<StoreState>()(
             state.viewMode = 'level'
           }
 
-          // Migrate: isOverviewMode -> viewMode
-          if ('isOverviewMode' in state) {
-            const oldState = state as any
-            state.viewMode = oldState.isOverviewMode ? 'full' : 'level'
-            oldState.isOverviewMode = undefined
-          }
-
           // Ensure viewMode is set correctly based on selectedFloorId
           if (state.selectedFloorId === null) {
             state.viewMode = 'full'
           } else if (state.viewMode === undefined) {
             state.viewMode = 'level'
+          }
+
+          // Initialize selectedScanIds if not present
+          if (!state.selectedScanIds) {
+            state.selectedScanIds = []
           }
         }
       },
@@ -1127,89 +1109,3 @@ const useStore = create<StoreState>()(
 )
 
 export const useEditor = useStore
-
-export const useEditorContext = () => {
-  const store = useStore()
-  return {
-    walls: store.getWallsSet(),
-    setWalls: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getWallsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setWalls(Array.from(newSet))
-    },
-    roofs: store.getRoofsSet(),
-    setRoofs: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getRoofsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setRoofs(Array.from(newSet))
-    },
-    images: store.images,
-    setImages: store.setImages,
-    scans: store.scans,
-    setScans: store.setScans,
-    selectedElements: store.selectedElements,
-    setSelectedElements: store.setSelectedElements,
-    selectedImageIds: store.getSelectedImageIdsSet(),
-    setSelectedImageIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedImageIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedImageIds(Array.from(newSet))
-    },
-    selectedScanIds: store.getSelectedScanIdsSet(),
-    setSelectedScanIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedScanIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedScanIds(Array.from(newSet))
-    },
-    isHelpOpen: store.isHelpOpen,
-    setIsHelpOpen: store.setIsHelpOpen,
-    isJsonInspectorOpen: store.isJsonInspectorOpen,
-    setIsJsonInspectorOpen: store.setIsJsonInspectorOpen,
-    wallsGroupRef: store.wallsGroupRef,
-    setWallsGroupRef: store.setWallsGroupRef,
-    activeTool: store.activeTool,
-    setActiveTool: store.setActiveTool,
-    controlMode: store.controlMode,
-    setControlMode: store.setControlMode,
-    cameraMode: store.cameraMode,
-    setCameraMode: store.setCameraMode,
-    viewerDisplayMode: store.viewerDisplayMode,
-    setViewerDisplayMode: store.setViewerDisplayMode,
-    movingCamera: store.movingCamera,
-    setMovingCamera: store.setMovingCamera,
-    isManipulatingImage: store.isManipulatingImage,
-    setIsManipulatingImage: store.setIsManipulatingImage,
-    isManipulatingScan: store.isManipulatingScan,
-    setIsManipulatingScan: store.setIsManipulatingScan,
-    handleExport: store.handleExport,
-    handleUpload: store.handleUpload,
-    handleScanUpload: store.handleScanUpload,
-    handleDeleteSelectedElements: store.handleDeleteSelectedElements,
-    handleDeleteSelectedImages: store.handleDeleteSelectedImages,
-    handleDeleteSelectedScans: store.handleDeleteSelectedScans,
-    serializeLayout: store.serializeLayout,
-    loadLayout: store.loadLayout,
-    handleSaveLayout: store.handleSaveLayout,
-    handleLoadLayout: store.handleLoadLayout,
-    handleResetToDefault: store.handleResetToDefault,
-    undo: store.undo,
-    redo: store.redo,
-    handleClear: store.handleClear,
-    groups: store.groups,
-    selectedFloorId: store.selectedFloorId,
-    viewMode: store.viewMode,
-    selectFloor: store.selectFloor,
-    addComponent: store.addComponent,
-    addGroup: store.addGroup,
-    deleteGroup: store.deleteGroup,
-    reorderGroups: store.reorderGroups,
-    toggleFloorVisibility: store.toggleFloorVisibility,
-    toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
-    toggleImageVisibility: store.toggleImageVisibility,
-    toggleScanVisibility: store.toggleScanVisibility,
-    setFloorOpacity: store.setFloorOpacity,
-    setBuildingElementOpacity: store.setBuildingElementOpacity,
-    setImageOpacity: store.setImageOpacity,
-    setScanOpacity: store.setScanOpacity,
-  }
-}

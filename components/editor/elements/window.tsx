@@ -1,11 +1,12 @@
 'use client'
 
-import { Gltf } from '@react-three/drei'
+import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import type { Component, WallSegment, WindowComponentData } from '@/hooks/use-editor'
+import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import { useWindows } from '@/hooks/use-nodes'
+import { handleElementClick } from '@/lib/building-elements'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -96,34 +97,37 @@ export const WindowPlacementPreview = memo(
     }, [tileSize])
 
     // Handle click to place window
-    const addComponent = useEditor((state) => state.addComponent)
+    const levels = useEditor((state) => state.levels)
+    const updateLevels = useEditor((state) => state.updateLevels)
 
     const handleClick = useCallback(() => {
       if (!(placement?.canPlace && placement?.nearestWall)) {
         return
       }
 
-      // Create window component
-      const windowId = `window_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const windowComponent: Component = {
+      // Create window node
+      const windowId = `window-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      const windowNode = {
         id: windowId,
-        type: 'window',
-        group: floorId,
-        label: 'Window',
-        createdAt: new Date().toISOString(),
-        data: {
-          position: placement.gridPosition,
-          rotation: placement.rotation,
-          width: 2,
-        } as WindowComponentData,
+        type: 'window' as const,
+        name: 'Window',
+        position: placement.gridPosition,
+        rotation: placement.rotation,
+        size: [1, 1.2] as [number, number], // 1m x 1.2m window
+        visible: true,
+        opacity: 100,
+        children: [] as [],
       }
 
-      // Add window to components using store method
-      addComponent(windowComponent)
+      // Add window to the nearest wall using node operations
+      const wallId = placement.nearestWall.id
+      const { addWindowToWall } = require('@/lib/nodes/operations')
+      const updatedLevels = addWindowToWall(levels, wallId, windowNode)
+      updateLevels(updatedLevels)
 
       // Notify parent component
       onPlaced?.()
-    }, [placement, floorId, onPlaced, addComponent])
+    }, [placement, floorId, levels, updateLevels, onPlaced])
 
     if (!placement) {
       return null
@@ -170,6 +174,7 @@ type WindowProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
+  allWindows: Array<{ id: string }>
 }
 
 const Window = memo(
@@ -181,10 +186,15 @@ const Window = memo(
     wallHeight,
     isActive,
     isFullView = false,
+    allWindows,
   }: WindowProps) => {
+    const movingCamera = useEditor((state) => state.movingCamera)
+    const controlMode = useEditor((state) => state.controlMode)
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
+    const setSelectedElements = useEditor((state) => state.setSelectedElements)
+    const setControlMode = useEditor((state) => state.setControlMode)
     const windowRef = useRef<THREE.Group>(null)
 
     // Check if this window is selected
@@ -204,6 +214,9 @@ const Window = memo(
         windowRef.current.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
             const material = child.material as THREE.Material
+            if (material.name.toLowerCase() === 'glass') {
+              return // Skip glass materials
+            }
             if ('opacity' in material && 'transparent' in material && 'depthWrite' in material) {
               material.opacity = opacity
               material.transparent = opacity < 1
@@ -243,7 +256,31 @@ const Window = memo(
     ]
 
     return (
-      <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
+      <group
+        onClick={(e) => {
+          if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+            return
+          }
+          e.stopPropagation()
+
+          // Handle element selection
+          const updatedSelection = handleElementClick({
+            selectedElements,
+            segments: allWindows,
+            elementId: windowId,
+            type: 'window',
+            event: e,
+          })
+          setSelectedElements(updatedSelection)
+
+          // Switch to building mode unless we're in select mode
+          if (controlMode !== 'select') {
+            setControlMode('building')
+          }
+        }}
+        position={[worldX, 0, worldZ]}
+        rotation={[0, rotation, 0]}
+      >
         <group ref={windowRef}>
           <Gltf position-y={0.5} scale={[1, 1, 2]} src="/models/Window.glb" />
         </group>
@@ -313,38 +350,32 @@ type WindowsProps = {
 
 export const Windows = memo(
   ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: WindowsProps) => {
-    // Fetch window components for this floor from the store
-    const windowComponents = useEditor(
-      useShallow((state) =>
-        state.components.filter((c) => c.type === 'window' && c.group === floorId),
-      ),
-    )
+    // Fetch window nodes for this floor from the node tree
+    const windowNodes = useWindows(floorId)
 
-    if (windowComponents.length === 0) return null
+    if (windowNodes.length === 0) return null
 
     return (
-      <group>
-        {windowComponents.map((component) => {
-          if (component.type !== 'window') return null
-
-          const { position, rotation } = component.data
-
-          return (
-            <Window
-              isActive={isActive}
-              isFullView={isFullView}
-              key={component.id}
-              position={position}
-              rotation={rotation}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-              windowId={component.id}
-            />
-          )
-        })}
-      </group>
+      <>
+        {windowNodes.map((windowNode) => (
+          <Window
+            allWindows={windowNodes}
+            isActive={isActive}
+            isFullView={isFullView}
+            key={windowNode.id}
+            position={windowNode.position}
+            rotation={windowNode.rotation}
+            tileSize={tileSize}
+            wallHeight={wallHeight}
+            windowId={windowNode.id}
+          />
+        ))}
+      </>
     )
   },
 )
 
 Windows.displayName = 'Windows'
+
+// Preload GLTFs
+useGLTF.preload('/models/Window.glb')

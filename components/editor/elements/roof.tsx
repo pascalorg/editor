@@ -3,14 +3,16 @@
 import { useThree } from '@react-three/fiber'
 import { forwardRef, memo, type Ref, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
 import type { RoofSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
+import { useRoofs } from '@/hooks/use-nodes'
 import {
   handleElementClick,
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
+import { updateNodeProperties } from '@/lib/nodes/operations'
+import type { RoofSegmentNode } from '@/lib/nodes/types'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const ROOF_THICKNESS = 0.05 // 5cm roof thickness
@@ -129,26 +131,107 @@ export const Roofs = forwardRef(
     // Three.js scene utilities
     const { camera, gl } = useThree()
 
-    // Fetch roof segments for this floor from the store
-    const roofSegments = useEditor(
-      useShallow((state) => {
-        const roofComponent = state.components.find((c) => c.type === 'roof' && c.group === floorId)
-        return roofComponent?.type === 'roof'
-          ? roofComponent.data.segments.filter((seg) => seg.visible !== false)
-          : []
-      }),
-    )
+    // Fetch roof nodes for this floor from the node tree
+    const roofNodes = useRoofs(floorId)
+
+    // Convert RoofNodes to RoofSegment format for rendering
+    const roofSegments: RoofSegment[] = useMemo(() => {
+      return roofNodes
+        .filter((node) => {
+          // Filter out invalid nodes
+          return (
+            node.position &&
+            node.position.length === 2 &&
+            node.size &&
+            node.size.length >= 1 &&
+            typeof node.rotation === 'number' &&
+            !isNaN(node.position[0]) &&
+            !isNaN(node.position[1]) &&
+            !isNaN(node.size[0]) &&
+            !isNaN(node.rotation)
+          )
+        })
+        .map((node) => {
+          // Node position and size are in grid coordinates
+          // Calculate end point from start position, rotation, and length
+          const [x1, y1] = node.position
+          const length = node.size[0]
+          const x2 = x1 + Math.cos(node.rotation) * length
+          const y2 = y1 + Math.sin(node.rotation) * length
+
+          return {
+            start: [x1, y1] as [number, number],
+            end: [x2, y2] as [number, number],
+            id: node.id,
+            height: (node as any).height ?? 2.5, // Peak height above base
+            leftWidth: (node as any).leftWidth ?? ROOF_WIDTH / 2,
+            rightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
+            visible: node.visible ?? true,
+            opacity: node.opacity ?? 100,
+          }
+        })
+    }, [roofNodes])
 
     // Update roof segment in the store
     const setComponents = useCallback(
       (updatedSegments: RoofSegment[]) => {
-        useEditor.setState((state) => ({
-          components: state.components.map((comp) =>
-            comp.type === 'roof' && comp.group === floorId
-              ? { ...comp, data: { segments: updatedSegments } }
-              : comp,
-          ),
-        }))
+        const state = useEditor.getState()
+        let updatedLevels = state.levels
+
+        // Update each segment individually
+        for (const segment of updatedSegments) {
+          // Calculate position, rotation, and size from start/end coordinates
+          const [x1, y1] = segment.start
+          const [x2, y2] = segment.end
+          const dx = x2 - x1
+          const dy = y2 - y1
+          const length = Math.sqrt(dx * dx + dy * dy)
+          const rotation = Math.atan2(dy, dx)
+
+          // Check if this is a roof-segment (child of roof) or a roof node (flat structure)
+          const existingNode = state.nodeIndex.get(segment.id)
+          if (!existingNode) {
+            continue
+          }
+
+          if (existingNode.type === 'roof-segment') {
+            // Segment is a child of a roof - update it
+            const updates: Partial<RoofSegmentNode> = {
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, 0] as [number, number],
+              height: segment.height,
+              leftWidth: segment.leftWidth,
+              rightWidth: segment.rightWidth,
+              visible: segment.visible ?? true,
+              opacity: segment.opacity ?? 100,
+            }
+            updatedLevels = updateNodeProperties(updatedLevels, segment.id, updates)
+          } else if (existingNode.type === 'roof') {
+            // Node is a roof - update it directly (flat structure)
+            const updates: Record<string, unknown> = {
+              position: [x1, y1] as [number, number],
+              rotation,
+              size: [length, 0] as [number, number],
+              visible: segment.visible ?? true,
+              opacity: segment.opacity ?? 100,
+            }
+            // Also update roof-specific properties if they exist
+            if (segment.height !== undefined) {
+              updates.height = segment.height
+            }
+            if (segment.leftWidth !== undefined) {
+              updates.leftWidth = segment.leftWidth
+            }
+            if (segment.rightWidth !== undefined) {
+              updates.rightWidth = segment.rightWidth
+            }
+            updatedLevels = updateNodeProperties(updatedLevels, segment.id, updates)
+          }
+        }
+
+        // Update the store
+        state.updateLevels(updatedLevels, false) // Don't push to undo - handled by drag handlers
       },
       [floorId],
     )
@@ -161,9 +244,7 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane()
         const raycaster = new THREE.Raycaster()
@@ -338,10 +419,7 @@ export const Roofs = forwardRef(
           // Push to undo stack if there were changes
           if (hasChanged) {
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }
@@ -363,9 +441,7 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -507,10 +583,7 @@ export const Roofs = forwardRef(
 
             // Push to undo stack if there were changes
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }
@@ -532,9 +605,7 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        const originalComponents = storeState.components
-        const originalImages = storeState.images
-        const originalScans = storeState.scans
+        const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
         const raycaster = new THREE.Raycaster()
@@ -633,10 +704,7 @@ export const Roofs = forwardRef(
           // Push to undo stack if there were changes
           if (hasChanged) {
             useEditor.setState((state) => ({
-              undoStack: [
-                ...state.undoStack,
-                { images: originalImages, components: originalComponents, scans: originalScans },
-              ].slice(-50),
+              undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
               redoStack: [],
             }))
           }
@@ -897,7 +965,12 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.frontGable}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
@@ -912,8 +985,10 @@ export const Roofs = forwardRef(
                   })
                   setSelectedElements(updatedSelection)
 
-                  // Automatically activate building mode when selecting a building element
-                  setControlMode('building')
+                  // Switch to building mode unless we're in select mode
+                  if (controlMode !== 'select') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerDown={(e) => {
                   if (!isActive || movingCamera || controlMode === 'delete') {
@@ -947,8 +1022,8 @@ export const Roofs = forwardRef(
                   if (
                     !isActive ||
                     movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
                   ) {
                     return
                   }
@@ -962,7 +1037,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {
@@ -989,8 +1068,8 @@ export const Roofs = forwardRef(
                   if (
                     !isActive ||
                     movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
                   ) {
                     return
                   }
@@ -1004,7 +1083,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {
@@ -1031,8 +1114,8 @@ export const Roofs = forwardRef(
                   if (
                     !isActive ||
                     movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
                   ) {
                     return
                   }
@@ -1046,7 +1129,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {

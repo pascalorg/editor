@@ -2,10 +2,10 @@
 
 import { type CameraControlsImpl, Line } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import { useEditor } from '@/hooks/use-editor'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import { RoofShadowPreview } from './roof'
 import { WallShadowPreview } from './wall'
 
@@ -14,7 +14,6 @@ const GRID_SIZE = 30 // 30m x 30m
 type GridTilesProps = {
   intersections: number
   tileSize: number
-  walls: Set<string>
   onIntersectionClick: (x: number, y: number) => void
   onIntersectionDoubleClick: () => void
   onIntersectionHover: (x: number, y: number | null) => void
@@ -38,7 +37,6 @@ export const GridTiles = memo(
   ({
     intersections,
     tileSize,
-    walls,
     onIntersectionClick,
     onIntersectionDoubleClick,
     onIntersectionHover,
@@ -66,14 +64,27 @@ export const GridTiles = memo(
     const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const lastClickTimeRef = useRef<number>(0)
 
-    // Get all wall segments for the active floor (needed for mitered junction calculations in previews)
-    const allWallSegments = useEditor(
-      useShallow((state) => {
-        const wallComponent = state.components.find(
-          (c) => c.type === 'wall' && c.group === selectedFloorId,
-        )
-        return wallComponent?.type === 'wall' ? wallComponent.data.segments : []
-      }),
+    // Get all wall nodes for the active floor
+    const wallNodes = useWalls(selectedFloorId || '')
+    const allWallSegments: WallSegment[] = useMemo(
+      () =>
+        wallNodes.map((node) => {
+          const [x1, y1] = node.position
+          const length = node.size[0]
+          const rotation = node.rotation
+          const x2 = x1 + Math.cos(rotation) * length
+          const y2 = y1 + Math.sin(rotation) * length
+
+          return {
+            id: node.id,
+            start: [x1, y1],
+            end: [x2, y2],
+            isHorizontal: Math.abs(Math.sin(rotation)) < 0.1,
+            visible: node.visible ?? true,
+            opacity: node.opacity ?? 100,
+          }
+        }),
+      [wallNodes],
     )
 
     const gridSize = (intersections - 1) * tileSize
