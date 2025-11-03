@@ -89,20 +89,59 @@ bun run lint           # Format with Biome
 - Grid Y → World Z (ground plane)
 - Parent group offset `[-15, 0, -15]` centers grid at origin
 
+## Node-based Architecture
+
+The canonical model is a typed node tree per level.
+
+- **Root**: `levels: LevelNode[]` (one tree per floor)
+- **Types** (`lib/nodes/types.ts`): `level`, `wall`, `door`, `window`, `column`, `roof`, `roof-segment`, `reference-image`, `scan`, `group`
+- **Grid nodes**: `position [x,y]` (grid units), `rotation` (radians), `size [width, depth]`
+  - Wall: `size = [length, thickness]` (thickness defaults to 0.2m)
+  - Roof segment: adds `height`, `leftWidth`, `rightWidth`
+- **Parent/child rules** (`lib/nodes/guards.ts`):
+  - Level → wall | roof | column | reference-image | scan | group
+  - Wall → door | window
+  - Roof → roof-segment
+  - Group → building elements | group
+- **Invariants**:
+  - IDs unique across the tree
+  - Child `parent` equals parent's `id`
+  - No cycles; `validateNodeTree` passes
+  - `opacity` in 0–100; `visible`/`locked` booleans
+  - All mutations are immutable (new arrays/objects)
+
+APIs
+- **Operations** (`lib/nodes/operations.ts`): pure add/move/update/delete (e.g., `addWallToLevel`, `addDoorToWall`, `moveNodeToParent`, `replaceWallsInLevel`)
+- **Selectors** (`lib/nodes/selectors.ts`): ergonomic queries for levels, walls, doors/windows, visibility, counts, and memoizable builders
+- **Indexes** (`lib/nodes/indexes.ts`): `NodeIndexes` for O(1) by-id/type/parent lookups and level mapping
+- **Utils** (`lib/nodes/utils.ts`): traversal (`traverseTree`, `mapTree`), search (`findNodeById`, `findNodesByType`), structure ops (`addNode`, `updateNode`, `moveNode`)
+- **Guards** (`lib/nodes/guards.ts`): runtime guards (`isWallNode`, `canBeChildOf`, `validateNodeTree`)
+
+Performance
+- Rebuild a minimal `nodeIndex: Map<string, BaseNode>` via `buildNodeIndex(levels)` after mutations
+- For heavy queries, maintain `indexes: NodeIndexes` via `buildNodeIndexes(levels)` and use `getNodeById`, `getNodesByType`, `getChildrenOfNode`
+- Prefer index-backed selectors in render paths (`selectNodeByIdFromIndex`)
+
 ## State Management
 
-### Zustand Store (`use-editor.tsx`)
-Single source of truth with localStorage persistence, undo/redo stacks (max 50 states).
+### Zustand Store (`hooks/use-editor.tsx`)
+Single source of truth with localStorage persistence, undo/redo (snapshots of `levels`).
 
 **Core State**:
-- `components` - Building elements organized by floor (walls, roofs, etc.)
-- `groups` - Floor/room/outdoor groupings with level info
-- `selectedFloorId` - Active floor for editing/viewing
-- `images` - Reference images with position/rotation/scale
+- `levels: LevelNode[]` (canonical)
+- `nodeIndex: Map<string, BaseNode>` (fast by-id, rebuild on mutation)
+- `indexes?: NodeIndexes` (optional full indexes for large scenes)
+- `selectedLevelId: string | null`
 - `controlMode` - 'select' | 'delete' | 'building' | 'guide'
-- `viewMode` / `levelMode` / `cameraMode` - Viewer display settings
+- `viewMode` / `levelMode` / `cameraMode`
 
-**Key Operations**: Floor selection, wall updates, serialization, undo/redo, floor visibility
+**Mutations**:
+- Use `lib/nodes/operations.ts` (pure) to produce new `levels`
+- Immediately rebuild `nodeIndex` (and `indexes` if used)
+
+**Queries**:
+- Use `lib/nodes/selectors.ts` (e.g., `selectWallsFromLevel`, `selectDoorsFromLevel`)
+- Prefer `selectNodeByIdFromIndex`/`createSingleNodeSelector` in render paths
 
 ### Editor Canvas
 Multi-floor rendering with per-floor positioning. Active floor gets interactive grid + full colors, inactive floors are muted. Keyboard shortcuts for modes (V/D/B/G), undo (Cmd+Z), camera (Space).
@@ -158,13 +197,38 @@ Read-only presentation mode. Reuses editor components with no-op handlers. Anima
 
 ## Data Model
 
-### JSON Schema (v2.0)
-- **Components**: Building elements (walls, roofs, doors, windows) with segment/polygon data
-- **Groups**: Floor/room/outdoor groupings with level, color, visibility
-- **Images**: Reference images with position/rotation/scale
-- Versioned, extensible format supporting future component types
+### Canonical (nodes v2.0)
+- `levels: LevelNode[]` with typed children per `lib/nodes/types.ts`
+- Grid units = 0.5m; rotations in radians
+- Doors/windows live under their parent `wall`; roof segments under `roof`
+- Supports indexing (`lib/nodes/indexes.ts`) and validation (`validateNodeTree`)
+
+### Legacy compatibility (components v1.x)
+- Migration utilities in `lib/migration/`:
+  - `legacy-to-nodes.ts`: `componentsToNodeTree`, `associateDoorsAndWindowsWithWalls`
+  - `nodes-to-legacy.ts`: `nodeTreeToComponents(WithLevels)`
+  - `validators.ts`: integrity checks and round-trip validation
+- Use migrations only at import/export boundaries; keep editor logic node-native
 
 ### Persistence
 - Auto-sync to localStorage via Zustand middleware
 - JSON export/import (`layout_YYYY-MM-DD.json`)
 - Viewer loads from localStorage (edit in main editor)
+
+## Contributing to the Node Model
+
+- **Add a new node type**
+  1) Define in `lib/nodes/types.ts`
+  2) Add guards and `canBeChildOf` in `lib/nodes/guards.ts`
+  3) Add operations/selectors as needed
+  4) Render in editor/viewer layers
+  5) Update migrations if represented in legacy format
+
+- **Do’s**
+- Prefer `operations.ts` over ad-hoc tree manipulation
+- Recompute `nodeIndex`/`indexes` after each mutation
+- Use selectors with shallow comparison in React
+
+- **Don’ts**
+- Don’t mutate nodes in place
+- Don’t traverse entire trees in hot render paths; use indexes/selectors
