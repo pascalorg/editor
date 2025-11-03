@@ -22,6 +22,7 @@ import type {
 import type {
   ColumnNode,
   DoorNode,
+  GroupNode,
   LevelNode,
   ReferenceImageNode,
   RoofNode,
@@ -107,12 +108,13 @@ function levelNodeToComponents(level: LevelNode): {
   const columns: ColumnNode[] = []
   const roofs: RoofNode[] = []
 
-  for (const child of level.children) {
-    switch (child.type) {
+  // Helper function to recursively process nodes (including group children)
+  const processNode = (node: any) => {
+    switch (node.type) {
       case 'wall':
-        walls.push(child as WallNode)
+        walls.push(node as WallNode)
         // Extract doors and windows from wall children
-        for (const wallChild of (child as WallNode).children) {
+        for (const wallChild of (node as WallNode).children) {
           if (wallChild.type === 'door') {
             doors.push(wallChild as DoorNode)
           } else if (wallChild.type === 'window') {
@@ -122,25 +124,33 @@ function levelNodeToComponents(level: LevelNode): {
         break
 
       case 'column':
-        columns.push(child as ColumnNode)
+        columns.push(node as ColumnNode)
         break
 
       case 'roof':
-        roofs.push(child as RoofNode)
+        roofs.push(node as RoofNode)
         break
 
       case 'reference-image':
-        images.push(referenceImageNodeToImage(child as ReferenceImageNode))
+        images.push(referenceImageNodeToImage(node as ReferenceImageNode))
         break
 
       case 'scan':
-        scans.push(scanNodeToScan(child as ScanNode))
+        scans.push(scanNodeToScan(node as ScanNode))
         break
 
       case 'group':
-        // TODO: Handle nested groups if needed
+        // Recursively process group children
+        for (const groupChild of (node as any).children) {
+          processNode(groupChild)
+        }
         break
     }
+  }
+
+  // Process all level children
+  for (const child of level.children) {
+    processNode(child)
   }
 
   // Convert walls to single wall component
