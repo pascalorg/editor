@@ -91,9 +91,7 @@ export const TreeProvider = ({
   const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>(selectedIds ?? [])
 
   const isExpandedControlled = controlledExpandedIds !== undefined && onExpandedChange !== undefined
-  const expandedIds = isExpandedControlled
-    ? new Set(controlledExpandedIds)
-    : internalExpandedIds
+  const expandedIds = isExpandedControlled ? new Set(controlledExpandedIds) : internalExpandedIds
 
   const isControlled = selectedIds !== undefined && onSelectionChange !== undefined
   const currentSelectedIds = isControlled ? selectedIds : internalSelectedIds

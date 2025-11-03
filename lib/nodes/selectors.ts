@@ -221,9 +221,7 @@ export const selectWindowsFromLevel =
     for (const group of groups) {
       const groupWalls = group.children.filter((child) => child.type === 'wall') as WallNode[]
       for (const wall of groupWalls) {
-        const wallWindows = wall.children.filter(
-          (child) => child.type === 'window',
-        ) as WindowNode[]
+        const wallWindows = wall.children.filter((child) => child.type === 'window') as WindowNode[]
         windows.push(...wallWindows)
       }
     }

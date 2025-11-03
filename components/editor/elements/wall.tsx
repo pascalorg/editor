@@ -1,5 +1,8 @@
 'use client'
 
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { forwardRef, memo, type Ref, useMemo } from 'react'
+import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
@@ -8,9 +11,6 @@ import {
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { forwardRef, memo, type Ref, useMemo } from 'react'
-import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -442,7 +442,12 @@ export const Walls = forwardRef(
               <mesh
                 castShadow
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()

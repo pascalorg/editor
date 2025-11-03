@@ -131,7 +131,12 @@ export const Columns = forwardRef(
                 castShadow
                 geometry={cylinderGeometry}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()

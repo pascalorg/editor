@@ -1,13 +1,13 @@
 'use client'
 
+import { Gltf, useGLTF } from '@react-three/drei'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useDoors } from '@/hooks/use-nodes'
 import { handleElementClick } from '@/lib/building-elements'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
-import { Gltf, useGLTF } from '@react-three/drei'
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 

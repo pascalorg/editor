@@ -1,5 +1,10 @@
 'use client'
 
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
@@ -9,11 +14,6 @@ import {
   setNodeOpacity,
   setNodeVisibility,
 } from '@/lib/nodes/operations'
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
@@ -379,9 +379,7 @@ const useStore = create<StoreState>()(
           const level = state.levels.find((l) => l.id === selectedFloorId)
           if (!level) return state
 
-          const existingWalls = level.children.filter(
-            (child) => child.type === 'wall',
-          ) as any[]
+          const existingWalls = level.children.filter((child) => child.type === 'wall') as any[]
           const existingWallsMap = new Map(existingWalls.map((w) => [w.id, w]))
 
           // Convert wall keys to WallNode objects
@@ -451,9 +449,7 @@ const useStore = create<StoreState>()(
           const level = state.levels.find((l) => l.id === selectedFloorId)
           if (!level) return state
 
-          const existingRoofs = level.children.filter(
-            (child) => child.type === 'roof',
-          ) as any[]
+          const existingRoofs = level.children.filter((child) => child.type === 'roof') as any[]
           const existingRoofsMap = new Map(existingRoofs.map((r) => [r.id, r]))
 
           // Convert roof keys to RoofNode objects

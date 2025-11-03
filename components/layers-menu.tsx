@@ -346,8 +346,7 @@ function DraggableLevelItem({
                   type === 'wall'
                     ? [...levelDoors, ...levelWindows].filter(
                         (child) =>
-                          child.data?.parentWallId === element.id &&
-                          !child.data?.parentGroupId, // Exclude walls in groups
+                          child.data?.parentWallId === element.id && !child.data?.parentGroupId, // Exclude walls in groups
                       )
                     : []
                 const hasChildren = elementChildren.length > 0

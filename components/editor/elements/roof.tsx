@@ -969,7 +969,12 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.frontGable}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
@@ -1018,7 +1023,12 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.backGable}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
@@ -1059,7 +1069,12 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.leftRoof}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
@@ -1100,7 +1115,12 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.rightRoof}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+                  if (
+                    !isActive ||
+                    movingCamera ||
+                    controlMode === 'delete' ||
+                    controlMode === 'guide'
+                  ) {
                     return
                   }
                   e.stopPropagation()
