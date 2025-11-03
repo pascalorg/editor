@@ -251,7 +251,6 @@ type StoreState = {
   reorderLevels: (levels: LevelNode[]) => void
   selectFloor: (floorId: string | null) => void
 
-  addComponent: (component: Component) => void
   setWalls: (walls: string[]) => void
   setRoofs: (roofs: string[]) => void
 
@@ -356,10 +355,6 @@ const useStore = create<StoreState>()(
         }),
 
       // Building element operations
-      addComponent: (component) => {
-        console.warn('addComponent is deprecated - use node operations instead')
-        // TODO: Convert component to appropriate node type and add to levels
-      },
       setWalls: (wallKeys) =>
         set((state) => {
           const selectedFloorId = state.selectedFloorId

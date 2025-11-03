@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import {
   TreeExpander,
   TreeIcon,
@@ -188,13 +189,21 @@ function DraggableLevelItem({
               elements[type].map((element, index, all) => {
                 const config = buildingElementConfig[type]
                 if (!config) return null
+
+                // Get children for this element (doors/windows for walls)
+                const elementChildren =
+                  type === 'wall'
+                    ? [...levelDoors, ...levelWindows].filter(
+                        (child) => child.data?.parentWallId === element.id,
+                      )
+                    : []
+                const hasChildren = elementChildren.length > 0
+
                 return (
                   <TreeNode
                     isLast={
                       index === all.length - 1 &&
-                      elementTypes.indexOf(type) === elementTypes.length - 1 &&
-                      levelDoors.length === 0 &&
-                      levelWindows.length === 0
+                      elementTypes.indexOf(type) === elementTypes.length - 1
                     }
                     key={element.id}
                     level={2}
@@ -210,8 +219,8 @@ function DraggableLevelItem({
                         handleElementSelect(element.id, type, e as any)
                       }}
                     >
-                      <TreeExpander />
-                      <TreeIcon icon={config.icon} />
+                      <TreeExpander hasChildren={hasChildren} />
+                      <TreeIcon hasChildren={hasChildren} icon={config.icon} />
                       <TreeLabel>{config.getLabel(index)}</TreeLabel>
                       <OpacityControl
                         onOpacityChange={(opacity) =>
@@ -222,58 +231,54 @@ function DraggableLevelItem({
                         visible={element.visible}
                       />
                     </TreeNodeTrigger>
+
+                    {/* Render children (doors/windows) under walls */}
+                    {hasChildren && (
+                      <TreeNodeContent hasChildren={true}>
+                        {elementChildren.map((child, childIndex) => {
+                          const isDoor = child.type === 'door'
+                          return (
+                            <TreeNode
+                              isLast={childIndex === elementChildren.length - 1}
+                              key={child.id}
+                              level={3}
+                              nodeId={child.id}
+                            >
+                              <TreeNodeTrigger
+                                className={cn(
+                                  selectedElements.find((el) => el.id === child.id) && 'bg-accent',
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedElements([{ id: child.id, type: child.type }])
+                                  setControlMode('building')
+                                }}
+                              >
+                                <TreeExpander />
+                                <TreeIcon
+                                  icon={
+                                    isDoor ? (
+                                      <DoorOpen className="h-4 w-4 text-orange-600" />
+                                    ) : (
+                                      <RectangleVertical className="h-4 w-4 text-blue-500" />
+                                    )
+                                  }
+                                />
+                                <TreeLabel>
+                                  {isDoor
+                                    ? `Door ${elementChildren.filter((c) => c.type === 'door').indexOf(child) + 1}`
+                                    : `Window ${elementChildren.filter((c) => c.type === 'window').indexOf(child) + 1}`}
+                                </TreeLabel>
+                              </TreeNodeTrigger>
+                            </TreeNode>
+                          )
+                        })}
+                      </TreeNodeContent>
+                    )}
                   </TreeNode>
                 )
               }),
             )}
-
-            {/* Doors */}
-            {levelDoors.map((door, index, doors) => (
-              <TreeNode
-                isLast={index === doors.length - 1 && levelWindows.length === 0}
-                key={door.id}
-                level={2}
-                nodeId={door.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(selectedElements.find((el) => el.id === door.id) && 'bg-accent')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    // Select door for deletion
-                    setSelectedElements([{ id: door.id, type: 'door' }])
-                    setControlMode('building')
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<DoorOpen className="h-4 w-4 text-orange-600" />} />
-                  <TreeLabel>Door {index + 1}</TreeLabel>
-                </TreeNodeTrigger>
-              </TreeNode>
-            ))}
-
-            {/* Windows */}
-            {levelWindows.map((window, index, windows) => (
-              <TreeNode
-                isLast={index === windows.length - 1}
-                key={window.id}
-                level={2}
-                nodeId={window.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(selectedElements.find((el) => el.id === window.id) && 'bg-accent')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    // Select window for deletion
-                    setSelectedElements([{ id: window.id, type: 'window' }])
-                    setControlMode('building')
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<RectangleVertical className="h-4 w-4 text-blue-500" />} />
-                  <TreeLabel>Window {index + 1}</TreeLabel>
-                </TreeNodeTrigger>
-              </TreeNode>
-            ))}
           </TreeNodeContent>
         </TreeNode>
 
@@ -454,6 +459,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
   const levels = useEditor((state) => state.levels)
 
+  // Track expanded state
+  const [expandedIds, setExpandedIds] = useState<string[]>(['level_0'])
+
   // Extract data from node tree for hierarchy display
   const components: any[] = []
   const images: any[] = []
@@ -486,6 +494,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   rotation: wallChild.rotation,
                   visible: wallChild.visible ?? true,
                   opacity: wallChild.opacity ?? 100,
+                  parentWallId: child.id, // Track which wall this door/window belongs to
                 },
               })
             }
@@ -748,6 +757,88 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   // Get sorted levels for rendering
   const floorGroups = levels.sort((a, b) => (b.level || 0) - (a.level || 0))
 
+  // Update expanded IDs when selection changes to reveal selected items
+  useEffect(() => {
+    const newExpanded = new Set(expandedIds)
+    let hasChanges = false
+
+    // Expand parents of selected elements (walls, roofs, columns, doors, windows)
+    selectedElements.forEach((selected) => {
+      // Find which level contains this element
+      const levelId = components.find((c) => {
+        if (c.type === 'wall' || c.type === 'roof' || c.type === 'column') {
+          return c.data?.segments?.some?.((seg: any) => seg.id === selected.id)
+        }
+        // For doors/windows, find by their direct match
+        return c.id === selected.id
+      })?.group
+
+      if (levelId) {
+        if (!newExpanded.has(levelId)) {
+          newExpanded.add(levelId)
+          hasChanges = true
+        }
+        const objectsId = `${levelId}-3d-objects`
+        if (!newExpanded.has(objectsId)) {
+          newExpanded.add(objectsId)
+          hasChanges = true
+        }
+      }
+
+      // If it's a door or window, also expand its parent wall
+      if (selected.type === 'door' || selected.type === 'window') {
+        const component = components.find((c) => c.id === selected.id)
+        const parentWallId = component?.data?.parentWallId
+        if (parentWallId && !newExpanded.has(parentWallId)) {
+          newExpanded.add(parentWallId)
+          hasChanges = true
+        }
+      }
+    })
+
+    // Expand parents of selected images
+    selectedImageIds.forEach((imageId) => {
+      const image = images.find((img) => img.id === imageId)
+      if (image) {
+        const levelId = levels.find((l) => (l.level || 0) === image.level)?.id
+        if (levelId) {
+          if (!newExpanded.has(levelId)) {
+            newExpanded.add(levelId)
+            hasChanges = true
+          }
+          const guidesId = `${levelId}-guides`
+          if (!newExpanded.has(guidesId)) {
+            newExpanded.add(guidesId)
+            hasChanges = true
+          }
+        }
+      }
+    })
+
+    // Expand parents of selected scans
+    selectedScanIds.forEach((scanId) => {
+      const scan = scans.find((s) => s.id === scanId)
+      if (scan) {
+        const levelId = levels.find((l) => (l.level || 0) === scan.level)?.id
+        if (levelId) {
+          if (!newExpanded.has(levelId)) {
+            newExpanded.add(levelId)
+            hasChanges = true
+          }
+          const scansId = `${levelId}-scans`
+          if (!newExpanded.has(scansId)) {
+            newExpanded.add(scansId)
+            hasChanges = true
+          }
+        }
+      }
+    })
+
+    if (hasChanges) {
+      setExpandedIds(Array.from(newExpanded))
+    }
+  }, [selectedElements, selectedImageIds, selectedScanIds, components, images, scans, levels])
+
   return (
     <div className="flex flex-1 flex-col px-2 py-2">
       <div className="mb-2 flex items-center justify-between">
@@ -767,9 +858,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       <div className="no-scrollbar flex-1">
         {mounted ? (
           <TreeProvider
-            defaultExpandedIds={['level_0']}
+            expandedIds={expandedIds}
             indent={16}
             multiSelect={false}
+            onExpandedChange={setExpandedIds}
             onSelectionChange={handleTreeSelectionChange}
             selectedIds={selectedFloorId ? [selectedFloorId] : []}
             showLines={true}

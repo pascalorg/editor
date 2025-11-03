@@ -57,6 +57,8 @@ const useTreeNode = () => {
 export type TreeProviderProps = {
   children: ReactNode
   defaultExpandedIds?: string[]
+  expandedIds?: string[]
+  onExpandedChange?: (expandedIds: string[]) => void
   showLines?: boolean
   showIcons?: boolean
   selectable?: boolean
@@ -71,6 +73,8 @@ export type TreeProviderProps = {
 export const TreeProvider = ({
   children,
   defaultExpandedIds = [],
+  expandedIds: controlledExpandedIds,
+  onExpandedChange,
   showLines = true,
   showIcons = true,
   selectable = true,
@@ -81,23 +85,43 @@ export const TreeProvider = ({
   animateExpand = true,
   className,
 }: TreeProviderProps) => {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultExpandedIds))
+  const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(
+    new Set(defaultExpandedIds),
+  )
   const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>(selectedIds ?? [])
+
+  const isExpandedControlled = controlledExpandedIds !== undefined && onExpandedChange !== undefined
+  const expandedIds = isExpandedControlled
+    ? new Set(controlledExpandedIds)
+    : internalExpandedIds
 
   const isControlled = selectedIds !== undefined && onSelectionChange !== undefined
   const currentSelectedIds = isControlled ? selectedIds : internalSelectedIds
 
-  const toggleExpanded = useCallback((nodeId: string) => {
-    setExpandedIds((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(nodeId)) {
-        newSet.delete(nodeId)
+  const toggleExpanded = useCallback(
+    (nodeId: string) => {
+      if (isExpandedControlled && onExpandedChange) {
+        const newSet = new Set(expandedIds)
+        if (newSet.has(nodeId)) {
+          newSet.delete(nodeId)
+        } else {
+          newSet.add(nodeId)
+        }
+        onExpandedChange(Array.from(newSet))
       } else {
-        newSet.add(nodeId)
+        setInternalExpandedIds((prev) => {
+          const newSet = new Set(prev)
+          if (newSet.has(nodeId)) {
+            newSet.delete(nodeId)
+          } else {
+            newSet.add(nodeId)
+          }
+          return newSet
+        })
       }
-      return newSet
-    })
-  }, [])
+    },
+    [isExpandedControlled, onExpandedChange, expandedIds],
+  )
 
   const handleSelection = useCallback(
     (nodeId: string, ctrlKey = false) => {
