@@ -363,8 +363,24 @@ const useStore = create<StoreState>()(
             return state
           }
 
+          // Get existing walls to preserve their children (doors/windows)
+          const level = state.levels.find((l) => l.id === selectedFloorId)
+          if (!level) return state
+
+          const existingWalls = level.children.filter(
+            (child) => child.type === 'wall',
+          ) as any[]
+          const existingWallsMap = new Map(existingWalls.map((w) => [w.id, w]))
+
           // Convert wall keys to WallNode objects
           const wallNodes: any[] = wallKeys.map((wallKey) => {
+            // Check if this wall already exists
+            const existingWall = existingWallsMap.get(wallKey)
+            if (existingWall) {
+              // Preserve existing wall with its children
+              return existingWall
+            }
+
             // Parse wall key: "x1,y1-x2,y2"
             const [start, end] = wallKey.split('-')
             const [x1, y1] = start.split(',').map(Number)
@@ -376,7 +392,7 @@ const useStore = create<StoreState>()(
             const length = Math.sqrt(dx * dx + dy * dy)
             const rotation = Math.atan2(dy, dx)
 
-            // Create WallNode
+            // Create new WallNode
             return {
               id: wallKey, // Use wall key as ID for consistency
               type: 'wall',
@@ -394,7 +410,7 @@ const useStore = create<StoreState>()(
           // Update the current level's walls
           const updatedLevels = state.levels.map((level) => {
             if (level.id === selectedFloorId) {
-              // Remove existing walls and add new ones
+              // Remove existing walls and add new/updated ones
               const nonWalls = level.children.filter((child) => child.type !== 'wall')
               return {
                 ...level,
@@ -419,8 +435,24 @@ const useStore = create<StoreState>()(
             return state
           }
 
+          // Get existing roofs to preserve their children (roof segments)
+          const level = state.levels.find((l) => l.id === selectedFloorId)
+          if (!level) return state
+
+          const existingRoofs = level.children.filter(
+            (child) => child.type === 'roof',
+          ) as any[]
+          const existingRoofsMap = new Map(existingRoofs.map((r) => [r.id, r]))
+
           // Convert roof keys to RoofNode objects
           const roofNodes: any[] = roofKeys.map((roofKey) => {
+            // Check if this roof already exists
+            const existingRoof = existingRoofsMap.get(roofKey)
+            if (existingRoof) {
+              // Preserve existing roof with its children
+              return existingRoof
+            }
+
             // Parse roof key: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
             // First check if there are width parameters
             let coordsPart = roofKey
@@ -446,7 +478,7 @@ const useStore = create<StoreState>()(
             const length = Math.sqrt(dx * dx + dy * dy)
             const rotation = Math.atan2(dy, dx)
 
-            // Create RoofNode
+            // Create new RoofNode
             return {
               id: roofKey,
               type: 'roof',
@@ -467,7 +499,7 @@ const useStore = create<StoreState>()(
           // Update the current level's roofs
           const updatedLevels = state.levels.map((level) => {
             if (level.id === selectedFloorId) {
-              // Remove existing roofs and add new ones
+              // Remove existing roofs and add new/updated ones
               const nonRoofs = level.children.filter((child) => child.type !== 'roof')
               return {
                 ...level,
