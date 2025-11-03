@@ -3,8 +3,8 @@
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useWindows } from '@/hooks/use-nodes'
-import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { handleElementClick } from '@/lib/building-elements'
+import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -174,8 +174,6 @@ type WindowProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
-  controlMode: string
-  movingCamera: boolean
   allWindows: Array<{ id: string }>
 }
 
@@ -188,10 +186,10 @@ const Window = memo(
     wallHeight,
     isActive,
     isFullView = false,
-    controlMode,
-    movingCamera,
     allWindows,
   }: WindowProps) => {
+    const movingCamera = useEditor((state) => state.movingCamera)
+    const controlMode = useEditor((state) => state.controlMode)
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
@@ -348,20 +346,10 @@ type WindowsProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
-  controlMode: string
-  movingCamera: boolean
 }
 
 export const Windows = memo(
-  ({
-    floorId,
-    tileSize,
-    wallHeight,
-    isActive,
-    isFullView = false,
-    controlMode,
-    movingCamera,
-  }: WindowsProps) => {
+  ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: WindowsProps) => {
     // Fetch window nodes for this floor from the node tree
     const windowNodes = useWindows(floorId)
 
@@ -372,11 +360,9 @@ export const Windows = memo(
         {windowNodes.map((windowNode) => (
           <Window
             allWindows={windowNodes}
-            controlMode={controlMode}
             isActive={isActive}
             isFullView={isFullView}
             key={windowNode.id}
-            movingCamera={movingCamera}
             position={windowNode.position}
             rotation={windowNode.rotation}
             tileSize={tileSize}

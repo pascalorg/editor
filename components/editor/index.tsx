@@ -1603,11 +1603,9 @@ export default function Editor({ className }: { className?: string }) {
 
                     {/* Doors component renders placed doors */}
                     <Doors
-                      controlMode={controlMode}
                       floorId={floor.id}
                       isActive={isActiveFloor}
                       isFullView={viewMode === 'full'}
-                      movingCamera={movingCamera}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />
@@ -1631,11 +1629,9 @@ export default function Editor({ className }: { className?: string }) {
 
                     {/* Windows component renders placed windows */}
                     <Windows
-                      controlMode={controlMode}
                       floorId={floor.id}
                       isActive={isActiveFloor}
                       isFullView={viewMode === 'full'}
-                      movingCamera={movingCamera}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />

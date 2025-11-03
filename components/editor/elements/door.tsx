@@ -176,8 +176,6 @@ type DoorProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
-  controlMode: string
-  movingCamera: boolean
   allDoors: Array<{ id: string }>
 }
 
@@ -190,10 +188,10 @@ const Door = memo(
     wallHeight,
     isActive,
     isFullView = false,
-    controlMode,
-    movingCamera,
     allDoors,
   }: DoorProps) => {
+    const controlMode = useEditor((state) => state.controlMode)
+    const movingCamera = useEditor((state) => state.movingCamera)
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
@@ -351,20 +349,10 @@ type DoorsProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
-  controlMode: string
-  movingCamera: boolean
 }
 
 export const Doors = memo(
-  ({
-    floorId,
-    tileSize,
-    wallHeight,
-    isActive,
-    isFullView = false,
-    controlMode,
-    movingCamera,
-  }: DoorsProps) => {
+  ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: DoorsProps) => {
     // Fetch door nodes for this floor from the node tree
     const doorNodes = useDoors(floorId)
 
@@ -375,12 +363,10 @@ export const Doors = memo(
         {doorNodes.map((doorNode) => (
           <Door
             allDoors={doorNodes}
-            controlMode={controlMode}
             doorId={doorNode.id}
             isActive={isActive}
             isFullView={isFullView}
             key={doorNode.id}
-            movingCamera={movingCamera}
             position={doorNode.position}
             rotation={doorNode.rotation}
             tileSize={tileSize}
