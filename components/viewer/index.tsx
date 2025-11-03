@@ -17,8 +17,8 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import { calculateFloorBounds } from '@/lib/grid-bounds'
 import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
+import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
 import { cn } from '@/lib/utils'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
@@ -158,8 +158,16 @@ export default function Viewer({ className }: { className?: string }) {
               const nextFloor = visibleFloors.find((f) => (f.level || 0) === floorLevel + 1)
               const hitBoxHeight = nextFloor ? heightPerLevel : heightPerLevel
 
-              // Calculate bounds for this floor (in grid units)
-              const bounds = calculateFloorBounds(components, floor.id, 6)
+              // Calculate bounds for this floor (in grid units) using node tree
+              const bounds = calculateLevelBoundsById(levels, floor.id, 6)
+
+              // Debug logging
+              if (bounds) {
+                console.log(`Floor ${floor.id} (level ${floor.level}) bounds:`, bounds)
+                console.log(
+                  `  Grid: minX=${bounds.minX}, maxX=${bounds.maxX}, minZ=${bounds.minZ}, maxZ=${bounds.maxZ}`,
+                )
+              }
 
               // Convert bounds to world units and add padding
               const PADDING = 1.5 // padding in grid units
@@ -167,10 +175,19 @@ export default function Viewer({ className }: { className?: string }) {
                 ? (bounds.maxX - bounds.minX + PADDING * 2) * tileSize
                 : GRID_SIZE
               const hitBoxDepth = bounds
-                ? (bounds.maxY - bounds.minY + PADDING * 2) * tileSize
+                ? (bounds.maxZ - bounds.minZ + PADDING * 2) * tileSize
                 : GRID_SIZE
               const hitBoxCenterX = bounds ? ((bounds.minX + bounds.maxX) / 2) * tileSize : 0
-              const hitBoxCenterZ = bounds ? ((bounds.minY + bounds.maxY) / 2) * tileSize : 0
+              const hitBoxCenterZ = bounds ? ((bounds.minZ + bounds.maxZ) / 2) * tileSize : 0
+
+              // Debug logging continued
+              if (bounds && floor.level === 2) {
+                console.log(`  Hit box: width=${hitBoxWidth}, depth=${hitBoxDepth}`)
+                console.log(`  Center (before offset): x=${hitBoxCenterX}, z=${hitBoxCenterZ}`)
+                console.log(
+                  `  Final position: x=${hitBoxCenterX - GRID_SIZE / 2}, z=${hitBoxCenterZ - GRID_SIZE / 2}`,
+                )
+              }
 
               // Find the level directly below (for reference grid)
               const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
@@ -182,36 +199,35 @@ export default function Viewer({ className }: { className?: string }) {
               return (
                 <AnimatedLevel key={floor.id} positionY={yPosition}>
                   {/* Clickable hit target box for floor selection */}
-                  {bounds && (
-                    <mesh
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        selectFloor(floor.id)
-                      }}
-                      onPointerEnter={(e) => {
-                        e.stopPropagation()
-                        setHoveredFloorId(floor.id)
-                        document.body.style.cursor = 'pointer'
-                      }}
-                      onPointerLeave={(e) => {
-                        e.stopPropagation()
-                        setHoveredFloorId(null)
-                        document.body.style.cursor = 'default'
-                      }}
-                      position={[
-                        hitBoxCenterX - GRID_SIZE / 2,
-                        hitBoxHeight / 2,
-                        hitBoxCenterZ - GRID_SIZE / 2,
-                      ]}
-                    >
-                      <boxGeometry args={[hitBoxWidth, hitBoxHeight, hitBoxDepth]} />
-                      <meshBasicMaterial
-                        color="#ffffff"
-                        opacity={hoveredFloorId === floor.id ? 0.08 : 0}
-                        transparent
-                      />
-                    </mesh>
-                  )}
+                  <mesh
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      selectFloor(floor.id)
+                    }}
+                    onPointerEnter={(e) => {
+                      e.stopPropagation()
+                      setHoveredFloorId(floor.id)
+                      document.body.style.cursor = 'pointer'
+                    }}
+                    onPointerLeave={(e) => {
+                      e.stopPropagation()
+                      setHoveredFloorId(null)
+                      document.body.style.cursor = 'default'
+                    }}
+                    position={[
+                      hitBoxCenterX - GRID_SIZE / 2,
+                      hitBoxHeight / 2,
+                      hitBoxCenterZ - GRID_SIZE / 2,
+                    ]}
+                  >
+                    <boxGeometry args={[hitBoxWidth, hitBoxHeight, hitBoxDepth]} />
+                    <meshBasicMaterial
+                      color={hoveredFloorId === floor.id ? '#00ff00' : '#ff0000'}
+                      opacity={hoveredFloorId === floor.id ? 0.3 : 0.15}
+                      transparent
+                      wireframe
+                    />
+                  </mesh>
 
                   {/* Solid dark purple floor for lowest level only - infinite appearance */}
                   {floorLevel === 0 && <InfiniteFloor />}

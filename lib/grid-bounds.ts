@@ -4,6 +4,9 @@ import type { Component } from '@/hooks/use-editor'
 /**
  * Calculate the bounding box for all elements on a specific floor
  * Returns bounds in grid units (not world units)
+ *
+ * @deprecated Use calculateLevelBoundsById from @/lib/nodes/bounds instead
+ * This function is kept for backward compatibility with legacy component-based code
  */
 export function calculateFloorBounds(
   components: Component[],
@@ -12,8 +15,8 @@ export function calculateFloorBounds(
 ): Bounds | null {
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
   let hasElements = false
 
   // Check walls
@@ -22,12 +25,12 @@ export function calculateFloorBounds(
     for (const segment of wallComponent.data.segments) {
       if (segment.visible === false) continue
       hasElements = true
-      const [x1, y1] = segment.start
-      const [x2, y2] = segment.end
+      const [x1, z1] = segment.start
+      const [x2, z2] = segment.end
       minX = Math.min(minX, x1, x2)
       maxX = Math.max(maxX, x1, x2)
-      minY = Math.min(minY, y1, y2)
-      maxY = Math.max(maxY, y1, y2)
+      minZ = Math.min(minZ, z1, z2)
+      maxZ = Math.max(maxZ, z1, z2)
     }
   }
 
@@ -37,8 +40,8 @@ export function calculateFloorBounds(
     for (const segment of roofComponent.data.segments) {
       if (segment.visible === false) continue
       hasElements = true
-      const [x1, y1] = segment.start
-      const [x2, y2] = segment.end
+      const [x1, z1] = segment.start
+      const [x2, z2] = segment.end
 
       // For roofs, also consider the width on either side
       const leftWidth = segment.leftWidth || 0
@@ -51,31 +54,31 @@ export function calculateFloorBounds(
 
       // Calculate perpendicular direction
       const dx = x2 - x1
-      const dy = y2 - y1
-      const length = Math.sqrt(dx * dx + dy * dy)
+      const dz = z2 - z1
+      const length = Math.sqrt(dx * dx + dz * dz)
       if (length > 0) {
-        const perpX = -dy / length
-        const perpY = dx / length
+        const perpX = -dz / length
+        const perpZ = dx / length
 
         // Expand bounds to include roof width
         const leftExtentX1 = x1 + perpX * leftWidthGrid
-        const leftExtentY1 = y1 + perpY * leftWidthGrid
+        const leftExtentZ1 = z1 + perpZ * leftWidthGrid
         const leftExtentX2 = x2 + perpX * leftWidthGrid
-        const leftExtentY2 = y2 + perpY * leftWidthGrid
+        const leftExtentZ2 = z2 + perpZ * leftWidthGrid
         const rightExtentX1 = x1 - perpX * rightWidthGrid
-        const rightExtentY1 = y1 - perpY * rightWidthGrid
+        const rightExtentZ1 = z1 - perpZ * rightWidthGrid
         const rightExtentX2 = x2 - perpX * rightWidthGrid
-        const rightExtentY2 = y2 - perpY * rightWidthGrid
+        const rightExtentZ2 = z2 - perpZ * rightWidthGrid
 
         minX = Math.min(minX, x1, x2, leftExtentX1, leftExtentX2, rightExtentX1, rightExtentX2)
         maxX = Math.max(maxX, x1, x2, leftExtentX1, leftExtentX2, rightExtentX1, rightExtentX2)
-        minY = Math.min(minY, y1, y2, leftExtentY1, leftExtentY2, rightExtentY1, rightExtentY2)
-        maxY = Math.max(maxY, y1, y2, leftExtentY1, leftExtentY2, rightExtentY1, rightExtentY2)
+        minZ = Math.min(minZ, z1, z2, leftExtentZ1, leftExtentZ2, rightExtentZ1, rightExtentZ2)
+        maxZ = Math.max(maxZ, z1, z2, leftExtentZ1, leftExtentZ2, rightExtentZ1, rightExtentZ2)
       } else {
         minX = Math.min(minX, x1, x2)
         maxX = Math.max(maxX, x1, x2)
-        minY = Math.min(minY, y1, y2)
-        maxY = Math.max(maxY, y1, y2)
+        minZ = Math.min(minZ, z1, z2)
+        maxZ = Math.max(maxZ, z1, z2)
       }
     }
   }
@@ -85,11 +88,11 @@ export function calculateFloorBounds(
   for (const doorComponent of doorComponents) {
     if (doorComponent.type === 'door') {
       hasElements = true
-      const [x, y] = doorComponent.data.position
+      const [x, z] = doorComponent.data.position
       minX = Math.min(minX, x)
       maxX = Math.max(maxX, x)
-      minY = Math.min(minY, y)
-      maxY = Math.max(maxY, y)
+      minZ = Math.min(minZ, z)
+      maxZ = Math.max(maxZ, z)
     }
   }
 
@@ -100,17 +103,17 @@ export function calculateFloorBounds(
 
   // Ensure minimum size
   const width = maxX - minX
-  const height = maxY - minY
+  const depth = maxZ - minZ
   if (width < minSize) {
     const expansion = (minSize - width) / 2
     minX -= expansion
     maxX += expansion
   }
-  if (height < minSize) {
-    const expansion = (minSize - height) / 2
-    minY -= expansion
-    maxY += expansion
+  if (depth < minSize) {
+    const expansion = (minSize - depth) / 2
+    minZ -= expansion
+    maxZ += expansion
   }
 
-  return { minX, maxX, minY, maxY }
+  return { minX, maxX, minZ, maxZ }
 }
