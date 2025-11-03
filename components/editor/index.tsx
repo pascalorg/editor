@@ -1077,8 +1077,6 @@ export default function Editor({ className }: { className?: string }) {
 
   const disabledRaycast = useCallback(() => null, [])
 
-  console.log('levels in 3D view:', levels)
-
   return (
     <div className="relative h-full w-full">
       <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
