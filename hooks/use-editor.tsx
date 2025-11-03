@@ -182,6 +182,18 @@ export type Component =
       data: ColumnComponentData
       createdAt: string
     }
+  | {
+      id: string
+      type: 'group'
+      group: string | null
+      data: {
+        name: string
+        groupType: 'room' | 'floor' | 'outdoor'
+        visible: boolean
+        opacity: number
+        walls: any[]
+      }
+    }
 
 export type ComponentGroup = {
   id: string

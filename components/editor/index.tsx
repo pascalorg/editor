@@ -81,6 +81,8 @@ export default function Editor({ className }: { className?: string }) {
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const levels = useEditor((state) => state.levels)
+
+  console.log('levels', levels)
   const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
@@ -688,25 +690,79 @@ export default function Editor({ className }: { className?: string }) {
         setRoofPreviewEnd(null)
       }
     } else if (controlMode === 'building' && activeTool === 'room') {
-      // Room mode: two-click rectangle (4 walls)
+      // Room mode: two-click rectangle (4 walls in a group)
       if (roomStartPoint === null) {
         // First click: set start corner
         setRoomStartPoint([x, y])
       } else {
-        // Second click: create 4 walls forming a rectangle
-        if (roomPreviewEnd) {
+        // Second click: create a room group with 4 walls
+        if (roomPreviewEnd && selectedFloorId) {
           const [x1, y1] = roomStartPoint
           const [x2, y2] = roomPreviewEnd
 
-          // Create 4 walls: top, bottom, left, right
-          const currentWalls = Array.from(walls)
-          const newWalls = [
+          // Create wall keys for the 4 walls
+          const wallKeys = [
             `${x1},${y2}-${x2},${y2}`, // Top wall
             `${x1},${y1}-${x2},${y1}`, // Bottom wall
             `${x1},${y1}-${x1},${y2}`, // Left wall
             `${x2},${y1}-${x2},${y2}`, // Right wall
           ]
-          setWalls([...currentWalls, ...newWalls])
+
+          // Create wall nodes for the group
+          const wallNodes = wallKeys.map((wallKey) => {
+            const [start, end] = wallKey.split('-')
+            const [wx1, wy1] = start.split(',').map(Number)
+            const [wx2, wy2] = end.split(',').map(Number)
+            const dx = wx2 - wx1
+            const dy = wy2 - wy1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            return {
+              id: wallKey,
+              type: 'wall' as const,
+              name: `Wall ${wallKey}`,
+              position: [wx1, wy1] as [number, number],
+              rotation,
+              size: [length, 0.2] as [number, number],
+              visible: true,
+              opacity: 100,
+              children: [],
+            }
+          })
+
+          // Count existing rooms to auto-increment the number
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const existingRooms = currentLevel?.children.filter(
+            (child) => child.type === 'group' && (child as any).groupType === 'room',
+          ) || []
+          const roomNumber = existingRooms.length + 1
+
+          // Create a group node containing the walls
+          const groupId = `room_${Date.now()}`
+          const groupNode = {
+            id: groupId,
+            type: 'group' as const,
+            name: `Room ${roomNumber}`,
+            groupType: 'room' as const,
+            visible: true,
+            opacity: 100,
+            children: wallNodes,
+            parent: selectedFloorId,
+          }
+
+          // Add the group to the current level
+          const updatedLevels = levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              return {
+                ...level,
+                children: [...level.children, groupNode],
+              }
+            }
+            return level
+          })
+
+          updateLevels(updatedLevels)
         }
 
         // Reset placement state
@@ -725,16 +781,73 @@ export default function Editor({ className }: { className?: string }) {
         snappedX === customRoomPoints[0][0] &&
         snappedY === customRoomPoints[0][1]
       ) {
-        // Complete the custom room polygon by creating walls between all points
-        const currentWalls = Array.from(walls)
-        const newWalls: string[] = []
-        // Create walls between consecutive points (including closing wall)
-        for (let i = 0; i < customRoomPoints.length; i++) {
-          const [x1, y1] = customRoomPoints[i]
-          const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
-          newWalls.push(`${x1},${y1}-${x2},${y2}`)
+        // Complete the custom room polygon by creating a group with walls
+        if (selectedFloorId) {
+          const wallKeys: string[] = []
+          // Create walls between consecutive points (including closing wall)
+          for (let i = 0; i < customRoomPoints.length; i++) {
+            const [x1, y1] = customRoomPoints[i]
+            const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
+            wallKeys.push(`${x1},${y1}-${x2},${y2}`)
+          }
+
+          // Create wall nodes for the group
+          const wallNodes = wallKeys.map((wallKey) => {
+            const [start, end] = wallKey.split('-')
+            const [wx1, wy1] = start.split(',').map(Number)
+            const [wx2, wy2] = end.split(',').map(Number)
+            const dx = wx2 - wx1
+            const dy = wy2 - wy1
+            const length = Math.sqrt(dx * dx + dy * dy)
+            const rotation = Math.atan2(dy, dx)
+
+            return {
+              id: wallKey,
+              type: 'wall' as const,
+              name: `Wall ${wallKey}`,
+              position: [wx1, wy1] as [number, number],
+              rotation,
+              size: [length, 0.2] as [number, number],
+              visible: true,
+              opacity: 100,
+              children: [],
+            }
+          })
+
+          // Count existing rooms to auto-increment the number
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const existingRooms = currentLevel?.children.filter(
+            (child) => child.type === 'group' && (child as any).groupType === 'room',
+          ) || []
+          const roomNumber = existingRooms.length + 1
+
+          // Create a group node containing the walls
+          const groupId = `room_${Date.now()}`
+          const groupNode = {
+            id: groupId,
+            type: 'group' as const,
+            name: `Room ${roomNumber}`,
+            groupType: 'room' as const,
+            visible: true,
+            opacity: 100,
+            children: wallNodes,
+            parent: selectedFloorId,
+          }
+
+          // Add the group to the current level
+          const updatedLevels = levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              return {
+                ...level,
+                children: [...level.children, groupNode],
+              }
+            }
+            return level
+          })
+
+          updateLevels(updatedLevels)
         }
-        setWalls([...currentWalls, ...newWalls])
+
         // Reset custom room state
         setCustomRoomPoints([])
         setCustomRoomPreviewEnd(null)

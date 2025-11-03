@@ -97,12 +97,31 @@ export const selectNodesOfTypeFromLevel =
   }
 
 /**
- * Select all walls from a level
+ * Select all walls from a level (including walls in groups)
  */
 export const selectWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] =>
-    selectNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
+  (state: { levels: LevelNode[] }): WallNode[] => {
+    const level = state.levels.find((l) => l.id === levelId)
+    if (!level) {
+      return []
+    }
+
+    const walls: WallNode[] = []
+
+    // Get direct wall children
+    const directWalls = level.children.filter((child) => child.type === 'wall') as WallNode[]
+    walls.push(...directWalls)
+
+    // Get walls from groups
+    const groups = level.children.filter((child) => child.type === 'group')
+    for (const group of groups) {
+      const groupWalls = group.children.filter((child) => child.type === 'wall') as WallNode[]
+      walls.push(...groupWalls)
+    }
+
+    return walls
+  }
 
 /**
  * Select all columns from a level
@@ -141,7 +160,7 @@ export const selectScansFromLevel =
 // ============================================================================
 
 /**
- * Select all doors from a level (including those in walls)
+ * Select all doors from a level (including those in walls and walls in groups)
  */
 export const selectDoorsFromLevel =
   (levelId: string) =>
@@ -153,7 +172,7 @@ export const selectDoorsFromLevel =
 
     const doors: DoorNode[] = []
 
-    // Get walls
+    // Get direct walls
     const walls = level.children.filter((child) => child.type === 'wall') as WallNode[]
 
     // Extract doors from each wall
@@ -162,11 +181,21 @@ export const selectDoorsFromLevel =
       doors.push(...wallDoors)
     }
 
+    // Get walls from groups
+    const groups = level.children.filter((child) => child.type === 'group')
+    for (const group of groups) {
+      const groupWalls = group.children.filter((child) => child.type === 'wall') as WallNode[]
+      for (const wall of groupWalls) {
+        const wallDoors = wall.children.filter((child) => child.type === 'door') as DoorNode[]
+        doors.push(...wallDoors)
+      }
+    }
+
     return doors
   }
 
 /**
- * Select all windows from a level (including those in walls)
+ * Select all windows from a level (including those in walls and walls in groups)
  */
 export const selectWindowsFromLevel =
   (levelId: string) =>
@@ -178,13 +207,25 @@ export const selectWindowsFromLevel =
 
     const windows: WindowNode[] = []
 
-    // Get walls
+    // Get direct walls
     const walls = level.children.filter((child) => child.type === 'wall') as WallNode[]
 
     // Extract windows from each wall
     for (const wall of walls) {
       const wallWindows = wall.children.filter((child) => child.type === 'window') as WindowNode[]
       windows.push(...wallWindows)
+    }
+
+    // Get walls from groups
+    const groups = level.children.filter((child) => child.type === 'group')
+    for (const group of groups) {
+      const groupWalls = group.children.filter((child) => child.type === 'wall') as WallNode[]
+      for (const wall of groupWalls) {
+        const wallWindows = wall.children.filter(
+          (child) => child.type === 'window',
+        ) as WindowNode[]
+        windows.push(...wallWindows)
+      }
     }
 
     return windows
@@ -233,12 +274,14 @@ export const selectVisibleNodesOfTypeFromLevel =
   }
 
 /**
- * Select visible walls from a level
+ * Select visible walls from a level (including walls in groups)
  */
 export const selectVisibleWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] =>
-    selectVisibleNodesOfTypeFromLevel<WallNode>(levelId, 'wall')(state)
+  (state: { levels: LevelNode[] }): WallNode[] => {
+    const walls = selectWallsFromLevel(levelId)(state)
+    return walls.filter((wall) => wall.visible !== false)
+  }
 
 /**
  * Select visible reference images from a level
@@ -271,12 +314,14 @@ export const selectNodeCountByType =
   }
 
 /**
- * Select total wall count in a level
+ * Select total wall count in a level (including walls in groups)
  */
 export const selectWallCountInLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): number =>
-    selectNodeCountByType(levelId, 'wall')(state)
+  (state: { levels: LevelNode[] }): number => {
+    const walls = selectWallsFromLevel(levelId)(state)
+    return walls.length
+  }
 
 /**
  * Select total door count in a level (including those in walls)

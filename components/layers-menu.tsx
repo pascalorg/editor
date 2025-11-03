@@ -44,10 +44,10 @@ import type { LevelNode } from '@/lib/nodes/types'
 import { cn } from '@/lib/utils'
 
 const buildingElementConfig: Record<
-  'wall' | 'roof' | 'column',
+  'wall' | 'roof' | 'column' | 'group',
   {
     icon: ReactNode
-    getLabel: (index: number) => string
+    getLabel: (index: number, data?: any) => string
   }
 > = {
   wall: {
@@ -61,6 +61,10 @@ const buildingElementConfig: Record<
   column: {
     icon: <CylinderIcon className="h-4 w-4 text-gray-500" />,
     getLabel: (index) => getElementLabel('column', index),
+  },
+  group: {
+    icon: <Building className="h-4 w-4 text-purple-600" />,
+    getLabel: (index, data) => data?.name || `Room ${index + 1}`,
   },
 }
 
@@ -190,11 +194,152 @@ function DraggableLevelItem({
                 const config = buildingElementConfig[type]
                 if (!config) return null
 
+                // For groups, render walls as children
+                if (type === 'group') {
+                  const groupWalls = element.data?.walls || []
+                  return (
+                    <TreeNode
+                      isLast={
+                        index === all.length - 1 &&
+                        elementTypes.indexOf(type) === elementTypes.length - 1
+                      }
+                      key={element.id}
+                      level={2}
+                      nodeId={element.id}
+                    >
+                      <TreeNodeTrigger
+                        className={cn(element.visible === false && 'opacity-50')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // Groups can be selected for deletion
+                          setSelectedElements([{ id: element.id, type: 'group' }])
+                          setControlMode('building')
+                        }}
+                      >
+                        <TreeExpander hasChildren={groupWalls.length > 0} />
+                        <TreeIcon hasChildren={groupWalls.length > 0} icon={config.icon} />
+                        <TreeLabel>{config.getLabel(index, element.data)}</TreeLabel>
+                        <OpacityControl
+                          onOpacityChange={(opacity) => {
+                            // Update group opacity
+                            // TODO: implement group opacity control
+                          }}
+                          onVisibilityToggle={() => {
+                            // Toggle group visibility
+                            // TODO: implement group visibility toggle
+                          }}
+                          opacity={element.opacity || 100}
+                          visible={element.visible !== false}
+                        />
+                      </TreeNodeTrigger>
+
+                      {/* Render walls within the group */}
+                      {groupWalls.length > 0 && (
+                        <TreeNodeContent hasChildren={true}>
+                          {groupWalls.map((wall: any, wallIndex: number) => {
+                            // Get doors/windows for this wall
+                            const wallChildren = [...levelDoors, ...levelWindows].filter(
+                              (child) => child.data?.parentWallId === wall.id,
+                            )
+
+                            return (
+                              <TreeNode
+                                isLast={wallIndex === groupWalls.length - 1}
+                                key={wall.id}
+                                level={3}
+                                nodeId={wall.id}
+                              >
+                                <TreeNodeTrigger
+                                  className={cn(
+                                    isElementSelected(selectedElements, wall.id, 'wall') &&
+                                      'bg-accent',
+                                    wall.visible === false && 'opacity-50',
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleElementSelect(wall.id, 'wall', e as any)
+                                  }}
+                                >
+                                  <TreeExpander hasChildren={wallChildren.length > 0} />
+                                  <TreeIcon
+                                    hasChildren={wallChildren.length > 0}
+                                    icon={<Square className="h-4 w-4 text-gray-600" />}
+                                  />
+                                  <TreeLabel>Wall {wallIndex + 1}</TreeLabel>
+                                  <OpacityControl
+                                    onOpacityChange={(opacity) =>
+                                      setBuildingElementOpacity(wall.id, 'wall', opacity)
+                                    }
+                                    onVisibilityToggle={() =>
+                                      toggleBuildingElementVisibility(wall.id, 'wall')
+                                    }
+                                    opacity={wall.opacity}
+                                    visible={wall.visible}
+                                  />
+                                </TreeNodeTrigger>
+
+                                {/* Render doors/windows under walls */}
+                                {wallChildren.length > 0 && (
+                                  <TreeNodeContent hasChildren={true}>
+                                    {wallChildren.map((child, childIndex) => {
+                                      const isDoor = child.type === 'door'
+                                      return (
+                                        <TreeNode
+                                          isLast={childIndex === wallChildren.length - 1}
+                                          key={child.id}
+                                          level={4}
+                                          nodeId={child.id}
+                                        >
+                                          <TreeNodeTrigger
+                                            className={cn(
+                                              selectedElements.find((el) => el.id === child.id) &&
+                                                'bg-accent',
+                                            )}
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              setSelectedElements([
+                                                { id: child.id, type: child.type },
+                                              ])
+                                              setControlMode('building')
+                                            }}
+                                          >
+                                            <TreeExpander />
+                                            <TreeIcon
+                                              icon={
+                                                isDoor ? (
+                                                  <DoorOpen className="h-4 w-4 text-orange-600" />
+                                                ) : (
+                                                  <RectangleVertical className="h-4 w-4 text-blue-500" />
+                                                )
+                                              }
+                                            />
+                                            <TreeLabel>
+                                              {isDoor
+                                                ? `Door ${wallChildren.filter((c) => c.type === 'door').indexOf(child) + 1}`
+                                                : `Window ${wallChildren.filter((c) => c.type === 'window').indexOf(child) + 1}`}
+                                            </TreeLabel>
+                                          </TreeNodeTrigger>
+                                        </TreeNode>
+                                      )
+                                    })}
+                                  </TreeNodeContent>
+                                )}
+                              </TreeNode>
+                            )
+                          })}
+                        </TreeNodeContent>
+                      )}
+                    </TreeNode>
+                  )
+                }
+
                 // Get children for this element (doors/windows for walls)
                 const elementChildren =
                   type === 'wall'
                     ? [...levelDoors, ...levelWindows].filter(
-                        (child) => child.data?.parentWallId === element.id,
+                        (child) =>
+                          child.data?.parentWallId === element.id &&
+                          !child.data?.parentGroupId, // Exclude walls in groups
                       )
                     : []
                 const hasChildren = elementChildren.length > 0
@@ -468,10 +613,11 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const scans: any[] = []
 
   levels.forEach((level) => {
-    // Group walls, roofs, and columns by type for the legacy format
+    // Group walls, roofs, columns, and groups by type for the legacy format
     const walls: any[] = []
     const roofs: any[] = []
     const columns: any[] = []
+    const groups: any[] = []
 
     level.children.forEach((child) => {
       if (child.type === 'wall') {
@@ -500,6 +646,49 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             }
           })
         }
+      } else if (child.type === 'group') {
+        // Extract group and its walls
+        const groupWalls: any[] = []
+
+        child.children.forEach((groupChild: any) => {
+          if (groupChild.type === 'wall') {
+            groupWalls.push({
+              id: groupChild.id,
+              visible: groupChild.visible ?? true,
+              opacity: groupChild.opacity ?? 100,
+            })
+
+            // Extract doors and windows from walls in the group
+            if (groupChild.children) {
+              groupChild.children.forEach((wallChild: any) => {
+                if (wallChild.type === 'door' || wallChild.type === 'window') {
+                  components.push({
+                    id: wallChild.id,
+                    type: wallChild.type,
+                    group: level.id,
+                    data: {
+                      position: wallChild.position,
+                      rotation: wallChild.rotation,
+                      visible: wallChild.visible ?? true,
+                      opacity: wallChild.opacity ?? 100,
+                      parentWallId: groupChild.id,
+                      parentGroupId: child.id, // Track which group this belongs to
+                    },
+                  })
+                }
+              })
+            }
+          }
+        })
+
+        groups.push({
+          id: child.id,
+          name: child.name,
+          groupType: (child as any).groupType,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+          walls: groupWalls,
+        })
       } else if (child.type === 'roof') {
         roofs.push({
           id: child.id,
@@ -534,7 +723,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     })
 
-    // Create aggregated components for walls, roofs, and columns
+    // Create aggregated components for walls, roofs, columns, and groups
     if (walls.length > 0) {
       components.push({
         id: `${level.id}-walls`,
@@ -567,6 +756,22 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         },
       })
     }
+
+    // Add groups (rooms) to components
+    groups.forEach((groupNode) => {
+      components.push({
+        id: groupNode.id,
+        type: 'group',
+        group: level.id,
+        data: {
+          name: groupNode.name,
+          groupType: groupNode.groupType,
+          visible: groupNode.visible,
+          opacity: groupNode.opacity,
+          walls: groupNode.walls,
+        },
+      })
+    })
   })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)
