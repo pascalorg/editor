@@ -10,15 +10,15 @@ import {
   PerspectiveCamera,
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type * as THREE from 'three'
 import { Scan } from '@/components/editor/elements/scan'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import { useScans } from '@/hooks/use-nodes'
 import { calculateFloorBounds } from '@/lib/grid-bounds'
+import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { cn } from '@/lib/utils'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
@@ -53,21 +53,8 @@ export default function Viewer({ className }: { className?: string }) {
   const selectFloor = useEditor((state) => state.selectFloor)
   const movingCamera = useEditor((state) => state.movingCamera)
 
-  // Get scans from node tree for the current level
-  const nodeScans = useScans(selectedFloorId || 'level_0')
-  const scans = nodeScans.map((node) => ({
-    id: node.id,
-    url: node.url,
-    name: node.name,
-    createdAt: node.createdAt,
-    position: node.position,
-    rotation: node.rotation,
-    scale: node.scale,
-    level: 0, // TODO: Get from parent level
-    yOffset: node.yOffset,
-    visible: node.visible,
-    opacity: node.opacity,
-  }))
+  // Convert node tree to legacy component format for rendering
+  const { components, scans } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
 
   // Viewer-specific state (isolated from editor)
   const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
@@ -172,8 +159,7 @@ export default function Viewer({ className }: { className?: string }) {
               const hitBoxHeight = nextFloor ? heightPerLevel : heightPerLevel
 
               // Calculate bounds for this floor (in grid units)
-              // TODO: Migrate to use node tree
-              const bounds = calculateFloorBounds([], floor.id, 6)
+              const bounds = calculateFloorBounds(components, floor.id, 6)
 
               // Convert bounds to world units and add padding
               const PADDING = 1.5 // padding in grid units
@@ -259,7 +245,7 @@ export default function Viewer({ className }: { className?: string }) {
                         <>
                           {isActiveFloor && (
                             <ProximityGrid
-                              components={[]} // TODO: Migrate to use node tree
+                              components={components}
                               cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -278,7 +264,7 @@ export default function Viewer({ className }: { className?: string }) {
                           )}
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
-                              components={[]} // TODO: Migrate to use node tree
+                              components={components}
                               cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
@@ -311,7 +297,7 @@ export default function Viewer({ className }: { className?: string }) {
                         raycast={() => null}
                       >
                         <ProximityGrid
-                          components={[]} // TODO: Migrate to use node tree
+                          components={components}
                           cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
@@ -334,7 +320,7 @@ export default function Viewer({ className }: { className?: string }) {
                   {viewerDisplayMode === 'objects' && (
                     <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                       <BuildingElementsRenderer
-                        components={[]} // TODO: Migrate to use node tree
+                        components={components}
                         floorId={floor.id}
                         isActiveFloor={isActiveFloor}
                         movingCamera={movingCamera}
