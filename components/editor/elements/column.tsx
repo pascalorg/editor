@@ -2,9 +2,6 @@
 
 import { forwardRef, memo, type Ref, useMemo } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import type { Component } from '@/hooks/use-editor'
-import { useEditor } from '@/hooks/use-editor'
 import { useColumns } from '@/hooks/use-nodes'
 import {
   handleElementClick,

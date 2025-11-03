@@ -15,13 +15,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { BoundingBoxes } from '@/components/editor/elements/bounding-boxes'
 import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
 import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Roofs } from '@/components/editor/elements/roof'
 import { Walls } from '@/components/editor/elements/wall'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
+import { EngineStats } from '@/components/editor/engine-stats'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useEngineWorld } from '@/hooks/use-engine'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
 import {
@@ -89,6 +92,9 @@ export default function Editor({ className }: { className?: string }) {
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+
+  // Initialize ECS World from node tree
+  const world = useEngineWorld(levels)
 
   // Get reference images and scans from node tree for the current level
   const nodeImages = useReferenceImages(selectedFloorId || 'level_0')
@@ -1612,6 +1618,15 @@ export default function Editor({ className }: { className?: string }) {
                         />
                       )}
 
+                    {/* Bounding boxes for selected elements (using ECS engine) */}
+                    {isActiveFloor && selectedElements.length > 0 && (
+                      <BoundingBoxes
+                        levelYOffset={0}
+                        selectedElements={selectedElements}
+                        world={world}
+                      />
+                    )}
+
                     {/* Doors component renders placed doors */}
                     <Doors
                       floorId={floor.id}
@@ -1704,6 +1719,9 @@ export default function Editor({ className }: { className?: string }) {
 
       <ControlModeMenu onModeChange={clearPlacementStates} />
       <BuildingMenu />
+
+      {/* ECS Engine Stats (debug overlay) */}
+      <EngineStats enabled={process.env.NODE_ENV === 'development'} world={world} />
     </div>
   )
 }
