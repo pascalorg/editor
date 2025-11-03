@@ -1,6 +1,6 @@
 'use client'
 
-import { type SelectedElement } from '@/lib/building-elements'
+import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addReferenceImageToLevel,
@@ -251,7 +251,6 @@ type StoreState = {
   reorderLevels: (levels: LevelNode[]) => void
   selectFloor: (floorId: string | null) => void
 
-  // Legacy compatibility stubs (TODO: migrate to node operations)
   addComponent: (component: Component) => void
   setWalls: (walls: string[]) => void
   setRoofs: (roofs: string[]) => void

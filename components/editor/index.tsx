@@ -1,5 +1,14 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { Walls } from '@/components/editor/elements/wall'
+import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -13,26 +22,13 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
-import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { type Component, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
-import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addColumnToLevel,
-  deleteNode,
-  setNodeOpacity,
   setNodePosition,
   setNodeRotation,
   setNodeSize,
-  setNodeVisibility,
 } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
@@ -40,7 +36,6 @@ import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
-import { LightingControls } from './lighting-controls'
 import { ProximityGrid } from './proximity-grid'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
@@ -1069,19 +1064,6 @@ export default function Editor({ className }: { className?: string }) {
     }
   }
 
-  const handleDeleteWall = () => {
-    if (contextMenuState.wallSegment) {
-      // Select the wall segment and delete it
-      setSelectedElements([{ id: contextMenuState.wallSegment.id, type: 'wall' }])
-      handleDeleteSelectedElements()
-    }
-    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
-  }
-
-  const handleCloseContextMenu = () => {
-    setContextMenuState((prev) => ({ ...prev, isOpen: false }))
-  }
-
   // Use constants for reference image
   const imageOpacity = IMAGE_OPACITY
   const imageScale = IMAGE_SCALE
@@ -1435,7 +1417,6 @@ export default function Editor({ className }: { className?: string }) {
                         wallHeight={wallHeight}
                         wallPreviewEnd={wallPreviewEnd}
                         wallStartPoint={wallStartPoint}
-                        walls={walls}
                       />
                     )}
 

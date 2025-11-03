@@ -1,12 +1,11 @@
 'use client'
 
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import { type CameraControlsImpl, Line } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
 import { RoofShadowPreview } from './roof'
 import { WallShadowPreview } from './wall'
 
@@ -15,7 +14,6 @@ const GRID_SIZE = 30 // 30m x 30m
 type GridTilesProps = {
   intersections: number
   tileSize: number
-  walls: Set<string>
   onIntersectionClick: (x: number, y: number) => void
   onIntersectionDoubleClick: () => void
   onIntersectionHover: (x: number, y: number | null) => void
@@ -39,7 +37,6 @@ export const GridTiles = memo(
   ({
     intersections,
     tileSize,
-    walls,
     onIntersectionClick,
     onIntersectionDoubleClick,
     onIntersectionHover,
