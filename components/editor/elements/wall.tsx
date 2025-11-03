@@ -1,8 +1,5 @@
 'use client'
 
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { forwardRef, memo, type Ref, useMemo } from 'react'
-import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
@@ -11,6 +8,9 @@ import {
   isElementSelected,
   type SelectedElement,
 } from '@/lib/building-elements'
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { forwardRef, memo, type Ref, useMemo } from 'react'
+import * as THREE from 'three'
 
 const WALL_THICKNESS = 0.2 // 20cm wall thickness
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -502,12 +502,12 @@ export const Walls = forwardRef(
                     const worldX = opening.position[0] * tileSize
                     const worldZ = opening.position[1] * tileSize
                     const scale: [number, number, number] =
-                      opening.type === 'door' ? [0.9, 4, 1] : [0.9, 1.2, 1] // Adjust scale based on type
+                      opening.type === 'door' ? [1, 4, 0.95] : [0.9, 1.22, 0.9] // Adjust scale based on type
                     return (
                       <Subtraction
                         key={idx}
                         position-x={worldX}
-                        position-y={opening.type === 'window' ? 1.1 : 0}
+                        position-y={opening.type === 'window' ? 1.12 : 0}
                         position-z={worldZ}
                         scale={scale}
                       >

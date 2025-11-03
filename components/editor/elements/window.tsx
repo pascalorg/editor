@@ -1,12 +1,12 @@
 'use client'
 
-import { Gltf, useGLTF } from '@react-three/drei'
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
+import { Gltf, useGLTF } from '@react-three/drei'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -207,6 +207,9 @@ const Window = memo(
         windowRef.current.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
             const material = child.material as THREE.Material
+            if (material.name.toLowerCase() === 'glass') {
+              return // Skip glass materials
+            }
             if ('opacity' in material && 'transparent' in material && 'depthWrite' in material) {
               material.opacity = opacity
               material.transparent = opacity < 1
