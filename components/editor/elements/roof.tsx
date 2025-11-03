@@ -3,7 +3,6 @@
 import { useThree } from '@react-three/fiber'
 import { forwardRef, memo, type Ref, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
-import { useShallow } from 'zustand/react/shallow'
 import type { RoofSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useRoofs } from '@/hooks/use-nodes'
@@ -245,7 +244,6 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        // TODO: Migrate undo to use node tree snapshot
         const originalLevels = storeState.levels
 
         const plane = new THREE.Plane()
@@ -443,7 +441,6 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        // TODO: Migrate undo to use node tree snapshot
         const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -608,7 +605,6 @@ export const Roofs = forwardRef(
 
         // Capture state for undo
         const storeState = useEditor.getState()
-        // TODO: Migrate undo to use node tree snapshot
         const originalLevels = storeState.levels
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)

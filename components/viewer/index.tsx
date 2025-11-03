@@ -19,6 +19,7 @@ import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
 import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
+import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
@@ -39,6 +40,7 @@ export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no f
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
   const levels = useEditor((state) => state.levels)
+  const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -222,10 +224,9 @@ export default function Viewer({ className }: { className?: string }) {
                   >
                     <boxGeometry args={[hitBoxWidth, hitBoxHeight, hitBoxDepth]} />
                     <meshBasicMaterial
-                      color={hoveredFloorId === floor.id ? '#00ff00' : '#ff0000'}
-                      opacity={hoveredFloorId === floor.id ? 0.3 : 0.15}
+                      color="#ffffff"
+                      opacity={hoveredFloorId === floor.id ? 0.15 : 0}
                       transparent
-                      wireframe
                     />
                   </mesh>
 
@@ -373,11 +374,42 @@ export default function Viewer({ className }: { className?: string }) {
                             onManipulationStart={() => setIsManipulatingScan(true)}
                             onSelect={() => setSelectedScanIds([scan.id])}
                             onUpdate={(updates, pushToUndo = true) => {
-                              // TODO: Implement node update operations for scans
-                              console.warn(
-                                'Scan update not yet implemented with node operations',
-                                updates,
-                              )
+                              let updatedLevels = levels
+
+                              // Apply each update operation
+                              if (updates.position !== undefined) {
+                                updatedLevels = setNodePosition(
+                                  updatedLevels,
+                                  scan.id,
+                                  updates.position,
+                                )
+                              }
+                              if (updates.rotation !== undefined) {
+                                updatedLevels = setNodeRotation(
+                                  updatedLevels,
+                                  scan.id,
+                                  updates.rotation,
+                                )
+                              }
+                              if (updates.scale !== undefined || updates.yOffset !== undefined) {
+                                // Use updateNodeProperties with proper typing for scan-specific properties
+                                const scanUpdates: Partial<{
+                                  scale: number
+                                  yOffset: number
+                                }> = {}
+                                if (updates.scale !== undefined) scanUpdates.scale = updates.scale
+                                if (updates.yOffset !== undefined)
+                                  scanUpdates.yOffset = updates.yOffset
+
+                                // Type assertion is safe here as we know the node is a ScanNode
+                                updatedLevels = updateNodeProperties(
+                                  updatedLevels,
+                                  scan.id,
+                                  scanUpdates as any,
+                                )
+                              }
+
+                              updateLevels(updatedLevels, pushToUndo)
                             }}
                             opacity={scanOpacity}
                             position={scan.position}

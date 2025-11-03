@@ -29,6 +29,7 @@ import {
   setNodePosition,
   setNodeRotation,
   setNodeSize,
+  updateNodeProperties,
 } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { CustomControls } from './custom-controls'
@@ -1341,11 +1342,21 @@ export default function Editor({ className }: { className?: string }) {
                     if (updates.rotation !== undefined) {
                       updatedLevels = setNodeRotation(updatedLevels, scan.id, updates.rotation)
                     }
-                    if (updates.scale !== undefined) {
-                      updatedLevels = setNodeSize(updatedLevels, scan.id, [
-                        updates.scale,
-                        updates.scale,
-                      ])
+                    if (updates.scale !== undefined || updates.yOffset !== undefined) {
+                      // Use updateNodeProperties with proper typing for scan-specific properties
+                      const scanUpdates: Partial<{
+                        scale: number
+                        yOffset: number
+                      }> = {}
+                      if (updates.scale !== undefined) scanUpdates.scale = updates.scale
+                      if (updates.yOffset !== undefined) scanUpdates.yOffset = updates.yOffset
+
+                      // Type assertion is safe here as we know the node is a ScanNode
+                      updatedLevels = updateNodeProperties(
+                        updatedLevels,
+                        scan.id,
+                        scanUpdates as any,
+                      )
                     }
 
                     updateLevels(updatedLevels, pushToUndo)
