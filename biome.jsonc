@@ -87,21 +87,21 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "apps/**/*.ts",
-      "apps/**/*.tsx",
-      "apps/**/*.js",
-      "apps/**/*.jsx",
-      "apps/**/*.json",
-      "apps/**/*.css",
-      "packages/**/*.ts",
-      "packages/**/*.tsx",
-      "!**/node_modules",
-      "!**/.next",
-      "!**/dist",
-      "!**/build",
-      "!**/components/ui",
-      "!**/public",
-      "!**/.turbo"
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!components/ui/",
+      "!public",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.json",
+      "**/*.css",
+      "**/*.md",
+      "**/*.mdx"
     ]
   },
   "overrides": [
