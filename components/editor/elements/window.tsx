@@ -4,6 +4,7 @@ import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
+import { handleElementClick } from '@/lib/building-elements'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -173,6 +174,9 @@ type WindowProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
+  controlMode: string
+  movingCamera: boolean
+  allWindows: Array<{ id: string }>
 }
 
 const Window = memo(
@@ -184,10 +188,15 @@ const Window = memo(
     wallHeight,
     isActive,
     isFullView = false,
+    controlMode,
+    movingCamera,
+    allWindows,
   }: WindowProps) => {
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
+    const setSelectedElements = useEditor((state) => state.setSelectedElements)
+    const setControlMode = useEditor((state) => state.setControlMode)
     const windowRef = useRef<THREE.Group>(null)
 
     // Check if this window is selected
@@ -249,7 +258,31 @@ const Window = memo(
     ]
 
     return (
-      <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
+      <group
+        onClick={(e) => {
+          if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+            return
+          }
+          e.stopPropagation()
+
+          // Handle element selection
+          const updatedSelection = handleElementClick({
+            selectedElements,
+            segments: allWindows,
+            elementId: windowId,
+            type: 'window',
+            event: e,
+          })
+          setSelectedElements(updatedSelection)
+
+          // Switch to building mode unless we're in select mode
+          if (controlMode !== 'select') {
+            setControlMode('building')
+          }
+        }}
+        position={[worldX, 0, worldZ]}
+        rotation={[0, rotation, 0]}
+      >
         <group ref={windowRef}>
           <Gltf position-y={0.5} scale={[1, 1, 2]} src="/models/Window.glb" />
         </group>
@@ -315,10 +348,20 @@ type WindowsProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
+  controlMode: string
+  movingCamera: boolean
 }
 
 export const Windows = memo(
-  ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: WindowsProps) => {
+  ({
+    floorId,
+    tileSize,
+    wallHeight,
+    isActive,
+    isFullView = false,
+    controlMode,
+    movingCamera,
+  }: WindowsProps) => {
     // Fetch window nodes for this floor from the node tree
     const windowNodes = useWindows(floorId)
 
@@ -328,9 +371,12 @@ export const Windows = memo(
       <>
         {windowNodes.map((windowNode) => (
           <Window
+            allWindows={windowNodes}
+            controlMode={controlMode}
             isActive={isActive}
             isFullView={isFullView}
             key={windowNode.id}
+            movingCamera={movingCamera}
             position={windowNode.position}
             rotation={windowNode.rotation}
             tileSize={tileSize}

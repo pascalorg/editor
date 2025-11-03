@@ -3,6 +3,7 @@
 import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useDoors } from '@/hooks/use-nodes'
+import { handleElementClick } from '@/lib/building-elements'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -175,6 +176,9 @@ type DoorProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
+  controlMode: string
+  movingCamera: boolean
+  allDoors: Array<{ id: string }>
 }
 
 const Door = memo(
@@ -186,10 +190,15 @@ const Door = memo(
     wallHeight,
     isActive,
     isFullView = false,
+    controlMode,
+    movingCamera,
+    allDoors,
   }: DoorProps) => {
     const worldX = position[0] * tileSize
     const worldZ = position[1] * tileSize
     const selectedElements = useEditor((state) => state.selectedElements)
+    const setSelectedElements = useEditor((state) => state.setSelectedElements)
+    const setControlMode = useEditor((state) => state.setControlMode)
     const doorRef = useRef<THREE.Group>(null)
 
     // Check if this door is selected
@@ -252,7 +261,31 @@ const Door = memo(
     ]
 
     return (
-      <group position={[worldX, 0, worldZ]} rotation={[0, rotation, 0]}>
+      <group
+        onClick={(e) => {
+          if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
+            return
+          }
+          e.stopPropagation()
+
+          // Handle element selection
+          const updatedSelection = handleElementClick({
+            selectedElements,
+            segments: allDoors,
+            elementId: doorId,
+            type: 'door',
+            event: e,
+          })
+          setSelectedElements(updatedSelection)
+
+          // Switch to building mode unless we're in select mode
+          if (controlMode !== 'select') {
+            setControlMode('building')
+          }
+        }}
+        position={[worldX, 0, worldZ]}
+        rotation={[0, rotation, 0]}
+      >
         <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
           <Gltf src="/models/Door.glb" />
         </group>
@@ -318,10 +351,20 @@ type DoorsProps = {
   wallHeight: number
   isActive: boolean
   isFullView?: boolean
+  controlMode: string
+  movingCamera: boolean
 }
 
 export const Doors = memo(
-  ({ floorId, tileSize, wallHeight, isActive, isFullView = false }: DoorsProps) => {
+  ({
+    floorId,
+    tileSize,
+    wallHeight,
+    isActive,
+    isFullView = false,
+    controlMode,
+    movingCamera,
+  }: DoorsProps) => {
     // Fetch door nodes for this floor from the node tree
     const doorNodes = useDoors(floorId)
 
@@ -331,10 +374,13 @@ export const Doors = memo(
       <>
         {doorNodes.map((doorNode) => (
           <Door
+            allDoors={doorNodes}
+            controlMode={controlMode}
             doorId={doorNode.id}
             isActive={isActive}
             isFullView={isFullView}
             key={doorNode.id}
+            movingCamera={movingCamera}
             position={doorNode.position}
             rotation={doorNode.rotation}
             tileSize={tileSize}

@@ -131,7 +131,7 @@ export const Columns = forwardRef(
                 castShadow
                 geometry={cylinderGeometry}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -146,8 +146,10 @@ export const Columns = forwardRef(
                   })
                   setSelectedElements(updatedSelection)
 
-                  // Automatically activate building mode when selecting a building element
-                  setControlMode('building')
+                  // Switch to building mode unless we're in select mode
+                  if (controlMode !== 'select') {
+                    setControlMode('building')
+                  }
                 }}
                 position={[worldX, columnHeight / 2, worldZ]}
                 receiveShadow

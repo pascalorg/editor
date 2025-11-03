@@ -442,7 +442,7 @@ export const Walls = forwardRef(
               <mesh
                 castShadow
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -457,8 +457,10 @@ export const Walls = forwardRef(
                   })
                   setSelectedElements(updatedSelection)
 
-                  // Automatically activate building mode when selecting a building element
-                  setControlMode('building')
+                  // Switch to building mode unless we're in select mode
+                  if (controlMode !== 'select') {
+                    setControlMode('building')
+                  }
                 }}
                 onContextMenu={(e) => {
                   if (!isActive) return

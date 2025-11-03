@@ -85,6 +85,7 @@ interface DraggableLevelItemProps {
   selectedElements: any[]
   selectedImageIds: string[]
   selectedScanIds: string[]
+  controlMode: string
   handleElementSelect: (id: string, type: any, event: React.MouseEvent) => void
   handleImageSelect: (id: string, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
@@ -116,6 +117,7 @@ function DraggableLevelItem({
   selectedElements,
   selectedImageIds,
   selectedScanIds,
+  controlMode,
   handleElementSelect,
   handleImageSelect,
   handleScanSelect,
@@ -213,7 +215,10 @@ function DraggableLevelItem({
                           e.stopPropagation()
                           // Groups can be selected for deletion
                           setSelectedElements([{ id: element.id, type: 'group' }])
-                          setControlMode('building')
+                          // Switch to building mode unless we're in select mode
+                          if (controlMode !== 'select') {
+                            setControlMode('building')
+                          }
                         }}
                       >
                         <TreeExpander hasChildren={groupWalls.length > 0} />
@@ -300,7 +305,10 @@ function DraggableLevelItem({
                                               setSelectedElements([
                                                 { id: child.id, type: child.type },
                                               ])
-                                              setControlMode('building')
+                                              // Switch to building mode unless we're in select mode
+                                              if (controlMode !== 'select') {
+                                                setControlMode('building')
+                                              }
                                             }}
                                           >
                                             <TreeExpander />
@@ -396,7 +404,10 @@ function DraggableLevelItem({
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   setSelectedElements([{ id: child.id, type: child.type }])
-                                  setControlMode('building')
+                                  // Switch to building mode unless we're in select mode
+                                  if (controlMode !== 'select') {
+                                    setControlMode('building')
+                                  }
                                 }}
                               >
                                 <TreeExpander />
@@ -592,10 +603,13 @@ interface LayersMenuProps {
 }
 
 export function LayersMenu({ mounted }: LayersMenuProps) {
+  // Retrieve editor state
   const handleUpload = useEditor((state) => state.handleUpload)
   const handleScanUpload = useEditor((state) => state.handleScanUpload)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
+  const controlMode = useEditor((state) => state.controlMode)
+  const setControlMode = useEditor((state) => state.setControlMode)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
   const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
@@ -778,7 +792,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const addLevel = useEditor((state) => state.addLevel)
   const deleteLevel = useEditor((state) => state.deleteLevel)
   const reorderLevels = useEditor((state) => state.reorderLevels)
-  const setControlMode = useEditor((state) => state.setControlMode)
   const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
   const toggleBuildingElementVisibility = useEditor(
     (state) => state.toggleBuildingElementVisibility,
@@ -811,8 +824,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       setSelectedElements(updatedSelection)
     }
 
-    // Automatically activate building mode when selecting a building element
-    setControlMode('building')
+    // Switch to building mode unless we're in select mode
+    if (controlMode !== 'select') {
+      setControlMode('building')
+    }
   }
 
   const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
@@ -1097,6 +1112,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
                   return (
                     <LevelReorderItem
+                      controlMode={controlMode}
                       elements={levelElements}
                       handleElementSelect={handleElementSelect}
                       handleImageSelect={handleImageSelect}

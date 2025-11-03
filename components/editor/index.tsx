@@ -82,7 +82,6 @@ export default function Editor({ className }: { className?: string }) {
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const levels = useEditor((state) => state.levels)
 
-  console.log('levels', levels)
   const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
@@ -733,9 +732,10 @@ export default function Editor({ className }: { className?: string }) {
 
           // Count existing rooms to auto-increment the number
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const existingRooms = currentLevel?.children.filter(
-            (child) => child.type === 'group' && (child as any).groupType === 'room',
-          ) || []
+          const existingRooms =
+            currentLevel?.children.filter(
+              (child) => child.type === 'group' && (child as any).groupType === 'room',
+            ) || []
           const roomNumber = existingRooms.length + 1
 
           // Create a group node containing the walls
@@ -816,9 +816,10 @@ export default function Editor({ className }: { className?: string }) {
 
           // Count existing rooms to auto-increment the number
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const existingRooms = currentLevel?.children.filter(
-            (child) => child.type === 'group' && (child as any).groupType === 'room',
-          ) || []
+          const existingRooms =
+            currentLevel?.children.filter(
+              (child) => child.type === 'group' && (child as any).groupType === 'room',
+            ) || []
           const roomNumber = existingRooms.length + 1
 
           // Create a group node containing the walls
@@ -1602,9 +1603,11 @@ export default function Editor({ className }: { className?: string }) {
 
                     {/* Doors component renders placed doors */}
                     <Doors
+                      controlMode={controlMode}
                       floorId={floor.id}
                       isActive={isActiveFloor}
                       isFullView={viewMode === 'full'}
+                      movingCamera={movingCamera}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />
@@ -1628,9 +1631,11 @@ export default function Editor({ className }: { className?: string }) {
 
                     {/* Windows component renders placed windows */}
                     <Windows
+                      controlMode={controlMode}
                       floorId={floor.id}
                       isActive={isActiveFloor}
                       isFullView={viewMode === 'full'}
+                      movingCamera={movingCamera}
                       tileSize={tileSize}
                       wallHeight={wallHeight}
                     />

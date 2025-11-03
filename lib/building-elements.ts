@@ -288,10 +288,10 @@ export function toggleElementSelection(
     return [...selectedElements, { id: elementId, type }]
   }
 
-  // Single select: replace selection
-  if (isSelected && selectedElements.length === 1) {
-    // Deselect if it's the only selected element
-    return []
+  // Single select: replace selection (keep selection if clicking same item)
+  if (isSelected) {
+    // Keep the current selection if clicking the same item
+    return selectedElements
   }
   return [{ id: elementId, type }]
 }

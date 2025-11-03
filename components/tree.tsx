@@ -253,7 +253,6 @@ export const TreeNodeTrigger = ({
         className,
       )}
       onClick={(e) => {
-        toggleExpanded(nodeId)
         handleSelection(nodeId, e.ctrlKey || e.metaKey)
         onClick?.(e)
       }}

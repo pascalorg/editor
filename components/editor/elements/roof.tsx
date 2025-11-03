@@ -969,7 +969,7 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.frontGable}
                 onClick={(e) => {
-                  if (!isActive || movingCamera || controlMode === 'delete') {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -984,8 +984,10 @@ export const Roofs = forwardRef(
                   })
                   setSelectedElements(updatedSelection)
 
-                  // Automatically activate building mode when selecting a building element
-                  setControlMode('building')
+                  // Switch to building mode unless we're in select mode
+                  if (controlMode !== 'select') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerDown={(e) => {
                   if (!isActive || movingCamera || controlMode === 'delete') {
@@ -1016,12 +1018,7 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.backGable}
                 onClick={(e) => {
-                  if (
-                    !isActive ||
-                    movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
-                  ) {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -1034,7 +1031,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {
@@ -1058,12 +1059,7 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.leftRoof}
                 onClick={(e) => {
-                  if (
-                    !isActive ||
-                    movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
-                  ) {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -1076,7 +1072,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {
@@ -1100,12 +1100,7 @@ export const Roofs = forwardRef(
                 castShadow
                 geometry={geom.rightRoof}
                 onClick={(e) => {
-                  if (
-                    !isActive ||
-                    movingCamera ||
-                    controlMode === 'building' ||
-                    controlMode === 'delete'
-                  ) {
+                  if (!isActive || movingCamera || controlMode === 'delete' || controlMode === 'guide') {
                     return
                   }
                   e.stopPropagation()
@@ -1118,7 +1113,11 @@ export const Roofs = forwardRef(
                     event: e,
                   })
                   setSelectedElements(updatedSelection)
-                  setControlMode('building')
+
+                  // Only switch to building mode if already in building mode
+                  if (controlMode === 'building') {
+                    setControlMode('building')
+                  }
                 }}
                 onPointerEnter={(e) => {
                   if (isActive && controlMode !== 'delete' && !movingCamera) {
