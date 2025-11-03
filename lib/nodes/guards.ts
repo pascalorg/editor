@@ -5,6 +5,7 @@
  * different node types at runtime.
  */
 
+import { canTypeBeChildOf } from './extensions'
 import type {
   AnyNode,
   BaseNode,
@@ -262,6 +263,7 @@ export function validateGridItem(node: BaseNode & Partial<GridItem>): node is Gr
  * Validate that a node can be a child of another node
  */
 export function canBeChildOf(child: BaseNode, parent: BaseNode): boolean {
+  // Check built-in rules first
   if (isLevelNode(parent)) {
     return isLevelChildNode(child)
   }
@@ -278,8 +280,8 @@ export function canBeChildOf(child: BaseNode, parent: BaseNode): boolean {
     return isBuildingElementNode(child) || isGroupNode(child)
   }
 
-  // Other nodes don't have children
-  return false
+  // Fall back to dynamic type extensions for custom/catalog types
+  return canTypeBeChildOf(child.type, parent.type)
 }
 
 /**

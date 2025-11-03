@@ -4,6 +4,7 @@ import './globals.css'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ReactScan } from '@/components/debug/react-scan'
+import { EngineInitializer } from '@/components/engine-initializer'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,7 +29,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <ReactScan />
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <EngineInitializer />
+        {children}
+      </body>
       <Analytics />
       <SpeedInsights />
     </html>
