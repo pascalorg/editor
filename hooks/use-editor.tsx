@@ -1,34 +1,19 @@
 'use client'
 
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type { SetStateAction } from 'react'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import {
-  deleteElements,
-  type SelectedElement,
-  toggleElementVisibility,
-} from '@/lib/building-elements'
-import {
-  associateDoorsAndWindowsWithWalls,
-  componentsToNodeTree,
-} from '@/lib/migration/legacy-to-nodes'
-import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
-import type { NodeIndexes } from '@/lib/nodes/indexes'
-import { buildNodeIndex, buildNodeIndexes } from '@/lib/nodes/indexes'
+import { type SelectedElement } from '@/lib/building-elements'
+import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addReferenceImageToLevel,
   addScanToLevel,
   deleteNode,
-  deleteNodes,
   setNodeOpacity,
-  setNodePosition,
-  setNodeRotation,
   setNodeVisibility,
-  updateNodeProperties,
 } from '@/lib/nodes/operations'
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
@@ -1090,85 +1075,3 @@ const useStore = create<StoreState>()(
 )
 
 export const useEditor = useStore
-
-export const useEditorContext = () => {
-  const store = useStore()
-  return {
-    walls: store.getWallsSet(),
-    setWalls: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getWallsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setWalls(Array.from(newSet))
-    },
-    roofs: store.getRoofsSet(),
-    setRoofs: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getRoofsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setRoofs(Array.from(newSet))
-    },
-    selectedElements: store.selectedElements,
-    setSelectedElements: store.setSelectedElements,
-    selectedImageIds: store.getSelectedImageIdsSet(),
-    setSelectedImageIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedImageIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedImageIds(Array.from(newSet))
-    },
-    selectedScanIds: store.getSelectedScanIdsSet(),
-    setSelectedScanIds: (action: SetStateAction<Set<string>>) => {
-      const currentSet = store.getSelectedScanIdsSet()
-      const newSet = typeof action === 'function' ? action(currentSet) : action
-      store.setSelectedScanIds(Array.from(newSet))
-    },
-    isHelpOpen: store.isHelpOpen,
-    setIsHelpOpen: store.setIsHelpOpen,
-    isJsonInspectorOpen: store.isJsonInspectorOpen,
-    setIsJsonInspectorOpen: store.setIsJsonInspectorOpen,
-    wallsGroupRef: store.wallsGroupRef,
-    setWallsGroupRef: store.setWallsGroupRef,
-    activeTool: store.activeTool,
-    setActiveTool: store.setActiveTool,
-    controlMode: store.controlMode,
-    setControlMode: store.setControlMode,
-    cameraMode: store.cameraMode,
-    setCameraMode: store.setCameraMode,
-    viewerDisplayMode: store.viewerDisplayMode,
-    setViewerDisplayMode: store.setViewerDisplayMode,
-    movingCamera: store.movingCamera,
-    setMovingCamera: store.setMovingCamera,
-    isManipulatingImage: store.isManipulatingImage,
-    setIsManipulatingImage: store.setIsManipulatingImage,
-    isManipulatingScan: store.isManipulatingScan,
-    setIsManipulatingScan: store.setIsManipulatingScan,
-    handleExport: store.handleExport,
-    handleUpload: store.handleUpload,
-    handleScanUpload: store.handleScanUpload,
-    handleDeleteSelectedElements: store.handleDeleteSelectedElements,
-    handleDeleteSelectedImages: store.handleDeleteSelectedImages,
-    handleDeleteSelectedScans: store.handleDeleteSelectedScans,
-    serializeLayout: store.serializeLayout,
-    loadLayout: store.loadLayout,
-    handleSaveLayout: store.handleSaveLayout,
-    handleLoadLayout: store.handleLoadLayout,
-    handleResetToDefault: store.handleResetToDefault,
-    undo: store.undo,
-    redo: store.redo,
-    handleClear: store.handleClear,
-    levels: store.levels,
-    selectedFloorId: store.selectedFloorId,
-    viewMode: store.viewMode,
-    selectFloor: store.selectFloor,
-    addComponent: store.addComponent,
-    addLevel: store.addLevel,
-    deleteLevel: store.deleteLevel,
-    reorderLevels: store.reorderLevels,
-    toggleFloorVisibility: store.toggleFloorVisibility,
-    toggleBuildingElementVisibility: store.toggleBuildingElementVisibility,
-    toggleImageVisibility: store.toggleImageVisibility,
-    toggleScanVisibility: store.toggleScanVisibility,
-    setFloorOpacity: store.setFloorOpacity,
-    setBuildingElementOpacity: store.setBuildingElementOpacity,
-    setImageOpacity: store.setImageOpacity,
-    setScanOpacity: store.setScanOpacity,
-  }
-}
