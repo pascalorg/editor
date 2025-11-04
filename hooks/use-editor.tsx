@@ -402,7 +402,7 @@ const useStore = create<StoreState>()(
             const dx = x2 - x1
             const dy = y2 - y1
             const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(dy, dx)
+            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
             // Create new WallNode
             return {
@@ -486,7 +486,7 @@ const useStore = create<StoreState>()(
             const dx = x2 - x1
             const dy = y2 - y1
             const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(dy, dx)
+            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
             // Create new RoofNode
             return {

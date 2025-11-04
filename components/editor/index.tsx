@@ -717,7 +717,7 @@ export default function Editor({ className }: { className?: string }) {
             const dx = wx2 - wx1
             const dy = wy2 - wy1
             const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(dy, dx)
+            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
             return {
               id: wallKey,
@@ -801,7 +801,7 @@ export default function Editor({ className }: { className?: string }) {
             const dx = wx2 - wx1
             const dy = wy2 - wy1
             const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(dy, dx)
+            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
             return {
               id: wallKey,
@@ -1548,24 +1548,26 @@ export default function Editor({ className }: { className?: string }) {
                     )}
 
                     {/* Walls component fetches its own data based on floorId */}
-                    <Walls
-                      controlMode={controlMode}
-                      floorId={floor.id}
-                      hoveredWallIndex={hoveredWallIndex}
-                      isActive={isActiveFloor}
-                      isCameraEnabled={isCameraEnabled}
-                      isFullView={viewMode === 'full'}
-                      key={`${floor.id}-${isActiveFloor}`}
-                      movingCamera={movingCamera}
-                      onDeleteWalls={handleDeleteSelectedElements}
-                      onWallHover={setHoveredWallIndex}
-                      onWallRightClick={handleWallRightClick}
-                      selectedElements={selectedElements}
-                      setControlMode={setControlMode}
-                      setSelectedElements={setSelectedElements}
-                      tileSize={tileSize}
-                      wallHeight={wallHeight}
-                    />
+                    <group visible={false}>
+                      <Walls
+                        controlMode={controlMode}
+                        floorId={floor.id}
+                        hoveredWallIndex={hoveredWallIndex}
+                        isActive={isActiveFloor}
+                        isCameraEnabled={isCameraEnabled}
+                        isFullView={viewMode === 'full'}
+                        key={`${floor.id}-${isActiveFloor}`}
+                        movingCamera={movingCamera}
+                        onDeleteWalls={handleDeleteSelectedElements}
+                        onWallHover={setHoveredWallIndex}
+                        onWallRightClick={handleWallRightClick}
+                        selectedElements={selectedElements}
+                        setControlMode={setControlMode}
+                        setSelectedElements={setSelectedElements}
+                        tileSize={tileSize}
+                        wallHeight={wallHeight}
+                      />
+                    </group>
 
                     {/* Roofs component fetches its own data based on floorId */}
                     <Roofs
