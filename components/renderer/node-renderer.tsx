@@ -34,6 +34,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
             </mesh> */}
           </>
         )}
+        {/* TODO: Add other node type renderers here */}
       </group>
       {node.children.map((childNode) => (
         <NodeRenderer key={childNode.id} node={childNode} />
