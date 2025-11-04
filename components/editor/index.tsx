@@ -1,5 +1,14 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { Walls } from '@/components/editor/elements/wall'
+import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -13,15 +22,6 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
-import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
-import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
 import {
@@ -32,6 +32,7 @@ import {
   updateNodeProperties,
 } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
+import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
@@ -39,7 +40,7 @@ import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { ProximityGrid } from './proximity-grid'
 
-const TILE_SIZE = 0.5 // 50cm grid spacing
+export const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 export const GRID_SIZE = 30 // 30m x 30m
@@ -1512,6 +1513,7 @@ export default function Editor({ className }: { className?: string }) {
                     )}
 
                   <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                    <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
                     {isActiveFloor && (
                       <GridTiles

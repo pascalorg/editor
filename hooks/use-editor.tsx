@@ -1,10 +1,5 @@
 'use client'
 
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
@@ -14,6 +9,11 @@ import {
   setNodeOpacity,
   setNodeVisibility,
 } from '@/lib/nodes/operations'
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
@@ -255,6 +255,7 @@ type StoreState = {
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   isManipulatingScan: boolean // Flag to prevent undo stack during scan manipulation
   handleClear: () => void
+  cursorPosition: { x: number; y: number }
 } & {
   // Node-based operations
   updateLevels: (levels: LevelNode[], pushToUndo?: boolean) => void
@@ -310,6 +311,7 @@ type StoreState = {
   ) => void
   setImageOpacity: (imageId: string, opacity: number) => void
   setScanOpacity: (scanId: string, opacity: number) => void
+  setCursorPosition: (position: { x: number; y: number }) => void
 }
 
 const useStore = create<StoreState>()(
@@ -1005,6 +1007,8 @@ const useStore = create<StoreState>()(
             nodeIndex: buildNodeIndex(updatedLevels),
           }
         }),
+      cursorPosition: { x: 0, y: 0 },
+      setCursorPosition: (position) => set({ cursorPosition: position }),
     }),
     {
       name: 'editor-storage',

@@ -14,7 +14,17 @@
  */
 export interface BaseNode {
   id: string
-  type: string
+  type:
+    | 'level'
+    | 'wall'
+    | 'door'
+    | 'window'
+    | 'column'
+    | 'roof'
+    | 'roof-segment'
+    | 'reference-image'
+    | 'scan'
+    | 'group'
   name: string
   visible?: boolean
   opacity?: number // 0-100, defaults to 100
