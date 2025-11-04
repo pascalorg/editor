@@ -284,9 +284,16 @@ export function WallRenderer({ node }: WallRendererProps) {
 
   // TODO: handle subtraction windows / doors here
 
+  // Determine opacity based on selected floor
+  // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
+  // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
+  const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
+  const opacity = isActiveFloor ? 1 : 0.3
+  const transparent = !isActiveFloor
+
   return (
     <mesh geometry={wallGeometry}>
-      <meshStandardMaterial color="beige" opacity={0.3} transparent={levelId !== selectedFloorId} />
+      <meshStandardMaterial color="beige" opacity={opacity} transparent={transparent} />
     </mesh>
   )
 }

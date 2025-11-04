@@ -14,6 +14,7 @@ import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
 import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
+import { NodeRenderer } from '../renderer/node-renderer'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
@@ -326,8 +327,10 @@ export default function Viewer({ className }: { className?: string }) {
                   {/* 3D Objects - only show when viewerDisplayMode is 'objects' */}
                   {viewerDisplayMode === 'objects' && (
                     <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                      <NodeRenderer node={floor} />
+                      {/* Render non-wall elements using legacy components until NodeRenderer supports them */}
                       <BuildingElementsRenderer
-                        components={components}
+                        components={components.filter((c) => c.type !== 'wall')}
                         floorId={floor.id}
                         isActiveFloor={isActiveFloor}
                         movingCamera={movingCamera}

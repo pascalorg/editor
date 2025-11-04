@@ -3,15 +3,14 @@
 import { Columns } from '@/components/editor/elements/column'
 import { Doors } from '@/components/editor/elements/door'
 import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
 import { Windows } from '@/components/editor/elements/window'
 import type { Component as EditorComponent, ViewMode } from '@/hooks/use-editor'
 import type { SelectedElement } from '@/lib/building-elements'
 
 // Define a map of component types to their corresponding React components.
 // This makes it easy to add new building elements in the future.
+// Note: Walls are now rendered via NodeRenderer, so they're excluded from this map.
 const elementComponentMap = {
-  wall: Walls,
   roof: Roofs,
   door: Doors,
   window: Windows,
@@ -75,31 +74,8 @@ export function BuildingElementsRenderer({
 
         // Each component type might have slightly different props.
         // The switch statement handles these variations.
+        // Note: Walls are handled by NodeRenderer and should not be passed to this component.
         switch (component.type) {
-          case 'wall':
-            return (
-              <Walls
-                {...commonProps}
-                controlMode={controlMode}
-                hoveredWallIndex={null}
-                isActive={isActiveFloor}
-                isCameraEnabled={false}
-                isFullView={viewMode === 'full'}
-                key={component.id}
-                movingCamera={movingCamera}
-                onDeleteWalls={() => {
-                  /* No-op in viewer mode */
-                }}
-                onWallHover={() => {
-                  /* No-op in viewer mode */
-                }}
-                onWallRightClick={undefined}
-                selectedElements={viewerSelectedElements}
-                setControlMode={noopSetControlMode}
-                setSelectedElements={noopSetSelectedElements}
-                wallHeight={wallHeight}
-              />
-            )
           case 'roof':
             return (
               <Roofs

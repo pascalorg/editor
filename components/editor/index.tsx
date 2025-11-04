@@ -19,7 +19,6 @@ import { ColumnShadowPreview, Columns } from '@/components/editor/elements/colum
 import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { Roofs } from '@/components/editor/elements/roof'
-import { Walls } from '@/components/editor/elements/wall'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
@@ -1556,28 +1555,6 @@ export default function Editor({ className }: { className?: string }) {
                         wallStartPoint={wallStartPoint}
                       />
                     )}
-
-                    {/* Walls component fetches its own data based on floorId */}
-                    <group visible={false}>
-                      <Walls
-                        controlMode={controlMode}
-                        floorId={floor.id}
-                        hoveredWallIndex={hoveredWallIndex}
-                        isActive={isActiveFloor}
-                        isCameraEnabled={isCameraEnabled}
-                        isFullView={viewMode === 'full'}
-                        key={`${floor.id}-${isActiveFloor}`}
-                        movingCamera={movingCamera}
-                        onDeleteWalls={handleDeleteSelectedElements}
-                        onWallHover={setHoveredWallIndex}
-                        onWallRightClick={handleWallRightClick}
-                        selectedElements={selectedElements}
-                        setControlMode={setControlMode}
-                        setSelectedElements={setSelectedElements}
-                        tileSize={tileSize}
-                        wallHeight={wallHeight}
-                      />
-                    </group>
 
                     {/* Roofs component fetches its own data based on floorId */}
                     <Roofs
