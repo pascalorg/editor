@@ -35,7 +35,7 @@
         "useConsistentArrayType": "off",
         "noNestedTernary": "off",
         "useBlockStatements": "off",
-        "noNonNullAssertion": "info",
+        "noNonNullAssertion": "off",
         "useConst": "off",
         "noMagicNumbers": "off"
       },
@@ -46,7 +46,7 @@
       "suspicious": {
         "noImplicitAnyLet": "off",
         "noGlobalIsNan": "off",
-        "noExplicitAny": "info",
+        "noExplicitAny": "off",
         "useAwait": "off",
         "noConsole": "off",
         "noArrayIndexKey": "off",
