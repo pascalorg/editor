@@ -741,6 +741,13 @@ export default function Editor({ className }: { className?: string }) {
 
           // Create a group node containing the walls
           const groupId = `room_${Date.now()}`
+
+          // Set parent on all wall nodes
+          const wallNodesWithParent = wallNodes.map((wall) => ({
+            ...wall,
+            parent: groupId,
+          }))
+
           const groupNode = {
             id: groupId,
             type: 'group' as const,
@@ -748,7 +755,7 @@ export default function Editor({ className }: { className?: string }) {
             groupType: 'room' as const,
             visible: true,
             opacity: 100,
-            children: wallNodes,
+            children: wallNodesWithParent,
             parent: selectedFloorId,
           }
 
@@ -825,6 +832,13 @@ export default function Editor({ className }: { className?: string }) {
 
           // Create a group node containing the walls
           const groupId = `room_${Date.now()}`
+
+          // Set parent on all wall nodes
+          const wallNodesWithParent = wallNodes.map((wall) => ({
+            ...wall,
+            parent: groupId,
+          }))
+
           const groupNode = {
             id: groupId,
             type: 'group' as const,
@@ -832,7 +846,7 @@ export default function Editor({ className }: { className?: string }) {
             groupType: 'room' as const,
             visible: true,
             opacity: 100,
-            children: wallNodes,
+            children: wallNodesWithParent,
             parent: selectedFloorId,
           }
 

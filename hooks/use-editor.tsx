@@ -1013,25 +1013,33 @@ const useStore = create<StoreState>()(
       getLevelId: (node) => {
         const state = get()
 
+        // Create a Set of level IDs for fast lookup
+        const levelIds = new Set(state.levels.map((l) => l.id))
+
         // If node is already a level, return its id
-        if (state.levels.find((l) => l.id === node.id)) {
+        if (levelIds.has(node.id)) {
           return node.id
         }
 
-        // Use nodeIndex to traverse up the parent chain
+        // Traverse up the parent chain recursively
         let currentNode = node
         while (currentNode.parent) {
           const parentNode = state.nodeIndex.get(currentNode.parent)
-          if (!parentNode) break
+          if (!parentNode) {
+            // Parent not found in index, stop traversal
+            break
+          }
 
-          // Check if parent is a level
-          if (state.levels.find((l) => l.id === parentNode.id)) {
+          // Check if this parent is a level
+          if (levelIds.has(parentNode.id)) {
             return parentNode.id
           }
 
+          // Continue up the chain
           currentNode = parentNode
         }
 
+        // No level found in parent chain
         return null
       },
     }),

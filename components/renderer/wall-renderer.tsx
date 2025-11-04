@@ -163,7 +163,11 @@ interface WallRendererProps {
 
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
-  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
+
+  const levelId = useMemo(() => {
+    const id = getLevelId(node)
+    return id
+  }, [getLevelId, node])
   const allWalls = useWalls(levelId || '')
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
@@ -277,6 +281,8 @@ export function WallRenderer({ node }: WallRendererProps) {
   }, [node, allWalls])
 
   if (!wallGeometry) return null
+
+  // TODO: handle subtraction windows / doors here
 
   return (
     <mesh geometry={wallGeometry}>
