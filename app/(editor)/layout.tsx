@@ -1,6 +1,6 @@
 import { AppSidebar } from '@/components/app-sidebar'
-import { SidebarProvider } from '@/components/ui/sidebar'
 import { NodesDebugger } from '@/components/debug/nodes-debugger'
+import { SidebarProvider } from '@/components/ui/sidebar'
 
 export default function EditorLayout({
   children,

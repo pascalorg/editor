@@ -30,7 +30,7 @@ import {
   setNodeSize,
   updateNodeProperties,
 } from '@/lib/nodes/operations'
-import { cn } from '@/lib/utils'
+import { cn, createId } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
@@ -91,8 +91,8 @@ export default function Editor({ className }: { className?: string }) {
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
   // Get reference images and scans from node tree for the current level
-  const nodeImages = useReferenceImages(selectedFloorId || 'level_0')
-  const nodeScans = useScans(selectedFloorId || 'level_0')
+  const nodeImages = useReferenceImages(selectedFloorId || levels[0].id)
+  const nodeScans = useScans(selectedFloorId || levels[0].id)
 
   // Map node data to the format expected by rendering components
   const images = nodeImages.map((node) => ({
@@ -150,9 +150,9 @@ export default function Editor({ className }: { className?: string }) {
   const walls = getWallsSet()
 
   // Get wall/door/window data for the currently selected floor (for placement validation)
-  const currentFloorWallNodes = useWalls(selectedFloorId || 'level_0')
-  const currentFloorDoorNodes = useDoors(selectedFloorId || 'level_0')
-  const currentFloorWindowNodes = useWindows(selectedFloorId || 'level_0')
+  const currentFloorWallNodes = useWalls(selectedFloorId || levels[0].id)
+  const currentFloorDoorNodes = useDoors(selectedFloorId || levels[0].id)
+  const currentFloorWindowNodes = useWindows(selectedFloorId || levels[0].id)
 
   const currentFloorWallSegments = useMemo(
     () => convertWallNodesToSegments(currentFloorWallNodes),
@@ -718,7 +718,7 @@ export default function Editor({ className }: { className?: string }) {
             const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
             return {
-              id: wallKey,
+              id: createId('wall'),
               type: 'wall' as const,
               name: `Wall ${wallKey}`,
               position: [wx1, wy1] as [number, number],
@@ -739,8 +739,7 @@ export default function Editor({ className }: { className?: string }) {
           const roomNumber = existingRooms.length + 1
 
           // Create a group node containing the walls
-          const groupId = `room_${Date.now()}`
-
+          const groupId = createId('room')
           // Set parent on all wall nodes
           const wallNodesWithParent = wallNodes.map((wall) => ({
             ...wall,

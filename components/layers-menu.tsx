@@ -41,7 +41,7 @@ import {
   toggleElementSelection,
 } from '@/lib/building-elements'
 import type { LevelNode } from '@/lib/nodes/types'
-import { cn } from '@/lib/utils'
+import { cn, createId } from '@/lib/utils'
 
 const buildingElementConfig: Record<
   'wall' | 'roof' | 'column' | 'group',
@@ -97,7 +97,7 @@ interface DraggableLevelItemProps {
   setBuildingElementOpacity: (id: string, type: 'wall' | 'roof' | 'column', opacity: number) => void
   setImageOpacity: (id: string, opacity: number) => void
   setScanOpacity: (id: string, opacity: number) => void
-  handleUpload: (file: File, level: number) => Promise<void>
+  handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, level: number) => Promise<void>
   setSelectedElements: (elements: any[]) => void
   setControlMode: (mode: any) => void
@@ -458,7 +458,7 @@ function DraggableLevelItem({
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
                       if (file) {
-                        handleUpload(file, level.level || 0).catch((error: unknown) => {
+                        handleUpload(file, level.id).catch((error: unknown) => {
                           console.error('Failed to upload image:', error)
                         })
                       }
@@ -618,7 +618,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const levels = useEditor((state) => state.levels)
 
   // Track expanded state
-  const [expandedIds, setExpandedIds] = useState<string[]>(['level_0'])
+  const [expandedIds, setExpandedIds] = useState<string[]>([levels[0].id])
 
   // Extract data from node tree for hierarchy display
   const components: any[] = []
@@ -938,7 +938,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     }
 
     const newLevel = {
-      id: `level_${nextNumber}`,
+      id: createId('level'),
       type: 'level' as const,
       name: `level ${nextNumber}`,
       level: nextNumber,

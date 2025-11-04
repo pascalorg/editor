@@ -7,6 +7,7 @@ import type { WallSegment } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useDoors } from '@/hooks/use-nodes'
 import { handleElementClick } from '@/lib/building-elements'
+import { createId } from '@/lib/utils'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -106,9 +107,8 @@ export const DoorPlacementPreview = memo(
       }
 
       // Create door node
-      const doorId = `door-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
       const doorNode = {
-        id: doorId,
+        id: createId('door'),
         type: 'door' as const,
         name: 'Door',
         position: placement.gridPosition,

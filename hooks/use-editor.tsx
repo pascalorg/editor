@@ -16,6 +16,7 @@ import {
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
+import { createId } from '@/lib/utils'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
 type AssetMap = Record<string, string>
@@ -427,7 +428,7 @@ type StoreState = {
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
   handleExport: () => void
-  handleUpload: (file: File, level: number) => Promise<void>
+  handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, level: number) => Promise<void>
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
@@ -461,7 +462,7 @@ const useStore = create<StoreState>()(
       // Node-based state initialization with default base level
       levels: [
         {
-          id: 'level_0',
+          id: createId('level'),
           type: 'level',
           name: 'base level',
           level: 0,
@@ -547,7 +548,7 @@ const useStore = create<StoreState>()(
 
             // Create new WallNode
             return {
-              id: wallKey, // Use wall key as ID for consistency
+              id: createId('wall'),
               type: 'wall',
               name: `Wall ${wallKey}`,
               position: [x1, y1] as [number, number],
@@ -631,7 +632,7 @@ const useStore = create<StoreState>()(
 
             // Create new RoofNode
             return {
-              id: roofKey,
+              id: createId('roof'),
               type: 'roof',
               name: `Roof ${roofKey}`,
               position: [x1, y1] as [number, number],
@@ -668,7 +669,7 @@ const useStore = create<StoreState>()(
           }
         }),
 
-      selectedFloorId: 'level_0',
+      selectedFloorId: null,
       viewMode: 'level', // Start in level mode with base level selected
       viewerDisplayMode: 'objects', // Start with 3D objects visible in viewer
       selectedElements: [],
@@ -812,7 +813,7 @@ const useStore = create<StoreState>()(
           { binary: true },
         )
       },
-      handleUpload: async (file: File, level: number) => {
+      handleUpload: async (file: File, levelId: string) => {
         // Convert file to data URL (persists across reloads)
         const reader = new FileReader()
         const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -822,14 +823,9 @@ const useStore = create<StoreState>()(
         })
 
         set((state) => {
-          // Find the level to add the image to
-          const levelId = `level_${level}`
-
-          const imageId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-
           // Create ReferenceImageNode
           const imageNode = {
-            id: imageId,
+            id: createId('image'),
             type: 'reference-image' as const,
             name: file.name,
             url: dataUrl, // Use data URL instead of blob URL
@@ -1013,7 +1009,7 @@ const useStore = create<StoreState>()(
       handleResetToDefault: () => {
         const defaultLevels: LevelNode[] = [
           {
-            id: 'level_0',
+            id: createId('level'),
             type: 'level',
             name: 'base level',
             level: 0,
@@ -1025,7 +1021,7 @@ const useStore = create<StoreState>()(
           levels: defaultLevels,
           nodeIndex: buildNodeIndex(defaultLevels),
           currentLevel: 0,
-          selectedFloorId: 'level_0',
+          selectedFloorId: defaultLevels[0].id,
           viewMode: 'level',
           selectedElements: [],
           selectedImageIds: [],
@@ -1244,7 +1240,7 @@ const useStore = create<StoreState>()(
           if (!state.levels || state.levels.length === 0) {
             state.levels = [
               {
-                id: 'level_0',
+                id: createId('level'),
                 type: 'level',
                 name: 'base level',
                 level: 0,
@@ -1263,7 +1259,7 @@ const useStore = create<StoreState>()(
 
           // Preselect base level if no level is selected
           if (!state.selectedFloorId) {
-            state.selectedFloorId = 'level_0'
+            state.selectedFloorId = state.levels[0].id
             state.currentLevel = 0
             state.viewMode = 'level'
           }
