@@ -17,17 +17,157 @@ import {
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 
-// IndexedDB storage adapter for Zustand persist middleware
+// Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
+type AssetMap = Record<string, string>
+type PersistEnvelope = { state: any; version: number }
+
+/**
+ * Extracts heavy asset URLs (from reference-image and scan nodes) into a separate map,
+ * replacing them with placeholder strings in the levels structure.
+ */
+function extractAssetsFromLevels(levels: LevelNode[]): {
+  levels: LevelNode[]
+  assets: AssetMap
+} {
+  const assets: AssetMap = {}
+
+  const walk = (nodes: BaseNode[]): BaseNode[] =>
+    nodes.map((node) => {
+      const n: any = { ...node }
+      // Extract URL from reference-image and scan nodes
+      if (
+        (n.type === 'reference-image' || n.type === 'scan') &&
+        typeof n.url === 'string' &&
+        n.url.length > 0
+      ) {
+        assets[n.id] = n.url
+        n.url = `asset:${n.id}` // Placeholder; rehydration will swap back
+      }
+      // Recursively process children
+      if (Array.isArray(n.children) && n.children.length > 0) {
+        n.children = walk(n.children as BaseNode[])
+      }
+      return n
+    })
+
+  return { levels: walk(levels) as LevelNode[], assets }
+}
+
+/**
+ * Injects asset URLs back into levels structure from the assets map.
+ */
+function injectAssetsIntoLevels(levels: LevelNode[], assets: AssetMap): LevelNode[] {
+  const walk = (nodes: BaseNode[]): BaseNode[] =>
+    nodes.map((node) => {
+      const n: any = { ...node }
+      // Restore URL from assets map if placeholder is present
+      if (typeof n.url === 'string' && n.url.startsWith('asset:')) {
+        const id = n.url.slice('asset:'.length)
+        n.url = assets[id] ?? n.url // Fallback to placeholder if asset missing
+      }
+      // Recursively process children
+      if (Array.isArray(n.children) && n.children.length > 0) {
+        n.children = walk(n.children as BaseNode[])
+      }
+      return n
+    })
+
+  return walk(levels) as LevelNode[]
+}
+
+// IndexedDB storage adapter for Zustand persist middleware (split keys)
 const indexedDBStorage: StateStorage = {
   getItem: async (name: string) => {
-    const value = await idbGet<string>(name)
-    return value ?? null
+    // Back-compat: migrate single key to split keys (one-time migration)
+    const legacy = await idbGet<string>(name)
+    if (legacy) {
+      try {
+        const env = JSON.parse(legacy) as PersistEnvelope
+        if (env.state?.levels && Array.isArray(env.state.levels)) {
+          const { levels, assets } = extractAssetsFromLevels(env.state.levels as LevelNode[])
+          const structure = JSON.stringify({
+            state: { ...env.state, levels },
+            version: env.version,
+          })
+          const assetsJson = JSON.stringify({ assets })
+          await idbSet(`${name}:structure`, structure)
+          await idbSet(`${name}:assets`, assetsJson)
+          await idbDel(name) // Remove old single-key entry
+          // Return merged state for immediate use
+          const merged = {
+            ...env,
+            state: {
+              ...env.state,
+              levels: injectAssetsIntoLevels(levels, assets),
+            },
+          }
+          return JSON.stringify(merged)
+        }
+      } catch (error) {
+        console.warn('[Storage] Migration failed, using legacy format:', error)
+        // If migration fails, return as-is
+        return legacy
+      }
+    }
+
+    // Read split keys
+    const structureRaw = await idbGet<string>(`${name}:structure`)
+    if (!structureRaw) return null
+
+    const assetsRaw = (await idbGet<string>(`${name}:assets`)) ?? '{"assets":{}}'
+    try {
+      const env = JSON.parse(structureRaw) as PersistEnvelope
+      const { assets } = JSON.parse(assetsRaw) as { assets: AssetMap }
+      // Merge assets back into levels
+      env.state = {
+        ...env.state,
+        levels: injectAssetsIntoLevels(env.state.levels as LevelNode[], assets),
+      }
+      return JSON.stringify(env)
+    } catch (error) {
+      console.error('[Storage] Failed to parse split keys:', error)
+      return null
+    }
   },
+
   setItem: async (name: string, value: string) => {
-    await idbSet(name, value)
+    try {
+      const env = JSON.parse(value) as PersistEnvelope
+      const hasValidLevels = env.state?.levels && Array.isArray(env.state.levels)
+      if (!hasValidLevels) {
+        // Fallback: store unmodified if structure is invalid
+        await idbSet(name, value)
+        return
+      }
+
+      // Extract assets from levels
+      const { levels, assets } = extractAssetsFromLevels(env.state.levels as LevelNode[])
+
+      // Save structure (lightweight, updates frequently)
+      const structureToSave = JSON.stringify({
+        state: { ...env.state, levels },
+        version: env.version,
+      })
+      await idbSet(`${name}:structure`, structureToSave)
+
+      // Save assets (heavy, only updates when assets change)
+      const nextAssets = JSON.stringify({ assets })
+      const prevAssets = await idbGet<string>(`${name}:assets`)
+      if (prevAssets !== nextAssets) {
+        await idbSet(`${name}:assets`, nextAssets)
+      }
+    } catch (error) {
+      console.error('[Storage] Failed to save split keys, falling back:', error)
+      // Fallback: store unmodified
+      await idbSet(name, value)
+    }
   },
+
   removeItem: async (name: string) => {
+    // Clean up both keys
     await idbDel(name)
+    await idbDel(`${name}:structure`)
+    await idbDel(`${name}:assets`)
   },
 }
 
