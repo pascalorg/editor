@@ -429,7 +429,7 @@ type StoreState = {
   getSelectedScanIdsSet: () => Set<string>
   handleExport: () => void
   handleUpload: (file: File, levelId: string) => Promise<void>
-  handleScanUpload: (file: File, level: number) => Promise<void>
+  handleScanUpload: (file: File, levelId: string) => Promise<void>
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
@@ -851,7 +851,7 @@ const useStore = create<StoreState>()(
           }
         })
       },
-      handleScanUpload: async (file: File, level: number) => {
+      handleScanUpload: async (file: File, levelId: string) => {
         // Convert file to data URL (persists across reloads)
         const reader = new FileReader()
         const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -862,7 +862,6 @@ const useStore = create<StoreState>()(
 
         set((state) => {
           // Find the level to add the scan to
-          const levelId = `level_${level}`
 
           const scanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 

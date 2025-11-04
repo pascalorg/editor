@@ -1,13 +1,6 @@
 import { CylinderIcon } from '@phosphor-icons/react'
 import { DoorOpen, RectangleVertical, Square, Triangle } from 'lucide-react'
-import type {
-  ColumnComponentData,
-  Component,
-  RoofComponentData,
-  RoofSegment,
-  WallComponentData,
-  WallSegment,
-} from '@/hooks/use-editor'
+import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
 
 /**
  * Building Element Abstraction Layer

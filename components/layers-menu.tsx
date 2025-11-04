@@ -98,7 +98,7 @@ interface DraggableLevelItemProps {
   setImageOpacity: (id: string, opacity: number) => void
   setScanOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, levelId: string) => Promise<void>
-  handleScanUpload: (file: File, level: number) => Promise<void>
+  handleScanUpload: (file: File, levelId: string) => Promise<void>
   setSelectedElements: (elements: any[]) => void
   setControlMode: (mode: any) => void
   controls: ReturnType<typeof useDragControls>
@@ -530,7 +530,7 @@ function DraggableLevelItem({
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
                       if (file) {
-                        handleScanUpload(file, level.level || 0).catch((error: unknown) => {
+                        handleScanUpload(file, level.id).catch((error: unknown) => {
                           console.error('Failed to upload scan:', error)
                         })
                       }
