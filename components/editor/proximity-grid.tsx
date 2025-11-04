@@ -1,10 +1,10 @@
 'use client'
 
-import { type Component, useEditor } from '@/hooks/use-editor'
 import { shaderMaterial } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, DoubleSide, Vector2 } from 'three'
+import { type Component, useEditor } from '@/hooks/use-editor'
 
 // Create empty arrays for uniforms with proper initialization
 const createEmptyVector2Array = (size: number): Vector2[] => {
