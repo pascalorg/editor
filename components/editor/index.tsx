@@ -32,7 +32,6 @@ import {
 } from '@/lib/nodes/operations'
 import { cn, createId } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
-import { WallPlacementPreview } from '../renderer/wall-renderer'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
