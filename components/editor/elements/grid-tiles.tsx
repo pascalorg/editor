@@ -64,7 +64,7 @@ export const GridTiles = memo(
     const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const lastClickTimeRef = useRef<number>(0)
 
-    // Get all wall nodes for the active floor
+    // Get all wall nodes for the active floor (needed for room and custom-room modes)
     const wallNodes = useWalls(selectedFloorId || '')
     const allWallSegments: WallSegment[] = useMemo(
       () =>
@@ -245,55 +245,6 @@ export const GridTiles = memo(
               <DownArrow />
             </group>
           )}
-
-        {/* Start point indicator for wall mode */}
-        {wallStartPoint && activeTool === 'wall' && (
-          <mesh position={[wallStartPoint[0] * tileSize, 0.01, wallStartPoint[1] * tileSize]}>
-            <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
-          </mesh>
-        )}
-
-        {/* Preview line when placing wall */}
-        {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
-          <>
-            {/* Occluded version - dimmer */}
-            <Line
-              color="#336633"
-              dashed={false}
-              depthTest={false}
-              lineWidth={2}
-              opacity={0.3}
-              points={[
-                [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
-                [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize],
-              ]}
-              transparent
-            />
-            {/* Visible version - brighter */}
-            <Line
-              color="#44ff44"
-              dashed={false}
-              depthTest={true}
-              lineWidth={3}
-              points={[
-                [wallStartPoint[0] * tileSize, 0.1, wallStartPoint[1] * tileSize],
-                [wallPreviewEnd[0] * tileSize, 0.1, wallPreviewEnd[1] * tileSize],
-              ]}
-            />
-          </>
-        )}
-
-        {/* Wall shadow preview */}
-        {wallStartPoint && wallPreviewEnd && activeTool === 'wall' && (
-          <WallShadowPreview
-            allWallSegments={allWallSegments}
-            end={wallPreviewEnd}
-            start={wallStartPoint}
-            tileSize={tileSize}
-            wallHeight={wallHeight}
-          />
-        )}
 
         {/* Room mode preview - rectangle with 4 walls */}
         {roomStartPoint && roomPreviewEnd && activeTool === 'room' && (

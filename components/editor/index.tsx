@@ -32,6 +32,7 @@ import {
 } from '@/lib/nodes/operations'
 import { cn, createId } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
+import { WallPlacementPreview } from '../renderer/wall-renderer'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
@@ -61,6 +62,11 @@ export default function Editor({ className }: { className?: string }) {
   const getRoofsSet = useEditor((state) => state.getRoofsSet)
   const setWalls = useEditor((state) => state.setWalls)
   const setRoofs = useEditor((state) => state.setRoofs)
+  // Preview wall methods
+  const startWallPreview = useEditor((state) => state.startWallPreview)
+  const updateWallPreview = useEditor((state) => state.updateWallPreview)
+  const commitWallPreview = useEditor((state) => state.commitWallPreview)
+  const cancelWallPreview = useEditor((state) => state.cancelWallPreview)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
@@ -234,6 +240,8 @@ export default function Editor({ className }: { className?: string }) {
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setPointerPosition(null)
+    // Cancel any active wall preview
+    cancelWallPreview()
     // Clear all selections (building elements, images, and scans)
     setSelectedElements([])
     setSelectedImageIds([])
@@ -339,6 +347,7 @@ export default function Editor({ className }: { className?: string }) {
     handleDeleteSelectedElements,
     handleDeleteSelectedImages,
     handleDeleteSelectedScans,
+    toggleLevelMode,
   ])
 
   // Use constants instead of Leva controls
@@ -599,35 +608,14 @@ export default function Editor({ className }: { className?: string }) {
 
     // Building mode - check active tool (only allow building in building mode)
     if (controlMode === 'building' && activeTool === 'wall') {
-      // Wall mode: two-click line drawing
+      // Wall mode: two-click line drawing with node-based preview
       if (wallStartPoint === null) {
-        // First click: set start point
+        // First click: set start point and create preview node
         setWallStartPoint([x, y])
+        startWallPreview([x, y])
       } else {
-        // Second click: create wall using wallPreviewEnd (snapped position)
-        if (wallPreviewEnd) {
-          const [x1, y1] = wallStartPoint
-          const [x2, y2] = wallPreviewEnd
-          // Ensure wall is at least MIN_WALL_LENGTH
-          const dx = Math.abs(x2 - x1) * TILE_SIZE
-          const dy = Math.abs(y2 - y1) * TILE_SIZE
-          const length = Math.sqrt(dx * dx + dy * dy)
-
-          const absDxGrid = Math.abs(x2 - x1)
-          const absDyGrid = Math.abs(y2 - y1)
-          const isHorizontal = y2 === y1
-          const isVertical = x2 === x1
-          const isDiagonal = absDxGrid === absDyGrid // 45° diagonal
-
-          if (length >= MIN_WALL_LENGTH && (isHorizontal || isVertical || isDiagonal)) {
-            // Wall is valid (horizontal, vertical, or 45° diagonal, meets min length)
-            const wallKey = `${x1},${y1}-${x2},${y2}`
-            const currentWalls = Array.from(walls)
-            if (!currentWalls.includes(wallKey)) {
-              setWalls([...currentWalls, wallKey])
-            }
-          }
-        }
+        // Second click: commit the preview wall
+        commitWallPreview()
 
         // Reset placement state
         setWallStartPoint(null)
@@ -710,20 +698,22 @@ export default function Editor({ className }: { className?: string }) {
           // Create wall nodes for the group
           const wallNodes = wallKeys.map((wallKey) => {
             const [start, end] = wallKey.split('-')
-            const [wx1, wy1] = start.split(',').map(Number)
-            const [wx2, wy2] = end.split(',').map(Number)
+            const [wx1, wz1] = start.split(',').map(Number)
+            const [wx2, wz2] = end.split(',').map(Number)
             const dx = wx2 - wx1
-            const dy = wy2 - wy1
-            const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
+            const dz = wz2 - wz1
+            const length = Math.sqrt(dx * dx + dz * dz)
+            const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
 
             return {
               id: createId('wall'),
               type: 'wall' as const,
               name: `Wall ${wallKey}`,
-              position: [wx1, wy1] as [number, number],
+              position: [wx1, wz1] as [number, number],
               rotation,
               size: [length, 0.2] as [number, number],
+              start: { x: wx1, z: wz1 }, // Start point in grid coordinates
+              end: { x: wx2, z: wz2 }, // End point in grid coordinates
               visible: true,
               opacity: 100,
               children: [],
@@ -800,20 +790,22 @@ export default function Editor({ className }: { className?: string }) {
           // Create wall nodes for the group
           const wallNodes = wallKeys.map((wallKey) => {
             const [start, end] = wallKey.split('-')
-            const [wx1, wy1] = start.split(',').map(Number)
-            const [wx2, wy2] = end.split(',').map(Number)
+            const [wx1, wz1] = start.split(',').map(Number)
+            const [wx2, wz2] = end.split(',').map(Number)
             const dx = wx2 - wx1
-            const dy = wy2 - wy1
-            const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
+            const dz = wz2 - wz1
+            const length = Math.sqrt(dx * dx + dz * dz)
+            const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
 
             return {
               id: wallKey,
               type: 'wall' as const,
               name: `Wall ${wallKey}`,
-              position: [wx1, wy1] as [number, number],
+              position: [wx1, wz1] as [number, number],
               rotation,
               size: [length, 0.2] as [number, number],
+              start: { x: wx1, z: wz1 }, // Start point in grid coordinates
+              end: { x: wx2, z: wz2 }, // End point in grid coordinates
               visible: true,
               opacity: 100,
               children: [],
@@ -1057,6 +1049,8 @@ export default function Editor({ className }: { className?: string }) {
         }
 
         setWallPreviewEnd([projectedX, projectedY])
+        // Update the preview wall node with the new end point
+        updateWallPreview([projectedX, projectedY])
       } else if (!wallStartPoint) {
         setWallPreviewEnd(null)
       }
@@ -1554,6 +1548,20 @@ export default function Editor({ className }: { className?: string }) {
                         wallStartPoint={wallStartPoint}
                       />
                     )}
+
+                    {/* Wall placement preview */}
+                    {/* {isActiveFloor &&
+                      controlMode === 'building' &&
+                      activeTool === 'wall' &&
+                      wallStartPoint &&
+                      wallPreviewEnd && (
+                        <WallPlacementPreview
+                          end={wallPreviewEnd}
+                          start={wallStartPoint}
+                          tileSize={tileSize}
+                          wallHeight={wallHeight}
+                        />
+                      )} */}
 
                     {/* Roofs component fetches its own data based on floorId */}
                     <Roofs

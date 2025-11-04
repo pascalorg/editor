@@ -454,6 +454,11 @@ type StoreState = {
   setScanOpacity: (scanId: string, opacity: number) => void
   setPointerPosition: (position: [number, number] | null) => void
   getLevelId: (node: BaseNode) => string | null
+  // Preview wall placement methods
+  startWallPreview: (startPoint: [number, number]) => void
+  updateWallPreview: (endPoint: [number, number]) => void
+  commitWallPreview: () => void
+  cancelWallPreview: () => void
 }
 
 const useStore = create<StoreState>()(
@@ -535,25 +540,27 @@ const useStore = create<StoreState>()(
               return existingWall
             }
 
-            // Parse wall key: "x1,y1-x2,y2"
+            // Parse wall key: "x1,z1-x2,z2"
             const [start, end] = wallKey.split('-')
-            const [x1, y1] = start.split(',').map(Number)
-            const [x2, y2] = end.split(',').map(Number)
+            const [x1, z1] = start.split(',').map(Number)
+            const [x2, z2] = end.split(',').map(Number)
 
             // Calculate wall properties
             const dx = x2 - x1
-            const dy = y2 - y1
-            const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
+            const dz = z2 - z1
+            const length = Math.sqrt(dx * dx + dz * dz)
+            const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
 
             // Create new WallNode
             return {
               id: createId('wall'),
               type: 'wall',
               name: `Wall ${wallKey}`,
-              position: [x1, y1] as [number, number],
+              position: [x1, z1] as [number, number],
               rotation,
               size: [length, 0.2] as [number, number], // 0.2m thickness
+              start: { x: x1, z: z1 }, // Start point in grid coordinates
+              end: { x: x2, z: z2 }, // End point in grid coordinates
               visible: true,
               opacity: 100,
               children: [],
@@ -1177,21 +1184,186 @@ const useStore = create<StoreState>()(
         // No level found in parent chain
         return null
       },
+      // Preview wall placement methods
+      startWallPreview: (startPoint) =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) return state
+
+          // Create a preview wall node at the start point (zero length initially)
+          const previewWallId = 'preview-wall'
+          const [x, z] = startPoint
+          const previewWall = {
+            id: previewWallId,
+            type: 'wall' as const,
+            name: 'Wall Preview',
+            position: startPoint,
+            rotation: 0,
+            size: [0, 0.2] as [number, number], // Zero length initially
+            start: { x, z }, // Start point in grid coordinates
+            end: { x, z }, // End point (same as start initially)
+            visible: true,
+            opacity: 100,
+            preview: true, // Mark as preview
+            children: [],
+            parent: selectedFloorId,
+          }
+
+          // Add preview wall to the current level
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              // Remove any existing preview walls first
+              const nonPreviewChildren = level.children.filter((child) => !child.preview)
+              return {
+                ...level,
+                children: [...nonPreviewChildren, previewWall],
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
+      updateWallPreview: (endPoint) =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) return state
+
+          // Find the preview wall and update its end point
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              const updatedChildren = level.children.map((child) => {
+                if (child.preview && child.type === 'wall') {
+                  const wall = child as any
+                  const [x1, z1] = wall.position
+                  const [x2, z2] = endPoint
+
+                  // Calculate new wall properties
+                  const dx = x2 - x1
+                  const dz = z2 - z1
+                  const length = Math.sqrt(dx * dx + dz * dz)
+                  const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
+
+                  return {
+                    ...wall,
+                    rotation,
+                    size: [length, 0.2] as [number, number],
+                    end: { x: x2, z: z2 }, // Update end point in grid coordinates
+                  }
+                }
+                return child
+              })
+
+              return {
+                ...level,
+                children: updatedChildren,
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
+      commitWallPreview: () =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) return state
+
+          // Find the preview wall and convert it to a real wall
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              const updatedChildren = level.children.map((child) => {
+                if (child.preview && child.type === 'wall') {
+                  const wall = child as any
+                  // Only commit if wall has meaningful length
+                  if (wall.size[0] >= 0.5) {
+                    // 50cm minimum
+                    return {
+                      ...wall,
+                      id: createId('wall'), // Generate new ID for committed wall
+                      preview: false, // No longer a preview
+                    }
+                  }
+                  // If too short, don't commit (will be filtered out below)
+                  return null
+                }
+                return child
+              })
+
+              return {
+                ...level,
+                children: updatedChildren.filter((child) => child !== null) as any[],
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+            redoStack: [],
+          }
+        }),
+      cancelWallPreview: () =>
+        set((state) => {
+          const selectedFloorId = state.selectedFloorId
+          if (!selectedFloorId) return state
+
+          // Remove all preview nodes from the current level
+          const updatedLevels = state.levels.map((level) => {
+            if (level.id === selectedFloorId) {
+              return {
+                ...level,
+                children: level.children.filter((child) => !child.preview),
+              }
+            }
+            return level
+          })
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+          }
+        }),
     }),
     {
       name: 'editor-storage',
       version: 1, // Increment this when storage format changes
       storage: createJSONStorage(() => indexedDBStorage),
-      partialize: (state) => ({
-        // Node-based state (single source of truth)
-        levels: state.levels,
-        // Note: nodeIndex is NOT persisted - it's rebuilt from levels on load
+      partialize: (state) => {
+        // Filter out preview nodes before persisting
+        const filterPreviewNodes = (nodes: BaseNode[]): BaseNode[] => {
+          return nodes
+            .filter((node) => !node.preview) // Remove preview nodes
+            .map((node) => ({
+              ...node,
+              children: node.children.length > 0 ? filterPreviewNodes(node.children) : [],
+            }))
+        }
 
-        // Selection state
-        selectedElements: state.selectedElements,
-        selectedImageIds: state.selectedImageIds,
-        selectedScanIds: state.selectedScanIds,
-      }),
+        const levelsWithoutPreviews = state.levels.map((level) => ({
+          ...level,
+          children: filterPreviewNodes(level.children) as LevelNode['children'],
+        }))
+
+        return {
+          // Node-based state (single source of truth)
+          levels: levelsWithoutPreviews,
+          // Note: nodeIndex is NOT persisted - it's rebuilt from levels on load
+
+          // Selection state
+          selectedElements: state.selectedElements,
+          selectedImageIds: state.selectedImageIds,
+          selectedScanIds: state.selectedScanIds,
+        }
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           // Migrate blob URLs to prevent errors (cleanup from v0 -> v1)

@@ -1,25 +1,28 @@
-import { useMemo } from 'react'
+'use client'
+
+import { Line } from '@react-three/drei'
+import { memo, useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
-import { WALL_THICKNESS } from '../editor/elements/wall'
 
+export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
 interface Point {
   x: number
   y: number
 }
-interface Line {
+interface LineEquation {
   a: number
   b: number
   c: number
 }
 interface ProcessedWall {
   angle: number
-  edgeA: Line
-  edgeB: Line
+  edgeA: LineEquation
+  edgeB: LineEquation
   v: Point
   wall_id: string
   pA: Point
@@ -48,14 +51,14 @@ function getOutgoingVector(wall: LiveWall, endType: 'start' | 'end', meetingPoin
   return { x: wall.start.x - wall.end.x, y: wall.start.y - wall.end.y }
 }
 
-function createLineFromPointAndVector(p: Point, v: Point): Line {
+function createLineFromPointAndVector(p: Point, v: Point): LineEquation {
   const a = -v.y
   const b = v.x
   const c = -(a * p.x + b * p.y)
   return { a, b, c }
 }
 
-function intersectLines(l1: Line, l2: Line): Point | null {
+function intersectLines(l1: LineEquation, l2: LineEquation): Point | null {
   const det = l1.a * l2.b - l2.a * l1.b
   if (Math.abs(det) < 1e-9) return null
   const x = (l1.b * l2.c - l2.b * l1.c) / det
@@ -163,6 +166,11 @@ interface WallRendererProps {
 
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
+  const tileSize = TILE_SIZE
+  const wallHeight = WALL_HEIGHT
+
+  // Check if this is a preview node
+  const isPreview = node.preview === true
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)
@@ -170,6 +178,20 @@ export function WallRenderer({ node }: WallRendererProps) {
   }, [getLevelId, node])
   const allWalls = useWalls(levelId || '')
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+
+  // Calculate local space coordinates for preview line
+  // The parent group already handles position & rotation, so we render in local space
+  const { localEndX, localEndZ } = useMemo(() => {
+    const length = node.size[0] // Length in grid units
+    const worldLength = length * TILE_SIZE
+
+    // In local space, start is always at (0, 0) and end is at (length, 0)
+    // since the parent group handles the rotation and position
+    return {
+      localEndX: worldLength,
+      localEndZ: 0,
+    }
+  }, [node.size])
 
   // Generate wall geometry similar to wall.tsx with junction handling
   // Note: Geometry is in LOCAL space since parent group handles position & rotation
@@ -292,8 +314,233 @@ export function WallRenderer({ node }: WallRendererProps) {
   const transparent = !isActiveFloor
 
   return (
-    <mesh geometry={wallGeometry}>
-      <meshStandardMaterial color="beige" opacity={opacity} transparent={transparent} />
-    </mesh>
+    <>
+      {isPreview ? (
+        <>
+          {/* Start point indicator (at origin in local space) */}
+          <mesh position={[0, 0.01, 0]}>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
+          </mesh>
+
+          {/* Preview line - occluded version (dimmer) */}
+          {/* Lines are in LOCAL space - parent group handles position & rotation */}
+          <Line
+            color="#336633"
+            dashed={false}
+            depthTest={false}
+            lineWidth={2}
+            opacity={0.3}
+            points={[
+              [0, 0.1, 0], // Start at origin in local space
+              [localEndX, 0.1, localEndZ], // End at length along local X axis
+            ]}
+            transparent
+          />
+
+          {/* Preview line - visible version (brighter) */}
+          <Line
+            color="#44ff44"
+            dashed={false}
+            depthTest={true}
+            lineWidth={3}
+            points={[
+              [0, 0.1, 0], // Start at origin in local space
+              [localEndX, 0.1, localEndZ], // End at length along local X axis
+            ]}
+          />
+
+          {/* Occluded/behind version - dimmer, shows through everything */}
+          <mesh geometry={wallGeometry} renderOrder={1}>
+            <meshStandardMaterial
+              color="#44ff44"
+              depthTest={false}
+              depthWrite={false}
+              emissive="#22aa22"
+              emissiveIntensity={0.1}
+              opacity={0.15}
+              transparent
+            />
+          </mesh>
+
+          {/* Visible/front version - brighter, only shows when not occluded */}
+          <mesh geometry={wallGeometry} renderOrder={2}>
+            <meshStandardMaterial
+              color="#44ff44"
+              depthTest={true}
+              depthWrite={false}
+              emissive="#22aa22"
+              emissiveIntensity={0.4}
+              opacity={0.5}
+              transparent
+            />
+          </mesh>
+        </>
+      ) : (
+        <mesh geometry={wallGeometry}>
+          <meshStandardMaterial color="beige" opacity={opacity} transparent={transparent} />
+        </mesh>
+      )}
+    </>
   )
 }
+
+// Wall placement preview component
+type WallPlacementPreviewProps = {
+  start: [number, number]
+  end: [number, number]
+  tileSize: number
+  wallHeight: number
+}
+
+export const WallPlacementPreview = memo(
+  ({ start, end, tileSize, wallHeight }: WallPlacementPreviewProps) => {
+    const selectedFloorId = useEditor((state) => state.selectedFloorId)
+    const allWalls = useWalls(selectedFloorId || '')
+
+    const geometry = useMemo(() => {
+      const previewWall: LiveWall = {
+        id: 'preview',
+        start: { x: start[0] * tileSize, y: start[1] * tileSize },
+        end: { x: end[0] * tileSize, y: end[1] * tileSize },
+        thickness: WALL_THICKNESS,
+      }
+
+      const liveWalls: LiveWall[] = allWalls.map((w) => {
+        const [wx1, wy1] = w.position
+        const wLength = w.size[0]
+        const wx2 = wx1 + Math.cos(w.rotation) * wLength
+        const wy2 = wy1 - Math.sin(w.rotation) * wLength
+        return {
+          id: w.id,
+          start: { x: wx1 * tileSize, y: wy1 * tileSize },
+          end: { x: wx2 * tileSize, y: wy2 * tileSize },
+          thickness: WALL_THICKNESS,
+        }
+      })
+
+      // Add the preview wall to the list to find junctions
+      const allWallsWithPreview = [...liveWalls, previewWall]
+
+      const junctions = findJunctions(allWallsWithPreview)
+      const junctionData = new Map<string, Map<string, { left: Point; right: Point }>>()
+      for (const [key, junction] of junctions.entries()) {
+        const { wallIntersections } = calculateJunctionIntersections(junction)
+        junctionData.set(key, wallIntersections)
+      }
+
+      // Now, calculate the geometry just for the previewWall
+      const wall = previewWall
+      const halfT = wall.thickness / 2
+
+      const v = { x: wall.end.x - wall.start.x, y: wall.end.y - wall.start.y }
+      const L = Math.sqrt(v.x * v.x + v.y * v.y)
+      if (L < 1e-9) return null
+
+      const n_unit = { x: -v.y / L, y: v.x / L }
+
+      const key_start = pointToKey(wall.start)
+      const key_end = pointToKey(wall.end)
+
+      const startJunctionData = junctionData.get(key_start)?.get(wall.id)
+      const endJunctionData = junctionData.get(key_end)?.get(wall.id)
+
+      const p_start_L = startJunctionData
+        ? startJunctionData.left
+        : { x: wall.start.x + n_unit.x * halfT, y: wall.start.y + n_unit.y * halfT }
+      const p_start_R = startJunctionData
+        ? startJunctionData.right
+        : { x: wall.start.x - n_unit.x * halfT, y: wall.start.y - n_unit.y * halfT }
+      const p_end_L = endJunctionData
+        ? endJunctionData.right
+        : { x: wall.end.x + n_unit.x * halfT, y: wall.end.y + n_unit.y * halfT }
+      const p_end_R = endJunctionData
+        ? endJunctionData.left
+        : { x: wall.end.x - n_unit.x * halfT, y: wall.end.y - n_unit.y * halfT }
+
+      const polyPoints = [p_start_R, p_end_R]
+      if (endJunctionData) polyPoints.push(wall.end)
+      polyPoints.push(p_end_L, p_start_L)
+      if (startJunctionData) polyPoints.push(wall.start)
+
+      // Note: Negate y values because rotation by -π/2 around X flips Z sign
+      const shapePoints = polyPoints.map((p) => new THREE.Vector2(p.x, -p.y))
+      const shape = new THREE.Shape(shapePoints)
+
+      const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+
+      // Rotate to lie on XZ plane and extrude along Y
+      // After rotation, the wall sits from y=0 to y=wallHeight (no translation needed)
+      geometry.rotateX(-Math.PI / 2)
+
+      return geometry
+    }, [start, end, tileSize, wallHeight, allWalls])
+
+    if (!geometry) return null
+
+    return (
+      <group>
+        {/* Start point indicator */}
+        <mesh position={[start[0] * tileSize, 0.01, start[1] * tileSize]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
+          <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
+        </mesh>
+
+        {/* Preview line - occluded version (dimmer) */}
+        <Line
+          color="#336633"
+          dashed={false}
+          depthTest={false}
+          lineWidth={2}
+          opacity={0.3}
+          points={[
+            [start[0] * tileSize, 0.1, start[1] * tileSize],
+            [end[0] * tileSize, 0.1, end[1] * tileSize],
+          ]}
+          transparent
+        />
+
+        {/* Preview line - visible version (brighter) */}
+        <Line
+          color="#44ff44"
+          dashed={false}
+          depthTest={true}
+          lineWidth={3}
+          points={[
+            [start[0] * tileSize, 0.1, start[1] * tileSize],
+            [end[0] * tileSize, 0.1, end[1] * tileSize],
+          ]}
+        />
+
+        {/* Occluded/behind version - dimmer, shows through everything */}
+        <mesh geometry={geometry} renderOrder={1}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={false}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.1}
+            opacity={0.15}
+            transparent
+          />
+        </mesh>
+
+        {/* Visible/front version - brighter, only shows when not occluded */}
+        <mesh geometry={geometry} renderOrder={2}>
+          <meshStandardMaterial
+            color="#44ff44"
+            depthTest={true}
+            depthWrite={false}
+            emissive="#22aa22"
+            emissiveIntensity={0.4}
+            opacity={0.5}
+            transparent
+          />
+        </mesh>
+      </group>
+    )
+  },
+)
+
+WallPlacementPreview.displayName = 'WallPlacementPreview'

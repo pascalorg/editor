@@ -197,18 +197,20 @@ function wallSegmentsToWallNodes(segments: WallSegment[], parentId: string): Wal
  * Convert a single WallSegment to WallNode
  */
 export function wallSegmentToWallNode(segment: WallSegment, parentId: string): WallNode {
-  const [x1, y1] = segment.start
-  const [x2, y2] = segment.end
+  const [x1, z1] = segment.start
+  const [x2, z2] = segment.end
 
   // Calculate length and rotation
-  const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-  const rotation = Math.atan2(y2 - y1, x2 - x1)
+  const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2)
+  const rotation = Math.atan2(z2 - z1, x2 - x1)
 
   return {
     id: `wall-${segment.id}`,
     type: 'wall',
     name: `Wall ${segment.id}`,
-    position: [x1, y1],
+    start: { x: x1, z: z1 },
+    end: { x: x2, z: z2 },
+    position: [x1, z1],
     rotation,
     size: [length, WALL_THICKNESS],
     visible: segment.visible,
