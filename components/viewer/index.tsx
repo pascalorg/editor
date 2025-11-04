@@ -1,17 +1,5 @@
 'use client'
 
-import { animated, useSpring } from '@react-spring/three'
-import {
-  Environment,
-  GizmoHelper,
-  GizmoViewport,
-  Line,
-  OrthographicCamera,
-  PerspectiveCamera,
-} from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type * as THREE from 'three'
 import { Scan } from '@/components/editor/elements/scan'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
@@ -21,6 +9,11 @@ import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
 import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
+import { animated, useSpring } from '@react-spring/three'
+import { Environment, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type * as THREE from 'three'
 import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
@@ -263,7 +256,6 @@ export default function Viewer({ className }: { className?: string }) {
                           {isActiveFloor && (
                             <ProximityGrid
                               components={components}
-                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -282,7 +274,6 @@ export default function Viewer({ className }: { className?: string }) {
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
                               components={components}
-                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -315,7 +306,6 @@ export default function Viewer({ className }: { className?: string }) {
                       >
                         <ProximityGrid
                           components={components}
-                          cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
                           gridSize={tileSize}

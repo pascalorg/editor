@@ -1473,7 +1473,6 @@ export default function Editor({ className }: { className?: string }) {
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
                               components={[]} // TODO: Migrate to use node tree
-                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
