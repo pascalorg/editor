@@ -255,7 +255,7 @@ type StoreState = {
   isManipulatingImage: boolean // Flag to prevent undo stack during drag
   isManipulatingScan: boolean // Flag to prevent undo stack during scan manipulation
   handleClear: () => void
-  cursorPosition: { x: number; y: number }
+  pointerPosition: [number, number] | null
 } & {
   // Node-based operations
   updateLevels: (levels: LevelNode[], pushToUndo?: boolean) => void
@@ -311,7 +311,8 @@ type StoreState = {
   ) => void
   setImageOpacity: (imageId: string, opacity: number) => void
   setScanOpacity: (scanId: string, opacity: number) => void
-  setCursorPosition: (position: { x: number; y: number }) => void
+  setPointerPosition: (position: [number, number] | null) => void
+  getLevelId: (node: BaseNode) => string | null
 }
 
 const useStore = create<StoreState>()(
@@ -1007,8 +1008,32 @@ const useStore = create<StoreState>()(
             nodeIndex: buildNodeIndex(updatedLevels),
           }
         }),
-      cursorPosition: { x: 0, y: 0 },
-      setCursorPosition: (position) => set({ cursorPosition: position }),
+      pointerPosition: null,
+      setPointerPosition: (position) => set({ pointerPosition: position }),
+      getLevelId: (node) => {
+        const state = get()
+
+        // If node is already a level, return its id
+        if (state.levels.find((l) => l.id === node.id)) {
+          return node.id
+        }
+
+        // Use nodeIndex to traverse up the parent chain
+        let currentNode = node
+        while (currentNode.parent) {
+          const parentNode = state.nodeIndex.get(currentNode.parent)
+          if (!parentNode) break
+
+          // Check if parent is a level
+          if (state.levels.find((l) => l.id === parentNode.id)) {
+            return parentNode.id
+          }
+
+          currentNode = parentNode
+        }
+
+        return null
+      },
     }),
     {
       name: 'editor-storage',

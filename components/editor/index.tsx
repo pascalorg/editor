@@ -217,8 +217,7 @@ export default function Editor({ className }: { className?: string }) {
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
 
-  // State for tracking mouse cursor position (for proximity grid)
-  const [cursorPosition, setCursorPosition] = useState<[number, number] | null>(null)
+  const setPointerPosition = useEditor((state) => state.setPointerPosition)
 
   // Helper function to clear all placement states and selections
   const clearPlacementStates = () => {
@@ -235,7 +234,7 @@ export default function Editor({ className }: { className?: string }) {
     setColumnPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
-    setCursorPosition(null)
+    setPointerPosition(null)
     // Clear all selections (building elements, images, and scans)
     setSelectedElements([])
     setSelectedImageIds([])
@@ -244,8 +243,8 @@ export default function Editor({ className }: { className?: string }) {
 
   // Clear cursor position when switching floors to prevent grid artifacts
   useEffect(() => {
-    setCursorPosition(null)
-  }, [selectedFloorId])
+    setPointerPosition(null)
+  }, [selectedFloorId, setPointerPosition])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -956,13 +955,13 @@ export default function Editor({ className }: { className?: string }) {
     if (currentLevel > 0) {
       // Update cursor position for proximity grid on non-base levels
       if (y !== null) {
-        setCursorPosition([x, y])
+        setPointerPosition([x, y])
       } else {
-        setCursorPosition(null)
+        setPointerPosition(null)
       }
     } else {
       // On base level, don't track cursor position
-      setCursorPosition(null)
+      setPointerPosition(null)
     }
 
     // Check control mode first - delete mode takes priority
@@ -1426,7 +1425,6 @@ export default function Editor({ className }: { className?: string }) {
                           {isActiveFloor && (
                             <ProximityGrid
                               components={[]} // TODO: Migrate to use node tree
-                              cursorPosition={cursorPosition}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -1494,7 +1492,6 @@ export default function Editor({ className }: { className?: string }) {
                       >
                         <ProximityGrid
                           components={[]} // TODO: Migrate to use node tree
-                          cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
                           gridSize={tileSize}

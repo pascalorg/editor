@@ -162,9 +162,10 @@ interface WallRendererProps {
 }
 
 export function WallRenderer({ node }: WallRendererProps) {
-  const levelId = useEditor((state) => state.selectedFloorId)
-  // Get all walls from the same level for junction calculation
+  const getLevelId = useEditor((state) => state.getLevelId)
+  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const allWalls = useWalls(levelId || '')
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Generate wall geometry similar to wall.tsx with junction handling
   // Note: Geometry is in LOCAL space since parent group handles position & rotation
@@ -279,7 +280,7 @@ export function WallRenderer({ node }: WallRendererProps) {
 
   return (
     <mesh geometry={wallGeometry}>
-      <meshStandardMaterial color="beige" />
+      <meshStandardMaterial color="beige" opacity={0.3} transparent={levelId !== selectedFloorId} />
     </mesh>
   )
 }
