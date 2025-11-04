@@ -20,7 +20,46 @@ export const ColumnSpec: ElementSpec = {
   },
 
   render: {
-    color: '#b0b0b0', // Gray
+    // Procedural cylinder geometry
+    geometry: {
+      type: 'cylinder',
+      dimensions: {
+        radius: 0.15, // 15cm radius (0.3m diameter)
+        height: 2.7, // Default height from metadata
+        radialSegments: 16,
+      },
+    },
+
+    // Material properties
+    material: {
+      color: '#aaaabf',
+      emissive: '#aaaabf',
+      emissiveIntensity: 0,
+      metalness: 0.1,
+      roughness: 0.7,
+    },
+
+    // Selection appearance - rings at top/bottom + vertical edges
+    selection: {
+      color: '#ffffff',
+      emissiveIntensity: 0.5,
+      style: 'edges',
+      outlineWidth: 0.02, // 2cm outline width
+    },
+
+    // Hover appearance
+    hover: {
+      emissiveIntensity: 0.3,
+    },
+
+    // Preview during placement
+    preview: {
+      validColor: '#44ff44',
+      invalidColor: '#ff4444',
+      opacity: 0.5,
+      showOccluded: true,
+      occludedOpacity: 0.15,
+    },
   },
 
   bounds: {

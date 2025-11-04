@@ -19,6 +19,7 @@ import {
   VISIBILITY,
 } from './components'
 import { metersToGrid } from './core'
+import { elementRegistry } from './element-registry'
 import type { CreationContext, ElementDefinition } from './registry'
 import { register } from './registry'
 import type { ElementSpec } from './spec'
@@ -115,8 +116,11 @@ export function registerFromSpec(spec: ElementSpec): void {
       : undefined,
   }
 
-  // Register the definition
+  // Register the definition with the engine
   register(definition)
+
+  // Register the spec in the element registry for rendering
+  elementRegistry.register(spec)
 
   // Register node extensions if parent rules are specified
   if (spec.node.parentRules && spec.node.parentRules.length > 0) {

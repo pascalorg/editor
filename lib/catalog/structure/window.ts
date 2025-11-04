@@ -22,10 +22,31 @@ export const WindowSpec: ElementSpec = {
   render: {
     model: {
       url: '/models/Window.glb',
-      scale: 1,
+      scale: 2, // Scale from existing Window component
       upAxis: 'Y',
     },
     anchor: 'center',
+    
+    // Selection appearance - bounding box outline
+    selection: {
+      color: '#ffffff',
+      emissiveIntensity: 0.5,
+      style: 'box',
+      outlineWidth: 0.02,
+    },
+    
+    // Hover appearance
+    hover: {
+      emissiveIntensity: 0.3,
+    },
+    
+    // Preview during placement
+    preview: {
+      validColor: '#44ff44',
+      invalidColor: '#ff4444',
+      opacity: 0.3,
+      showOccluded: false,
+    },
   },
 
   bounds: {

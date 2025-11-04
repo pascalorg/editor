@@ -47,16 +47,17 @@ export {
 export type { Component, ComponentStore, ComponentType, EntityId } from './core'
 // Core
 export { gridToMeters, metersToGrid, World } from './core'
+// Element Registry (spec lookups for rendering)
+export { elementRegistry, getElementSpec, registerElementSpec } from './element-registry'
 export type { CreationContext, ElementDefinition } from './registry'
 // Registry
 export {
-  elementRegistry,
   getAllDefinitions,
   getAllTypes,
   getDefinition,
   register,
 } from './registry'
-export type { BoundsStrategy, ElementSpec, FootprintStrategy } from './spec'
+export type { BoundsStrategy, ElementSpec, FootprintStrategy, GeometryType, SelectionStyle } from './spec'
 // Spec
 export {
   canBeChildOfType,

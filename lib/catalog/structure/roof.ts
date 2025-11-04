@@ -20,7 +20,40 @@ export const RoofSpec: ElementSpec = {
   },
 
   render: {
-    color: '#8b4513', // Brown
+    // Roofs use custom geometry (pitched roof segments)
+    // This will be handled specially in the roof renderer
+    geometry: {
+      type: 'extrusion',
+      dimensions: {
+        height: 2.5, // Peak height
+      },
+    },
+    
+    material: {
+      color: '#8b4513',
+      emissive: '#8b4513',
+      emissiveIntensity: 0,
+      metalness: 0.2,
+      roughness: 0.8,
+    },
+    
+    selection: {
+      color: '#ffffff',
+      emissiveIntensity: 0.4,
+      style: 'outline',
+      outlineWidth: 0.03,
+    },
+    
+    hover: {
+      emissiveIntensity: 0.2,
+    },
+    
+    preview: {
+      validColor: '#44ff44',
+      invalidColor: '#ff4444',
+      opacity: 0.4,
+      showOccluded: false,
+    },
   },
 
   bounds: {

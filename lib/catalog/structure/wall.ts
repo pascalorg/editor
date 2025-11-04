@@ -20,7 +20,41 @@ export const WallSpec: ElementSpec = {
   },
 
   render: {
-    color: '#e0e0e0', // Light gray
+    // Walls use custom extrusion geometry (mitered junctions)
+    // This will be handled specially in the wall renderer
+    geometry: {
+      type: 'extrusion',
+      dimensions: {
+        height: 2.7, // Default wall height
+      },
+    },
+    
+    material: {
+      color: '#e0e0e0',
+      emissive: '#e0e0e0',
+      emissiveIntensity: 0,
+      metalness: 0.0,
+      roughness: 0.9,
+    },
+    
+    selection: {
+      color: '#ffffff',
+      emissiveIntensity: 0.4,
+      style: 'outline',
+      outlineWidth: 0.03,
+    },
+    
+    hover: {
+      emissiveIntensity: 0.2,
+    },
+    
+    preview: {
+      validColor: '#44ff44',
+      invalidColor: '#ff4444',
+      opacity: 0.3,
+      showOccluded: true,
+      occludedOpacity: 0.1,
+    },
   },
 
   bounds: {

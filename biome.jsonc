@@ -29,6 +29,7 @@
   "linter": {
     "rules": {
       "style": {
+        "useReadonlyClassProperties": "info",
         "useDefaultSwitchClause": "off",
         "useConsistentTypeDefinitions": "off",
         "useAtIndex": "off",
@@ -40,7 +41,7 @@
         "noMagicNumbers": "off"
       },
       "performance": {
-        "noBarrelFile": "info",
+        "noBarrelFile": "off",
         "noNamespaceImport": "off",
         "noImgElement": "off"
       },

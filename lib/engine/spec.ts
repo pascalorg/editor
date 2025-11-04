@@ -28,6 +28,16 @@ export type FootprintStrategy =
   | 'hullFromModelXY' // Convex hull from 3D model (XY projection)
 
 /**
+ * Geometry type for procedural rendering
+ */
+export type GeometryType = 'cylinder' | 'box' | 'extrusion' | 'plane'
+
+/**
+ * Selection rendering style
+ */
+export type SelectionStyle = 'edges' | 'box' | 'glow' | 'outline'
+
+/**
  * Main element specification
  */
 export interface ElementSpec {
@@ -51,13 +61,62 @@ export interface ElementSpec {
 
   // Rendering configuration
   render?: {
+    // 3D model rendering
     model?: {
       url: string // URL to GLB/GLTF model
       scale?: number // Scale multiplier
       upAxis?: 'Y' | 'Z' // Up axis of the model
     }
+    
+    // Procedural geometry rendering (alternative to model)
+    geometry?: {
+      type: GeometryType // Type of geometry to generate
+      dimensions?: {
+        radius?: number // For cylinder/sphere (meters)
+        height?: number // For cylinder/box (meters)
+        width?: number // For box/plane (meters)
+        depth?: number // For box/plane (meters)
+        segments?: number // Tessellation detail
+        radialSegments?: number // For cylinder
+      }
+    }
+    
+    // Material properties
+    material?: {
+      color: string // Base color (CSS color)
+      emissive?: string // Emissive color (CSS color)
+      emissiveIntensity?: number // Emissive intensity (0-1)
+      metalness?: number // Metalness (0-1)
+      roughness?: number // Roughness (0-1)
+      opacity?: number // Base opacity (0-1)
+      transparent?: boolean // Enable transparency
+    }
+    
+    // Selection appearance
+    selection?: {
+      color?: string // Selection highlight color (default: #ffffff)
+      emissiveIntensity?: number // Emissive intensity when selected (default: 0.4)
+      style: SelectionStyle // How to render selection
+      outlineWidth?: number // Width of outline/edges (meters)
+    }
+    
+    // Hover appearance
+    hover?: {
+      emissiveIntensity?: number // Emissive intensity when hovered (default: 0.3)
+      color?: string // Hover highlight color
+    }
+    
+    // Preview appearance during placement
+    preview?: {
+      validColor: string // Color for valid placement (e.g., #44ff44)
+      invalidColor: string // Color for invalid placement (e.g., #ff4444)
+      opacity: number // Preview opacity (0-1)
+      showOccluded?: boolean // Show occluded parts dimmer
+      occludedOpacity?: number // Opacity for occluded parts
+    }
+    
     anchor?: 'center' | 'back' | 'front' | 'left' | 'right' // Anchor point
-    color?: string // Default color (CSS color)
+    color?: string // Deprecated: use material.color instead
   }
 
   // Bounds computation

@@ -5,11 +5,7 @@
  */
 
 import { registerFromSpec } from '@/lib/engine'
-import { ColumnSpec } from './structure/column'
-import { DoorSpec } from './structure/door'
-import { RoofSpec } from './structure/roof'
-import { WallSpec } from './structure/wall'
-import { WindowSpec } from './structure/window'
+import { ColumnSpec, DoorSpec, RoofSpec, WallSpec, WindowSpec } from './structure'
 
 /**
  * Register all structural elements
