@@ -1,13 +1,12 @@
 'use client'
 
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import { type CameraControlsImpl, Line } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
 import { RoofShadowPreview } from './roof'
-import { WallShadowPreview } from './wall'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -288,7 +287,7 @@ export const GridTiles = memo(
             />
 
             {/* Wall shadow previews for all 4 walls */}
-            <WallShadowPreview
+            {/* <WallShadowPreview
               allWallSegments={allWallSegments}
               end={[roomPreviewEnd[0], roomStartPoint[1]]}
               start={[roomStartPoint[0], roomStartPoint[1]]}
@@ -315,7 +314,7 @@ export const GridTiles = memo(
               start={[roomStartPoint[0], roomPreviewEnd[1]]}
               tileSize={tileSize}
               wallHeight={wallHeight}
-            />
+            /> */}
           </>
         )}
 
@@ -575,7 +574,7 @@ export const GridTiles = memo(
             )}
 
             {/* Wall shadow previews for placed segments */}
-            {customRoomPoints.length > 1 &&
+            {/* {customRoomPoints.length > 1 &&
               customRoomPoints.map((point, index) => {
                 if (index === 0) return null
                 const prevPoint = customRoomPoints[index - 1]
@@ -589,10 +588,10 @@ export const GridTiles = memo(
                     wallHeight={wallHeight}
                   />
                 )
-              })}
+              })} */}
 
             {/* Wall shadow preview for current hover segment */}
-            {customRoomPreviewEnd && (
+            {/* {customRoomPreviewEnd && (
               <WallShadowPreview
                 allWallSegments={allWallSegments}
                 end={customRoomPreviewEnd}
@@ -600,7 +599,7 @@ export const GridTiles = memo(
                 tileSize={tileSize}
                 wallHeight={wallHeight}
               />
-            )}
+            )} */}
           </>
         )}
 

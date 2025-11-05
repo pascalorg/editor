@@ -1,5 +1,13 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
+import { useEditor, type GridEvent, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -13,14 +21,6 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
-import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
 import {
@@ -35,6 +35,7 @@ import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './elements/grid-tiles'
 import { Scan } from './elements/scan'
+import { WallBuilder } from './elements/wall-builder'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { ProximityGrid } from './proximity-grid'
@@ -572,9 +573,17 @@ export default function Editor({ className }: { className?: string }) {
     setWalls(next)
   }
 
+  const emitGridEvent = useEditor((state) => state.emitGridEvent)
+
   const handleIntersectionClick = (x: number, y: number) => {
     // Don't handle clicks while camera is moving
     if (movingCamera) return
+
+    const gridEvent: GridEvent = {
+      type: 'click',
+      position: [x, y],
+    }
+    emitGridEvent(gridEvent)
 
     // Guide mode: deselect images when clicking on the grid
     if (controlMode === 'guide') {
@@ -914,6 +923,12 @@ export default function Editor({ className }: { className?: string }) {
     // Don't handle double-clicks while camera is moving
     if (movingCamera) return
 
+    const gridEvent: GridEvent = {
+      type: 'double-click',
+      position: [x, y],
+    }
+    emitGridEvent(gridEvent)
+
     if (
       controlMode === 'building' &&
       activeTool === 'custom-room' &&
@@ -951,6 +966,11 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
+    const gridEvent: GridEvent = {
+      type: 'move',
+      position: [x, y],
+    }
+    emitGridEvent(gridEvent)
     // Only track cursor position for non-base levels (base level uses InfiniteGrid)
     const currentFloor = levels.find((level) => level.id === selectedFloorId)
     const currentLevel = currentFloor?.level || 0
@@ -1514,6 +1534,10 @@ export default function Editor({ className }: { className?: string }) {
                     )}
 
                   <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                    {controlMode === 'building' && activeTool === 'wall' && isActiveFloor && (
+                      <WallBuilder />
+                    )}
+
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
                     {isActiveFloor && (

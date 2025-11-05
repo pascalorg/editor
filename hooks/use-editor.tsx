@@ -1,10 +1,5 @@
 'use client'
 
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
@@ -14,6 +9,11 @@ import {
   setNodeOpacity,
   setNodeVisibility,
 } from '@/lib/nodes/operations'
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
 import { createId } from '@/lib/utils'
@@ -253,6 +253,13 @@ export type {
   WindowNode,
 } from '@/lib/nodes/types'
 
+export interface GridEvent {
+  type: 'click' | 'double-click' | 'move'
+  position: [number, number]
+}
+
+export type EventHandler = (event: GridEvent) => void
+
 export type WallComponentData = {
   segments: WallSegment[] // Line segments between intersections
 }
@@ -459,6 +466,13 @@ type StoreState = {
   updateWallPreview: (endPoint: [number, number]) => void
   commitWallPreview: () => void
   cancelWallPreview: () => void
+
+  // Event handling
+  eventHandlers: Map<string, EventHandler>
+
+  registerHandler: (id: string, handler: EventHandler) => void
+  unregisterHandler: (id: string) => void
+  emitGridEvent: (event: GridEvent) => void
 }
 
 const useStore = create<StoreState>()(
@@ -1332,6 +1346,29 @@ const useStore = create<StoreState>()(
             nodeIndex: buildNodeIndex(updatedLevels),
           }
         }),
+      eventHandlers: new Map(),
+      registerHandler: (id, handler) => {
+        set((state) => {
+          const newHandlers = new Map(state.eventHandlers)
+          newHandlers.set(id, handler)
+          return { eventHandlers: newHandlers }
+        })
+      },
+
+      unregisterHandler: (id) => {
+        set((state) => {
+          const newHandlers = new Map(state.eventHandlers)
+          newHandlers.delete(id)
+          return { eventHandlers: newHandlers }
+        })
+      },
+
+      emitGridEvent: (event) => {
+        const handlers = get().eventHandlers
+        handlers.forEach((handler) => {
+          handler(event)
+        })
+      },
     }),
     {
       name: 'editor-storage',
