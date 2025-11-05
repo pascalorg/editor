@@ -20,8 +20,6 @@ type GridTilesProps = {
   wallPreviewEnd: [number, number] | null
   roomStartPoint: [number, number] | null
   roomPreviewEnd: [number, number] | null
-  customRoomPoints: Array<[number, number]>
-  customRoomPreviewEnd: [number, number] | null
   roofStartPoint: [number, number] | null
   roofPreviewEnd: [number, number] | null
   deleteStartPoint: [number, number] | null
@@ -43,8 +41,6 @@ export const GridTiles = memo(
     wallPreviewEnd,
     roomStartPoint,
     roomPreviewEnd,
-    customRoomPoints,
-    customRoomPreviewEnd,
     roofStartPoint,
     roofPreviewEnd,
     deleteStartPoint,
@@ -221,24 +217,19 @@ export const GridTiles = memo(
             <group
               position={[
                 // For wall mode, use wallPreviewEnd for snapped position
-                // For custom-room mode, use customRoomPreviewEnd for snapped position
                 // For delete mode, use deletePreviewEnd for snapped position
                 // For other modes, use the raw hovered intersection
                 activeTool === 'wall' && wallPreviewEnd
                   ? wallPreviewEnd[0] * tileSize
-                  : activeTool === 'custom-room' && customRoomPreviewEnd
-                    ? customRoomPreviewEnd[0] * tileSize
-                    : controlMode === 'delete' && deletePreviewEnd
-                      ? deletePreviewEnd[0] * tileSize
-                      : hoveredIntersection.x * tileSize,
+                  : controlMode === 'delete' && deletePreviewEnd
+                    ? deletePreviewEnd[0] * tileSize
+                    : hoveredIntersection.x * tileSize,
                 2,
                 activeTool === 'wall' && wallPreviewEnd
                   ? wallPreviewEnd[1] * tileSize
-                  : activeTool === 'custom-room' && customRoomPreviewEnd
-                    ? customRoomPreviewEnd[1] * tileSize
-                    : controlMode === 'delete' && deletePreviewEnd
-                      ? deletePreviewEnd[1] * tileSize
-                      : hoveredIntersection.y * tileSize,
+                  : controlMode === 'delete' && deletePreviewEnd
+                    ? deletePreviewEnd[1] * tileSize
+                    : hoveredIntersection.y * tileSize,
               ]}
             >
               <DownArrow />
@@ -401,205 +392,6 @@ export const GridTiles = memo(
                 />
               )
             })()}
-          </>
-        )}
-
-        {/* Custom-room mode preview - polygon */}
-        {activeTool === 'custom-room' && customRoomPoints.length > 0 && (
-          <>
-            {/* Point indicators for all placed points */}
-            {customRoomPoints.map((point, index) => {
-              // Check if hovering over the first point (to close the shape)
-              const isHoveringFirstPoint =
-                index === 0 &&
-                customRoomPoints.length >= 3 &&
-                customRoomPreviewEnd &&
-                customRoomPreviewEnd[0] === point[0] &&
-                customRoomPreviewEnd[1] === point[1]
-
-              return (
-                <mesh key={index} position={[point[0] * tileSize, 0.01, point[1] * tileSize]}>
-                  <sphereGeometry args={[isHoveringFirstPoint ? 0.15 : 0.1, 16, 16]} />
-                  <meshStandardMaterial
-                    color={isHoveringFirstPoint ? '#ffff44' : '#44ff44'}
-                    depthTest={false}
-                    emissive={isHoveringFirstPoint ? '#aaaa22' : '#22aa22'}
-                  />
-                </mesh>
-              )
-            })}
-
-            {/* Lines between consecutive points */}
-            {customRoomPoints.length > 1 && (
-              <>
-                {customRoomPoints.map((point, index) => {
-                  if (index === 0) return null
-                  const prevPoint = customRoomPoints[index - 1]
-                  return (
-                    <group key={`line-${index}`}>
-                      {/* Occluded version - dimmer */}
-                      <Line
-                        color="#336633"
-                        dashed={false}
-                        depthTest={false}
-                        lineWidth={2}
-                        opacity={0.3}
-                        points={[
-                          [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
-                          [point[0] * tileSize, 0.1, point[1] * tileSize],
-                        ]}
-                        transparent
-                      />
-                      {/* Visible version - brighter */}
-                      <Line
-                        color="#44ff44"
-                        dashed={false}
-                        depthTest={true}
-                        lineWidth={3}
-                        points={[
-                          [prevPoint[0] * tileSize, 0.1, prevPoint[1] * tileSize],
-                          [point[0] * tileSize, 0.1, point[1] * tileSize],
-                        ]}
-                      />
-                    </group>
-                  )
-                })}
-              </>
-            )}
-
-            {/* Preview line from last point to current hover position */}
-            {customRoomPreviewEnd && (
-              <>
-                {/* Check if hovering over first point */}
-                {(() => {
-                  const isHoveringFirstPoint =
-                    customRoomPoints.length >= 3 &&
-                    customRoomPreviewEnd[0] === customRoomPoints[0][0] &&
-                    customRoomPreviewEnd[1] === customRoomPoints[0][1]
-
-                  if (isHoveringFirstPoint) {
-                    // Show closing line when hovering over first point
-                    return (
-                      <>
-                        {/* Occluded version - dimmer */}
-                        <Line
-                          color="#999922"
-                          dashed={false}
-                          depthTest={false}
-                          lineWidth={2}
-                          opacity={0.3}
-                          points={[
-                            [
-                              customRoomPoints[customRoomPoints.length - 1][0] * tileSize,
-                              0.1,
-                              customRoomPoints[customRoomPoints.length - 1][1] * tileSize,
-                            ],
-                            [
-                              customRoomPoints[0][0] * tileSize,
-                              0.1,
-                              customRoomPoints[0][1] * tileSize,
-                            ],
-                          ]}
-                          transparent
-                        />
-                        {/* Visible version - brighter */}
-                        <Line
-                          color="#ffff44"
-                          dashed={false}
-                          depthTest={true}
-                          lineWidth={3}
-                          points={[
-                            [
-                              customRoomPoints[customRoomPoints.length - 1][0] * tileSize,
-                              0.1,
-                              customRoomPoints[customRoomPoints.length - 1][1] * tileSize,
-                            ],
-                            [
-                              customRoomPoints[0][0] * tileSize,
-                              0.1,
-                              customRoomPoints[0][1] * tileSize,
-                            ],
-                          ]}
-                        />
-                      </>
-                    )
-                  }
-                  // Normal preview line to cursor (no auto-closing line)
-                  return (
-                    <>
-                      {/* Occluded version - dimmer */}
-                      <Line
-                        color="#336633"
-                        dashed={false}
-                        depthTest={false}
-                        lineWidth={2}
-                        opacity={0.3}
-                        points={[
-                          [
-                            customRoomPoints[customRoomPoints.length - 1][0] * tileSize,
-                            0.1,
-                            customRoomPoints[customRoomPoints.length - 1][1] * tileSize,
-                          ],
-                          [
-                            customRoomPreviewEnd[0] * tileSize,
-                            0.1,
-                            customRoomPreviewEnd[1] * tileSize,
-                          ],
-                        ]}
-                        transparent
-                      />
-                      {/* Visible version - brighter */}
-                      <Line
-                        color="#44ff44"
-                        dashed={false}
-                        depthTest={true}
-                        lineWidth={3}
-                        points={[
-                          [
-                            customRoomPoints[customRoomPoints.length - 1][0] * tileSize,
-                            0.1,
-                            customRoomPoints[customRoomPoints.length - 1][1] * tileSize,
-                          ],
-                          [
-                            customRoomPreviewEnd[0] * tileSize,
-                            0.1,
-                            customRoomPreviewEnd[1] * tileSize,
-                          ],
-                        ]}
-                      />
-                    </>
-                  )
-                })()}
-              </>
-            )}
-
-            {/* Wall shadow previews for placed segments */}
-            {/* {customRoomPoints.length > 1 &&
-              customRoomPoints.map((point, index) => {
-                if (index === 0) return null
-                const prevPoint = customRoomPoints[index - 1]
-                return (
-                  <WallShadowPreview
-                    allWallSegments={allWallSegments}
-                    end={point}
-                    key={`shadow-${index}`}
-                    start={prevPoint}
-                    tileSize={tileSize}
-                    wallHeight={wallHeight}
-                  />
-                )
-              })} */}
-
-            {/* Wall shadow preview for current hover segment */}
-            {/* {customRoomPreviewEnd && (
-              <WallShadowPreview
-                allWallSegments={allWallSegments}
-                end={customRoomPreviewEnd}
-                start={customRoomPoints[customRoomPoints.length - 1]}
-                tileSize={tileSize}
-                wallHeight={wallHeight}
-              />
-            )} */}
           </>
         )}
 

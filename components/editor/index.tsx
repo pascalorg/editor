@@ -33,6 +33,7 @@ import {
 import { cn, createId } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
+import { CustomRoomBuilder } from './elements/custom-room-builder'
 import { GridTiles } from './elements/grid-tiles'
 import { RoomBuilder } from './elements/room-builder'
 import { Scan } from './elements/scan'
@@ -198,10 +199,6 @@ export default function Editor({ className }: { className?: string }) {
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
   const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
 
-  // State for custom-room mode (multi-point polygon)
-  const [customRoomPoints, setCustomRoomPoints] = useState<Array<[number, number]>>([])
-  const [customRoomPreviewEnd, setCustomRoomPreviewEnd] = useState<[number, number] | null>(null)
-
   // State for roof mode (two-click ridge line)
   const [roofStartPoint, setRoofStartPoint] = useState<[number, number] | null>(null)
   const [roofPreviewEnd, setRoofPreviewEnd] = useState<[number, number] | null>(null)
@@ -225,8 +222,6 @@ export default function Editor({ className }: { className?: string }) {
   const clearPlacementStates = () => {
     setWallStartPoint(null)
     setWallPreviewEnd(null)
-    setCustomRoomPoints([])
-    setCustomRoomPreviewEnd(null)
     setRoofStartPoint(null)
     setRoofPreviewEnd(null)
     setDoorPreviewPosition(null)
@@ -260,7 +255,6 @@ export default function Editor({ className }: { className?: string }) {
         // Check if there's an active placement/deletion in progress
         const hasActivePlacement =
           wallStartPoint !== null ||
-          customRoomPoints.length > 0 ||
           roofStartPoint !== null ||
           deleteStartPoint !== null
 
@@ -330,7 +324,6 @@ export default function Editor({ className }: { className?: string }) {
     cameraMode,
     setCameraMode,
     wallStartPoint,
-    customRoomPoints,
     deleteStartPoint,
     roofStartPoint,
     clearPlacementStates,
@@ -676,104 +669,6 @@ export default function Editor({ className }: { className?: string }) {
         setRoofStartPoint(null)
         setRoofPreviewEnd(null)
       }
-    } else if (controlMode === 'building' && activeTool === 'custom-room') {
-      // Custom-room mode: multi-point polygon
-      // Use the snapped preview position instead of raw x,y
-      const snappedX = customRoomPreviewEnd ? customRoomPreviewEnd[0] : x
-      const snappedY = customRoomPreviewEnd ? customRoomPreviewEnd[1] : y
-
-      // Check if clicking on the first point to close the shape
-      if (
-        customRoomPoints.length >= 3 &&
-        snappedX === customRoomPoints[0][0] &&
-        snappedY === customRoomPoints[0][1]
-      ) {
-        // Complete the custom room polygon by creating a group with walls
-        if (selectedFloorId) {
-          const wallKeys: string[] = []
-          // Create walls between consecutive points (including closing wall)
-          for (let i = 0; i < customRoomPoints.length; i++) {
-            const [x1, y1] = customRoomPoints[i]
-            const [x2, y2] = customRoomPoints[(i + 1) % customRoomPoints.length]
-            wallKeys.push(`${x1},${y1}-${x2},${y2}`)
-          }
-
-          // Create wall nodes for the group
-          const wallNodes = wallKeys.map((wallKey) => {
-            const [start, end] = wallKey.split('-')
-            const [wx1, wz1] = start.split(',').map(Number)
-            const [wx2, wz2] = end.split(',').map(Number)
-            const dx = wx2 - wx1
-            const dz = wz2 - wz1
-            const length = Math.sqrt(dx * dx + dz * dz)
-            const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
-
-            return {
-              id: wallKey,
-              type: 'wall' as const,
-              name: `Wall ${wallKey}`,
-              position: [wx1, wz1] as [number, number],
-              rotation,
-              size: [length, 0.2] as [number, number],
-              start: { x: wx1, z: wz1 }, // Start point in grid coordinates
-              end: { x: wx2, z: wz2 }, // End point in grid coordinates
-              visible: true,
-              opacity: 100,
-              children: [],
-            }
-          })
-
-          // Count existing rooms to auto-increment the number
-          const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const existingRooms =
-            currentLevel?.children.filter(
-              (child) => child.type === 'group' && (child as any).groupType === 'room',
-            ) || []
-          const roomNumber = existingRooms.length + 1
-
-          // Create a group node containing the walls
-          const groupId = `room_${Date.now()}`
-
-          // Set parent on all wall nodes
-          const wallNodesWithParent = wallNodes.map((wall) => ({
-            ...wall,
-            parent: groupId,
-          }))
-
-          const groupNode = {
-            id: groupId,
-            type: 'group' as const,
-            name: `Room ${roomNumber}`,
-            groupType: 'room' as const,
-            visible: true,
-            opacity: 100,
-            children: wallNodesWithParent,
-            parent: selectedFloorId,
-          }
-
-          // Add the group to the current level
-          const updatedLevels = levels.map((level) => {
-            if (level.id === selectedFloorId) {
-              return {
-                ...level,
-                children: [...level.children, groupNode],
-              }
-            }
-            return level
-          })
-
-          updateLevels(updatedLevels)
-        }
-
-        // Reset custom room state
-        setCustomRoomPoints([])
-        setCustomRoomPreviewEnd(null)
-      } else {
-        // Add snapped point to the list and reset preview
-        setCustomRoomPoints((prev) => [...prev, [snappedX, snappedY]])
-        // Reset preview so it recalculates from the new point on next hover
-        setCustomRoomPreviewEnd(null)
-      }
     } else if (controlMode === 'building' && activeTool === 'column') {
       // Column mode: one-click placement at intersection
       if (!selectedFloorId) return
@@ -814,8 +709,7 @@ export default function Editor({ className }: { className?: string }) {
     if (
       controlMode === 'building' &&
       wallStartPoint === null &&
-      roofStartPoint === null &&
-      customRoomPoints.length === 0
+      roofStartPoint === null
     ) {
       setSelectedElements([])
     }
@@ -827,44 +721,9 @@ export default function Editor({ className }: { className?: string }) {
 
     const gridEvent: GridEvent = {
       type: 'double-click',
-      position: [x, y],
+      position: [0, 0], // Position not used for double-click events
     }
     emitGridEvent(gridEvent)
-
-    if (
-      controlMode === 'building' &&
-      activeTool === 'custom-room' &&
-      customRoomPoints.length >= 1
-    ) {
-      // Add the current preview point (from the first click of the double-click)
-      // But only if it's different from the last point
-      let finalPoints = customRoomPoints
-      if (customRoomPreviewEnd) {
-        const lastPoint = customRoomPoints[customRoomPoints.length - 1]
-        const isDifferent =
-          lastPoint[0] !== customRoomPreviewEnd[0] || lastPoint[1] !== customRoomPreviewEnd[1]
-        if (isDifferent) {
-          finalPoints = [...customRoomPoints, customRoomPreviewEnd]
-        }
-      }
-
-      // Create walls between consecutive points (NOT closing the shape)
-      if (finalPoints.length >= 2) {
-        const currentWalls = Array.from(walls)
-        const newWalls: string[] = []
-        // Create walls between consecutive points only (no closing wall)
-        for (let i = 0; i < finalPoints.length - 1; i++) {
-          const [x1, y1] = finalPoints[i]
-          const [x2, y2] = finalPoints[i + 1]
-          newWalls.push(`${x1},${y1}-${x2},${y2}`)
-        }
-        setWalls([...currentWalls, ...newWalls])
-      }
-
-      // Reset custom room state
-      setCustomRoomPoints([])
-      setCustomRoomPreviewEnd(null)
-    }
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
@@ -976,51 +835,6 @@ export default function Editor({ className }: { className?: string }) {
         setRoofPreviewEnd([x, y])
       } else if (!roofStartPoint) {
         setRoofPreviewEnd(null)
-      }
-    } else if (controlMode === 'building' && activeTool === 'custom-room') {
-      // Custom-room mode: show preview line to current hover point with snapping
-      if (y !== null) {
-        if (customRoomPoints.length > 0) {
-          const lastPoint = customRoomPoints[customRoomPoints.length - 1]
-          const [x1, y1] = lastPoint
-          let projectedX = x1
-          let projectedY = y1
-
-          const dx = x - x1
-          const dy = y - y1
-          const absDx = Math.abs(dx)
-          const absDy = Math.abs(dy)
-
-          // Calculate distances to horizontal, vertical, and diagonal lines
-          const horizontalDist = absDy
-          const verticalDist = absDx
-          const diagonalDist = Math.abs(absDx - absDy)
-
-          // Find the minimum distance to determine which axis to snap to
-          const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-
-          if (minDist === diagonalDist) {
-            // Snap to 45° diagonal
-            const diagonalLength = Math.min(absDx, absDy)
-            projectedX = x1 + Math.sign(dx) * diagonalLength
-            projectedY = y1 + Math.sign(dy) * diagonalLength
-          } else if (minDist === horizontalDist) {
-            // Snap to horizontal
-            projectedX = x
-            projectedY = y1
-          } else {
-            // Snap to vertical
-            projectedX = x1
-            projectedY = y
-          }
-
-          setCustomRoomPreviewEnd([projectedX, projectedY])
-        } else {
-          // No points yet, just follow the cursor
-          setCustomRoomPreviewEnd([x, y])
-        }
-      } else {
-        setCustomRoomPreviewEnd(null)
       }
     } else if (controlMode === 'building' && activeTool === 'door') {
       // Door mode: show preview at current grid position
@@ -1349,11 +1163,6 @@ export default function Editor({ className }: { className?: string }) {
                               offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                               opacity={0.3}
                               padding={1.5}
-                              previewCustomRoom={
-                                customRoomPoints.length > 0
-                                  ? { points: customRoomPoints, previewEnd: customRoomPreviewEnd }
-                                  : null
-                              }
                               previewRoof={
                                 roofStartPoint && roofPreviewEnd
                                   ? { corner1: roofStartPoint, corner2: roofPreviewEnd }
@@ -1425,14 +1234,15 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'room' && isActiveFloor && (
                       <RoomBuilder />
                     )}
+                    {controlMode === 'building' && activeTool === 'custom-room' && isActiveFloor && (
+                      <CustomRoomBuilder />
+                    )}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
                     {isActiveFloor && (
                       <GridTiles
                         controlMode={controlMode}
-                        customRoomPoints={customRoomPoints}
-                        customRoomPreviewEnd={customRoomPreviewEnd}
                         deletePreviewEnd={deletePreviewEnd}
                         deleteStartPoint={deleteStartPoint}
                         disableBuild={
