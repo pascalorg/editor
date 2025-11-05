@@ -3,9 +3,7 @@
 import { type GridEvent, useEditor } from '@/hooks/use-editor'
 import { useEffect, useRef } from 'react'
 
-type WallBuilderProps = {}
-
-export function WallBuilder({}: WallBuilderProps) {
+export function WallBuilder() {
   const registerHandler = useEditor((state) => state.registerHandler)
   const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
@@ -64,7 +62,6 @@ export function WallBuilder({}: WallBuilderProps) {
 
       return [projectedX, projectedY]
     }
-
     const handleGridEvent = (e: GridEvent) => {
       if (!selectedFloorId) return
 
