@@ -1,11 +1,11 @@
 'use client'
 
-import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { WallNode } from '@/lib/nodes/types'
 import { Line } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
+import type { WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -318,10 +318,10 @@ export function WallRenderer({ node }: WallRendererProps) {
       {isPreview ? (
         <>
           {/* Start point indicator (at origin in local space) */}
-          <mesh position={[0, 0.01, 0]}>
+          {/* <mesh position={[0, 0.01, 0]}>
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
-          </mesh>
+          </mesh> */}
 
           {/* Preview line - occluded version (dimmer) */}
           {/* Lines are in LOCAL space - parent group handles position & rotation */}

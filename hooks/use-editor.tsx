@@ -1,5 +1,10 @@
 'use client'
 
+import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import type * as THREE from 'three'
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
@@ -9,13 +14,8 @@ import {
   setNodeOpacity,
   setNodeVisibility,
 } from '@/lib/nodes/operations'
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import type * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { create } from 'zustand'
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
-import type { BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
 import { mapTree } from '@/lib/nodes/utils'
 import { createId } from '@/lib/utils'
 
@@ -465,7 +465,7 @@ type StoreState = {
 
   // Generic node operations
   addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
-  updateNode: (nodeId: string, updates: Partial<BaseNode>) => void
+  updateNode: (nodeId: string, updates: Partial<AnyNode>) => void
 
   // Preview wall placement methods
   startWallPreview: (startPoint: [number, number]) => void

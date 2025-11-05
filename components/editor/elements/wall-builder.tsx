@@ -1,7 +1,7 @@
 'use client'
 
-import { type GridEvent, useEditor } from '@/hooks/use-editor'
 import { useEffect, useRef } from 'react'
+import { type GridEvent, useEditor } from '@/hooks/use-editor'
 
 export function WallBuilder() {
   const registerHandler = useEditor((state) => state.registerHandler)
@@ -136,8 +136,8 @@ export function WallBuilder() {
               updateNode(previewWallId, {
                 size: [length, 0.2] as [number, number],
                 rotation,
-                start: { x: x1, z: y1 } as any,
-                end: { x: x2, z: y2 } as any,
+                start: { x: x1, z: y1 },
+                end: { x: x2, z: y2 },
               })
             }
           }

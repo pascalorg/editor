@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { type GridEvent, useEditor } from '@/hooks/use-editor'
 import { createId } from '@/lib/utils'
-import { useEffect, useRef } from 'react'
 
 export function RoomBuilder() {
   const registerHandler = useEditor((state) => state.registerHandler)
@@ -190,11 +190,11 @@ export function RoomBuilder() {
                 const topLength = Math.abs(topDx)
                 const topRotation = Math.atan2(0, topDx)
                 updateNode(topWall.id, {
-                  position: [x1, y2] as [number, number],
-                  size: [topLength, 0.2] as [number, number],
+                  position: [x1, y2],
+                  size: [topLength, 0.2],
                   rotation: topRotation,
-                  start: { x: x1, z: y2 } as any,
-                  end: { x: x2, z: y2 } as any,
+                  start: { x: x1, z: y2 },
+                  end: { x: x2, z: y2 },
                 })
 
                 // Update Bottom wall (x1,y1 -> x2,y1)
@@ -202,11 +202,11 @@ export function RoomBuilder() {
                 const bottomLength = Math.abs(bottomDx)
                 const bottomRotation = Math.atan2(0, bottomDx)
                 updateNode(bottomWall.id, {
-                  position: [x1, y1] as [number, number],
-                  size: [bottomLength, 0.2] as [number, number],
+                  position: [x1, y1],
+                  size: [bottomLength, 0.2],
                   rotation: bottomRotation,
-                  start: { x: x1, z: y1 } as any,
-                  end: { x: x2, z: y1 } as any,
+                  start: { x: x1, z: y1 },
+                  end: { x: x2, z: y1 },
                 })
 
                 // Update Left wall (x1,y1 -> x1,y2)
@@ -226,11 +226,11 @@ export function RoomBuilder() {
                 const rightLength = Math.abs(rightDy)
                 const rightRotation = Math.atan2(-rightDy, 0)
                 updateNode(rightWall.id, {
-                  position: [x2, y1] as [number, number],
-                  size: [rightLength, 0.2] as [number, number],
+                  position: [x2, y1],
+                  size: [rightLength, 0.2],
                   rotation: rightRotation,
-                  start: { x: x2, z: y1 } as any,
-                  end: { x: x2, z: y2 } as any,
+                  start: { x: x2, z: y1 },
+                  end: { x: x2, z: y2 },
                 })
               }
             }

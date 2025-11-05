@@ -1,13 +1,5 @@
 'use client'
 
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
-import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
-import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { useEditor, type GridEvent, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -21,6 +13,14 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
+import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { Roofs } from '@/components/editor/elements/roof'
+import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
+import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
 import {
@@ -65,9 +65,6 @@ export default function Editor({ className }: { className?: string }) {
   const setWalls = useEditor((state) => state.setWalls)
   const setRoofs = useEditor((state) => state.setRoofs)
   // Preview wall methods
-  const startWallPreview = useEditor((state) => state.startWallPreview)
-  const updateWallPreview = useEditor((state) => state.updateWallPreview)
-  const commitWallPreview = useEditor((state) => state.commitWallPreview)
   const cancelWallPreview = useEditor((state) => state.cancelWallPreview)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setSelectedElements = useEditor((state) => state.setSelectedElements)
@@ -254,9 +251,7 @@ export default function Editor({ className }: { className?: string }) {
         e.preventDefault()
         // Check if there's an active placement/deletion in progress
         const hasActivePlacement =
-          wallStartPoint !== null ||
-          roofStartPoint !== null ||
-          deleteStartPoint !== null
+          wallStartPoint !== null || roofStartPoint !== null || deleteStartPoint !== null
 
         // Cancel all placement and delete modes
         clearPlacementStates()
@@ -343,7 +338,6 @@ export default function Editor({ className }: { className?: string }) {
   const gridOpacity = GRID_OPACITY
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
-  const [hoveredWallIndex, setHoveredWallIndex] = useState<number | null>(null)
   const [hoveredRoofIndex, setHoveredRoofIndex] = useState<number | null>(null)
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
@@ -706,11 +700,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     // Door placement is now handled by DoorPlacementPreview component's onClick
     // Deselect in building mode if no placement action was taken
-    if (
-      controlMode === 'building' &&
-      wallStartPoint === null &&
-      roofStartPoint === null
-    ) {
+    if (controlMode === 'building' && wallStartPoint === null && roofStartPoint === null) {
       setSelectedElements([])
     }
   }
@@ -727,6 +717,8 @@ export default function Editor({ className }: { className?: string }) {
   }
 
   const handleIntersectionHover = (x: number, y: number | null) => {
+    if (y === null) return
+
     const gridEvent: GridEvent = {
       type: 'move',
       position: [x, y],
@@ -870,42 +862,6 @@ export default function Editor({ className }: { className?: string }) {
       })
     }
     wallContextMenuTriggeredRef.current = false
-  }
-
-  const handleWallRightClick = (e: any, wallSegment: WallSegment) => {
-    e.stopPropagation()
-    wallContextMenuTriggeredRef.current = true
-
-    // Only show context menu if there are selected elements to delete
-    if (selectedElements.length === 0) {
-      return
-    }
-
-    // Get mouse position - try different approaches for R3F events
-    let clientX, clientY
-
-    if (e.nativeEvent) {
-      // Standard DOM event
-      clientX = e.nativeEvent.clientX
-      clientY = e.nativeEvent.clientY
-    } else if (e.pointer) {
-      // Three.js pointer event - convert to screen coordinates
-      const canvas = document.querySelector('canvas')
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect()
-        clientX = rect.left + ((e.pointer.x + 1) * rect.width) / 2
-        clientY = rect.top + ((-e.pointer.y + 1) * rect.height) / 2
-      }
-    }
-
-    if (clientX !== undefined && clientY !== undefined) {
-      setContextMenuState({
-        isOpen: true,
-        position: { x: clientX, y: clientY },
-        type: 'wall',
-        wallSegment,
-      })
-    }
   }
 
   // Use constants for reference image
@@ -1234,9 +1190,9 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'room' && isActiveFloor && (
                       <RoomBuilder />
                     )}
-                    {controlMode === 'building' && activeTool === 'custom-room' && isActiveFloor && (
-                      <CustomRoomBuilder />
-                    )}
+                    {controlMode === 'building' &&
+                      activeTool === 'custom-room' &&
+                      isActiveFloor && <CustomRoomBuilder />}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
@@ -1264,23 +1220,8 @@ export default function Editor({ className }: { className?: string }) {
                         tileSize={tileSize}
                         wallHeight={wallHeight}
                         wallPreviewEnd={wallPreviewEnd}
-                        wallStartPoint={wallStartPoint}
                       />
                     )}
-
-                    {/* Wall placement preview */}
-                    {/* {isActiveFloor &&
-                      controlMode === 'building' &&
-                      activeTool === 'wall' &&
-                      wallStartPoint &&
-                      wallPreviewEnd && (
-                        <WallPlacementPreview
-                          end={wallPreviewEnd}
-                          start={wallStartPoint}
-                          tileSize={tileSize}
-                          wallHeight={wallHeight}
-                        />
-                      )} */}
 
                     {/* Roofs component fetches its own data based on floorId */}
                     <Roofs

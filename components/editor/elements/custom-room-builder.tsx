@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { type GridEvent, useEditor } from '@/hooks/use-editor'
 import { createId } from '@/lib/utils'
-import { useEffect, useRef } from 'react'
 
 export function CustomRoomBuilder() {
   const registerHandler = useEditor((state) => state.registerHandler)
@@ -207,7 +207,7 @@ export function CustomRoomBuilder() {
             }
 
             // Add the new point AFTER finalizing the old cursor wall
-            const newPoints = [...points, [x, y]]
+            const newPoints = [...points, [x, y] as [number, number]]
             customRoomStateRef.current.points = newPoints
             customRoomStateRef.current.lastCursorPoint = null
 

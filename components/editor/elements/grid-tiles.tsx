@@ -1,11 +1,11 @@
 'use client'
 
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
 import { type CameraControlsImpl, Line } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
 import { RoofShadowPreview } from './roof'
 
 const GRID_SIZE = 30 // 30m x 30m
@@ -16,10 +16,7 @@ type GridTilesProps = {
   onIntersectionClick: (x: number, y: number) => void
   onIntersectionDoubleClick: () => void
   onIntersectionHover: (x: number, y: number | null) => void
-  wallStartPoint: [number, number] | null
   wallPreviewEnd: [number, number] | null
-  roomStartPoint: [number, number] | null
-  roomPreviewEnd: [number, number] | null
   roofStartPoint: [number, number] | null
   roofPreviewEnd: [number, number] | null
   deleteStartPoint: [number, number] | null
@@ -37,10 +34,7 @@ export const GridTiles = memo(
     onIntersectionClick,
     onIntersectionDoubleClick,
     onIntersectionHover,
-    wallStartPoint,
     wallPreviewEnd,
-    roomStartPoint,
-    roomPreviewEnd,
     roofStartPoint,
     roofPreviewEnd,
     deleteStartPoint,
@@ -235,79 +229,6 @@ export const GridTiles = memo(
               <DownArrow />
             </group>
           )}
-
-        {/* Room mode preview - rectangle with 4 walls */}
-        {roomStartPoint && roomPreviewEnd && activeTool === 'room' && (
-          <>
-            {/* Start point indicator */}
-            <mesh position={[roomStartPoint[0] * tileSize, 0.01, roomStartPoint[1] * tileSize]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
-            </mesh>
-
-            {/* Preview lines for the 4 walls */}
-            {/* Occluded version - dimmer */}
-            <Line
-              color="#336633"
-              dashed={false}
-              depthTest={false}
-              lineWidth={2}
-              opacity={0.3}
-              points={[
-                [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-                [roomPreviewEnd[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-                [roomPreviewEnd[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
-                [roomStartPoint[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
-                [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-              ]}
-              transparent
-            />
-            {/* Visible version - brighter */}
-            <Line
-              color="#44ff44"
-              dashed={false}
-              depthTest={true}
-              lineWidth={3}
-              points={[
-                [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-                [roomPreviewEnd[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-                [roomPreviewEnd[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
-                [roomStartPoint[0] * tileSize, 0.1, roomPreviewEnd[1] * tileSize],
-                [roomStartPoint[0] * tileSize, 0.1, roomStartPoint[1] * tileSize],
-              ]}
-            />
-
-            {/* Wall shadow previews for all 4 walls */}
-            {/* <WallShadowPreview
-              allWallSegments={allWallSegments}
-              end={[roomPreviewEnd[0], roomStartPoint[1]]}
-              start={[roomStartPoint[0], roomStartPoint[1]]}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-            />
-            <WallShadowPreview
-              allWallSegments={allWallSegments}
-              end={[roomPreviewEnd[0], roomPreviewEnd[1]]}
-              start={[roomPreviewEnd[0], roomStartPoint[1]]}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-            />
-            <WallShadowPreview
-              allWallSegments={allWallSegments}
-              end={[roomStartPoint[0], roomPreviewEnd[1]]}
-              start={[roomPreviewEnd[0], roomPreviewEnd[1]]}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-            />
-            <WallShadowPreview
-              allWallSegments={allWallSegments}
-              end={[roomStartPoint[0], roomStartPoint[1]]}
-              start={[roomStartPoint[0], roomPreviewEnd[1]]}
-              tileSize={tileSize}
-              wallHeight={wallHeight}
-            /> */}
-          </>
-        )}
 
         {/* Roof mode preview - rectangular base outline + 3D roof geometry */}
         {roofStartPoint && roofPreviewEnd && activeTool === 'roof' && (
