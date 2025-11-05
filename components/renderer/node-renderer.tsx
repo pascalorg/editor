@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type { BaseNode, GridItem, WallNode } from '@/lib/nodes/types'
+import { useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { WallRenderer } from './wall-renderer'
 

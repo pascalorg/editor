@@ -1,11 +1,11 @@
 'use client'
 
-import { Line } from '@react-three/drei'
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { WallNode } from '@/lib/nodes/types'
+import { Line } from '@react-three/drei'
+import { useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness

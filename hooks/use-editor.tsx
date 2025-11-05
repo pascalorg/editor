@@ -1184,12 +1184,25 @@ const useStore = create<StoreState>()(
             return node.id
           }
 
+          // Look up the node in the index to get the current version with updated parent references
+          let currentNode = state.nodeIndex.get(node.id)
+          if (!currentNode) {
+            // Node not found in index
+            console.warn('[getLevelId] Node not found in index:', node.id)
+            return null
+          }
+
           // Traverse up the parent chain recursively
-          let currentNode = node
           while (currentNode.parent) {
             const parentNode = state.nodeIndex.get(currentNode.parent)
             if (!parentNode) {
               // Parent not found in index, stop traversal
+              console.warn(
+                '[getLevelId] Parent not found in index:',
+                currentNode.parent,
+                'for node:',
+                currentNode.id,
+              )
               break
             }
 
@@ -1203,6 +1216,7 @@ const useStore = create<StoreState>()(
           }
 
           // No level found in parent chain
+          console.warn('[getLevelId] No level found in parent chain for node:', node.id)
           return null
         },
 
