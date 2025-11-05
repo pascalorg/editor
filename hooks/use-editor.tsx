@@ -16,6 +16,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 // Node-based architecture imports
 import type { BaseNode, LevelNode } from '@/lib/nodes/types'
+import { mapTree } from '@/lib/nodes/utils'
 import { createId } from '@/lib/utils'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -461,6 +462,10 @@ type StoreState = {
   setScanOpacity: (scanId: string, opacity: number) => void
   setPointerPosition: (position: [number, number] | null) => void
   getLevelId: (node: BaseNode) => string | null
+
+  // Generic node operations
+  addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
+  updateNode: (nodeId: string, updates: Partial<BaseNode>, pushToUndo?: boolean) => void
   // Preview wall placement methods
   startWallPreview: (startPoint: [number, number]) => void
   updateWallPreview: (endPoint: [number, number]) => void
@@ -1198,6 +1203,105 @@ const useStore = create<StoreState>()(
         // No level found in parent chain
         return null
       },
+
+      // Generic node operations
+      addNode: (nodeData, parentId) => {
+        let addedNodeId = ''
+        set((state) => {
+          // Generate ID
+          const id = createId(nodeData.type)
+          addedNodeId = id
+
+          const newNode = {
+            ...nodeData,
+            id,
+            parent: parentId,
+          } as BaseNode
+
+          // Check if this is a preview node
+          const isPreview = (nodeData as any).preview === true
+
+          if (parentId === null) {
+            // Add to root (only for level nodes)
+            if (nodeData.type !== 'level') {
+              console.error('Only level nodes can be added to root')
+              return state
+            }
+            const updatedLevels = [...state.levels, newNode as LevelNode]
+            return {
+              levels: updatedLevels,
+              nodeIndex: buildNodeIndex(updatedLevels),
+              // Add to undo stack only if not a preview
+              ...(isPreview
+                ? {}
+                : {
+                    undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+                    redoStack: [],
+                  }),
+            }
+          }
+
+          // Add to parent node
+          const updatedLevels = mapTree(state.levels, (node) => {
+            if (node.id === parentId) {
+              return {
+                ...node,
+                children: [...node.children, newNode],
+              } as typeof node
+            }
+            return node
+          }) as LevelNode[]
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            // Add to undo stack only if not a preview
+            ...(isPreview
+              ? {}
+              : {
+                  undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+                  redoStack: [],
+                }),
+          }
+        })
+        return addedNodeId
+      },
+
+      updateNode: (nodeId, updates, pushToUndo) =>
+        set((state) => {
+          // Find the node to check if it's a preview
+          const node = state.nodeIndex.get(nodeId)
+          const isPreview =
+            node && (node as any).preview === true && updates && (updates as any).preview !== false
+
+          const updatedLevels = mapTree(state.levels, (node) => {
+            if (node.id === nodeId) {
+              return {
+                ...node,
+                ...updates,
+              } as typeof node
+            }
+            return node
+          }) as LevelNode[]
+
+          // Determine whether to add to undo stack:
+          // 1. If pushToUndo is explicitly set, use that value
+          // 2. Otherwise, only add if not a preview node
+          const shouldPushToUndo = pushToUndo !== undefined ? pushToUndo : !isPreview
+
+          return {
+            levels: updatedLevels,
+            nodeIndex: buildNodeIndex(updatedLevels),
+            // Add to undo stack based on shouldPushToUndo
+            ...(shouldPushToUndo
+              ? {
+                  undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+                  redoStack: [],
+                }
+              : {}),
+          }
+        }),
+
       // Preview wall placement methods
       startWallPreview: (startPoint) =>
         set((state) => {

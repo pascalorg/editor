@@ -617,18 +617,17 @@ export default function Editor({ className }: { className?: string }) {
     // Building mode - check active tool (only allow building in building mode)
     if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: two-click line drawing with node-based preview
-      if (wallStartPoint === null) {
-        // First click: set start point and create preview node
-        setWallStartPoint([x, y])
-        startWallPreview([x, y])
-      } else {
-        // Second click: commit the preview wall
-        commitWallPreview()
-
-        // Reset placement state
-        setWallStartPoint(null)
-        setWallPreviewEnd(null)
-      }
+      // if (wallStartPoint === null) {
+      //   // First click: set start point and create preview node
+      //   setWallStartPoint([x, y])
+      //   startWallPreview([x, y])
+      // } else {
+      //   // Second click: commit the preview wall
+      //   commitWallPreview()
+      //   // Reset placement state
+      //   setWallStartPoint(null)
+      //   setWallPreviewEnd(null)
+      // }
     } else if (controlMode === 'building' && activeTool === 'roof') {
       // Roof mode: two-click rectangle (defines base footprint)
       if (roofStartPoint === null) {
@@ -1033,46 +1032,41 @@ export default function Editor({ className }: { className?: string }) {
     // Building mode - check active tool (only allow previews in building mode)
     if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: snap to horizontal, vertical, or 45° diagonal
-      if (wallStartPoint && y !== null) {
-        // Calculate projected point on same row, column, or 45° diagonal
-        const [x1, y1] = wallStartPoint
-        let projectedX = x1
-        let projectedY = y1
-
-        const dx = x - x1
-        const dy = y - y1
-        const absDx = Math.abs(dx)
-        const absDy = Math.abs(dy)
-
-        // Calculate distances to horizontal, vertical, and diagonal lines
-        const horizontalDist = absDy
-        const verticalDist = absDx
-        const diagonalDist = Math.abs(absDx - absDy)
-
-        // Find the minimum distance to determine which axis to snap to
-        const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-
-        if (minDist === diagonalDist) {
-          // Snap to 45° diagonal
-          const diagonalLength = Math.min(absDx, absDy)
-          projectedX = x1 + Math.sign(dx) * diagonalLength
-          projectedY = y1 + Math.sign(dy) * diagonalLength
-        } else if (minDist === horizontalDist) {
-          // Snap to horizontal
-          projectedX = x
-          projectedY = y1
-        } else {
-          // Snap to vertical
-          projectedX = x1
-          projectedY = y
-        }
-
-        setWallPreviewEnd([projectedX, projectedY])
-        // Update the preview wall node with the new end point
-        updateWallPreview([projectedX, projectedY])
-      } else if (!wallStartPoint) {
-        setWallPreviewEnd(null)
-      }
+      // if (wallStartPoint && y !== null) {
+      //   // Calculate projected point on same row, column, or 45° diagonal
+      //   const [x1, y1] = wallStartPoint
+      //   let projectedX = x1
+      //   let projectedY = y1
+      //   const dx = x - x1
+      //   const dy = y - y1
+      //   const absDx = Math.abs(dx)
+      //   const absDy = Math.abs(dy)
+      //   // Calculate distances to horizontal, vertical, and diagonal lines
+      //   const horizontalDist = absDy
+      //   const verticalDist = absDx
+      //   const diagonalDist = Math.abs(absDx - absDy)
+      //   // Find the minimum distance to determine which axis to snap to
+      //   const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+      //   if (minDist === diagonalDist) {
+      //     // Snap to 45° diagonal
+      //     const diagonalLength = Math.min(absDx, absDy)
+      //     projectedX = x1 + Math.sign(dx) * diagonalLength
+      //     projectedY = y1 + Math.sign(dy) * diagonalLength
+      //   } else if (minDist === horizontalDist) {
+      //     // Snap to horizontal
+      //     projectedX = x
+      //     projectedY = y1
+      //   } else {
+      //     // Snap to vertical
+      //     projectedX = x1
+      //     projectedY = y
+      //   }
+      //   setWallPreviewEnd([projectedX, projectedY])
+      //   // Update the preview wall node with the new end point
+      //   updateWallPreview([projectedX, projectedY])
+      // } else if (!wallStartPoint) {
+      //   setWallPreviewEnd(null)
+      // }
     } else if (controlMode === 'building' && activeTool === 'roof') {
       // Roof mode: show rectangle preview (base footprint snaps to grid)
       if (roofStartPoint && y !== null) {

@@ -1,21 +1,33 @@
 'use client'
 
 import { type GridEvent, useEditor } from '@/hooks/use-editor'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 type WallBuilderProps = {}
 
 export function WallBuilder({}: WallBuilderProps) {
   const registerHandler = useEditor((state) => state.registerHandler)
   const unregisterHandler = useEditor((state) => state.unregisterHandler)
+  const addNode = useEditor((state) => state.addNode)
+  const updateNode = useEditor((state) => state.updateNode)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+
+  // Use ref to persist values across renders without triggering re-renders
+  const wallStateRef = useRef<{
+    startPoint: [number, number] | null
+    previewWallId: string | null
+    lastEndPoint: [number, number] | null
+  }>({
+    startPoint: null,
+    previewWallId: null,
+    lastEndPoint: null,
+  })
 
   useEffect(() => {
-    let wallStartPoint: [number, number] | null = null
-    let wallPreviewEnd: [number, number] | null = null
-
-    const calculateWallEndPoint = (x: number, y: number) => {
+    const calculateWallEndPoint = (x: number, y: number): [number, number] => {
+      const wallStartPoint = wallStateRef.current.startPoint
       if (wallStartPoint === null) {
-        return null
+        return [x, y]
       }
       const [x1, y1] = wallStartPoint
 
@@ -49,29 +61,88 @@ export function WallBuilder({}: WallBuilderProps) {
         projectedX = x1
         projectedY = y
       }
-      updateWallPreview()
+
+      return [projectedX, projectedY]
     }
 
     const handleGridEvent = (e: GridEvent) => {
-      console.log('WallBuilder event', e.type, e.position)
+      if (!selectedFloorId) return
 
       switch (e.type) {
         case 'click': {
           const [x, y] = e.position
-          if (wallStartPoint === null) {
+          if (wallStateRef.current.startPoint === null) {
             // First click: set start point and create preview node
-            wallStartPoint = [x, y]
-            wallPreviewEnd = null
+            wallStateRef.current.startPoint = [x, y]
+            wallStateRef.current.lastEndPoint = null // Reset last end point
+
+            // Create preview wall node
+            const previewWallId = addNode(
+              {
+                type: 'wall',
+                name: 'Wall Preview',
+                position: [x, y] as [number, number],
+                rotation: 0,
+                size: [0, 0.2] as [number, number], // Zero length initially
+                start: { x, z: y },
+                end: { x, z: y },
+                visible: true,
+                opacity: 100,
+                preview: true, // Mark as preview
+                children: [],
+              } as any,
+              selectedFloorId,
+            )
+
+            wallStateRef.current.previewWallId = previewWallId
           } else {
-            wallPreviewEnd = [x, y]
             // Second click: commit the preview wall
+            const previewWallId = wallStateRef.current.previewWallId
+
+            if (previewWallId) {
+              // Update the wall to remove preview flag
+              // This will automatically add to undo stack (because preview is being set to false)
+              updateNode(previewWallId, {
+                preview: false as any,
+                name: 'Wall',
+              })
+            }
+
+            // Reset state
+            wallStateRef.current.startPoint = null
+            wallStateRef.current.previewWallId = null
+            wallStateRef.current.lastEndPoint = null
           }
           break
         }
         case 'move': {
           const [x, y] = e.position
-          if (wallStartPoint !== null) {
-            calculateWallEndPoint(x, y)
+          const wallStartPoint = wallStateRef.current.startPoint
+          const previewWallId = wallStateRef.current.previewWallId
+
+          if (wallStartPoint !== null && previewWallId) {
+            const [x1, y1] = wallStartPoint
+            const [x2, y2] = calculateWallEndPoint(x, y)
+
+            // Only update if the end point has changed
+            const lastEndPoint = wallStateRef.current.lastEndPoint
+            if (!lastEndPoint || lastEndPoint[0] !== x2 || lastEndPoint[1] !== y2) {
+              wallStateRef.current.lastEndPoint = [x2, y2]
+
+              // Calculate new wall properties
+              const dx = x2 - x1
+              const dy = y2 - y1
+              const length = Math.sqrt(dx * dx + dy * dy)
+              const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
+
+              // Update preview wall
+              updateNode(previewWallId, {
+                size: [length, 0.2] as [number, number],
+                rotation,
+                start: { x: x1, z: y1 } as any,
+                end: { x: x2, z: y2 } as any,
+              })
+            }
           }
           break
         }
@@ -84,24 +155,7 @@ export function WallBuilder({}: WallBuilderProps) {
     const handlerId = 'wall-builder-handler'
     registerHandler(handlerId, handleGridEvent)
     return () => unregisterHandler(handlerId)
+  }, [registerHandler, unregisterHandler, addNode, updateNode, selectedFloorId])
 
-    // const onClick = () => {
-    //   if (wallStartPoint === null) {
-    //   // First click: set start point and create preview node
-    //   setWallStartPoint([x, y])
-    //   startWallPreview([x, y])
-    // } else {
-    //   // Second click: commit the preview wall
-    //   commitWallPreview()
-
-    //   // Reset placement state
-    //   setWallStartPoint(null)
-    //   setWallPreviewEnd(null)
-    // }
-    // }
-
-    // window.addEventListener('click', onClick)
-    // return () => window.removeEventListener('click', onClick)
-  }, [registerHandler, unregisterHandler])
   return <></>
 }
