@@ -1,6 +1,5 @@
 'use client'
 
-import { Columns } from '@/components/editor/elements/column'
 import { Doors } from '@/components/editor/elements/door'
 import { Windows } from '@/components/editor/elements/window'
 import type { Component as EditorComponent, ViewMode } from '@/hooks/use-editor'
@@ -12,7 +11,6 @@ import type { SelectedElement } from '@/lib/building-elements'
 const elementComponentMap = {
   door: Doors,
   window: Windows,
-  column: Columns,
 }
 
 type BuildingElementsRendererProps = {
@@ -94,21 +92,21 @@ export function BuildingElementsRenderer({
                 wallHeight={wallHeight}
               />
             )
-          case 'column':
-            return (
-              <Columns
-                {...commonProps}
-                columnHeight={wallHeight}
-                controlMode={controlMode}
-                isActive={isActiveFloor}
-                isFullView={viewMode === 'full'}
-                key={component.id}
-                movingCamera={movingCamera}
-                selectedElements={viewerSelectedElements}
-                setControlMode={noopSetControlMode}
-                setSelectedElements={noopSetSelectedElements}
-              />
-            )
+          // case 'column':
+          //   return (
+          //     <Columns
+          //       {...commonProps}
+          //       columnHeight={wallHeight}
+          //       controlMode={controlMode}
+          //       isActive={isActiveFloor}
+          //       isFullView={viewMode === 'full'}
+          //       key={component.id}
+          //       movingCamera={movingCamera}
+          //       selectedElements={viewerSelectedElements}
+          //       setControlMode={noopSetControlMode}
+          //       setSelectedElements={noopSetSelectedElements}
+          //     />
+          //   )
           default:
             return null
         }

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode, GridItem, RoofNode, WallNode } from '@/lib/nodes/types'
+import type { BaseNode, ColumnNode, GridItem, RoofNode, WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { ColumnRenderer } from './column-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { WallRenderer } from './wall-renderer'
 
@@ -138,6 +139,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
           </>
         )}
         {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
+        {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
         {/* TODO: Add other node type renderers here */}
 
         {/* Selection outline for grid items */}

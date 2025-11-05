@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
+import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
@@ -23,13 +23,12 @@ import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
 import { useDoors, useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
 import {
-  addColumnToLevel,
   setNodePosition,
   setNodeRotation,
   setNodeSize,
   updateNodeProperties,
 } from '@/lib/nodes/operations'
-import { cn, createId } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
 import { CustomRoomBuilder } from './elements/custom-room-builder'
@@ -44,11 +43,9 @@ import { ProximityGrid } from './proximity-grid'
 
 export const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
-const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 export const GRID_SIZE = 30 // 30m x 30m
 const SHOW_GRID = true // Show grid by default
 const GRID_OPACITY = 0.3 // Grid opacity
-const CAMERA_TYPE = 'perspective' as 'perspective' | 'orthographic' // Camera type
 const IMAGE_OPACITY = 0.5 // Reference image opacity
 const IMAGE_SCALE = 1 // Reference image scale
 const IMAGE_POSITION: [number, number] = [0, 0] // Reference image position
@@ -200,9 +197,6 @@ export default function Editor({ className }: { className?: string }) {
   // State for window mode (one-click placement with preview)
   const [windowPreviewPosition, setWindowPreviewPosition] = useState<[number, number] | null>(null)
 
-  // State for column mode (one-click placement with preview)
-  const [columnPreviewPosition, setColumnPreviewPosition] = useState<[number, number] | null>(null)
-
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -213,11 +207,8 @@ export default function Editor({ className }: { className?: string }) {
   const clearPlacementStates = () => {
     setWallStartPoint(null)
     setWallPreviewEnd(null)
-    // setRoofStartPoint(null)
-    // setRoofPreviewEnd(null)
     setDoorPreviewPosition(null)
     setWindowPreviewPosition(null)
-    setColumnPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setPointerPosition(null)
@@ -588,51 +579,10 @@ export default function Editor({ className }: { className?: string }) {
     // Building mode - check active tool (only allow building in building mode)
     if (controlMode === 'building' && activeTool === 'wall') {
       // Wall mode: two-click line drawing with node-based preview
-      // if (wallStartPoint === null) {
-      //   // First click: set start point and create preview node
-      //   setWallStartPoint([x, y])
-      //   startWallPreview([x, y])
-      // } else {
-      //   // Second click: commit the preview wall
-      //   commitWallPreview()
-      //   // Reset placement state
-      //   setWallStartPoint(null)
-      //   setWallPreviewEnd(null)
-      // }
+      // Handled by WallBuilder component
     } else if (controlMode === 'building' && activeTool === 'column') {
       // Column mode: one-click placement at intersection
-      if (!selectedFloorId) return
-
-      // Check if column already exists at this position
-      const level = levels.find((l) => l.id === selectedFloorId)
-      if (!level) return
-
-      const existingColumn = level.children.find(
-        (child) =>
-          child.type === 'column' &&
-          (child as any).position[0] === x &&
-          (child as any).position[1] === y,
-      )
-
-      if (!existingColumn) {
-        // Create column node
-        const columnId = `col-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-        const columnNode = {
-          id: columnId,
-          type: 'column' as const,
-          name: `Column at ${x},${y}`,
-          position: [x, y] as [number, number],
-          rotation: 0,
-          size: [0.3, 0.3] as [number, number], // 30cm x 30cm column
-          visible: true,
-          opacity: 100,
-          children: [] as [],
-        }
-
-        // Add column to level using node operation
-        const updatedLevels = addColumnToLevel(levels, selectedFloorId, columnNode)
-        updateLevels(updatedLevels)
-      }
+      // Handled by ColumnBuilder component
     }
     // Door placement is now handled by DoorPlacementPreview component's onClick
     // Deselect in building mode if no placement action was taken
@@ -720,44 +670,7 @@ export default function Editor({ className }: { className?: string }) {
     }
 
     // Building mode - check active tool (only allow previews in building mode)
-    if (controlMode === 'building' && activeTool === 'wall') {
-      // Wall mode: snap to horizontal, vertical, or 45° diagonal
-      // if (wallStartPoint && y !== null) {
-      //   // Calculate projected point on same row, column, or 45° diagonal
-      //   const [x1, y1] = wallStartPoint
-      //   let projectedX = x1
-      //   let projectedY = y1
-      //   const dx = x - x1
-      //   const dy = y - y1
-      //   const absDx = Math.abs(dx)
-      //   const absDy = Math.abs(dy)
-      //   // Calculate distances to horizontal, vertical, and diagonal lines
-      //   const horizontalDist = absDy
-      //   const verticalDist = absDx
-      //   const diagonalDist = Math.abs(absDx - absDy)
-      //   // Find the minimum distance to determine which axis to snap to
-      //   const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-      //   if (minDist === diagonalDist) {
-      //     // Snap to 45° diagonal
-      //     const diagonalLength = Math.min(absDx, absDy)
-      //     projectedX = x1 + Math.sign(dx) * diagonalLength
-      //     projectedY = y1 + Math.sign(dy) * diagonalLength
-      //   } else if (minDist === horizontalDist) {
-      //     // Snap to horizontal
-      //     projectedX = x
-      //     projectedY = y1
-      //   } else {
-      //     // Snap to vertical
-      //     projectedX = x1
-      //     projectedY = y
-      //   }
-      //   setWallPreviewEnd([projectedX, projectedY])
-      //   // Update the preview wall node with the new end point
-      //   updateWallPreview([projectedX, projectedY])
-      // } else if (!wallStartPoint) {
-      //   setWallPreviewEnd(null)
-      // }
-    } else if (controlMode === 'building' && activeTool === 'door') {
+    if (controlMode === 'building' && activeTool === 'door') {
       // Door mode: show preview at current grid position
       if (y !== null) {
         setDoorPreviewPosition([x, y])
@@ -771,14 +684,8 @@ export default function Editor({ className }: { className?: string }) {
       } else {
         setWindowPreviewPosition(null)
       }
-    } else if (controlMode === 'building' && activeTool === 'column') {
-      // Column mode: show preview at current grid position
-      if (y !== null) {
-        setColumnPreviewPosition([x, y])
-      } else {
-        setColumnPreviewPosition(null)
-      }
     }
+    // Column preview is now handled by ColumnBuilder component
   }
 
   const handleCanvasRightClick = (e: React.MouseEvent) => {
@@ -1121,6 +1028,9 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'roof' && isActiveFloor && (
                       <RoofBuilder />
                     )}
+                    {controlMode === 'building' && activeTool === 'column' && isActiveFloor && (
+                      <ColumnBuilder />
+                    )}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
@@ -1150,7 +1060,7 @@ export default function Editor({ className }: { className?: string }) {
                     )}
 
                     {/* Columns component fetches its own data based on floorId */}
-                    <Columns
+                    {/* <Columns
                       columnHeight={wallHeight}
                       controlMode={controlMode}
                       floorId={floor.id}
@@ -1162,19 +1072,9 @@ export default function Editor({ className }: { className?: string }) {
                       setControlMode={setControlMode}
                       setSelectedElements={setSelectedElements}
                       tileSize={tileSize}
-                    />
+                    /> */}
 
-                    {/* Column placement preview */}
-                    {isActiveFloor &&
-                      controlMode === 'building' &&
-                      activeTool === 'column' &&
-                      columnPreviewPosition && (
-                        <ColumnShadowPreview
-                          columnHeight={wallHeight}
-                          position={columnPreviewPosition}
-                          tileSize={tileSize}
-                        />
-                      )}
+                    {/* Column preview is now handled by ColumnBuilder creating preview nodes */}
 
                     {/* Doors component renders placed doors */}
                     <Doors
