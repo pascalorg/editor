@@ -6,7 +6,6 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
-import { RoofShadowPreview } from './roof'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -17,8 +16,6 @@ type GridTilesProps = {
   onIntersectionDoubleClick: () => void
   onIntersectionHover: (x: number, y: number | null) => void
   wallPreviewEnd: [number, number] | null
-  roofStartPoint: [number, number] | null
-  roofPreviewEnd: [number, number] | null
   deleteStartPoint: [number, number] | null
   deletePreviewEnd: [number, number] | null
   opacity: number
@@ -35,11 +32,8 @@ export const GridTiles = memo(
     onIntersectionDoubleClick,
     onIntersectionHover,
     wallPreviewEnd,
-    roofStartPoint,
-    roofPreviewEnd,
     deleteStartPoint,
     deletePreviewEnd,
-    opacity,
     disableBuild = false,
     wallHeight,
     controlMode,
@@ -229,92 +223,6 @@ export const GridTiles = memo(
               <DownArrow />
             </group>
           )}
-
-        {/* Roof mode preview - rectangular base outline + 3D roof geometry */}
-        {roofStartPoint && roofPreviewEnd && activeTool === 'roof' && (
-          <>
-            {/* Start point indicator */}
-            <mesh position={[roofStartPoint[0] * tileSize, 0.01, roofStartPoint[1] * tileSize]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
-            </mesh>
-
-            {/* Preview rectangular outline on ground (base footprint) */}
-            {/* Occluded version - dimmer */}
-            <Line
-              color="#336633"
-              dashed={false}
-              depthTest={false}
-              lineWidth={2}
-              opacity={0.3}
-              points={[
-                [roofStartPoint[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-                [roofPreviewEnd[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-                [roofPreviewEnd[0] * tileSize, 0.1, roofPreviewEnd[1] * tileSize],
-                [roofStartPoint[0] * tileSize, 0.1, roofPreviewEnd[1] * tileSize],
-                [roofStartPoint[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-              ]}
-              transparent
-            />
-            {/* Visible version - brighter */}
-            <Line
-              color="#44ff44"
-              dashed={false}
-              depthTest={true}
-              lineWidth={3}
-              points={[
-                [roofStartPoint[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-                [roofPreviewEnd[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-                [roofPreviewEnd[0] * tileSize, 0.1, roofPreviewEnd[1] * tileSize],
-                [roofStartPoint[0] * tileSize, 0.1, roofPreviewEnd[1] * tileSize],
-                [roofStartPoint[0] * tileSize, 0.1, roofStartPoint[1] * tileSize],
-              ]}
-            />
-
-            {/* 3D roof preview - calculate ridge from base corners */}
-            {(() => {
-              const [x1, y1] = roofStartPoint
-              const [x2, y2] = roofPreviewEnd
-              const width = Math.abs(x2 - x1)
-              const depth = Math.abs(y2 - y1)
-
-              // Calculate ridge line along the longer axis
-              const minX = Math.min(x1, x2)
-              const maxX = Math.max(x1, x2)
-              const minY = Math.min(y1, y2)
-              const maxY = Math.max(y1, y2)
-              const centerX = (minX + maxX) / 2
-              const centerY = (minY + maxY) / 2
-
-              let ridgeStart: [number, number]
-              let ridgeEnd: [number, number]
-              let roofWidth: number // Distance from ridge to each edge
-
-              if (width >= depth) {
-                // Ridge runs along X axis (longer side)
-                ridgeStart = [minX, centerY]
-                ridgeEnd = [maxX, centerY]
-                roofWidth = (depth * tileSize) / 2
-              } else {
-                // Ridge runs along Y axis (longer side)
-                ridgeStart = [centerX, minY]
-                ridgeEnd = [centerX, maxY]
-                roofWidth = (width * tileSize) / 2
-              }
-
-              return (
-                <RoofShadowPreview
-                  baseHeight={wallHeight}
-                  end={ridgeEnd}
-                  leftWidth={roofWidth}
-                  rightWidth={roofWidth}
-                  start={ridgeStart}
-                  tileSize={tileSize}
-                />
-              )
-            })()}
-          </>
-        )}
 
         {/* Delete mode preview - red line and plane */}
         {controlMode === 'delete' && deleteStartPoint && (

@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode, GridItem, WallNode } from '@/lib/nodes/types'
+import type { BaseNode, GridItem, RoofNode, WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { RoofRenderer } from './roof-renderer'
 import { WallRenderer } from './wall-renderer'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -136,6 +137,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
             </mesh> */}
           </>
         )}
+        {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
         {/* TODO: Add other node type renderers here */}
 
         {/* Selection outline for grid items */}

@@ -2,7 +2,6 @@
 
 import { Columns } from '@/components/editor/elements/column'
 import { Doors } from '@/components/editor/elements/door'
-import { Roofs } from '@/components/editor/elements/roof'
 import { Windows } from '@/components/editor/elements/window'
 import type { Component as EditorComponent, ViewMode } from '@/hooks/use-editor'
 import type { SelectedElement } from '@/lib/building-elements'
@@ -11,7 +10,6 @@ import type { SelectedElement } from '@/lib/building-elements'
 // This makes it easy to add new building elements in the future.
 // Note: Walls are now rendered via NodeRenderer, so they're excluded from this map.
 const elementComponentMap = {
-  roof: Roofs,
   door: Doors,
   window: Windows,
   column: Columns,
@@ -76,30 +74,6 @@ export function BuildingElementsRenderer({
         // The switch statement handles these variations.
         // Note: Walls are handled by NodeRenderer and should not be passed to this component.
         switch (component.type) {
-          case 'roof':
-            return (
-              <Roofs
-                {...commonProps}
-                baseHeight={wallHeight}
-                controlMode={controlMode}
-                hoveredRoofIndex={null}
-                isActive={isActiveFloor}
-                isCameraEnabled={false}
-                isFullView={viewMode === 'full'}
-                key={component.id}
-                movingCamera={movingCamera}
-                onDeleteRoofs={() => {
-                  /* No-op in viewer mode */
-                }}
-                onRoofHover={() => {
-                  /* No-op in viewer mode */
-                }}
-                onRoofRightClick={undefined}
-                selectedElements={viewerSelectedElements}
-                setControlMode={noopSetControlMode}
-                setSelectedElements={noopSetSelectedElements}
-              />
-            )
           case 'door':
             return (
               <Doors

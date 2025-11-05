@@ -18,7 +18,6 @@ import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { ColumnShadowPreview, Columns } from '@/components/editor/elements/column'
 import { DoorPlacementPreview, Doors } from '@/components/editor/elements/door'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { Roofs } from '@/components/editor/elements/roof'
 import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
 import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
@@ -35,6 +34,7 @@ import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
 import { CustomRoomBuilder } from './elements/custom-room-builder'
 import { GridTiles } from './elements/grid-tiles'
+import { RoofBuilder } from './elements/roof-builder'
 import { RoomBuilder } from './elements/room-builder'
 import { Scan } from './elements/scan'
 import { WallBuilder } from './elements/wall-builder'
@@ -61,9 +61,7 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 export default function Editor({ className }: { className?: string }) {
   // Use individual selectors for better performance
   const getWallsSet = useEditor((state) => state.getWallsSet)
-  const getRoofsSet = useEditor((state) => state.getRoofsSet)
   const setWalls = useEditor((state) => state.setWalls)
-  const setRoofs = useEditor((state) => state.setRoofs)
   // Preview wall methods
   const cancelWallPreview = useEditor((state) => state.cancelWallPreview)
   const selectedElements = useEditor((state) => state.selectedElements)
@@ -196,10 +194,6 @@ export default function Editor({ className }: { className?: string }) {
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
   const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
 
-  // State for roof mode (two-click ridge line)
-  const [roofStartPoint, setRoofStartPoint] = useState<[number, number] | null>(null)
-  const [roofPreviewEnd, setRoofPreviewEnd] = useState<[number, number] | null>(null)
-
   // State for door mode (one-click placement with preview)
   const [doorPreviewPosition, setDoorPreviewPosition] = useState<[number, number] | null>(null)
 
@@ -219,8 +213,8 @@ export default function Editor({ className }: { className?: string }) {
   const clearPlacementStates = () => {
     setWallStartPoint(null)
     setWallPreviewEnd(null)
-    setRoofStartPoint(null)
-    setRoofPreviewEnd(null)
+    // setRoofStartPoint(null)
+    // setRoofPreviewEnd(null)
     setDoorPreviewPosition(null)
     setWindowPreviewPosition(null)
     setColumnPreviewPosition(null)
@@ -250,8 +244,7 @@ export default function Editor({ className }: { className?: string }) {
       if (e.key === 'Escape') {
         e.preventDefault()
         // Check if there's an active placement/deletion in progress
-        const hasActivePlacement =
-          wallStartPoint !== null || roofStartPoint !== null || deleteStartPoint !== null
+        const hasActivePlacement = wallStartPoint !== null || deleteStartPoint !== null
 
         // Cancel all placement and delete modes
         clearPlacementStates()
@@ -320,7 +313,6 @@ export default function Editor({ className }: { className?: string }) {
     setCameraMode,
     wallStartPoint,
     deleteStartPoint,
-    roofStartPoint,
     clearPlacementStates,
     selectedElements,
     selectedImageIds,
@@ -338,7 +330,6 @@ export default function Editor({ className }: { className?: string }) {
   const gridOpacity = GRID_OPACITY
 
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
-  const [hoveredRoofIndex, setHoveredRoofIndex] = useState<number | null>(null)
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     position: { x: number; y: number }
@@ -608,61 +599,6 @@ export default function Editor({ className }: { className?: string }) {
       //   setWallStartPoint(null)
       //   setWallPreviewEnd(null)
       // }
-    } else if (controlMode === 'building' && activeTool === 'roof') {
-      // Roof mode: two-click rectangle (defines base footprint)
-      if (roofStartPoint === null) {
-        // First click: set start corner
-        setRoofStartPoint([x, y])
-      } else {
-        // Second click: create roof from base rectangle
-        if (roofPreviewEnd) {
-          const [x1, y1] = roofStartPoint
-          const [x2, y2] = roofPreviewEnd
-
-          // Calculate base dimensions
-          const width = Math.abs(x2 - x1)
-          const depth = Math.abs(y2 - y1)
-
-          // Ensure roof base is at least MIN_WALL_LENGTH
-          if (width * TILE_SIZE >= MIN_WALL_LENGTH && depth * TILE_SIZE >= MIN_WALL_LENGTH) {
-            // Calculate ridge line along the longer axis
-            // Ridge runs parallel to the longer side, centered in the rectangle
-            const minX = Math.min(x1, x2)
-            const maxX = Math.max(x1, x2)
-            const minY = Math.min(y1, y2)
-            const maxY = Math.max(y1, y2)
-            const centerX = (minX + maxX) / 2
-            const centerY = (minY + maxY) / 2
-
-            let ridgeStart: [number, number]
-            let ridgeEnd: [number, number]
-            let roofWidth: number // Distance from ridge to each edge in grid units
-
-            if (width >= depth) {
-              // Ridge runs along X axis (longer side)
-              ridgeStart = [minX, centerY]
-              ridgeEnd = [maxX, centerY]
-              roofWidth = depth / 2
-            } else {
-              // Ridge runs along Y axis (longer side)
-              ridgeStart = [centerX, minY]
-              ridgeEnd = [centerX, maxY]
-              roofWidth = width / 2
-            }
-
-            // Store roof with widths: "x1,y1-x2,y2:leftWidth,rightWidth"
-            const roofKey = `${ridgeStart[0]},${ridgeStart[1]}-${ridgeEnd[0]},${ridgeEnd[1]}:${roofWidth * TILE_SIZE},${roofWidth * TILE_SIZE}`
-            const currentRoofs = Array.from(getRoofsSet())
-            if (!currentRoofs.includes(roofKey)) {
-              setRoofs([...currentRoofs, roofKey])
-            }
-          }
-        }
-
-        // Reset placement state
-        setRoofStartPoint(null)
-        setRoofPreviewEnd(null)
-      }
     } else if (controlMode === 'building' && activeTool === 'column') {
       // Column mode: one-click placement at intersection
       if (!selectedFloorId) return
@@ -700,7 +636,7 @@ export default function Editor({ className }: { className?: string }) {
     }
     // Door placement is now handled by DoorPlacementPreview component's onClick
     // Deselect in building mode if no placement action was taken
-    if (controlMode === 'building' && wallStartPoint === null && roofStartPoint === null) {
+    if (controlMode === 'building' && wallStartPoint === null) {
       setSelectedElements([])
     }
   }
@@ -821,13 +757,6 @@ export default function Editor({ className }: { className?: string }) {
       // } else if (!wallStartPoint) {
       //   setWallPreviewEnd(null)
       // }
-    } else if (controlMode === 'building' && activeTool === 'roof') {
-      // Roof mode: show rectangle preview (base footprint snaps to grid)
-      if (roofStartPoint && y !== null) {
-        setRoofPreviewEnd([x, y])
-      } else if (!roofStartPoint) {
-        setRoofPreviewEnd(null)
-      }
     } else if (controlMode === 'building' && activeTool === 'door') {
       // Door mode: show preview at current grid position
       if (y !== null) {
@@ -1119,11 +1048,7 @@ export default function Editor({ className }: { className?: string }) {
                               offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
                               opacity={0.3}
                               padding={1.5}
-                              previewRoof={
-                                roofStartPoint && roofPreviewEnd
-                                  ? { corner1: roofStartPoint, corner2: roofPreviewEnd }
-                                  : null
-                              }
+                              previewRoof={null}
                               previewWall={
                                 wallStartPoint && wallPreviewEnd
                                   ? { start: wallStartPoint, end: wallPreviewEnd }
@@ -1193,6 +1118,9 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' &&
                       activeTool === 'custom-room' &&
                       isActiveFloor && <CustomRoomBuilder />}
+                    {controlMode === 'building' && activeTool === 'roof' && isActiveFloor && (
+                      <RoofBuilder />
+                    )}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
@@ -1215,33 +1143,11 @@ export default function Editor({ className }: { className?: string }) {
                             ? (floor.opacity / 100) * gridOpacity
                             : gridOpacity
                         }
-                        roofPreviewEnd={roofPreviewEnd}
-                        roofStartPoint={roofStartPoint}
                         tileSize={tileSize}
                         wallHeight={wallHeight}
                         wallPreviewEnd={wallPreviewEnd}
                       />
                     )}
-
-                    {/* Roofs component fetches its own data based on floorId */}
-                    <Roofs
-                      baseHeight={wallHeight}
-                      controlMode={controlMode}
-                      floorId={floor.id}
-                      hoveredRoofIndex={hoveredRoofIndex}
-                      isActive={isActiveFloor}
-                      isCameraEnabled={isCameraEnabled}
-                      isFullView={viewMode === 'full'}
-                      key={`roof-${floor.id}-${isActiveFloor}`}
-                      movingCamera={movingCamera}
-                      onDeleteRoofs={handleDeleteSelectedElements}
-                      onRoofHover={setHoveredRoofIndex}
-                      onRoofRightClick={undefined}
-                      selectedElements={selectedElements}
-                      setControlMode={setControlMode}
-                      setSelectedElements={setSelectedElements}
-                      tileSize={tileSize}
-                    />
 
                     {/* Columns component fetches its own data based on floorId */}
                     <Columns

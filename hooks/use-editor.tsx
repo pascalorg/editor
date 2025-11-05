@@ -1270,10 +1270,10 @@ const useStore = create<StoreState>()(
 
         updateNode: (nodeId, updates) => {
           set((state) => {
-            let fromPreviewNode = false
+            let wasPreviewNode = false
             const updatedLevels = mapTree(state.levels, (node) => {
               if (node.id === nodeId) {
-                fromPreviewNode = node.preview === true
+                wasPreviewNode = node.preview === true
                 return {
                   ...node,
                   ...updates,
@@ -1281,6 +1281,18 @@ const useStore = create<StoreState>()(
               }
               return node
             }) as LevelNode[]
+
+            // If we're committing a preview node (removing preview flag), push to undo stack
+            const isCommittingPreview = wasPreviewNode && updates.preview === false
+
+            if (isCommittingPreview) {
+              return {
+                levels: updatedLevels,
+                nodeIndex: buildNodeIndex(updatedLevels),
+                undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
+                redoStack: [],
+              }
+            }
 
             return {
               levels: updatedLevels,
