@@ -13,7 +13,7 @@
 // ) => void
 
 import mitt from 'mitt'
-import type { BaseNode, WallNode } from '@/hooks/use-editor'
+import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
 
 export interface GridEvent {
   position: [number, number]
@@ -28,6 +28,20 @@ export interface WallEvent extends NodeEvent {
   node: WallNode
 }
 
+export interface ImageEvent {
+  node: ReferenceImageNode
+}
+
+export interface ImageUpdateEvent {
+  nodeId: string
+  updates: Partial<{ position: [number, number]; rotation: number; scale: number }>
+  pushToUndo: boolean
+}
+
+export interface ImageManipulationEvent {
+  nodeId: string
+}
+
 type EditorEvents = {
   'grid:click': GridEvent
   'grid:move': GridEvent
@@ -38,5 +52,9 @@ type EditorEvents = {
   'wall:move': WallEvent
   'wall:enter': WallEvent
   'wall:leave': WallEvent
+  'image:select': ImageEvent
+  'image:update': ImageUpdateEvent
+  'image:manipulation-start': ImageManipulationEvent
+  'image:manipulation-end': ImageManipulationEvent
 }
 export const emitter = mitt<EditorEvents>()

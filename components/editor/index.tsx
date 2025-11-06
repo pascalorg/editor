@@ -17,7 +17,8 @@ import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { ImageBuilder } from '@/components/editor/elements/image-builder'
+// import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
 import { emitter } from '@/events/bus'
@@ -715,7 +716,7 @@ export default function Editor({ className }: { className?: string }) {
         <InfiniteFloor />
 
         {/* Hide guides (reference images and scans) in full view mode */}
-        {viewMode === 'level' &&
+        {/* {viewMode === 'level' &&
           images
             .filter((image) => {
               // Filter out hidden images (visible === false or opacity === 0)
@@ -764,7 +765,7 @@ export default function Editor({ className }: { className?: string }) {
                   url={image.url}
                 />
               )
-            })}
+            })} */}
 
         {/* Render 3D scans */}
         {viewMode === 'level' &&
@@ -1008,6 +1009,8 @@ export default function Editor({ className }: { className?: string }) {
         </group>
 
         <CustomControls />
+        {/* Image builder for handling image manipulation in guide mode */}
+        {controlMode === 'guide' && <ImageBuilder />}
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />

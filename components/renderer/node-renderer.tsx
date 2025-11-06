@@ -6,6 +6,7 @@ import type {
   ColumnNode,
   DoorNode,
   GridItem,
+  ReferenceImageNode,
   RoofNode,
   WallNode,
   WindowNode,
@@ -13,6 +14,7 @@ import type {
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
+import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { WallRenderer } from './wall-renderer'
 import { WindowRenderer } from './window-renderer'
@@ -138,21 +140,12 @@ export function NodeRenderer({ node }: NodeRendererProps) {
         rotation-y={(node as unknown as GridItem).rotation || 0}
         visible={node.visible}
       >
-        {node.type === 'wall' && (
-          <>
-            <WallRenderer node={node as WallNode} />
-            {/* Door/window children are rendered by WallRenderer at correct local positions */}
-            {/* DEBUG REAL POSITION / SIZE */}
-            {/* <mesh position-x={((node as unknown as GridItem).size?.[0] * TILE_SIZE) / 2}>
-              <boxGeometry args={[(node as unknown as GridItem).size?.[0] * TILE_SIZE, 1, 1]} />
-              <meshStandardMaterial color="pink" />
-            </mesh> */}
-          </>
-        )}
+        {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
         {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
         {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
         {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
         {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
+        {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
 
         {/* Selection outline for grid items */}
         {(node as unknown as GridItem).size && isSelected && (
