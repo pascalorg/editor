@@ -1,12 +1,14 @@
 'use client'
 
+import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Line } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
-import type { WallNode } from '@/lib/nodes/types'
+import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { DoorRenderer } from './door-renderer'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
@@ -179,6 +181,42 @@ export function WallRenderer({ node }: WallRendererProps) {
   const allWalls = useWalls(levelId || '')
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
+  // Get door children from wall (include preview doors for real-time cutouts)
+  const doors = useMemo(
+    () => node.children.filter((child) => child.type === 'door') as DoorNode[],
+    [node.children],
+  )
+
+  // Calculate door positions in local wall space
+  const doorOpenings = useMemo(() => {
+    return doors
+      .filter((door) => door.visible !== false) // Only include visible doors
+      .map((door) => {
+        // Door position in grid coordinates
+        const [doorX, doorY] = door.position
+        // Wall start position in grid coordinates
+        const [wallX, wallY] = node.position
+
+        // Calculate relative position in grid units
+        const relativeX = doorX - wallX
+        const relativeY = doorY - wallY
+
+        // Project onto wall's local X axis (wall direction)
+        // Wall rotation is atan2(-dy, dx), so the direction vector is (cos(rot), -sin(rot))
+        const cos = Math.cos(node.rotation)
+        const sin = Math.sin(node.rotation)
+
+        // Dot product to get position along wall's length
+        // Direction vector is (cos(rot), -sin(rot)), so: relativeX * cos + relativeY * (-sin)
+        const localX = (relativeX * cos - relativeY * sin) * TILE_SIZE
+
+        return {
+          door,
+          localX, // Position along wall's length in meters
+        }
+      })
+  }, [doors, node.position, node.rotation])
+
   // Calculate local space coordinates for preview line
   // The parent group already handles position & rotation, so we render in local space
   const { localEndX, localEndZ } = useMemo(() => {
@@ -304,8 +342,6 @@ export function WallRenderer({ node }: WallRendererProps) {
 
   if (!wallGeometry) return null
 
-  // TODO: handle subtraction windows / doors here
-
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
@@ -317,14 +353,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     <>
       {isPreview ? (
         <>
-          {/* Start point indicator (at origin in local space) */}
-          {/* <mesh position={[0, 0.01, 0]}>
-            <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial color="#44ff44" depthTest={false} emissive="#22aa22" />
-          </mesh> */}
-
           {/* Preview line - occluded version (dimmer) */}
-          {/* Lines are in LOCAL space - parent group handles position & rotation */}
           <Line
             color="#336633"
             dashed={false}
@@ -377,9 +406,56 @@ export function WallRenderer({ node }: WallRendererProps) {
           </mesh>
         </>
       ) : (
-        <mesh geometry={wallGeometry}>
-          <meshStandardMaterial color="beige" opacity={opacity} transparent={transparent} />
-        </mesh>
+        <>
+          {/* Wall with door cutouts */}
+          {doorOpenings.length > 0 ? (
+            <>
+              <mesh castShadow receiveShadow>
+                <Geometry useGroups>
+                  <Base geometry={wallGeometry} />
+                  {/* Create holes for doors */}
+                  {doorOpenings.map((opening) => {
+                    const doorWidth = 1 // 1 meter door width (standard)
+                    const doorHeight = WALL_HEIGHT // Door height matches wall height
+                    const doorDepth = WALL_THICKNESS * 1.1 // Slightly larger than wall thickness to ensure clean cut
+
+                    // Validate opening position
+                    if (!Number.isFinite(opening.localX)) {
+                      console.warn(`Invalid door position for door ${opening.door.id}`)
+                      return null
+                    }
+
+                    return (
+                      <Subtraction
+                        key={opening.door.id}
+                        position={[opening.localX, doorHeight / 2, 0]}
+                      >
+                        <boxGeometry args={[doorWidth, doorHeight, doorDepth]} />
+                      </Subtraction>
+                    )
+                  })}
+                </Geometry>
+                <meshStandardMaterial
+                  color="beige"
+                  metalness={0.1}
+                  opacity={opacity}
+                  roughness={0.7}
+                  transparent={transparent}
+                />
+              </mesh>
+            </>
+          ) : (
+            <mesh castShadow geometry={wallGeometry} receiveShadow>
+              <meshStandardMaterial
+                color="beige"
+                metalness={0.1}
+                opacity={opacity}
+                roughness={0.7}
+                transparent={transparent}
+              />
+            </mesh>
+          )}
+        </>
       )}
     </>
   )

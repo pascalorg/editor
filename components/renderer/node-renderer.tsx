@@ -1,11 +1,21 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode, ColumnNode, GridItem, RoofNode, WallNode } from '@/lib/nodes/types'
+import type {
+  BaseNode,
+  ColumnNode,
+  DoorNode,
+  GridItem,
+  RoofNode,
+  WindowNode,
+  WallNode,
+} from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
+import { DoorRenderer } from './door-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { WallRenderer } from './wall-renderer'
+import { WindowRenderer } from './window-renderer'
 
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
@@ -131,6 +141,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
         {node.type === 'wall' && (
           <>
             <WallRenderer node={node as WallNode} />
+            {/* Door/window children are rendered by WallRenderer at correct local positions */}
             {/* DEBUG REAL POSITION / SIZE */}
             {/* <mesh position-x={((node as unknown as GridItem).size?.[0] * TILE_SIZE) / 2}>
               <boxGeometry args={[(node as unknown as GridItem).size?.[0] * TILE_SIZE, 1, 1]} />
@@ -140,16 +151,27 @@ export function NodeRenderer({ node }: NodeRendererProps) {
         )}
         {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
         {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
-        {/* TODO: Add other node type renderers here */}
+        {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
+        {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
 
         {/* Selection outline for grid items */}
         {(node as unknown as GridItem).size && isSelected && (
           <SelectionOutline gridItem={node as unknown as GridItem} />
         )}
       </group>
-      {node.children.map((childNode) => (
-        <NodeRenderer key={childNode.id} node={childNode} />
-      ))}
+      {/* Recursively render children */}
+      {/* Skip doors/windows when they're children of walls (rendered inside wall group above) */}
+      {node.children
+        .filter((childNode) => {
+          // Skip door/window children of walls (they're rendered inside the wall group)
+          if (node.type === 'wall' && (childNode.type === 'door' || childNode.type === 'window')) {
+            return false
+          }
+          return true
+        })
+        .map((childNode) => (
+          <NodeRenderer key={childNode.id} node={childNode} />
+        ))}
     </>
   )
 }

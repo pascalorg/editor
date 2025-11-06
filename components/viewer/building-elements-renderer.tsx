@@ -72,16 +72,16 @@ export function BuildingElementsRenderer({
         // The switch statement handles these variations.
         // Note: Walls are handled by NodeRenderer and should not be passed to this component.
         switch (component.type) {
-          case 'door':
-            return (
-              <Doors
-                {...commonProps}
-                isActive={isActiveFloor}
-                isFullView={viewMode === 'full'}
-                key={component.id}
-                wallHeight={wallHeight}
-              />
-            )
+          // case 'door':
+          //   return (
+          //     <Doors
+          //       {...commonProps}
+          //       isActive={isActiveFloor}
+          //       isFullView={viewMode === 'full'}
+          //       key={component.id}
+          //       wallHeight={wallHeight}
+          //     />
+          //   )
           case 'window':
             return (
               <Windows

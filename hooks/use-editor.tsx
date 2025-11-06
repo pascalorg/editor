@@ -466,6 +466,7 @@ type StoreState = {
   // Generic node operations
   addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
   updateNode: (nodeId: string, updates: Partial<AnyNode>) => void
+  deleteNode: (nodeId: string) => void
 
   // Preview wall placement methods
   startWallPreview: (startPoint: [number, number]) => void
@@ -1293,6 +1294,17 @@ const useStore = create<StoreState>()(
                 redoStack: [],
               }
             }
+
+            return {
+              levels: updatedLevels,
+              nodeIndex: buildNodeIndex(updatedLevels),
+            }
+          })
+        },
+
+        deleteNode: (nodeId) => {
+          set((state) => {
+            const updatedLevels = deleteNode(state.levels, nodeId)
 
             return {
               levels: updatedLevels,
