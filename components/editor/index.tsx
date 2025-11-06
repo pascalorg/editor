@@ -129,7 +129,7 @@ export default function Editor({ className }: { className?: string }) {
         const [x1, y1] = node.position
         const length = node.size[0]
         const x2 = x1 + Math.cos(node.rotation) * length
-        const y2 = y1 + Math.sin(node.rotation) * length
+        const y2 = y1 - Math.sin(node.rotation) * length // Note: minus sign to match wall coordinate system
 
         return {
           start: [x1, y1] as [number, number],

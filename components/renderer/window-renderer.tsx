@@ -1,10 +1,10 @@
 'use client'
 
+import { useEditor } from '@/hooks/use-editor'
+import type { WindowNode } from '@/lib/nodes/types'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useEditor } from '@/hooks/use-editor'
-import type { WindowNode } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
 
 interface WindowRendererProps {
@@ -32,6 +32,9 @@ export const WindowRenderer = memo(({ node }: WindowRendererProps) => {
       windowRef.current.traverse((child) => {
         if (child instanceof THREE.Mesh && child.material) {
           const material = child.material as THREE.MeshStandardMaterial
+          if (material.name.toLowerCase() === 'glass') {
+            return // Skip glass materials
+          }
           material.opacity = opacity
           material.transparent = opacity < 1
           material.depthWrite = true
@@ -58,7 +61,7 @@ export const WindowRenderer = memo(({ node }: WindowRendererProps) => {
 
   return (
     <>
-      {isPreview ? (
+      {isPreview && (
         <>
           <mesh geometry={placementIndicatorGeometry} position={[0, 0.01, 0]}>
             <meshStandardMaterial
@@ -69,15 +72,12 @@ export const WindowRenderer = memo(({ node }: WindowRendererProps) => {
               transparent
             />
           </mesh>
-          <group ref={windowRef} position={[0, 0, 0]} scale={[1, 1, 2]}>
-            <Gltf position-y={0.5} src="/models/Window.glb" />
-          </group>
         </>
-      ) : (
-        <group ref={windowRef} position={[0, 0, 0]} scale={[1, 1, 2]}>
+      )} 
+      
+        <group ref={windowRef} position={[0, 0, 0]} scale={[1, 1, 1]}>
           <Gltf position-y={0.5} src="/models/Window.glb" />
         </group>
-      )}
     </>
   )
 })
