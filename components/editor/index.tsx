@@ -1,5 +1,12 @@
 'use client'
 
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnBuilder } from '@/components/editor/elements/column-builder'
+import { DoorBuilder } from '@/components/editor/elements/door-builder'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { WindowBuilder } from '@/components/editor/elements/window-builder'
+import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -11,17 +18,10 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnBuilder } from '@/components/editor/elements/column-builder'
-import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { WindowPlacementPreview, Windows } from '@/components/editor/elements/window'
-import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
 // Node-based API imports for Phase 3 migration
-import { useReferenceImages, useScans, useWalls, useWindows } from '@/hooks/use-nodes'
+import { useReferenceImages, useScans } from '@/hooks/use-nodes'
 import {
   setNodePosition,
   setNodeRotation,
@@ -149,37 +149,6 @@ export default function Editor({ className }: { className?: string }) {
   // Get walls as a Set
   const walls = getWallsSet()
 
-  // Get wall/window data for the currently selected floor (for placement validation)
-  const currentFloorWallNodes = useWalls(selectedFloorId || levels[0].id)
-  const currentFloorWindowNodes = useWindows(selectedFloorId || levels[0].id)
-
-  const currentFloorWallSegments = useMemo(
-    () => convertWallNodesToSegments(currentFloorWallNodes),
-    [currentFloorWallNodes, convertWallNodesToSegments],
-  )
-
-  // Extract doors from walls' children for window placement validation
-  const currentFloorExistingDoors = useMemo(
-    () =>
-      currentFloorWallNodes.flatMap((wall) =>
-        wall.children
-          .filter((child) => child.type === 'door')
-          .map((door: any) => ({
-            position: door.position,
-            rotation: door.rotation,
-          })),
-      ),
-    [currentFloorWallNodes],
-  )
-
-  const currentFloorExistingWindows = useMemo(
-    () =>
-      currentFloorWindowNodes.map((node) => ({
-        position: node.position,
-        rotation: node.rotation,
-      })),
-    [currentFloorWindowNodes],
-  )
 
   // Use a callback ref to ensure the store is updated when the group is attached
   const allFloorsGroupCallback = useCallback(
@@ -195,9 +164,6 @@ export default function Editor({ className }: { className?: string }) {
   const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
   const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
 
-  // State for window mode (one-click placement with preview)
-  const [windowPreviewPosition, setWindowPreviewPosition] = useState<[number, number] | null>(null)
-
   // State for delete mode (two-click selection)
   const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
   const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
@@ -208,7 +174,6 @@ export default function Editor({ className }: { className?: string }) {
   const clearPlacementStates = () => {
     setWallStartPoint(null)
     setWallPreviewEnd(null)
-    setWindowPreviewPosition(null)
     setDeleteStartPoint(null)
     setDeletePreviewEnd(null)
     setPointerPosition(null)
@@ -670,15 +635,7 @@ export default function Editor({ className }: { className?: string }) {
     }
 
     // Building mode - check active tool (only allow previews in building mode)
-    if (controlMode === 'building' && activeTool === 'window') {
-      // Window mode: show preview at current grid position
-      if (y !== null) {
-        setWindowPreviewPosition([x, y])
-      } else {
-        setWindowPreviewPosition(null)
-      }
-    }
-    // Door and Column previews are now handled by DoorBuilder and ColumnBuilder components
+    // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
   }
 
   const handleCanvasRightClick = (e: React.MouseEvent) => {
@@ -1027,6 +984,9 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'door' && isActiveFloor && (
                       <DoorBuilder />
                     )}
+                    {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
+                      <WindowBuilder />
+                    )}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
@@ -1064,31 +1024,6 @@ export default function Editor({ className }: { className?: string }) {
                       wallHeight={wallHeight}
                     /> */}
 
-                    {/* Windows component renders placed windows */}
-                    <Windows
-                      floorId={floor.id}
-                      isActive={isActiveFloor}
-                      isFullView={viewMode === 'full'}
-                      tileSize={tileSize}
-                      wallHeight={wallHeight}
-                    />
-
-                    {/* Window placement preview */}
-                    {isActiveFloor &&
-                      controlMode === 'building' &&
-                      activeTool === 'window' &&
-                      windowPreviewPosition && (
-                        <WindowPlacementPreview
-                          existingDoors={currentFloorExistingDoors}
-                          existingWindows={currentFloorExistingWindows}
-                          floorId={floor.id}
-                          mouseGridPosition={windowPreviewPosition}
-                          onPlaced={() => setWindowPreviewPosition(null)}
-                          tileSize={tileSize}
-                          wallHeight={wallHeight}
-                          wallSegments={currentFloorWallSegments}
-                        />
-                      )}
                   </group>
                 </AnimatedLevel>
               )
