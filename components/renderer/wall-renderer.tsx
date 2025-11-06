@@ -1,14 +1,13 @@
 'use client'
 
+import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
+import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Line } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
-import { DoorRenderer } from './door-renderer'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
@@ -186,36 +185,6 @@ export function WallRenderer({ node }: WallRendererProps) {
     () => node.children.filter((child) => child.type === 'door') as DoorNode[],
     [node.children],
   )
-
-  // Calculate door positions in local wall space
-  const doorOpenings = useMemo(() => {
-    return doors
-      .filter((door) => door.visible !== false) // Only include visible doors
-      .map((door) => {
-        // Door position in grid coordinates
-        const [doorX, doorY] = door.position
-        // Wall start position in grid coordinates
-        const [wallX, wallY] = node.position
-
-        // Calculate relative position in grid units
-        const relativeX = doorX - wallX
-        const relativeY = doorY - wallY
-
-        // Project onto wall's local X axis (wall direction)
-        // Wall rotation is atan2(-dy, dx), so the direction vector is (cos(rot), -sin(rot))
-        const cos = Math.cos(node.rotation)
-        const sin = Math.sin(node.rotation)
-
-        // Dot product to get position along wall's length
-        // Direction vector is (cos(rot), -sin(rot)), so: relativeX * cos + relativeY * (-sin)
-        const localX = (relativeX * cos - relativeY * sin) * TILE_SIZE
-
-        return {
-          door,
-          localX, // Position along wall's length in meters
-        }
-      })
-  }, [doors, node.position, node.rotation])
 
   // Calculate local space coordinates for preview line
   // The parent group already handles position & rotation, so we render in local space
@@ -407,54 +376,39 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       ) : (
         <>
-          {/* Wall with door cutouts */}
-          {doorOpenings.length > 0 ? (
-            <>
-              <mesh castShadow receiveShadow>
-                <Geometry useGroups>
-                  <Base geometry={wallGeometry} />
-                  {/* Create holes for doors */}
-                  {doorOpenings.map((opening) => {
-                    const doorWidth = 1 // 1 meter door width (standard)
-                    const doorHeight = WALL_HEIGHT // Door height matches wall height
-                    const doorDepth = WALL_THICKNESS * 1.1 // Slightly larger than wall thickness to ensure clean cut
+          <mesh castShadow receiveShadow>
+            <Geometry>
+              <Base geometry={wallGeometry}>
+                {node.children.map((opening, idx) => {
+                  // TODO: Later turn into a generic sub-component based on node type (like door and window would extend WallOpening and have properties for the size it takes)
+                  const worldX = opening.position[0] * tileSize
+                  const worldZ = opening.position[1] * tileSize
 
-                    // Validate opening position
-                    if (!Number.isFinite(opening.localX)) {
-                      console.warn(`Invalid door position for door ${opening.door.id}`)
-                      return null
-                    }
-
-                    return (
-                      <Subtraction
-                        key={opening.door.id}
-                        position={[opening.localX, doorHeight / 2, 0]}
-                      >
-                        <boxGeometry args={[doorWidth, doorHeight, doorDepth]} />
-                      </Subtraction>
-                    )
-                  })}
-                </Geometry>
-                <meshStandardMaterial
-                  color="beige"
-                  metalness={0.1}
-                  opacity={opacity}
-                  roughness={0.7}
-                  transparent={transparent}
-                />
-              </mesh>
-            </>
-          ) : (
-            <mesh castShadow geometry={wallGeometry} receiveShadow>
-              <meshStandardMaterial
-                color="beige"
-                metalness={0.1}
-                opacity={opacity}
-                roughness={0.7}
-                transparent={transparent}
-              />
-            </mesh>
-          )}
+                  console.log('worldX, worldZ', worldX, worldZ)
+                  const scale: [number, number, number] =
+                    opening.type === 'door' ? [1, 4, 0.95] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                  return (
+                    <Subtraction
+                      key={idx}
+                      position-x={worldX}
+                      position-y={opening.type === 'window' ? 1.12 : 0}
+                      position-z={worldZ}
+                      scale={scale}
+                    >
+                      <boxGeometry />
+                    </Subtraction>
+                  )
+                })}
+              </Base>
+            </Geometry>
+            <meshStandardMaterial
+              color="beige"
+              metalness={0.1}
+              opacity={opacity}
+              roughness={0.7}
+              transparent={transparent}
+            />
+          </mesh>
         </>
       )}
     </>
