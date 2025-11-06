@@ -398,6 +398,7 @@ type StoreState = {
   isManipulatingScan: boolean // Flag to prevent undo stack during scan manipulation
   handleClear: () => void
   pointerPosition: [number, number] | null
+  debug: boolean // Debug mode flag
 } & {
   // Node-based operations
   updateLevels: (levels: LevelNode[], pushToUndo?: boolean) => void
@@ -423,6 +424,7 @@ type StoreState = {
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
   setIsManipulatingScan: (manipulating: boolean) => void
+  setDebug: (debug: boolean) => void
   getWallsSet: () => Set<string>
   getRoofsSet: () => Set<string>
   getSelectedElementsSet: () => Set<SelectedElement>
@@ -733,6 +735,7 @@ const useStore = create<StoreState>()(
         movingCamera: false,
         isManipulatingImage: false,
         isManipulatingScan: false,
+        debug: false,
         setSelectedElements: (elements) => set({ selectedElements: elements }),
         setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
         setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
@@ -759,6 +762,7 @@ const useStore = create<StoreState>()(
         setMovingCamera: (moving) => set({ movingCamera: moving }),
         setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
         setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
+        setDebug: (debug) => set({ debug }),
         getWallsSet: () => {
           const state = get()
           const selectedFloorId = state.selectedFloorId
@@ -1478,6 +1482,9 @@ const useStore = create<StoreState>()(
           selectedElements: state.selectedElements,
           selectedImageIds: state.selectedImageIds,
           selectedScanIds: state.selectedScanIds,
+
+          // Debug state
+          debug: state.debug,
         }
       },
       onRehydrateStorage: () => (state) => {

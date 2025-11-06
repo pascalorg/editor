@@ -1,7 +1,7 @@
 'use client'
 
 import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { Line } from '@react-three/drei'
+import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
@@ -170,8 +170,8 @@ interface WallRendererProps {
 
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
+  const debug = useEditor((state) => state.debug)
   const tileSize = TILE_SIZE
-  const wallHeight = WALL_HEIGHT
 
   // Check if this is a preview node
   const isPreview = node.preview === true
@@ -182,12 +182,6 @@ export function WallRenderer({ node }: WallRendererProps) {
   }, [getLevelId, node])
   const allWalls = useWalls(levelId || '')
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-
-  // Get door children from wall (include preview doors for real-time cutouts)
-  const doors = useMemo(
-    () => node.children.filter((child) => child.type === 'door') as DoorNode[],
-    [node.children],
-  )
 
   // Calculate local space coordinates for preview line
   // The parent group already handles position & rotation, so we render in local space
@@ -443,11 +437,22 @@ export function WallRenderer({ node }: WallRendererProps) {
             </Geometry>
             <meshStandardMaterial
               color="beige"
+              flatShading
               metalness={0.1}
               opacity={opacity}
               roughness={0.7}
               transparent={transparent}
             />
+            {debug && (
+              <Edges
+                color="#000000"
+                key={wallGeometry.id}
+                linewidth={1}
+                opacity={0.1}
+                renderOrder={1000}
+                threshold={15}
+              />
+            )}
           </mesh>
         </>
       )}

@@ -667,7 +667,21 @@ export default function Editor({ className }: { className?: string }) {
         )}
         {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
         <color args={['#212134']} attach="background" />
-        {/* <LightingControls /> */}
+
+        {/* Lighting setup with shadows */}
+        <ambientLight intensity={0.4} />
+        <directionalLight
+          castShadow
+          intensity={0.8}
+          position={[20, 30, 20]}
+          shadow-bias={-0.0001}
+          shadow-camera-bottom={-30}
+          shadow-camera-far={100}
+          shadow-camera-left={-30}
+          shadow-camera-right={30}
+          shadow-camera-top={30}
+          shadow-mapSize={[2048, 2048]}
+        />
 
         {/* Infinite dashed axis lines - visual only, not interactive */}
         <group raycast={disabledRaycast}>
@@ -714,58 +728,6 @@ export default function Editor({ className }: { className?: string }) {
 
         {/* Infinite floor - rendered outside export group */}
         <InfiniteFloor />
-
-        {/* Hide guides (reference images and scans) in full view mode */}
-        {/* {viewMode === 'level' &&
-          images
-            .filter((image) => {
-              // Filter out hidden images (visible === false or opacity === 0)
-              const isHidden =
-                image.visible === false || (image.opacity !== undefined && image.opacity === 0)
-              return !isHidden
-            })
-            .map((image) => {
-              // Calculate opacity: use custom opacity if set, otherwise use default IMAGE_OPACITY
-              const opacity = image.opacity !== undefined ? image.opacity / 100 : imageOpacity
-
-              return (
-                <ReferenceImage
-                  controlMode={controlMode}
-                  id={image.id}
-                  isSelected={selectedImageIds.includes(image.id)}
-                  key={image.id}
-                  level={image.level}
-                  movingCamera={movingCamera}
-                  onManipulationEnd={() => setIsManipulatingImage(false)}
-                  onManipulationStart={() => setIsManipulatingImage(true)}
-                  onSelect={() => setSelectedImageIds([image.id])}
-                  onUpdate={(updates, pushToUndo = true) => {
-                    let updatedLevels = levels
-
-                    // Apply each update operation
-                    if (updates.position !== undefined) {
-                      updatedLevels = setNodePosition(updatedLevels, image.id, updates.position)
-                    }
-                    if (updates.rotation !== undefined) {
-                      updatedLevels = setNodeRotation(updatedLevels, image.id, updates.rotation)
-                    }
-                    if (updates.scale !== undefined) {
-                      updatedLevels = setNodeSize(updatedLevels, image.id, [
-                        updates.scale,
-                        updates.scale,
-                      ])
-                    }
-
-                    updateLevels(updatedLevels, pushToUndo)
-                  }}
-                  opacity={opacity}
-                  position={image.position}
-                  rotation={image.rotation}
-                  scale={image.scale}
-                  url={image.url}
-                />
-              )
-            })} */}
 
         {/* Render 3D scans */}
         {viewMode === 'level' &&
@@ -975,6 +937,8 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
                       <WindowBuilder />
                     )}
+                    {/* Image builder for handling image manipulation in guide mode */}
+                    {controlMode === 'guide' && <ImageBuilder />}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}
@@ -1009,8 +973,7 @@ export default function Editor({ className }: { className?: string }) {
         </group>
 
         <CustomControls />
-        {/* Image builder for handling image manipulation in guide mode */}
-        {controlMode === 'guide' && <ImageBuilder />}
+
         <Environment preset="city" />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />

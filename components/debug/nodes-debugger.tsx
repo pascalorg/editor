@@ -4,6 +4,7 @@ import { CylinderIcon, TreeViewIcon } from '@phosphor-icons/react'
 import {
   AppWindow,
   Box,
+  Bug,
   Building2,
   Copy,
   DoorOpen,
@@ -397,7 +398,14 @@ export function NodesDebugger() {
 
   const levels = useEditor((state) => state.levels)
   const nodeIndex = useEditor((state) => state.nodeIndex)
-  const { selectFloor, setSelectedElements, setSelectedImageIds, setSelectedScanIds } = useEditor()
+  const debug = useEditor((state) => state.debug)
+  const {
+    selectFloor,
+    setSelectedElements,
+    setSelectedImageIds,
+    setSelectedScanIds,
+    setDebug,
+  } = useEditor()
 
   // Load state from localStorage only on client
   useEffect(() => {
@@ -555,6 +563,23 @@ export function NodesDebugger() {
           <span className="font-semibold text-sm">Nodes Debugger</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            aria-label={debug ? 'Disable debug mode' : 'Enable debug mode'}
+            className={cn(
+              'flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+              debug
+                ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/30 dark:text-orange-400'
+                : 'bg-muted text-muted-foreground hover:bg-accent',
+            )}
+            onClick={(e) => {
+              e.stopPropagation()
+              setDebug(!debug)
+            }}
+            type="button"
+          >
+            <Bug className="h-3.5 w-3.5" />
+            {debug ? 'Debug ON' : 'Debug OFF'}
+          </button>
           <button
             aria-label={state.isMinimized ? 'Maximize' : 'Minimize'}
             className="rounded p-1 hover:bg-accent"
