@@ -206,6 +206,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   // Generate wall geometry similar to wall.tsx with junction handling
   // Note: Geometry is in LOCAL space since parent group handles position & rotation
   const wallGeometry = useMemo(() => {
+
     // Get wall dimensions from node
     const length = node.size[0] // Length in grid units
     const worldLength = length * TILE_SIZE
@@ -312,7 +313,6 @@ export function WallRenderer({ node }: WallRendererProps) {
     return geometry
   }, [node, allWalls])
 
-  if (!wallGeometry) return null
 
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -350,6 +350,8 @@ export function WallRenderer({ node }: WallRendererProps) {
       position: [e.point.x, e.point.y, e.point.z],
     })
   }, [])
+
+  if (!wallGeometry) return null
 
   return (
     <>
@@ -410,7 +412,7 @@ export function WallRenderer({ node }: WallRendererProps) {
       ) : (
         <>
           <mesh castShadow receiveShadow onPointerDown={onPointerDown} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave} onPointerMove={onPointerMove}>
-            <Geometry>
+            <Geometry useGroups>
               <Base geometry={wallGeometry}/>
                 {node.children.map((opening, idx) => {
                   // Transform opening's world position to wall's local coordinate system
@@ -421,13 +423,15 @@ export function WallRenderer({ node }: WallRendererProps) {
                   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
                   return (
                     <Subtraction
-                      key={idx}
+                    key={idx}
                       position-x={localX}
                       position-y={opening.type === 'window' ? 1.12 : 0}
                       position-z={localZ}
                       scale={scale}
+                      showOperation={opening.preview}
                     >
                       <boxGeometry/>
+                      <meshStandardMaterial color={"skyblue"} transparent opacity={0.5} />
                     </Subtraction>
                   )
                 })}

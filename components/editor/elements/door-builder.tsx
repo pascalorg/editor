@@ -239,15 +239,15 @@ export function DoorBuilder() {
         }
       
     const handleWallEnter = (e: WallEvent) => {
-      console.log('coucou', e);
+      console.log('door builder', 'wall enter', e);
     }
 
     const handleWallMove = (e: WallEvent) => {
-      console.log('coucou move', e);
+      console.log('door builder', 'wall move', e);
     }
 
     const handleWallLeave = (e: WallEvent) => {
-      console.log('coucou leave', e);
+      console.log('door builder', 'wall leave', e);
     }
 
     // Register event listeners
