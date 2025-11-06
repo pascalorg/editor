@@ -1,14 +1,13 @@
 'use client'
 
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
 import { useEffect, useRef } from 'react'
-import { type GridEvent, useEditor } from '@/hooks/use-editor'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 
 export function RoofBuilder() {
-  const registerHandler = useEditor((state) => state.registerHandler)
-  const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -25,13 +24,11 @@ export function RoofBuilder() {
   })
 
   useEffect(() => {
-    const handleGridEvent = (e: GridEvent) => {
+    const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      switch (e.type) {
-        case 'click': {
-          const [x, y] = e.position
-          if (roofStateRef.current.startCorner === null) {
+      const [x, y] = e.position
+      if (roofStateRef.current.startCorner === null) {
             // First click: set start corner and create preview node
             roofStateRef.current.startCorner = [x, y]
             roofStateRef.current.lastEndCorner = null // Reset last end corner
@@ -73,14 +70,17 @@ export function RoofBuilder() {
             roofStateRef.current.previewRoofId = null
             roofStateRef.current.lastEndCorner = null
           }
-          break
         }
-        case 'move': {
-          const [x, y] = e.position
-          const startCorner = roofStateRef.current.startCorner
-          const previewRoofId = roofStateRef.current.previewRoofId
+    
 
-          if (startCorner !== null && previewRoofId) {
+    const handleGridMove = (e: GridEvent) => {
+      if (!selectedFloorId) return
+
+      const [x, y] = e.position
+      const startCorner = roofStateRef.current.startCorner
+      const previewRoofId = roofStateRef.current.previewRoofId
+
+      if (startCorner !== null && previewRoofId) {
             const [x1, y1] = startCorner
             const [x2, y2] = [x, y]
 
@@ -150,18 +150,20 @@ export function RoofBuilder() {
               }
             }
           }
-          break
         }
-        default: {
-          break
-        }
-      }
-    }
+      
+    
 
-    const handlerId = 'roof-builder-handler'
-    registerHandler(handlerId, handleGridEvent)
-    return () => unregisterHandler(handlerId)
-  }, [registerHandler, unregisterHandler, addNode, updateNode, selectedFloorId])
+    // Register event listeners
+    emitter.on('grid:click', handleGridClick)
+    emitter.on('grid:move', handleGridMove)
+
+    // Cleanup event listeners
+    return () => {
+      emitter.off('grid:click', handleGridClick)
+      emitter.off('grid:move', handleGridMove)
+    }
+  }, [addNode, updateNode, selectedFloorId])
 
   return <></>
 }

@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { type GridEvent, useEditor } from '@/hooks/use-editor'
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
 import { createId } from '@/lib/utils'
+import { useEffect, useRef } from 'react'
 
 export function RoomBuilder() {
-  const registerHandler = useEditor((state) => state.registerHandler)
-  const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -24,13 +23,11 @@ export function RoomBuilder() {
   })
 
   useEffect(() => {
-    const handleGridEvent = (e: GridEvent) => {
+    const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      switch (e.type) {
-        case 'click': {
-          const [x, y] = e.position
-          if (roomStateRef.current.startPoint === null) {
+      const [x, y] = e.position
+      if (roomStateRef.current.startPoint === null) {
             // First click: set start corner and create preview room
             roomStateRef.current.startPoint = [x, y]
             roomStateRef.current.lastEndPoint = null
@@ -162,14 +159,17 @@ export function RoomBuilder() {
             roomStateRef.current.previewRoomId = null
             roomStateRef.current.lastEndPoint = null
           }
-          break
         }
-        case 'move': {
-          const [x, y] = e.position
-          const roomStartPoint = roomStateRef.current.startPoint
-          const previewRoomId = roomStateRef.current.previewRoomId
+    
 
-          if (roomStartPoint !== null && previewRoomId) {
+    const handleGridMove = (e: GridEvent) => {
+      if (!selectedFloorId) return
+
+      const [x, y] = e.position
+      const roomStartPoint = roomStateRef.current.startPoint
+      const previewRoomId = roomStateRef.current.previewRoomId
+
+      if (roomStartPoint !== null && previewRoomId) {
             const [x1, y1] = roomStartPoint
             const [x2, y2] = [x, y]
 
@@ -235,18 +235,20 @@ export function RoomBuilder() {
               }
             }
           }
-          break
         }
-        default: {
-          break
-        }
-      }
-    }
+      
+    
 
-    const handlerId = 'room-builder-handler'
-    registerHandler(handlerId, handleGridEvent)
-    return () => unregisterHandler(handlerId)
-  }, [registerHandler, unregisterHandler, addNode, updateNode, selectedFloorId, levels])
+    // Register event listeners
+    emitter.on('grid:click', handleGridClick)
+    emitter.on('grid:move', handleGridMove)
+
+    // Cleanup event listeners
+    return () => {
+      emitter.off('grid:click', handleGridClick)
+      emitter.off('grid:move', handleGridMove)
+    }
+  }, [addNode, updateNode, selectedFloorId, levels])
 
   return <></>
 }

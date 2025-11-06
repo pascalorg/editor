@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
-import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useDoors, useWalls, useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
+import { useEffect, useMemo, useRef } from 'react'
 
 export function WindowBuilder() {
-  const registerHandler = useEditor((state) => state.registerHandler)
-  const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -89,25 +88,23 @@ export function WindowBuilder() {
   }, [wallSegments, existingDoors, existingWindows])
 
   useEffect(() => {
-    const handleGridEvent = (e: GridEvent) => {
+    const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      switch (e.type) {
-        case 'click': {
-          const [x, y] = e.position
+      const [x, y] = e.position
 
-          // Validate placement using ref data
-          const placement = validateWallElementPlacement({
-            mouseGridPosition: [x, y],
-            wallSegments: validationDataRef.current.wallSegments,
-            existingElements: [
-              ...validationDataRef.current.existingDoors,
-              ...validationDataRef.current.existingWindows,
-            ],
-            elementWidth: 2, // Windows are 2 cells wide
-          })
+      // Validate placement using ref data
+      const placement = validateWallElementPlacement({
+        mouseGridPosition: [x, y],
+        wallSegments: validationDataRef.current.wallSegments,
+        existingElements: [
+          ...validationDataRef.current.existingDoors,
+          ...validationDataRef.current.existingWindows,
+        ],
+        elementWidth: 2, // Windows are 2 cells wide
+      })
 
-          if (placement?.canPlace && placement?.nearestWall) {
+      if (placement?.canPlace && placement?.nearestWall) {
             // Delete the preview before placing final window
             if (windowStateRef.current.previewWindowId) {
               deleteNode(windowStateRef.current.previewWindowId)
@@ -132,34 +129,36 @@ export function WindowBuilder() {
             const wallId = placement.nearestWall.id
             addNode(windowNode, wallId)
           }
-
-          break
         }
-        case 'move': {
-          const [x, y] = e.position
+    
 
-          // Only process if we're on a new grid position
-          const lastGridPosition = windowStateRef.current.lastGridPosition
-          if (lastGridPosition && lastGridPosition[0] === x && lastGridPosition[1] === y) {
-            return
-          }
-          windowStateRef.current.lastGridPosition = [x, y]
+    const handleGridMove = (e: GridEvent) => {
+      if (!selectedFloorId) return
 
-          // Combine existing doors and windows to check for conflicts
-          const existingElements = [
-            ...validationDataRef.current.existingDoors,
-            ...validationDataRef.current.existingWindows,
-          ]
+      const [x, y] = e.position
 
-          // Validate placement using ref data
-          const placement = validateWallElementPlacement({
-            mouseGridPosition: [x, y],
-            wallSegments: validationDataRef.current.wallSegments,
-            existingElements,
-            elementWidth: 2, // Windows are 2 cells wide
-          })
+      // Only process if we're on a new grid position
+      const lastGridPosition = windowStateRef.current.lastGridPosition
+      if (lastGridPosition && lastGridPosition[0] === x && lastGridPosition[1] === y) {
+        return
+      }
+      windowStateRef.current.lastGridPosition = [x, y]
 
-          if (!placement) {
+      // Combine existing doors and windows to check for conflicts
+      const existingElements = [
+        ...validationDataRef.current.existingDoors,
+        ...validationDataRef.current.existingWindows,
+      ]
+
+      // Validate placement using ref data
+      const placement = validateWallElementPlacement({
+        mouseGridPosition: [x, y],
+        wallSegments: validationDataRef.current.wallSegments,
+        existingElements,
+        elementWidth: 2, // Windows are 2 cells wide
+      })
+
+      if (!placement) {
             // No valid placement at all, delete preview
             if (windowStateRef.current.previewWindowId) {
               deleteNode(windowStateRef.current.previewWindowId)
@@ -237,20 +236,19 @@ export function WindowBuilder() {
             windowStateRef.current.previewWindowId = previewWindowId
             windowStateRef.current.lastWallId = currentParentId
           }
-
-          break
         }
-        default: {
-          break
-        }
-      }
-    }
+      
+    
 
-    const handlerId = 'window-builder-handler'
-    registerHandler(handlerId, handleGridEvent)
+    // Register event listeners
+    emitter.on('grid:click', handleGridClick)
+    emitter.on('grid:move', handleGridMove)
 
+    // Cleanup event listeners
     return () => {
-      unregisterHandler(handlerId)
+      emitter.off('grid:click', handleGridClick)
+      emitter.off('grid:move', handleGridMove)
+
       // Clean up preview on unmount
       if (windowStateRef.current.previewWindowId) {
         deleteNode(windowStateRef.current.previewWindowId)
@@ -259,8 +257,7 @@ export function WindowBuilder() {
         windowStateRef.current.lastGridPosition = null
       }
     }
-    // Only re-register when these core dependencies change
-  }, [registerHandler, unregisterHandler, addNode, updateNode, deleteNode, selectedFloorId])
+  }, [addNode, updateNode, deleteNode, selectedFloorId])
 
   return <></>
 }

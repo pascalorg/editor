@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { type GridEvent, useEditor } from '@/hooks/use-editor'
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
 import { createId } from '@/lib/utils'
+import { useEffect, useRef } from 'react'
 
 export function CustomRoomBuilder() {
-  const registerHandler = useEditor((state) => state.registerHandler)
-  const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -69,21 +68,19 @@ export function CustomRoomBuilder() {
       return [projectedX, projectedY]
     }
 
-    const handleGridEvent = (e: GridEvent) => {
+    const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      switch (e.type) {
-        case 'click': {
-          const points = customRoomStateRef.current.points
-          let [x, y] = e.position
+      const points = customRoomStateRef.current.points
+      let [x, y] = e.position
 
-          // Snap to grid from last point if we have points
-          if (points.length > 0) {
-            ;[x, y] = calculateSnapPoint(points[points.length - 1], [x, y])
-          }
+      // Snap to grid from last point if we have points
+      if (points.length > 0) {
+        ;[x, y] = calculateSnapPoint(points[points.length - 1], [x, y])
+      }
 
-          // Check if clicking on the first point to close the shape
-          if (points.length >= 3 && x === points[0][0] && y === points[0][1]) {
+      // Check if clicking on the first point to close the shape
+      if (points.length >= 3 && x === points[0][0] && y === points[0][1]) {
             // Finalize the room by removing preview flags
             const previewGroupId = customRoomStateRef.current.previewGroupId
             const previewWallIds = customRoomStateRef.current.previewWallIds
@@ -232,17 +229,20 @@ export function CustomRoomBuilder() {
 
             customRoomStateRef.current.cursorWallId = newCursorWallId
           }
-          break
         }
-        case 'move': {
-          const points = customRoomStateRef.current.points
-          const cursorWallId = customRoomStateRef.current.cursorWallId
+    
 
-          if (points.length >= 1 && cursorWallId) {
-            let [x, y] = e.position
+    const handleGridMove = (e: GridEvent) => {
+      if (!selectedFloorId) return
 
-            // Snap to grid from last point
-            ;[x, y] = calculateSnapPoint(points[points.length - 1], [x, y])
+      const points = customRoomStateRef.current.points
+      const cursorWallId = customRoomStateRef.current.cursorWallId
+
+      if (points.length >= 1 && cursorWallId) {
+        let [x, y] = e.position
+
+        // Snap to grid from last point
+        ;[x, y] = calculateSnapPoint(points[points.length - 1], [x, y])
 
             // Only update if the cursor point has changed
             const lastCursorPoint = customRoomStateRef.current.lastCursorPoint
@@ -269,16 +269,20 @@ export function CustomRoomBuilder() {
               })
             }
           }
-          break
         }
-        case 'double-click': {
-          // Double-click to finish without closing the shape
-          const points = customRoomStateRef.current.points
-          const previewGroupId = customRoomStateRef.current.previewGroupId
-          const previewWallIds = customRoomStateRef.current.previewWallIds
-          const cursorWallId = customRoomStateRef.current.cursorWallId
+      
+    
 
-          if (points.length >= 2 && previewGroupId) {
+    const handleGridDoubleClick = (e: GridEvent) => {
+      if (!selectedFloorId) return
+
+      // Double-click to finish without closing the shape
+      const points = customRoomStateRef.current.points
+      const previewGroupId = customRoomStateRef.current.previewGroupId
+      const previewWallIds = customRoomStateRef.current.previewWallIds
+      const cursorWallId = customRoomStateRef.current.cursorWallId
+
+      if (points.length >= 2 && previewGroupId) {
             // Count existing rooms to auto-increment the number
             const currentLevel = levels.find((l) => l.id === selectedFloorId)
             const existingRooms =
@@ -316,18 +320,22 @@ export function CustomRoomBuilder() {
             customRoomStateRef.current.previewGroupId = null
             customRoomStateRef.current.lastCursorPoint = null
           }
-          break
         }
-        default: {
-          break
-        }
-      }
-    }
+      
+    
 
-    const handlerId = 'custom-room-builder-handler'
-    registerHandler(handlerId, handleGridEvent)
-    return () => unregisterHandler(handlerId)
-  }, [registerHandler, unregisterHandler, addNode, updateNode, selectedFloorId, levels])
+    // Register event listeners
+    emitter.on('grid:click', handleGridClick)
+    emitter.on('grid:move', handleGridMove)
+    emitter.on('grid:double-click', handleGridDoubleClick)
+
+    // Cleanup event listeners
+    return () => {
+      emitter.off('grid:click', handleGridClick)
+      emitter.off('grid:move', handleGridMove)
+      emitter.off('grid:double-click', handleGridDoubleClick)
+    }
+  }, [addNode, updateNode, selectedFloorId, levels])
 
   return <></>
 }

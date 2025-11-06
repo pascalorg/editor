@@ -1,11 +1,10 @@
 'use client'
 
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
 import { useEffect, useRef } from 'react'
-import { type GridEvent, useEditor } from '@/hooks/use-editor'
 
 export function WallBuilder() {
-  const registerHandler = useEditor((state) => state.registerHandler)
-  const unregisterHandler = useEditor((state) => state.unregisterHandler)
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -62,13 +61,11 @@ export function WallBuilder() {
 
       return [projectedX, projectedY]
     }
-    const handleGridEvent = (e: GridEvent) => {
+    const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      switch (e.type) {
-        case 'click': {
-          const [x, y] = e.position
-          if (wallStateRef.current.startPoint === null) {
+      const [x, y] = e.position
+      if (wallStateRef.current.startPoint === null) {
             // First click: set start point and create preview node
             wallStateRef.current.startPoint = [x, y]
             wallStateRef.current.lastEndPoint = null // Reset last end point
@@ -110,20 +107,23 @@ export function WallBuilder() {
             wallStateRef.current.previewWallId = null
             wallStateRef.current.lastEndPoint = null
           }
-          break
         }
-        case 'move': {
-          const [x, y] = e.position
-          const wallStartPoint = wallStateRef.current.startPoint
-          const previewWallId = wallStateRef.current.previewWallId
+    
 
-          if (wallStartPoint !== null && previewWallId) {
-            const [x1, y1] = wallStartPoint
-            const [x2, y2] = calculateWallEndPoint(x, y)
+    const handleGridMove = (e: GridEvent) => {
+      if (!selectedFloorId) return
 
-            // Only update if the end point has changed
-            const lastEndPoint = wallStateRef.current.lastEndPoint
-            if (!lastEndPoint || lastEndPoint[0] !== x2 || lastEndPoint[1] !== y2) {
+      const [x, y] = e.position
+      const wallStartPoint = wallStateRef.current.startPoint
+      const previewWallId = wallStateRef.current.previewWallId
+
+      if (wallStartPoint !== null && previewWallId) {
+        const [x1, y1] = wallStartPoint
+        const [x2, y2] = calculateWallEndPoint(x, y)
+
+        // Only update if the end point has changed
+        const lastEndPoint = wallStateRef.current.lastEndPoint
+        if (!lastEndPoint || lastEndPoint[0] !== x2 || lastEndPoint[1] !== y2) {
               wallStateRef.current.lastEndPoint = [x2, y2]
 
               // Calculate new wall properties
@@ -141,18 +141,20 @@ export function WallBuilder() {
               })
             }
           }
-          break
         }
-        default: {
-          break
-        }
-      }
-    }
+      
+    
 
-    const handlerId = 'wall-builder-handler'
-    registerHandler(handlerId, handleGridEvent)
-    return () => unregisterHandler(handlerId)
-  }, [registerHandler, unregisterHandler, addNode, updateNode, selectedFloorId])
+    // Register event listeners
+    emitter.on('grid:click', handleGridClick)
+    emitter.on('grid:move', handleGridMove)
+
+    // Cleanup event listeners
+    return () => {
+      emitter.off('grid:click', handleGridClick)
+      emitter.off('grid:move', handleGridMove)
+    }
+  }, [addNode, updateNode, selectedFloorId])
 
   return <></>
 }

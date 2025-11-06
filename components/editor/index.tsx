@@ -6,7 +6,7 @@ import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorBuilder } from '@/components/editor/elements/door-builder'
 import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
-import { type GridEvent, useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -21,6 +21,7 @@ import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
 // Node-based API imports for Phase 3 migration
+import { emitter } from '@/events/bus'
 import { useReferenceImages, useScans } from '@/hooks/use-nodes'
 import {
   setNodePosition,
@@ -479,17 +480,14 @@ export default function Editor({ className }: { className?: string }) {
     setWalls(next)
   }
 
-  const emitGridEvent = useEditor((state) => state.emitGridEvent)
 
   const handleIntersectionClick = useCallback((x: number, y: number) => {
     // Don't handle clicks while camera is moving
     if (movingCamera) return
 
-    const gridEvent: GridEvent = {
-      type: 'click',
+    emitter.emit('grid:click', {
       position: [x, y],
-    }
-    emitGridEvent(gridEvent)
+    })
 
     // Guide mode: deselect images when clicking on the grid
     if (controlMode === 'guide') {
@@ -534,7 +532,6 @@ export default function Editor({ className }: { className?: string }) {
       setSelectedElements([])
     }
   }, [
-    emitGridEvent,
     movingCamera,
     controlMode,
     deleteStartPoint,
@@ -549,21 +546,19 @@ export default function Editor({ className }: { className?: string }) {
     // Don't handle double-clicks while camera is moving
     if (movingCamera) return
 
-    const gridEvent: GridEvent = {
-      type: 'double-click',
-      position: [0, 0], // Position not used for double-click events
-    }
-    emitGridEvent(gridEvent)
-  }, [emitGridEvent, movingCamera])
+    emitter.emit('grid:double-click', {
+      position: [0, 0],
+    })
+
+
+  }, [movingCamera])
 
   const handleIntersectionHover = useCallback((x: number, y: number | null) => {
     if (y === null) return
 
-    const gridEvent: GridEvent = {
-      type: 'move',
+    emitter.emit('grid:move', {
       position: [x, y],
-    }
-    emitGridEvent(gridEvent)
+    })
     // Only track cursor position for non-base levels (base level uses InfiniteGrid)
     const currentFloor = levels.find((level) => level.id === selectedFloorId)
     const currentLevel = currentFloor?.level || 0
@@ -625,7 +620,7 @@ export default function Editor({ className }: { className?: string }) {
 
     // Building mode - check active tool (only allow previews in building mode)
     // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
-  }, [controlMode, deleteStartPoint, setPointerPosition, emitGridEvent, levels, selectedFloorId])
+  }, [controlMode, deleteStartPoint, setPointerPosition,  levels, selectedFloorId])
 
 
   // TODO: Set context menu as a generic event handled per component
