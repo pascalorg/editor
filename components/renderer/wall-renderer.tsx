@@ -378,28 +378,35 @@ export function WallRenderer({ node }: WallRendererProps) {
         <>
           <mesh castShadow receiveShadow>
             <Geometry>
-              <Base geometry={wallGeometry}>
+              <Base geometry={wallGeometry}/>
                 {node.children.map((opening, idx) => {
-                  // TODO: Later turn into a generic sub-component based on node type (like door and window would extend WallOpening and have properties for the size it takes)
-                  const worldX = opening.position[0] * tileSize
-                  const worldZ = opening.position[1] * tileSize
 
-                  console.log('worldX, worldZ', worldX, worldZ)
+                  // TODO: Create Util function
+                  // Transform opening's world position to wall's local coordinate system
+                  const dx = opening.position[0] - node.position[0]
+                  const dy = opening.position[1] - node.position[1]
+
+                  // Rotate into wall's local space
+                  const cos = Math.cos(node.rotation)
+                  const sin = Math.sin(node.rotation)
+                  const localX = (dx * cos - dy * sin) * tileSize
+                  const localZ = (dx * sin + dy * cos) * tileSize
+
                   const scale: [number, number, number] =
-                    opening.type === 'door' ? [1, 4, 0.95] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
                   return (
                     <Subtraction
                       key={idx}
-                      position-x={worldX}
+                      position-x={localX}
                       position-y={opening.type === 'window' ? 1.12 : 0}
-                      position-z={worldZ}
+                      position-z={localZ}
                       scale={scale}
                     >
-                      <boxGeometry />
+                      <boxGeometry/>
                     </Subtraction>
                   )
                 })}
-              </Base>
             </Geometry>
             <meshStandardMaterial
               color="beige"

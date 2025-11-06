@@ -26,7 +26,7 @@ export function DoorBuilder() {
         const [x1, y1] = node.position
         const length = node.size[0]
         const x2 = x1 + Math.cos(node.rotation) * length
-        const y2 = y1 + Math.sin(node.rotation) * length
+        const y2 = y1 - Math.sin(node.rotation) * length // Note: minus sign to match wall coordinate system
 
         return {
           start: [x1, y1] as [number, number],
@@ -43,7 +43,7 @@ export function DoorBuilder() {
   // Existing doors and windows for validation
   const existingDoors = useMemo(
     () =>
-      currentFloorDoors.map((node) => ({
+      currentFloorDoors.filter(door => !door.preview).map((node) => ({
         position: node.position,
         rotation: node.rotation,
       })),
@@ -52,7 +52,7 @@ export function DoorBuilder() {
 
   const existingWindows = useMemo(
     () =>
-      currentFloorWindows.map((node) => ({
+      currentFloorWindows.filter(window => !window.preview).map((node) => ({
         position: node.position,
         rotation: node.rotation,
       })),
@@ -64,10 +64,12 @@ export function DoorBuilder() {
     previewDoorId: string | null
     lastValidRotation: number
     lastWallId: string | null // Track current parent (wall ID or level ID)
+    lastGridPosition: [number, number] | null // Track last processed grid position
   }>({
     previewDoorId: null,
     lastValidRotation: 0,
     lastWallId: null,
+    lastGridPosition: null,
   })
 
   // Store validation data in refs to avoid re-registering handlers
@@ -111,6 +113,7 @@ export function DoorBuilder() {
               deleteNode(doorStateRef.current.previewDoorId)
               doorStateRef.current.previewDoorId = null
               doorStateRef.current.lastWallId = null
+              doorStateRef.current.lastGridPosition = null
             }
 
             // Create door node as child of the nearest wall
@@ -135,6 +138,13 @@ export function DoorBuilder() {
         case 'move': {
           const [x, y] = e.position
 
+          // Only process if we're on a new grid position
+          const lastGridPosition = doorStateRef.current.lastGridPosition
+          if (lastGridPosition && lastGridPosition[0] === x && lastGridPosition[1] === y) {
+            return
+          }
+          doorStateRef.current.lastGridPosition = [x, y]
+
           // Combine existing doors and windows to check for conflicts
           const existingElements = [
             ...validationDataRef.current.existingDoors,
@@ -155,6 +165,7 @@ export function DoorBuilder() {
               deleteNode(doorStateRef.current.previewDoorId)
               doorStateRef.current.previewDoorId = null
               doorStateRef.current.lastWallId = null
+              doorStateRef.current.lastGridPosition = null
             }
             return
           }
@@ -245,6 +256,7 @@ export function DoorBuilder() {
         deleteNode(doorStateRef.current.previewDoorId)
         doorStateRef.current.previewDoorId = null
         doorStateRef.current.lastWallId = null
+        doorStateRef.current.lastGridPosition = null
       }
     }
     // Only re-register when these core dependencies change

@@ -1,17 +1,18 @@
 'use client'
 
+import { useEditor } from '@/hooks/use-editor'
+import type { DoorNode } from '@/lib/nodes/types'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { useEditor } from '@/hooks/use-editor'
-import type { DoorNode } from '@/lib/nodes/types'
-import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { TILE_SIZE } from '../editor'
 
 interface DoorRendererProps {
   node: DoorNode
 }
 
 export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
+  console.log('Rendering DoorNode', node)
   const getLevelId = useEditor((state) => state.getLevelId)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const doorRef = useRef<THREE.Group>(null)
@@ -29,6 +30,7 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
+
 
   // Apply opacity to all materials in the door model
   useEffect(() => {
@@ -73,7 +75,7 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
 
   return (
     <>
-      {isPreview ? (
+      {isPreview && (
         <>
           {/* Placement indicator rectangle on ground */}
           <mesh geometry={rectangleGeometry} position={[0, 0.01, 0]}>
@@ -85,17 +87,11 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
               transparent
             />
           </mesh>
-
-          {/* Preview door model */}
-          <group position={[0, 0, 0]} scale={[2, 2, 2]}>
-            <Gltf src="/models/Door.glb" />
-          </group>
-        </>
-      ) : (
-        <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
-          <Gltf src="/models/Door.glb" />
-        </group>
+          </>
       )}
+        <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
+        <Gltf src="/models/Door.glb" />
+      </group>
     </>
   )
 })
