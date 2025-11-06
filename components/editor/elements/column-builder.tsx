@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useEditor } from '@/hooks/use-editor'
 import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
 
 export function ColumnBuilder() {
   const addNode = useEditor((state) => state.addNode)

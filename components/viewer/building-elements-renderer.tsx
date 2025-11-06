@@ -1,17 +1,12 @@
 'use client'
 
-import { Doors } from '@/components/editor/elements/door'
-import { Windows } from '@/components/editor/elements/window'
 import type { Component as EditorComponent, ViewMode } from '@/hooks/use-editor'
 import type { SelectedElement } from '@/lib/building-elements'
 
 // Define a map of component types to their corresponding React components.
 // This makes it easy to add new building elements in the future.
 // Note: Walls are now rendered via NodeRenderer, so they're excluded from this map.
-const elementComponentMap = {
-  door: Doors,
-  window: Windows,
-}
+const elementComponentMap = {}
 
 type BuildingElementsRendererProps = {
   components: EditorComponent[]
@@ -82,16 +77,16 @@ export function BuildingElementsRenderer({
           //       wallHeight={wallHeight}
           //     />
           //   )
-          case 'window':
-            return (
-              <Windows
-                {...commonProps}
-                isActive={isActiveFloor}
-                isFullView={viewMode === 'full'}
-                key={component.id}
-                wallHeight={wallHeight}
-              />
-            )
+          // case 'window':
+          //   return (
+          //     <Windows
+          //       {...commonProps}
+          //       isActive={isActiveFloor}
+          //       isFullView={viewMode === 'full'}
+          //       key={component.id}
+          //       wallHeight={wallHeight}
+          //     />
+          //   )
           // case 'column':
           //   return (
           //     <Columns

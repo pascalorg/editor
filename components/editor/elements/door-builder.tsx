@@ -1,10 +1,10 @@
 'use client'
 
-import { emitter, WallEvent, type GridEvent } from '@/events/bus'
+import { useEffect, useMemo, useRef } from 'react'
+import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useDoors, useWalls, useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
-import { useEffect, useMemo, useRef } from 'react'
 
 export function DoorBuilder() {
   const addNode = useEditor((state) => state.addNode)
@@ -42,19 +42,23 @@ export function DoorBuilder() {
   // Existing doors and windows for validation
   const existingDoors = useMemo(
     () =>
-      currentFloorDoors.filter(door => !door.preview).map((node) => ({
-        position: node.position,
-        rotation: node.rotation,
-      })),
+      currentFloorDoors
+        .filter((door) => !door.preview)
+        .map((node) => ({
+          position: node.position,
+          rotation: node.rotation,
+        })),
     [currentFloorDoors],
   )
 
   const existingWindows = useMemo(
     () =>
-      currentFloorWindows.filter(window => !window.preview).map((node) => ({
-        position: node.position,
-        rotation: node.rotation,
-      })),
+      currentFloorWindows
+        .filter((window) => !window.preview)
+        .map((node) => ({
+          position: node.position,
+          rotation: node.rotation,
+        })),
     [currentFloorWindows],
   )
 
@@ -105,32 +109,31 @@ export function DoorBuilder() {
       })
 
       if (placement?.canPlace && placement?.nearestWall) {
-            // Delete the preview before placing final door
-            if (doorStateRef.current.previewDoorId) {
-              deleteNode(doorStateRef.current.previewDoorId)
-              doorStateRef.current.previewDoorId = null
-              doorStateRef.current.lastWallId = null
-              doorStateRef.current.lastGridPosition = null
-            }
-
-            // Create door node as child of the nearest wall
-            const doorNode = {
-              type: 'door',
-              name: 'Door',
-              position: placement.gridPosition,
-              rotation: placement.rotation,
-              size: [1, 2] as [number, number], // 1m x 2m door
-              visible: true,
-              opacity: 100,
-              children: [],
-            } as any
-
-            // Add door to the nearest wall
-            const wallId = placement.nearestWall.id
-            addNode(doorNode, wallId)
-          }
+        // Delete the preview before placing final door
+        if (doorStateRef.current.previewDoorId) {
+          deleteNode(doorStateRef.current.previewDoorId)
+          doorStateRef.current.previewDoorId = null
+          doorStateRef.current.lastWallId = null
+          doorStateRef.current.lastGridPosition = null
         }
-    
+
+        // Create door node as child of the nearest wall
+        const doorNode = {
+          type: 'door',
+          name: 'Door',
+          position: placement.gridPosition,
+          rotation: placement.rotation,
+          size: [1, 2] as [number, number], // 1m x 2m door
+          visible: true,
+          opacity: 100,
+          children: [],
+        } as any
+
+        // Add door to the nearest wall
+        const wallId = placement.nearestWall.id
+        addNode(doorNode, wallId)
+      }
+    }
 
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
@@ -159,95 +162,94 @@ export function DoorBuilder() {
       })
 
       if (!placement) {
-            // No valid placement at all, delete preview
-            if (doorStateRef.current.previewDoorId) {
-              deleteNode(doorStateRef.current.previewDoorId)
-              doorStateRef.current.previewDoorId = null
-              doorStateRef.current.lastWallId = null
-              doorStateRef.current.lastGridPosition = null
-            }
-            return
-          }
-
-          // Update last valid rotation if we have a valid rotation
-          if (placement.rotation !== 0) {
-            doorStateRef.current.lastValidRotation = placement.rotation
-          }
-
-          // Determine parent: wall if snapped, level if free-floating
-          const currentParentId = placement.nearestWall ? placement.nearestWall.id : selectedFloorId
-          const needsToMoveParent =
-            doorStateRef.current.previewDoorId &&
-            doorStateRef.current.lastWallId !== currentParentId
-
-          const rotation = placement.rotation || doorStateRef.current.lastValidRotation
-
-          // Create or update preview door
-          if (doorStateRef.current.previewDoorId) {
-            if (needsToMoveParent) {
-              // Move to different parent: delete old preview and create new one
-              deleteNode(doorStateRef.current.previewDoorId)
-
-              const previewDoorId = addNode(
-                {
-                  type: 'door',
-                  name: 'Door Preview',
-                  position: placement.gridPosition,
-                  rotation,
-                  size: [1, 2] as [number, number],
-                  visible: true,
-                  opacity: 100,
-                  preview: true,
-                  canPlace: placement.canPlace,
-                  children: [],
-                } as any,
-                currentParentId, // Parent is either wall or level
-              )
-
-              doorStateRef.current.previewDoorId = previewDoorId
-              doorStateRef.current.lastWallId = currentParentId
-            } else {
-              // Update existing preview (same parent)
-              updateNode(doorStateRef.current.previewDoorId, {
-                position: placement.gridPosition,
-                rotation,
-                visible: true,
-                canPlace: placement.canPlace,
-              } as any)
-            }
-          } else {
-            // Create initial preview door node
-            const previewDoorId = addNode(
-              {
-                type: 'door',
-                name: 'Door Preview',
-                position: placement.gridPosition,
-                rotation,
-                size: [1, 2] as [number, number],
-                visible: true,
-                opacity: 100,
-                preview: true,
-                canPlace: placement.canPlace,
-                children: [],
-              } as any,
-              currentParentId, // Parent is either wall or level
-            )
-
-            doorStateRef.current.previewDoorId = previewDoorId
-            doorStateRef.current.lastWallId = currentParentId
-          }
+        // No valid placement at all, delete preview
+        if (doorStateRef.current.previewDoorId) {
+          deleteNode(doorStateRef.current.previewDoorId)
+          doorStateRef.current.previewDoorId = null
+          doorStateRef.current.lastWallId = null
+          doorStateRef.current.lastGridPosition = null
         }
-      
+        return
+      }
+
+      // Update last valid rotation if we have a valid rotation
+      if (placement.rotation !== 0) {
+        doorStateRef.current.lastValidRotation = placement.rotation
+      }
+
+      // Determine parent: wall if snapped, level if free-floating
+      const currentParentId = placement.nearestWall ? placement.nearestWall.id : selectedFloorId
+      const needsToMoveParent =
+        doorStateRef.current.previewDoorId && doorStateRef.current.lastWallId !== currentParentId
+
+      const rotation = placement.rotation || doorStateRef.current.lastValidRotation
+
+      // Create or update preview door
+      if (doorStateRef.current.previewDoorId) {
+        if (needsToMoveParent) {
+          // Move to different parent: delete old preview and create new one
+          deleteNode(doorStateRef.current.previewDoorId)
+
+          const previewDoorId = addNode(
+            {
+              type: 'door',
+              name: 'Door Preview',
+              position: placement.gridPosition,
+              rotation,
+              size: [1, 2] as [number, number],
+              visible: true,
+              opacity: 100,
+              preview: true,
+              canPlace: placement.canPlace,
+              children: [],
+            } as any,
+            currentParentId, // Parent is either wall or level
+          )
+
+          doorStateRef.current.previewDoorId = previewDoorId
+          doorStateRef.current.lastWallId = currentParentId
+        } else {
+          // Update existing preview (same parent)
+          updateNode(doorStateRef.current.previewDoorId, {
+            position: placement.gridPosition,
+            rotation,
+            visible: true,
+            canPlace: placement.canPlace,
+          } as any)
+        }
+      } else {
+        // Create initial preview door node
+        const previewDoorId = addNode(
+          {
+            type: 'door',
+            name: 'Door Preview',
+            position: placement.gridPosition,
+            rotation,
+            size: [1, 2] as [number, number],
+            visible: true,
+            opacity: 100,
+            preview: true,
+            canPlace: placement.canPlace,
+            children: [],
+          } as any,
+          currentParentId, // Parent is either wall or level
+        )
+
+        doorStateRef.current.previewDoorId = previewDoorId
+        doorStateRef.current.lastWallId = currentParentId
+      }
+    }
+
     const handleWallEnter = (e: WallEvent) => {
-      console.log('door builder', 'wall enter', e);
+      console.log('door builder', 'wall enter', e)
     }
 
     const handleWallMove = (e: WallEvent) => {
-      console.log('door builder', 'wall move', e);
+      console.log('door builder', 'wall move', e)
     }
 
     const handleWallLeave = (e: WallEvent) => {
-      console.log('door builder', 'wall leave', e);
+      console.log('door builder', 'wall leave', e)
     }
 
     // Register event listeners

@@ -328,16 +328,6 @@ export default function Viewer({ className }: { className?: string }) {
                   {viewerDisplayMode === 'objects' && (
                     <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
                       <NodeRenderer node={floor} />
-                      {/* Render non-wall elements using legacy components until NodeRenderer supports them */}
-                      <BuildingElementsRenderer
-                        components={components.filter((c) => c.type !== 'wall')}
-                        floorId={floor.id}
-                        isActiveFloor={isActiveFloor}
-                        movingCamera={movingCamera}
-                        tileSize={tileSize}
-                        viewMode={viewMode}
-                        wallHeight={wallHeight}
-                      />
                     </group>
                   )}
 

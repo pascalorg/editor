@@ -1,15 +1,15 @@
 'use client'
 
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { Line } from '@react-three/drei'
+import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
+import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { getNodeRelativePosition } from '@/lib/nodes/utils'
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { Line } from '@react-three/drei'
-import { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
-import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -206,7 +206,6 @@ export function WallRenderer({ node }: WallRendererProps) {
   // Generate wall geometry similar to wall.tsx with junction handling
   // Note: Geometry is in LOCAL space since parent group handles position & rotation
   const wallGeometry = useMemo(() => {
-
     // Get wall dimensions from node
     const length = node.size[0] // Length in grid units
     const worldLength = length * TILE_SIZE
@@ -313,7 +312,6 @@ export function WallRenderer({ node }: WallRendererProps) {
     return geometry
   }, [node, allWalls])
 
-
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
@@ -411,30 +409,37 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       ) : (
         <>
-          <mesh castShadow receiveShadow onPointerDown={onPointerDown} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave} onPointerMove={onPointerMove}>
+          <mesh
+            castShadow
+            onPointerDown={onPointerDown}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
+            onPointerMove={onPointerMove}
+            receiveShadow
+          >
             <Geometry useGroups>
-              <Base geometry={wallGeometry}/>
-                {node.children.map((opening, idx) => {
-                  // Transform opening's world position to wall's local coordinate system
-                  const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
+              <Base geometry={wallGeometry} />
+              {node.children.map((opening, idx) => {
+                // Transform opening's world position to wall's local coordinate system
+                const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
-                  const scale: [number, number, number] =
-                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
-                  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
-                  return (
-                    <Subtraction
+                const scale: [number, number, number] =
+                  opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                // TODO: Create a WallOpening type to save properly the cut and be agnostic here
+                return (
+                  <Subtraction
                     key={idx}
-                      position-x={localX}
-                      position-y={opening.type === 'window' ? 1.12 : 0}
-                      position-z={localZ}
-                      scale={scale}
-                      showOperation={opening.preview}
-                    >
-                      <boxGeometry/>
-                      <meshStandardMaterial color={"skyblue"} transparent opacity={0.5} />
-                    </Subtraction>
-                  )
-                })}
+                    position-x={localX}
+                    position-y={opening.type === 'window' ? 1.12 : 0}
+                    position-z={localZ}
+                    scale={scale}
+                    showOperation={opening.preview}
+                  >
+                    <boxGeometry />
+                    <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
+                  </Subtraction>
+                )
+              })}
             </Geometry>
             <meshStandardMaterial
               color="beige"

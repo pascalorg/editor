@@ -1,12 +1,5 @@
 'use client'
 
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
-import { ColumnBuilder } from '@/components/editor/elements/column-builder'
-import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { WindowBuilder } from '@/components/editor/elements/window-builder'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -20,8 +13,15 @@ import { Canvas } from '@react-three/fiber'
 import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { BuildingMenu } from '@/components/editor/building-menu'
+import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { ColumnBuilder } from '@/components/editor/elements/column-builder'
+import { DoorBuilder } from '@/components/editor/elements/door-builder'
+import { ReferenceImage } from '@/components/editor/elements/reference-image'
+import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
 import { emitter } from '@/events/bus'
+import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useReferenceImages, useScans } from '@/hooks/use-nodes'
 import {
   setNodePosition,
@@ -128,7 +128,6 @@ export default function Editor({ className }: { className?: string }) {
 
   // Get walls as a Set
   const walls = getWallsSet()
-
 
   // Use a callback ref to ensure the store is updated when the group is attached
   const allFloorsGroupCallback = useCallback(
@@ -480,67 +479,69 @@ export default function Editor({ className }: { className?: string }) {
     setWalls(next)
   }
 
+  const handleIntersectionClick = useCallback(
+    (x: number, y: number) => {
+      // Don't handle clicks while camera is moving
+      if (movingCamera) return
 
-  const handleIntersectionClick = useCallback((x: number, y: number) => {
-    // Don't handle clicks while camera is moving
-    if (movingCamera) return
+      emitter.emit('grid:click', {
+        position: [x, y],
+      })
 
-    emitter.emit('grid:click', {
-      position: [x, y],
-    })
-
-    // Guide mode: deselect images when clicking on the grid
-    if (controlMode === 'guide') {
-      setSelectedImageIds([])
-      return
-    }
-
-    // Check control mode first - delete mode takes priority
-    if (controlMode === 'delete') {
-      // Delete mode: two-click line selection
-      if (deleteStartPoint === null) {
-        // First click: set start point
-        setDeleteStartPoint([x, y])
-      } else {
-        // Second click: delete wall portions using deletePreviewEnd (snapped position)
-        if (deletePreviewEnd) {
-          const [x1, y1] = deleteStartPoint
-          const [x2, y2] = deletePreviewEnd
-
-          // Delete wall portions that overlap with the selected segment
-          handleDeleteWallPortion(x1, y1, x2, y2)
-        }
-
-        // Reset delete state
-        setDeleteStartPoint(null)
-        setDeletePreviewEnd(null)
+      // Guide mode: deselect images when clicking on the grid
+      if (controlMode === 'guide') {
+        setSelectedImageIds([])
+        return
       }
-      return
-    }
 
-    // Building mode - check active tool (only allow building in building mode)
-    if (controlMode === 'building' && activeTool === 'wall') {
-      // Wall mode: two-click line drawing with node-based preview
-      // Handled by WallBuilder component
-    } else if (controlMode === 'building' && activeTool === 'column') {
-      // Column mode: one-click placement at intersection
-      // Handled by ColumnBuilder component
-    }
-    // Door placement is now handled by DoorPlacementPreview component's onClick
-    // Deselect in building mode if no placement action was taken
-    if (controlMode === 'building' && wallStartPoint === null) {
-      setSelectedElements([])
-    }
-  }, [
-    movingCamera,
-    controlMode,
-    deleteStartPoint,
-    deletePreviewEnd,
-    handleDeleteWallPortion,
-    activeTool,
-    wallStartPoint,
-    setSelectedImageIds,
-  ])
+      // Check control mode first - delete mode takes priority
+      if (controlMode === 'delete') {
+        // Delete mode: two-click line selection
+        if (deleteStartPoint === null) {
+          // First click: set start point
+          setDeleteStartPoint([x, y])
+        } else {
+          // Second click: delete wall portions using deletePreviewEnd (snapped position)
+          if (deletePreviewEnd) {
+            const [x1, y1] = deleteStartPoint
+            const [x2, y2] = deletePreviewEnd
+
+            // Delete wall portions that overlap with the selected segment
+            handleDeleteWallPortion(x1, y1, x2, y2)
+          }
+
+          // Reset delete state
+          setDeleteStartPoint(null)
+          setDeletePreviewEnd(null)
+        }
+        return
+      }
+
+      // Building mode - check active tool (only allow building in building mode)
+      if (controlMode === 'building' && activeTool === 'wall') {
+        // Wall mode: two-click line drawing with node-based preview
+        // Handled by WallBuilder component
+      } else if (controlMode === 'building' && activeTool === 'column') {
+        // Column mode: one-click placement at intersection
+        // Handled by ColumnBuilder component
+      }
+      // Door placement is now handled by DoorPlacementPreview component's onClick
+      // Deselect in building mode if no placement action was taken
+      if (controlMode === 'building' && wallStartPoint === null) {
+        setSelectedElements([])
+      }
+    },
+    [
+      movingCamera,
+      controlMode,
+      deleteStartPoint,
+      deletePreviewEnd,
+      handleDeleteWallPortion,
+      activeTool,
+      wallStartPoint,
+      setSelectedImageIds,
+    ],
+  )
 
   const handleIntersectionDoubleClick = useCallback(() => {
     // Don't handle double-clicks while camera is moving
@@ -549,79 +550,79 @@ export default function Editor({ className }: { className?: string }) {
     emitter.emit('grid:double-click', {
       position: [0, 0],
     })
-
-
   }, [movingCamera])
 
-  const handleIntersectionHover = useCallback((x: number, y: number | null) => {
-    if (y === null) return
+  const handleIntersectionHover = useCallback(
+    (x: number, y: number | null) => {
+      if (y === null) return
 
-    emitter.emit('grid:move', {
-      position: [x, y],
-    })
-    // Only track cursor position for non-base levels (base level uses InfiniteGrid)
-    const currentFloor = levels.find((level) => level.id === selectedFloorId)
-    const currentLevel = currentFloor?.level || 0
+      emitter.emit('grid:move', {
+        position: [x, y],
+      })
+      // Only track cursor position for non-base levels (base level uses InfiniteGrid)
+      const currentFloor = levels.find((level) => level.id === selectedFloorId)
+      const currentLevel = currentFloor?.level || 0
 
-    if (currentLevel > 0) {
-      // Update cursor position for proximity grid on non-base levels
-      if (y !== null) {
-        setPointerPosition([x, y])
+      if (currentLevel > 0) {
+        // Update cursor position for proximity grid on non-base levels
+        if (y !== null) {
+          setPointerPosition([x, y])
+        } else {
+          setPointerPosition(null)
+        }
       } else {
+        // On base level, don't track cursor position
         setPointerPosition(null)
       }
-    } else {
-      // On base level, don't track cursor position
-      setPointerPosition(null)
-    }
 
-    // Check control mode first - delete mode takes priority
-    if (controlMode === 'delete') {
-      // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
-      if (deleteStartPoint && y !== null) {
-        const [x1, y1] = deleteStartPoint
-        let projectedX = x1
-        let projectedY = y1
+      // Check control mode first - delete mode takes priority
+      if (controlMode === 'delete') {
+        // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
+        if (deleteStartPoint && y !== null) {
+          const [x1, y1] = deleteStartPoint
+          let projectedX = x1
+          let projectedY = y1
 
-        const dx = x - x1
-        const dy = y - y1
-        const absDx = Math.abs(dx)
-        const absDy = Math.abs(dy)
+          const dx = x - x1
+          const dy = y - y1
+          const absDx = Math.abs(dx)
+          const absDy = Math.abs(dy)
 
-        // Calculate distances to horizontal, vertical, and diagonal lines
-        const horizontalDist = absDy
-        const verticalDist = absDx
-        const diagonalDist = Math.abs(absDx - absDy)
+          // Calculate distances to horizontal, vertical, and diagonal lines
+          const horizontalDist = absDy
+          const verticalDist = absDx
+          const diagonalDist = Math.abs(absDx - absDy)
 
-        // Find the minimum distance to determine which axis to snap to
-        const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
+          // Find the minimum distance to determine which axis to snap to
+          const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
 
-        if (minDist === diagonalDist) {
-          // Snap to 45° diagonal
-          const diagonalLength = Math.min(absDx, absDy)
-          projectedX = x1 + Math.sign(dx) * diagonalLength
-          projectedY = y1 + Math.sign(dy) * diagonalLength
-        } else if (minDist === horizontalDist) {
-          // Snap to horizontal
-          projectedX = x
-          projectedY = y1
-        } else {
-          // Snap to vertical
-          projectedX = x1
-          projectedY = y
+          if (minDist === diagonalDist) {
+            // Snap to 45° diagonal
+            const diagonalLength = Math.min(absDx, absDy)
+            projectedX = x1 + Math.sign(dx) * diagonalLength
+            projectedY = y1 + Math.sign(dy) * diagonalLength
+          } else if (minDist === horizontalDist) {
+            // Snap to horizontal
+            projectedX = x
+            projectedY = y1
+          } else {
+            // Snap to vertical
+            projectedX = x1
+            projectedY = y
+          }
+
+          setDeletePreviewEnd([projectedX, projectedY])
+        } else if (!deleteStartPoint) {
+          setDeletePreviewEnd(null)
         }
-
-        setDeletePreviewEnd([projectedX, projectedY])
-      } else if (!deleteStartPoint) {
-        setDeletePreviewEnd(null)
+        return
       }
-      return
-    }
 
-    // Building mode - check active tool (only allow previews in building mode)
-    // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
-  }, [controlMode, deleteStartPoint, setPointerPosition,  levels, selectedFloorId])
-
+      // Building mode - check active tool (only allow previews in building mode)
+      // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
+    },
+    [controlMode, deleteStartPoint, setPointerPosition, levels, selectedFloorId],
+  )
 
   // TODO: Set context menu as a generic event handled per component
   const handleCanvasRightClick = (e: React.MouseEvent) => {

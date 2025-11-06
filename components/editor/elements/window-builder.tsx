@@ -1,10 +1,10 @@
 'use client'
 
+import { useEffect, useMemo, useRef } from 'react'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useDoors, useWalls, useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
-import { useEffect, useMemo, useRef } from 'react'
 
 export function WindowBuilder() {
   const addNode = useEditor((state) => state.addNode)
@@ -42,19 +42,23 @@ export function WindowBuilder() {
   // Existing doors and windows for validation
   const existingDoors = useMemo(
     () =>
-      currentFloorDoors.filter(door => !door.preview).map((node) => ({
-        position: node.position,
-        rotation: node.rotation,
-      })),
+      currentFloorDoors
+        .filter((door) => !door.preview)
+        .map((node) => ({
+          position: node.position,
+          rotation: node.rotation,
+        })),
     [currentFloorDoors],
   )
 
   const existingWindows = useMemo(
     () =>
-      currentFloorWindows.filter(window => !window.preview).map((node) => ({
-        position: node.position,
-        rotation: node.rotation,
-      })),
+      currentFloorWindows
+        .filter((window) => !window.preview)
+        .map((node) => ({
+          position: node.position,
+          rotation: node.rotation,
+        })),
     [currentFloorWindows],
   )
 
@@ -105,32 +109,31 @@ export function WindowBuilder() {
       })
 
       if (placement?.canPlace && placement?.nearestWall) {
-            // Delete the preview before placing final window
-            if (windowStateRef.current.previewWindowId) {
-              deleteNode(windowStateRef.current.previewWindowId)
-              windowStateRef.current.previewWindowId = null
-              windowStateRef.current.lastWallId = null
-              windowStateRef.current.lastGridPosition = null
-            }
-
-            // Create window node as child of the nearest wall
-            const windowNode = {
-              type: 'window',
-              name: 'Window',
-              position: placement.gridPosition,
-              rotation: placement.rotation,
-              size: [1, 1.2] as [number, number], // 1m x 1.2m window
-              visible: true,
-              opacity: 100,
-              children: [],
-            } as any
-
-            // Add window to the nearest wall
-            const wallId = placement.nearestWall.id
-            addNode(windowNode, wallId)
-          }
+        // Delete the preview before placing final window
+        if (windowStateRef.current.previewWindowId) {
+          deleteNode(windowStateRef.current.previewWindowId)
+          windowStateRef.current.previewWindowId = null
+          windowStateRef.current.lastWallId = null
+          windowStateRef.current.lastGridPosition = null
         }
-    
+
+        // Create window node as child of the nearest wall
+        const windowNode = {
+          type: 'window',
+          name: 'Window',
+          position: placement.gridPosition,
+          rotation: placement.rotation,
+          size: [1, 1.2] as [number, number], // 1m x 1.2m window
+          visible: true,
+          opacity: 100,
+          children: [],
+        } as any
+
+        // Add window to the nearest wall
+        const wallId = placement.nearestWall.id
+        addNode(windowNode, wallId)
+      }
+    }
 
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
@@ -159,86 +162,84 @@ export function WindowBuilder() {
       })
 
       if (!placement) {
-            // No valid placement at all, delete preview
-            if (windowStateRef.current.previewWindowId) {
-              deleteNode(windowStateRef.current.previewWindowId)
-              windowStateRef.current.previewWindowId = null
-              windowStateRef.current.lastWallId = null
-              windowStateRef.current.lastGridPosition = null
-            }
-            return
-          }
-
-          // Update last valid rotation if we have a valid rotation
-          if (placement.rotation !== 0) {
-            windowStateRef.current.lastValidRotation = placement.rotation
-          }
-
-          // Determine parent: wall if snapped, level if free-floating
-          const currentParentId = placement.nearestWall ? placement.nearestWall.id : selectedFloorId
-          const needsToMoveParent =
-            windowStateRef.current.previewWindowId &&
-            windowStateRef.current.lastWallId !== currentParentId
-
-          const rotation = placement.rotation || windowStateRef.current.lastValidRotation
-
-          // Create or update preview window
-          if (windowStateRef.current.previewWindowId) {
-            if (needsToMoveParent) {
-              // Move to different parent: delete old preview and create new one
-              deleteNode(windowStateRef.current.previewWindowId)
-
-              const previewWindowId = addNode(
-                {
-                  type: 'window',
-                  name: 'Window Preview',
-                  position: placement.gridPosition,
-                  rotation,
-                  size: [1, 1.2] as [number, number],
-                  visible: true,
-                  opacity: 100,
-                  preview: true,
-                  canPlace: placement.canPlace,
-                  children: [],
-                } as any,
-                currentParentId, // Parent is either wall or level
-              )
-
-              windowStateRef.current.previewWindowId = previewWindowId
-              windowStateRef.current.lastWallId = currentParentId
-            } else {
-              // Update existing preview (same parent)
-              updateNode(windowStateRef.current.previewWindowId, {
-                position: placement.gridPosition,
-                rotation,
-                visible: true,
-                canPlace: placement.canPlace,
-              } as any)
-            }
-          } else {
-            // Create initial preview window node
-            const previewWindowId = addNode(
-              {
-                type: 'window',
-                name: 'Window Preview',
-                position: placement.gridPosition,
-                rotation,
-                size: [1, 1.2] as [number, number],
-                visible: true,
-                opacity: 100,
-                preview: true,
-                canPlace: placement.canPlace,
-                children: [],
-              } as any,
-              currentParentId, // Parent is either wall or level
-            )
-
-            windowStateRef.current.previewWindowId = previewWindowId
-            windowStateRef.current.lastWallId = currentParentId
-          }
+        // No valid placement at all, delete preview
+        if (windowStateRef.current.previewWindowId) {
+          deleteNode(windowStateRef.current.previewWindowId)
+          windowStateRef.current.previewWindowId = null
+          windowStateRef.current.lastWallId = null
+          windowStateRef.current.lastGridPosition = null
         }
-      
-    
+        return
+      }
+
+      // Update last valid rotation if we have a valid rotation
+      if (placement.rotation !== 0) {
+        windowStateRef.current.lastValidRotation = placement.rotation
+      }
+
+      // Determine parent: wall if snapped, level if free-floating
+      const currentParentId = placement.nearestWall ? placement.nearestWall.id : selectedFloorId
+      const needsToMoveParent =
+        windowStateRef.current.previewWindowId &&
+        windowStateRef.current.lastWallId !== currentParentId
+
+      const rotation = placement.rotation || windowStateRef.current.lastValidRotation
+
+      // Create or update preview window
+      if (windowStateRef.current.previewWindowId) {
+        if (needsToMoveParent) {
+          // Move to different parent: delete old preview and create new one
+          deleteNode(windowStateRef.current.previewWindowId)
+
+          const previewWindowId = addNode(
+            {
+              type: 'window',
+              name: 'Window Preview',
+              position: placement.gridPosition,
+              rotation,
+              size: [1, 1.2] as [number, number],
+              visible: true,
+              opacity: 100,
+              preview: true,
+              canPlace: placement.canPlace,
+              children: [],
+            } as any,
+            currentParentId, // Parent is either wall or level
+          )
+
+          windowStateRef.current.previewWindowId = previewWindowId
+          windowStateRef.current.lastWallId = currentParentId
+        } else {
+          // Update existing preview (same parent)
+          updateNode(windowStateRef.current.previewWindowId, {
+            position: placement.gridPosition,
+            rotation,
+            visible: true,
+            canPlace: placement.canPlace,
+          } as any)
+        }
+      } else {
+        // Create initial preview window node
+        const previewWindowId = addNode(
+          {
+            type: 'window',
+            name: 'Window Preview',
+            position: placement.gridPosition,
+            rotation,
+            size: [1, 1.2] as [number, number],
+            visible: true,
+            opacity: 100,
+            preview: true,
+            canPlace: placement.canPlace,
+            children: [],
+          } as any,
+          currentParentId, // Parent is either wall or level
+        )
+
+        windowStateRef.current.previewWindowId = previewWindowId
+        windowStateRef.current.lastWallId = currentParentId
+      }
+    }
 
     // Register event listeners
     emitter.on('grid:click', handleGridClick)

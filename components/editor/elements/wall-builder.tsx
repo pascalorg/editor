@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import { useEffect, useRef } from 'react'
 
 export function WallBuilder() {
   const addNode = useEditor((state) => state.addNode)
@@ -66,49 +66,48 @@ export function WallBuilder() {
 
       const [x, y] = e.position
       if (wallStateRef.current.startPoint === null) {
-            // First click: set start point and create preview node
-            wallStateRef.current.startPoint = [x, y]
-            wallStateRef.current.lastEndPoint = null // Reset last end point
+        // First click: set start point and create preview node
+        wallStateRef.current.startPoint = [x, y]
+        wallStateRef.current.lastEndPoint = null // Reset last end point
 
-            // Create preview wall node
-            const previewWallId = addNode(
-              {
-                type: 'wall',
-                name: 'Wall Preview',
-                position: [x, y] as [number, number],
-                rotation: 0,
-                size: [0, 0.2] as [number, number], // Zero length initially
-                start: { x, z: y },
-                end: { x, z: y },
-                visible: true,
-                opacity: 100,
-                preview: true, // Mark as preview
-                children: [],
-              } as any,
-              selectedFloorId,
-            )
+        // Create preview wall node
+        const previewWallId = addNode(
+          {
+            type: 'wall',
+            name: 'Wall Preview',
+            position: [x, y] as [number, number],
+            rotation: 0,
+            size: [0, 0.2] as [number, number], // Zero length initially
+            start: { x, z: y },
+            end: { x, z: y },
+            visible: true,
+            opacity: 100,
+            preview: true, // Mark as preview
+            children: [],
+          } as any,
+          selectedFloorId,
+        )
 
-            wallStateRef.current.previewWallId = previewWallId
-          } else {
-            // Second click: commit the preview wall
-            const previewWallId = wallStateRef.current.previewWallId
+        wallStateRef.current.previewWallId = previewWallId
+      } else {
+        // Second click: commit the preview wall
+        const previewWallId = wallStateRef.current.previewWallId
 
-            if (previewWallId) {
-              // Update the wall to remove preview flag
-              // This will automatically add to undo stack (because preview is being set to false)
-              updateNode(previewWallId, {
-                preview: false as any,
-                name: 'Wall',
-              })
-            }
-
-            // Reset state
-            wallStateRef.current.startPoint = null
-            wallStateRef.current.previewWallId = null
-            wallStateRef.current.lastEndPoint = null
-          }
+        if (previewWallId) {
+          // Update the wall to remove preview flag
+          // This will automatically add to undo stack (because preview is being set to false)
+          updateNode(previewWallId, {
+            preview: false as any,
+            name: 'Wall',
+          })
         }
-    
+
+        // Reset state
+        wallStateRef.current.startPoint = null
+        wallStateRef.current.previewWallId = null
+        wallStateRef.current.lastEndPoint = null
+      }
+    }
 
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
@@ -124,26 +123,24 @@ export function WallBuilder() {
         // Only update if the end point has changed
         const lastEndPoint = wallStateRef.current.lastEndPoint
         if (!lastEndPoint || lastEndPoint[0] !== x2 || lastEndPoint[1] !== y2) {
-              wallStateRef.current.lastEndPoint = [x2, y2]
+          wallStateRef.current.lastEndPoint = [x2, y2]
 
-              // Calculate new wall properties
-              const dx = x2 - x1
-              const dy = y2 - y1
-              const length = Math.sqrt(dx * dx + dy * dy)
-              const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
+          // Calculate new wall properties
+          const dx = x2 - x1
+          const dy = y2 - y1
+          const length = Math.sqrt(dx * dx + dy * dy)
+          const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
-              // Update preview wall
-              updateNode(previewWallId, {
-                size: [length, 0.2] as [number, number],
-                rotation,
-                start: { x: x1, z: y1 },
-                end: { x: x2, z: y2 },
-              })
-            }
-          }
+          // Update preview wall
+          updateNode(previewWallId, {
+            size: [length, 0.2] as [number, number],
+            rotation,
+            start: { x: x1, z: y1 },
+            end: { x: x2, z: y2 },
+          })
         }
-      
-    
+      }
+    }
 
     // Register event listeners
     emitter.on('grid:click', handleGridClick)

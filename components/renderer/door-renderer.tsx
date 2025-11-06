@@ -1,10 +1,10 @@
 'use client'
 
-import { useEditor } from '@/hooks/use-editor'
-import type { DoorNode } from '@/lib/nodes/types'
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useEditor } from '@/hooks/use-editor'
+import type { DoorNode } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
 
 interface DoorRendererProps {
@@ -29,7 +29,6 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
-
 
   // Apply opacity to all materials in the door model
   useEffect(() => {
@@ -86,9 +85,9 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
               transparent
             />
           </mesh>
-          </>
+        </>
       )}
-        <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
+      <group position={[0, 0, 0]} ref={doorRef} scale={[2, 2, 2]}>
         <Gltf src="/models/Door.glb" />
       </group>
     </>

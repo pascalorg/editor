@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type {
   BaseNode,
@@ -8,8 +10,6 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
@@ -160,10 +160,9 @@ export function NodeRenderer({ node }: NodeRendererProps) {
         )}
       </group>
       {/* Recursively render children */}
-      {node.children
-        .map((childNode) => (
-          <NodeRenderer key={childNode.id} node={childNode} />
-        ))}
+      {node.children.map((childNode) => (
+        <NodeRenderer key={childNode.id} node={childNode} />
+      ))}
     </>
   )
 }
