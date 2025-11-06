@@ -122,27 +122,6 @@ export default function Editor({ className }: { className?: string }) {
     opacity: node.opacity,
   }))
 
-  // Helper function to convert wall nodes to wall segments
-  const convertWallNodesToSegments = useCallback(
-    (wallNodes: any[]): WallSegment[] =>
-      wallNodes.map((node) => {
-        const [x1, y1] = node.position
-        const length = node.size[0]
-        const x2 = x1 + Math.cos(node.rotation) * length
-        const y2 = y1 - Math.sin(node.rotation) * length // Note: minus sign to match wall coordinate system
-
-        return {
-          start: [x1, y1] as [number, number],
-          end: [x2, y2] as [number, number],
-          id: node.id,
-          isHorizontal: Math.abs(node.rotation) < 0.1 || Math.abs(node.rotation - Math.PI) < 0.1,
-          visible: node.visible ?? true,
-          opacity: node.opacity ?? 100,
-        }
-      }),
-    [],
-  )
-
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
 
@@ -502,7 +481,7 @@ export default function Editor({ className }: { className?: string }) {
 
   const emitGridEvent = useEditor((state) => state.emitGridEvent)
 
-  const handleIntersectionClick = (x: number, y: number) => {
+  const handleIntersectionClick = useCallback((x: number, y: number) => {
     // Don't handle clicks while camera is moving
     if (movingCamera) return
 
@@ -554,9 +533,19 @@ export default function Editor({ className }: { className?: string }) {
     if (controlMode === 'building' && wallStartPoint === null) {
       setSelectedElements([])
     }
-  }
+  }, [
+    emitGridEvent,
+    movingCamera,
+    controlMode,
+    deleteStartPoint,
+    deletePreviewEnd,
+    handleDeleteWallPortion,
+    activeTool,
+    wallStartPoint,
+    setSelectedImageIds,
+  ])
 
-  const handleIntersectionDoubleClick = () => {
+  const handleIntersectionDoubleClick = useCallback(() => {
     // Don't handle double-clicks while camera is moving
     if (movingCamera) return
 
@@ -565,9 +554,9 @@ export default function Editor({ className }: { className?: string }) {
       position: [0, 0], // Position not used for double-click events
     }
     emitGridEvent(gridEvent)
-  }
+  }, [emitGridEvent, movingCamera])
 
-  const handleIntersectionHover = (x: number, y: number | null) => {
+  const handleIntersectionHover = useCallback((x: number, y: number | null) => {
     if (y === null) return
 
     const gridEvent: GridEvent = {
@@ -636,8 +625,10 @@ export default function Editor({ className }: { className?: string }) {
 
     // Building mode - check active tool (only allow previews in building mode)
     // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
-  }
+  }, [controlMode, deleteStartPoint, setPointerPosition, emitGridEvent, levels, selectedFloorId])
 
+
+  // TODO: Set context menu as a generic event handled per component
   const handleCanvasRightClick = (e: React.MouseEvent) => {
     // Only show canvas context menu if no wall was right-clicked
     if (!wallContextMenuTriggeredRef.current) {
@@ -1014,16 +1005,6 @@ export default function Editor({ className }: { className?: string }) {
                         wallPreviewEnd={wallPreviewEnd}
                       />
                     )}
-
-                    {/* Doors component renders placed doors - kept for backward compatibility but now doors are rendered via NodeRenderer */}
-                    {/* <Doors
-                      floorId={floor.id}
-                      isActive={isActiveFloor}
-                      isFullView={viewMode === 'full'}
-                      tileSize={tileSize}
-                      wallHeight={wallHeight}
-                    /> */}
-
                   </group>
                 </AnimatedLevel>
               )

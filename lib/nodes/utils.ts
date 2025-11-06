@@ -460,3 +460,40 @@ export function filterTree(
     children: filterTree(node.children, predicate),
   }))
 }
+
+// ============================================================================
+// SPATIAL OPERATIONS
+// ============================================================================
+
+/**
+ * Get a node's position relative to another node's local coordinate system
+ *
+ * @param childNode - The node whose position you want in local space
+ * @param parentNode - The node whose coordinate system to transform to
+ * @param scale - Optional scale factor to apply (e.g., TILE_SIZE)
+ * @returns Object with localX and localZ coordinates in the parent's local space
+ *
+ * @example
+ * ```ts
+ * // Get door position in wall's local space
+ * const { localX, localZ } = getNodeRelativePosition(doorNode, wallNode, TILE_SIZE)
+ * ```
+ */
+export function getNodeRelativePosition(
+  childNode: { position: [number, number] },
+  parentNode: { position: [number, number]; rotation: number },
+  scale = 1,
+): { localX: number; localZ: number } {
+  // Calculate offset in world space
+  const dx = childNode.position[0] - parentNode.position[0]
+  const dy = childNode.position[1] - parentNode.position[1]
+
+  // Rotate into parent's local space using 2D rotation matrix
+  const cos = Math.cos(parentNode.rotation)
+  const sin = Math.sin(parentNode.rotation)
+
+  return {
+    localX: (dx * cos - dy * sin) * scale,
+    localZ: (dx * sin + dy * cos) * scale,
+  }
+}

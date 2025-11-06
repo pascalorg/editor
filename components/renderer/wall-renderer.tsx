@@ -3,6 +3,7 @@
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { DoorNode, WallNode } from '@/lib/nodes/types'
+import { getNodeRelativePosition } from '@/lib/nodes/utils'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Line } from '@react-three/drei'
 import { useMemo } from 'react'
@@ -380,17 +381,8 @@ export function WallRenderer({ node }: WallRendererProps) {
             <Geometry>
               <Base geometry={wallGeometry}/>
                 {node.children.map((opening, idx) => {
-
-                  // TODO: Create Util function
                   // Transform opening's world position to wall's local coordinate system
-                  const dx = opening.position[0] - node.position[0]
-                  const dy = opening.position[1] - node.position[1]
-
-                  // Rotate into wall's local space
-                  const cos = Math.cos(node.rotation)
-                  const sin = Math.sin(node.rotation)
-                  const localX = (dx * cos - dy * sin) * tileSize
-                  const localZ = (dx * sin + dy * cos) * tileSize
+                  const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
                     opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
