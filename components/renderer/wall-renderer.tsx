@@ -411,7 +411,7 @@ export function WallRenderer({ node }: WallRendererProps) {
             onPointerMove={onPointerMove}
             receiveShadow
           >
-            <Geometry useGroups>
+            <Geometry useGroups computeVertexNormals={true}>
               <Base geometry={wallGeometry} />
               {node.children.map((opening, idx) => {
                 // Transform opening's world position to wall's local coordinate system
@@ -437,7 +437,6 @@ export function WallRenderer({ node }: WallRendererProps) {
             </Geometry>
             <meshStandardMaterial
               color="beige"
-              flatShading
               metalness={0.1}
               opacity={opacity}
               roughness={0.7}
