@@ -12,7 +12,6 @@ interface DoorRendererProps {
 }
 
 export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
-  console.log('Rendering DoorNode', node)
   const getLevelId = useEditor((state) => state.getLevelId)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const doorRef = useRef<THREE.Group>(null)
