@@ -15,7 +15,6 @@ import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
 import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
-import { BuildingElementsRenderer } from './building-elements-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -51,16 +50,6 @@ export default function Viewer({ className }: { className?: string }) {
 
   // Convert node tree to legacy component format for rendering
   const { components, scans } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
-
-  // Viewer-specific state (isolated from editor)
-  const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
-  const noopSetSelectedElements = () => {
-    /* No-op in viewer mode */
-  }
-  const noopSetControlMode = () => {
-    /* No-op in viewer mode */
-  }
-  const controlMode = 'select' as const
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -100,7 +89,6 @@ export default function Viewer({ className }: { className?: string }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [cameraMode, setCameraMode, toggleLevelMode, selectFloor])
 
-  const wallHeight = WALL_HEIGHT
   const tileSize = TILE_SIZE
   const showGrid = SHOW_GRID
 
