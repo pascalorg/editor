@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, WallEvent, type GridEvent } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useDoors, useWalls, useWindows } from '@/hooks/use-nodes'
 import { validateWallElementPlacement } from '@/lib/wall-element-validation'
@@ -238,16 +238,32 @@ export function DoorBuilder() {
           }
         }
       
-    
+    const handleWallEnter = (e: WallEvent) => {
+      console.log('coucou', e);
+    }
+
+    const handleWallMove = (e: WallEvent) => {
+      console.log('coucou move', e);
+    }
+
+    const handleWallLeave = (e: WallEvent) => {
+      console.log('coucou leave', e);
+    }
 
     // Register event listeners
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
+    emitter.on('wall:enter', handleWallEnter)
+    emitter.on('wall:move', handleWallMove)
+    emitter.on('wall:leave', handleWallLeave)
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
+      emitter.off('wall:enter', handleWallEnter)
+      emitter.off('wall:move', handleWallMove)
+      emitter.off('wall:leave', handleWallLeave)
 
       // Clean up preview on unmount
       if (doorStateRef.current.previewDoorId) {

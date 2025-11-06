@@ -23,10 +23,9 @@ import mitt from 'mitt'
   export interface NodeEvent {
     node: BaseNode
     position: [number, number, number ] // [x, y, z] world coordinates
-    gridPosition: [number, number] // [x, y] grid coordinates
   }
 
-  interface WallEvent extends NodeEvent {
+  export interface WallEvent extends NodeEvent {
     node: WallNode
   }
   

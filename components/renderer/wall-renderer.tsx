@@ -1,12 +1,14 @@
 'use client'
 
+import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { getNodeRelativePosition } from '@/lib/nodes/utils'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Line } from '@react-three/drei'
-import { useMemo } from 'react'
+import { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
@@ -319,6 +321,36 @@ export function WallRenderer({ node }: WallRendererProps) {
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
+  //  Event handlers
+
+  const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    emitter.emit('wall:click', {
+      node,
+      position: [e.point.x, e.point.y, e.point.z],
+    })
+  }, [])
+
+  const onPointerEnter = useCallback((e: ThreeEvent<PointerEvent>) => {
+    emitter.emit('wall:enter', {
+      node,
+      position: [e.point.x, e.point.y, e.point.z],
+    })
+  }, [])
+
+  const onPointerLeave = useCallback((e: ThreeEvent<PointerEvent>) => {
+    emitter.emit('wall:leave', {
+      node,
+      position: [e.point.x, e.point.y, e.point.z],
+    })
+  }, [])
+
+  const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
+    emitter.emit('wall:move', {
+      node,
+      position: [e.point.x, e.point.y, e.point.z],
+    })
+  }, [])
+
   return (
     <>
       {isPreview ? (
@@ -377,7 +409,7 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       ) : (
         <>
-          <mesh castShadow receiveShadow>
+          <mesh castShadow receiveShadow onPointerDown={onPointerDown} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave} onPointerMove={onPointerMove}>
             <Geometry>
               <Base geometry={wallGeometry}/>
                 {node.children.map((opening, idx) => {
