@@ -110,7 +110,7 @@ export function GroupRenderer({ node }: { node: BaseNode }) {
   return (
     <group>
       <mesh position={[centerX * TILE_SIZE, WALL_HEIGHT / 2, centerZ * TILE_SIZE]}>
-        <boxGeometry args={[width * TILE_SIZE + 0.5, WALL_HEIGHT, depth * TILE_SIZE + 0.5]} />
+        <boxGeometry args={[width * TILE_SIZE + 0.5, WALL_HEIGHT + 0.5, depth * TILE_SIZE + 0.5]} />
         <meshStandardMaterial color="blue" depthWrite={false} opacity={0.2} transparent />
       </mesh>
     </group>

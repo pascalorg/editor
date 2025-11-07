@@ -210,7 +210,10 @@ function DraggableLevelItem({
                       nodeId={element.id}
                     >
                       <TreeNodeTrigger
-                        className={cn(element.visible === false && 'opacity-50')}
+                        className={cn(
+                          isElementSelected(selectedElements, element.id, 'group') && 'bg-accent',
+                          element.visible === false && 'opacity-50',
+                        )}
                         onClick={(e) => {
                           e.stopPropagation()
                           // Groups can be selected for deletion
