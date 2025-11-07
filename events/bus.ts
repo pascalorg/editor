@@ -12,9 +12,9 @@
 //   data: EditorEvents[K]
 // ) => void
 
-import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
-import { GridPoint } from '@/lib/nodes/types'
 import mitt from 'mitt'
+import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
+import type { GridPoint } from '@/lib/nodes/types'
 
 export interface GridEvent {
   position: [number, number]

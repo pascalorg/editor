@@ -1,7 +1,7 @@
-import { type ClassValue, clsx } from 'clsx';
-import { customAlphabet } from 'nanoid';
-import { twMerge } from 'tailwind-merge';
-import type { WallNode } from './nodes/types';
+import { type ClassValue, clsx } from 'clsx'
+import { customAlphabet } from 'nanoid'
+import { twMerge } from 'tailwind-merge'
+import type { WallNode } from './nodes/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -9,11 +9,16 @@ export function cn(...inputs: ClassValue[]) {
 const nanoid = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 export const createId = (prefix?: string) => `${prefix ? `${prefix}_` : ''}${nanoid()}`
 
-
-export function worldPositionToGrid(position: [number, number, number], { gridSize, tileSize }: {
-  gridSize: number
-  tileSize: number
-}): [number, number] {
+export function worldPositionToGrid(
+  position: [number, number, number],
+  {
+    gridSize,
+    tileSize,
+  }: {
+    gridSize: number
+    tileSize: number
+  },
+): [number, number] {
   const localX = position[0] + gridSize / 2
   const localZ = position[2] + gridSize / 2
 
@@ -33,7 +38,7 @@ export function worldPositionToGrid(position: [number, number, number], { gridSi
 export function canPlaceGridItemOnWall(
   wall: WallNode,
   item: { position: [number, number]; rotation: number; preview?: boolean },
-  itemWidth: number = 2
+  itemWidth = 2,
 ): boolean {
   const itemPosition = item.position
 

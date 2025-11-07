@@ -1,5 +1,5 @@
-import { type BaseNode, type GridItem, useEditor } from '@/hooks/use-editor'
 import { useMemo } from 'react'
+import { type BaseNode, type GridItem, useEditor } from '@/hooks/use-editor'
 import { TILE_SIZE } from '../editor'
 import { WALL_HEIGHT } from '../viewer'
 

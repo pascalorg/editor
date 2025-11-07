@@ -1,9 +1,9 @@
 'use client'
 
+import { useEffect } from 'react'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor, type WindowNode } from '@/hooks/use-editor'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
-import { useEffect } from 'react'
 
 export function WindowBuilder() {
   const addNode = useEditor((state) => state.addNode)
