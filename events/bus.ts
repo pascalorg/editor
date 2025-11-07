@@ -12,8 +12,9 @@
 //   data: EditorEvents[K]
 // ) => void
 
-import mitt from 'mitt'
 import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
+import { GridPoint } from '@/lib/nodes/types'
+import mitt from 'mitt'
 
 export interface GridEvent {
   position: [number, number]
@@ -21,6 +22,7 @@ export interface GridEvent {
 
 export interface NodeEvent {
   node: BaseNode
+  gridPosition: GridPoint
   position: [number, number, number] // [x, y, z] world coordinates
 }
 

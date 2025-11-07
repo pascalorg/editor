@@ -1,11 +1,9 @@
 'use client'
 
-import { GRID_SIZE } from '@/components/viewer'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { DoorNode, useEditor } from '@/hooks/use-editor'
-import { canPlaceGridItemOnWall, worldPositionToGrid } from '@/lib/utils'
+import { canPlaceGridItemOnWall } from '@/lib/utils'
 import { useEffect } from 'react'
-import { TILE_SIZE } from '..'
 
 export function DoorBuilder() {
   const addNode = useEditor((state) => state.addNode)
@@ -75,16 +73,12 @@ export function DoorBuilder() {
         deleteNode(previewDoor.id);
       }
       ignoreGridMove = true;
-      const [x, y] = worldPositionToGrid(e.position, {
-        gridSize: GRID_SIZE,
-        tileSize: TILE_SIZE,
-      });
       lastRotation = e.node.rotation;
       previewDoor = {
         parent: e.node.id,
         type: 'door',
         name: 'Door Preview',
-        position: [x, y],
+        position: [e.gridPosition.x, e.gridPosition.z],
         rotation: e.node.rotation,
         size: [1, 2] as [number, number],
         visible: true,
@@ -102,13 +96,11 @@ export function DoorBuilder() {
     }
 
     const handleWallMove = (e: WallEvent) => {
-      const [x, y] = worldPositionToGrid(e.position, {
-        gridSize: GRID_SIZE,
-        tileSize: TILE_SIZE,
-      });
-      if (lastPosition && lastPosition[0] === x && lastPosition[1] === y) {
+      
+      if (lastPosition && lastPosition[0] === e.gridPosition.x && lastPosition[1] === e.gridPosition.z) {
         return ; // Avoid computing for same position
       }
+
 
       ignoreGridMove = true;
       if (previewDoor && e.node.id !== previewDoor.parent) {
@@ -116,9 +108,9 @@ export function DoorBuilder() {
         deleteNode(previewDoor.id);
         previewDoor = null;
       }
-      lastPosition = [x, y];
+      lastPosition = [e.gridPosition.x, e.gridPosition.z];
       if (previewDoor) {
-        previewDoor.position = [x, y];
+        previewDoor.position = [e.gridPosition.x, e.gridPosition.z];
         previewDoor.rotation = e.node.rotation;
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2);
         previewDoor.canPlace = canPlace;
@@ -128,7 +120,7 @@ export function DoorBuilder() {
           parent: e.node.id,
           type: 'door',
           name: 'Door Preview',
-          position: [x, y],
+          position: [e.gridPosition.x, e.gridPosition.z],
           rotation: e.node.rotation,
           size: [1, 2] as [number, number],
           visible: true,

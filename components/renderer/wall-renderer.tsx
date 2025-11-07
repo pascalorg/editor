@@ -1,16 +1,17 @@
 'use client'
 
+import { emitter } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
+import type { GridPoint, WallNode } from '@/lib/nodes/types'
+import { getNodeRelativePosition } from '@/lib/nodes/utils'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
-import { emitter } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { DoorNode, WallNode } from '@/lib/nodes/types'
-import { getNodeRelativePosition } from '@/lib/nodes/utils'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { GRID_SIZE } from '../viewer'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
@@ -313,11 +314,32 @@ export function WallRenderer({ node }: WallRendererProps) {
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
+
+  const getClosestGridPoint = useCallback((point: THREE.Vector3): GridPoint => {
+    const gridPoint = {
+    x: (point.x + GRID_SIZE/2) / TILE_SIZE,
+    y: (point.z + GRID_SIZE/2) / TILE_SIZE
+  }
+  
+  // Find closest point on wall segment in grid space
+  const t = Math.max(0, Math.min(1, 
+    ((gridPoint.x - node.start.x) * (node.end.x - node.start.x) + 
+     (gridPoint.y - node.start.z) * (node.end.z - node.start.z)) /
+    ((node.end.x - node.start.x) ** 2 + (node.end.z - node.start.z) ** 2)
+  ))
+  
+  const closestGridPoint: GridPoint = {
+    x: Math.round(node.start.x + t * (node.end.x - node.start.x)),
+    z: Math.round(node.start.z + t * (node.end.z - node.start.z))
+  }
+  return closestGridPoint
+}, [node])
   //  Event handlers
 
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
     emitter.emit('wall:click', {
       node,
+      gridPosition: getClosestGridPoint(e.point),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }, [])
@@ -325,6 +347,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   const onPointerEnter = useCallback((e: ThreeEvent<PointerEvent>) => {
     emitter.emit('wall:enter', {
       node,
+      gridPosition: getClosestGridPoint(e.point),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }, [])
@@ -332,6 +355,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   const onPointerLeave = useCallback((e: ThreeEvent<PointerEvent>) => {
     emitter.emit('wall:leave', {
       node,
+      gridPosition: getClosestGridPoint(e.point),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }, [])
@@ -339,6 +363,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     emitter.emit('wall:move', {
       node,
+      gridPosition: getClosestGridPoint(e.point),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }, [])
