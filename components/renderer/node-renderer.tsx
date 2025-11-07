@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type {
   BaseNode,
@@ -12,9 +10,12 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
+import { useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
+import { GroupRenderer } from './group-renderer'
 import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
@@ -171,6 +172,7 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
         rotation-y={(node as unknown as GridItem).rotation || 0}
         visible={node.visible}
       >
+        {node.type === 'group' && <GroupRenderer node={node} />}
         {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
         {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
         {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}

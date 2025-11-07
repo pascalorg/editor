@@ -314,59 +314,77 @@ export function WallRenderer({ node }: WallRendererProps) {
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
+  const getClosestGridPoint = useCallback(
+    (point: THREE.Vector3): GridPoint => {
+      const gridPoint = {
+        x: (point.x + GRID_SIZE / 2) / TILE_SIZE,
+        y: (point.z + GRID_SIZE / 2) / TILE_SIZE,
+      }
 
-  const getClosestGridPoint = useCallback((point: THREE.Vector3): GridPoint => {
-    const gridPoint = {
-    x: (point.x + GRID_SIZE/2) / TILE_SIZE,
-    y: (point.z + GRID_SIZE/2) / TILE_SIZE
-  }
-  
-  // Find closest point on wall segment in grid space
-  const t = Math.max(0, Math.min(1, 
-    ((gridPoint.x - node.start.x) * (node.end.x - node.start.x) + 
-     (gridPoint.y - node.start.z) * (node.end.z - node.start.z)) /
-    ((node.end.x - node.start.x) ** 2 + (node.end.z - node.start.z) ** 2)
-  ))
-  
-  const closestGridPoint: GridPoint = {
-    x: Math.round(node.start.x + t * (node.end.x - node.start.x)),
-    z: Math.round(node.start.z + t * (node.end.z - node.start.z))
-  }
-  return closestGridPoint
-}, [node])
+      // Find closest point on wall segment in grid space
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((gridPoint.x - node.start.x) * (node.end.x - node.start.x) +
+            (gridPoint.y - node.start.z) * (node.end.z - node.start.z)) /
+            ((node.end.x - node.start.x) ** 2 + (node.end.z - node.start.z) ** 2),
+        ),
+      )
+
+      const closestGridPoint: GridPoint = {
+        x: Math.round(node.start.x + t * (node.end.x - node.start.x)),
+        z: Math.round(node.start.z + t * (node.end.z - node.start.z)),
+      }
+      return closestGridPoint
+    },
+    [node],
+  )
   //  Event handlers
 
-  const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
-    emitter.emit('wall:click', {
-      node,
-      gridPosition: getClosestGridPoint(e.point),
-      position: [e.point.x, e.point.y, e.point.z],
-    })
-  }, [])
+  const onPointerDown = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      emitter.emit('wall:click', {
+        node,
+        gridPosition: getClosestGridPoint(e.point),
+        position: [e.point.x, e.point.y, e.point.z],
+      })
+    },
+    [getClosestGridPoint, node],
+  )
 
-  const onPointerEnter = useCallback((e: ThreeEvent<PointerEvent>) => {
-    emitter.emit('wall:enter', {
-      node,
-      gridPosition: getClosestGridPoint(e.point),
-      position: [e.point.x, e.point.y, e.point.z],
-    })
-  }, [])
+  const onPointerEnter = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      emitter.emit('wall:enter', {
+        node,
+        gridPosition: getClosestGridPoint(e.point),
+        position: [e.point.x, e.point.y, e.point.z],
+      })
+    },
+    [getClosestGridPoint, node],
+  )
 
-  const onPointerLeave = useCallback((e: ThreeEvent<PointerEvent>) => {
-    emitter.emit('wall:leave', {
-      node,
-      gridPosition: getClosestGridPoint(e.point),
-      position: [e.point.x, e.point.y, e.point.z],
-    })
-  }, [])
+  const onPointerLeave = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      emitter.emit('wall:leave', {
+        node,
+        gridPosition: getClosestGridPoint(e.point),
+        position: [e.point.x, e.point.y, e.point.z],
+      })
+    },
+    [getClosestGridPoint, node],
+  )
 
-  const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
-    emitter.emit('wall:move', {
-      node,
-      gridPosition: getClosestGridPoint(e.point),
-      position: [e.point.x, e.point.y, e.point.z],
-    })
-  }, [])
+  const onPointerMove = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      emitter.emit('wall:move', {
+        node,
+        gridPosition: getClosestGridPoint(e.point),
+        position: [e.point.x, e.point.y, e.point.z],
+      })
+    },
+    [getClosestGridPoint, node],
+  )
 
   if (!wallGeometry) return null
 
@@ -440,14 +458,14 @@ export function WallRenderer({ node }: WallRendererProps) {
             />
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
-                <Base geometry={wallGeometry} >
-                <meshStandardMaterial
-                  color="beige"
-                  metalness={0.1}
-                  opacity={opacity}
-                  roughness={0.7}
-                  transparent={transparent}
-                />
+                <Base geometry={wallGeometry}>
+                  <meshStandardMaterial
+                    color="beige"
+                    metalness={0.1}
+                    opacity={opacity}
+                    roughness={0.7}
+                    transparent={transparent}
+                  />
                 </Base>
                 {node.children.map((opening, idx) => {
                   // Transform opening's world position to wall's local coordinate system
