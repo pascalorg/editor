@@ -24,6 +24,8 @@ import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
 import { emitter } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import { useReferenceImages, useScans } from '@/hooks/use-nodes'
+import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'

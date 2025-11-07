@@ -403,56 +403,60 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       ) : (
         <>
-          <mesh
-            // castShadow
-            onPointerDown={onPointerDown}
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={onPointerLeave}
-            onPointerMove={onPointerMove}
-            // receiveShadow
-          >
-            <Geometry useGroups>
-              <Base castShadow geometry={wallGeometry} receiveShadow />
-              {node.children.map((opening, idx) => {
-                // Transform opening's world position to wall's local coordinate system
-                const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
-
-                const scale: [number, number, number] =
-                  opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
-                // TODO: Create a WallOpening type to save properly the cut and be agnostic here
-                return (
-                  <Subtraction
-                    key={idx}
-                    position-x={localX}
-                    position-y={opening.type === 'window' ? 1.12 : 0}
-                    position-z={localZ}
-                    scale={scale}
-                    showOperation={opening.preview}
-                  >
-                    <boxGeometry />
-                    <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
-                  </Subtraction>
-                )
-              })}
-            </Geometry>
-            <meshStandardMaterial
-              color="beige"
-              metalness={0.1}
-              opacity={opacity}
-              roughness={0.7}
-              transparent={transparent}
+          <group>
+            {/* INVISIBLE MESH USED FOR EVENTS */}
+            <mesh
+              geometry={wallGeometry}
+              onPointerDown={onPointerDown}
+              onPointerEnter={onPointerEnter}
+              onPointerLeave={onPointerLeave}
+              onPointerMove={onPointerMove}
+              visible={false}
             />
-            {debug && (
-              <Edges
-                color="#000000"
-                key={wallGeometry.id}
-                linewidth={1}
-                opacity={0.1}
-                renderOrder={1000}
-                threshold={15}
+            <mesh castShadow receiveShadow>
+              <Geometry useGroups>
+                <Base geometry={wallGeometry} />
+                {node.children.map((opening, idx) => {
+                  // Transform opening's world position to wall's local coordinate system
+                  const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
+
+                  const scale: [number, number, number] =
+                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
+                  return (
+                    <Subtraction
+                      key={idx}
+                      position-x={localX}
+                      position-y={opening.type === 'window' ? 1.12 : 0}
+                      position-z={localZ}
+                      scale={scale}
+                      showOperation={opening.preview}
+                    >
+                      <boxGeometry />
+                      <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
+                    </Subtraction>
+                  )
+                })}
+              </Geometry>
+              <meshStandardMaterial
+                color="beige"
+                metalness={0.1}
+                opacity={opacity}
+                roughness={0.7}
+                transparent={transparent}
               />
-            )}
-          </mesh>
+              {debug && (
+                <Edges
+                  color="#000000"
+                  key={wallGeometry.id}
+                  linewidth={1}
+                  opacity={0.1}
+                  renderOrder={1000}
+                  threshold={15}
+                />
+              )}
+            </mesh>
+          </group>
         </>
       )}
     </>
