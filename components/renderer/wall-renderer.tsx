@@ -1,15 +1,15 @@
 'use client'
 
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { Line } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
-import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { DoorNode, WallNode } from '@/lib/nodes/types'
 import { getNodeRelativePosition } from '@/lib/nodes/utils'
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { Line } from '@react-three/drei'
+import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -409,16 +409,24 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       ) : (
         <>
+        <group>
+          {/* INVISIBLE MESH USED FOR EVENTS */}
           <mesh
-            castShadow
             onPointerDown={onPointerDown}
             onPointerEnter={onPointerEnter}
             onPointerLeave={onPointerLeave}
             onPointerMove={onPointerMove}
+            geometry={wallGeometry}
+            visible={false}
+          />
+          <mesh
+            castShadow
             receiveShadow
           >
             <Geometry useGroups>
-              <Base geometry={wallGeometry} />
+              <Base geometry={wallGeometry} >
+              <meshStandardMaterial color="white" />
+              </Base>
               {node.children.map((opening, idx) => {
                 // Transform opening's world position to wall's local coordinate system
                 const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
@@ -449,6 +457,7 @@ export function WallRenderer({ node }: WallRendererProps) {
               transparent={transparent}
             />
           </mesh>
+          </group>
         </>
       )}
     </>
