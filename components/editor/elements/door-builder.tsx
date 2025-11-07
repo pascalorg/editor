@@ -4,7 +4,7 @@ import { GRID_SIZE } from '@/components/viewer'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { DoorNode, useEditor } from '@/hooks/use-editor'
 import { canPlaceGridItemOnWall, worldPositionToGrid } from '@/lib/utils'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { TILE_SIZE } from '..'
 
 export function DoorBuilder() {
@@ -12,19 +12,6 @@ export function DoorBuilder() {
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-
-  // Track preview door state and validation data in refs
-  const doorStateRef = useRef<{
-    previewDoorId: string | null
-    lastValidRotation: number
-    lastWallId: string | null // Track current parent (wall ID or level ID)
-    lastGridPosition: [number, number] | null // Track last processed grid position
-  }>({
-    previewDoorId: null,
-    lastValidRotation: 0,
-    lastWallId: null,
-    lastGridPosition: null,
-  })
 
   useEffect(() => {
     if (!selectedFloorId) return; // Only register events if a floor is selected
