@@ -42,6 +42,16 @@ export interface ImageManipulationEvent {
   nodeId: string
 }
 
+export interface ScanUpdateEvent {
+  nodeId: string
+  updates: Partial<{ position: [number, number]; rotation: number; scale: number; yOffset: number }>
+  pushToUndo: boolean
+}
+
+export interface ScanManipulationEvent {
+  nodeId: string
+}
+
 type EditorEvents = {
   'grid:click': GridEvent
   'grid:move': GridEvent
@@ -56,5 +66,8 @@ type EditorEvents = {
   'image:update': ImageUpdateEvent
   'image:manipulation-start': ImageManipulationEvent
   'image:manipulation-end': ImageManipulationEvent
+  'scan:update': ScanUpdateEvent
+  'scan:manipulation-start': ScanManipulationEvent
+  'scan:manipulation-end': ScanManipulationEvent
 }
 export const emitter = mitt<EditorEvents>()

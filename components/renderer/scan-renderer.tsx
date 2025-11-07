@@ -1,16 +1,17 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FLOOR_SPACING } from '@/components/editor'
-import type { ControlMode } from '@/hooks/use-editor'
+import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
+import { useScanManipulation } from '@/components/editor/elements/scan-builder'
+import { useEditor } from '@/hooks/use-editor'
+import type { ScanNode } from '@/lib/nodes/types'
 
 const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles
 
-// Handle geometry dimensions - base sizes (same as reference-image)
+// Handle geometry dimensions - base sizes
 const ORIGIN_MARKER_SIZE = 0.16
 const ARROW_SHAFT_RADIUS = 0.06
 const ARROW_SHAFT_LENGTH = 2
@@ -28,73 +29,58 @@ const ARROW_HIT_LENGTH_SCALE = 1.1
 const ROTATION_HIT_SCALE = 2
 const SCALE_HIT_SCALE = 1.5
 
-const TILE_SIZE = 0.5 // Grid spacing in meters (matches editor grid)
-
-type ScanProps = {
-  id: string
-  url: string
-  opacity: number
-  scale: number
-  position: [number, number]
-  rotation: number // degrees
-  level: number // Floor level (Y position)
-  yOffset?: number // Additional Y offset from floor level
-  isSelected: boolean
-  controlMode: ControlMode
-  movingCamera: boolean
-  onSelect: () => void
-  onUpdate: (
-    updates: Partial<{
-      position: [number, number]
-      rotation: number
-      scale: number
-      yOffset: number
-    }>,
-    pushToUndo?: boolean,
-  ) => void
-  onManipulationStart: () => void
-  onManipulationEnd: () => void
+interface ScanRendererProps {
+  node: ScanNode
 }
 
-export const Scan = ({
-  id,
-  url,
-  opacity,
-  scale,
-  position,
-  rotation,
-  level,
-  yOffset = 0,
-  isSelected,
-  controlMode,
-  movingCamera,
-  onSelect,
-  onUpdate,
-  onManipulationStart,
-  onManipulationEnd,
-}: ScanProps) => {
+export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
-  const { scene } = useGLTF(url)
-  const { camera, gl } = useThree()
+  const { scene } = useGLTF(node.url)
   const groupRef = useRef<THREE.Group>(null)
+
+  // Get state from store
+  const controlMode = useEditor((state) => state.controlMode)
+  const movingCamera = useEditor((state) => state.movingCamera)
+  const selectedScanIds = useEditor((state) => state.selectedScanIds)
+
+  const isSelected = selectedScanIds.includes(node.id)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
 
+  // Get manipulation handlers from the builder hook
+  const {
+    handleSelect,
+    handleTranslateDown,
+    handleTranslateXZDown,
+    handleRotationDown,
+    handleTranslateYDown,
+    handleScaleDown,
+  } = useScanManipulation(node, groupRef, setActiveHandle)
+
+  // Get level for Y position
+  const getLevelId = useEditor((state) => state.getLevelId)
+  const levels = useEditor((state) => state.levels)
+  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
+  const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
+  const levelNumber = level?.level ?? 0
+
   // Track hover state for the scan itself
   const [isHovered, setIsHovered] = useState(false)
 
   // Apply opacity to scan materials
-  useMemo(() => {
-    scene.traverse((child: any) => {
+  const clonedScene = useMemo(() => {
+    const cloned = scene.clone()
+    cloned.traverse((child: any) => {
       if (child.isMesh && child.material) {
         child.material = child.material.clone()
-        child.material.transparent = opacity < 1
-        child.material.opacity = opacity
+        child.material.transparent = (node.opacity ?? 100) < 100
+        child.material.opacity = (node.opacity ?? 100) / 100
       }
     })
-  }, [scene, opacity])
+    return cloned
+  }, [scene, node.opacity])
 
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
@@ -126,280 +112,51 @@ export const Scan = ({
     />
   )
 
-  // Calculate handle positions based on dimensions
-  const originMarkerEdge = ORIGIN_MARKER_SIZE / 2
+  // Calculate derived dimensions from base sizes and scale factors
   const originHitSize = ORIGIN_MARKER_SIZE * ORIGIN_HIT_SCALE
-  const originHitEdge = originHitSize / 2
-
-  const arrowShaftPos = originMarkerEdge + ARROW_SHAFT_LENGTH / 2
   const arrowHitRadius = ARROW_SHAFT_RADIUS * ARROW_HIT_RADIUS_SCALE
   const arrowHitLength = ARROW_SHAFT_LENGTH * ARROW_HIT_LENGTH_SCALE
-  const arrowHitPos = originHitEdge + arrowHitLength / 2
-  const arrowHeadPos = originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
-
   const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
   const scaleHitRadius = SCALE_HANDLE_RADIUS * SCALE_HIT_SCALE
   const scaleHitLength = SCALE_HANDLE_LENGTH * SCALE_HIT_SCALE
 
+  // Calculate handle positions based on dimensions
+  const originMarkerEdge = ORIGIN_MARKER_SIZE / 2
+  const originHitEdge = originHitSize / 2
+
+  const arrowShaftPos = originMarkerEdge + ARROW_SHAFT_LENGTH / 2
+  const arrowHitPos = originHitEdge + arrowHitLength / 2
+  const arrowHeadPos = originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
+
   // Calculate bounding box for the scan
-  const bbox = new THREE.Box3().setFromObject(scene)
-  const bboxSize = new THREE.Vector3()
-  bbox.getSize(bboxSize)
+  const bbox = useMemo(() => new THREE.Box3().setFromObject(clonedScene), [clonedScene])
+  const bboxSize = useMemo(() => {
+    const size = new THREE.Vector3()
+    bbox.getSize(size)
+    return size
+  }, [bbox])
 
-  const handleTranslateDown = (axis: 'x' | 'z') => (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
-    setActiveHandle(handleId)
-    onManipulationStart()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialPosition = groupRef.current.position.clone()
-    const localDir = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
-    const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
-    const worldAxis = localDir
-      .clone()
-      .applyMatrix4(groupRef.current.matrixWorld)
-      .sub(worldZero)
-      .normalize()
-    let lastPosition: [number, number] | null = null
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const delta = intersect.clone().sub(initialMouse)
-      const projected = delta.dot(worldAxis)
-      const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
-
-      let finalX = newPos.x
-      let finalZ = newPos.z
-      if (ev.shiftKey) {
-        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
-      }
-
-      lastPosition = [finalX, finalZ]
-      onUpdate({ position: lastPosition }, false)
-    }
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastPosition) {
-        onUpdate({ position: lastPosition }, true)
-      }
-      onManipulationEnd()
-    }
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleTranslateXZDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('translate-xz')
-    onManipulationStart()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialPosition = groupRef.current.position.clone()
-    let lastPosition: [number, number] | null = null
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const delta = intersect.clone().sub(initialMouse)
-      const newPos = initialPosition.clone().add(delta)
-
-      let finalX = newPos.x
-      let finalZ = newPos.z
-      if (ev.shiftKey) {
-        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
-      }
-
-      lastPosition = [finalX, finalZ]
-      onUpdate({ position: lastPosition }, false)
-    }
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastPosition) {
-        onUpdate({ position: lastPosition }, true)
-      }
-      onManipulationEnd()
-    }
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleRotationDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('rotation')
-    onManipulationStart()
-    const center = groupRef.current.position.clone()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialVector = initialMouse.clone().sub(center)
-    const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-    const initialRotation = rotation
-    let lastRotation: number | null = null
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const vector = intersect.clone().sub(center)
-      const angle = Math.atan2(vector.z, vector.x)
-      const delta = angle - initialAngle
-      let newRotation = initialRotation - delta * (180 / Math.PI)
-
-      if (ev.shiftKey) {
-        newRotation = Math.round(newRotation / 45) * 45
-      }
-
-      lastRotation = newRotation
-      onUpdate({ rotation: lastRotation }, false)
-    }
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastRotation !== null) {
-        onUpdate({ rotation: lastRotation }, true)
-      }
-      onManipulationEnd()
-    }
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleTranslateYDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('translate-y')
-    onManipulationStart()
-    const initialMouseY = e.pointer.y
-    const initialYOffset = yOffset
-    let lastYOffset: number | null = null
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const deltaY = my - initialMouseY
-      // Scale the movement - adjust multiplier as needed for responsiveness
-      let newYOffset = initialYOffset + deltaY * 2
-
-      if (ev.shiftKey) {
-        newYOffset = Math.round(newYOffset / 0.5) * 0.5
-      }
-
-      lastYOffset = newYOffset
-      onUpdate({ yOffset: lastYOffset }, false)
-    }
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastYOffset !== null) {
-        onUpdate({ yOffset: lastYOffset }, true)
-      }
-      onManipulationEnd()
-    }
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleScaleDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('scale')
-    onManipulationStart()
-    const center = groupRef.current.position.clone()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialDist = center.distanceTo(initialMouse)
-    const initialScale = scale
-    let lastScale: number | null = null
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const newDist = center.distanceTo(intersect)
-      let newScale = initialScale * (newDist / initialDist)
-
-      if (ev.shiftKey) {
-        newScale = Math.round(newScale * 10) / 10
-      }
-
-      lastScale = Math.max(0.1, newScale)
-      onUpdate({ scale: lastScale }, false)
-    }
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastScale !== null) {
-        onUpdate({ scale: lastScale }, true)
-      }
-      onManipulationEnd()
-    }
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
+  // Convert grid position to world position
+  const [worldX, worldZ] = useMemo(
+    () => [node.position[0] * TILE_SIZE, node.position[1] * TILE_SIZE],
+    [node.position],
+  )
 
   return (
     <group
-      position={[position[0], level * FLOOR_SPACING + 0.001 + yOffset, position[1]]}
+      position={[worldX, levelNumber * FLOOR_SPACING + 0.001 + (node.yOffset || 0), worldZ]}
       ref={groupRef}
-      rotation={[0, (rotation * Math.PI) / 180, 0]}
+      rotation={[0, (node.rotation * Math.PI) / 180, 0]}
     >
       {/* The 3D scan model */}
-      <group scale={scale}>
+      <group scale={node.scale}>
         <primitive
-          object={scene.clone()}
+          object={clonedScene}
           onPointerDown={(e: any) => {
             if (e.button !== 0) return
             if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               e.stopPropagation()
-              onSelect()
+              handleSelect()
             }
           }}
           onPointerEnter={() => {
@@ -542,7 +299,7 @@ export const Scan = ({
           </group>
 
           {/* Rotation handles at corners - Cyan curved arrows around Y axis */}
-          <group position={[(bboxSize.x * scale) / 2, 0, (bboxSize.z * scale) / 2]}>
+          <group position={[(bboxSize.x * node.scale) / 2, 0, (bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -563,7 +320,7 @@ export const Scan = ({
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * scale) / 2, 0, (bboxSize.z * scale) / 2]}>
+          <group position={[-(bboxSize.x * node.scale) / 2, 0, (bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -584,7 +341,7 @@ export const Scan = ({
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * scale) / 2, 0, -(bboxSize.z * scale) / 2]}>
+          <group position={[-(bboxSize.x * node.scale) / 2, 0, -(bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -605,7 +362,7 @@ export const Scan = ({
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[(bboxSize.x * scale) / 2, 0, -(bboxSize.z * scale) / 2]}>
+          <group position={[(bboxSize.x * node.scale) / 2, 0, -(bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -628,7 +385,7 @@ export const Scan = ({
           </group>
 
           {/* Scale handles at edge midpoints - Yellow cones pointing outward */}
-          <group position={[(bboxSize.x * scale) / 2, 0, 0]}>
+          <group position={[(bboxSize.x * node.scale) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -645,7 +402,7 @@ export const Scan = ({
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * scale) / 2, 0, 0]}>
+          <group position={[-(bboxSize.x * node.scale) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -662,7 +419,7 @@ export const Scan = ({
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, (bboxSize.z * scale) / 2]}>
+          <group position={[0, 0, (bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -679,7 +436,7 @@ export const Scan = ({
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, -(bboxSize.z * scale) / 2]}>
+          <group position={[0, 0, -(bboxSize.z * node.scale) / 2]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -700,4 +457,6 @@ export const Scan = ({
       )}
     </group>
   )
-}
+})
+
+ScanRenderer.displayName = 'ScanRenderer'

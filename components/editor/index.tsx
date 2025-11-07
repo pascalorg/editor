@@ -18,18 +18,12 @@ import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorBuilder } from '@/components/editor/elements/door-builder'
 import { ImageBuilder } from '@/components/editor/elements/image-builder'
+import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 // import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
 import { emitter } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { useReferenceImages, useScans } from '@/hooks/use-nodes'
-import {
-  setNodePosition,
-  setNodeRotation,
-  setNodeSize,
-  updateNodeProperties,
-} from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
@@ -37,7 +31,6 @@ import { CustomRoomBuilder } from './elements/custom-room-builder'
 import { GridTiles } from './elements/grid-tiles'
 import { RoofBuilder } from './elements/roof-builder'
 import { RoomBuilder } from './elements/room-builder'
-import { Scan } from './elements/scan'
 import { WallBuilder } from './elements/wall-builder'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
@@ -91,38 +84,6 @@ export default function Editor({ className }: { className?: string }) {
   const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
-
-  // Get reference images and scans from node tree for the current level
-  const nodeImages = useReferenceImages(selectedFloorId || levels[0].id)
-  const nodeScans = useScans(selectedFloorId || levels[0].id)
-
-  // Map node data to the format expected by rendering components
-  const images = nodeImages.map((node) => ({
-    id: node.id,
-    url: node.url,
-    name: node.name,
-    createdAt: node.createdAt,
-    position: node.position,
-    rotation: node.rotation,
-    scale: node.scale,
-    level: 0, // TODO: Get from parent level
-    visible: node.visible,
-    opacity: node.opacity,
-  }))
-
-  const scans = nodeScans.map((node) => ({
-    id: node.id,
-    url: node.url,
-    name: node.name,
-    createdAt: node.createdAt,
-    position: node.position,
-    rotation: node.rotation,
-    scale: node.scale,
-    level: 0, // TODO: Get from parent level
-    yOffset: node.yOffset,
-    visible: node.visible,
-    opacity: node.opacity,
-  }))
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -638,12 +599,6 @@ export default function Editor({ className }: { className?: string }) {
     wallContextMenuTriggeredRef.current = false
   }
 
-  // Use constants for reference image
-  const imageOpacity = IMAGE_OPACITY
-  const imageScale = IMAGE_SCALE
-  const imagePosition = IMAGE_POSITION
-  const imageRotation = IMAGE_ROTATION
-
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     // Prevent browser context menu
     e.preventDefault()
@@ -669,10 +624,10 @@ export default function Editor({ className }: { className?: string }) {
         <color args={['#212134']} attach="background" />
 
         {/* Lighting setup with shadows */}
-        <ambientLight intensity={0.4} />
+        <ambientLight intensity={0.1} />
         <directionalLight
           castShadow
-          intensity={0.8}
+          intensity={2}
           position={[20, 30, 20]}
           shadow-bias={-0.0001}
           shadow-camera-bottom={-30}
@@ -728,69 +683,6 @@ export default function Editor({ className }: { className?: string }) {
 
         {/* Infinite floor - rendered outside export group */}
         <InfiniteFloor />
-
-        {/* Render 3D scans */}
-        {viewMode === 'level' &&
-          scans
-            .filter((scan) => {
-              // Filter out hidden scans (visible === false or opacity === 0)
-              const isHidden =
-                scan.visible === false || (scan.opacity !== undefined && scan.opacity === 0)
-              return !isHidden
-            })
-            .map((scan) => {
-              // Calculate opacity: use custom opacity if set, otherwise use 1 (fully visible)
-              const scanOpacity = scan.opacity !== undefined ? scan.opacity / 100 : 1
-
-              return (
-                <Scan
-                  controlMode={controlMode}
-                  id={scan.id}
-                  isSelected={selectedScanIds.includes(scan.id)}
-                  key={scan.id}
-                  level={scan.level}
-                  movingCamera={movingCamera}
-                  onManipulationEnd={() => setIsManipulatingScan(false)}
-                  onManipulationStart={() => setIsManipulatingScan(true)}
-                  onSelect={() => setSelectedScanIds([scan.id])}
-                  onUpdate={(updates, pushToUndo = true) => {
-                    let updatedLevels = levels
-
-                    // Apply each update operation
-                    if (updates.position !== undefined) {
-                      updatedLevels = setNodePosition(updatedLevels, scan.id, updates.position)
-                    }
-                    if (updates.rotation !== undefined) {
-                      updatedLevels = setNodeRotation(updatedLevels, scan.id, updates.rotation)
-                    }
-                    if (updates.scale !== undefined || updates.yOffset !== undefined) {
-                      // Use updateNodeProperties with proper typing for scan-specific properties
-                      const scanUpdates: Partial<{
-                        scale: number
-                        yOffset: number
-                      }> = {}
-                      if (updates.scale !== undefined) scanUpdates.scale = updates.scale
-                      if (updates.yOffset !== undefined) scanUpdates.yOffset = updates.yOffset
-
-                      // Type assertion is safe here as we know the node is a ScanNode
-                      updatedLevels = updateNodeProperties(
-                        updatedLevels,
-                        scan.id,
-                        scanUpdates as any,
-                      )
-                    }
-
-                    updateLevels(updatedLevels, pushToUndo)
-                  }}
-                  opacity={scanOpacity}
-                  position={scan.position}
-                  rotation={scan.rotation}
-                  scale={scan.scale}
-                  url={scan.url}
-                  yOffset={scan.yOffset}
-                />
-              )
-            })}
 
         {/* Loop through all floors and render grid + walls for each */}
         <group ref={allFloorsGroupCallback}>
@@ -937,8 +829,8 @@ export default function Editor({ className }: { className?: string }) {
                     {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
                       <WindowBuilder />
                     )}
-                    {/* Image builder for handling image manipulation in guide mode */}
-                    {controlMode === 'guide' && <ImageBuilder />}
+                    {controlMode === 'guide' && isActiveFloor && <ImageBuilder />}
+                    {controlMode === 'guide' && isActiveFloor && <ScanBuilder />}
 
                     <NodeRenderer node={floor} />
                     {/* Only show interactive grid tiles for the active floor */}

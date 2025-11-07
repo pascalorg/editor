@@ -32,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { BaseNode } from '@/lib/nodes/types'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'nodes-debugger-state'
@@ -399,13 +399,8 @@ export function NodesDebugger() {
   const levels = useEditor((state) => state.levels)
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)
-  const {
-    selectFloor,
-    setSelectedElements,
-    setSelectedImageIds,
-    setSelectedScanIds,
-    setDebug,
-  } = useEditor()
+  const { selectFloor, setSelectedElements, setSelectedImageIds, setSelectedScanIds, setDebug } =
+    useEditor()
 
   // Load state from localStorage only on client
   useEffect(() => {

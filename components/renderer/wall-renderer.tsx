@@ -404,15 +404,15 @@ export function WallRenderer({ node }: WallRendererProps) {
       ) : (
         <>
           <mesh
-            castShadow
+            // castShadow
             onPointerDown={onPointerDown}
             onPointerEnter={onPointerEnter}
             onPointerLeave={onPointerLeave}
             onPointerMove={onPointerMove}
-            receiveShadow
+            // receiveShadow
           >
-            <Geometry useGroups computeVertexNormals={true}>
-              <Base geometry={wallGeometry} />
+            <Geometry useGroups>
+              <Base castShadow geometry={wallGeometry} receiveShadow />
               {node.children.map((opening, idx) => {
                 // Transform opening's world position to wall's local coordinate system
                 const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)

@@ -1,11 +1,10 @@
 'use client'
 
 import { useTexture } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
-import { emitter } from '@/events/bus'
+import { useImageManipulation } from '@/components/editor/elements/image-builder'
 import { useEditor } from '@/hooks/use-editor'
 import type { ReferenceImageNode } from '@/lib/nodes/types'
 
@@ -39,16 +38,27 @@ interface ImageRendererProps {
 export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
   const texture = useTexture(node.url)
-  const { camera, gl } = useThree()
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
   const controlMode = useEditor((state) => state.controlMode)
   const movingCamera = useEditor((state) => state.movingCamera)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
 
   const isSelected = selectedImageIds.includes(node.id)
+
+  // Track hover and active states for handles
+  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
+  const [activeHandle, setActiveHandle] = useState<string | null>(null)
+
+  // Get manipulation handlers from the builder hook
+  const {
+    handleSelect,
+    handleTranslateDown,
+    handleTranslateXZDown,
+    handleRotationDown,
+    handleScaleDown,
+  } = useImageManipulation(node, groupRef, setActiveHandle)
 
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
@@ -56,10 +66,6 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
   const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
   const levelNumber = level?.level ?? 0
-
-  // Track hover and active states for handles
-  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
-  const [activeHandle, setActiveHandle] = useState<string | null>(null)
 
   // Track hover state for the image itself
   const [isHovered, setIsHovered] = useState(false)
@@ -123,285 +129,6 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
   const arrowShaftPos = originMarkerEdge + ARROW_SHAFT_LENGTH / 2
   const arrowHitPos = originHitEdge + arrowHitLength / 2
   const arrowHeadPos = originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
-
-  const handleSelect = useCallback(() => {
-    if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedImageIds([node.id])
-      emitter.emit('image:select', { node })
-    }
-  }, [controlMode, node])
-
-  const handleTranslateDown = (axis: 'x' | 'y') => (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
-    setActiveHandle(handleId)
-    emitter.emit('image:manipulation-start', { nodeId: node.id })
-
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialPosition = groupRef.current.position.clone()
-    const localDir = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
-    const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
-    const worldAxis = localDir
-      .clone()
-      .applyMatrix4(groupRef.current.matrixWorld)
-      .sub(worldZero)
-      .normalize()
-    let lastPosition: [number, number] | null = null
-
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const delta = intersect.clone().sub(initialMouse)
-      const projected = delta.dot(worldAxis)
-      const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
-
-      let finalX = newPos.x
-      let finalZ = newPos.z
-      if (ev.shiftKey) {
-        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
-      }
-
-      lastPosition = [finalX, finalZ]
-      emitter.emit('image:update', {
-        nodeId: node.id,
-        updates: { position: lastPosition },
-        pushToUndo: false,
-      })
-    }
-
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastPosition) {
-        emitter.emit('image:update', {
-          nodeId: node.id,
-          updates: { position: lastPosition },
-          pushToUndo: true,
-        })
-      }
-      emitter.emit('image:manipulation-end', { nodeId: node.id })
-    }
-
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleTranslateXZDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('translate-xz')
-    emitter.emit('image:manipulation-start', { nodeId: node.id })
-
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialPosition = groupRef.current.position.clone()
-    let lastPosition: [number, number] | null = null
-
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const delta = intersect.clone().sub(initialMouse)
-      const newPos = initialPosition.clone().add(delta)
-
-      let finalX = newPos.x
-      let finalZ = newPos.z
-      if (ev.shiftKey) {
-        finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-        finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
-      }
-
-      lastPosition = [finalX, finalZ]
-      emitter.emit('image:update', {
-        nodeId: node.id,
-        updates: { position: lastPosition },
-        pushToUndo: false,
-      })
-    }
-
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastPosition) {
-        emitter.emit('image:update', {
-          nodeId: node.id,
-          updates: { position: lastPosition },
-          pushToUndo: true,
-        })
-      }
-      emitter.emit('image:manipulation-end', { nodeId: node.id })
-    }
-
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleRotationDown = (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('rotation')
-    emitter.emit('image:manipulation-start', { nodeId: node.id })
-
-    const center = groupRef.current.position.clone()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialVector = initialMouse.clone().sub(center)
-    const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-    const initialRotation = node.rotation
-    let lastRotation: number | null = null
-
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const vector = intersect.clone().sub(center)
-      const angle = Math.atan2(vector.z, vector.x)
-      const delta = angle - initialAngle
-      let newRotation = initialRotation - delta * (180 / Math.PI)
-
-      if (ev.shiftKey) {
-        newRotation = Math.round(newRotation / 45) * 45
-      }
-
-      lastRotation = newRotation
-      emitter.emit('image:update', {
-        nodeId: node.id,
-        updates: { rotation: lastRotation },
-        pushToUndo: false,
-      })
-    }
-
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastRotation !== null) {
-        emitter.emit('image:update', {
-          nodeId: node.id,
-          updates: { rotation: lastRotation },
-          pushToUndo: true,
-        })
-      }
-      emitter.emit('image:manipulation-end', { nodeId: node.id })
-    }
-
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
-
-  const handleScaleDown = (edge: 'right' | 'left' | 'top' | 'bottom') => (e: any) => {
-    if (e.button !== 0) return
-    if (movingCamera) return
-    e.stopPropagation()
-    if (!groupRef.current) return
-    setActiveHandle('scale')
-    emitter.emit('image:manipulation-start', { nodeId: node.id })
-
-    const center = groupRef.current.position.clone()
-    const initialMouse = new THREE.Vector3()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(e.pointer, camera)
-    raycaster.ray.intersectPlane(plane, initialMouse)
-    const initialDist = center.distanceTo(initialMouse)
-    const initialScale = node.scale
-    const getLocalDir = () => {
-      switch (edge) {
-        case 'right':
-          return new THREE.Vector3(1, 0, 0)
-        case 'left':
-          return new THREE.Vector3(-1, 0, 0)
-        case 'top':
-          return new THREE.Vector3(0, 0, 1)
-        case 'bottom':
-          return new THREE.Vector3(0, 0, -1)
-      }
-    }
-    const localDir = getLocalDir()
-    const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
-    const worldDir = localDir
-      .clone()
-      .applyMatrix4(groupRef.current.matrixWorld)
-      .sub(worldZero)
-      .normalize()
-    let lastScale: number | null = null
-
-    const handleMove = (ev: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      const mouseVec = new THREE.Vector2(mx, my)
-      raycaster.setFromCamera(mouseVec, camera)
-      const intersect = new THREE.Vector3()
-      raycaster.ray.intersectPlane(plane, intersect)
-      const delta = intersect.clone().sub(initialMouse)
-      const projected = delta.dot(worldDir)
-      const projectedPoint = initialMouse.clone().add(worldDir.clone().multiplyScalar(projected))
-      const newDist = center.distanceTo(projectedPoint)
-      let newScale = initialScale * (newDist / initialDist)
-
-      if (ev.shiftKey) {
-        newScale = Math.round(newScale * 10) / 10
-      }
-
-      lastScale = Math.max(0.1, newScale)
-      emitter.emit('image:update', {
-        nodeId: node.id,
-        updates: { scale: lastScale },
-        pushToUndo: false,
-      })
-    }
-
-    const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove)
-      document.removeEventListener('pointerup', handleUp)
-      setActiveHandle(null)
-      if (lastScale !== null) {
-        emitter.emit('image:update', {
-          nodeId: node.id,
-          updates: { scale: lastScale },
-          pushToUndo: true,
-        })
-      }
-      emitter.emit('image:manipulation-end', { nodeId: node.id })
-    }
-
-    document.addEventListener('pointermove', handleMove)
-    document.addEventListener('pointerup', handleUp)
-  }
 
   // Convert grid position to world position
   const [worldX, worldZ] = useMemo(

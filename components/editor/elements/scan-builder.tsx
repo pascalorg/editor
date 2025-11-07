@@ -4,13 +4,13 @@ import { useThree } from '@react-three/fiber'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
-import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/events/bus'
+import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import type { ReferenceImageNode } from '@/lib/nodes/types'
+import type { ScanNode } from '@/lib/nodes/types'
 
-export function ImageBuilder() {
+export function ScanBuilder() {
   const updateNode = useEditor((state) => state.updateNode)
-  const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
+  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
 
   // Track undo state changes for batch updates during manipulation
   const undoStateRef = useRef<{
@@ -18,11 +18,12 @@ export function ImageBuilder() {
       position?: [number, number]
       rotation?: number
       scale?: number
+      yOffset?: number
     }
   }>({})
 
   useEffect(() => {
-    const handleImageUpdate = (event: ImageUpdateEvent) => {
+    const handleScanUpdate = (event: ScanUpdateEvent) => {
       const { nodeId, updates, pushToUndo } = event
 
       // Update the node in the store
@@ -40,56 +41,55 @@ export function ImageBuilder() {
       }
     }
 
-    const handleManipulationStart = (event: ImageManipulationEvent) => {
+    const handleManipulationStart = (event: ScanManipulationEvent) => {
       const { nodeId } = event
       // Initialize accumulated state
       undoStateRef.current[nodeId] = {}
-      setIsManipulatingImage(true)
+      setIsManipulatingScan(true)
     }
 
-    const handleManipulationEnd = (event: ImageManipulationEvent) => {
-      setIsManipulatingImage(false)
+    const handleManipulationEnd = (event: ScanManipulationEvent) => {
+      setIsManipulatingScan(false)
     }
 
     // Register event listeners
-    emitter.on('image:update', handleImageUpdate)
-    emitter.on('image:manipulation-start', handleManipulationStart)
-    emitter.on('image:manipulation-end', handleManipulationEnd)
+    emitter.on('scan:update', handleScanUpdate)
+    emitter.on('scan:manipulation-start', handleManipulationStart)
+    emitter.on('scan:manipulation-end', handleManipulationEnd)
 
     // Cleanup event listeners
     return () => {
-      emitter.off('image:update', handleImageUpdate)
-      emitter.off('image:manipulation-start', handleManipulationStart)
-      emitter.off('image:manipulation-end', handleManipulationEnd)
+      emitter.off('scan:update', handleScanUpdate)
+      emitter.off('scan:manipulation-start', handleManipulationStart)
+      emitter.off('scan:manipulation-end', handleManipulationEnd)
     }
-  }, [updateNode, setIsManipulatingImage])
+  }, [updateNode, setIsManipulatingScan])
 
   return <></>
 }
 
 /**
- * Custom hook for image manipulation handlers
- * Provides all the pointer event handlers for transforming reference images
+ * Custom hook for scan manipulation handlers
+ * Provides all the pointer event handlers for transforming 3D scans
  */
-export function useImageManipulation(
-  node: ReferenceImageNode,
+export function useScanManipulation(
+  node: ScanNode,
   groupRef: RefObject<THREE.Group | null>,
   setActiveHandle?: (handleId: string | null) => void,
 ) {
   const { camera, gl } = useThree()
   const movingCamera = useEditor((state) => state.movingCamera)
   const controlMode = useEditor((state) => state.controlMode)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
 
   const handleSelect = useCallback(() => {
     if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedImageIds([node.id])
-      emitter.emit('image:select', { node })
+      setSelectedScanIds([node.id])
     }
-  }, [controlMode, node, setSelectedImageIds])
+  }, [controlMode, node, setSelectedScanIds])
 
   const handleTranslateDown = useCallback(
-    (axis: 'x' | 'y') => (e: any) => {
+    (axis: 'x' | 'z') => (e: any) => {
       if (e.button !== 0) return
       if (movingCamera) return
       e.stopPropagation()
@@ -97,7 +97,7 @@ export function useImageManipulation(
 
       const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
       setActiveHandle?.(handleId)
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -134,7 +134,7 @@ export function useImageManipulation(
         }
 
         lastPosition = [finalX, finalZ]
-        emitter.emit('image:update', {
+        emitter.emit('scan:update', {
           nodeId: node.id,
           updates: { position: lastPosition },
           pushToUndo: false,
@@ -146,13 +146,13 @@ export function useImageManipulation(
         document.removeEventListener('pointerup', handleUp)
         setActiveHandle?.(null)
         if (lastPosition) {
-          emitter.emit('image:update', {
+          emitter.emit('scan:update', {
             nodeId: node.id,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
       }
 
       document.addEventListener('pointermove', handleMove)
@@ -169,7 +169,7 @@ export function useImageManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('translate-xz')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -198,7 +198,7 @@ export function useImageManipulation(
         }
 
         lastPosition = [finalX, finalZ]
-        emitter.emit('image:update', {
+        emitter.emit('scan:update', {
           nodeId: node.id,
           updates: { position: lastPosition },
           pushToUndo: false,
@@ -210,13 +210,13 @@ export function useImageManipulation(
         document.removeEventListener('pointerup', handleUp)
         setActiveHandle?.(null)
         if (lastPosition) {
-          emitter.emit('image:update', {
+          emitter.emit('scan:update', {
             nodeId: node.id,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
       }
 
       document.addEventListener('pointermove', handleMove)
@@ -233,7 +233,7 @@ export function useImageManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('rotation')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -264,7 +264,7 @@ export function useImageManipulation(
         }
 
         lastRotation = newRotation
-        emitter.emit('image:update', {
+        emitter.emit('scan:update', {
           nodeId: node.id,
           updates: { rotation: lastRotation },
           pushToUndo: false,
@@ -276,13 +276,13 @@ export function useImageManipulation(
         document.removeEventListener('pointerup', handleUp)
         setActiveHandle?.(null)
         if (lastRotation !== null) {
-          emitter.emit('image:update', {
+          emitter.emit('scan:update', {
             nodeId: node.id,
             updates: { rotation: lastRotation },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
       }
 
       document.addEventListener('pointermove', handleMove)
@@ -291,15 +291,68 @@ export function useImageManipulation(
     [node.id, node.rotation, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
+  const handleTranslateYDown = useCallback(
+    (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      setActiveHandle?.('translate-y')
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const initialMouseY = e.pointer.y
+      const initialYOffset = node.yOffset || 0
+      let lastYOffset: number | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const deltaY = my - initialMouseY
+        // Scale the movement - adjust multiplier as needed for responsiveness
+        let newYOffset = initialYOffset + deltaY * 2
+
+        if (ev.shiftKey) {
+          newYOffset = Math.round(newYOffset / 0.5) * 0.5
+        }
+
+        lastYOffset = newYOffset
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { yOffset: lastYOffset },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastYOffset !== null) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { yOffset: lastYOffset },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, node.yOffset, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
   const handleScaleDown = useCallback(
-    (edge: 'right' | 'left' | 'top' | 'bottom') => (e: any) => {
+    (e: any) => {
       if (e.button !== 0) return
       if (movingCamera) return
       e.stopPropagation()
       if (!groupRef.current) return
 
       setActiveHandle?.('scale')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -309,25 +362,6 @@ export function useImageManipulation(
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialDist = center.distanceTo(initialMouse)
       const initialScale = node.scale
-      const getLocalDir = () => {
-        switch (edge) {
-          case 'right':
-            return new THREE.Vector3(1, 0, 0)
-          case 'left':
-            return new THREE.Vector3(-1, 0, 0)
-          case 'top':
-            return new THREE.Vector3(0, 0, 1)
-          case 'bottom':
-            return new THREE.Vector3(0, 0, -1)
-        }
-      }
-      const localDir = getLocalDir()
-      const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
-      const worldDir = localDir
-        .clone()
-        .applyMatrix4(groupRef.current.matrixWorld)
-        .sub(worldZero)
-        .normalize()
       let lastScale: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -338,10 +372,7 @@ export function useImageManipulation(
         raycaster.setFromCamera(mouseVec, camera)
         const intersect = new THREE.Vector3()
         raycaster.ray.intersectPlane(plane, intersect)
-        const delta = intersect.clone().sub(initialMouse)
-        const projected = delta.dot(worldDir)
-        const projectedPoint = initialMouse.clone().add(worldDir.clone().multiplyScalar(projected))
-        const newDist = center.distanceTo(projectedPoint)
+        const newDist = center.distanceTo(intersect)
         let newScale = initialScale * (newDist / initialDist)
 
         if (ev.shiftKey) {
@@ -349,7 +380,7 @@ export function useImageManipulation(
         }
 
         lastScale = Math.max(0.1, newScale)
-        emitter.emit('image:update', {
+        emitter.emit('scan:update', {
           nodeId: node.id,
           updates: { scale: lastScale },
           pushToUndo: false,
@@ -361,13 +392,13 @@ export function useImageManipulation(
         document.removeEventListener('pointerup', handleUp)
         setActiveHandle?.(null)
         if (lastScale !== null) {
-          emitter.emit('image:update', {
+          emitter.emit('scan:update', {
             nodeId: node.id,
             updates: { scale: lastScale },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
       }
 
       document.addEventListener('pointermove', handleMove)
@@ -381,6 +412,7 @@ export function useImageManipulation(
     handleTranslateDown,
     handleTranslateXZDown,
     handleRotationDown,
+    handleTranslateYDown,
     handleScaleDown,
   }
 }
