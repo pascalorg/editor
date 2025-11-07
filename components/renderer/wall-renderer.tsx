@@ -454,7 +454,7 @@ export function WallRenderer({ node }: WallRendererProps) {
                   const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
-                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.9] // Adjust scale based on type
+                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
                   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
                   return (
                     <Subtraction
