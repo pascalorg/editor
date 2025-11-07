@@ -1,27 +1,19 @@
 'use client'
 
 import { animated, useSpring } from '@react-spring/three'
-import {
-  Environment,
-  GizmoHelper,
-  GizmoViewport,
-  Line,
-  OrthographicCamera,
-  PerspectiveCamera,
-} from '@react-three/drei'
+import { Environment, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type * as THREE from 'three'
-import { Scan } from '@/components/editor/elements/scan'
+import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
 import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
-import { setNodePosition, setNodeRotation, updateNodeProperties } from '@/lib/nodes/operations'
 import { cn } from '@/lib/utils'
-import { BuildingElementsRenderer } from './building-elements-renderer'
+import { NodeRenderer } from '../renderer/node-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -49,24 +41,10 @@ export default function Viewer({ className }: { className?: string }) {
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
-  const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
-  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const selectFloor = useEditor((state) => state.selectFloor)
-  const movingCamera = useEditor((state) => state.movingCamera)
 
-  // Convert node tree to legacy component format for rendering
-  const { components, scans } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
-
-  // Viewer-specific state (isolated from editor)
-  const viewerSelectedElements: import('@/lib/building-elements').SelectedElement[] = []
-  const noopSetSelectedElements = () => {
-    /* No-op in viewer mode */
-  }
-  const noopSetControlMode = () => {
-    /* No-op in viewer mode */
-  }
-  const controlMode = 'select' as const
+  // Convert node tree to legacy component format for proximity grid
+  const { components } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -106,7 +84,6 @@ export default function Viewer({ className }: { className?: string }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [cameraMode, setCameraMode, toggleLevelMode, selectFloor])
 
-  const wallHeight = WALL_HEIGHT
   const tileSize = TILE_SIZE
   const showGrid = SHOW_GRID
 
@@ -263,7 +240,6 @@ export default function Viewer({ className }: { className?: string }) {
                           {isActiveFloor && (
                             <ProximityGrid
                               components={components}
-                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -282,7 +258,6 @@ export default function Viewer({ className }: { className?: string }) {
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
                               components={components}
-                              cursorPosition={null}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -315,7 +290,6 @@ export default function Viewer({ className }: { className?: string }) {
                       >
                         <ProximityGrid
                           components={components}
-                          cursorPosition={null}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
                           gridSize={tileSize}
@@ -333,93 +307,12 @@ export default function Viewer({ className }: { className?: string }) {
                       </group>
                     )}
 
-                  {/* 3D Objects - only show when viewerDisplayMode is 'objects' */}
-                  {viewerDisplayMode === 'objects' && (
-                    <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                      <BuildingElementsRenderer
-                        components={components}
-                        floorId={floor.id}
-                        isActiveFloor={isActiveFloor}
-                        movingCamera={movingCamera}
-                        tileSize={tileSize}
-                        viewMode={viewMode}
-                        wallHeight={wallHeight}
-                      />
-                    </group>
-                  )}
-
-                  {/* Scans - only show when viewerDisplayMode is 'scans' */}
-                  {viewerDisplayMode === 'scans' &&
-                    scans
-                      .filter((scan) => {
-                        // Only show scans for this floor level
-                        if (scan.level !== floorLevel) return false
-                        // Filter out hidden scans
-                        const isHidden =
-                          scan.visible === false ||
-                          (scan.opacity !== undefined && scan.opacity === 0)
-                        return !isHidden
-                      })
-                      .map((scan) => {
-                        const scanOpacity = scan.opacity !== undefined ? scan.opacity / 100 : 1
-                        return (
-                          <Scan
-                            controlMode="select"
-                            id={scan.id}
-                            isSelected={selectedScanIds.includes(scan.id)}
-                            key={scan.id}
-                            level={scan.level}
-                            movingCamera={movingCamera}
-                            onManipulationEnd={() => setIsManipulatingScan(false)}
-                            onManipulationStart={() => setIsManipulatingScan(true)}
-                            onSelect={() => setSelectedScanIds([scan.id])}
-                            onUpdate={(updates, pushToUndo = true) => {
-                              let updatedLevels = levels
-
-                              // Apply each update operation
-                              if (updates.position !== undefined) {
-                                updatedLevels = setNodePosition(
-                                  updatedLevels,
-                                  scan.id,
-                                  updates.position,
-                                )
-                              }
-                              if (updates.rotation !== undefined) {
-                                updatedLevels = setNodeRotation(
-                                  updatedLevels,
-                                  scan.id,
-                                  updates.rotation,
-                                )
-                              }
-                              if (updates.scale !== undefined || updates.yOffset !== undefined) {
-                                // Use updateNodeProperties with proper typing for scan-specific properties
-                                const scanUpdates: Partial<{
-                                  scale: number
-                                  yOffset: number
-                                }> = {}
-                                if (updates.scale !== undefined) scanUpdates.scale = updates.scale
-                                if (updates.yOffset !== undefined)
-                                  scanUpdates.yOffset = updates.yOffset
-
-                                // Type assertion is safe here as we know the node is a ScanNode
-                                updatedLevels = updateNodeProperties(
-                                  updatedLevels,
-                                  scan.id,
-                                  scanUpdates as any,
-                                )
-                              }
-
-                              updateLevels(updatedLevels, pushToUndo)
-                            }}
-                            opacity={scanOpacity}
-                            position={scan.position}
-                            rotation={scan.rotation}
-                            scale={scan.scale}
-                            url={scan.url}
-                            yOffset={scan.yOffset}
-                          />
-                        )
-                      })}
+                  {/* Render node tree - filtered by viewerDisplayMode */}
+                  <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                    {/* Scan builder for handling scan manipulation */}
+                    <ScanBuilder />
+                    <NodeRenderer isViewer node={floor} />
+                  </group>
                 </AnimatedLevel>
               )
             })}

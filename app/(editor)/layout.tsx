@@ -1,4 +1,5 @@
 import { AppSidebar } from '@/components/app-sidebar'
+import { NodesDebugger } from '@/components/debug/nodes-debugger'
 import { SidebarProvider } from '@/components/ui/sidebar'
 
 export default function EditorLayout({
@@ -11,6 +12,7 @@ export default function EditorLayout({
       <main className="h-screen w-full">
         <AppSidebar />
         {children}
+        {process.env.NODE_ENV !== 'production' ? <NodesDebugger /> : null}
       </main>
     </SidebarProvider>
   )

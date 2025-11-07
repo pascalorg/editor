@@ -4,7 +4,7 @@ import { shaderMaterial } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, DoubleSide, Vector2 } from 'three'
-import type { Component } from '@/hooks/use-editor'
+import { type Component, useEditor } from '@/hooks/use-editor'
 
 // Create empty arrays for uniforms with proper initialization
 const createEmptyVector2Array = (size: number): Vector2[] => {
@@ -142,7 +142,6 @@ interface ProximityGridProps {
   fadeWidth?: number // Width of fade falloff in world units
   offset?: [number, number] // Coordinate system offset
   maxSize?: number // Maximum grid size to render
-  cursorPosition?: [number, number] | null // Current cursor position in grid coordinates
   // Preview elements (for showing grid under elements being placed)
   previewWall?: { start: [number, number]; end: [number, number] } | null
   previewRoof?: { corner1: [number, number]; corner2: [number, number] } | null // Rectangle footprint
@@ -168,13 +167,14 @@ export function ProximityGrid({
   fadeWidth = 0.5, // 0.5m fade
   offset = [0, 0],
   maxSize = 100, // 100m x 100m max
-  cursorPosition = null,
   previewWall = null,
   previewRoof = null,
   previewRoom = null,
   previewCustomRoom = null,
 }: ProximityGridProps) {
   const materialRef = useRef<any>(null)
+
+  const pointerPosition = useEditor((state) => state.pointerPosition)
 
   // Extract all segments and points from components
   const { segments, points } = useMemo(() => {
@@ -368,8 +368,8 @@ export function ProximityGrid({
     }
 
     // Add cursor position as a point to reveal grid around it
-    if (cursorPosition) {
-      const [x, y] = cursorPosition
+    if (pointerPosition) {
+      const [x, y] = pointerPosition
       const worldX = x * gridSize + offset[0]
       const worldY = y * gridSize + offset[1]
       points.push(new Vector2(worldX, worldY))
@@ -381,7 +381,7 @@ export function ProximityGrid({
     floorId,
     gridSize,
     offset,
-    cursorPosition,
+    pointerPosition,
     previewWall,
     previewRoof,
     previewRoom,
@@ -410,7 +410,7 @@ export function ProximityGrid({
   })
 
   // Don't render if no elements and no cursor
-  if (segments.length === 0 && points.length === 0 && !cursorPosition) {
+  if (segments.length === 0 && points.length === 0 && !pointerPosition) {
     return null
   }
 

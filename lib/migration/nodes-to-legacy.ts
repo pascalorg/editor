@@ -6,23 +6,17 @@
  */
 
 import type {
-  ColumnComponentData,
   Component,
   ComponentGroup,
-  DoorComponentData,
   ReferenceImage,
-  RoofComponentData,
   RoofSegment,
   Scan,
-  WallComponentData,
   WallSegment,
-  WindowComponentData,
 } from '../../hooks/use-editor'
 
 import type {
   ColumnNode,
   DoorNode,
-  GroupNode,
   LevelNode,
   ReferenceImageNode,
   RoofNode,

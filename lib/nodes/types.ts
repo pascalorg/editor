@@ -14,11 +14,22 @@
  */
 export interface BaseNode {
   id: string
-  type: string
+  type:
+    | 'level'
+    | 'wall'
+    | 'door'
+    | 'window'
+    | 'column'
+    | 'roof'
+    | 'roof-segment'
+    | 'reference-image'
+    | 'scan'
+    | 'group'
   name: string
   visible?: boolean
   opacity?: number // 0-100, defaults to 100
   locked?: boolean
+  preview?: boolean // True for nodes being actively placed (not yet committed)
   children: BaseNode[]
   parent?: string // parent id for bi-directional traversal
   metadata?: Record<string, any>
@@ -28,9 +39,15 @@ export interface BaseNode {
  * Interface for nodes that exist on the grid with position, rotation, and size
  */
 export interface GridItem {
-  position: [number, number] // x, y in grid coordinates
+  position: [number, number] // x, z in grid coordinates
   rotation: number // radians
   size: [number, number] // width, depth in grid units
+  canPlace?: boolean // Whether the item can be placed at its current position
+}
+
+export interface GridPoint {
+  x: number
+  z: number
 }
 
 // ============================================================================
@@ -50,6 +67,8 @@ export interface LevelNode extends BaseNode {
 export interface WallNode extends BaseNode, GridItem {
   type: 'wall'
   children: (DoorNode | WindowNode)[]
+  start: GridPoint // Start point of the wall
+  end: GridPoint // End point of the wall
   // Position represents the start point of the wall
   // Size[0] = length, Size[1] = thickness (0.2m)
   // Rotation determines wall direction
