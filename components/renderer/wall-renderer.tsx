@@ -440,7 +440,15 @@ export function WallRenderer({ node }: WallRendererProps) {
             />
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
-                <Base geometry={wallGeometry} />
+                <Base geometry={wallGeometry} >
+                <meshStandardMaterial
+                  color="beige"
+                  metalness={0.1}
+                  opacity={opacity}
+                  roughness={0.7}
+                  transparent={transparent}
+                />
+                </Base>
                 {node.children.map((opening, idx) => {
                   // Transform opening's world position to wall's local coordinate system
                   const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
@@ -463,13 +471,6 @@ export function WallRenderer({ node }: WallRendererProps) {
                   )
                 })}
               </Geometry>
-              <meshStandardMaterial
-                color="beige"
-                metalness={0.1}
-                opacity={opacity}
-                roughness={0.7}
-                transparent={transparent}
-              />
               {debug && (
                 <Edges
                   color="#000000"
