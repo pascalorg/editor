@@ -133,7 +133,7 @@ export interface ScanNode extends BaseNode, GridItem {
 // GROUP NODE
 // ============================================================================
 
-export interface GroupNode extends BaseNode {
+export interface GroupNode extends BaseNode, GridItem {
   type: 'group'
   groupType?: 'room' | 'floor' | 'outdoor' // Type of grouping
   color?: string // CSS color for visualization
@@ -198,6 +198,7 @@ export type GridNode =
   | RoofSegmentNode
   | ReferenceImageNode
   | ScanNode
+  | GroupNode
 
 // ============================================================================
 // UTILITY TYPES

@@ -70,12 +70,16 @@ export function WindowBuilder() {
       }
       ignoreGridMove = true
       lastRotation = e.node.rotation
+
+      // gridPosition is already in wall's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
       previewWindow = {
         parent: e.node.id,
         type: 'window',
         name: 'Window Preview',
-        position: [e.gridPosition.x, e.gridPosition.z],
-        rotation: e.node.rotation,
+        position: localPos, // Position RELATIVE to wall (already in wall-local coords)
+        rotation: 0, // Rotation relative to wall (always 0 since window aligns with wall)
         size: [1, 1.2] as [number, number],
         visible: true,
         opacity: 100,
@@ -85,7 +89,7 @@ export function WindowBuilder() {
       } as WindowNode
       canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
       previewWindow.canPlace = canPlace
-      previewWindow.id = addNode(previewWindow, e.node.id)
+      previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -104,9 +108,13 @@ export function WindowBuilder() {
         previewWindow = null
       }
       lastPosition = [e.gridPosition.x, e.gridPosition.z]
+
+      // gridPosition is already in wall's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
       if (previewWindow) {
-        previewWindow.position = [e.gridPosition.x, e.gridPosition.z]
-        previewWindow.rotation = e.node.rotation
+        previewWindow.position = localPos // Position RELATIVE to wall
+        previewWindow.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
         previewWindow.canPlace = canPlace
         updateNode(previewWindow.id, previewWindow)
@@ -115,8 +123,8 @@ export function WindowBuilder() {
           parent: e.node.id,
           type: 'window',
           name: 'Window Preview',
-          position: [e.gridPosition.x, e.gridPosition.z],
-          rotation: e.node.rotation,
+          position: localPos, // Position RELATIVE to wall
+          rotation: 0, // Rotation relative to wall
           size: [1, 1.2] as [number, number],
           visible: true,
           opacity: 100,
@@ -127,7 +135,7 @@ export function WindowBuilder() {
 
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
         previewWindow.canPlace = canPlace
-        previewWindow.id = addNode(previewWindow, e.node.id)
+        previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
       }
     }
 

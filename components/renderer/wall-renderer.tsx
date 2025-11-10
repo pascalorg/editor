@@ -1,17 +1,15 @@
 'use client'
 
+import { emitter } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
+import type { GridPoint, WallNode } from '@/lib/nodes/types'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
-import { emitter } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { GridPoint, WallNode } from '@/lib/nodes/types'
-import { getNodeRelativePosition } from '@/lib/nodes/utils'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
-import { GRID_SIZE } from '../viewer'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
@@ -315,28 +313,30 @@ export function WallRenderer({ node }: WallRendererProps) {
   const transparent = !isActiveFloor
 
   const getClosestGridPoint = useCallback(
-    (point: THREE.Vector3): GridPoint => {
-      const gridPoint = {
-        x: (point.x + GRID_SIZE / 2) / TILE_SIZE,
-        y: (point.z + GRID_SIZE / 2) / TILE_SIZE,
+    (point: THREE.Vector3, object: THREE.Object3D): GridPoint => {
+      // Transform the world point to the wall mesh's local coordinate system
+      // This automatically handles all parent transforms (room, level, etc.)
+      const localPoint = object.worldToLocal(point.clone())
+
+      // Convert to grid coordinates in local space
+      const localGridX = localPoint.x / TILE_SIZE
+      const localGridZ = localPoint.z / TILE_SIZE
+
+      // In wall-local space, the wall runs from (0, 0) to (length, 0) along the X-axis
+      const wallLength = node.size[0] // Wall length in grid units
+
+      // Project onto the wall's X-axis (the wall runs horizontally in its local space)
+      // Clamp to [0, wallLength]
+      const projectedX = Math.max(0, Math.min(wallLength, localGridX))
+
+      // Return the grid position in wall-local coordinates
+      // Round to nearest grid point
+      const localGridPoint: GridPoint = {
+        x: Math.round(projectedX),
+        z: 0, // Always 0 in wall-local space (on the wall surface)
       }
 
-      // Find closest point on wall segment in grid space
-      const t = Math.max(
-        0,
-        Math.min(
-          1,
-          ((gridPoint.x - node.start.x) * (node.end.x - node.start.x) +
-            (gridPoint.y - node.start.z) * (node.end.z - node.start.z)) /
-            ((node.end.x - node.start.x) ** 2 + (node.end.z - node.start.z) ** 2),
-        ),
-      )
-
-      const closestGridPoint: GridPoint = {
-        x: Math.round(node.start.x + t * (node.end.x - node.start.x)),
-        z: Math.round(node.start.z + t * (node.end.z - node.start.z)),
-      }
-      return closestGridPoint
+      return localGridPoint
     },
     [node],
   )
@@ -346,7 +346,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:click', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -357,7 +357,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:enter', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -368,7 +368,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:leave', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -379,7 +379,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:move', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -469,7 +469,7 @@ export function WallRenderer({ node }: WallRendererProps) {
                 </Base>
                 {node.children.map((opening, idx) => {
                   // Transform opening's world position to wall's local coordinate system
-                  const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
+                  // const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
                     opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
@@ -477,9 +477,9 @@ export function WallRenderer({ node }: WallRendererProps) {
                   return (
                     <Subtraction
                       key={idx}
-                      position-x={localX}
+                      position-x={opening.position[0] * tileSize}
                       position-y={opening.type === 'window' ? 1.12 : 0}
-                      position-z={localZ}
+                      position-z={opening.position[1] * tileSize}
                       scale={scale}
                       showOperation={opening.preview}
                     >

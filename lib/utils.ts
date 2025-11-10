@@ -40,22 +40,23 @@ export function canPlaceGridItemOnWall(
   item: { position: [number, number]; rotation: number; preview?: boolean },
   itemWidth = 2,
 ): boolean {
-  const itemPosition = item.position
+  // Items are now positioned in wall's LOCAL coordinate system
+  // In wall-local space, the wall runs from (0, 0) to (length, 0) along the X-axis
+  const wallLength = wall.size[0]
+  const itemLocalPos = item.position
 
-  // Calculate wall direction
-  const [x1, y1] = wall.position
-  const length = wall.size[0]
-  const x2 = x1 + Math.cos(wall.rotation) * length
-  const y2 = y1 - Math.sin(wall.rotation) * length
+  // In wall-local space, the wall direction is always along X-axis
+  const wallDirX = 1
+  const wallDirZ = 0
 
-  const dx = x2 - x1
-  const dz = y2 - y1
-  const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallDirX = dx / wallLength
-  const wallDirZ = dz / wallLength
+  // Check if item's X position (distance along wall) is within wall bounds
+  // Item needs at least 1 cell on each side of center
+  if (itemLocalPos[0] < 1 || itemLocalPos[0] > wallLength - 1) {
+    return false
+  }
 
-  // Calculate item's 3 grid points: center + 2 endpoints
-  const itemCenter = itemPosition
+  // Calculate item's 3 grid points: center + 2 endpoints (in wall-local space)
+  const itemCenter = itemLocalPos
   const itemEndpoint1: [number, number] = [
     itemCenter[0] + Math.round(wallDirX),
     itemCenter[1] + Math.round(wallDirZ),
@@ -65,37 +66,22 @@ export function canPlaceGridItemOnWall(
     itemCenter[1] - Math.round(wallDirZ),
   ]
 
-  // Check if item fits within wall bounds
-  // Calculate distance from wall start to item center along wall direction
-  const toItemX = itemCenter[0] - x1
-  const toItemZ = itemCenter[1] - y1
-  const distanceAlongWall = toItemX * wallDirX + toItemZ * wallDirZ
-
-  // Item needs at least 1 cell on each side of center
-  if (distanceAlongWall < 1 || distanceAlongWall > wallLength - 1) {
-    return false
-  }
-
-  // Check for overlaps with existing doors/windows on the wall
   const itemPoints = [itemEndpoint1, itemEndpoint2, itemCenter]
 
+  // Check for overlaps with existing doors/windows on the wall
   for (const child of wall.children) {
     // Skip preview nodes
     if (child.preview) continue
 
-    // Calculate the 3 grid points for existing element
-    const childRotation = child.rotation
-    const childWallDirX = Math.cos(-childRotation)
-    const childWallDirZ = Math.sin(-childRotation)
-
+    // Children are also in wall-local coordinates
     const childCenter = child.position
     const childEndpoint1: [number, number] = [
-      childCenter[0] + Math.round(childWallDirX),
-      childCenter[1] + Math.round(childWallDirZ),
+      childCenter[0] + Math.round(wallDirX),
+      childCenter[1] + Math.round(wallDirZ),
     ]
     const childEndpoint2: [number, number] = [
-      childCenter[0] - Math.round(childWallDirX),
-      childCenter[1] - Math.round(childWallDirZ),
+      childCenter[0] - Math.round(wallDirX),
+      childCenter[1] - Math.round(wallDirZ),
     ]
 
     const childPoints = [childEndpoint1, childEndpoint2, childCenter]

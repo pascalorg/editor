@@ -166,30 +166,29 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
   // TODO: If node has children and is selected we could calculate a bounding box around all children and render that too
 
   return (
-    <>
-      <group
-        position={gridItemPosition}
-        rotation-y={(node as unknown as GridItem).rotation || 0}
-        visible={node.visible}
-      >
-        {node.type === 'group' && <GroupRenderer node={node} />}
-        {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
-        {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
-        {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
-        {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
-        {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
-        {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
-        {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
+    <group
+      position={gridItemPosition}
+      rotation-y={(node as unknown as GridItem).rotation || 0}
+      visible={node.visible}
+    >
+      {node.type === 'group' && <GroupRenderer node={node} />}
+      {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
+      {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
+      {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
+      {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
+      {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
+      {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
+      {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
 
-        {/* Selection outline for grid items */}
-        {(node as unknown as GridItem).size && isSelected && (
-          <SelectionOutline gridItem={node as unknown as GridItem} />
-        )}
-      </group>
-      {/* Recursively render children - pass isViewer prop down */}
+      {/* Selection outline for grid items */}
+      {(node as unknown as GridItem).size && isSelected && (
+        <SelectionOutline gridItem={node as unknown as GridItem} />
+      )}
+
+      {/* Recursively render children INSIDE parent group - children use relative positions */}
       {node.children.map((childNode) => (
         <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
       ))}
-    </>
+    </group>
   )
 }

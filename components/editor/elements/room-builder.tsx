@@ -41,6 +41,7 @@ export function RoomBuilder() {
         const roomNumber = existingRooms.length + 1
 
         // Create preview room group with 4 walls
+        // Room will be positioned at the start point with zero size initially
         // Pre-generate wall IDs so we can update their parent after the group is created
         const topWallId = createId('wall')
         const bottomWallId = createId('wall')
@@ -52,65 +53,68 @@ export function RoomBuilder() {
             type: 'group',
             name: `Room ${roomNumber} Preview`,
             groupType: 'room',
+            position: [x, y] as [number, number], // Room position (bottom-left corner)
+            rotation: 0, // Rooms are always axis-aligned
+            size: [0, 0] as [number, number], // Zero size initially
             visible: true,
             opacity: 100,
             preview: true, // Mark as preview
             children: [
-              // Top wall
-              {
-                id: topWallId,
-                type: 'wall',
-                name: 'Wall Preview Top',
-                position: [x, y] as [number, number],
-                rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x, z: y },
-                end: { x, z: y },
-                visible: true,
-                opacity: 100,
-                preview: true,
-                children: [],
-              } as any,
-              // Bottom wall
+              // Bottom wall (relative position [0, 0])
               {
                 id: bottomWallId,
                 type: 'wall',
                 name: 'Wall Preview Bottom',
-                position: [x, y] as [number, number],
+                position: [0, 0] as [number, number], // RELATIVE to room
                 rotation: 0,
                 size: [0, 0.2] as [number, number],
-                start: { x, z: y },
-                end: { x, z: y },
+                start: { x: 0, z: 0 }, // RELATIVE to room
+                end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
                 preview: true,
                 children: [],
               } as any,
-              // Left wall
-              {
-                id: leftWallId,
-                type: 'wall',
-                name: 'Wall Preview Left',
-                position: [x, y] as [number, number],
-                rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x, z: y },
-                end: { x, z: y },
-                visible: true,
-                opacity: 100,
-                preview: true,
-                children: [],
-              } as any,
-              // Right wall
+              // Right wall (relative position [0, 0])
               {
                 id: rightWallId,
                 type: 'wall',
                 name: 'Wall Preview Right',
-                position: [x, y] as [number, number],
+                position: [0, 0] as [number, number], // RELATIVE to room
                 rotation: 0,
                 size: [0, 0.2] as [number, number],
-                start: { x, z: y },
-                end: { x, z: y },
+                start: { x: 0, z: 0 }, // RELATIVE to room
+                end: { x: 0, z: 0 },
+                visible: true,
+                opacity: 100,
+                preview: true,
+                children: [],
+              } as any,
+              // Top wall (relative position [0, 0])
+              {
+                id: topWallId,
+                type: 'wall',
+                name: 'Wall Preview Top',
+                position: [0, 0] as [number, number], // RELATIVE to room
+                rotation: 0,
+                size: [0, 0.2] as [number, number],
+                start: { x: 0, z: 0 }, // RELATIVE to room
+                end: { x: 0, z: 0 },
+                visible: true,
+                opacity: 100,
+                preview: true,
+                children: [],
+              } as any,
+              // Left wall (relative position [0, 0])
+              {
+                id: leftWallId,
+                type: 'wall',
+                name: 'Wall Preview Left',
+                position: [0, 0] as [number, number], // RELATIVE to room
+                rotation: 0,
+                size: [0, 0.2] as [number, number],
+                start: { x: 0, z: 0 }, // RELATIVE to room
+                end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
                 preview: true,
@@ -177,59 +181,63 @@ export function RoomBuilder() {
         if (!lastEndPoint || lastEndPoint[0] !== x2 || lastEndPoint[1] !== y2) {
           roomStateRef.current.lastEndPoint = [x2, y2]
 
-          // Get the room node and update its walls
+          // Calculate room position (bottom-left corner) and size
+          const roomX = Math.min(x1, x2)
+          const roomY = Math.min(y1, y2)
+          const roomWidth = Math.abs(x2 - x1)
+          const roomHeight = Math.abs(y2 - y1)
+
+          // Update room group with position and size
+          updateNode(previewRoomId, {
+            position: [roomX, roomY] as [number, number],
+            size: [roomWidth, roomHeight] as [number, number],
+          })
+
+          // Get the room node and update its walls with RELATIVE positions
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
           const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
 
           if (roomNode && 'children' in roomNode && roomNode.children.length === 4) {
-            const [topWall, bottomWall, leftWall, rightWall] = roomNode.children
+            const [bottomWall, rightWall, topWall, leftWall] = roomNode.children
 
-            // Update Top wall (x1,y2 -> x2,y2)
-            const topDx = x2 - x1
-            const topLength = Math.abs(topDx)
-            const topRotation = Math.atan2(0, topDx)
-            updateNode(topWall.id, {
-              position: [x1, y2],
-              size: [topLength, 0.2],
-              rotation: topRotation,
-              start: { x: x1, z: y2 },
-              end: { x: x2, z: y2 },
-            })
-
-            // Update Bottom wall (x1,y1 -> x2,y1)
-            const bottomDx = x2 - x1
-            const bottomLength = Math.abs(bottomDx)
-            const bottomRotation = Math.atan2(0, bottomDx)
+            // Bottom wall: (0,0) -> (roomWidth,0) - horizontal, going right
+            const bottomRotation = Math.atan2(0, roomWidth)
             updateNode(bottomWall.id, {
-              position: [x1, y1],
-              size: [bottomLength, 0.2],
+              position: [0, 0] as [number, number], // RELATIVE to room
+              size: [roomWidth, 0.2] as [number, number],
               rotation: bottomRotation,
-              start: { x: x1, z: y1 },
-              end: { x: x2, z: y1 },
+              start: { x: 0, z: 0 }, // RELATIVE to room
+              end: { x: roomWidth, z: 0 },
             })
 
-            // Update Left wall (x1,y1 -> x1,y2)
-            const leftDy = y2 - y1
-            const leftLength = Math.abs(leftDy)
-            const leftRotation = Math.atan2(-leftDy, 0)
-            updateNode(leftWall.id, {
-              position: [x1, y1] as [number, number],
-              size: [leftLength, 0.2] as [number, number],
-              rotation: leftRotation,
-              start: { x: x1, z: y1 } as any,
-              end: { x: x1, z: y2 } as any,
-            })
-
-            // Update Right wall (x2,y1 -> x2,y2)
-            const rightDy = y2 - y1
-            const rightLength = Math.abs(rightDy)
-            const rightRotation = Math.atan2(-rightDy, 0)
+            // Right wall: (roomWidth,0) -> (roomWidth,roomHeight) - vertical, going up
+            const rightRotation = Math.atan2(-roomHeight, 0)
             updateNode(rightWall.id, {
-              position: [x2, y1],
-              size: [rightLength, 0.2],
+              position: [roomWidth, 0] as [number, number], // RELATIVE to room
+              size: [roomHeight, 0.2] as [number, number],
               rotation: rightRotation,
-              start: { x: x2, z: y1 },
-              end: { x: x2, z: y2 },
+              start: { x: roomWidth, z: 0 }, // RELATIVE to room
+              end: { x: roomWidth, z: roomHeight },
+            })
+
+            // Top wall: (roomWidth,roomHeight) -> (0,roomHeight) - horizontal, going left
+            const topRotation = Math.atan2(0, -roomWidth)
+            updateNode(topWall.id, {
+              position: [roomWidth, roomHeight] as [number, number], // RELATIVE to room
+              size: [roomWidth, 0.2] as [number, number],
+              rotation: topRotation,
+              start: { x: roomWidth, z: roomHeight }, // RELATIVE to room
+              end: { x: 0, z: roomHeight },
+            })
+
+            // Left wall: (0,roomHeight) -> (0,0) - vertical, going down
+            const leftRotation = Math.atan2(roomHeight, 0)
+            updateNode(leftWall.id, {
+              position: [0, roomHeight] as [number, number], // RELATIVE to room
+              size: [roomHeight, 0.2] as [number, number],
+              rotation: leftRotation,
+              start: { x: 0, z: roomHeight }, // RELATIVE to room
+              end: { x: 0, z: 0 },
             })
           }
         }

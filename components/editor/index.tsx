@@ -108,21 +108,6 @@ export default function Editor({ className }: { className?: string }) {
 
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
 
-  // Helper function to clear all placement states and selections
-  const clearPlacementStates = () => {
-    setWallStartPoint(null)
-    setWallPreviewEnd(null)
-    setDeleteStartPoint(null)
-    setDeletePreviewEnd(null)
-    setPointerPosition(null)
-    // Cancel any active wall preview
-    cancelWallPreview()
-    // Clear all selections (building elements, images, and scans)
-    setSelectedElements([])
-    setSelectedImageIds([])
-    setSelectedScanIds([])
-  }
-
   // Clear cursor position when switching floors to prevent grid artifacts
   useEffect(() => {
     setPointerPosition(null)
@@ -140,24 +125,18 @@ export default function Editor({ className }: { className?: string }) {
         // Check if there's an active placement/deletion in progress
         const hasActivePlacement = wallStartPoint !== null || deleteStartPoint !== null
 
-        // Cancel all placement and delete modes
-        clearPlacementStates()
-
         // Only change mode to 'select' if there was no active placement/deletion
         if (!hasActivePlacement) {
           setControlMode('select')
         }
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('select')
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('delete')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         // Default to 'wall' tool if no active tool when entering building mode
         if (activeTool) {
           setControlMode('building')
@@ -166,7 +145,6 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('guide')
       } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -207,7 +185,6 @@ export default function Editor({ className }: { className?: string }) {
     setCameraMode,
     wallStartPoint,
     deleteStartPoint,
-    clearPlacementStates,
     selectedElements,
     selectedImageIds,
     selectedScanIds,
