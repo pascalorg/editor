@@ -1259,6 +1259,11 @@ const useStore = create<StoreState>()(
                 // Handle children - always preserve the children property if it exists
                 if (children !== undefined) {
                   if (children.length > 0) {
+                    // For groups (rooms), check if we need to convert world positions to relative
+                    const isGroup = previewNode.type === 'group'
+                    const hasPosition = updates.position !== undefined
+                    const roomPosition = hasPosition ? updates.position : [0, 0]
+
                     // Recursively strip preview/id/parent from children
                     newNodeData.children = children.map((child: any) => {
                       const {
@@ -1267,6 +1272,27 @@ const useStore = create<StoreState>()(
                         parent: childParent,
                         ...childData
                       } = child
+
+                      // Convert wall positions to relative if this is a group with a position
+                      if (isGroup && hasPosition && child.type === 'wall') {
+                        return {
+                          ...childData,
+                          name: childData.name.replace(' Preview', '').replace('Preview ', ''),
+                          position: [
+                            (childData.position?.[0] || 0) - (roomPosition as [number, number])[0],
+                            (childData.position?.[1] || 0) - (roomPosition as [number, number])[1],
+                          ] as [number, number],
+                          start: {
+                            x: (childData.start?.x || 0) - (roomPosition as [number, number])[0],
+                            z: (childData.start?.z || 0) - (roomPosition as [number, number])[1],
+                          },
+                          end: {
+                            x: (childData.end?.x || 0) - (roomPosition as [number, number])[0],
+                            z: (childData.end?.z || 0) - (roomPosition as [number, number])[1],
+                          },
+                        }
+                      }
+
                       return {
                         ...childData,
                         name: childData.name.replace(' Preview', '').replace('Preview ', ''),

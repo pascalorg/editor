@@ -346,7 +346,7 @@ export default function Editor({ className }: { className?: string }) {
   }, [])
 
   const disabledRaycast = useCallback(() => null, [])
-
+  console.log('levels', levels)
   return (
     <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
       {cameraMode === 'perspective' ? (

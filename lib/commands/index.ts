@@ -41,10 +41,31 @@ export class AddNodeCommand implements Command {
   }
 
   execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    // Recursively process children to generate IDs and set parent references
+    const processChildren = (children: any[], parentId: string): BaseNode[] => {
+      if (!children || children.length === 0) return []
+
+      return children.map((child) => {
+        const childId = child.id || createId(child.type)
+        const processedChild = {
+          ...child,
+          id: childId,
+          parent: parentId,
+          children: processChildren(child.children || [], childId),
+        } as BaseNode
+
+        // Add child to index
+        nodeIndex.set(childId, processedChild)
+
+        return processedChild
+      })
+    }
+
     const newNode = {
       ...this.nodeData,
       id: this.nodeId,
       parent: this.parentId,
+      children: processChildren(this.nodeData.children || [], this.nodeId),
     } as BaseNode
 
     if (this.parentId === null) {
@@ -60,6 +81,9 @@ export class AddNodeCommand implements Command {
         for (const node of nodes) {
           if (node.id === this.parentId) {
             node.children.push(newNode)
+            // Update parent in index after modifying its children (important for Immer)
+            // Use current() to store plain object, not draft proxy
+            nodeIndex.set(this.parentId, current(node) as BaseNode)
             return true
           }
           if (node.children.length > 0 && findAndAddToParent(node.children)) {
@@ -118,8 +142,8 @@ export class UpdateNodeCommand implements Command {
   }
 
   execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
-    // Find and update the node
-    const findAndUpdate = (nodes: BaseNode[]): boolean => {
+    // Find and update the node, tracking parent to update it in nodeIndex too
+    const findAndUpdate = (nodes: BaseNode[], parent: BaseNode | null = null): boolean => {
       for (const node of nodes) {
         if (node.id === this.nodeId) {
           // Save previous state for undo (only keys we're updating)
@@ -135,37 +159,51 @@ export class UpdateNodeCommand implements Command {
 
           Object.assign(node, this.updates)
           nodeIndex.set(this.nodeId, node)
+
+          // Update parent in index after modifying its child (important for Immer)
+          // Use current() to store plain object, not draft proxy
+          if (parent) {
+            nodeIndex.set(parent.id, current(parent) as BaseNode)
+          }
+
           return true
         }
-        if (node.children.length > 0 && findAndUpdate(node.children)) {
+        if (node.children.length > 0 && findAndUpdate(node.children, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndUpdate(levels)
+    findAndUpdate(levels, null)
   }
 
   undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
     if (!this.previousState) return
 
-    // Find and restore the node
-    const findAndRestore = (nodes: BaseNode[]): boolean => {
+    // Find and restore the node, tracking parent to update it in nodeIndex too
+    const findAndRestore = (nodes: BaseNode[], parent: BaseNode | null = null): boolean => {
       for (const node of nodes) {
         if (node.id === this.nodeId) {
           Object.assign(node, this.previousState)
           nodeIndex.set(this.nodeId, node)
+
+          // Update parent in index after modifying its child (important for Immer)
+          // Use current() to store plain object, not draft proxy
+          if (parent) {
+            nodeIndex.set(parent.id, current(parent) as BaseNode)
+          }
+
           return true
         }
-        if (node.children.length > 0 && findAndRestore(node.children)) {
+        if (node.children.length > 0 && findAndRestore(node.children, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndRestore(levels)
+    findAndRestore(levels, null)
   }
 }
 
@@ -191,7 +229,11 @@ export class DeleteNodeCommand implements Command {
     }
 
     // Find and remove the node
-    const findAndDelete = (nodes: BaseNode[], parentId: string | null = null): boolean => {
+    const findAndDelete = (
+      nodes: BaseNode[],
+      parentId: string | null = null,
+      parent: BaseNode | null = null,
+    ): boolean => {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i]
         if (node.id === this.nodeId) {
@@ -202,16 +244,23 @@ export class DeleteNodeCommand implements Command {
 
           removeFromIndex(node)
           nodes.splice(i, 1)
+
+          // Update parent in index after removing child (important for Immer)
+          // Use current() to store plain object, not draft proxy
+          if (parent) {
+            nodeIndex.set(parent.id, current(parent) as BaseNode)
+          }
+
           return true
         }
-        if (node.children.length > 0 && findAndDelete(node.children, node.id)) {
+        if (node.children.length > 0 && findAndDelete(node.children, node.id, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndDelete(levels)
+    findAndDelete(levels, null, null)
   }
 
   undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
@@ -235,6 +284,11 @@ export class DeleteNodeCommand implements Command {
           // Found parent
           node.children.splice(this.indexInParent, 0, this.deletedNode)
           addToIndex(this.deletedNode)
+
+          // Update parent in index after adding child (important for Immer)
+          // Use current() to store plain object, not draft proxy
+          nodeIndex.set(node.id, current(node) as BaseNode)
+
           return true
         }
         if (node.children.length > 0 && findAndRestore(node.children)) {
