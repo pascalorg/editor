@@ -9,6 +9,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 
 // Enable Map/Set support in Immer
 enableMapSet()
+
 import type { SelectedElement } from '@/lib/building-elements'
 import {
   AddNodeCommand,
@@ -381,6 +382,12 @@ type StoreState = {
   nodeIndex: Map<string, BaseNode> // Fast lookup by ID
 
   // ============================================================================
+  // UNDO/REDO STATE
+  // ============================================================================
+  undoStack: Array<{ levels: LevelNode[] }>
+  redoStack: Array<{ levels: LevelNode[] }>
+
+  // ============================================================================
   // UI STATE
   // ============================================================================
   currentLevel: number
@@ -491,6 +498,10 @@ const useStore = create<StoreState>()(
           },
         ],
         nodeIndex: new Map(), // Will be built from levels
+
+        // Undo/redo state initialization
+        undoStack: [],
+        redoStack: [],
 
         // UI state initialization
         currentLevel: 0,
@@ -1261,7 +1272,7 @@ const useStore = create<StoreState>()(
                   if (children.length > 0) {
                     // For groups (rooms), check if we need to convert world positions to relative
                     const isGroup = previewNode.type === 'group'
-                    const hasPosition = updates.position !== undefined
+                    const hasPosition = 'position' in updates && updates.position !== undefined
                     const roomPosition = hasPosition ? updates.position : [0, 0]
 
                     // Recursively strip preview/id/parent from children
@@ -1315,11 +1326,11 @@ const useStore = create<StoreState>()(
                 // Check if we're updating a preview node
                 const isPreviewNode = node?.preview === true
 
-                if (!isPreviewNode) {
-                  draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
-                } else {
+                if (isPreviewNode) {
                   // Preview node update - execute directly without undo tracking
                   command.execute(draft.levels, draft.nodeIndex)
+                } else {
+                  draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
                 }
               }
             }),

@@ -1,11 +1,11 @@
 'use client'
 
+import { StackIcon } from '@phosphor-icons/react'
+import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { StackIcon } from '@phosphor-icons/react'
-import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 
 export function ControlModeMenu({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)

@@ -93,7 +93,7 @@ export const selectNodesOfTypeFromLevel =
       return []
     }
 
-    return level.children.filter((child) => child.type === type) as T[]
+    return level.children.filter((child) => child.type === type) as unknown as T[]
   }
 
 /**
@@ -376,7 +376,7 @@ export function createNodeSelector<T extends BaseNode>(levelId: string, type: No
       return []
     }
 
-    return level.children.filter((child) => child.type === type) as T[]
+    return level.children.filter((child) => child.type === type) as unknown as T[]
   }
 }
 

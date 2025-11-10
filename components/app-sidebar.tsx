@@ -1,5 +1,20 @@
 'use client'
 
+import JsonView from '@uiw/react-json-view'
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Eye,
+  FileCode,
+  HelpCircle,
+  Save,
+  Settings,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,21 +40,6 @@ import {
 } from '@/components/ui/sidebar'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import JsonView from '@uiw/react-json-view'
-import {
-  ChevronDown,
-  ChevronRight,
-  Download,
-  Eye,
-  FileCode,
-  HelpCircle,
-  Save,
-  Settings,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
 
 export function AppSidebar() {
   const isHelpOpen = useEditor((state) => state.isHelpOpen)

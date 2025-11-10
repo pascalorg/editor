@@ -977,7 +977,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   }
 
   // Get sorted levels for rendering
-  const floorGroups = levels.sort((a, b) => (b.level || 0) - (a.level || 0))
+  const floorGroups = [...levels].sort((a, b) => (b.level || 0) - (a.level || 0))
 
   // Update expanded IDs when selection changes to reveal selected items
   useEffect(() => {

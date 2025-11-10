@@ -26,9 +26,9 @@ export interface Command {
 // ============================================================================
 
 export class AddNodeCommand implements Command {
-  private nodeId: string
-  private nodeData: Omit<BaseNode, 'id'>
-  private parentId: string | null
+  private readonly nodeId: string
+  private readonly nodeData: Omit<BaseNode, 'id'>
+  private readonly parentId: string | null
 
   constructor(nodeData: Omit<BaseNode, 'id'>, parentId: string | null, nodeId?: string) {
     this.nodeData = nodeData
@@ -132,8 +132,8 @@ export class AddNodeCommand implements Command {
 // ============================================================================
 
 export class UpdateNodeCommand implements Command {
-  private nodeId: string
-  private updates: Partial<AnyNode>
+  private readonly nodeId: string
+  private readonly updates: Partial<AnyNode>
   private previousState: Partial<AnyNode> | null = null
 
   constructor(nodeId: string, updates: Partial<AnyNode>) {
@@ -212,10 +212,10 @@ export class UpdateNodeCommand implements Command {
 // ============================================================================
 
 export class DeleteNodeCommand implements Command {
-  private nodeId: string
+  private readonly nodeId: string
   private deletedNode: BaseNode | null = null
   private parentId: string | null = null
-  private indexInParent: number = -1
+  private indexInParent = -1
 
   constructor(nodeId: string) {
     this.nodeId = nodeId
@@ -278,12 +278,13 @@ export class DeleteNodeCommand implements Command {
         if (this.parentId === null) {
           // Root level
           levels.splice(this.indexInParent, 0, this.deletedNode as LevelNode)
-          addToIndex(this.deletedNode)
+          addToIndex(this.deletedNode!)
           return true
-        } else if (node.id === this.parentId) {
+        }
+        if (node.id === this.parentId) {
           // Found parent
-          node.children.splice(this.indexInParent, 0, this.deletedNode)
-          addToIndex(this.deletedNode)
+          node.children.splice(this.indexInParent, 0, this.deletedNode!)
+          addToIndex(this.deletedNode!)
 
           // Update parent in index after adding child (important for Immer)
           // Use current() to store plain object, not draft proxy
@@ -309,7 +310,7 @@ export class DeleteNodeCommand implements Command {
 export class CommandManager {
   private undoStack: Command[] = []
   private redoStack: Command[] = []
-  private maxStackSize = 50
+  private readonly maxStackSize = 50
 
   execute(command: Command, levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
     command.execute(levels, nodeIndex)
