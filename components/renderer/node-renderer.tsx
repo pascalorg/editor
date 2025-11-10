@@ -120,6 +120,7 @@ interface NodeRendererProps {
 }
 
 export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
+  console.log('Rendering node:', node.id, 'of type', node.type)
   const gridItemPosition = useMemo(() => {
     const gridItem = node as unknown as GridItem
     if (gridItem.position) {

@@ -10,6 +10,12 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 // Enable Map/Set support in Immer
 enableMapSet()
 import type { SelectedElement } from '@/lib/building-elements'
+import {
+  AddNodeCommand,
+  CommandManager,
+  DeleteNodeCommand,
+  UpdateNodeCommand,
+} from '@/lib/commands'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addReferenceImageToLevel,
@@ -363,10 +369,6 @@ export type LayoutJSON = {
   // scans?: Scan[] // Optional for backward compatibility
 }
 
-type HistoryState = {
-  levels: LevelNode[]
-}
-
 export type ViewMode = 'full' | 'level'
 
 export type ViewerDisplayMode = 'scans' | 'objects'
@@ -391,8 +393,7 @@ type StoreState = {
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
-  undoStack: HistoryState[]
-  redoStack: HistoryState[]
+  commandManager: CommandManager
   activeTool: Tool | null
   controlMode: ControlMode
   cameraMode: CameraMode
@@ -598,8 +599,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
         setRoofs: (roofKeys) =>
@@ -685,8 +684,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
 
@@ -725,8 +722,7 @@ const useStore = create<StoreState>()(
         isHelpOpen: false,
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
-        undoStack: [],
-        redoStack: [],
+        commandManager: new CommandManager(),
         activeTool: 'wall',
         controlMode: 'building',
         cameraMode: 'perspective',
@@ -869,8 +865,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           })
         },
@@ -912,8 +906,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           })
         },
@@ -1048,38 +1040,34 @@ const useStore = create<StoreState>()(
             selectedElements: [],
             selectedImageIds: [],
             selectedScanIds: [],
-            undoStack: [],
-            redoStack: [],
           })
+          // Clear command history
+          get().commandManager.clear()
         },
         undo: () =>
-          set((state) => {
-            if (state.undoStack.length === 0) return state
-            const previous = state.undoStack[state.undoStack.length - 1]
-            return {
-              levels: previous.levels,
-              nodeIndex: buildNodeIndex(previous.levels),
-              undoStack: state.undoStack.slice(0, -1),
-              redoStack: [...state.redoStack, { levels: state.levels }],
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
-            }
-          }),
+          set(
+            produce((draft) => {
+              const success = draft.commandManager.undo(draft.levels, draft.nodeIndex)
+              if (success) {
+                // Clear selections after undo
+                draft.selectedElements = []
+                draft.selectedImageIds = []
+                draft.selectedScanIds = []
+              }
+            }),
+          ),
         redo: () =>
-          set((state) => {
-            if (state.redoStack.length === 0) return state
-            const next = state.redoStack[state.redoStack.length - 1]
-            return {
-              levels: next.levels,
-              nodeIndex: buildNodeIndex(next.levels),
-              redoStack: state.redoStack.slice(0, -1),
-              undoStack: [...state.undoStack, { levels: state.levels }],
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
-            }
-          }),
+          set(
+            produce((draft) => {
+              const success = draft.commandManager.redo(draft.levels, draft.nodeIndex)
+              if (success) {
+                // Clear selections after redo
+                draft.selectedElements = []
+                draft.selectedImageIds = []
+                draft.selectedScanIds = []
+              }
+            }),
+          ),
         toggleFloorVisibility: (floorId) =>
           set((state) => {
             const updatedLevels = state.levels.map((level) =>
@@ -1217,95 +1205,24 @@ const useStore = create<StoreState>()(
 
         // Generic node operations
         addNode: (nodeData, parentId) => {
-          const id = createId(nodeData.type)
+          let nodeId = ''
 
           set(
             produce((draft) => {
-              const newNode = {
-                ...nodeData,
-                id,
-                parent: parentId,
-              } as BaseNode
-
-              if (parentId === null) {
-                // Add to root (only for level nodes)
-                if (nodeData.type !== 'level') {
-                  console.error('Only level nodes can be added to root')
-                  return
-                }
-                draft.levels.push(newNode as LevelNode)
-              } else {
-                // Find parent node and add to its children
-                const findAndAddToParent = (nodes: BaseNode[]): boolean => {
-                  for (const node of nodes) {
-                    if (node.id === parentId) {
-                      node.children.push(newNode)
-                      return true
-                    }
-                    if (node.children.length > 0 && findAndAddToParent(node.children)) {
-                      return true
-                    }
-                  }
-                  return false
-                }
-
-                findAndAddToParent(draft.levels)
-              }
-
-              // Update index incrementally (O(1) instead of O(n))
-              draft.nodeIndex.set(id, newNode)
-
-              // Update undo stack
-              draft.undoStack.push({ levels: get().levels })
-              if (draft.undoStack.length > 50) {
-                draft.undoStack.shift()
-              }
-              draft.redoStack = []
+              const command = new AddNodeCommand(nodeData, parentId)
+              nodeId = command.getNodeId()
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
             }),
           )
 
-          return id
+          return nodeId
         },
 
         updateNode: (nodeId, updates) => {
           set(
             produce((draft) => {
-              let wasPreviewNode = false
-              let isCommittingPreview = false
-              let updatedNode: BaseNode | null = null
-
-              // Find and update the node
-              const findAndUpdate = (nodes: BaseNode[]): boolean => {
-                for (const node of nodes) {
-                  if (node.id === nodeId) {
-                    wasPreviewNode = node.preview === true
-                    Object.assign(node, updates)
-                    updatedNode = node
-                    isCommittingPreview = wasPreviewNode && updates.preview === false
-                    return true
-                  }
-                  if (node.children.length > 0 && findAndUpdate(node.children)) {
-                    return true
-                  }
-                }
-                return false
-              }
-
-              findAndUpdate(draft.levels)
-
-              // Update index incrementally (O(1) instead of O(n))
-              if (updatedNode) {
-                draft.nodeIndex.set(nodeId, updatedNode)
-              }
-
-              // If committing a preview, push to undo stack
-              if (isCommittingPreview) {
-                draft.undoStack.push({ levels: get().levels })
-                if (draft.undoStack.length > 50) {
-                  draft.undoStack.shift()
-                }
-                draft.redoStack = []
-              }
+              const command = new UpdateNodeCommand(nodeId, updates)
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
             }),
           )
         },
@@ -1313,30 +1230,8 @@ const useStore = create<StoreState>()(
         deleteNode: (nodeId) => {
           set(
             produce((draft) => {
-              // Recursively remove node and all children from index
-              const removeFromIndex = (node: BaseNode) => {
-                draft.nodeIndex.delete(node.id)
-                node.children.forEach(removeFromIndex)
-              }
-
-              // Find and remove the node
-              const findAndDelete = (nodes: BaseNode[], parent?: BaseNode): boolean => {
-                for (let i = 0; i < nodes.length; i++) {
-                  const node = nodes[i]
-                  if (node.id === nodeId) {
-                    // Remove from index before deleting
-                    removeFromIndex(node)
-                    nodes.splice(i, 1)
-                    return true
-                  }
-                  if (node.children.length > 0 && findAndDelete(node.children, node)) {
-                    return true
-                  }
-                }
-                return false
-              }
-
-              findAndDelete(draft.levels)
+              const command = new DeleteNodeCommand(nodeId)
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
             }),
           )
         },
@@ -1464,8 +1359,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
         cancelWallPreview: () =>
@@ -1588,6 +1481,9 @@ const useStore = create<StoreState>()(
             nodes: state.nodeIndex.size,
             levels: state.levels.length,
           })
+
+          // Reinitialize command manager (can't be persisted)
+          state.commandManager = new CommandManager()
 
           // Preselect base level if no level is selected
           if (!state.selectedFloorId) {
