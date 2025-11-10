@@ -1,10 +1,14 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import { enableMapSet, produce } from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+
+// Enable Map/Set support in Immer
+enableMapSet()
 import type { SelectedElement } from '@/lib/building-elements'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
@@ -1213,94 +1217,128 @@ const useStore = create<StoreState>()(
 
         // Generic node operations
         addNode: (nodeData, parentId) => {
-          let addedNodeId = ''
+          const id = createId(nodeData.type)
 
-          set((state) => {
-            // Generate ID
-            const id = createId(nodeData.type)
-            addedNodeId = id
+          set(
+            produce((draft) => {
+              const newNode = {
+                ...nodeData,
+                id,
+                parent: parentId,
+              } as BaseNode
 
-            const newNode = {
-              ...nodeData,
-              id,
-              parent: parentId,
-            } as BaseNode
-
-            let updatedLevels: LevelNode[]
-
-            if (parentId === null) {
-              // Add to root (only for level nodes)
-              if (nodeData.type !== 'level') {
-                console.error('Only level nodes can be added to root')
-                return state
-              }
-              updatedLevels = [...state.levels, newNode as LevelNode]
-            } else {
-              // Add to parent node
-              updatedLevels = mapTree(state.levels, (node) => {
-                if (node.id === parentId) {
-                  return {
-                    ...node,
-                    children: [...node.children, newNode],
-                  } as typeof node
+              if (parentId === null) {
+                // Add to root (only for level nodes)
+                if (nodeData.type !== 'level') {
+                  console.error('Only level nodes can be added to root')
+                  return
                 }
-                return node
-              }) as LevelNode[]
-            }
+                draft.levels.push(newNode as LevelNode)
+              } else {
+                // Find parent node and add to its children
+                const findAndAddToParent = (nodes: BaseNode[]): boolean => {
+                  for (const node of nodes) {
+                    if (node.id === parentId) {
+                      node.children.push(newNode)
+                      return true
+                    }
+                    if (node.children.length > 0 && findAndAddToParent(node.children)) {
+                      return true
+                    }
+                  }
+                  return false
+                }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          })
+                findAndAddToParent(draft.levels)
+              }
 
-          return addedNodeId
+              // Update index incrementally (O(1) instead of O(n))
+              draft.nodeIndex.set(id, newNode)
+
+              // Update undo stack
+              draft.undoStack.push({ levels: get().levels })
+              if (draft.undoStack.length > 50) {
+                draft.undoStack.shift()
+              }
+              draft.redoStack = []
+            }),
+          )
+
+          return id
         },
 
         updateNode: (nodeId, updates) => {
-          set((state) => {
-            let wasPreviewNode = false
-            const updatedLevels = mapTree(state.levels, (node) => {
-              if (node.id === nodeId) {
-                wasPreviewNode = node.preview === true
-                return {
-                  ...node,
-                  ...updates,
-                } as typeof node
+          set(
+            produce((draft) => {
+              let wasPreviewNode = false
+              let isCommittingPreview = false
+              let updatedNode: BaseNode | null = null
+
+              // Find and update the node
+              const findAndUpdate = (nodes: BaseNode[]): boolean => {
+                for (const node of nodes) {
+                  if (node.id === nodeId) {
+                    wasPreviewNode = node.preview === true
+                    Object.assign(node, updates)
+                    updatedNode = node
+                    isCommittingPreview = wasPreviewNode && updates.preview === false
+                    return true
+                  }
+                  if (node.children.length > 0 && findAndUpdate(node.children)) {
+                    return true
+                  }
+                }
+                return false
               }
-              return node
-            }) as LevelNode[]
 
-            // If we're committing a preview node (removing preview flag), push to undo stack
-            const isCommittingPreview = wasPreviewNode && updates.preview === false
+              findAndUpdate(draft.levels)
 
-            if (isCommittingPreview) {
-              return {
-                levels: updatedLevels,
-                nodeIndex: buildNodeIndex(updatedLevels),
-                undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-                redoStack: [],
+              // Update index incrementally (O(1) instead of O(n))
+              if (updatedNode) {
+                draft.nodeIndex.set(nodeId, updatedNode)
               }
-            }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          })
+              // If committing a preview, push to undo stack
+              if (isCommittingPreview) {
+                draft.undoStack.push({ levels: get().levels })
+                if (draft.undoStack.length > 50) {
+                  draft.undoStack.shift()
+                }
+                draft.redoStack = []
+              }
+            }),
+          )
         },
 
         deleteNode: (nodeId) => {
-          set((state) => {
-            const updatedLevels = deleteNode(state.levels, nodeId)
+          set(
+            produce((draft) => {
+              // Recursively remove node and all children from index
+              const removeFromIndex = (node: BaseNode) => {
+                draft.nodeIndex.delete(node.id)
+                node.children.forEach(removeFromIndex)
+              }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          })
+              // Find and remove the node
+              const findAndDelete = (nodes: BaseNode[], parent?: BaseNode): boolean => {
+                for (let i = 0; i < nodes.length; i++) {
+                  const node = nodes[i]
+                  if (node.id === nodeId) {
+                    // Remove from index before deleting
+                    removeFromIndex(node)
+                    nodes.splice(i, 1)
+                    return true
+                  }
+                  if (node.children.length > 0 && findAndDelete(node.children, node)) {
+                    return true
+                  }
+                }
+                return false
+              }
+
+              findAndDelete(draft.levels)
+            }),
+          )
         },
 
         // Preview wall placement methods
