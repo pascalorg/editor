@@ -22,11 +22,9 @@ export function DoorBuilder() {
 
     const handleWallClick = (e: WallEvent) => {
       if (previewDoor && canPlace) {
-        // Commit the door placement
-        updateNode(previewDoor.id, {
-          preview: false,
-          name: 'Door',
-        })
+        // Commit the preview by setting preview: false (useEditor handles the conversion)
+        updateNode(previewDoor.id, { preview: false })
+
         previewDoor = null
       }
     }

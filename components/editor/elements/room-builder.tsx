@@ -8,6 +8,7 @@ import { createId } from '@/lib/utils'
 export function RoomBuilder() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => state.levels)
 
@@ -137,25 +138,8 @@ export function RoomBuilder() {
         const previewRoomId = roomStateRef.current.previewRoomId
 
         if (previewRoomId) {
-          // Find the room node to get its children
-          const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
-
-          // Update the room group to remove preview flag
-          updateNode(previewRoomId, {
-            preview: false as any,
-            name: roomNode?.name.replace(' Preview', '') || 'Room',
-          })
-
-          // Update all child walls to remove preview flag
-          if (roomNode && 'children' in roomNode) {
-            roomNode.children.forEach((wall) => {
-              updateNode(wall.id, {
-                preview: false as any,
-                name: wall.name.replace(' Preview', '').replace('Preview ', ''),
-              })
-            })
-          }
+          // Commit the preview by setting preview: false (useEditor handles the conversion)
+          updateNode(previewRoomId, { preview: false })
         }
 
         // Reset state
@@ -253,7 +237,7 @@ export function RoomBuilder() {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
     }
-  }, [addNode, updateNode, selectedFloorId, levels])
+  }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
   return <></>
 }

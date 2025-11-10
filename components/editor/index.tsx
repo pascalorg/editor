@@ -153,13 +153,11 @@ export default function Editor({ className }: { className?: string }) {
         e.preventDefault()
         toggleLevelMode()
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        if (e.shiftKey) {
-          e.preventDefault()
-          redo()
-        } else {
-          e.preventDefault()
-          undo()
-        }
+        e.preventDefault()
+        undo()
+      } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        redo()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
         if (selectedElements.length > 0) {

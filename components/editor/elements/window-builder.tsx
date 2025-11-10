@@ -22,11 +22,9 @@ export function WindowBuilder() {
 
     const handleWallClick = (e: WallEvent) => {
       if (previewWindow && canPlace) {
-        // Commit the window placement
-        updateNode(previewWindow.id, {
-          preview: false,
-          name: 'Window',
-        })
+        // Commit the preview by setting preview: false (useEditor handles the conversion)
+        updateNode(previewWindow.id, { preview: false })
+
         previewWindow = null
       }
     }

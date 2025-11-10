@@ -1,7 +1,7 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import { enableMapSet, produce } from 'immer'
+import { current, enableMapSet, produce } from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
@@ -465,7 +465,7 @@ type StoreState = {
 
   // Generic node operations
   addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
-  updateNode: (nodeId: string, updates: Partial<AnyNode>) => void
+  updateNode: (nodeId: string, updates: Partial<AnyNode>) => string
   deleteNode: (nodeId: string) => void
 
   // Preview wall placement methods
@@ -945,24 +945,23 @@ const useStore = create<StoreState>()(
               redoStack: [],
             }
           }),
-        handleDeleteSelectedElements: () =>
-          set((state) => {
-            if (state.selectedElements.length === 0) return state
+        handleDeleteSelectedElements: () => {
+          const state = get()
+          if (state.selectedElements.length === 0) return
 
-            // Delete all selected building element nodes
-            let updatedLevels = state.levels
-            for (const element of state.selectedElements) {
-              updatedLevels = deleteNode(updatedLevels, element.id)
-            }
+          set(
+            produce((draft) => {
+              // Delete all selected elements using the command manager
+              for (const element of state.selectedElements) {
+                const command = new DeleteNodeCommand(element.id)
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              selectedElements: [],
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          }),
+              // Clear selection
+              draft.selectedElements = []
+            }),
+          )
+        },
         handleClear: () => {
           get().setWalls([])
           set({ selectedElements: [] })
@@ -1211,7 +1210,13 @@ const useStore = create<StoreState>()(
             produce((draft) => {
               const command = new AddNodeCommand(nodeData, parentId)
               nodeId = command.getNodeId()
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+
+              // If it's a preview node, execute directly without adding to undo stack
+              if (nodeData.preview) {
+                command.execute(draft.levels, draft.nodeIndex)
+              } else {
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
             }),
           )
 
@@ -1219,19 +1224,97 @@ const useStore = create<StoreState>()(
         },
 
         updateNode: (nodeId, updates) => {
+          let resultNodeId = nodeId
+
           set(
             produce((draft) => {
-              const command = new UpdateNodeCommand(nodeId, updates)
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              const node = draft.nodeIndex.get(nodeId)
+
+              // Check if we're committing a preview node (preview: true -> false)
+              const isCommittingPreview = node?.preview === true && updates.preview === false
+
+              if (isCommittingPreview) {
+                // Get full node data using current() to get plain object
+                const previewNode = current(node)
+
+                // Delete preview node (no undo)
+                const deleteCommand = new DeleteNodeCommand(nodeId)
+                deleteCommand.execute(draft.levels, draft.nodeIndex)
+
+                // Prepare new node data
+                const { preview, id, children, parent, ...nodeData } = previewNode as any
+
+                // Clean up name if not explicitly provided in updates
+                const cleanName =
+                  updates.name || nodeData.name.replace(' Preview', '').replace('Preview ', '')
+
+                // Merge with updates
+                const newNodeData = {
+                  ...nodeData,
+                  ...updates,
+                  name: cleanName,
+                  preview: false, // Ensure preview is false
+                }
+
+                // Handle children - always preserve the children property if it exists
+                if (children !== undefined) {
+                  if (children.length > 0) {
+                    // Recursively strip preview/id/parent from children
+                    newNodeData.children = children.map((child: any) => {
+                      const {
+                        preview: childPreview,
+                        id: childId,
+                        parent: childParent,
+                        ...childData
+                      } = child
+                      return {
+                        ...childData,
+                        name: childData.name.replace(' Preview', '').replace('Preview ', ''),
+                      }
+                    })
+                  } else {
+                    // Preserve empty children array
+                    newNodeData.children = []
+                  }
+                }
+
+                // Create new real node (with undo)
+                const addCommand = new AddNodeCommand(newNodeData, parent)
+                resultNodeId = addCommand.getNodeId()
+                draft.commandManager.execute(addCommand, draft.levels, draft.nodeIndex)
+              } else {
+                // Normal update
+                const command = new UpdateNodeCommand(nodeId, updates)
+
+                // Check if we're updating a preview node
+                const isPreviewNode = node?.preview === true
+
+                if (!isPreviewNode) {
+                  draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+                } else {
+                  // Preview node update - execute directly without undo tracking
+                  command.execute(draft.levels, draft.nodeIndex)
+                }
+              }
             }),
           )
+
+          return resultNodeId
         },
 
         deleteNode: (nodeId) => {
           set(
             produce((draft) => {
               const command = new DeleteNodeCommand(nodeId)
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+
+              // Check if we're deleting a preview node
+              const node = draft.nodeIndex.get(nodeId)
+              if (node?.preview) {
+                // Preview node - execute directly without undo tracking
+                command.execute(draft.levels, draft.nodeIndex)
+              } else {
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
             }),
           )
         },
@@ -1395,7 +1478,8 @@ const useStore = create<StoreState>()(
             .filter((node) => !node.preview) // Remove preview nodes
             .map((node) => ({
               ...node,
-              children: node.children.length > 0 ? filterPreviewNodes(node.children) : [],
+              children:
+                node.children && node.children.length > 0 ? filterPreviewNodes(node.children) : [],
             }))
         }
 

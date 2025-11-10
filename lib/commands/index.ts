@@ -19,9 +19,6 @@ export interface Command {
 
   /** Undo the command */
   undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void
-
-  /** Whether this command should be added to undo stack (false for preview operations) */
-  shouldTrack(): boolean
 }
 
 // ============================================================================
@@ -104,11 +101,6 @@ export class AddNodeCommand implements Command {
 
     findAndDelete(levels)
   }
-
-  shouldTrack(): boolean {
-    // Don't track preview nodes
-    return !this.nodeData.preview
-  }
 }
 
 // ============================================================================
@@ -119,7 +111,6 @@ export class UpdateNodeCommand implements Command {
   private nodeId: string
   private updates: Partial<AnyNode>
   private previousState: Partial<AnyNode> | null = null
-  private wasPreviewNode = false
 
   constructor(nodeId: string, updates: Partial<AnyNode>) {
     this.nodeId = nodeId
@@ -140,8 +131,6 @@ export class UpdateNodeCommand implements Command {
               this.previousState[key as keyof BaseNode] =
                 value && typeof value === 'object' ? current(value) : value
             }
-            // Track if this was a preview node
-            this.wasPreviewNode = node.preview === true
           }
 
           Object.assign(node, this.updates)
@@ -177,16 +166,6 @@ export class UpdateNodeCommand implements Command {
     }
 
     findAndRestore(levels)
-  }
-
-  shouldTrack(): boolean {
-    // Don't track updates to preview nodes
-    if (this.wasPreviewNode) {
-      // Unless we're committing the preview (setting preview: false)
-      return this.updates.preview === false
-    }
-    // Track updates to non-preview nodes
-    return true
   }
 }
 
@@ -267,11 +246,6 @@ export class DeleteNodeCommand implements Command {
 
     findAndRestore(levels)
   }
-
-  shouldTrack(): boolean {
-    // Don't track deletion of preview nodes
-    return !this.deletedNode?.preview
-  }
 }
 
 // ============================================================================
@@ -286,13 +260,13 @@ export class CommandManager {
   execute(command: Command, levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
     command.execute(levels, nodeIndex)
 
-    if (command.shouldTrack()) {
-      this.undoStack.push(command)
-      if (this.undoStack.length > this.maxStackSize) {
-        this.undoStack.shift()
-      }
-      this.redoStack = [] // Clear redo stack on new action
+    // Always add to undo stack when using CommandManager
+    // (Preview operations bypass CommandManager entirely)
+    this.undoStack.push(command)
+    if (this.undoStack.length > this.maxStackSize) {
+      this.undoStack.shift()
     }
+    this.redoStack = [] // Clear redo stack on new action
   }
 
   undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): boolean {
