@@ -1,19 +1,13 @@
 'use client'
 
-import { StackIcon } from '@phosphor-icons/react'
-import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import { StackIcon } from '@phosphor-icons/react'
+import { Camera, Hammer, Image, MousePointer2, Trash2 } from 'lucide-react'
 
-export function ControlModeMenu({
-  className,
-  onModeChange,
-}: {
-  className?: string
-  onModeChange?: () => void
-}) {
+export function ControlModeMenu({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
   const setControlMode = useEditor((state) => state.setControlMode)
   const activeTool = useEditor((state) => state.activeTool)
@@ -24,9 +18,6 @@ export function ControlModeMenu({
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
   const handleModeClick = (mode: ControlMode) => {
-    // Clear any in-progress placement states when switching modes
-    onModeChange?.()
-
     // If switching to building mode without an active tool, default to 'wall'
     if (mode === 'building' && !activeTool) {
       setActiveTool('wall')
