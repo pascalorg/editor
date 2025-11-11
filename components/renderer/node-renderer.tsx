@@ -10,12 +10,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
-import { GroupRenderer } from './group-renderer'
 import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
@@ -132,10 +131,7 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
   const selectedElements = useEditor((state) => state.selectedElements)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
-  const isSelected = useMemo(
-    () => selectedElements.includes(node.id),
-    [selectedElements, node],
-  )
+  const isSelected = useMemo(() => selectedElements.includes(node.id), [selectedElements, node])
 
   // Filter nodes based on viewer display mode (only in viewer mode)
   const shouldRenderNode = useMemo(() => {
@@ -158,39 +154,126 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return true
   }, [node.type, viewerDisplayMode, isViewer])
 
+  const groupRef = useRef<THREE.Group>(null)
+
   // Don't render if filtered out by display mode
   if (!shouldRenderNode && node.type !== 'level') {
     return null
   }
 
   return (
-    <group
-      name={node.id}
-      position={gridItemPosition}
-      rotation-y={(node as unknown as GridItem).rotation || 0}
-      userData={{
-        nodeId: node.id,
-      }}
-      visible={node.visible}
-    >
-      {node.type === 'group' && <GroupRenderer node={node} />}
-      {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
-      {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
-      {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
-      {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
-      {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
-      {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
-      {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
+    <>
+      <group
+        name={node.id}
+        position={gridItemPosition}
+        rotation-y={(node as unknown as GridItem).rotation || 0}
+        userData={{
+          nodeId: node.id,
+        }}
+        visible={node.visible}
+      >
+        <group ref={groupRef}>
+          {/* {node.type === 'group' && <GroupRenderer node={node} />} */}
+          {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
+          {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
+          {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
+          {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
+          {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
+          {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
+          {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
 
-      {/* Selection outline for grid items */}
-      {(node as unknown as GridItem).size && isSelected && (
+          {/* Selection outline for grid items */}
+          {/* {(node as unknown as GridItem).size && isSelected && (
         <SelectionOutline gridItem={node as unknown as GridItem} />
-      )}
+      )} */}
 
-      {/* Recursively render children INSIDE parent group - children use relative positions */}
-      {node.children.map((childNode) => (
-        <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
-      ))}
-    </group>
+          {/* Recursively render children INSIDE parent group - children use relative positions */}
+          {node.children.map((childNode) => (
+            <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
+          ))}
+        </group>
+        {isSelected && <SelectionBox group={groupRef} />}
+      </group>
+    </>
+  )
+}
+
+import { Edges } from '@react-three/drei'
+import { useState } from 'react'
+
+interface SelectionBoxProps {
+  group: React.RefObject<THREE.Group>
+}
+
+export function SelectionBox({ group }: SelectionBoxProps) {
+  const [size, setSize] = useState<THREE.Vector3 | null>(null)
+  const [center, setCenter] = useState<THREE.Vector3 | null>(null)
+
+  useEffect(() => {
+    if (!group.current) return
+
+    const updateBounds = () => {
+      const innerGroup = group.current!
+
+      // Force update of world matrices to ensure accurate calculation
+      innerGroup.updateMatrixWorld(true)
+
+      // Calculate bounding box in local space by manually computing it
+      const box = new THREE.Box3()
+      let hasContent = false
+
+      innerGroup.traverse((child) => {
+        if (child === innerGroup) return
+
+        // For meshes with geometry
+        if (child instanceof THREE.Mesh && child.geometry) {
+          const geometry = child.geometry
+
+          if (!geometry.boundingBox) {
+            geometry.computeBoundingBox()
+          }
+
+          if (geometry.boundingBox) {
+            hasContent = true
+            // Get the geometry bounds in local space
+            const localBox = geometry.boundingBox.clone()
+
+            // Transform by the mesh's matrix (relative to inner group)
+            // We need the transform from inner group to this child
+            const relativeMatrix = new THREE.Matrix4()
+            relativeMatrix.copy(child.matrix)
+
+            // If child has a parent chain within innerGroup, accumulate their matrices
+            let current = child.parent
+            while (current && current !== innerGroup) {
+              relativeMatrix.premultiply(current.matrix)
+              current = current.parent
+            }
+
+            localBox.applyMatrix4(relativeMatrix)
+            box.union(localBox)
+          }
+        }
+      })
+
+      if (!hasContent || box.isEmpty()) return
+
+      const size = box.getSize(new THREE.Vector3())
+      const center = box.getCenter(new THREE.Vector3())
+      setSize(size)
+      setCenter(center)
+    }
+
+    updateBounds()
+  }, [group])
+
+  if (!(size && center)) return null
+
+  return (
+    <mesh position={center}>
+      <boxGeometry args={[size.x, size.y, size.z]} />
+      <meshBasicMaterial opacity={0} transparent />
+      <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
+    </mesh>
   )
 }
