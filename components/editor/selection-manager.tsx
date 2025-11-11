@@ -8,31 +8,6 @@ function SelectionManager() {
 
   const controlMode = useEditor((state) => state.controlMode)
 
-  // const onPointerDown = useCallback(
-  //   (e: ThreeEvent<PointerEvent>) => {
-  //     e.stopPropagation()
-  //     console.log('NodeRenderer onPointerDown', node.id)
-  //     // Only handle selection for building element types
-  //     const buildingElementTypes = ['wall', 'roof', 'door', 'window', 'column', 'group']
-  //     if (!buildingElementTypes.includes(node.type)) {
-  //       return
-  //     }
-
-  //     const updatedSelection = handleSimpleClick(
-  //       selectedElements,
-  //       node.id,
-  //       node.type as 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group',
-  //       {
-  //         metaKey: e.metaKey,
-  //         ctrlKey: e.ctrlKey,
-  //         shiftKey: e.shiftKey,
-  //       },
-  //     )
-  //     setSelectedElements(updatedSelection)
-  //   },
-  //   [node, selectedElements, setSelectedElements],
-  // )
-
   const { camera, scene, gl, raycaster } = useThree()
   const currentFloorId = useEditor((state) => state.selectedFloorId)
 
