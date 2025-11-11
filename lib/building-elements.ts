@@ -264,6 +264,10 @@ export function isElementSelected(
 
 /**
  * Toggle element selection (with multi-select support)
+ *
+ * Figma-style behavior:
+ * - multiSelect=false (regular click): Always select only this element, deselect all others
+ * - multiSelect=true (Shift/Cmd+click): Toggle this element in/out of selection
  */
 export function toggleElementSelection(
   selectedElements: SelectedElement[],
@@ -274,23 +278,20 @@ export function toggleElementSelection(
   const isSelected = isElementSelected(selectedElements, elementId, type)
 
   if (multiSelect) {
-    // Add/remove from selection
+    // Add/remove from selection (toggle)
     if (isSelected) {
       return selectedElements.filter((e) => !(e.type === type && e.id === elementId))
     }
     return [...selectedElements, { id: elementId, type }]
   }
 
-  // Single select: replace selection (keep selection if clicking same item)
-  if (isSelected) {
-    // Keep the current selection if clicking the same item
-    return selectedElements
-  }
+  // Single select: Always replace selection with only this element
   return [{ id: elementId, type }]
 }
 
 /**
- * Select range of elements of the same type
+ * Select range of elements of the same type (Figma-style)
+ * Selects from the last selected item to the clicked item, replacing selection
  */
 export function selectElementRange(
   selectedElements: SelectedElement[],
@@ -302,37 +303,33 @@ export function selectElementRange(
   if (clickedIndex === -1) return selectedElements
 
   // Find all selected elements of the same type
-  const selectedIndices = selectedElements
-    .filter((e) => e.type === type)
-    .map((e) => segments.findIndex((seg) => seg.id === e.id))
-    .filter((idx) => idx !== -1)
+  const sameTypeSelections = selectedElements.filter((e) => e.type === type)
 
-  if (selectedIndices.length === 0) {
+  if (sameTypeSelections.length === 0) {
     // No existing selection of this type, just select the clicked element
-    return [...selectedElements, { id: clickedId, type }]
+    return [{ id: clickedId, type }]
   }
 
-  // Find closest selected element
-  const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-    const currentDist = Math.abs(current - clickedIndex)
-    const closestDist = Math.abs(closest - clickedIndex)
-    return currentDist < closestDist ? current : closest
-  })
+  // Get the last selected element of this type
+  const lastSelected = sameTypeSelections[sameTypeSelections.length - 1]
+  const lastSelectedIndex = segments.findIndex((seg) => seg.id === lastSelected.id)
 
-  // Select all elements between closest and clicked
-  const start = Math.min(closestSelectedIndex, clickedIndex)
-  const end = Math.max(closestSelectedIndex, clickedIndex)
+  if (lastSelectedIndex === -1) {
+    // Fallback: just select the clicked element
+    return [{ id: clickedId, type }]
+  }
 
-  // Keep existing selections of other types
-  const otherTypeSelections = selectedElements.filter((e) => e.type !== type)
+  // Select all elements between last selected and clicked
+  const start = Math.min(lastSelectedIndex, clickedIndex)
+  const end = Math.max(lastSelectedIndex, clickedIndex)
 
-  // Add range of this type
+  // Create range selection (replaces all previous selections)
   const rangeSelections: SelectedElement[] = []
   for (let i = start; i <= end; i++) {
     rangeSelections.push({ id: segments[i].id, type })
   }
 
-  return [...otherTypeSelections, ...rangeSelections]
+  return rangeSelections
 }
 
 /**
@@ -383,6 +380,39 @@ export function handleElementClick(options: {
   if (event.shiftKey && selectedElements.length > 0) {
     // Shift+click: select range
     return selectElementRange(selectedElements, segments, elementId, type)
+  }
+
+  // Regular click: single select
+  return toggleElementSelection(selectedElements, elementId, type, false)
+}
+
+/**
+ * Handle simple element click without range selection support
+ * Used for nested elements like doors/windows or groups
+ *
+ * Figma-style behavior:
+ * - Regular click: Select only this element
+ * - Shift+click: Add to selection
+ * - Cmd/Ctrl+click: Toggle in selection
+ */
+export function handleSimpleClick(
+  selectedElements: SelectedElement[],
+  elementId: string,
+  type: BuildingElementType,
+  event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
+): SelectedElement[] {
+  if (event.metaKey || event.ctrlKey) {
+    // Cmd/Ctrl+click: toggle selection
+    return toggleElementSelection(selectedElements, elementId, type, true)
+  }
+
+  if (event.shiftKey) {
+    // Shift+click: add to selection (don't remove if already selected)
+    const isSelected = isElementSelected(selectedElements, elementId, type)
+    if (!isSelected) {
+      return [...selectedElements, { id: elementId, type }]
+    }
+    return selectedElements
   }
 
   // Regular click: single select

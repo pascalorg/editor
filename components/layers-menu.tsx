@@ -36,6 +36,7 @@ import {
   getAllElementsOfType,
   getElementLabel,
   getElementsOfType,
+  handleSimpleClick,
   isElementSelected,
   selectElementRange,
   toggleElementSelection,
@@ -216,8 +217,14 @@ function DraggableLevelItem({
                         )}
                         onClick={(e) => {
                           e.stopPropagation()
-                          // Groups can be selected for deletion
-                          setSelectedElements([{ id: element.id, type: 'group' }])
+                          // Groups can be selected with Figma-style modifiers
+                          const updatedSelection = handleSimpleClick(
+                            selectedElements,
+                            element.id,
+                            'group',
+                            e as React.MouseEvent,
+                          )
+                          setSelectedElements(updatedSelection)
                           // Switch to building mode unless we're in select mode
                           if (controlMode !== 'select') {
                             setControlMode('building')
@@ -405,7 +412,13 @@ function DraggableLevelItem({
                                 )}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setSelectedElements([{ id: child.id, type: child.type }])
+                                  const updatedSelection = handleSimpleClick(
+                                    selectedElements,
+                                    child.id,
+                                    child.type as BuildingElementType,
+                                    e as React.MouseEvent,
+                                  )
+                                  setSelectedElements(updatedSelection)
                                   // Switch to building mode unless we're in select mode
                                   if (controlMode !== 'select') {
                                     setControlMode('building')
@@ -844,25 +857,23 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         next = [...selectedImageIds, imageId]
       }
     } else if (event.shiftKey && selectedImageIds.length > 0) {
-      // Shift+click: select range
-      const selectedIndices = selectedImageIds
-        .map((id) => images.findIndex((img) => img.id === id))
-        .filter((idx) => idx !== -1)
+      // Shift+click: select range from last selected to clicked (Figma-style)
+      const lastSelectedId = selectedImageIds[selectedImageIds.length - 1]
+      const lastSelectedIndex = images.findIndex((img) => img.id === lastSelectedId)
 
-      const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-        const currentDist = Math.abs(current - clickedIndex)
-        const closestDist = Math.abs(closest - clickedIndex)
-        return currentDist < closestDist ? current : closest
-      })
+      if (lastSelectedIndex !== -1) {
+        const start = Math.min(lastSelectedIndex, clickedIndex)
+        const end = Math.max(lastSelectedIndex, clickedIndex)
 
-      const start = Math.min(closestSelectedIndex, clickedIndex)
-      const end = Math.max(closestSelectedIndex, clickedIndex)
-
-      const rangeIds = []
-      for (let i = start; i <= end; i++) {
-        rangeIds.push(images[i].id)
+        const rangeIds = []
+        for (let i = start; i <= end; i++) {
+          rangeIds.push(images[i].id)
+        }
+        next = rangeIds
+      } else {
+        // Fallback if last selected not found
+        next = [imageId]
       }
-      next = [...new Set([...selectedImageIds, ...rangeIds])]
     } else {
       // Regular click: select only this image
       next = [imageId]
@@ -886,25 +897,23 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         next = [...selectedScanIds, scanId]
       }
     } else if (event.shiftKey && selectedScanIds.length > 0) {
-      // Shift+click: select range
-      const selectedIndices = selectedScanIds
-        .map((id) => scans.findIndex((scan) => scan.id === id))
-        .filter((idx) => idx !== -1)
+      // Shift+click: select range from last selected to clicked (Figma-style)
+      const lastSelectedId = selectedScanIds[selectedScanIds.length - 1]
+      const lastSelectedIndex = scans.findIndex((scan) => scan.id === lastSelectedId)
 
-      const closestSelectedIndex = selectedIndices.reduce((closest, current) => {
-        const currentDist = Math.abs(current - clickedIndex)
-        const closestDist = Math.abs(closest - clickedIndex)
-        return currentDist < closestDist ? current : closest
-      })
+      if (lastSelectedIndex !== -1) {
+        const start = Math.min(lastSelectedIndex, clickedIndex)
+        const end = Math.max(lastSelectedIndex, clickedIndex)
 
-      const start = Math.min(closestSelectedIndex, clickedIndex)
-      const end = Math.max(closestSelectedIndex, clickedIndex)
-
-      const rangeIds = []
-      for (let i = start; i <= end; i++) {
-        rangeIds.push(scans[i].id)
+        const rangeIds = []
+        for (let i = start; i <= end; i++) {
+          rangeIds.push(scans[i].id)
+        }
+        next = rangeIds
+      } else {
+        // Fallback if last selected not found
+        next = [scanId]
       }
-      next = [...new Set([...selectedScanIds, ...rangeIds])]
     } else {
       // Regular click: select only this scan
       next = [scanId]

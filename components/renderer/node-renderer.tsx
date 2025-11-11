@@ -1,5 +1,8 @@
+import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
+import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import { toggleElementSelection } from '@/lib/building-elements'
+import { handleSimpleClick } from '@/lib/building-elements'
 import type {
   BaseNode,
   ColumnNode,
@@ -11,9 +14,6 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
-import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
-import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
@@ -165,11 +165,21 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      const updatedSelection = toggleElementSelection(
+      // Only handle selection for building element types
+      const buildingElementTypes = ['wall', 'roof', 'door', 'window', 'column', 'group']
+      if (!buildingElementTypes.includes(node.type)) {
+        return
+      }
+
+      const updatedSelection = handleSimpleClick(
         selectedElements,
         node.id,
-        node.type,
-        e.shiftKey,
+        node.type as 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group',
+        {
+          metaKey: e.metaKey,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+        },
       )
       setSelectedElements(updatedSelection)
     },

@@ -1,9 +1,5 @@
 'use client'
 
-import { ColumnBuilder } from '@/components/editor/elements/column-builder'
-import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ImageBuilder } from '@/components/editor/elements/image-builder'
-import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -15,6 +11,10 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ColumnBuilder } from '@/components/editor/elements/column-builder'
+import { DoorBuilder } from '@/components/editor/elements/door-builder'
+import { ImageBuilder } from '@/components/editor/elements/image-builder'
+import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 // import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
