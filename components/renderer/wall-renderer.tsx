@@ -8,8 +8,8 @@ import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
+import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
 import { findAncestors } from '@/lib/nodes/utils'
-import type { GridPoint, WallNode, GridItem, BaseNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -230,6 +230,12 @@ export function WallRenderer({ node }: WallRendererProps) {
 
   // Check if this is a preview node
   const isPreview = node.preview === true
+
+  // Determine preview colors based on canPlace
+  const canPlaceWall = node.canPlace !== false // Default to true if undefined
+  const previewColor = canPlaceWall ? '#44ff44' : '#ff4444'
+  const previewEmissive = canPlaceWall ? '#22aa22' : '#aa2222'
+  const previewLineDim = canPlaceWall ? '#336633' : '#663333'
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)
@@ -461,7 +467,7 @@ export function WallRenderer({ node }: WallRendererProps) {
         <>
           {/* Preview line - occluded version (dimmer) */}
           <Line
-            color="#336633"
+            color={previewLineDim}
             dashed={false}
             depthTest={false}
             lineWidth={2}
@@ -475,7 +481,7 @@ export function WallRenderer({ node }: WallRendererProps) {
 
           {/* Preview line - visible version (brighter) */}
           <Line
-            color="#44ff44"
+            color={previewColor}
             dashed={false}
             depthTest={true}
             lineWidth={3}
@@ -488,10 +494,10 @@ export function WallRenderer({ node }: WallRendererProps) {
           {/* Occluded/behind version - dimmer, shows through everything */}
           <mesh geometry={wallGeometry} renderOrder={1}>
             <meshStandardMaterial
-              color="#44ff44"
+              color={previewColor}
               depthTest={false}
               depthWrite={false}
-              emissive="#22aa22"
+              emissive={previewEmissive}
               emissiveIntensity={0.1}
               opacity={0.15}
               transparent
@@ -501,10 +507,10 @@ export function WallRenderer({ node }: WallRendererProps) {
           {/* Visible/front version - brighter, only shows when not occluded */}
           <mesh geometry={wallGeometry} renderOrder={2}>
             <meshStandardMaterial
-              color="#44ff44"
+              color={previewColor}
               depthTest={true}
               depthWrite={false}
-              emissive="#22aa22"
+              emissive={previewEmissive}
               emissiveIntensity={0.4}
               opacity={0.5}
               transparent

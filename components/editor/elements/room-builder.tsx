@@ -134,12 +134,21 @@ export function RoomBuilder() {
 
         roomStateRef.current.previewRoomId = previewRoomId
       } else {
-        // Second click: commit the preview room
+        // Second click: commit or delete the preview room based on canPlace
         const previewRoomId = roomStateRef.current.previewRoomId
 
         if (previewRoomId) {
-          // Commit the preview by setting preview: false (useEditor handles the conversion)
-          updateNode(previewRoomId, { preview: false })
+          // Get the room node to check if it can be placed
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
+
+          if (roomNode && 'canPlace' in roomNode && roomNode.canPlace === false) {
+            // Room is invalid (too small), delete it
+            deleteNode(previewRoomId)
+          } else {
+            // Room is valid, commit the preview by setting preview: false
+            updateNode(previewRoomId, { preview: false })
+          }
         }
 
         // Reset state
@@ -171,10 +180,15 @@ export function RoomBuilder() {
           const roomWidth = Math.abs(x2 - x1)
           const roomHeight = Math.abs(y2 - y1)
 
+          // Room can only be placed if both width and height are at least 1 grid unit
+          // This ensures walls don't overlap (e.g., when width=0, left and right walls would be at same position)
+          const canPlace = roomWidth >= 1 && roomHeight >= 1
+
           // Update room group with position and size
           updateNode(previewRoomId, {
             position: [roomX, roomY] as [number, number],
             size: [roomWidth, roomHeight] as [number, number],
+            canPlace,
           })
 
           // Get the room node and update its walls with RELATIVE positions
@@ -184,6 +198,7 @@ export function RoomBuilder() {
           if (roomNode && 'children' in roomNode && roomNode.children.length === 4) {
             const [bottomWall, rightWall, topWall, leftWall] = roomNode.children
 
+            // All walls inherit the room's canPlace status since walls overlapping means the room is invalid
             // Bottom wall: (0,0) -> (roomWidth,0) - horizontal, going right
             const bottomRotation = Math.atan2(0, roomWidth)
             updateNode(bottomWall.id, {
@@ -192,6 +207,7 @@ export function RoomBuilder() {
               rotation: bottomRotation,
               start: { x: 0, z: 0 }, // RELATIVE to room
               end: { x: roomWidth, z: 0 },
+              canPlace,
             })
 
             // Right wall: (roomWidth,0) -> (roomWidth,roomHeight) - vertical, going up
@@ -202,6 +218,7 @@ export function RoomBuilder() {
               rotation: rightRotation,
               start: { x: roomWidth, z: 0 }, // RELATIVE to room
               end: { x: roomWidth, z: roomHeight },
+              canPlace,
             })
 
             // Top wall: (roomWidth,roomHeight) -> (0,roomHeight) - horizontal, going left
@@ -212,6 +229,7 @@ export function RoomBuilder() {
               rotation: topRotation,
               start: { x: roomWidth, z: roomHeight }, // RELATIVE to room
               end: { x: 0, z: roomHeight },
+              canPlace,
             })
 
             // Left wall: (0,roomHeight) -> (0,0) - vertical, going down
@@ -222,6 +240,7 @@ export function RoomBuilder() {
               rotation: leftRotation,
               start: { x: 0, z: roomHeight }, // RELATIVE to room
               end: { x: 0, z: 0 },
+              canPlace,
             })
           }
         }
