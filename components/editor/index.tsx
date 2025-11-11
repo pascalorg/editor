@@ -1,5 +1,9 @@
 'use client'
 
+import { ColumnBuilder } from '@/components/editor/elements/column-builder'
+import { DoorBuilder } from '@/components/editor/elements/door-builder'
+import { ImageBuilder } from '@/components/editor/elements/image-builder'
+import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 import { animated, useSpring } from '@react-spring/three'
 import {
   Environment,
@@ -11,10 +15,6 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ColumnBuilder } from '@/components/editor/elements/column-builder'
-import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ImageBuilder } from '@/components/editor/elements/image-builder'
-import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 // import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
@@ -30,6 +30,7 @@ import { WallBuilder } from './elements/wall-builder'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { ProximityGrid } from './proximity-grid'
+import SelectionManager from './selection-manager'
 
 export const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -568,6 +569,7 @@ export default function Editor({ className }: { className?: string }) {
           })}
       </group>
 
+      {controlMode === 'select' && <SelectionManager />}
       <CustomControls />
 
       <Environment preset="city" />

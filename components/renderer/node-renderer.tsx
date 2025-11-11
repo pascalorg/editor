@@ -1,8 +1,4 @@
-import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import { handleSimpleClick } from '@/lib/building-elements'
 import type {
   BaseNode,
   ColumnNode,
@@ -14,6 +10,8 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
+import { useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
@@ -160,32 +158,6 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return true
   }, [node.type, viewerDisplayMode, isViewer])
 
-  const setSelectedElements = useEditor((state) => state.setSelectedElements)
-
-  const onPointerDown = useCallback(
-    (e: ThreeEvent<PointerEvent>) => {
-      e.stopPropagation()
-      // Only handle selection for building element types
-      const buildingElementTypes = ['wall', 'roof', 'door', 'window', 'column', 'group']
-      if (!buildingElementTypes.includes(node.type)) {
-        return
-      }
-
-      const updatedSelection = handleSimpleClick(
-        selectedElements,
-        node.id,
-        node.type as 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group',
-        {
-          metaKey: e.metaKey,
-          ctrlKey: e.ctrlKey,
-          shiftKey: e.shiftKey,
-        },
-      )
-      setSelectedElements(updatedSelection)
-    },
-    [node, selectedElements, setSelectedElements],
-  )
-
   // Don't render if filtered out by display mode
   if (!shouldRenderNode && node.type !== 'level') {
     return null
@@ -193,9 +165,12 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
 
   return (
     <group
-      onPointerDown={onPointerDown}
+      name={node.id}
       position={gridItemPosition}
       rotation-y={(node as unknown as GridItem).rotation || 0}
+      userData={{
+        nodeId: node.id,
+      }}
       visible={node.visible}
     >
       {node.type === 'group' && <GroupRenderer node={node} />}
