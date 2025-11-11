@@ -177,7 +177,7 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
       case 'wall':
       case 'roof':
       case 'column':
-        setSelectedElements([{ id: node.id, type: node.type }])
+        setSelectedElements([node.id])
         break
       case 'reference-image':
         setSelectedImageIds([node.id])
@@ -190,7 +190,7 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
         if (node.parent) {
           const parentNode = nodeIndex.get(node.parent)
           if (parentNode?.type === 'wall') {
-            setSelectedElements([{ id: node.parent, type: 'wall' }])
+            setSelectedElements([node.parent])
           }
         }
     }
@@ -422,7 +422,7 @@ export function NodesDebugger() {
       case 'wall':
       case 'roof':
       case 'column':
-        setSelectedElements([{ id: node.id, type: node.type }])
+        setSelectedElements([node.id])
         break
       case 'reference-image':
         setSelectedImageIds([node.id])
@@ -435,7 +435,7 @@ export function NodesDebugger() {
         if (node.parent) {
           const parentNode = nodeIndex.get(node.parent)
           if (parentNode?.type === 'wall') {
-            setSelectedElements([{ id: node.parent, type: 'wall' }])
+            setSelectedElements([node.parent])
           }
         }
     }

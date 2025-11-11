@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
 
 function SelectionManager() {
-  const setSelectedElements = useEditor((state) => state.setSelectedElements)
+  const handleElementSelect = useEditor((state) => state.handleElementSelect)
 
   const controlMode = useEditor((state) => state.controlMode)
 
@@ -35,8 +35,6 @@ function SelectionManager() {
 
   const { camera, scene, gl, raycaster } = useThree()
   const currentFloorId = useEditor((state) => state.selectedFloorId)
-
-  console.log('currentFloorId in SelectionManager:', currentFloorId)
 
   const currentFloor = useMemo(
     () => (currentFloorId ? scene.getObjectByName(currentFloorId) : null),
@@ -103,24 +101,14 @@ function SelectionManager() {
       if (candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
-        // const updatedSelection = handleSimpleClick(
-        // selectedElements,
-        //   topCandidate.nodeId,
-        //   node.type as 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group',
-        //   {
-        //     metaKey: event.metaKey,
-        //     ctrlKey: event.ctrlKey,
-        //     shiftKey: event.shiftKey,
-        //   },
-        // )
-        // setSelectedElements(updatedSelection)
+        handleElementSelect(topCandidate.nodeId, event)
       }
       // Process intersections...
     }
 
     gl.domElement.addEventListener('pointerdown', handlePointerDown)
     return () => gl.domElement.removeEventListener('pointerdown', handlePointerDown)
-  }, [camera, scene, gl, raycaster, currentFloor])
+  }, [camera, scene, gl, raycaster, currentFloor, handleElementSelect])
 
   return null
 }

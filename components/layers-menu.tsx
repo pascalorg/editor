@@ -87,7 +87,11 @@ interface DraggableLevelItemProps {
   selectedImageIds: string[]
   selectedScanIds: string[]
   controlMode: string
-  handleElementSelect: (id: string, type: any, event: React.MouseEvent) => void
+  handleElementSelect: (
+    elementId: string,
+    event: React.MouseEvent,
+    segments?: { id: string }[],
+  ) => void
   handleImageSelect: (id: string, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
   toggleFloorVisibility: (id: string) => void
@@ -212,7 +216,7 @@ function DraggableLevelItem({
                     >
                       <TreeNodeTrigger
                         className={cn(
-                          isElementSelected(selectedElements, element.id, 'group') && 'bg-accent',
+                          isElementSelected(selectedElements, element.id) && 'bg-accent',
                           element.visible === false && 'opacity-50',
                         )}
                         onClick={(e) => {
@@ -221,7 +225,6 @@ function DraggableLevelItem({
                           const updatedSelection = handleSimpleClick(
                             selectedElements,
                             element.id,
-                            'group',
                             e as React.MouseEvent,
                           )
                           setSelectedElements(updatedSelection)
@@ -266,13 +269,12 @@ function DraggableLevelItem({
                               >
                                 <TreeNodeTrigger
                                   className={cn(
-                                    isElementSelected(selectedElements, wall.id, 'wall') &&
-                                      'bg-accent',
+                                    isElementSelected(selectedElements, wall.id) && 'bg-accent',
                                     wall.visible === false && 'opacity-50',
                                   )}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    handleElementSelect(wall.id, 'wall', e as any)
+                                    handleElementSelect(wall.id, e as React.MouseEvent, groupWalls)
                                   }}
                                 >
                                   <TreeExpander hasChildren={wallChildren.length > 0} />
@@ -307,14 +309,11 @@ function DraggableLevelItem({
                                         >
                                           <TreeNodeTrigger
                                             className={cn(
-                                              selectedElements.find((el) => el.id === child.id) &&
-                                                'bg-accent',
+                                              selectedElements.includes(child.id) && 'bg-accent',
                                             )}
                                             onClick={(e) => {
                                               e.stopPropagation()
-                                              setSelectedElements([
-                                                { id: child.id, type: child.type },
-                                              ])
+                                              setSelectedElements([child.id])
                                               // Switch to building mode unless we're in select mode
                                               if (controlMode !== 'select') {
                                                 setControlMode('building')
@@ -373,12 +372,12 @@ function DraggableLevelItem({
                   >
                     <TreeNodeTrigger
                       className={cn(
-                        isElementSelected(selectedElements, element.id, type) && 'bg-accent',
+                        isElementSelected(selectedElements, element.id) && 'bg-accent',
                         element.visible === false && 'opacity-50',
                       )}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleElementSelect(element.id, type, e as any)
+                        handleElementSelect(element.id, e as React.MouseEvent, all)
                       }}
                     >
                       <TreeExpander hasChildren={hasChildren} />
@@ -408,14 +407,13 @@ function DraggableLevelItem({
                             >
                               <TreeNodeTrigger
                                 className={cn(
-                                  selectedElements.find((el) => el.id === child.id) && 'bg-accent',
+                                  selectedElements.includes(child.id) && 'bg-accent',
                                 )}
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   const updatedSelection = handleSimpleClick(
                                     selectedElements,
                                     child.id,
-                                    child.type as BuildingElementType,
                                     e as React.MouseEvent,
                                   )
                                   setSelectedElements(updatedSelection)
@@ -817,33 +815,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const setBuildingElementOpacity = useEditor((state) => state.setBuildingElementOpacity)
   const setImageOpacity = useEditor((state) => state.setImageOpacity)
   const setScanOpacity = useEditor((state) => state.setScanOpacity)
-
-  const handleElementSelect = (
-    elementId: string,
-    type: BuildingElementType,
-    event: React.MouseEvent,
-  ) => {
-    const segments = getAllElementsOfType(components, selectedFloorId || '', type)
-
-    if (event.metaKey || event.ctrlKey) {
-      // Cmd/Ctrl+click: toggle selection
-      const updatedSelection = toggleElementSelection(selectedElements, elementId, type, true)
-      setSelectedElements(updatedSelection)
-    } else if (event.shiftKey && selectedElements.length > 0) {
-      // Shift+click: select range
-      const updatedSelection = selectElementRange(selectedElements, segments, elementId, type)
-      setSelectedElements(updatedSelection)
-    } else {
-      // Regular click: single select
-      const updatedSelection = toggleElementSelection(selectedElements, elementId, type, false)
-      setSelectedElements(updatedSelection)
-    }
-
-    // Switch to building mode unless we're in select mode
-    if (controlMode !== 'select') {
-      setControlMode('building')
-    }
-  }
+  const handleElementSelect = useEditor((state) => state.handleElementSelect)
 
   const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
     const clickedIndex = images.findIndex((img) => img.id === imageId)
@@ -994,14 +966,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     let hasChanges = false
 
     // Expand parents of selected elements (walls, roofs, columns, doors, windows)
-    selectedElements.forEach((selected) => {
+    selectedElements.forEach((selectedId) => {
       // Find which level contains this element
       const levelId = components.find((c) => {
         if (c.type === 'wall' || c.type === 'roof' || c.type === 'column') {
-          return c.data?.segments?.some?.((seg: any) => seg.id === selected.id)
+          return c.data?.segments?.some?.((seg: any) => seg.id === selectedId)
         }
         // For doors/windows, find by their direct match
-        return c.id === selected.id
+        return c.id === selectedId
       })?.group
 
       if (levelId) {
@@ -1017,8 +989,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
 
       // If it's a door or window, also expand its parent wall
-      if (selected.type === 'door' || selected.type === 'window') {
-        const component = components.find((c) => c.id === selected.id)
+      const component = components.find((c) => c.id === selectedId)
+      if (component && (component.type === 'door' || component.type === 'window')) {
         const parentWallId = component?.data?.parentWallId
         if (parentWallId && !newExpanded.has(parentWallId)) {
           newExpanded.add(parentWallId)

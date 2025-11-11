@@ -7,7 +7,7 @@ export function GroupRenderer({ node }: { node: BaseNode }) {
   const children = node.children
   const selectedElements = useEditor((state) => state.selectedElements)
   const isSelected = useMemo(
-    () => selectedElements.some((el) => el.id === node.id),
+    () => selectedElements.includes(node.id),
     [selectedElements, node],
   )
 

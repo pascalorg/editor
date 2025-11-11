@@ -133,7 +133,7 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
   const isSelected = useMemo(
-    () => selectedElements.some((el) => el.id === node.id),
+    () => selectedElements.includes(node.id),
     [selectedElements, node],
   )
 

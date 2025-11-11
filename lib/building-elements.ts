@@ -11,10 +11,8 @@ import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
 
 export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group'
 
-export interface SelectedElement {
-  id: string
-  type: BuildingElementType
-}
+// Simplified: just store the ID, we can look up type from nodeIndex when needed
+export type SelectedElement = string
 
 export interface ElementDescriptor {
   type: BuildingElementType
@@ -160,106 +158,10 @@ export function getAllElementsOfType(
 }
 
 /**
- * Toggle visibility for a specific element
- */
-export function toggleElementVisibility(
-  components: Component[],
-  elementId: string,
-  type: BuildingElementType,
-  floorId: string,
-): Component[] {
-  return components.map((comp) => {
-    if (comp.type === type && comp.group === floorId) {
-      const descriptor = ELEMENT_DESCRIPTORS[type]
-      const { itemsKey } = descriptor
-      if (
-        itemsKey &&
-        comp.data &&
-        typeof comp.data === 'object' &&
-        itemsKey in comp.data &&
-        Array.isArray((comp.data as any)[itemsKey])
-      ) {
-        const updatedData = {
-          ...comp.data,
-          [itemsKey]: (comp.data as any)[itemsKey].map((item: any) =>
-            item.id === elementId ? { ...item, visible: !(item.visible ?? true) } : item,
-          ),
-        }
-        return { ...comp, data: updatedData } as Component
-      }
-    }
-    return comp
-  })
-}
-
-/**
- * Delete multiple elements across different types
- */
-export function deleteElements(
-  components: Component[],
-  selectedElements: SelectedElement[],
-  floorId: string,
-): Component[] {
-  // Group elements by type for efficient deletion
-  const elementsByType = selectedElements.reduce(
-    (acc, elem) => {
-      if (!acc[elem.type]) acc[elem.type] = new Set()
-      acc[elem.type].add(elem.id)
-      return acc
-    },
-    {} as Record<string, Set<string>>,
-  )
-
-  // First, filter out door and window components entirely (they are individual components, not segments)
-  const doorIdsToDelete = elementsByType['door'] || new Set()
-  const windowIdsToDelete = elementsByType['window'] || new Set()
-  let filteredComponents = components.filter(
-    (comp) =>
-      !(
-        (comp.type === 'door' && comp.group === floorId && doorIdsToDelete.has(comp.id)) ||
-        (comp.type === 'window' && comp.group === floorId && windowIdsToDelete.has(comp.id))
-      ),
-  )
-
-  // Then, handle walls, roofs, and columns which are segments/items within components
-  return filteredComponents.map((comp) => {
-    if (
-      comp.group === floorId &&
-      elementsByType[comp.type] &&
-      comp.type !== 'door' &&
-      comp.type !== 'window'
-    ) {
-      const idsToDelete = elementsByType[comp.type]
-      const descriptor = ELEMENT_DESCRIPTORS[comp.type as BuildingElementType]
-      const { itemsKey } = descriptor
-
-      if (
-        itemsKey &&
-        comp.data &&
-        typeof comp.data === 'object' &&
-        itemsKey in comp.data &&
-        Array.isArray((comp.data as any)[itemsKey])
-      ) {
-        const updatedData = {
-          ...comp.data,
-          [itemsKey]: (comp.data as any)[itemsKey].filter((item: any) => !idsToDelete.has(item.id)),
-        }
-        return { ...comp, data: updatedData } as Component
-      }
-    }
-    return comp
-  })
-}
-
-/**
  * Check if an element is selected
  */
-export function isElementSelected(
-  selectedElements: SelectedElement[],
-  elementId: string,
-  type: BuildingElementType,
-): boolean {
-  return selectedElements.some((e) => e.type === type && e.id === elementId)
+export function isElementSelected(selectedElements: SelectedElement[], elementId: string): boolean {
+  return selectedElements.includes(elementId)
 }
 
 /**
@@ -272,51 +174,46 @@ export function isElementSelected(
 export function toggleElementSelection(
   selectedElements: SelectedElement[],
   elementId: string,
-  type: BuildingElementType,
   multiSelect: boolean,
 ): SelectedElement[] {
-  const isSelected = isElementSelected(selectedElements, elementId, type)
+  const isSelected = isElementSelected(selectedElements, elementId)
 
   if (multiSelect) {
     // Add/remove from selection (toggle)
     if (isSelected) {
-      return selectedElements.filter((e) => !(e.type === type && e.id === elementId))
+      return selectedElements.filter((id) => id !== elementId)
     }
-    return [...selectedElements, { id: elementId, type }]
+    return [...selectedElements, elementId]
   }
 
   // Single select: Always replace selection with only this element
-  return [{ id: elementId, type }]
+  return [elementId]
 }
 
 /**
- * Select range of elements of the same type (Figma-style)
+ * Select range of elements (Figma-style)
  * Selects from the last selected item to the clicked item, replacing selection
  */
 export function selectElementRange(
   selectedElements: SelectedElement[],
   segments: Array<{ id: string }>,
   clickedId: string,
-  type: BuildingElementType,
 ): SelectedElement[] {
   const clickedIndex = segments.findIndex((seg) => seg.id === clickedId)
   if (clickedIndex === -1) return selectedElements
 
-  // Find all selected elements of the same type
-  const sameTypeSelections = selectedElements.filter((e) => e.type === type)
-
-  if (sameTypeSelections.length === 0) {
-    // No existing selection of this type, just select the clicked element
-    return [{ id: clickedId, type }]
+  if (selectedElements.length === 0) {
+    // No existing selection, just select the clicked element
+    return [clickedId]
   }
 
-  // Get the last selected element of this type
-  const lastSelected = sameTypeSelections[sameTypeSelections.length - 1]
-  const lastSelectedIndex = segments.findIndex((seg) => seg.id === lastSelected.id)
+  // Get the last selected element
+  const lastSelectedId = selectedElements[selectedElements.length - 1]
+  const lastSelectedIndex = segments.findIndex((seg) => seg.id === lastSelectedId)
 
   if (lastSelectedIndex === -1) {
     // Fallback: just select the clicked element
-    return [{ id: clickedId, type }]
+    return [clickedId]
   }
 
   // Select all elements between last selected and clicked
@@ -326,20 +223,10 @@ export function selectElementRange(
   // Create range selection (replaces all previous selections)
   const rangeSelections: SelectedElement[] = []
   for (let i = start; i <= end; i++) {
-    rangeSelections.push({ id: segments[i].id, type })
+    rangeSelections.push(segments[i].id)
   }
 
   return rangeSelections
-}
-
-/**
- * Get count of selected elements by type
- */
-export function getSelectedCountByType(
-  selectedElements: SelectedElement[],
-  type: BuildingElementType,
-): number {
-  return selectedElements.filter((e) => e.type === type).length
 }
 
 /**
@@ -350,16 +237,6 @@ export function clearSelection(): SelectedElement[] {
 }
 
 /**
- * Get all selected element IDs of a specific type
- */
-export function getSelectedIdsOfType(
-  selectedElements: SelectedElement[],
-  type: BuildingElementType,
-): string[] {
-  return selectedElements.filter((e) => e.type === type).map((e) => e.id)
-}
-
-/**
  * Handle element click with proper multi-select and range-select support
  * This matches the behavior in layers-menu.tsx
  */
@@ -367,23 +244,22 @@ export function handleElementClick(options: {
   selectedElements: SelectedElement[]
   segments: Array<{ id: string }>
   elementId: string
-  type: BuildingElementType
   event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }
 }): SelectedElement[] {
-  const { selectedElements, segments, elementId, type, event } = options
+  const { selectedElements, segments, elementId, event } = options
 
   if (event.metaKey || event.ctrlKey) {
     // Cmd/Ctrl+click: toggle selection
-    return toggleElementSelection(selectedElements, elementId, type, true)
+    return toggleElementSelection(selectedElements, elementId, true)
   }
 
   if (event.shiftKey && selectedElements.length > 0) {
     // Shift+click: select range
-    return selectElementRange(selectedElements, segments, elementId, type)
+    return selectElementRange(selectedElements, segments, elementId)
   }
 
   // Regular click: single select
-  return toggleElementSelection(selectedElements, elementId, type, false)
+  return toggleElementSelection(selectedElements, elementId, false)
 }
 
 /**
@@ -398,23 +274,22 @@ export function handleElementClick(options: {
 export function handleSimpleClick(
   selectedElements: SelectedElement[],
   elementId: string,
-  type: BuildingElementType,
   event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
 ): SelectedElement[] {
   if (event.metaKey || event.ctrlKey) {
     // Cmd/Ctrl+click: toggle selection
-    return toggleElementSelection(selectedElements, elementId, type, true)
+    return toggleElementSelection(selectedElements, elementId, true)
   }
 
   if (event.shiftKey) {
     // Shift+click: add to selection (don't remove if already selected)
-    const isSelected = isElementSelected(selectedElements, elementId, type)
+    const isSelected = isElementSelected(selectedElements, elementId)
     if (!isSelected) {
-      return [...selectedElements, { id: elementId, type }]
+      return [...selectedElements, elementId]
     }
     return selectedElements
   }
 
   // Regular click: single select
-  return toggleElementSelection(selectedElements, elementId, type, false)
+  return toggleElementSelection(selectedElements, elementId, false)
 }

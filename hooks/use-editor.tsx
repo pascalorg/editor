@@ -11,6 +11,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 enableMapSet()
 
 import type { SelectedElement } from '@/lib/building-elements'
+import { handleElementClick, handleSimpleClick } from '@/lib/building-elements'
 import {
   AddLevelCommand,
   AddNodeCommand,
@@ -422,6 +423,11 @@ type StoreState = {
   setRoofs: (roofs: string[]) => void
 
   setSelectedElements: (elements: SelectedElement[]) => void
+  handleElementSelect: (
+    elementId: string,
+    event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
+    segments?: Array<{ id: string }>,
+  ) => void
   setSelectedImageIds: (ids: string[]) => void
   setSelectedScanIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
@@ -740,6 +746,31 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         setSelectedElements: (elements) => set({ selectedElements: elements }),
+        handleElementSelect: (elementId, event, segments) => {
+          const currentSelection = get().selectedElements
+
+          let updatedSelection: SelectedElement[]
+          if (segments && segments.length > 0) {
+            // Has segments: support range selection
+            updatedSelection = handleElementClick({
+              selectedElements: currentSelection,
+              segments,
+              elementId,
+              event,
+            })
+          } else {
+            // No segments: simple click (for nested elements like doors/windows/groups)
+            updatedSelection = handleSimpleClick(currentSelection, elementId, event)
+          }
+
+          set({ selectedElements: updatedSelection })
+
+          // Switch to building mode unless we're in select mode
+          const controlMode = get().controlMode
+          if (controlMode !== 'select') {
+            set({ controlMode: 'building' })
+          }
+        },
         setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
         setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
@@ -953,8 +984,8 @@ const useStore = create<StoreState>()(
           set(
             produce((draft) => {
               // Delete all selected elements using the command manager
-              for (const element of state.selectedElements) {
-                const command = new DeleteNodeCommand(element.id)
+              for (const elementId of state.selectedElements) {
+                const command = new DeleteNodeCommand(elementId)
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
 
