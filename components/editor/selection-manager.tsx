@@ -78,12 +78,11 @@ function SelectionManager() {
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
         handleElementSelect(topCandidate.nodeId, event)
       }
-      // Process intersections...
     }
 
     gl.domElement.addEventListener('pointerdown', handlePointerDown)
     return () => gl.domElement.removeEventListener('pointerdown', handlePointerDown)
-  }, [camera, scene, gl, raycaster, currentFloor, handleElementSelect])
+  }, [camera, gl, raycaster, currentFloor, handleElementSelect])
 
   return null
 }
