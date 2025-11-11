@@ -379,9 +379,7 @@ function DraggableLevelItem({
                               nodeId={child.id}
                             >
                               <TreeNodeTrigger
-                                className={cn(
-                                  selectedElements.includes(child.id) && 'bg-accent',
-                                )}
+                                className={cn(selectedElements.includes(child.id) && 'bg-accent')}
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleElementSelect(child.id, e as React.MouseEvent)
