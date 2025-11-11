@@ -1,12 +1,12 @@
 'use client'
 
-import type { CameraControlsImpl } from '@react-three/drei'
-import { type ThreeEvent, useThree } from '@react-three/fiber'
-import { memo, useCallback, useMemo, useRef } from 'react'
-import type * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
+import { type CameraControlsImpl, useCursor } from '@react-three/drei'
+import { type ThreeEvent, useThree } from '@react-three/fiber'
+import { memo, useCallback, useMemo, useRef } from 'react'
+import type * as THREE from 'three'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '..'
 
 const GRID_SIZE = 30 // 30m x 30m
@@ -172,9 +172,11 @@ export const GridTiles = memo(() => {
     [controls],
   )
 
+  useCursor(controlMode === 'select')
+
   return (
     <>
-      <DownArrow />
+      {controlMode !== 'select' && <DownArrow />}
       {/* Invisible plane for raycasting */}
       <mesh
         onPointerDown={handlePointerDown}

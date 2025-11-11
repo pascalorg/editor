@@ -1,6 +1,5 @@
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
+import { toggleElementSelection } from '@/lib/building-elements'
 import type {
   BaseNode,
   ColumnNode,
@@ -12,6 +11,9 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
+import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
@@ -158,15 +160,30 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return true
   }, [node.type, viewerDisplayMode, isViewer])
 
+  const setSelectedElements = useEditor((state) => state.setSelectedElements)
+
+  const onPointerDown = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation()
+      const updatedSelection = toggleElementSelection(
+        selectedElements,
+        node.id,
+        node.type,
+        e.shiftKey,
+      )
+      setSelectedElements(updatedSelection)
+    },
+    [node, selectedElements, setSelectedElements],
+  )
+
   // Don't render if filtered out by display mode
   if (!shouldRenderNode && node.type !== 'level') {
     return null
   }
 
-  // TODO: If node has children and is selected we could calculate a bounding box around all children and render that too
-
   return (
     <group
+      onPointerDown={onPointerDown}
       position={gridItemPosition}
       rotation-y={(node as unknown as GridItem).rotation || 0}
       visible={node.visible}
