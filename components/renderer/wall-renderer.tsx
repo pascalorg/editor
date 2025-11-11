@@ -8,10 +8,9 @@ import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
-import type { GridPoint, WallNode } from '@/lib/nodes/types'
-import { getNodeRelativePosition } from '@/lib/nodes/utils'
+import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
+import { findAncestors } from '@/lib/nodes/utils'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
-import { GRID_SIZE } from '../viewer'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---
@@ -165,6 +164,60 @@ function calculateJunctionIntersections(junction: Junction) {
 }
 // --- End of Junction Helpers ---
 
+/**
+ * Calculate the absolute world position of a node by traversing up through all parents
+ * and accumulating position and rotation transforms
+ */
+function calculateWorldPosition(
+  node: BaseNode & GridItem,
+  allLevels: BaseNode[],
+): { position: [number, number]; rotation: number } {
+  // If node doesn't have a parent property, it's at world root
+  if (!node.parent) {
+    return {
+      position: node.position,
+      rotation: node.rotation,
+    }
+  }
+
+  // Get all ancestors (from immediate parent up to root)
+  const ancestors = findAncestors(allLevels, node.id)
+
+  // Start with the node's local position and rotation
+  let worldX = node.position[0]
+  let worldY = node.position[1]
+  let worldRotation = node.rotation
+
+  // Traverse up through ancestors (from immediate parent to root)
+  // ancestors array is ordered from immediate parent to root
+  for (const ancestor of ancestors) {
+    // Check if ancestor has GridItem properties (position, rotation, size)
+    if ('position' in ancestor && 'rotation' in ancestor && 'size' in ancestor) {
+      const parent = ancestor as BaseNode & GridItem
+      const parentRotation = parent.rotation
+      const parentPos = parent.position
+
+      // Rotate the current position by parent's rotation
+      const cos = Math.cos(parentRotation)
+      const sin = Math.sin(parentRotation)
+      const rotatedX = worldX * cos - worldY * sin
+      const rotatedY = worldX * sin + worldY * cos
+
+      // Add parent's position
+      worldX = parentPos[0] + rotatedX
+      worldY = parentPos[1] + rotatedY
+
+      // Add parent's rotation
+      worldRotation += parentRotation
+    }
+  }
+
+  return {
+    position: [worldX, worldY],
+    rotation: worldRotation,
+  }
+}
+
 interface WallRendererProps {
   node: WallNode
 }
@@ -172,10 +225,17 @@ interface WallRendererProps {
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const debug = useEditor((state) => state.debug)
+  const allLevels = useEditor((state) => state.levels)
   const tileSize = TILE_SIZE
 
   // Check if this is a preview node
   const isPreview = node.preview === true
+
+  // Determine preview colors based on canPlace
+  const canPlaceWall = node.canPlace !== false // Default to true if undefined
+  const previewColor = canPlaceWall ? '#44ff44' : '#ff4444'
+  const previewEmissive = canPlaceWall ? '#22aa22' : '#aa2222'
+  const previewLineDim = canPlaceWall ? '#336633' : '#663333'
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)
@@ -211,19 +271,30 @@ export function WallRenderer({ node }: WallRendererProps) {
     const halfT = WALL_THICKNESS / 2
 
     // Calculate world space coordinates for junction detection
-    // Note: rotation was calculated as atan2(-dy, dx), so when reconstructing:
+    // Now using calculateWorldPosition to account for parent transforms
+    const worldPos = calculateWorldPosition(node, allLevels)
+    const [x1, y1] = worldPos.position
+    const worldRotation = worldPos.rotation
+
+    // Calculate end point in world space
+    // rotation was calculated as atan2(-dy, dx), so when reconstructing:
     // x2 = x1 + length * cos(rotation)
     // y2 = y1 - length * sin(rotation)  <- Note the minus sign!
-    const [x1, y1] = node.position
-    const x2 = x1 + Math.cos(node.rotation) * length
-    const y2 = y1 - Math.sin(node.rotation) * length
+    const x2 = x1 + Math.cos(worldRotation) * length
+    const y2 = y1 - Math.sin(worldRotation) * length
 
     // Convert all walls to LiveWall format for junction calculation
     const liveWalls: LiveWall[] = allWalls.map((w) => {
-      const [wx1, wy1] = w.position
+      // Calculate world position for each wall
+      const wWorldPos = calculateWorldPosition(w, allLevels)
+      const [wx1, wy1] = wWorldPos.position
+      const wWorldRotation = wWorldPos.rotation
       const wLength = w.size[0]
-      const wx2 = wx1 + Math.cos(w.rotation) * wLength
-      const wy2 = wy1 - Math.sin(w.rotation) * wLength
+
+      // Calculate end point
+      const wx2 = wx1 + Math.cos(wWorldRotation) * wLength
+      const wy2 = wy1 - Math.sin(wWorldRotation) * wLength
+
       return {
         id: w.id,
         start: { x: wx1 * TILE_SIZE, y: wy1 * TILE_SIZE },
@@ -255,8 +326,8 @@ export function WallRenderer({ node }: WallRendererProps) {
       const dx = worldPoint.x - thisWall.start.x
       const dy = worldPoint.y - thisWall.start.y
       // Since rotation = atan2(-dy, dx), we rotate by +rotation (not -rotation) to align with +X axis
-      const cos = Math.cos(node.rotation)
-      const sin = Math.sin(node.rotation)
+      const cos = Math.cos(worldRotation)
+      const sin = Math.sin(worldRotation)
       return {
         x: dx * cos - dy * sin,
         z: dx * sin + dy * cos,
@@ -305,7 +376,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     geometry.rotateX(-Math.PI / 2)
 
     return geometry
-  }, [node, allWalls])
+  }, [node, allWalls, allLevels])
 
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -315,28 +386,30 @@ export function WallRenderer({ node }: WallRendererProps) {
   const transparent = !isActiveFloor
 
   const getClosestGridPoint = useCallback(
-    (point: THREE.Vector3): GridPoint => {
-      const gridPoint = {
-        x: (point.x + GRID_SIZE / 2) / TILE_SIZE,
-        y: (point.z + GRID_SIZE / 2) / TILE_SIZE,
+    (point: THREE.Vector3, object: THREE.Object3D): GridPoint => {
+      // Transform the world point to the wall mesh's local coordinate system
+      // This automatically handles all parent transforms (room, level, etc.)
+      const localPoint = object.worldToLocal(point.clone())
+
+      // Convert to grid coordinates in local space
+      const localGridX = localPoint.x / TILE_SIZE
+      const localGridZ = localPoint.z / TILE_SIZE
+
+      // In wall-local space, the wall runs from (0, 0) to (length, 0) along the X-axis
+      const wallLength = node.size[0] // Wall length in grid units
+
+      // Project onto the wall's X-axis (the wall runs horizontally in its local space)
+      // Clamp to [0, wallLength]
+      const projectedX = Math.max(0, Math.min(wallLength, localGridX))
+
+      // Return the grid position in wall-local coordinates
+      // Round to nearest grid point
+      const localGridPoint: GridPoint = {
+        x: Math.round(projectedX),
+        z: 0, // Always 0 in wall-local space (on the wall surface)
       }
 
-      // Find closest point on wall segment in grid space
-      const t = Math.max(
-        0,
-        Math.min(
-          1,
-          ((gridPoint.x - node.start.x) * (node.end.x - node.start.x) +
-            (gridPoint.y - node.start.z) * (node.end.z - node.start.z)) /
-            ((node.end.x - node.start.x) ** 2 + (node.end.z - node.start.z) ** 2),
-        ),
-      )
-
-      const closestGridPoint: GridPoint = {
-        x: Math.round(node.start.x + t * (node.end.x - node.start.x)),
-        z: Math.round(node.start.z + t * (node.end.z - node.start.z)),
-      }
-      return closestGridPoint
+      return localGridPoint
     },
     [node],
   )
@@ -346,7 +419,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:click', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -357,7 +430,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:enter', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -368,7 +441,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:leave', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -379,7 +452,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       emitter.emit('wall:move', {
         node,
-        gridPosition: getClosestGridPoint(e.point),
+        gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
@@ -394,7 +467,7 @@ export function WallRenderer({ node }: WallRendererProps) {
         <>
           {/* Preview line - occluded version (dimmer) */}
           <Line
-            color="#336633"
+            color={previewLineDim}
             dashed={false}
             depthTest={false}
             lineWidth={2}
@@ -408,7 +481,7 @@ export function WallRenderer({ node }: WallRendererProps) {
 
           {/* Preview line - visible version (brighter) */}
           <Line
-            color="#44ff44"
+            color={previewColor}
             dashed={false}
             depthTest={true}
             lineWidth={3}
@@ -421,10 +494,10 @@ export function WallRenderer({ node }: WallRendererProps) {
           {/* Occluded/behind version - dimmer, shows through everything */}
           <mesh geometry={wallGeometry} renderOrder={1}>
             <meshStandardMaterial
-              color="#44ff44"
+              color={previewColor}
               depthTest={false}
               depthWrite={false}
-              emissive="#22aa22"
+              emissive={previewEmissive}
               emissiveIntensity={0.1}
               opacity={0.15}
               transparent
@@ -434,10 +507,10 @@ export function WallRenderer({ node }: WallRendererProps) {
           {/* Visible/front version - brighter, only shows when not occluded */}
           <mesh geometry={wallGeometry} renderOrder={2}>
             <meshStandardMaterial
-              color="#44ff44"
+              color={previewColor}
               depthTest={true}
               depthWrite={false}
-              emissive="#22aa22"
+              emissive={previewEmissive}
               emissiveIntensity={0.4}
               opacity={0.5}
               transparent
@@ -469,7 +542,7 @@ export function WallRenderer({ node }: WallRendererProps) {
                 </Base>
                 {node.children.map((opening, idx) => {
                   // Transform opening's world position to wall's local coordinate system
-                  const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
+                  // const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
                     opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
@@ -477,9 +550,9 @@ export function WallRenderer({ node }: WallRendererProps) {
                   return (
                     <Subtraction
                       key={idx}
-                      position-x={localX}
+                      position-x={opening.position[0] * tileSize}
                       position-y={opening.type === 'window' ? 1.12 : 0}
-                      position-z={localZ}
+                      position-z={opening.position[1] * tileSize}
                       scale={scale}
                       showOperation={opening.preview}
                     >

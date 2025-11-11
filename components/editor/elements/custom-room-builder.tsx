@@ -8,6 +8,7 @@ import { createId } from '@/lib/utils'
 export function CustomRoomBuilder() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => state.levels)
 
@@ -83,10 +84,43 @@ export function CustomRoomBuilder() {
       if (points.length >= 3 && x === points[0][0] && y === points[0][1]) {
         // Finalize the room by removing preview flags
         const previewGroupId = customRoomStateRef.current.previewGroupId
-        const previewWallIds = customRoomStateRef.current.previewWallIds
         const cursorWallId = customRoomStateRef.current.cursorWallId
 
         if (previewGroupId) {
+          // Update cursor wall to closing wall position, or delete it if 0-length
+          if (cursorWallId) {
+            const [x1, y1] = points[points.length - 1]
+            const [x2, y2] = points[0]
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const length = Math.sqrt(dx * dx + dy * dy)
+
+            if (length > 0) {
+              const rotation = Math.atan2(-dy, dx)
+
+              updateNode(cursorWallId, {
+                position: [x1, y1] as [number, number],
+                size: [length, 0.2] as [number, number],
+                rotation,
+                start: { x: x1, z: y1 } as any,
+                end: { x: x2, z: y2 } as any,
+              })
+            } else {
+              // Delete 0-length cursor wall before committing
+              deleteNode(cursorWallId)
+            }
+          }
+
+          // Calculate bounding box of all points for room position
+          const allX = points.map((p) => p[0])
+          const allY = points.map((p) => p[1])
+          const minX = Math.min(...allX)
+          const minY = Math.min(...allY)
+          const maxX = Math.max(...allX)
+          const maxY = Math.max(...allY)
+          const roomWidth = maxX - minX
+          const roomHeight = maxY - minY
+
           // Count existing rooms to auto-increment the number
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
           const existingRooms =
@@ -95,39 +129,15 @@ export function CustomRoomBuilder() {
             ) || []
           const roomNumber = existingRooms.length + 1
 
-          // Update group to remove preview
+          // Commit the entire group with position and size
+          // useEditor will automatically convert wall positions to relative
           updateNode(previewGroupId, {
-            preview: false as any,
+            preview: false,
             name: `Room ${roomNumber}`,
+            position: [minX, minY] as [number, number],
+            rotation: 0,
+            size: [roomWidth, roomHeight] as [number, number],
           })
-
-          // Update all placed walls to remove preview
-          previewWallIds.forEach((wallId, i) => {
-            updateNode(wallId, {
-              preview: false as any,
-              name: `Wall ${i + 1}`,
-            })
-          })
-
-          // Convert cursor wall to closing wall and remove preview
-          if (cursorWallId) {
-            const [x1, y1] = points[points.length - 1]
-            const [x2, y2] = points[0]
-            const dx = x2 - x1
-            const dy = y2 - y1
-            const length = Math.sqrt(dx * dx + dy * dy)
-            const rotation = Math.atan2(-dy, dx)
-
-            updateNode(cursorWallId, {
-              preview: false as any,
-              name: `Wall ${points.length}`,
-              position: [x1, y1] as [number, number],
-              rotation,
-              size: [length, 0.2] as [number, number],
-              start: { x: x1, z: y1 } as any,
-              end: { x: x2, z: y2 } as any,
-            })
-          }
         }
 
         // Reset state
@@ -188,46 +198,50 @@ export function CustomRoomBuilder() {
           const dx = x2 - x1
           const dy = y2 - y1
           const length = Math.sqrt(dx * dx + dy * dy)
-          const rotation = Math.atan2(-dy, dx)
 
-          // Update cursor wall to final position
-          updateNode(oldCursorWallId, {
-            size: [length, 0.2] as [number, number],
-            rotation,
-            start: { x: x1, z: y1 } as any,
-            end: { x: x2, z: y2 } as any,
-            name: `Wall Preview ${customRoomStateRef.current.previewWallIds.length + 1}`,
-          })
+          // Only finalize the wall if it has non-zero length
+          // (prevents adding 0-length walls when double-clicking)
+          if (length > 0) {
+            const rotation = Math.atan2(-dy, dx)
 
-          // Move it to the placed walls list
-          customRoomStateRef.current.previewWallIds.push(oldCursorWallId)
+            // Update cursor wall to final position
+            updateNode(oldCursorWallId, {
+              size: [length, 0.2] as [number, number],
+              rotation,
+              start: { x: x1, z: y1 } as any,
+              end: { x: x2, z: y2 } as any,
+              name: `Wall Preview ${customRoomStateRef.current.previewWallIds.length + 1}`,
+            })
+
+            // Move it to the placed walls list
+            customRoomStateRef.current.previewWallIds.push(oldCursorWallId)
+
+            // Add the new point AFTER finalizing the old cursor wall
+            const newPoints = [...points, [x, y] as [number, number]]
+            customRoomStateRef.current.points = newPoints
+            customRoomStateRef.current.lastCursorPoint = null
+
+            // Create new cursor wall starting at the point we just added
+            const newCursorWallId = addNode(
+              {
+                type: 'wall',
+                name: 'Wall Preview Cursor',
+                position: [x, y] as [number, number],
+                rotation: 0,
+                size: [0, 0.2] as [number, number],
+                start: { x, z: y },
+                end: { x, z: y },
+                visible: true,
+                opacity: 100,
+                preview: true,
+                children: [],
+              } as any,
+              customRoomStateRef.current.previewGroupId!,
+            )
+
+            customRoomStateRef.current.cursorWallId = newCursorWallId
+          }
         }
-
-        // Add the new point AFTER finalizing the old cursor wall
-        const newPoints = [...points, [x, y] as [number, number]]
-        customRoomStateRef.current.points = newPoints
-        customRoomStateRef.current.lastCursorPoint = null
-
-        // Create new cursor wall starting at the point we just added
-        // Note: addNode generates its own ID, so we need to capture the returned ID
-        const newCursorWallId = addNode(
-          {
-            type: 'wall',
-            name: 'Wall Preview Cursor',
-            position: [x, y] as [number, number], // Start at the new point
-            rotation: 0,
-            size: [0, 0.2] as [number, number],
-            start: { x, z: y },
-            end: { x, z: y },
-            visible: true,
-            opacity: 100,
-            preview: true,
-            children: [],
-          } as any,
-          customRoomStateRef.current.previewGroupId!,
-        )
-
-        customRoomStateRef.current.cursorWallId = newCursorWallId
       }
     }
 
@@ -275,10 +289,24 @@ export function CustomRoomBuilder() {
       // Double-click to finish without closing the shape
       const points = customRoomStateRef.current.points
       const previewGroupId = customRoomStateRef.current.previewGroupId
-      const previewWallIds = customRoomStateRef.current.previewWallIds
       const cursorWallId = customRoomStateRef.current.cursorWallId
 
       if (points.length >= 2 && previewGroupId) {
+        // Delete the cursor wall before committing (it's always 0-length or unwanted)
+        if (cursorWallId) {
+          deleteNode(cursorWallId)
+        }
+
+        // Calculate bounding box of all points for room position
+        const allX = points.map((p) => p[0])
+        const allY = points.map((p) => p[1])
+        const minX = Math.min(...allX)
+        const minY = Math.min(...allY)
+        const maxX = Math.max(...allX)
+        const maxY = Math.max(...allY)
+        const roomWidth = maxX - minX
+        const roomHeight = maxY - minY
+
         // Count existing rooms to auto-increment the number
         const currentLevel = levels.find((l) => l.id === selectedFloorId)
         const existingRooms =
@@ -287,27 +315,15 @@ export function CustomRoomBuilder() {
           ) || []
         const roomNumber = existingRooms.length + 1
 
-        // Update group to remove preview
+        // Commit the entire group with position and size
+        // useEditor will automatically convert wall positions to relative
         updateNode(previewGroupId, {
-          preview: false as any,
+          preview: false,
           name: `Room ${roomNumber}`,
+          position: [minX, minY] as [number, number],
+          rotation: 0,
+          size: [roomWidth, roomHeight] as [number, number],
         })
-
-        // Update all placed walls to remove preview
-        previewWallIds.forEach((wallId, i) => {
-          updateNode(wallId, {
-            preview: false as any,
-            name: `Wall ${i + 1}`,
-          })
-        })
-
-        // Also update cursor wall to remove preview (it becomes the last wall in an open polygon)
-        if (cursorWallId) {
-          updateNode(cursorWallId, {
-            preview: false as any,
-            name: `Wall ${previewWallIds.length + 1}`,
-          })
-        }
 
         // Reset state
         customRoomStateRef.current.points = []
@@ -329,7 +345,7 @@ export function CustomRoomBuilder() {
       emitter.off('grid:move', handleGridMove)
       emitter.off('grid:double-click', handleGridDoubleClick)
     }
-  }, [addNode, updateNode, selectedFloorId, levels])
+  }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
   return <></>
 }

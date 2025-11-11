@@ -7,6 +7,7 @@ import { useEditor } from '@/hooks/use-editor'
 export function WallBuilder() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Use ref to persist values across renders without triggering re-renders
@@ -94,12 +95,8 @@ export function WallBuilder() {
         const previewWallId = wallStateRef.current.previewWallId
 
         if (previewWallId) {
-          // Update the wall to remove preview flag
-          // This will automatically add to undo stack (because preview is being set to false)
-          updateNode(previewWallId, {
-            preview: false as any,
-            name: 'Wall',
-          })
+          // Commit the preview by setting preview: false (useEditor handles the conversion)
+          updateNode(previewWallId, { preview: false })
         }
 
         // Reset state
@@ -151,7 +148,7 @@ export function WallBuilder() {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
     }
-  }, [addNode, updateNode, selectedFloorId])
+  }, [addNode, updateNode, deleteNode, selectedFloorId])
 
   return <></>
 }

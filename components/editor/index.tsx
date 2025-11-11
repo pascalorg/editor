@@ -10,11 +10,7 @@ import {
   PerspectiveCamera,
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type * as THREE from 'three'
-import { BuildingMenu } from '@/components/editor/building-menu'
-import { ControlModeMenu } from '@/components/editor/control-mode-menu'
 import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorBuilder } from '@/components/editor/elements/door-builder'
 import { ImageBuilder } from '@/components/editor/elements/image-builder'
@@ -22,7 +18,6 @@ import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 // import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
-import { emitter } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
@@ -35,6 +30,7 @@ import { WallBuilder } from './elements/wall-builder'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { ProximityGrid } from './proximity-grid'
+import SelectionManager from './selection-manager'
 
 export const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
@@ -46,22 +42,14 @@ const IMAGE_SCALE = 1 // Reference image scale
 const IMAGE_POSITION: [number, number] = [0, 0] // Reference image position
 const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
-const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
+export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
-  // Use individual selectors for better performance
-  const getWallsSet = useEditor((state) => state.getWallsSet)
-  const setWalls = useEditor((state) => state.setWalls)
-  // Preview wall methods
-  const cancelWallPreview = useEditor((state) => state.cancelWallPreview)
   const selectedElements = useEditor((state) => state.selectedElements)
-  const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
   const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
   const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
@@ -73,7 +61,7 @@ export default function Editor({ className }: { className?: string }) {
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
-  const movingCamera = useEditor((state) => state.movingCamera)
+
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const levels = useEditor((state) => state.levels)
@@ -88,43 +76,7 @@ export default function Editor({ className }: { className?: string }) {
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
 
-  // Get walls as a Set
-  const walls = getWallsSet()
-
-  // Use a callback ref to ensure the store is updated when the group is attached
-  const allFloorsGroupCallback = useCallback(
-    (node: THREE.Group | null) => {
-      if (node) {
-        setWallsGroupRef(node)
-      }
-    },
-    [setWallsGroupRef],
-  )
-
-  // State for two-click wall placement
-  const [wallStartPoint, setWallStartPoint] = useState<[number, number] | null>(null)
-  const [wallPreviewEnd, setWallPreviewEnd] = useState<[number, number] | null>(null)
-
-  // State for delete mode (two-click selection)
-  const [deleteStartPoint, setDeleteStartPoint] = useState<[number, number] | null>(null)
-  const [deletePreviewEnd, setDeletePreviewEnd] = useState<[number, number] | null>(null)
-
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
-
-  // Helper function to clear all placement states and selections
-  const clearPlacementStates = () => {
-    setWallStartPoint(null)
-    setWallPreviewEnd(null)
-    setDeleteStartPoint(null)
-    setDeletePreviewEnd(null)
-    setPointerPosition(null)
-    // Cancel any active wall preview
-    cancelWallPreview()
-    // Clear all selections (building elements, images, and scans)
-    setSelectedElements([])
-    setSelectedImageIds([])
-    setSelectedScanIds([])
-  }
 
   // Clear cursor position when switching floors to prevent grid artifacts
   useEffect(() => {
@@ -140,27 +92,15 @@ export default function Editor({ className }: { className?: string }) {
 
       if (e.key === 'Escape') {
         e.preventDefault()
-        // Check if there's an active placement/deletion in progress
-        const hasActivePlacement = wallStartPoint !== null || deleteStartPoint !== null
-
-        // Cancel all placement and delete modes
-        clearPlacementStates()
-
-        // Only change mode to 'select' if there was no active placement/deletion
-        if (!hasActivePlacement) {
-          setControlMode('select')
-        }
+        setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('select')
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('delete')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         // Default to 'wall' tool if no active tool when entering building mode
         if (activeTool) {
           setControlMode('building')
@@ -169,7 +109,6 @@ export default function Editor({ className }: { className?: string }) {
         }
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        clearPlacementStates()
         setControlMode('guide')
       } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -178,13 +117,11 @@ export default function Editor({ className }: { className?: string }) {
         e.preventDefault()
         toggleLevelMode()
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        if (e.shiftKey) {
-          e.preventDefault()
-          redo()
-        } else {
-          e.preventDefault()
-          undo()
-        }
+        e.preventDefault()
+        undo()
+      } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        redo()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
         if (selectedElements.length > 0) {
@@ -208,9 +145,6 @@ export default function Editor({ className }: { className?: string }) {
     activeTool,
     cameraMode,
     setCameraMode,
-    wallStartPoint,
-    deleteStartPoint,
-    clearPlacementStates,
     selectedElements,
     selectedImageIds,
     selectedScanIds,
@@ -262,8 +196,6 @@ export default function Editor({ className }: { className?: string }) {
       document.removeEventListener('click', handleClickOutside)
     }
   }, [])
-
-  const intersections = GRID_INTERSECTIONS
 
   // Helper function to check if two line segments overlap (for collinear segments only)
   const getOverlappingSegment = (
@@ -400,320 +332,122 @@ export default function Editor({ className }: { className?: string }) {
     return { overlap: false, remaining: [seg1] }
   }
 
-  const handleDeleteWallPortion = (x1: number, y1: number, x2: number, y2: number) => {
-    const deleteSegment: [[number, number], [number, number]] = [
-      [x1, y1],
-      [x2, y2],
-    ]
-
-    const currentWalls = walls
-    const next: string[] = []
-
-    // Check each existing wall
-    for (const wallKey of currentWalls) {
-      const parts = wallKey.split('-')
-      if (parts.length !== 2) continue
-
-      const [start, end] = parts
-      const [wx1, wy1] = start.split(',').map(Number)
-      const [wx2, wy2] = end.split(',').map(Number)
-
-      const wallSegment: [[number, number], [number, number]] = [
-        [wx1, wy1],
-        [wx2, wy2],
-      ]
-
-      // Check if this wall overlaps with the deletion segment
-      const result = getOverlappingSegment(wallSegment, deleteSegment)
-
-      if (result.overlap) {
-        // Add remaining segments (if any)
-        for (const remaining of result.remaining) {
-          const [[rx1, ry1], [rx2, ry2]] = remaining
-          next.push(`${rx1},${ry1}-${rx2},${ry2}`)
-        }
-      } else {
-        // No overlap, keep the wall
-        next.push(wallKey)
-      }
-    }
-
-    setWalls(next)
-  }
-
-  const handleIntersectionClick = useCallback(
-    (x: number, y: number) => {
-      // Don't handle clicks while camera is moving
-      if (movingCamera) return
-
-      emitter.emit('grid:click', {
-        position: [x, y],
-      })
-
-      // Guide mode: deselect images when clicking on the grid
-      if (controlMode === 'guide') {
-        setSelectedImageIds([])
-        return
-      }
-
-      // Check control mode first - delete mode takes priority
-      if (controlMode === 'delete') {
-        // Delete mode: two-click line selection
-        if (deleteStartPoint === null) {
-          // First click: set start point
-          setDeleteStartPoint([x, y])
-        } else {
-          // Second click: delete wall portions using deletePreviewEnd (snapped position)
-          if (deletePreviewEnd) {
-            const [x1, y1] = deleteStartPoint
-            const [x2, y2] = deletePreviewEnd
-
-            // Delete wall portions that overlap with the selected segment
-            handleDeleteWallPortion(x1, y1, x2, y2)
-          }
-
-          // Reset delete state
-          setDeleteStartPoint(null)
-          setDeletePreviewEnd(null)
-        }
-        return
-      }
-
-      // Building mode - check active tool (only allow building in building mode)
-      if (controlMode === 'building' && activeTool === 'wall') {
-        // Wall mode: two-click line drawing with node-based preview
-        // Handled by WallBuilder component
-      } else if (controlMode === 'building' && activeTool === 'column') {
-        // Column mode: one-click placement at intersection
-        // Handled by ColumnBuilder component
-      }
-      // Door placement is now handled by DoorPlacementPreview component's onClick
-      // Deselect in building mode if no placement action was taken
-      if (controlMode === 'building' && wallStartPoint === null) {
-        setSelectedElements([])
-      }
-    },
-    [
-      movingCamera,
-      controlMode,
-      deleteStartPoint,
-      deletePreviewEnd,
-      handleDeleteWallPortion,
-      activeTool,
-      wallStartPoint,
-      setSelectedImageIds,
-    ],
-  )
-
-  const handleIntersectionDoubleClick = useCallback(() => {
-    // Don't handle double-clicks while camera is moving
-    if (movingCamera) return
-
-    emitter.emit('grid:double-click', {
-      position: [0, 0],
-    })
-  }, [movingCamera])
-
-  const handleIntersectionHover = useCallback(
-    (x: number, y: number | null) => {
-      if (y === null) return
-
-      emitter.emit('grid:move', {
-        position: [x, y],
-      })
-      // Only track cursor position for non-base levels (base level uses InfiniteGrid)
-      const currentFloor = levels.find((level) => level.id === selectedFloorId)
-      const currentLevel = currentFloor?.level || 0
-
-      if (currentLevel > 0) {
-        // Update cursor position for proximity grid on non-base levels
-        if (y !== null) {
-          setPointerPosition([x, y])
-        } else {
-          setPointerPosition(null)
-        }
-      } else {
-        // On base level, don't track cursor position
-        setPointerPosition(null)
-      }
-
-      // Check control mode first - delete mode takes priority
-      if (controlMode === 'delete') {
-        // Delete mode: snap to horizontal, vertical, or 45° diagonal (same as wall mode)
-        if (deleteStartPoint && y !== null) {
-          const [x1, y1] = deleteStartPoint
-          let projectedX = x1
-          let projectedY = y1
-
-          const dx = x - x1
-          const dy = y - y1
-          const absDx = Math.abs(dx)
-          const absDy = Math.abs(dy)
-
-          // Calculate distances to horizontal, vertical, and diagonal lines
-          const horizontalDist = absDy
-          const verticalDist = absDx
-          const diagonalDist = Math.abs(absDx - absDy)
-
-          // Find the minimum distance to determine which axis to snap to
-          const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-
-          if (minDist === diagonalDist) {
-            // Snap to 45° diagonal
-            const diagonalLength = Math.min(absDx, absDy)
-            projectedX = x1 + Math.sign(dx) * diagonalLength
-            projectedY = y1 + Math.sign(dy) * diagonalLength
-          } else if (minDist === horizontalDist) {
-            // Snap to horizontal
-            projectedX = x
-            projectedY = y1
-          } else {
-            // Snap to vertical
-            projectedX = x1
-            projectedY = y
-          }
-
-          setDeletePreviewEnd([projectedX, projectedY])
-        } else if (!deleteStartPoint) {
-          setDeletePreviewEnd(null)
-        }
-        return
-      }
-
-      // Building mode - check active tool (only allow previews in building mode)
-      // Door, Window, and Column previews are now handled by DoorBuilder, WindowBuilder, and ColumnBuilder components
-    },
-    [controlMode, deleteStartPoint, setPointerPosition, levels, selectedFloorId],
-  )
-
-  // TODO: Set context menu as a generic event handled per component
-  const handleCanvasRightClick = (e: React.MouseEvent) => {
-    // Only show canvas context menu if no wall was right-clicked
-    if (!wallContextMenuTriggeredRef.current) {
-      setContextMenuState({
-        isOpen: true,
-        position: { x: e.clientX, y: e.clientY },
-        type: 'wall',
-      })
-    }
-    wallContextMenuTriggeredRef.current = false
-  }
-
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     // Prevent browser context menu
     e.preventDefault()
+    console.log('Context menu event', e)
   }, [])
 
   const disabledRaycast = useCallback(() => null, [])
-
   return (
-    <div className="relative h-full w-full">
-      <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
-        {cameraMode === 'perspective' ? (
-          <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
-        ) : (
-          <OrthographicCamera
-            far={1000}
-            makeDefault
-            near={-1000}
-            position={[10, 10, 10]}
-            zoom={20}
-          />
-        )}
-        {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
-        <color args={['#212134']} attach="background" />
+    <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
+      {cameraMode === 'perspective' ? (
+        <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
+      ) : (
+        <OrthographicCamera far={1000} makeDefault near={-1000} position={[10, 10, 10]} zoom={20} />
+      )}
+      {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
+      <color args={['#212134']} attach="background" />
 
-        {/* Lighting setup with shadows */}
-        <ambientLight intensity={0.1} />
-        <directionalLight
-          castShadow
-          intensity={2}
-          position={[20, 30, 20]}
-          shadow-bias={-0.0001}
-          shadow-camera-bottom={-30}
-          shadow-camera-far={100}
-          shadow-camera-left={-30}
-          shadow-camera-right={30}
-          shadow-camera-top={30}
-          shadow-mapSize={[2048, 2048]}
+      {/* Lighting setup with shadows */}
+      <ambientLight intensity={0.1} />
+      <directionalLight
+        castShadow
+        intensity={2}
+        position={[20, 30, 20]}
+        shadow-bias={-0.0001}
+        shadow-camera-bottom={-30}
+        shadow-camera-far={100}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-mapSize={[2048, 2048]}
+      />
+
+      {/* Infinite dashed axis lines - visual only, not interactive */}
+      <group raycast={disabledRaycast}>
+        {/* X axis (red) */}
+        <Line
+          color="white"
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          lineWidth={1}
+          opacity={0.4}
+          points={[
+            [-1000, 0, 0],
+            [1000, 0, 0],
+          ]}
         />
+        {/* Y axis (green) - vertical */}
+        <Line
+          color="white"
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          lineWidth={1}
+          opacity={0.4}
+          points={[
+            [0, -1000, 0],
+            [0, 1000, 0],
+          ]}
+        />
+        {/* Z axis (blue) */}
+        <Line
+          color="white"
+          dashed
+          dashSize={0.5}
+          gapSize={0.25}
+          lineWidth={1}
+          opacity={0.4}
+          points={[
+            [0, 0, -1000],
+            [0, 0, 1000],
+          ]}
+        />
+      </group>
 
-        {/* Infinite dashed axis lines - visual only, not interactive */}
-        <group raycast={disabledRaycast}>
-          {/* X axis (red) */}
-          <Line
-            color="white"
-            dashed
-            dashSize={0.5}
-            gapSize={0.25}
-            lineWidth={1}
-            opacity={0.4}
-            points={[
-              [-1000, 0, 0],
-              [1000, 0, 0],
-            ]}
-          />
-          {/* Y axis (green) - vertical */}
-          <Line
-            color="white"
-            dashed
-            dashSize={0.5}
-            gapSize={0.25}
-            lineWidth={1}
-            opacity={0.4}
-            points={[
-              [0, -1000, 0],
-              [0, 1000, 0],
-            ]}
-          />
-          {/* Z axis (blue) */}
-          <Line
-            color="white"
-            dashed
-            dashSize={0.5}
-            gapSize={0.25}
-            lineWidth={1}
-            opacity={0.4}
-            points={[
-              [0, 0, -1000],
-              [0, 0, 1000],
-            ]}
-          />
-        </group>
+      {/* Infinite floor - rendered outside export group */}
+      <InfiniteFloor />
 
-        {/* Infinite floor - rendered outside export group */}
-        <InfiniteFloor />
+      {/* Loop through all floors and render grid + walls for each */}
+      <group>
+        {levels
+          .filter((level) => {
+            // Filter out hidden floors (visible === false or opacity === 0)
+            const isHidden =
+              level.visible === false || (level.opacity !== undefined && level.opacity === 0)
+            return level.type === 'level' && !isHidden
+          })
+          .map((floor) => {
+            const floorLevel = floor.level || 0
+            const yPosition = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * floorLevel
+            const isActiveFloor = selectedFloorId === floor.id
 
-        {/* Loop through all floors and render grid + walls for each */}
-        <group ref={allFloorsGroupCallback}>
-          {levels
-            .filter((level) => {
-              // Filter out hidden floors (visible === false or opacity === 0)
-              const isHidden =
-                level.visible === false || (level.opacity !== undefined && level.opacity === 0)
-              return level.type === 'level' && !isHidden
-            })
-            .map((floor) => {
-              const floorLevel = floor.level || 0
-              const yPosition =
-                (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * floorLevel
-              const isActiveFloor = selectedFloorId === floor.id
+            // Find the level directly below (for reference grid)
+            const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
+            const floorBelow =
+              levelBelow !== null
+                ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
+                : null
 
-              // Find the level directly below (for reference grid)
-              const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
-              const floorBelow =
-                levelBelow !== null
-                  ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
-                  : null
-
-              return (
-                <AnimatedLevel key={floor.id} positionY={yPosition}>
-                  {/* Grid for visual reference only - not interactive */}
-                  {showGrid && (
-                    <group raycast={() => null}>
-                      {floorLevel === 0 ? (
-                        // Base level: show infinite grid
-                        isActiveFloor ? (
+            return (
+              <AnimatedLevel key={floor.id} positionY={yPosition}>
+                {/* Grid for visual reference only - not interactive */}
+                {showGrid && (
+                  <group raycast={() => null}>
+                    {floorLevel === 0 ? (
+                      // Base level: show infinite grid
+                      isActiveFloor ? (
+                        <InfiniteGrid
+                          fadeDistance={fadeDistance}
+                          fadeStrength={fadeStrength}
+                          gridSize={tileSize}
+                          lineColor="#ffffff"
+                          lineWidth={1.0}
+                        />
+                      ) : (
+                        levelMode === 'exploded' && (
                           <InfiniteGrid
                             fadeDistance={fadeDistance}
                             fadeStrength={fadeStrength}
@@ -721,186 +455,121 @@ export default function Editor({ className }: { className?: string }) {
                             lineColor="#ffffff"
                             lineWidth={1.0}
                           />
-                        ) : (
-                          levelMode === 'exploded' && (
-                            <InfiniteGrid
-                              fadeDistance={fadeDistance}
-                              fadeStrength={fadeStrength}
-                              gridSize={tileSize}
-                              lineColor="#ffffff"
-                              lineWidth={1.0}
-                            />
-                          )
                         )
-                      ) : (
-                        // Non-base level: show proximity-based grid around elements
-                        <>
-                          {isActiveFloor && (
-                            <ProximityGrid
-                              components={[]} // TODO: Migrate to use node tree
-                              fadeWidth={0.5}
-                              floorId={floor.id}
-                              gridSize={tileSize}
-                              lineColor="#ffffff"
-                              lineWidth={1.0}
-                              maxSize={GRID_SIZE}
-                              offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                              opacity={0.3}
-                              padding={1.5}
-                              previewRoof={null}
-                              previewWall={
-                                wallStartPoint && wallPreviewEnd
-                                  ? { start: wallStartPoint, end: wallPreviewEnd }
-                                  : null
-                              }
-                            />
-                          )}
-                          {!isActiveFloor && levelMode === 'exploded' && (
-                            <ProximityGrid
-                              components={[]} // TODO: Migrate to use node tree
-                              fadeWidth={0.5}
-                              floorId={floor.id}
-                              gridSize={tileSize}
-                              lineColor="#ffffff"
-                              lineWidth={1.0}
-                              maxSize={GRID_SIZE}
-                              offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                              opacity={0.15}
-                              padding={1.5}
-                              previewCustomRoom={null}
-                              previewRoof={null}
-                              previewRoom={null}
-                              previewWall={null}
-                            />
-                          )}
-                        </>
-                      )}
+                      )
+                    ) : (
+                      // Non-base level: show proximity-based grid around elements
+                      <>
+                        {isActiveFloor && (
+                          <ProximityGrid
+                            components={[]} // TODO: Migrate to use node tree
+                            fadeWidth={0.5}
+                            floorId={floor.id}
+                            gridSize={tileSize}
+                            lineColor="#ffffff"
+                            lineWidth={1.0}
+                            maxSize={GRID_SIZE}
+                            offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                            opacity={0.3}
+                            padding={1.5}
+                            previewRoof={null}
+                          />
+                        )}
+                        {!isActiveFloor && levelMode === 'exploded' && (
+                          <ProximityGrid
+                            components={[]} // TODO: Migrate to use node tree
+                            fadeWidth={0.5}
+                            floorId={floor.id}
+                            gridSize={tileSize}
+                            lineColor="#ffffff"
+                            lineWidth={1.0}
+                            maxSize={GRID_SIZE}
+                            offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                            opacity={0.15}
+                            padding={1.5}
+                            previewCustomRoom={null}
+                            previewRoof={null}
+                            previewRoom={null}
+                            previewWall={null}
+                          />
+                        )}
+                      </>
+                    )}
+                  </group>
+                )}
+
+                {/* Show grid from level below as reference for non-base levels (only in exploded mode) */}
+                {showGrid &&
+                  floorLevel > 0 &&
+                  isActiveFloor &&
+                  floorBelow &&
+                  levelMode === 'exploded' && (
+                    <group
+                      position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
+                      raycast={() => null}
+                    >
+                      <ProximityGrid
+                        components={[]} // TODO: Migrate to use node tree
+                        fadeWidth={0.5}
+                        floorId={floorBelow.id}
+                        gridSize={tileSize}
+                        lineColor="#ffffff"
+                        lineWidth={1.0}
+                        maxSize={GRID_SIZE}
+                        offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
+                        opacity={0.08}
+                        padding={1.5}
+                        previewCustomRoom={null}
+                        previewRoof={null}
+                        previewRoom={null}
+                        previewWall={null}
+                      />
                     </group>
                   )}
 
-                  {/* Show grid from level below as reference for non-base levels (only in exploded mode) */}
-                  {showGrid &&
-                    floorLevel > 0 &&
-                    isActiveFloor &&
-                    floorBelow &&
-                    levelMode === 'exploded' && (
-                      <group
-                        position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
-                        raycast={() => null}
-                      >
-                        <ProximityGrid
-                          components={[]} // TODO: Migrate to use node tree
-                          fadeWidth={0.5}
-                          floorId={floorBelow.id}
-                          gridSize={tileSize}
-                          lineColor="#ffffff"
-                          lineWidth={1.0}
-                          maxSize={GRID_SIZE}
-                          offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                          opacity={0.08}
-                          padding={1.5}
-                          previewCustomRoom={null}
-                          previewRoof={null}
-                          previewRoom={null}
-                          previewWall={null}
-                        />
-                      </group>
-                    )}
+                <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+                  {controlMode === 'building' && activeTool === 'wall' && isActiveFloor && (
+                    <WallBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'room' && isActiveFloor && (
+                    <RoomBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'custom-room' && isActiveFloor && (
+                    <CustomRoomBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'roof' && isActiveFloor && (
+                    <RoofBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'column' && isActiveFloor && (
+                    <ColumnBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'door' && isActiveFloor && (
+                    <DoorBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
+                    <WindowBuilder />
+                  )}
+                  {controlMode === 'guide' && isActiveFloor && <ImageBuilder />}
+                  {controlMode === 'guide' && isActiveFloor && <ScanBuilder />}
 
-                  <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                    {controlMode === 'building' && activeTool === 'wall' && isActiveFloor && (
-                      <WallBuilder />
-                    )}
-                    {controlMode === 'building' && activeTool === 'room' && isActiveFloor && (
-                      <RoomBuilder />
-                    )}
-                    {controlMode === 'building' &&
-                      activeTool === 'custom-room' &&
-                      isActiveFloor && <CustomRoomBuilder />}
-                    {controlMode === 'building' && activeTool === 'roof' && isActiveFloor && (
-                      <RoofBuilder />
-                    )}
-                    {controlMode === 'building' && activeTool === 'column' && isActiveFloor && (
-                      <ColumnBuilder />
-                    )}
-                    {controlMode === 'building' && activeTool === 'door' && isActiveFloor && (
-                      <DoorBuilder />
-                    )}
-                    {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
-                      <WindowBuilder />
-                    )}
-                    {controlMode === 'guide' && isActiveFloor && <ImageBuilder />}
-                    {controlMode === 'guide' && isActiveFloor && <ScanBuilder />}
+                  <NodeRenderer node={floor} />
+                  {/* Only show interactive grid tiles for the active floor */}
+                  {isActiveFloor && <GridTiles />}
+                </group>
+              </AnimatedLevel>
+            )
+          })}
+      </group>
 
-                    <NodeRenderer node={floor} />
-                    {/* Only show interactive grid tiles for the active floor */}
-                    {isActiveFloor && (
-                      <GridTiles
-                        controlMode={controlMode}
-                        deletePreviewEnd={deletePreviewEnd}
-                        deleteStartPoint={deleteStartPoint}
-                        disableBuild={
-                          (controlMode === 'building' && !activeTool) ||
-                          controlMode === 'select' ||
-                          controlMode === 'guide'
-                        }
-                        intersections={intersections}
-                        onIntersectionClick={handleIntersectionClick}
-                        onIntersectionDoubleClick={handleIntersectionDoubleClick}
-                        onIntersectionHover={handleIntersectionHover}
-                        opacity={
-                          floor.opacity !== undefined
-                            ? (floor.opacity / 100) * gridOpacity
-                            : gridOpacity
-                        }
-                        tileSize={tileSize}
-                        wallHeight={wallHeight}
-                        wallPreviewEnd={wallPreviewEnd}
-                      />
-                    )}
-                  </group>
-                </AnimatedLevel>
-              )
-            })}
-        </group>
+      {controlMode === 'select' && <SelectionManager />}
+      <CustomControls />
 
-        <CustomControls />
-
-        <Environment preset="city" />
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
-        </GizmoHelper>
-        {/* <Stats/> */}
-      </Canvas>
-
-      {contextMenuState.isOpen &&
-        contextMenuState.type === 'wall' &&
-        selectedElements.length > 0 && (
-          <div
-            className="fixed z-50 min-w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-            style={{
-              top: `${contextMenuState.position.y}px`,
-              left: `${contextMenuState.position.x}px`,
-            }}
-          >
-            {contextMenuState.wallSegment && (
-              <div
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                onClick={() => {
-                  handleDeleteSelectedElements()
-                  setContextMenuState((prev) => ({ ...prev, isOpen: false }))
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete Selected Elements
-              </div>
-            )}
-          </div>
-        )}
-
-      <ControlModeMenu onModeChange={clearPlacementStates} />
-      <BuildingMenu />
-    </div>
+      <Environment preset="city" />
+      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+        <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
+      </GizmoHelper>
+      {/* <Stats/> */}
+    </Canvas>
   )
 }
 

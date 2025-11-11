@@ -584,5 +584,5 @@ export function getNodesOfTypeInLevel<T extends BaseNode>(
     return []
   }
 
-  return level.children.filter((child) => child.type === type) as T[]
+  return level.children.filter((child) => child.type === type) as unknown as T[]
 }

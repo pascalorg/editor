@@ -1,267 +1,204 @@
 'use client'
 
-import { type CameraControlsImpl, Line } from '@react-three/drei'
+import { type CameraControlsImpl, useCursor } from '@react-three/drei'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
+import { emitter } from '@/events/bus'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
+import { GRID_INTERSECTIONS, TILE_SIZE } from '..'
 
 const GRID_SIZE = 30 // 30m x 30m
 
-type GridTilesProps = {
-  intersections: number
-  tileSize: number
-  onIntersectionClick: (x: number, y: number) => void
-  onIntersectionDoubleClick: () => void
-  onIntersectionHover: (x: number, y: number | null) => void
-  wallPreviewEnd: [number, number] | null
-  deleteStartPoint: [number, number] | null
-  deletePreviewEnd: [number, number] | null
-  opacity: number
-  disableBuild?: boolean
-  wallHeight: number
-  controlMode: 'select' | 'delete' | 'building' | 'guide'
-}
+export const GridTiles = memo(() => {
+  const activeTool = useEditor((state) => state.activeTool)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const meshRef = useRef<THREE.Mesh>(null)
 
-export const GridTiles = memo(
-  ({
-    intersections,
-    tileSize,
-    onIntersectionClick,
-    onIntersectionDoubleClick,
-    onIntersectionHover,
-    wallPreviewEnd,
-    deleteStartPoint,
-    deletePreviewEnd,
-    disableBuild = false,
-    wallHeight,
-    controlMode,
-  }: GridTilesProps) => {
-    const activeTool = useEditor((state) => state.activeTool)
-    const selectedFloorId = useEditor((state) => state.selectedFloorId)
-    const meshRef = useRef<THREE.Mesh>(null)
-    const [hoveredIntersection, setHoveredIntersection] = useState<{ x: number; y: number } | null>(
-      null,
-    )
-    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-    const lastClickTimeRef = useRef<number>(0)
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastClickTimeRef = useRef<number>(0)
 
-    // Get all wall nodes for the active floor (needed for room and custom-room modes)
-    const wallNodes = useWalls(selectedFloorId || '')
-    const allWallSegments: WallSegment[] = useMemo(
-      () =>
-        wallNodes.map((node) => {
-          const [x1, y1] = node.position
-          const length = node.size[0]
-          const rotation = node.rotation
-          const x2 = x1 + Math.cos(rotation) * length
-          const y2 = y1 + Math.sin(rotation) * length
+  // Get all wall nodes for the active floor (needed for room and custom-room modes)
+  const wallNodes = useWalls(selectedFloorId || '')
+  const allWallSegments: WallSegment[] = useMemo(
+    () =>
+      wallNodes.map((node) => {
+        const [x1, y1] = node.position
+        const length = node.size[0]
+        const rotation = node.rotation
+        const x2 = x1 + Math.cos(rotation) * length
+        const y2 = y1 + Math.sin(rotation) * length
 
-          return {
-            id: node.id,
-            start: [x1, y1],
-            end: [x2, y2],
-            isHorizontal: Math.abs(Math.sin(rotation)) < 0.1,
-            visible: node.visible ?? true,
-            opacity: node.opacity ?? 100,
-          }
-        }),
-      [wallNodes],
-    )
-
-    const gridSize = (intersections - 1) * tileSize
-
-    const handlePointerLeave = useCallback(() => {
-      setHoveredIntersection(null)
-      onIntersectionHover(0, null)
-    }, [onIntersectionHover])
-
-    const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
-      e.stopPropagation()
-
-      // Don't show hover indicators in guide mode (reserved for image manipulation)
-      if (controlMode === 'guide') {
-        setHoveredIntersection(null)
-        onIntersectionHover(0, null)
-        return
-      }
-
-      if (e.point && !disableBuild) {
-        // e.point is in world coordinates
-        // The parent group is offset by [-GRID_SIZE/2, 0, -GRID_SIZE/2]
-        // Convert world coords to local coords by adding the offset back
-        const localX = e.point.x + GRID_SIZE / 2
-        const localZ = e.point.z + GRID_SIZE / 2
-
-        // Round to nearest intersection
-        const x = Math.round(localX / tileSize)
-        const y = Math.round(localZ / tileSize) // y in grid space is z in 3D space
-
-        if (x >= 0 && x < intersections && y >= 0 && y < intersections) {
-          setHoveredIntersection({ x, y })
-          onIntersectionHover(x, y)
-        } else {
-          setHoveredIntersection(null)
-          onIntersectionHover(0, null)
+        return {
+          id: node.id,
+          start: [x1, y1],
+          end: [x2, y2],
+          isHorizontal: Math.abs(Math.sin(rotation)) < 0.1,
+          visible: node.visible ?? true,
+          opacity: node.opacity ?? 100,
         }
-      }
-    }
+      }),
+    [wallNodes],
+  )
 
-    const rightClickDownAt = useRef(0)
+  const gridSize = (GRID_INTERSECTIONS - 1) * TILE_SIZE
+  const hoveredIntersection = useRef<{ x: number; y: number } | null>(null)
+  const setPointerPosition = useEditor((state) => state.setPointerPosition)
+  const movingCamera = useEditor((state) => state.movingCamera)
+  const controlMode = useEditor((state) => state.controlMode)
+  const handleIntersectionClick = useCallback(
+    (x: number, y: number) => {
+      // Don't handle clicks while camera is moving
+      if (movingCamera) return
 
-    const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
-      if (e.button === 2) {
-        rightClickDownAt.current = Date.now()
-      }
-      // Only handle left-click (button 0) for wall placement
-      // Right-click (button 2) and middle-click (button 1) are for camera controls
-      if (e.button !== 0) return
+      emitter.emit('grid:click', {
+        position: [x, y],
+      })
+    },
+    [movingCamera],
+  )
 
-      e.stopPropagation()
+  const handleIntersectionDoubleClick = useCallback(() => {
+    // Don't handle double-clicks while camera is moving
+    if (movingCamera) return
 
-      // Special handling for guide mode - allow clicks for deselection
-      if (controlMode === 'guide') {
-        onIntersectionClick(0, 0) // Trigger deselection (coordinates don't matter)
-        return
-      }
+    emitter.emit('grid:double-click', {
+      position: [0, 0],
+    })
+  }, [movingCamera])
 
-      if (disableBuild || !hoveredIntersection) return
+  const handleIntersectionHover = useCallback(
+    (x: number, y: number | null) => {
+      if (y === null) return
 
-      const now = Date.now()
-      const timeSinceLastClick = now - lastClickTimeRef.current
-
-      // Detect double-click within 300ms
-      if (activeTool === 'custom-room' && timeSinceLastClick < 300) {
-        // This is a double-click
-        if (clickTimeoutRef.current) {
-          clearTimeout(clickTimeoutRef.current)
-          clickTimeoutRef.current = null
-        }
-        onIntersectionDoubleClick()
-        lastClickTimeRef.current = 0 // Reset to prevent triple-click issues
+      emitter.emit('grid:move', {
+        position: [x, y],
+      })
+      // Update cursor position for proximity grid on non-base levels
+      if (y !== null) {
+        setPointerPosition([x, y])
       } else {
-        // Single click
-        if (activeTool === 'custom-room') {
-          // For custom-room mode, delay the click to check if it's part of a double-click
-          if (clickTimeoutRef.current) {
-            clearTimeout(clickTimeoutRef.current)
-          }
-          clickTimeoutRef.current = setTimeout(() => {
-            onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
-            clickTimeoutRef.current = null
-          }, 300)
-        } else {
-          // For other modes, handle click immediately
-          onIntersectionClick(hoveredIntersection.x, hoveredIntersection.y)
-        }
-        lastClickTimeRef.current = now
+        setPointerPosition(null)
       }
+    },
+    [setPointerPosition],
+  )
+
+  const handlePointerLeave = useCallback(() => {
+    hoveredIntersection.current = null
+    setPointerPosition(null)
+  }, [setPointerPosition])
+
+  const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+
+    // Don't show hover indicators in guide mode (reserved for image manipulation)
+    if (controlMode === 'guide') {
+      hoveredIntersection.current = null
+      setPointerPosition(null)
+      return
     }
 
-    const controls = useThree((state) => state.controls)
+    if (e.point) {
+      // e.point is in world coordinates
+      // The parent group is offset by [-GRID_SIZE/2, 0, -GRID_SIZE/2]
+      // Convert world coords to local coords by adding the offset back
+      const localX = e.point.x + GRID_SIZE / 2
+      const localZ = e.point.z + GRID_SIZE / 2
 
-    const handlePointerUp = useCallback(
-      (e: ThreeEvent<PointerEvent>) => {
-        if (e.button === 2) {
-          const now = Date.now()
-          const timeHeld = now - rightClickDownAt.current
-          // If right-click was held for less than 200ms, treat it as a click to recenter
-          if (timeHeld < 200 && e.point) {
-            ;(controls as CameraControlsImpl).moveTo(e.point.x, e.point.y, e.point.z, true)
-          }
+      // Round to nearest intersection
+      const x = Math.round(localX / TILE_SIZE)
+      const y = Math.round(localZ / TILE_SIZE) // y in grid space is z in 3D space
+
+      if (x >= 0 && x < GRID_INTERSECTIONS && y >= 0 && y < GRID_INTERSECTIONS) {
+        hoveredIntersection.current = { x, y }
+        handleIntersectionHover(x, y)
+      } else {
+        hoveredIntersection.current = null
+        setPointerPosition(null)
+      }
+    }
+  }
+
+  const rightClickDownAt = useRef(0)
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (e.button === 2) {
+      rightClickDownAt.current = Date.now()
+    }
+    // Only handle left-click (button 0) for wall placement
+    // Right-click (button 2) and middle-click (button 1) are for camera controls
+    if (e.button !== 0) return
+
+    e.stopPropagation()
+
+    // Special handling for guide mode - allow clicks for deselection
+    if (controlMode === 'guide') {
+      handleIntersectionClick(0, 0) // Trigger deselection (coordinates don't matter)
+      return
+    }
+
+    const now = Date.now()
+    const timeSinceLastClick = now - lastClickTimeRef.current
+
+    // Detect double-click within 300ms
+    if (timeSinceLastClick < 300) {
+      // This is a double-click
+      handleIntersectionDoubleClick()
+      lastClickTimeRef.current = 0 // Reset to prevent triple-click issues
+    } else {
+      handleIntersectionClick(
+        hoveredIntersection.current?.x || 0,
+        hoveredIntersection.current?.y || 0,
+      )
+      lastClickTimeRef.current = now
+    }
+  }
+
+  const controls = useThree((state) => state.controls)
+
+  const handlePointerUp = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      if (e.button === 2) {
+        const now = Date.now()
+        const timeHeld = now - rightClickDownAt.current
+        // If right-click was held for less than 200ms, treat it as a click to recenter
+        if (timeHeld < 200 && e.point) {
+          ;(controls as CameraControlsImpl).moveTo(e.point.x, e.point.y, e.point.z, true)
         }
-      },
-      [controls],
-    )
+      }
+    },
+    [controls],
+  )
 
-    return (
-      <>
-        {/* Invisible plane for raycasting */}
-        <mesh
-          onPointerDown={handlePointerDown}
-          onPointerLeave={handlePointerLeave}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          position={[gridSize / 2, 0.002, gridSize / 2]}
-          ref={meshRef}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[gridSize, gridSize]} />
-          <meshStandardMaterial
-            color="#404045"
-            colorWrite={false}
-            depthWrite={false}
-            opacity={0}
-            transparent
-          />
-        </mesh>
+  useCursor(controlMode === 'select')
 
-        {/* Down arrow at hovered intersection or snapped preview position */}
-        {hoveredIntersection &&
-          !disableBuild &&
-          activeTool !== 'door' &&
-          activeTool !== 'window' && (
-            <group
-              position={[
-                // For wall mode, use wallPreviewEnd for snapped position
-                // For delete mode, use deletePreviewEnd for snapped position
-                // For other modes, use the raw hovered intersection
-                activeTool === 'wall' && wallPreviewEnd
-                  ? wallPreviewEnd[0] * tileSize
-                  : controlMode === 'delete' && deletePreviewEnd
-                    ? deletePreviewEnd[0] * tileSize
-                    : hoveredIntersection.x * tileSize,
-                2,
-                activeTool === 'wall' && wallPreviewEnd
-                  ? wallPreviewEnd[1] * tileSize
-                  : controlMode === 'delete' && deletePreviewEnd
-                    ? deletePreviewEnd[1] * tileSize
-                    : hoveredIntersection.y * tileSize,
-              ]}
-            >
-              <DownArrow />
-            </group>
-          )}
-
-        {/* Delete mode preview - red line and plane */}
-        {controlMode === 'delete' && deleteStartPoint && (
-          <>
-            {/* Start point indicator for delete mode */}
-            <mesh position={[deleteStartPoint[0] * tileSize, 0.01, deleteStartPoint[1] * tileSize]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color="#ff4444" depthTest={false} emissive="#aa2222" />
-            </mesh>
-
-            {/* Preview line and transparent red plane when selecting deletion area */}
-            {deletePreviewEnd && (
-              <>
-                <Line
-                  color="#ff4444"
-                  dashed={false}
-                  depthTest={false}
-                  lineWidth={3}
-                  points={[
-                    [deleteStartPoint[0] * tileSize, 0.1, deleteStartPoint[1] * tileSize],
-                    [deletePreviewEnd[0] * tileSize, 0.1, deletePreviewEnd[1] * tileSize],
-                  ]}
-                />
-
-                {/* Transparent red plane showing what will be deleted */}
-                <DeletePlanePreview
-                  end={deletePreviewEnd}
-                  start={deleteStartPoint}
-                  tileSize={tileSize}
-                  wallHeight={wallHeight}
-                />
-              </>
-            )}
-          </>
-        )}
-      </>
-    )
-  },
-)
+  return (
+    <>
+      {controlMode !== 'select' && <DownArrow />}
+      {/* Invisible plane for raycasting */}
+      <mesh
+        onPointerDown={handlePointerDown}
+        onPointerLeave={handlePointerLeave}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        position={[gridSize / 2, 0.002, gridSize / 2]}
+        ref={meshRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[gridSize, gridSize]} />
+        <meshStandardMaterial
+          color="#404045"
+          colorWrite={false}
+          depthWrite={false}
+          opacity={0}
+          transparent
+        />
+      </mesh>
+    </>
+  )
+})
 
 GridTiles.displayName = 'GridTiles'
 
@@ -272,8 +209,12 @@ const DownArrow = () => {
   const shaftRadius = 0.03
   const coneRadius = 0.1
 
+  const cursorPosition = useEditor((state) => state.pointerPosition)
+
+  if (!cursorPosition) return null
+
   return (
-    <group>
+    <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
       {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
       <mesh position={[0, -shaftHeight / 2, 0]}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />

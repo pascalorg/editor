@@ -22,11 +22,9 @@ export function DoorBuilder() {
 
     const handleWallClick = (e: WallEvent) => {
       if (previewDoor && canPlace) {
-        // Commit the door placement
-        updateNode(previewDoor.id, {
-          preview: false,
-          name: 'Door',
-        })
+        // Commit the preview by setting preview: false (useEditor handles the conversion)
+        updateNode(previewDoor.id, { preview: false })
+
         previewDoor = null
       }
     }
@@ -52,7 +50,7 @@ export function DoorBuilder() {
           type: 'door',
           name: 'Door Preview',
           position: [x, y],
-          rotation: lastRotation,
+          rotation: 0,
           size: [1, 2] as [number, number],
           visible: true,
           opacity: 100,
@@ -73,12 +71,16 @@ export function DoorBuilder() {
       }
       ignoreGridMove = true
       lastRotation = e.node.rotation
+
+      // gridPosition is already in wall's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
       previewDoor = {
         parent: e.node.id,
         type: 'door',
         name: 'Door Preview',
-        position: [e.gridPosition.x, e.gridPosition.z],
-        rotation: e.node.rotation,
+        position: localPos, // Position RELATIVE to wall (already in wall-local coords)
+        rotation: 0, // Rotation relative to wall (always 0 since door aligns with wall)
         size: [1, 2] as [number, number],
         visible: true,
         opacity: 100,
@@ -90,7 +92,7 @@ export function DoorBuilder() {
       previewDoor.canPlace = canPlace
       previewDoor.id = addNode(
         previewDoor,
-        e.node.id, // Parent is either wall or level
+        e.node.id, // Parent is the wall
       )
     }
 
@@ -110,9 +112,13 @@ export function DoorBuilder() {
         previewDoor = null
       }
       lastPosition = [e.gridPosition.x, e.gridPosition.z]
+
+      // gridPosition is already in wall's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
       if (previewDoor) {
-        previewDoor.position = [e.gridPosition.x, e.gridPosition.z]
-        previewDoor.rotation = e.node.rotation
+        previewDoor.position = localPos // Position RELATIVE to wall
+        previewDoor.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
         previewDoor.canPlace = canPlace
         updateNode(previewDoor.id, previewDoor)
@@ -121,8 +127,8 @@ export function DoorBuilder() {
           parent: e.node.id,
           type: 'door',
           name: 'Door Preview',
-          position: [e.gridPosition.x, e.gridPosition.z],
-          rotation: e.node.rotation,
+          position: localPos, // Position RELATIVE to wall
+          rotation: 0, // Rotation relative to wall
           size: [1, 2] as [number, number],
           visible: true,
           opacity: 100,
@@ -135,7 +141,7 @@ export function DoorBuilder() {
         previewDoor.canPlace = canPlace
         previewDoor.id = addNode(
           previewDoor,
-          e.node.id, // Parent is either wall or level
+          e.node.id, // Parent is the wall
         )
       }
     }

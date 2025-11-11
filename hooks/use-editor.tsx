@@ -1,22 +1,35 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
+import { current, enableMapSet, produce } from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+
+// Enable Map/Set support in Immer
+enableMapSet()
+
 import type { SelectedElement } from '@/lib/building-elements'
+import { handleSimpleClick } from '@/lib/building-elements'
+import {
+  AddLevelCommand,
+  AddNodeCommand,
+  CommandManager,
+  DeleteLevelCommand,
+  DeleteNodeCommand,
+  ReorderLevelsCommand,
+  UpdateNodeCommand,
+} from '@/lib/commands'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
 import {
   addReferenceImageToLevel,
   addScanToLevel,
-  deleteNode,
   setNodeOpacity,
   setNodeVisibility,
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
 import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
-import { mapTree } from '@/lib/nodes/utils'
 import { createId } from '@/lib/utils'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -359,10 +372,6 @@ export type LayoutJSON = {
   // scans?: Scan[] // Optional for backward compatibility
 }
 
-type HistoryState = {
-  levels: LevelNode[]
-}
-
 export type ViewMode = 'full' | 'level'
 
 export type ViewerDisplayMode = 'scans' | 'objects'
@@ -373,6 +382,11 @@ type StoreState = {
   // ============================================================================
   levels: LevelNode[] // Node tree hierarchy
   nodeIndex: Map<string, BaseNode> // Fast lookup by ID
+
+  // ============================================================================
+  // UNDO/REDO STATE (managed by commandManager)
+  // ============================================================================
+  commandManager: CommandManager
 
   // ============================================================================
   // UI STATE
@@ -387,8 +401,6 @@ type StoreState = {
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
-  undoStack: HistoryState[]
-  redoStack: HistoryState[]
   activeTool: Tool | null
   controlMode: ControlMode
   cameraMode: CameraMode
@@ -401,7 +413,7 @@ type StoreState = {
   debug: boolean // Debug mode flag
 } & {
   // Node-based operations
-  updateLevels: (levels: LevelNode[], pushToUndo?: boolean) => void
+  updateLevels: (levels: LevelNode[]) => void
   addLevel: (level: Omit<LevelNode, 'children'>) => void
   deleteLevel: (levelId: string) => void
   reorderLevels: (levels: LevelNode[]) => void
@@ -410,7 +422,10 @@ type StoreState = {
   setWalls: (walls: string[]) => void
   setRoofs: (roofs: string[]) => void
 
-  setSelectedElements: (elements: SelectedElement[]) => void
+  handleElementSelect: (
+    elementId: string,
+    event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
+  ) => void
   setSelectedImageIds: (ids: string[]) => void
   setSelectedScanIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
@@ -460,8 +475,9 @@ type StoreState = {
 
   // Generic node operations
   addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
-  updateNode: (nodeId: string, updates: Partial<AnyNode>) => void
+  updateNode: (nodeId: string, updates: Partial<AnyNode>) => string
   deleteNode: (nodeId: string) => void
+  deletePreviewNodes: () => void
 
   // Preview wall placement methods
   startWallPreview: (startPoint: [number, number]) => void
@@ -487,43 +503,40 @@ const useStore = create<StoreState>()(
         ],
         nodeIndex: new Map(), // Will be built from levels
 
+        // Undo/redo state initialization
+        commandManager: new CommandManager(),
+
         // UI state initialization
         currentLevel: 0,
-        updateLevels: (levels, pushToUndo = true) =>
-          set((state) => {
-            const newIndex = buildNodeIndex(levels)
-            if (pushToUndo) {
-              return {
-                levels,
-                nodeIndex: newIndex,
-                undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-                redoStack: [],
-              }
-            }
-            return { levels, nodeIndex: newIndex }
-          }),
-        addLevel: (level) =>
-          set((state) => {
-            const newLevel: LevelNode = { ...level, children: [] }
-            const updatedLevels = [...state.levels, newLevel]
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          }),
-        deleteLevel: (levelId) =>
-          set((state) => {
-            const updatedLevels = state.levels.filter((l) => l.id !== levelId)
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          }),
-        reorderLevels: (levels) =>
+        updateLevels: (levels) =>
           set({
             levels,
             nodeIndex: buildNodeIndex(levels),
           }),
+        addLevel: (level) => {
+          set(
+            produce((draft) => {
+              const command = new AddLevelCommand(level)
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+            }),
+          )
+        },
+        deleteLevel: (levelId) => {
+          set(
+            produce((draft) => {
+              const command = new DeleteLevelCommand(levelId)
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+            }),
+          )
+        },
+        reorderLevels: (levels) => {
+          set(
+            produce((draft) => {
+              const command = new ReorderLevelsCommand(levels)
+              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+            }),
+          )
+        },
 
         // Building element operations
         setWalls: (wallKeys) =>
@@ -594,8 +607,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
         setRoofs: (roofKeys) =>
@@ -681,8 +692,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
 
@@ -721,8 +730,6 @@ const useStore = create<StoreState>()(
         isHelpOpen: false,
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
-        undoStack: [],
-        redoStack: [],
         activeTool: 'wall',
         controlMode: 'building',
         cameraMode: 'perspective',
@@ -736,13 +743,26 @@ const useStore = create<StoreState>()(
         isManipulatingImage: false,
         isManipulatingScan: false,
         debug: false,
-        setSelectedElements: (elements) => set({ selectedElements: elements }),
+        handleElementSelect: (elementId, event) => {
+          const currentSelection = get().selectedElements
+          const updatedSelection = handleSimpleClick(currentSelection, elementId, event)
+          set({ selectedElements: updatedSelection })
+
+          // Switch to building mode unless we're in select mode
+          const controlMode = get().controlMode
+          if (controlMode !== 'select') {
+            set({ controlMode: 'building' })
+          }
+        },
         setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
         setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
         setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
         setActiveTool: (tool) => {
+          // Delete all preview nodes before switching tools
+          get().deletePreviewNodes()
+
           set({ activeTool: tool })
           // Automatically switch to building mode when a building tool is selected
           if (tool !== null) {
@@ -752,6 +772,11 @@ const useStore = create<StoreState>()(
           }
         },
         setControlMode: (mode) => {
+          // Delete all preview nodes when switching away from building mode
+          if (mode !== 'building') {
+            get().deletePreviewNodes()
+          }
+
           set({ controlMode: mode })
           // Clear activeTool when switching away from building mode to prevent mode leakage
           if (mode !== 'building') {
@@ -865,8 +890,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           })
         },
@@ -908,65 +931,52 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           })
         },
-        handleDeleteSelectedImages: () =>
-          set((state) => {
-            if (state.selectedImageIds.length === 0) return state
+        handleDeleteSelectedImages: () => {
+          const state = get()
+          if (state.selectedImageIds.length === 0) return
 
-            // Delete all selected image nodes
-            let updatedLevels = state.levels
-            for (const imageId of state.selectedImageIds) {
-              updatedLevels = deleteNode(updatedLevels, imageId)
-            }
+          // Delete all selected image nodes using command manager
+          const imageIds = [...state.selectedImageIds]
+          for (const imageId of imageIds) {
+            get().deleteNode(imageId)
+          }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              selectedImageIds: [],
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          }),
-        handleDeleteSelectedScans: () =>
-          set((state) => {
-            if (state.selectedScanIds.length === 0) return state
+          // Clear selection
+          set({ selectedImageIds: [] })
+        },
+        handleDeleteSelectedScans: () => {
+          const state = get()
+          if (state.selectedScanIds.length === 0) return
 
-            // Delete all selected scan nodes
-            let updatedLevels = state.levels
-            for (const scanId of state.selectedScanIds) {
-              updatedLevels = deleteNode(updatedLevels, scanId)
-            }
+          // Delete all selected scan nodes using command manager
+          const scanIds = [...state.selectedScanIds]
+          for (const scanId of scanIds) {
+            get().deleteNode(scanId)
+          }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              selectedScanIds: [],
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          }),
-        handleDeleteSelectedElements: () =>
-          set((state) => {
-            if (state.selectedElements.length === 0) return state
+          // Clear selection
+          set({ selectedScanIds: [] })
+        },
+        handleDeleteSelectedElements: () => {
+          const state = get()
+          if (state.selectedElements.length === 0) return
 
-            // Delete all selected building element nodes
-            let updatedLevels = state.levels
-            for (const element of state.selectedElements) {
-              updatedLevels = deleteNode(updatedLevels, element.id)
-            }
+          set(
+            produce((draft) => {
+              // Delete all selected elements using the command manager
+              for (const elementId of state.selectedElements) {
+                const command = new DeleteNodeCommand(elementId)
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              selectedElements: [],
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          }),
+              // Clear selection
+              draft.selectedElements = []
+            }),
+          )
+        },
         handleClear: () => {
           get().setWalls([])
           set({ selectedElements: [] })
@@ -1044,38 +1054,34 @@ const useStore = create<StoreState>()(
             selectedElements: [],
             selectedImageIds: [],
             selectedScanIds: [],
-            undoStack: [],
-            redoStack: [],
           })
+          // Clear command history
+          get().commandManager.clear()
         },
         undo: () =>
-          set((state) => {
-            if (state.undoStack.length === 0) return state
-            const previous = state.undoStack[state.undoStack.length - 1]
-            return {
-              levels: previous.levels,
-              nodeIndex: buildNodeIndex(previous.levels),
-              undoStack: state.undoStack.slice(0, -1),
-              redoStack: [...state.redoStack, { levels: state.levels }],
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
-            }
-          }),
+          set(
+            produce((draft) => {
+              const success = draft.commandManager.undo(draft.levels, draft.nodeIndex)
+              if (success) {
+                // Clear selections after undo
+                draft.selectedElements = []
+                draft.selectedImageIds = []
+                draft.selectedScanIds = []
+              }
+            }),
+          ),
         redo: () =>
-          set((state) => {
-            if (state.redoStack.length === 0) return state
-            const next = state.redoStack[state.redoStack.length - 1]
-            return {
-              levels: next.levels,
-              nodeIndex: buildNodeIndex(next.levels),
-              redoStack: state.redoStack.slice(0, -1),
-              undoStack: [...state.undoStack, { levels: state.levels }],
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
-            }
-          }),
+          set(
+            produce((draft) => {
+              const success = draft.commandManager.redo(draft.levels, draft.nodeIndex)
+              if (success) {
+                // Clear selections after redo
+                draft.selectedElements = []
+                draft.selectedImageIds = []
+                draft.selectedScanIds = []
+              }
+            }),
+          ),
         toggleFloorVisibility: (floorId) =>
           set((state) => {
             const updatedLevels = state.levels.map((level) =>
@@ -1213,94 +1219,165 @@ const useStore = create<StoreState>()(
 
         // Generic node operations
         addNode: (nodeData, parentId) => {
-          let addedNodeId = ''
+          let nodeId = ''
 
-          set((state) => {
-            // Generate ID
-            const id = createId(nodeData.type)
-            addedNodeId = id
+          set(
+            produce((draft) => {
+              const command = new AddNodeCommand(nodeData, parentId)
+              nodeId = command.getNodeId()
 
-            const newNode = {
-              ...nodeData,
-              id,
-              parent: parentId,
-            } as BaseNode
-
-            let updatedLevels: LevelNode[]
-
-            if (parentId === null) {
-              // Add to root (only for level nodes)
-              if (nodeData.type !== 'level') {
-                console.error('Only level nodes can be added to root')
-                return state
+              // If it's a preview node, execute directly without adding to undo stack
+              if (nodeData.preview) {
+                command.execute(draft.levels, draft.nodeIndex)
+              } else {
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
-              updatedLevels = [...state.levels, newNode as LevelNode]
-            } else {
-              // Add to parent node
-              updatedLevels = mapTree(state.levels, (node) => {
-                if (node.id === parentId) {
-                  return {
-                    ...node,
-                    children: [...node.children, newNode],
-                  } as typeof node
-                }
-                return node
-              }) as LevelNode[]
-            }
+            }),
+          )
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
-            }
-          })
-
-          return addedNodeId
+          return nodeId
         },
 
         updateNode: (nodeId, updates) => {
-          set((state) => {
-            let wasPreviewNode = false
-            const updatedLevels = mapTree(state.levels, (node) => {
-              if (node.id === nodeId) {
-                wasPreviewNode = node.preview === true
-                return {
-                  ...node,
+          let resultNodeId = nodeId
+
+          set(
+            produce((draft) => {
+              const node = draft.nodeIndex.get(nodeId)
+
+              // Check if we're committing a preview node (preview: true -> false)
+              const isCommittingPreview = node?.preview === true && updates.preview === false
+
+              if (isCommittingPreview) {
+                // Get full node data using current() to get plain object
+                const previewNode = current(node)
+
+                // Delete preview node (no undo)
+                const deleteCommand = new DeleteNodeCommand(nodeId)
+                deleteCommand.execute(draft.levels, draft.nodeIndex)
+
+                // Prepare new node data
+                const { preview, id, children, parent, ...nodeData } = previewNode as any
+
+                // Clean up name if not explicitly provided in updates
+                const cleanName =
+                  updates.name || nodeData.name.replace(' Preview', '').replace('Preview ', '')
+
+                // Merge with updates
+                const newNodeData = {
+                  ...nodeData,
                   ...updates,
-                } as typeof node
+                  name: cleanName,
+                  preview: false, // Ensure preview is false
+                }
+
+                // Handle children - always preserve the children property if it exists
+                if (children !== undefined) {
+                  if (children.length > 0) {
+                    // For groups (rooms), check if we need to convert world positions to relative
+                    const isGroup = previewNode.type === 'group'
+                    const hasPosition = 'position' in updates && updates.position !== undefined
+                    const roomPosition = hasPosition ? updates.position : [0, 0]
+
+                    // Recursively strip preview/id/parent from children
+                    newNodeData.children = children.map((child: any) => {
+                      const {
+                        preview: childPreview,
+                        id: childId,
+                        parent: childParent,
+                        ...childData
+                      } = child
+
+                      // Convert wall positions to relative if this is a group with a position
+                      if (isGroup && hasPosition && child.type === 'wall') {
+                        return {
+                          ...childData,
+                          name: childData.name.replace(' Preview', '').replace('Preview ', ''),
+                          position: [
+                            (childData.position?.[0] || 0) - (roomPosition as [number, number])[0],
+                            (childData.position?.[1] || 0) - (roomPosition as [number, number])[1],
+                          ] as [number, number],
+                          start: {
+                            x: (childData.start?.x || 0) - (roomPosition as [number, number])[0],
+                            z: (childData.start?.z || 0) - (roomPosition as [number, number])[1],
+                          },
+                          end: {
+                            x: (childData.end?.x || 0) - (roomPosition as [number, number])[0],
+                            z: (childData.end?.z || 0) - (roomPosition as [number, number])[1],
+                          },
+                        }
+                      }
+
+                      return {
+                        ...childData,
+                        name: childData.name.replace(' Preview', '').replace('Preview ', ''),
+                      }
+                    })
+                  } else {
+                    // Preserve empty children array
+                    newNodeData.children = []
+                  }
+                }
+
+                // Create new real node (with undo)
+                const addCommand = new AddNodeCommand(newNodeData, parent)
+                resultNodeId = addCommand.getNodeId()
+                draft.commandManager.execute(addCommand, draft.levels, draft.nodeIndex)
+              } else {
+                // Normal update
+                const command = new UpdateNodeCommand(nodeId, updates)
+
+                // Check if we're updating a preview node
+                const isPreviewNode = node?.preview === true
+
+                if (isPreviewNode) {
+                  // Preview node update - execute directly without undo tracking
+                  command.execute(draft.levels, draft.nodeIndex)
+                } else {
+                  draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+                }
               }
-              return node
-            }) as LevelNode[]
+            }),
+          )
 
-            // If we're committing a preview node (removing preview flag), push to undo stack
-            const isCommittingPreview = wasPreviewNode && updates.preview === false
-
-            if (isCommittingPreview) {
-              return {
-                levels: updatedLevels,
-                nodeIndex: buildNodeIndex(updatedLevels),
-                undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-                redoStack: [],
-              }
-            }
-
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          })
+          return resultNodeId
         },
 
         deleteNode: (nodeId) => {
-          set((state) => {
-            const updatedLevels = deleteNode(state.levels, nodeId)
+          set(
+            produce((draft) => {
+              const command = new DeleteNodeCommand(nodeId)
 
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          })
+              // Check if we're deleting a preview node
+              const node = draft.nodeIndex.get(nodeId)
+              if (node?.preview) {
+                // Preview node - execute directly without undo tracking
+                command.execute(draft.levels, draft.nodeIndex)
+              } else {
+                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
+            }),
+          )
+        },
+
+        deletePreviewNodes: () => {
+          set(
+            produce((draft) => {
+              // Find all preview nodes in the node index
+              const previewNodeIds: string[] = []
+              for (const [id, node] of draft.nodeIndex.entries()) {
+                if (node.preview === true) {
+                  previewNodeIds.push(id)
+                }
+              }
+
+              // Delete each preview node without undo tracking
+              for (const nodeId of previewNodeIds) {
+                const command = new DeleteNodeCommand(nodeId)
+                command.execute(draft.levels, draft.nodeIndex)
+              }
+            }),
+          )
         },
 
         // Preview wall placement methods
@@ -1426,8 +1503,6 @@ const useStore = create<StoreState>()(
             return {
               levels: updatedLevels,
               nodeIndex: buildNodeIndex(updatedLevels),
-              undoStack: [...state.undoStack, { levels: state.levels }].slice(-50),
-              redoStack: [],
             }
           }),
         cancelWallPreview: () =>
@@ -1464,7 +1539,8 @@ const useStore = create<StoreState>()(
             .filter((node) => !node.preview) // Remove preview nodes
             .map((node) => ({
               ...node,
-              children: node.children.length > 0 ? filterPreviewNodes(node.children) : [],
+              children:
+                node.children && node.children.length > 0 ? filterPreviewNodes(node.children) : [],
             }))
         }
 
@@ -1550,6 +1626,9 @@ const useStore = create<StoreState>()(
             nodes: state.nodeIndex.size,
             levels: state.levels.length,
           })
+
+          // Reinitialize command manager (can't be persisted)
+          state.commandManager = new CommandManager()
 
           // Preselect base level if no level is selected
           if (!state.selectedFloorId) {

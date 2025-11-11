@@ -6,10 +6,7 @@ import { WALL_HEIGHT } from '../viewer'
 export function GroupRenderer({ node }: { node: BaseNode }) {
   const children = node.children
   const selectedElements = useEditor((state) => state.selectedElements)
-  const isSelected = useMemo(
-    () => selectedElements.some((el) => el.id === node.id),
-    [selectedElements, node],
-  )
+  const isSelected = useMemo(() => selectedElements.includes(node.id), [selectedElements, node])
 
   const { width, depth, startPoint } = useMemo(() => {
     if (!isSelected || children.length === 0)
