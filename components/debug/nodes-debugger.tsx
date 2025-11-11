@@ -146,7 +146,7 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const {
     selectFloor,
-    setSelectedElements,
+    handleElementSelect,
     setSelectedImageIds,
     setSelectedScanIds,
     toggleFloorVisibility,
@@ -177,7 +177,7 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
       case 'wall':
       case 'roof':
       case 'column':
-        setSelectedElements([node.id])
+        handleElementSelect(node.id, {})
         break
       case 'reference-image':
         setSelectedImageIds([node.id])
@@ -190,7 +190,7 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
         if (node.parent) {
           const parentNode = nodeIndex.get(node.parent)
           if (parentNode?.type === 'wall') {
-            setSelectedElements([node.parent])
+            handleElementSelect(node.parent, {})
           }
         }
     }
@@ -399,7 +399,7 @@ export function NodesDebugger() {
   const levels = useEditor((state) => state.levels)
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)
-  const { selectFloor, setSelectedElements, setSelectedImageIds, setSelectedScanIds, setDebug } =
+  const { selectFloor, handleElementSelect, setSelectedImageIds, setSelectedScanIds, setDebug } =
     useEditor()
 
   // Load state from localStorage only on client
@@ -422,7 +422,7 @@ export function NodesDebugger() {
       case 'wall':
       case 'roof':
       case 'column':
-        setSelectedElements([node.id])
+        handleElementSelect(node.id, {})
         break
       case 'reference-image':
         setSelectedImageIds([node.id])
@@ -435,7 +435,7 @@ export function NodesDebugger() {
         if (node.parent) {
           const parentNode = nodeIndex.get(node.parent)
           if (parentNode?.type === 'wall') {
-            setSelectedElements([node.parent])
+            handleElementSelect(node.parent, {})
           }
         }
     }
@@ -443,7 +443,7 @@ export function NodesDebugger() {
     selectedNodeId,
     nodeIndex,
     selectFloor,
-    setSelectedElements,
+    handleElementSelect,
     setSelectedImageIds,
     setSelectedScanIds,
   ])

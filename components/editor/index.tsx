@@ -47,17 +47,9 @@ export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axi
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
-  // Use individual selectors for better performance
-  const getWallsSet = useEditor((state) => state.getWallsSet)
-  const setWalls = useEditor((state) => state.setWalls)
-  // Preview wall methods
-  const cancelWallPreview = useEditor((state) => state.cancelWallPreview)
   const selectedElements = useEditor((state) => state.selectedElements)
-  const setSelectedElements = useEditor((state) => state.setSelectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
   const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
   const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
