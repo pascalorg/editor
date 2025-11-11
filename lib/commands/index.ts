@@ -304,6 +304,125 @@ export class DeleteNodeCommand implements Command {
 }
 
 // ============================================================================
+// LEVEL COMMANDS
+// ============================================================================
+
+export class AddLevelCommand implements Command {
+  private readonly level: LevelNode
+  private addedIndex = -1
+
+  constructor(level: Omit<LevelNode, 'children'>) {
+    this.level = {
+      ...level,
+      children: [],
+    } as LevelNode
+  }
+
+  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    levels.push(this.level)
+    this.addedIndex = levels.length - 1
+    nodeIndex.set(this.level.id, this.level)
+  }
+
+  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    if (this.addedIndex >= 0 && this.addedIndex < levels.length) {
+      // Recursively remove level and all children from index
+      const removeFromIndex = (node: BaseNode) => {
+        nodeIndex.delete(node.id)
+        node.children.forEach(removeFromIndex)
+      }
+      removeFromIndex(levels[this.addedIndex])
+      levels.splice(this.addedIndex, 1)
+    }
+  }
+}
+
+export class DeleteLevelCommand implements Command {
+  private readonly levelId: string
+  private deletedLevel: LevelNode | null = null
+  private deletedIndex = -1
+
+  constructor(levelId: string) {
+    this.levelId = levelId
+  }
+
+  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    const index = levels.findIndex((l) => l.id === this.levelId)
+    if (index >= 0) {
+      // Save for undo - use current() to get plain object from draft
+      this.deletedLevel = current(levels[index]) as LevelNode
+      this.deletedIndex = index
+
+      // Recursively remove level and all children from index
+      const removeFromIndex = (node: BaseNode) => {
+        nodeIndex.delete(node.id)
+        node.children.forEach(removeFromIndex)
+      }
+      removeFromIndex(levels[index])
+
+      levels.splice(index, 1)
+    }
+  }
+
+  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    if (this.deletedLevel && this.deletedIndex >= 0) {
+      // Re-add the level and all its children to index
+      const addToIndex = (node: BaseNode) => {
+        nodeIndex.set(node.id, node)
+        node.children.forEach(addToIndex)
+      }
+
+      levels.splice(this.deletedIndex, 0, this.deletedLevel)
+      addToIndex(this.deletedLevel)
+    }
+  }
+}
+
+export class ReorderLevelsCommand implements Command {
+  private readonly newOrder: LevelNode[]
+  private previousOrder: LevelNode[] = []
+
+  constructor(newOrder: LevelNode[]) {
+    this.newOrder = newOrder
+  }
+
+  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    // Save previous order for undo
+    if (this.previousOrder.length === 0) {
+      this.previousOrder = [...levels]
+    }
+
+    // Clear and set new order
+    levels.splice(0, levels.length, ...this.newOrder)
+
+    // Rebuild index with new order (though IDs shouldn't change)
+    nodeIndex.clear()
+    for (const level of levels) {
+      const addToIndex = (node: BaseNode) => {
+        nodeIndex.set(node.id, node)
+        node.children.forEach(addToIndex)
+      }
+      addToIndex(level)
+    }
+  }
+
+  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    // Restore previous order
+    levels.splice(0, levels.length, ...this.previousOrder)
+
+    // Rebuild index
+    nodeIndex.clear()
+    for (const level of levels) {
+      const addToIndex = (node: BaseNode) => {
+        nodeIndex.set(node.id, node)
+        node.children.forEach(addToIndex)
+      }
+      addToIndex(level)
+    }
+  }
+}
+
+// ============================================================================
 // COMMAND MANAGER
 // ============================================================================
 

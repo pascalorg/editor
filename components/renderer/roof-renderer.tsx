@@ -174,7 +174,7 @@ export function RoofRenderer({
       }
 
       const updatedLevels = updateNodeProperties(state.levels, node.id, updates)
-      state.updateLevels(updatedLevels, false) // Don't push to undo - handled by drag handlers
+      state.updateLevels(updatedLevels) // Don't push to undo during drag - final commit handled by drag handlers
     },
     [node.id],
   )
@@ -182,9 +182,14 @@ export function RoofRenderer({
   // Handle drag for edge manipulation
   const handleEdgeDrag = useCallback(
     (handleId: string, handleType: 'horizontal' | 'ridge') => {
-      // Capture state for undo
-      const storeState = useEditor.getState()
-      const originalLevels = storeState.levels
+      // Capture original segment state for undo
+      const originalSegmentState = {
+        start: roofSegment.start,
+        end: roofSegment.end,
+        height: roofSegment.height,
+        leftWidth: roofSegment.leftWidth,
+        rightWidth: roofSegment.rightWidth,
+      }
 
       const plane = new THREE.Plane()
       const raycaster = new THREE.Raycaster()
@@ -342,12 +347,22 @@ export function RoofRenderer({
         document.removeEventListener('pointerup', onPointerUp)
         gl.domElement.style.cursor = 'auto'
 
-        // Push to undo stack if there were changes
+        // Record undo operation if there were changes
         if (hasChanged) {
-          useEditor.setState((state) => ({
-            undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
-            redoStack: [],
-          }))
+          // Use updateNode to record the change with command manager
+          useEditor.getState().updateNode(node.id, {
+            position: roofSegment.start,
+            size: [
+              Math.sqrt(
+                (roofSegment.end[0] - roofSegment.start[0]) ** 2 +
+                  (roofSegment.end[1] - roofSegment.start[1]) ** 2,
+              ),
+              0,
+            ] as [number, number],
+            height: roofSegment.height,
+            leftWidth: roofSegment.leftWidth,
+            rightWidth: roofSegment.rightWidth,
+          })
         }
       }
 
@@ -356,15 +371,11 @@ export function RoofRenderer({
       document.addEventListener('pointerup', onPointerUp)
       gl.domElement.style.cursor = 'grabbing'
     },
-    [roofSegment, camera, gl, tileSize, updateRoofSegment],
+    [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id],
   )
 
   // Handle rotation around base center
   const handleRotationDrag = useCallback(() => {
-    // Capture state for undo
-    const storeState = useEditor.getState()
-    const originalLevels = storeState.levels
-
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
@@ -503,11 +514,20 @@ export function RoofRenderer({
 
         updateRoofSegment(snappedSegment)
 
-        // Push to undo stack if there were changes
-        useEditor.setState((state) => ({
-          undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
-          redoStack: [],
-        }))
+        // Record undo operation
+        useEditor.getState().updateNode(node.id, {
+          position: snappedSegment.start,
+          size: [
+            Math.sqrt(
+              (snappedSegment.end[0] - snappedSegment.start[0]) ** 2 +
+                (snappedSegment.end[1] - snappedSegment.start[1]) ** 2,
+            ),
+            0,
+          ] as [number, number],
+          height: snappedSegment.height,
+          leftWidth: snappedSegment.leftWidth,
+          rightWidth: snappedSegment.rightWidth,
+        })
       }
     }
 
@@ -515,15 +535,11 @@ export function RoofRenderer({
     document.addEventListener('pointermove', onPointerMove)
     document.addEventListener('pointerup', onPointerUp)
     gl.domElement.style.cursor = 'grabbing'
-  }, [roofSegment, camera, gl, tileSize, updateRoofSegment])
+  }, [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id])
 
   // Handle translation for whole roof segment
   const handleTranslationDrag = useCallback(
     (axis: 'ridge' | 'perp' | 'xz') => {
-      // Capture state for undo
-      const storeState = useEditor.getState()
-      const originalLevels = storeState.levels
-
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
       const raycaster = new THREE.Raycaster()
       const pointer = new THREE.Vector2()
@@ -615,12 +631,22 @@ export function RoofRenderer({
         document.removeEventListener('pointerup', onPointerUp)
         gl.domElement.style.cursor = 'auto'
 
-        // Push to undo stack if there were changes
+        // Record undo operation if there were changes
         if (hasChanged) {
-          useEditor.setState((state) => ({
-            undoStack: [...state.undoStack, { levels: originalLevels }].slice(-50),
-            redoStack: [],
-          }))
+          // Use updateNode to record the change with command manager
+          useEditor.getState().updateNode(node.id, {
+            position: roofSegment.start,
+            size: [
+              Math.sqrt(
+                (roofSegment.end[0] - roofSegment.start[0]) ** 2 +
+                  (roofSegment.end[1] - roofSegment.start[1]) ** 2,
+              ),
+              0,
+            ] as [number, number],
+            height: roofSegment.height,
+            leftWidth: roofSegment.leftWidth,
+            rightWidth: roofSegment.rightWidth,
+          })
         }
       }
 
@@ -629,7 +655,7 @@ export function RoofRenderer({
       document.addEventListener('pointerup', onPointerUp)
       gl.domElement.style.cursor = 'grabbing'
     },
-    [roofSegment, camera, gl, tileSize, updateRoofSegment],
+    [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id],
   )
 
   // Visual states for handles
