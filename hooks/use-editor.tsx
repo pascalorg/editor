@@ -474,6 +474,7 @@ type StoreState = {
   addNode: (nodeData: Omit<BaseNode, 'id'>, parentId: string | null) => string
   updateNode: (nodeId: string, updates: Partial<AnyNode>) => string
   deleteNode: (nodeId: string) => void
+  deletePreviewNodes: () => void
 
   // Preview wall placement methods
   startWallPreview: (startPoint: [number, number]) => void
@@ -754,6 +755,9 @@ const useStore = create<StoreState>()(
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
         setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
         setActiveTool: (tool) => {
+          // Delete all preview nodes before switching tools
+          get().deletePreviewNodes()
+
           set({ activeTool: tool })
           // Automatically switch to building mode when a building tool is selected
           if (tool !== null) {
@@ -763,6 +767,11 @@ const useStore = create<StoreState>()(
           }
         },
         setControlMode: (mode) => {
+          // Delete all preview nodes when switching away from building mode
+          if (mode !== 'building') {
+            get().deletePreviewNodes()
+          }
+
           set({ controlMode: mode })
           // Clear activeTool when switching away from building mode to prevent mode leakage
           if (mode !== 'building') {
@@ -1351,6 +1360,26 @@ const useStore = create<StoreState>()(
                 command.execute(draft.levels, draft.nodeIndex)
               } else {
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              }
+            }),
+          )
+        },
+
+        deletePreviewNodes: () => {
+          set(
+            produce((draft) => {
+              // Find all preview nodes in the node index
+              const previewNodeIds: string[] = []
+              for (const [id, node] of draft.nodeIndex.entries()) {
+                if (node.preview === true) {
+                  previewNodeIds.push(id)
+                }
+              }
+
+              // Delete each preview node without undo tracking
+              for (const nodeId of previewNodeIds) {
+                const command = new DeleteNodeCommand(nodeId)
+                command.execute(draft.levels, draft.nodeIndex)
               }
             }),
           )
