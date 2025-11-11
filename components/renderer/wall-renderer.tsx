@@ -8,7 +8,8 @@ import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
-import type { GridPoint, WallNode } from '@/lib/nodes/types'
+import { findAncestors } from '@/lib/nodes/utils'
+import type { GridPoint, WallNode, GridItem, BaseNode } from '@/lib/nodes/types'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -163,6 +164,60 @@ function calculateJunctionIntersections(junction: Junction) {
 }
 // --- End of Junction Helpers ---
 
+/**
+ * Calculate the absolute world position of a node by traversing up through all parents
+ * and accumulating position and rotation transforms
+ */
+function calculateWorldPosition(
+  node: BaseNode & GridItem,
+  allLevels: BaseNode[],
+): { position: [number, number]; rotation: number } {
+  // If node doesn't have a parent property, it's at world root
+  if (!node.parent) {
+    return {
+      position: node.position,
+      rotation: node.rotation,
+    }
+  }
+
+  // Get all ancestors (from immediate parent up to root)
+  const ancestors = findAncestors(allLevels, node.id)
+
+  // Start with the node's local position and rotation
+  let worldX = node.position[0]
+  let worldY = node.position[1]
+  let worldRotation = node.rotation
+
+  // Traverse up through ancestors (from immediate parent to root)
+  // ancestors array is ordered from immediate parent to root
+  for (const ancestor of ancestors) {
+    // Check if ancestor has GridItem properties (position, rotation, size)
+    if ('position' in ancestor && 'rotation' in ancestor && 'size' in ancestor) {
+      const parent = ancestor as BaseNode & GridItem
+      const parentRotation = parent.rotation
+      const parentPos = parent.position
+
+      // Rotate the current position by parent's rotation
+      const cos = Math.cos(parentRotation)
+      const sin = Math.sin(parentRotation)
+      const rotatedX = worldX * cos - worldY * sin
+      const rotatedY = worldX * sin + worldY * cos
+
+      // Add parent's position
+      worldX = parentPos[0] + rotatedX
+      worldY = parentPos[1] + rotatedY
+
+      // Add parent's rotation
+      worldRotation += parentRotation
+    }
+  }
+
+  return {
+    position: [worldX, worldY],
+    rotation: worldRotation,
+  }
+}
+
 interface WallRendererProps {
   node: WallNode
 }
@@ -170,6 +225,7 @@ interface WallRendererProps {
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const debug = useEditor((state) => state.debug)
+  const allLevels = useEditor((state) => state.levels)
   const tileSize = TILE_SIZE
 
   // Check if this is a preview node
@@ -209,19 +265,30 @@ export function WallRenderer({ node }: WallRendererProps) {
     const halfT = WALL_THICKNESS / 2
 
     // Calculate world space coordinates for junction detection
-    // Note: rotation was calculated as atan2(-dy, dx), so when reconstructing:
+    // Now using calculateWorldPosition to account for parent transforms
+    const worldPos = calculateWorldPosition(node, allLevels)
+    const [x1, y1] = worldPos.position
+    const worldRotation = worldPos.rotation
+
+    // Calculate end point in world space
+    // rotation was calculated as atan2(-dy, dx), so when reconstructing:
     // x2 = x1 + length * cos(rotation)
     // y2 = y1 - length * sin(rotation)  <- Note the minus sign!
-    const [x1, y1] = node.position
-    const x2 = x1 + Math.cos(node.rotation) * length
-    const y2 = y1 - Math.sin(node.rotation) * length
+    const x2 = x1 + Math.cos(worldRotation) * length
+    const y2 = y1 - Math.sin(worldRotation) * length
 
     // Convert all walls to LiveWall format for junction calculation
     const liveWalls: LiveWall[] = allWalls.map((w) => {
-      const [wx1, wy1] = w.position
+      // Calculate world position for each wall
+      const wWorldPos = calculateWorldPosition(w, allLevels)
+      const [wx1, wy1] = wWorldPos.position
+      const wWorldRotation = wWorldPos.rotation
       const wLength = w.size[0]
-      const wx2 = wx1 + Math.cos(w.rotation) * wLength
-      const wy2 = wy1 - Math.sin(w.rotation) * wLength
+
+      // Calculate end point
+      const wx2 = wx1 + Math.cos(wWorldRotation) * wLength
+      const wy2 = wy1 - Math.sin(wWorldRotation) * wLength
+
       return {
         id: w.id,
         start: { x: wx1 * TILE_SIZE, y: wy1 * TILE_SIZE },
@@ -253,8 +320,8 @@ export function WallRenderer({ node }: WallRendererProps) {
       const dx = worldPoint.x - thisWall.start.x
       const dy = worldPoint.y - thisWall.start.y
       // Since rotation = atan2(-dy, dx), we rotate by +rotation (not -rotation) to align with +X axis
-      const cos = Math.cos(node.rotation)
-      const sin = Math.sin(node.rotation)
+      const cos = Math.cos(worldRotation)
+      const sin = Math.sin(worldRotation)
       return {
         x: dx * cos - dy * sin,
         z: dx * sin + dy * cos,
@@ -303,7 +370,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     geometry.rotateX(-Math.PI / 2)
 
     return geometry
-  }, [node, allWalls])
+  }, [node, allWalls, allLevels])
 
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
