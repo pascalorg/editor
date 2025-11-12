@@ -19,8 +19,8 @@ import { SlabBuilder } from '@/components/editor/elements/slab-builder'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Import registry utilities and trigger component registrations
 import { getNodeEditor } from '@/lib/nodes/registry'
-import '@/components/registry/wall'
-import '@/components/registry/column'
+import '@/components/nodes/wall/wall-node'
+import '@/components/nodes/column/column-node'
 // Node-based API imports for Phase 3 migration
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'

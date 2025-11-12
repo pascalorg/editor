@@ -4,25 +4,21 @@ import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
 import type {
   BaseNode,
-  ColumnNode,
   DoorNode,
   GridItem,
   ReferenceImageNode,
   RoofNode,
   ScanNode,
   SlabNode,
-  WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
-import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
 import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
 import { SelectionBox } from './selection-box'
 import { SlabRenderer } from './slab-renderer'
-import { WallRenderer } from './wall-renderer'
 import { WindowRenderer } from './window-renderer'
 
 interface NodeRendererProps {
