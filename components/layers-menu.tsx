@@ -1,21 +1,5 @@
 'use client'
 
-import { CylinderIcon } from '@phosphor-icons/react'
-import {
-  Box,
-  Building,
-  DoorOpen,
-  GripVertical,
-  Image,
-  Layers,
-  Plus,
-  RectangleVertical,
-  Square,
-  Triangle,
-} from 'lucide-react'
-import { Reorder, useDragControls } from 'motion/react'
-import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
 import {
   TreeExpander,
   TreeIcon,
@@ -29,20 +13,30 @@ import {
 import { Button } from '@/components/ui/button'
 import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { ComponentGroup } from '@/hooks/use-editor'
 import { useEditor } from '@/hooks/use-editor'
-import {
-  type BuildingElementType,
-  getAllElementsOfType,
-  getElementLabel,
-  getElementsOfType,
-  isElementSelected,
-} from '@/lib/building-elements'
+import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
 import type { LevelNode } from '@/lib/nodes/types'
 import { cn, createId } from '@/lib/utils'
+import { CylinderIcon } from '@phosphor-icons/react'
+import {
+  Box,
+  Building,
+  CuboidIcon,
+  DoorOpen,
+  GripVertical,
+  Image,
+  Layers,
+  Plus,
+  RectangleVertical,
+  Square,
+  Triangle,
+} from 'lucide-react'
+import { Reorder, useDragControls } from 'motion/react'
+import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 
 const buildingElementConfig: Record<
-  'wall' | 'roof' | 'column' | 'group',
+  'wall' | 'roof' | 'column' | 'slab' | 'group',
   {
     icon: ReactNode
     getLabel: (index: number, data?: any) => string
@@ -59,6 +53,10 @@ const buildingElementConfig: Record<
   column: {
     icon: <CylinderIcon className="h-4 w-4 text-gray-500" />,
     getLabel: (index) => getElementLabel('column', index),
+  },
+  slab: {
+    icon: <CuboidIcon className="h-4 w-4 text-gray-300" />,
+    getLabel: (index) => getElementLabel('slab', index),
   },
   group: {
     icon: <Building className="h-4 w-4 text-purple-600" />,
@@ -87,11 +85,15 @@ interface DraggableLevelItemProps {
   handleImageSelect: (id: string, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
   toggleFloorVisibility: (id: string) => void
-  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof' | 'column') => void
+  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof' | 'column' | 'slab') => void
   toggleImageVisibility: (id: string) => void
   toggleScanVisibility: (id: string) => void
   setFloorOpacity: (id: string, opacity: number) => void
-  setBuildingElementOpacity: (id: string, type: 'wall' | 'roof' | 'column', opacity: number) => void
+  setBuildingElementOpacity: (
+    id: string,
+    type: 'wall' | 'roof' | 'column' | 'slab',
+    opacity: number,
+  ) => void
   setImageOpacity: (id: string, opacity: number) => void
   setScanOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, levelId: string) => Promise<void>
@@ -600,10 +602,11 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const scans: any[] = []
 
   levels.forEach((level) => {
-    // Group walls, roofs, columns, and groups by type for the legacy format
+    // Group walls, roofs, columns, slabs, and groups by type for the legacy format
     const walls: any[] = []
     const roofs: any[] = []
     const columns: any[] = []
+    const slabs: any[] = []
     const groups: any[] = []
 
     level.children.forEach((child) => {
@@ -689,6 +692,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
           visible: child.visible ?? true,
           opacity: child.opacity ?? 100,
         })
+      } else if (child.type === 'slab') {
+        slabs.push({
+          id: child.id,
+          position: (child as any).position,
+          size: (child as any).size,
+          visible: child.visible ?? true,
+          opacity: child.opacity ?? 100,
+        })
       } else if (child.type === 'reference-image') {
         images.push({
           id: child.id,
@@ -740,6 +751,17 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         group: level.id,
         data: {
           columns,
+        },
+      })
+    }
+
+    if (slabs.length > 0) {
+      components.push({
+        id: `${level.id}-slabs`,
+        type: 'slab',
+        group: level.id,
+        data: {
+          slabs,
         },
       })
     }

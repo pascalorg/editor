@@ -22,6 +22,7 @@ import {
   UpdateNodeCommand,
 } from '@/lib/commands'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
+import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import {
   addReferenceImageToLevel,
   addScanToLevel,
@@ -234,6 +235,7 @@ export interface Scan {
 }
 
 export type Tool =
+  | 'slab'
   | 'wall'
   | 'room'
   | 'custom-room'
@@ -241,6 +243,7 @@ export type Tool =
   | 'window'
   | 'roof'
   | 'column'
+  | 'slab'
   | 'dummy1'
   | 'dummy2'
 
@@ -382,6 +385,7 @@ type StoreState = {
   // ============================================================================
   levels: LevelNode[] // Node tree hierarchy
   nodeIndex: Map<string, BaseNode> // Fast lookup by ID
+  spatialGrid: SpatialGrid // Spatial indexing for efficient neighbor queries
 
   // ============================================================================
   // UNDO/REDO STATE (managed by commandManager)
@@ -459,13 +463,16 @@ type StoreState = {
   undo: () => void
   redo: () => void
   toggleFloorVisibility: (floorId: string) => void
-  toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof' | 'column') => void
+  toggleBuildingElementVisibility: (
+    elementId: string,
+    type: 'wall' | 'roof' | 'column' | 'slab',
+  ) => void
   toggleImageVisibility: (imageId: string) => void
   toggleScanVisibility: (scanId: string) => void
   setFloorOpacity: (floorId: string, opacity: number) => void
   setBuildingElementOpacity: (
     elementId: string,
-    type: 'wall' | 'roof' | 'column',
+    type: 'wall' | 'roof' | 'column' | 'slab',
     opacity: number,
   ) => void
   setImageOpacity: (imageId: string, opacity: number) => void
@@ -486,6 +493,30 @@ type StoreState = {
   cancelWallPreview: () => void
 }
 
+/**
+ * Rebuild the spatial grid from the node index
+ * Used after hydration from localStorage
+ */
+function rebuildSpatialGrid(
+  spatialGrid: SpatialGrid,
+  nodeIndex: Map<string, BaseNode>,
+  getLevelId: (node: BaseNode) => string | null,
+): void {
+  // Clear existing data
+  spatialGrid.clear()
+
+  // Iterate through all nodes and add them to the spatial grid
+  for (const [nodeId, node] of nodeIndex.entries()) {
+    const bounds = calculateNodeBounds(node)
+    if (bounds) {
+      const levelId = getLevelId(node)
+      if (levelId) {
+        spatialGrid.updateNode(nodeId, levelId, bounds)
+      }
+    }
+  }
+}
+
 const useStore = create<StoreState>()(
   persist(
     (set, get) => {
@@ -502,6 +533,7 @@ const useStore = create<StoreState>()(
           },
         ],
         nodeIndex: new Map(), // Will be built from levels
+        spatialGrid: new SpatialGrid(1), // Cell size of 1 grid unit
 
         // Undo/redo state initialization
         commandManager: new CommandManager(),
@@ -724,6 +756,7 @@ const useStore = create<StoreState>()(
               viewMode: 'level',
             })
           }
+          get().handleClear()
         },
         selectedImageIds: [],
         selectedScanIds: [],
@@ -1232,6 +1265,19 @@ const useStore = create<StoreState>()(
               } else {
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
+
+              // Update spatial grid for the new node
+              const node = draft.nodeIndex.get(nodeId)
+              if (node) {
+                const bounds = calculateNodeBounds(node)
+                if (bounds) {
+                  // Find the level ID this node belongs to
+                  const levelId = get().getLevelId(node)
+                  if (levelId) {
+                    draft.spatialGrid.updateNode(nodeId, levelId, bounds)
+                  }
+                }
+              }
             }),
           )
 
@@ -1240,6 +1286,7 @@ const useStore = create<StoreState>()(
 
         updateNode: (nodeId, updates) => {
           let resultNodeId = nodeId
+          let affectedNodeIds = new Set<string>()
 
           set(
             produce((draft) => {
@@ -1337,8 +1384,36 @@ const useStore = create<StoreState>()(
                   draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
                 }
               }
+
+              // Update spatial grid for the updated node
+              const updatedNode = draft.nodeIndex.get(resultNodeId)
+              if (updatedNode) {
+                const bounds = calculateNodeBounds(updatedNode)
+                if (bounds) {
+                  // Find the level ID this node belongs to
+                  const levelId = get().getLevelId(updatedNode)
+                  if (levelId) {
+                    // Update the node in spatial grid (handles moving between cells)
+                    draft.spatialGrid.updateNode(resultNodeId, levelId, bounds)
+
+                    // Query for affected nodes (those intersecting with this node's bounds)
+                    affectedNodeIds = draft.spatialGrid.query(levelId, bounds)
+
+                    // Remove self from affected nodes
+                    affectedNodeIds.delete(resultNodeId)
+                  }
+                }
+              }
             }),
           )
+
+          // Log affected nodes outside of produce (for debugging)
+          if (affectedNodeIds && affectedNodeIds.size > 0) {
+            console.log(`[SpatialGrid] Node ${resultNodeId} affects ${affectedNodeIds.size} nodes:`, {
+              updatedNode: resultNodeId,
+              affectedNodes: Array.from(affectedNodeIds),
+            })
+          }
 
           return resultNodeId
         },
@@ -1356,6 +1431,9 @@ const useStore = create<StoreState>()(
               } else {
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
+
+              // Remove from spatial grid
+              draft.spatialGrid.removeNode(nodeId)
             }),
           )
         },
@@ -1629,6 +1707,17 @@ const useStore = create<StoreState>()(
 
           // Reinitialize command manager (can't be persisted)
           state.commandManager = new CommandManager()
+
+          // Reinitialize and rebuild spatial grid (Maps can't be persisted)
+          state.spatialGrid = new SpatialGrid(1)
+          rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.getLevelId)
+          console.log('[Rehydration] Rebuilt spatial grid:', {
+            totalNodes: state.nodeIndex.size,
+            levels: state.levels.map((level) => ({
+              id: level.id,
+              nodesInGrid: state.spatialGrid.getNodesInLevel(level.id).size,
+            })),
+          })
 
           // Preselect base level if no level is selected
           if (!state.selectedFloorId) {

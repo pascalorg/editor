@@ -382,6 +382,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
+
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
@@ -521,14 +522,16 @@ export function WallRenderer({ node }: WallRendererProps) {
         <>
           <group>
             {/* INVISIBLE MESH USED FOR EVENTS */}
-            <mesh
-              geometry={wallGeometry}
-              onPointerDown={onPointerDown}
-              onPointerEnter={onPointerEnter}
-              onPointerLeave={onPointerLeave}
-              onPointerMove={onPointerMove}
-              visible={false}
-            />
+            {isActiveFloor && (
+              <mesh
+                geometry={wallGeometry}
+                onPointerDown={onPointerDown}
+                onPointerEnter={onPointerEnter}
+                onPointerLeave={onPointerLeave}
+                onPointerMove={onPointerMove}
+                visible={false}
+              />
+            )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
                 <Base geometry={wallGeometry}>
@@ -545,13 +548,13 @@ export function WallRenderer({ node }: WallRendererProps) {
                   // const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
-                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
+                    opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
                   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
                   return (
                     <Subtraction
                       key={idx}
                       position-x={opening.position[0] * tileSize}
-                      position-y={opening.type === 'window' ? 1.12 : 0}
+                      position-y={opening.type === 'window' ? 1.12 : 1}
                       position-z={opening.position[1] * tileSize}
                       scale={scale}
                       showOperation={opening.preview}

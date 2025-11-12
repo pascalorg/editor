@@ -15,6 +15,7 @@ import { ColumnBuilder } from '@/components/editor/elements/column-builder'
 import { DoorBuilder } from '@/components/editor/elements/door-builder'
 import { ImageBuilder } from '@/components/editor/elements/image-builder'
 import { ScanBuilder } from '@/components/editor/elements/scan-builder'
+import { SlabBuilder } from '@/components/editor/elements/slab-builder'
 // import { ReferenceImage } from '@/components/editor/elements/reference-image'
 import { WindowBuilder } from '@/components/editor/elements/window-builder'
 // Node-based API imports for Phase 3 migration
@@ -542,6 +543,9 @@ export default function Editor({ className }: { className?: string }) {
                   )}
                   {controlMode === 'building' && activeTool === 'column' && isActiveFloor && (
                     <ColumnBuilder />
+                  )}
+                  {controlMode === 'building' && activeTool === 'slab' && isActiveFloor && (
+                    <SlabBuilder />
                   )}
                   {controlMode === 'building' && activeTool === 'door' && isActiveFloor && (
                     <DoorBuilder />

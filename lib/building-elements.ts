@@ -1,5 +1,5 @@
 import { CylinderIcon } from '@phosphor-icons/react'
-import { DoorOpen, RectangleVertical, Square, Triangle } from 'lucide-react'
+import { DoorOpen, Grid3x3, RectangleVertical, Square, Triangle } from 'lucide-react'
 import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
 
 /**
@@ -9,7 +9,7 @@ import type { Component, RoofSegment, WallSegment } from '@/hooks/use-editor'
  * to ensure consistent behavior across selection, deletion, and visibility.
  */
 
-export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column' | 'group'
+export type BuildingElementType = 'wall' | 'roof' | 'door' | 'window' | 'column' | 'slab' | 'group'
 
 // Simplified: just store the ID, we can look up type from nodeIndex when needed
 export type SelectedElement = string
@@ -22,9 +22,10 @@ export interface ElementDescriptor {
     | typeof DoorOpen
     | typeof RectangleVertical
     | typeof CylinderIcon
+    | typeof Grid3x3
   labelSingular: string
   labelPlural: string
-  itemsKey: 'segments' | 'columns' | 'walls'
+  itemsKey: 'segments' | 'columns' | 'walls' | 'slabs'
 }
 
 /**
@@ -65,6 +66,13 @@ export const ELEMENT_DESCRIPTORS: Record<BuildingElementType, ElementDescriptor>
     labelSingular: 'Column',
     labelPlural: 'Columns',
     itemsKey: 'columns',
+  },
+  slab: {
+    type: 'slab',
+    icon: Grid3x3,
+    labelSingular: 'Slab',
+    labelPlural: 'Slabs',
+    itemsKey: 'slabs',
   },
   group: {
     type: 'group',
