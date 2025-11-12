@@ -724,6 +724,7 @@ const useStore = create<StoreState>()(
               viewMode: 'level',
             })
           }
+          get().handleClear()
         },
         selectedImageIds: [],
         selectedScanIds: [],

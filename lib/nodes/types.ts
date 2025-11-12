@@ -16,6 +16,7 @@ export interface BaseNode {
   id: string
   type:
     | 'level'
+    | 'slab'
     | 'wall'
     | 'door'
     | 'window'
@@ -57,7 +58,15 @@ export interface GridPoint {
 export interface LevelNode extends BaseNode {
   type: 'level'
   level: number // Floor number (0 = ground floor, 1 = first floor, etc.)
-  children: (WallNode | RoofNode | ColumnNode | ReferenceImageNode | ScanNode | GroupNode)[]
+  children: (
+    | WallNode
+    | RoofNode
+    | ColumnNode
+    | ReferenceImageNode
+    | ScanNode
+    | GroupNode
+    | SlabNode
+  )[]
 }
 
 // ============================================================================
@@ -72,6 +81,10 @@ export interface WallNode extends BaseNode, GridItem {
   // Position represents the start point of the wall
   // Size[0] = length, Size[1] = thickness (0.2m)
   // Rotation determines wall direction
+}
+
+export interface SlabNode extends BaseNode, GridItem {
+  type: 'slab'
 }
 
 export interface DoorNode extends BaseNode, GridItem {
@@ -137,7 +150,7 @@ export interface GroupNode extends BaseNode, GridItem {
   type: 'group'
   groupType?: 'room' | 'floor' | 'outdoor' // Type of grouping
   color?: string // CSS color for visualization
-  children: (WallNode | RoofNode | ColumnNode | DoorNode | WindowNode | GroupNode)[]
+  children: (WallNode | RoofNode | ColumnNode | DoorNode | WindowNode | GroupNode | SlabNode)[]
 }
 
 // ============================================================================
