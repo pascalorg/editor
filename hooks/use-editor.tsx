@@ -234,6 +234,7 @@ export interface Scan {
 }
 
 export type Tool =
+  | 'slab'
   | 'wall'
   | 'room'
   | 'custom-room'
@@ -241,6 +242,7 @@ export type Tool =
   | 'window'
   | 'roof'
   | 'column'
+  | 'slab'
   | 'dummy1'
   | 'dummy2'
 

@@ -7,6 +7,7 @@ import type {
   ReferenceImageNode,
   RoofNode,
   ScanNode,
+  SlabNode,
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
@@ -19,6 +20,7 @@ import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
 import { SelectionBox } from './selection-box'
+import { SlabRenderer } from './slab-renderer'
 import { WallRenderer } from './wall-renderer'
 import { WindowRenderer } from './window-renderer'
 
@@ -87,6 +89,7 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
           {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
           {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
           {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
+          {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />}
           {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
           {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
           {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
