@@ -1,3 +1,5 @@
+import { useMemo, useRef } from 'react'
+import type * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type {
   BaseNode,
@@ -11,8 +13,6 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
-import { useMemo, useRef } from 'react'
-import type * as THREE from 'three'
 import { TILE_SIZE } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'

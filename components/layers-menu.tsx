@@ -1,22 +1,5 @@
 'use client'
 
-import {
-  TreeExpander,
-  TreeIcon,
-  TreeLabel,
-  TreeNode,
-  TreeNodeContent,
-  TreeNodeTrigger,
-  TreeProvider,
-  TreeView,
-} from '@/components/tree'
-import { Button } from '@/components/ui/button'
-import { OpacityControl } from '@/components/ui/opacity-control'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useEditor } from '@/hooks/use-editor'
-import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
-import type { LevelNode } from '@/lib/nodes/types'
-import { cn, createId } from '@/lib/utils'
 import { CylinderIcon } from '@phosphor-icons/react'
 import {
   Box,
@@ -34,6 +17,23 @@ import {
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import {
+  TreeExpander,
+  TreeIcon,
+  TreeLabel,
+  TreeNode,
+  TreeNodeContent,
+  TreeNodeTrigger,
+  TreeProvider,
+  TreeView,
+} from '@/components/tree'
+import { Button } from '@/components/ui/button'
+import { OpacityControl } from '@/components/ui/opacity-control'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useEditor } from '@/hooks/use-editor'
+import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
+import type { LevelNode } from '@/lib/nodes/types'
+import { cn, createId } from '@/lib/utils'
 
 const buildingElementConfig: Record<
   'wall' | 'roof' | 'column' | 'slab' | 'group',

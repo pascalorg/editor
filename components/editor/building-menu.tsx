@@ -1,9 +1,5 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { type Tool, useEditor } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
 import {
   BoundingBoxIcon,
   CylinderIcon,
@@ -12,6 +8,10 @@ import {
   WallIcon,
 } from '@phosphor-icons/react'
 import { Blinds, Circle, CuboidIcon, DoorOpen, Pyramid } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { type Tool, useEditor } from '@/hooks/use-editor'
+import { cn } from '@/lib/utils'
 export function BuildingMenu() {
   const activeTool = useEditor((state) => state.activeTool)
   const setActiveTool = useEditor((state) => state.setActiveTool)
