@@ -461,13 +461,16 @@ type StoreState = {
   undo: () => void
   redo: () => void
   toggleFloorVisibility: (floorId: string) => void
-  toggleBuildingElementVisibility: (elementId: string, type: 'wall' | 'roof' | 'column') => void
+  toggleBuildingElementVisibility: (
+    elementId: string,
+    type: 'wall' | 'roof' | 'column' | 'slab',
+  ) => void
   toggleImageVisibility: (imageId: string) => void
   toggleScanVisibility: (scanId: string) => void
   setFloorOpacity: (floorId: string, opacity: number) => void
   setBuildingElementOpacity: (
     elementId: string,
-    type: 'wall' | 'roof' | 'column',
+    type: 'wall' | 'roof' | 'column' | 'slab',
     opacity: number,
   ) => void
   setImageOpacity: (imageId: string, opacity: number) => void
