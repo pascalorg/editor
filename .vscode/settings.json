@@ -6,7 +6,8 @@
   "emmet.showExpandedAbbreviation": "never",
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
-    "source.organizeImports.biome": "explicit"
+    "source.organizeImports.biome": "explicit",
+    "source.organizeImports": false
   },
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome"
