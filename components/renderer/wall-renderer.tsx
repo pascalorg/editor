@@ -1,15 +1,15 @@
 'use client'
 
-import { emitter } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
-import { findAncestors } from '@/lib/nodes/utils'
 import { Base, Geometry, Subtraction } from '@react-three/csg'
 import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
+import { emitter } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
+import { useWalls } from '@/hooks/use-nodes'
+import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
+import { findAncestors } from '@/lib/nodes/utils'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
