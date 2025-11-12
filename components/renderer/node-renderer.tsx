@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type {
   BaseNode,
@@ -12,106 +10,17 @@ import type {
   WallNode,
   WindowNode,
 } from '@/lib/nodes/types'
-import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { useMemo, useRef } from 'react'
+import type * as THREE from 'three'
+import { TILE_SIZE } from '../editor'
 import { ColumnRenderer } from './column-renderer'
 import { DoorRenderer } from './door-renderer'
 import { ImageRenderer } from './image-renderer'
 import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
+import { SelectionBox } from './selection-box'
 import { WallRenderer } from './wall-renderer'
 import { WindowRenderer } from './window-renderer'
-
-const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
-
-// Helper function to create a cylinder between two points
-function createEdgeCylinder(start: number[], end: number[]) {
-  const dx = end[0] - start[0]
-  const dy = end[1] - start[1]
-  const dz = end[2] - start[2]
-  const length = Math.sqrt(dx * dx + dy * dy + dz * dz)
-
-  const geometry = new THREE.CylinderGeometry(OUTLINE_RADIUS, OUTLINE_RADIUS, length, 8)
-  const midpoint = new THREE.Vector3(
-    (start[0] + end[0]) / 2,
-    (start[1] + end[1]) / 2,
-    (start[2] + end[2]) / 2,
-  )
-
-  // Calculate rotation to align cylinder with edge
-  const direction = new THREE.Vector3(dx, dy, dz).normalize()
-  const axis = new THREE.Vector3(0, 1, 0).cross(direction).normalize()
-  const angle = Math.acos(new THREE.Vector3(0, 1, 0).dot(direction))
-
-  return { geometry, midpoint, axis, angle }
-}
-
-// Selection outline component for grid items
-function SelectionOutline({ gridItem }: { gridItem: GridItem }) {
-  const edges = useMemo(() => {
-    const [width, depth] = gridItem.size
-    const worldWidth = width * TILE_SIZE
-    const worldDepth = (depth || width) * TILE_SIZE // Use width if depth not specified
-
-    // Create bottom corners (y=0)
-    const bottomCorners = [
-      [0, 0, 0],
-      [worldWidth, 0, 0],
-      [worldWidth, 0, worldDepth],
-      [0, 0, worldDepth],
-    ]
-
-    // Create top corners (y=WALL_HEIGHT)
-    const topCorners = [
-      [0, WALL_HEIGHT, 0],
-      [worldWidth, WALL_HEIGHT, 0],
-      [worldWidth, WALL_HEIGHT, worldDepth],
-      [0, WALL_HEIGHT, worldDepth],
-    ]
-
-    const edgeList = []
-
-    // Bottom rectangle edges
-    for (let i = 0; i < bottomCorners.length; i++) {
-      edgeList.push([bottomCorners[i], bottomCorners[(i + 1) % bottomCorners.length]])
-    }
-
-    // Top rectangle edges
-    for (let i = 0; i < topCorners.length; i++) {
-      edgeList.push([topCorners[i], topCorners[(i + 1) % topCorners.length]])
-    }
-
-    // Vertical edges connecting bottom to top
-    for (let i = 0; i < bottomCorners.length; i++) {
-      edgeList.push([bottomCorners[i], topCorners[i]])
-    }
-
-    return edgeList.map((edge, idx) => {
-      const { geometry, midpoint, axis, angle } = createEdgeCylinder(edge[0], edge[1])
-      return { geometry, midpoint, axis, angle, key: idx }
-    })
-  }, [gridItem.size])
-
-  return (
-    <>
-      {edges.map(({ geometry, midpoint, axis, angle, key }) => (
-        <mesh
-          geometry={geometry}
-          key={key}
-          position={midpoint}
-          quaternion={new THREE.Quaternion().setFromAxisAngle(axis, angle)}
-          renderOrder={999}
-        >
-          <meshStandardMaterial
-            color="#ffffff"
-            depthTest={false}
-            emissive="#ffffff"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-      ))}
-    </>
-  )
-}
 
 interface NodeRendererProps {
   node: BaseNode
@@ -130,6 +39,7 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
 
   const selectedElements = useEditor((state) => state.selectedElements)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
+  const controlMode = useEditor((state) => state.controlMode)
 
   const isSelected = useMemo(() => selectedElements.includes(node.id), [selectedElements, node])
 
@@ -192,88 +102,8 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
             <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
           ))}
         </group>
-        {isSelected && <SelectionBox group={groupRef} />}
+        {isSelected && controlMode === 'select' && <SelectionBox group={groupRef} />}
       </group>
     </>
-  )
-}
-
-import { Edges } from '@react-three/drei'
-import { useState } from 'react'
-
-interface SelectionBoxProps {
-  group: React.RefObject<THREE.Group | null>
-}
-
-export function SelectionBox({ group }: SelectionBoxProps) {
-  const [size, setSize] = useState<THREE.Vector3 | null>(null)
-  const [center, setCenter] = useState<THREE.Vector3 | null>(null)
-
-  useEffect(() => {
-    if (!group.current) return
-
-    const updateBounds = () => {
-      const innerGroup = group.current!
-
-      // Force update of world matrices to ensure accurate calculation
-      innerGroup.updateMatrixWorld(true)
-
-      // Calculate bounding box in local space by manually computing it
-      const box = new THREE.Box3()
-      let hasContent = false
-
-      innerGroup.traverse((child) => {
-        if (child === innerGroup) return
-
-        // For meshes with geometry
-        if (child instanceof THREE.Mesh && child.geometry) {
-          const geometry = child.geometry
-
-          if (!geometry.boundingBox) {
-            geometry.computeBoundingBox()
-          }
-
-          if (geometry.boundingBox) {
-            hasContent = true
-            // Get the geometry bounds in local space
-            const localBox = geometry.boundingBox.clone()
-
-            // Transform by the mesh's matrix (relative to inner group)
-            // We need the transform from inner group to this child
-            const relativeMatrix = new THREE.Matrix4()
-            relativeMatrix.copy(child.matrix)
-
-            // If child has a parent chain within innerGroup, accumulate their matrices
-            let current = child.parent
-            while (current && current !== innerGroup) {
-              relativeMatrix.premultiply(current.matrix)
-              current = current.parent
-            }
-
-            localBox.applyMatrix4(relativeMatrix)
-            box.union(localBox)
-          }
-        }
-      })
-
-      if (!hasContent || box.isEmpty()) return
-
-      const size = box.getSize(new THREE.Vector3())
-      const center = box.getCenter(new THREE.Vector3())
-      setSize(size)
-      setCenter(center)
-    }
-
-    updateBounds()
-  }, [group])
-
-  if (!(size && center)) return null
-
-  return (
-    <mesh position={center}>
-      <boxGeometry args={[size.x, size.y, size.z]} />
-      <meshBasicMaterial opacity={0} transparent />
-      <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
-    </mesh>
   )
 }

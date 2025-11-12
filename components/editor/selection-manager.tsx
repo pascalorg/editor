@@ -1,7 +1,7 @@
+import { useEditor } from '@/hooks/use-editor'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
-import { useEditor } from '@/hooks/use-editor'
 
 function SelectionManager() {
   const handleElementSelect = useEditor((state) => state.handleElementSelect)
@@ -58,19 +58,41 @@ function SelectionManager() {
       }
 
       // Then in your click handler
-      const candidates = intersections
+      const allCandidates = intersections
         .map((hit) => {
           const nodeInfo = getNodeInfoFromIntersection(hit.object)
           return nodeInfo ? { ...nodeInfo, distance: hit.distance } : null
         })
         .filter(Boolean)
 
-      // Then sort by depth (descending) and distance (ascending)
-      candidates.sort((a, b) => {
-        if (b!.depth !== a!.depth) {
-          return b!.depth - a!.depth // Deeper nodes first
+      // Deduplicate by nodeId, keeping only the closest hit for each node
+      const candidatesByNode = new Map<
+        string,
+        { nodeId: string; depth: number; distance: number }
+      >()
+
+      for (const candidate of allCandidates) {
+        if (!candidate) continue
+
+        const existing = candidatesByNode.get(candidate.nodeId)
+        if (!existing || candidate.distance < existing.distance) {
+          candidatesByNode.set(candidate.nodeId, candidate)
         }
-        return a!.distance - b!.distance // Closer nodes first
+      }
+
+      // Convert back to array
+      const candidates = Array.from(candidatesByNode.values())
+
+      // Sort by distance first, then by depth if distances are very close
+      candidates.sort((a, b) => {
+        const distanceDiff = a.distance - b.distance
+
+        // If distance difference is less than 0.5, use depth to break the tie
+        if (Math.abs(distanceDiff) < 0.5) {
+          return b.depth - a.depth // Deeper nodes first
+        }
+
+        return distanceDiff // Closer nodes first
       })
 
       if (candidates.length > 0) {

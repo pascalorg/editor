@@ -1,15 +1,15 @@
 'use client'
 
-import { Base, Geometry, Subtraction } from '@react-three/csg'
-import { Edges, Line } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
-import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
 import { findAncestors } from '@/lib/nodes/utils'
+import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { Edges, Line } from '@react-three/drei'
+import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useMemo } from 'react'
+import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -545,13 +545,13 @@ export function WallRenderer({ node }: WallRendererProps) {
                   // const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
 
                   const scale: [number, number, number] =
-                    opening.type === 'door' ? [0.98, 4, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
+                    opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
                   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
                   return (
                     <Subtraction
                       key={idx}
                       position-x={opening.position[0] * tileSize}
-                      position-y={opening.type === 'window' ? 1.12 : 0}
+                      position-y={opening.type === 'window' ? 1.12 : 1}
                       position-z={opening.position[1] * tileSize}
                       scale={scale}
                       showOperation={opening.preview}
