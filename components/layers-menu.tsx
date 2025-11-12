@@ -1022,7 +1022,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     if (hasChanges) {
       setExpandedIds(Array.from(newExpanded))
     }
-  }, [selectedElements, selectedImageIds, selectedScanIds, components, images, scans, levels])
+  }, [selectedElements, selectedImageIds, selectedScanIds, levels, expandedIds])
 
   return (
     <div className="flex flex-1 flex-col px-2 py-2">

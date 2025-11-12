@@ -7,7 +7,7 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
     "source.organizeImports.biome": "explicit",
-    "source.organizeImports": false
+    "source.organizeImports": "never"
   },
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome"
