@@ -382,6 +382,7 @@ export function WallRenderer({ node }: WallRendererProps) {
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
+
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
@@ -521,14 +522,16 @@ export function WallRenderer({ node }: WallRendererProps) {
         <>
           <group>
             {/* INVISIBLE MESH USED FOR EVENTS */}
-            <mesh
-              geometry={wallGeometry}
-              onPointerDown={onPointerDown}
-              onPointerEnter={onPointerEnter}
-              onPointerLeave={onPointerLeave}
-              onPointerMove={onPointerMove}
-              visible={false}
-            />
+            {isActiveFloor && (
+              <mesh
+                geometry={wallGeometry}
+                onPointerDown={onPointerDown}
+                onPointerEnter={onPointerEnter}
+                onPointerLeave={onPointerLeave}
+                onPointerMove={onPointerMove}
+                visible={false}
+              />
+            )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
                 <Base geometry={wallGeometry}>
