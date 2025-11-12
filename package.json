@@ -42,6 +42,7 @@
     "react-scan": "^0.4.3",
     "tailwind-merge": "^3.4.0",
     "three": "^0.180.0",
+    "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
