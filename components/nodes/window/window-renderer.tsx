@@ -3,9 +3,9 @@
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { WindowNode } from '@/lib/nodes/types'
-import { TILE_SIZE } from '../editor'
 
 interface WindowRendererProps {
   node: WindowNode

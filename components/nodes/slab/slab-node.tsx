@@ -1,10 +1,39 @@
 'use client'
 
+import { Square } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
+import { SlabRenderer } from './slab-renderer'
 
-export function SlabBuilder() {
+// ============================================================================
+// SLAB RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for slab renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const SlabRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    thickness: z.number().optional(),
+  })
+  .optional()
+
+export type SlabRendererProps = z.infer<typeof SlabRendererPropsSchema>
+
+// ============================================================================
+// SLAB NODE EDITOR
+// ============================================================================
+
+/**
+ * Slab node editor component
+ * Uses useEditor hooks directly to manage slab creation via two-click area selection
+ */
+export function SlabNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -121,5 +150,20 @@ export function SlabBuilder() {
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER SLAB COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'slab',
+  nodeName: 'Slab',
+  editorMode: 'building',
+  toolName: 'slab',
+  toolIcon: Square,
+  rendererPropsSchema: SlabRendererPropsSchema,
+  nodeEditor: SlabNodeEditor,
+  nodeRenderer: SlabRenderer,
+})

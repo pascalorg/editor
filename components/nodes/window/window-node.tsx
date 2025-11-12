@@ -1,11 +1,40 @@
 'use client'
 
+import { RectangleHorizontal } from 'lucide-react'
 import { useEffect } from 'react'
+import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor, type WindowNode } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
+import { WindowRenderer } from './window-renderer'
 
-export function WindowBuilder() {
+// ============================================================================
+// WINDOW RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for window renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const WindowRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    modelScale: z.number().optional(),
+  })
+  .optional()
+
+export type WindowRendererProps = z.infer<typeof WindowRendererPropsSchema>
+
+// ============================================================================
+// WINDOW NODE EDITOR
+// ============================================================================
+
+/**
+ * Window node editor component
+ * Handles placing windows on walls via wall events
+ */
+export function WindowNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -167,5 +196,20 @@ export function WindowBuilder() {
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER WINDOW COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'window',
+  nodeName: 'Window',
+  editorMode: 'building',
+  toolName: 'window',
+  toolIcon: RectangleHorizontal,
+  rendererPropsSchema: WindowRendererPropsSchema,
+  nodeEditor: WindowNodeEditor,
+  nodeRenderer: WindowRenderer,
+})

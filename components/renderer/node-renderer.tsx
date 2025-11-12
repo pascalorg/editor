@@ -2,24 +2,11 @@ import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
-import type {
-  BaseNode,
-  DoorNode,
-  GridItem,
-  ReferenceImageNode,
-  RoofNode,
-  ScanNode,
-  SlabNode,
-  WindowNode,
-} from '@/lib/nodes/types'
+import type { BaseNode, GridItem, ReferenceImageNode, ScanNode } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
-import { DoorRenderer } from './door-renderer'
 import { ImageRenderer } from './image-renderer'
-import { RoofRenderer } from './roof-renderer'
 import { ScanRenderer } from './scan-renderer'
 import { SelectionBox } from './selection-box'
-import { SlabRenderer } from './slab-renderer'
-import { WindowRenderer } from './window-renderer'
 
 interface NodeRendererProps {
   node: BaseNode
@@ -92,11 +79,11 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
             <>
               {/* {node.type === 'group' && <GroupRenderer node={node} />} */}
               {/* {node.type === 'wall' && <WallRenderer node={node as WallNode} />} */}
-              {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
+              {/* {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />} */}
               {/* {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />} */}
-              {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />}
-              {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
-              {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
+              {/* {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />} */}
+              {/* {node.type === 'door' && <DoorRenderer node={node as DoorNode} />} */}
+              {/* {node.type === 'window' && <WindowRenderer node={node as WindowNode} />} */}
               {node.type === 'reference-image' && (
                 <ImageRenderer node={node as ReferenceImageNode} />
               )}

@@ -38,23 +38,27 @@ interface ComponentConfig {
 
 ### 2. Component Registrations
 
-#### Wall Component (`components/registry/wall.tsx`)
+#### Wall Node (`components/nodes/wall/wall-node.tsx`)
 
-- **Renderer Props Schema**: `WallRendererPropsSchema` - validates renderer-specific props (optional)
-- **Node Editor**: `WallBuilder` - manages two-click wall placement logic using `useEditor` hooks
+- **Renderer Props Schema**: `WallRendererPropsSchema` - co-located schema validating renderer-specific props (optional)
+- **Node Editor**: `WallNodeEditor` - manages two-click wall placement logic using `useEditor` hooks and grid events
 - **Node Renderer**: Reuses existing `WallRenderer`
+- **Registration**: `registerComponent()` is invoked inside the module so importing `wall-node` registers everything
 
-#### Column Component (`components/registry/column.tsx`)
+#### Column Node (`components/nodes/column/column-node.tsx`)
 
 - **Renderer Props Schema**: `ColumnRendererPropsSchema` - validates renderer props (height, diameter)
-- **Node Editor**: `ColumnBuilder` - manages single-click column placement logic using `useEditor` hooks
+- **Node Editor**: `ColumnNodeEditor` - handles hover preview plus single-click placement via `useEditor`
 - **Node Renderer**: Reuses existing `ColumnRenderer`
+- **Registration**: Registration happens within `column-node` as a side effect
+
+> Both node editors previously lived in `components/editor/elements/*-builder.tsx`; the builder files were removed in favor of this co-located approach.
 
 ### 3. Integration Points
 
 #### Editor Integration (`components/editor/index.tsx`)
 
-- Imports registry to trigger component registration
+- Side-effect imports node modules (`@/components/nodes/wall/wall-node` and `@/components/nodes/column/column-node`) to trigger registration
 - Uses `getNodeEditor()` helper to render node editors for wall and column
 - Maintains fallback to legacy builders for non-migrated components
 
@@ -95,11 +99,11 @@ const RegistryRenderer = getRenderer(node.type)
 )}
 ```
 
-#### Registry Module (`components/registry/index.ts`)
+#### Registration Imports
 
-- Pure TypeScript module (no JSX)
-- Imports and triggers component registrations
-- Re-exports registry utilities (`getNodeEditor`, `getRenderer`, etc.)
+- Registration now occurs within each node module
+- Any runtime that needs the component simply imports the node module for its side effects
+- Additional helper utilities (`getNodeEditor`, `getRenderer`, etc.) continue to live in `lib/nodes/registry`
 
 ## Usage
 
@@ -185,14 +189,14 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 ### Migrated Components
 - ✅ Wall
 - ✅ Column
+- ✅ Slab
+- ✅ Door
+- ✅ Window
+- ✅ Roof
+- ✅ Room
+- ✅ Custom Room
 
 ### Pending Migration
-- ⏳ Room
-- ⏳ Custom Room
-- ⏳ Roof
-- ⏳ Slab
-- ⏳ Door
-- ⏳ Window
 - ⏳ Reference Image
 - ⏳ Scan
 
@@ -208,14 +212,30 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 
 ### Created
 - `lib/nodes/registry.ts` - Core registry module (metadata & utilities)
-- `components/registry/wall.tsx` - Wall node editor + registration
-- `components/registry/column.tsx` - Column node editor + registration
+- `components/nodes/wall/wall-node.tsx` - Wall node editor + registration (co-located with renderer)
+- `components/nodes/column/column-node.tsx` - Column node editor + registration (co-located with renderer)
+- `components/nodes/slab/slab-node.tsx` - Slab node editor + registration
+- `components/nodes/door/door-node.tsx` - Door node editor + registration
+- `components/nodes/window/window-node.tsx` - Window node editor + registration
+- `components/nodes/roof/roof-node.tsx` - Roof node editor + registration
+- `components/nodes/room/room-node.tsx` - Room node editor + registration
+- `components/nodes/custom-room/custom-room-node.tsx` - Custom room node editor + registration
 
 ### Modified
-- `components/editor/index.tsx` - Added `RegistryNodeEditor` helper, imports registry components directly
-- `components/renderer/node-renderer.tsx` - Added registry renderer lookup with `getRenderer()`
+- `components/editor/index.tsx` - Imports all node modules to trigger registration and renders `RegistryNodeEditor` for all building tools
+- `components/renderer/node-renderer.tsx` - Uses registry renderer lookup with `getRenderer()`
 - `package.json` - Added zod v4 dependency
 
 ### Removed
-- `components/registry/index.ts` - Unnecessary middleman file
+- `components/editor/elements/wall-builder.tsx`
+- `components/editor/elements/column-builder.tsx`
+- `components/editor/elements/slab-builder.tsx`
+- `components/editor/elements/door-builder.tsx`
+- `components/editor/elements/window-builder.tsx`
+- `components/editor/elements/roof-builder.tsx`
+- `components/editor/elements/room-builder.tsx`
+- `components/editor/elements/custom-room-builder.tsx`
+- `components/registry/index.ts`
+- `components/registry/wall.tsx`
+- `components/registry/column.tsx`
 
