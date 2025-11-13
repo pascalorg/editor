@@ -11,19 +11,8 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImageBuilder } from '@/components/editor/elements/image-builder'
-import { ScanBuilder } from '@/components/editor/elements/scan-builder'
-// Import registry utilities and trigger component registrations
-import { getNodeEditor } from '@/lib/nodes/registry'
-import '@/components/nodes/wall/wall-node'
-import '@/components/nodes/column/column-node'
-import '@/components/nodes/slab/slab-node'
-import '@/components/nodes/door/door-node'
-import '@/components/nodes/window/window-node'
-import '@/components/nodes/roof/roof-node'
-import '@/components/nodes/room/room-node'
-import '@/components/nodes/custom-room/custom-room-node'
-// Node-based API imports for Phase 3 migration
+import { componentRegistry } from '@/lib/nodes/registry'
+import '@/components/nodes'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
@@ -45,12 +34,29 @@ export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axi
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 /**
- * Helper component to render registry-based node editors
+ * Helper component to render registry-based node editors by tool name
  */
 function RegistryNodeEditor({ toolName }: { toolName: string }) {
-  const NodeEditor = getNodeEditor(toolName)
-  if (!NodeEditor) return null
+  const entry = componentRegistry.getByTool(toolName)
+  if (!entry?.config.nodeEditor) return null
+  const NodeEditor = entry.config.nodeEditor
   return <NodeEditor />
+}
+
+/**
+ * Helper component to render all node editors for a specific mode
+ */
+function RegistryModeEditors({ mode }: { mode: 'guide' | 'select' | 'delete' | 'building' }) {
+  const entries = componentRegistry.getByMode(mode)
+  return (
+    <>
+      {entries.map((entry) => {
+        if (!entry.config.nodeEditor) return null
+        const NodeEditor = entry.config.nodeEditor
+        return <NodeEditor key={entry.config.nodeType} />
+      })}
+    </>
+  )
 }
 
 export default function Editor({ className }: { className?: string }) {
@@ -551,8 +557,7 @@ export default function Editor({ className }: { className?: string }) {
                     isActiveFloor && <RegistryNodeEditor toolName={activeTool} />}
 
                   {/* Non-building mode editors (guide mode for images and scans) */}
-                  {controlMode === 'guide' && isActiveFloor && <ImageBuilder />}
-                  {controlMode === 'guide' && isActiveFloor && <ScanBuilder />}
+                  {controlMode === 'guide' && isActiveFloor && <RegistryModeEditors mode="guide" />}
 
                   <NodeRenderer node={floor} />
                   {/* Only show interactive grid tiles for the active floor */}

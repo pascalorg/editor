@@ -4,8 +4,6 @@ import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
 import type { BaseNode, GridItem, ReferenceImageNode, ScanNode } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
-import { ImageRenderer } from './image-renderer'
-import { ScanRenderer } from './scan-renderer'
 import { SelectionBox } from './selection-box'
 
 interface NodeRendererProps {
@@ -84,10 +82,10 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
               {/* {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />} */}
               {/* {node.type === 'door' && <DoorRenderer node={node as DoorNode} />} */}
               {/* {node.type === 'window' && <WindowRenderer node={node as WindowNode} />} */}
-              {node.type === 'reference-image' && (
+              {/* {node.type === 'reference-image' && (
                 <ImageRenderer node={node as ReferenceImageNode} />
               )}
-              {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
+              {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />} */}
             </>
           )}
 

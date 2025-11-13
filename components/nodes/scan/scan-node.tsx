@@ -1,14 +1,43 @@
 'use client'
 
 import { useThree } from '@react-three/fiber'
+import { Box } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { z } from 'zod'
 import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import type { ScanNode } from '@/lib/nodes/types'
+import { ScanRenderer } from './scan-renderer'
 
-export function ScanBuilder() {
+// ============================================================================
+// SCAN RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for scan renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const ScanRendererPropsSchema = z
+  .object({
+    // Add renderer-specific props here if needed
+    // e.g., quality settings, LOD, etc.
+  })
+  .optional()
+
+export type ScanRendererProps = z.infer<typeof ScanRendererPropsSchema>
+
+// ============================================================================
+// SCAN NODE EDITOR
+// ============================================================================
+
+/**
+ * Scan node editor component
+ * Uses useEditor hooks directly to manage scan manipulation
+ */
+export function ScanNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
 
@@ -65,8 +94,12 @@ export function ScanBuilder() {
     }
   }, [updateNode, setIsManipulatingScan])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// SCAN MANIPULATION HOOK
+// ============================================================================
 
 /**
  * Custom hook for scan manipulation handlers
@@ -416,3 +449,17 @@ export function useScanManipulation(
     handleScaleDown,
   }
 }
+
+// ============================================================================
+// REGISTER SCAN COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'scan',
+  nodeName: '3D Scan',
+  editorMode: 'guide',
+  rendererPropsSchema: ScanRendererPropsSchema,
+  nodeEditor: ScanNodeEditor,
+  nodeRenderer: ScanRenderer,
+  toolIcon: Box,
+})

@@ -58,9 +58,9 @@ interface ComponentConfig {
 
 #### Editor Integration (`components/editor/index.tsx`)
 
-- Side-effect imports node modules (`@/components/nodes/wall/wall-node` and `@/components/nodes/column/column-node`) to trigger registration
-- Uses `getNodeEditor()` helper to render node editors for wall and column
-- Maintains fallback to legacy builders for non-migrated components
+- Single side-effect import (`@/components/nodes`) triggers all component registrations
+- Uses `getNodeEditor()` helper to render node editors dynamically
+- Maintains fallback to legacy builders for non-migrated components (image-builder, scan-builder)
 
 ```tsx
 // Helper component
@@ -195,10 +195,8 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 - ✅ Roof
 - ✅ Room
 - ✅ Custom Room
-
-### Pending Migration
-- ⏳ Reference Image
-- ⏳ Scan
+- ✅ Reference Image
+- ✅ Scan
 
 ## Future Enhancements
 
@@ -212,6 +210,7 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 
 ### Created
 - `lib/nodes/registry.ts` - Core registry module (metadata & utilities)
+- `components/nodes/index.ts` - Single registration entry point (imports all node modules)
 - `components/nodes/wall/wall-node.tsx` - Wall node editor + registration (co-located with renderer)
 - `components/nodes/column/column-node.tsx` - Column node editor + registration (co-located with renderer)
 - `components/nodes/slab/slab-node.tsx` - Slab node editor + registration
@@ -220,10 +219,14 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 - `components/nodes/roof/roof-node.tsx` - Roof node editor + registration
 - `components/nodes/room/room-node.tsx` - Room node editor + registration
 - `components/nodes/custom-room/custom-room-node.tsx` - Custom room node editor + registration
+- `components/nodes/reference-image/reference-image-node.tsx` - Reference image node editor + registration + manipulation hooks
+- `components/nodes/scan/scan-node.tsx` - Scan node editor + registration + manipulation hooks
 
 ### Modified
-- `components/editor/index.tsx` - Imports all node modules to trigger registration and renders `RegistryNodeEditor` for all building tools
+- `components/editor/index.tsx` - Imports all node modules to trigger registration, renders `RegistryNodeEditor` for building tools and `RegistryModeEditors` for guide mode
 - `components/renderer/node-renderer.tsx` - Uses registry renderer lookup with `getRenderer()`
+- `components/renderer/image-renderer.tsx` - Updated to import `useImageManipulation` from node file
+- `components/renderer/scan-renderer.tsx` - Updated to import `useScanManipulation` from node file
 - `package.json` - Added zod v4 dependency
 
 ### Removed
@@ -235,6 +238,8 @@ The `RegistryNodeEditor` helper will automatically find and render your node edi
 - `components/editor/elements/roof-builder.tsx`
 - `components/editor/elements/room-builder.tsx`
 - `components/editor/elements/custom-room-builder.tsx`
+- `components/editor/elements/image-builder.tsx`
+- `components/editor/elements/scan-builder.tsx`
 - `components/registry/index.ts`
 - `components/registry/wall.tsx`
 - `components/registry/column.tsx`
