@@ -9,7 +9,6 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
 import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
@@ -43,7 +42,6 @@ export default function Viewer({ className }: { className?: string }) {
   const selectFloor = useEditor((state) => state.selectFloor)
 
   // Convert node tree to legacy component format for proximity grid
-  const { components } = useMemo(() => nodeTreeToComponentsWithLevels(levels), [levels])
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -238,7 +236,7 @@ export default function Viewer({ className }: { className?: string }) {
                         <>
                           {isActiveFloor && (
                             <ProximityGrid
-                              components={components}
+                              components={[]}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -256,7 +254,7 @@ export default function Viewer({ className }: { className?: string }) {
                           )}
                           {!isActiveFloor && levelMode === 'exploded' && (
                             <ProximityGrid
-                              components={components}
+                              components={[]}
                               fadeWidth={0.5}
                               floorId={floor.id}
                               gridSize={tileSize}
@@ -288,7 +286,7 @@ export default function Viewer({ className }: { className?: string }) {
                         raycast={() => null}
                       >
                         <ProximityGrid
-                          components={components}
+                          components={[]}
                           fadeWidth={0.5}
                           floorId={floorBelow.id}
                           gridSize={tileSize}
