@@ -22,7 +22,6 @@ import {
   UpdateNodeCommand,
 } from '@/lib/commands'
 import { buildNodeIndex } from '@/lib/nodes/indexes'
-import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import {
   addReferenceImageToLevel,
   addScanToLevel,
@@ -31,6 +30,7 @@ import {
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
 import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -1409,10 +1409,13 @@ const useStore = create<StoreState>()(
 
           // Log affected nodes outside of produce (for debugging)
           if (affectedNodeIds && affectedNodeIds.size > 0) {
-            console.log(`[SpatialGrid] Node ${resultNodeId} affects ${affectedNodeIds.size} nodes:`, {
-              updatedNode: resultNodeId,
-              affectedNodes: Array.from(affectedNodeIds),
-            })
+            console.log(
+              `[SpatialGrid] Node ${resultNodeId} affects ${affectedNodeIds.size} nodes:`,
+              {
+                updatedNode: resultNodeId,
+                affectedNodes: Array.from(affectedNodeIds),
+              },
+            )
           }
 
           return resultNodeId

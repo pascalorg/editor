@@ -1,7 +1,7 @@
-import { useEditor } from '@/hooks/use-editor'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
+import { useEditor } from '@/hooks/use-editor'
 
 function SelectionManager() {
   const handleElementSelect = useEditor((state) => state.handleElementSelect)

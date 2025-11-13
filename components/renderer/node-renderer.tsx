@@ -1,28 +1,10 @@
-import { useEditor } from '@/hooks/use-editor'
-import type {
-  BaseNode,
-  ColumnNode,
-  DoorNode,
-  GridItem,
-  ReferenceImageNode,
-  RoofNode,
-  ScanNode,
-  SlabNode,
-  WallNode,
-  WindowNode,
-} from '@/lib/nodes/types'
 import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
+import { useEditor } from '@/hooks/use-editor'
+import { getRenderer } from '@/lib/nodes/registry'
+import type { BaseNode, GridItem, ReferenceImageNode, ScanNode } from '@/lib/nodes/types'
 import { TILE_SIZE } from '../editor'
-import { ColumnRenderer } from './column-renderer'
-import { DoorRenderer } from './door-renderer'
-import { ImageRenderer } from './image-renderer'
-import { RoofRenderer } from './roof-renderer'
-import { ScanRenderer } from './scan-renderer'
 import { SelectionBox } from './selection-box'
-import { SlabRenderer } from './slab-renderer'
-import { WallRenderer } from './wall-renderer'
-import { WindowRenderer } from './window-renderer'
 
 interface NodeRendererProps {
   node: BaseNode
@@ -68,6 +50,9 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
 
   const groupRef = useRef<THREE.Group>(null)
 
+  // Try to get renderer from registry first
+  const RegistryRenderer = getRenderer(node.type)
+
   // Don't render if filtered out by display mode
   if (!shouldRenderNode && node.type !== 'level') {
     return null
@@ -85,15 +70,24 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
         visible={node.visible}
       >
         <group ref={groupRef}>
-          {/* {node.type === 'group' && <GroupRenderer node={node} />} */}
-          {node.type === 'wall' && <WallRenderer node={node as WallNode} />}
-          {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />}
-          {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />}
-          {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />}
-          {node.type === 'door' && <DoorRenderer node={node as DoorNode} />}
-          {node.type === 'window' && <WindowRenderer node={node as WindowNode} />}
-          {node.type === 'reference-image' && <ImageRenderer node={node as ReferenceImageNode} />}
-          {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />}
+          {/* Use registry renderer if available, otherwise fallback to direct imports */}
+          {RegistryRenderer ? (
+            <RegistryRenderer node={node} />
+          ) : (
+            <>
+              {/* {node.type === 'group' && <GroupRenderer node={node} />} */}
+              {/* {node.type === 'wall' && <WallRenderer node={node as WallNode} />} */}
+              {/* {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />} */}
+              {/* {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />} */}
+              {/* {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />} */}
+              {/* {node.type === 'door' && <DoorRenderer node={node as DoorNode} />} */}
+              {/* {node.type === 'window' && <WindowRenderer node={node as WindowNode} />} */}
+              {/* {node.type === 'reference-image' && (
+                <ImageRenderer node={node as ReferenceImageNode} />
+              )}
+              {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />} */}
+            </>
+          )}
 
           {/* Selection outline for grid items */}
           {/* {(node as unknown as GridItem).size && isSelected && (

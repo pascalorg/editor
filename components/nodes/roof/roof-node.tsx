@@ -1,13 +1,44 @@
 'use client'
 
+import { Triangle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
+import { RoofRenderer } from '@/components/nodes/roof/roof-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 
-export function RoofBuilder() {
+// ============================================================================
+// ROOF RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for roof renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const RoofRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    height: z.number().optional(),
+    leftWidth: z.number().optional(),
+    rightWidth: z.number().optional(),
+  })
+  .optional()
+
+export type RoofRendererProps = z.infer<typeof RoofRendererPropsSchema>
+
+// ============================================================================
+// ROOF NODE EDITOR
+// ============================================================================
+
+/**
+ * Roof node editor component
+ * Uses useEditor hooks directly to manage roof creation via two-click area selection
+ */
+export function RoofNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -162,5 +193,20 @@ export function RoofBuilder() {
     }
   }, [addNode, updateNode, selectedFloorId])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER ROOF COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'roof',
+  nodeName: 'Roof',
+  editorMode: 'building',
+  toolName: 'roof',
+  toolIcon: Triangle,
+  rendererPropsSchema: RoofRendererPropsSchema,
+  nodeEditor: RoofNodeEditor,
+  nodeRenderer: RoofRenderer,
+})

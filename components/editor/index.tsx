@@ -11,23 +11,13 @@ import {
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ColumnBuilder } from '@/components/editor/elements/column-builder'
-import { DoorBuilder } from '@/components/editor/elements/door-builder'
-import { ImageBuilder } from '@/components/editor/elements/image-builder'
-import { ScanBuilder } from '@/components/editor/elements/scan-builder'
-import { SlabBuilder } from '@/components/editor/elements/slab-builder'
-// import { ReferenceImage } from '@/components/editor/elements/reference-image'
-import { WindowBuilder } from '@/components/editor/elements/window-builder'
-// Node-based API imports for Phase 3 migration
+import { componentRegistry } from '@/lib/nodes/registry'
+import '@/components/nodes'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
-import { CustomRoomBuilder } from './elements/custom-room-builder'
 import { GridTiles } from './elements/grid-tiles'
-import { RoofBuilder } from './elements/roof-builder'
-import { RoomBuilder } from './elements/room-builder'
-import { WallBuilder } from './elements/wall-builder'
 import { InfiniteFloor, useGridFadeControls } from './infinite-floor'
 import { InfiniteGrid } from './infinite-grid'
 import { ProximityGrid } from './proximity-grid'
@@ -38,14 +28,36 @@ export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 export const GRID_SIZE = 30 // 30m x 30m
 const SHOW_GRID = true // Show grid by default
 const GRID_OPACITY = 0.3 // Grid opacity
-const IMAGE_OPACITY = 0.5 // Reference image opacity
-const IMAGE_SCALE = 1 // Reference image scale
-const IMAGE_POSITION: [number, number] = [0, 0] // Reference image position
-const IMAGE_ROTATION = 0 // Reference image rotation
 const GRID_DIVISIONS = Math.floor(GRID_SIZE / TILE_SIZE) // 60 divisions
 export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axis
 
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
+
+/**
+ * Helper component to render registry-based node editors by tool name
+ */
+function RegistryNodeEditor({ toolName }: { toolName: string }) {
+  const entry = componentRegistry.getByTool(toolName)
+  if (!entry?.config.nodeEditor) return null
+  const NodeEditor = entry.config.nodeEditor
+  return <NodeEditor />
+}
+
+/**
+ * Helper component to render all node editors for a specific mode
+ */
+function RegistryModeEditors({ mode }: { mode: 'guide' | 'select' | 'delete' | 'building' }) {
+  const entries = componentRegistry.getByMode(mode)
+  return (
+    <>
+      {entries.map((entry) => {
+        if (!entry.config.nodeEditor) return null
+        const NodeEditor = entry.config.nodeEditor
+        return <NodeEditor key={entry.config.nodeType} />
+      })}
+    </>
+  )
+}
 
 export default function Editor({ className }: { className?: string }) {
   const selectedElements = useEditor((state) => state.selectedElements)
@@ -82,7 +94,7 @@ export default function Editor({ className }: { className?: string }) {
   // Clear cursor position when switching floors to prevent grid artifacts
   useEffect(() => {
     setPointerPosition(null)
-  }, [selectedFloorId, setPointerPosition])
+  }, [setPointerPosition])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -529,32 +541,23 @@ export default function Editor({ className }: { className?: string }) {
                   )}
 
                 <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                  {controlMode === 'building' && activeTool === 'wall' && isActiveFloor && (
-                    <WallBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'room' && isActiveFloor && (
-                    <RoomBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'custom-room' && isActiveFloor && (
-                    <CustomRoomBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'roof' && isActiveFloor && (
-                    <RoofBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'column' && isActiveFloor && (
-                    <ColumnBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'slab' && isActiveFloor && (
-                    <SlabBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'door' && isActiveFloor && (
-                    <DoorBuilder />
-                  )}
-                  {controlMode === 'building' && activeTool === 'window' && isActiveFloor && (
-                    <WindowBuilder />
-                  )}
-                  {controlMode === 'guide' && isActiveFloor && <ImageBuilder />}
-                  {controlMode === 'guide' && isActiveFloor && <ScanBuilder />}
+                  {/* Registry-based node editors for all building tools */}
+                  {controlMode === 'building' &&
+                    activeTool &&
+                    [
+                      'column',
+                      'wall',
+                      'slab',
+                      'door',
+                      'window',
+                      'roof',
+                      'room',
+                      'custom-room',
+                    ].includes(activeTool) &&
+                    isActiveFloor && <RegistryNodeEditor toolName={activeTool} />}
+
+                  {/* Non-building mode editors (guide mode for images and scans) */}
+                  {controlMode === 'guide' && isActiveFloor && <RegistryModeEditors mode="guide" />}
 
                   <NodeRenderer node={floor} />
                   {/* Only show interactive grid tiles for the active floor */}

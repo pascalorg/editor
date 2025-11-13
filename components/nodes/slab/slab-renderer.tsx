@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { SlabNode } from '@/lib/nodes/types'
-import { TILE_SIZE } from '../editor'
 
 const SLAB_THICKNESS = 0.2 // 20cm thickness
 
@@ -54,11 +54,7 @@ export function SlabRenderer({ node }: SlabRendererProps) {
       {isPreview ? (
         <group>
           {/* Occluded/behind version - dimmer, shows through everything */}
-          <mesh
-            geometry={slabGeometry}
-            position={[xOffset, yPosition, zOffset]}
-            renderOrder={1}
-          >
+          <mesh geometry={slabGeometry} position={[xOffset, yPosition, zOffset]} renderOrder={1}>
             <meshStandardMaterial
               color={previewColor}
               depthTest={false}
@@ -70,11 +66,7 @@ export function SlabRenderer({ node }: SlabRendererProps) {
             />
           </mesh>
           {/* Visible/front version - brighter, only shows when not occluded */}
-          <mesh
-            geometry={slabGeometry}
-            position={[xOffset, yPosition, zOffset]}
-            renderOrder={2}
-          >
+          <mesh geometry={slabGeometry} position={[xOffset, yPosition, zOffset]} renderOrder={2}>
             <meshStandardMaterial
               color={previewColor}
               depthTest={true}

@@ -10,7 +10,7 @@ import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
 import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
 import { findAncestors } from '@/lib/nodes/utils'
-import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---

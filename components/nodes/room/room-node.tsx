@@ -1,11 +1,40 @@
 'use client'
 
+import { BoxSelect } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
+import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import { createId } from '@/lib/utils'
 
-export function RoomBuilder() {
+// ============================================================================
+// ROOM RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for room renderer props (groups)
+ * These are renderer-specific properties, not the full node structure
+ */
+export const RoomRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    groupType: z.string().optional(),
+  })
+  .optional()
+
+export type RoomRendererProps = z.infer<typeof RoomRendererPropsSchema>
+
+// ============================================================================
+// ROOM NODE EDITOR
+// ============================================================================
+
+/**
+ * Room node editor component
+ * Uses useEditor hooks directly to manage room creation via two-click area selection
+ */
+export function RoomNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -258,5 +287,20 @@ export function RoomBuilder() {
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER ROOM COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'room', // Unique type for registry, even though it creates 'group' nodes
+  nodeName: 'Room',
+  editorMode: 'building',
+  toolName: 'room',
+  toolIcon: BoxSelect,
+  rendererPropsSchema: RoomRendererPropsSchema,
+  nodeEditor: RoomNodeEditor,
+  nodeRenderer: GroupRenderer,
+})
