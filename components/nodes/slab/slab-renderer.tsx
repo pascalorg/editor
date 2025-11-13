@@ -6,7 +6,7 @@ import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { SlabNode } from '@/lib/nodes/types'
 
-const SLAB_THICKNESS = 0.2 // 20cm thickness
+export const SLAB_THICKNESS = 0.2 // 20cm thickness
 
 interface SlabRendererProps {
   node: SlabNode
