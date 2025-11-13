@@ -30,6 +30,8 @@ import {
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
 import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { NodeProcessor } from '@/lib/processors/types'
+import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-manager'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
 
@@ -415,6 +417,7 @@ type StoreState = {
   handleClear: () => void
   pointerPosition: [number, number] | null
   debug: boolean // Debug mode flag
+  nodeProcessors: NodeProcessor[]
 } & {
   // Node-based operations
   updateLevels: (levels: LevelNode[]) => void
@@ -579,6 +582,7 @@ const useStore = create<StoreState>()(
             children: [],
           },
         ],
+        nodeProcessors: [new VerticalStackingProcessor()],
         nodeIndex: new Map(), // Will be built from levels
         spatialGrid: new SpatialGrid(1), // Cell size of 1 grid unit
 
@@ -1323,6 +1327,45 @@ const useStore = create<StoreState>()(
                   const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
                   if (levelId) {
                     draft.spatialGrid.updateNode(nodeId, levelId, bounds)
+
+                    // Query for affected nodes (those intersecting with this node's bounds)
+                    const affectedNodeIds = draft.spatialGrid.query(levelId, bounds)
+
+                    // Remove self from affected nodes
+                    affectedNodeIds.delete(nodeId)
+
+                    // Process affected nodes
+                    if (affectedNodeIds.size > 0) {
+                      const affectedNodes: BaseNode[] = Array.from(affectedNodeIds)
+                        .map((id) => draft.nodeIndex.get(id))
+                        .filter((node): node is BaseNode => node !== undefined)
+
+                      const processors = draft.nodeProcessors
+
+                      // Collect all updates from processors
+                      const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
+
+                      processors.forEach((processor: NodeProcessor) => {
+                        const results = processor.process(affectedNodes)
+                        allUpdates.push(...results)
+                      })
+
+                      // Apply updates to each affected node using UpdateNodeCommand
+                      allUpdates.forEach(({ nodeId: affectedNodeId, updates }) => {
+                        const command = new UpdateNodeCommand(affectedNodeId, updates)
+                        command.execute(draft.levels, draft.nodeIndex)
+                        console.log(`[Processor] Applied updates to ${affectedNodeId}:`, updates)
+                      })
+
+                      console.log(
+                        `[SpatialGrid] Node ${nodeId} affects ${affectedNodeIds.size} nodes:`,
+                        {
+                          newNode: nodeId,
+                          affectedNodes: Array.from(affectedNodeIds),
+                          appliedUpdates: allUpdates.length,
+                        },
+                      )
+                    }
                   }
                 }
               }
@@ -1468,20 +1511,43 @@ const useStore = create<StoreState>()(
                     affectedNodeIds.delete(resultNodeId)
                   }
                 }
+
+                // Process affected nodes
+                if (affectedNodeIds && affectedNodeIds.size > 0) {
+                  const affectedNodes: BaseNode[] = Array.from(affectedNodeIds)
+                    .map((id) => draft.nodeIndex.get(id))
+                    .filter((node): node is BaseNode => node !== undefined)
+
+                  console.log('affectedNodes', affectedNodes)
+                  const processors = draft.nodeProcessors
+
+                  // Collect all updates from processors
+                  const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
+
+                  processors.forEach((processor: NodeProcessor) => {
+                    const results = processor.process(affectedNodes)
+                    allUpdates.push(...results)
+                  })
+
+                  // Apply updates to each affected node using UpdateNodeCommand
+                  allUpdates.forEach(({ nodeId, updates }) => {
+                    const command = new UpdateNodeCommand(nodeId, updates)
+                    command.execute(draft.levels, draft.nodeIndex)
+                    console.log(`[Processor] Applied updates to ${nodeId}:`, updates)
+                  })
+
+                  console.log(
+                    `[SpatialGrid] Node ${resultNodeId} affects ${affectedNodeIds.size} nodes:`,
+                    {
+                      updatedNode: resultNodeId,
+                      affectedNodes: Array.from(affectedNodeIds),
+                      appliedUpdates: allUpdates.length,
+                    },
+                  )
+                }
               }
             }),
           )
-
-          // Log affected nodes outside of produce (for debugging)
-          if (affectedNodeIds && affectedNodeIds.size > 0) {
-            console.log(
-              `[SpatialGrid] Node ${resultNodeId} affects ${affectedNodeIds.size} nodes:`,
-              {
-                updatedNode: resultNodeId,
-                affectedNodes: Array.from(affectedNodeIds),
-              },
-            )
-          }
 
           return resultNodeId
         },

@@ -44,6 +44,7 @@ export interface GridItem {
   rotation: number // radians
   size: [number, number] // width, depth in grid units
   canPlace?: boolean // Whether the item can be placed at its current position
+  verticalStackingOffset?: number // Additional Y offset due to vertical stacking
 }
 
 export interface GridPoint {
