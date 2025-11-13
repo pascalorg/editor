@@ -1,11 +1,40 @@
 'use client'
 
+import { DoorOpen } from 'lucide-react'
 import { useEffect } from 'react'
+import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { type DoorNode, useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
+import { DoorRenderer } from './door-renderer'
 
-export function DoorBuilder() {
+// ============================================================================
+// DOOR RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for door renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const DoorRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    modelScale: z.number().optional(),
+  })
+  .optional()
+
+export type DoorRendererProps = z.infer<typeof DoorRendererPropsSchema>
+
+// ============================================================================
+// DOOR NODE EDITOR
+// ============================================================================
+
+/**
+ * Door node editor component
+ * Handles placing doors on walls via wall events
+ */
+export function DoorNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -176,5 +205,20 @@ export function DoorBuilder() {
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER DOOR COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'door',
+  nodeName: 'Door',
+  editorMode: 'building',
+  toolName: 'door',
+  toolIcon: DoorOpen,
+  rendererPropsSchema: DoorRendererPropsSchema,
+  nodeEditor: DoorNodeEditor,
+  nodeRenderer: DoorRenderer,
+})

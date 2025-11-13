@@ -1,14 +1,43 @@
 'use client'
 
 import { useThree } from '@react-three/fiber'
+import { Image } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { z } from 'zod'
 import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import type { ReferenceImageNode } from '@/lib/nodes/types'
+import { ImageRenderer } from './image-renderer'
 
-export function ImageBuilder() {
+// ============================================================================
+// REFERENCE IMAGE RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for reference image renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const ReferenceImageRendererPropsSchema = z
+  .object({
+    // Add renderer-specific props here if needed
+    // e.g., quality settings, LOD, etc.
+  })
+  .optional()
+
+export type ReferenceImageRendererProps = z.infer<typeof ReferenceImageRendererPropsSchema>
+
+// ============================================================================
+// REFERENCE IMAGE NODE EDITOR
+// ============================================================================
+
+/**
+ * Reference image node editor component
+ * Uses useEditor hooks directly to manage image manipulation
+ */
+export function ReferenceImageNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
 
@@ -64,8 +93,12 @@ export function ImageBuilder() {
     }
   }, [updateNode, setIsManipulatingImage])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// IMAGE MANIPULATION HOOK
+// ============================================================================
 
 /**
  * Custom hook for image manipulation handlers
@@ -384,3 +417,17 @@ export function useImageManipulation(
     handleScaleDown,
   }
 }
+
+// ============================================================================
+// REGISTER REFERENCE IMAGE COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'reference-image',
+  nodeName: 'Reference Image',
+  editorMode: 'guide',
+  rendererPropsSchema: ReferenceImageRendererPropsSchema,
+  nodeEditor: ReferenceImageNodeEditor,
+  nodeRenderer: ImageRenderer,
+  toolIcon: Image,
+})

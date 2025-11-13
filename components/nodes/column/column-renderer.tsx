@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type { ColumnNode } from '@/lib/nodes/types'
-import { TILE_SIZE, WALL_HEIGHT } from '../editor'
+import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
 const COLUMN_RADIUS = 0.15 // 15cm radius
 

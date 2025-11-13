@@ -1,10 +1,37 @@
 'use client'
 
+import { Circle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
+import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 
-export function ColumnBuilder() {
+// ============================================================================
+// COLUMN RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for column renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const ColumnRendererPropsSchema = z.object({
+  height: z.number(),
+  diameter: z.number(),
+})
+
+export type ColumnRendererProps = z.infer<typeof ColumnRendererPropsSchema>
+
+// ============================================================================
+// COLUMN BUILDER COMPONENT
+// ============================================================================
+
+/**
+ * Column builder component
+ * Uses useEditor hooks directly to manage column placement
+ */
+export function ColumnNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -43,12 +70,12 @@ export function ColumnBuilder() {
           {
             type: 'column' as const,
             name: `Column at ${x},${y}`,
-            position: [x, y] as [number, number],
+            position: [x, y],
             rotation: 0,
-            size: [0.3, 0.3] as [number, number], // 30cm x 30cm column
+            size: [0.3, 0.3], // 30cm x 30cm column
             visible: true,
             opacity: 100,
-            children: [] as [],
+            children: [],
           } as any,
           selectedFloorId,
         )
@@ -125,5 +152,20 @@ export function ColumnBuilder() {
     }
   }, [addNode, updateNode, selectedFloorId, levels])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER COLUMN COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'column',
+  nodeName: 'Column',
+  editorMode: 'building',
+  toolName: 'column',
+  toolIcon: Circle,
+  rendererPropsSchema: ColumnRendererPropsSchema,
+  nodeEditor: ColumnNodeEditor,
+  nodeRenderer: ColumnRenderer,
+})

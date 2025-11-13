@@ -1,11 +1,40 @@
 'use client'
 
+import { Pentagon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
+import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
 import { createId } from '@/lib/utils'
 
-export function CustomRoomBuilder() {
+// ============================================================================
+// CUSTOM ROOM RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for custom room renderer props (groups)
+ * These are renderer-specific properties, not the full node structure
+ */
+export const CustomRoomRendererPropsSchema = z
+  .object({
+    // Optional renderer configuration
+    groupType: z.string().optional(),
+  })
+  .optional()
+
+export type CustomRoomRendererProps = z.infer<typeof CustomRoomRendererPropsSchema>
+
+// ============================================================================
+// CUSTOM ROOM NODE EDITOR
+// ============================================================================
+
+/**
+ * Custom room node editor component
+ * Uses useEditor hooks directly to manage custom room creation via multi-point polygon
+ */
+export function CustomRoomNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
@@ -347,5 +376,20 @@ export function CustomRoomBuilder() {
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER CUSTOM ROOM COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'custom-room', // Unique type for registry, even though it creates 'group' nodes
+  nodeName: 'Custom Room',
+  editorMode: 'building',
+  toolName: 'custom-room',
+  toolIcon: Pentagon,
+  rendererPropsSchema: CustomRoomRendererPropsSchema,
+  nodeEditor: CustomRoomNodeEditor,
+  nodeRenderer: GroupRenderer,
+})

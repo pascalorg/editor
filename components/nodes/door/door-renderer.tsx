@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import type { DoorNode } from '@/lib/nodes/types'
-import { TILE_SIZE } from '../editor'
+import { TILE_SIZE } from '../../editor'
 
 interface DoorRendererProps {
   node: DoorNode

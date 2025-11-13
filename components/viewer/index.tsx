@@ -5,7 +5,6 @@ import { Environment, OrthographicCamera, PerspectiveCamera } from '@react-three
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type * as THREE from 'three'
-import { ScanBuilder } from '@/components/editor/elements/scan-builder'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
@@ -309,8 +308,6 @@ export default function Viewer({ className }: { className?: string }) {
 
                   {/* Render node tree - filtered by viewerDisplayMode */}
                   <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                    {/* Scan builder for handling scan manipulation */}
-                    <ScanBuilder />
                     <NodeRenderer isViewer node={floor} />
                   </group>
                 </AnimatedLevel>

@@ -1,13 +1,41 @@
 'use client'
 
+import { Minus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/nodes/registry'
+import { WallRenderer } from './wall-renderer'
 
-export function WallBuilder() {
+// ============================================================================
+// WALL RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for wall renderer props (renderer-specific configuration)
+ * The renderer receives the full node, so this is for any additional props
+ */
+export const WallRendererPropsSchema = z
+  .object({
+    // Add renderer-specific props here if needed
+    // e.g., material overrides, LOD settings, etc.
+  })
+  .optional()
+
+export type WallRendererProps = z.infer<typeof WallRendererPropsSchema>
+
+// ============================================================================
+// WALL NODE EDITOR
+// ============================================================================
+
+/**
+ * Wall node editor component
+ * Uses useEditor hooks directly to manage wall creation
+ */
+export function WallNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
-  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Use ref to persist values across renders without triggering re-renders
@@ -62,6 +90,7 @@ export function WallBuilder() {
 
       return [projectedX, projectedY]
     }
+
     const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
@@ -148,7 +177,22 @@ export function WallBuilder() {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
     }
-  }, [addNode, updateNode, deleteNode, selectedFloorId])
+  }, [addNode, updateNode, selectedFloorId])
 
-  return <></>
+  return null
 }
+
+// ============================================================================
+// REGISTER WALL COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'wall',
+  nodeName: 'Wall',
+  editorMode: 'building',
+  toolName: 'wall',
+  toolIcon: Minus,
+  rendererPropsSchema: WallRendererPropsSchema,
+  nodeEditor: WallNodeEditor,
+  nodeRenderer: WallRenderer,
+})

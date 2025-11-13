@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { SlabNode } from '@/lib/nodes/types'
-import { TILE_SIZE } from '../editor'
 
 const SLAB_THICKNESS = 0.2 // 20cm thickness
 
