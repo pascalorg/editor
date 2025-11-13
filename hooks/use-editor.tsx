@@ -494,6 +494,59 @@ type StoreState = {
 }
 
 /**
+ * Helper function to get level ID from a node using provided draft state
+ * This is used inside Immer produce() where we can't use get() safely
+ */
+function getLevelIdFromDraft(
+  node: BaseNode,
+  levels: LevelNode[],
+  nodeIndex: Map<string, BaseNode>,
+): string | null {
+  // Create a Set of level IDs for fast lookup
+  const levelIds = new Set(levels.map((l) => l.id))
+
+  // If node is already a level, return its id
+  if (levelIds.has(node.id)) {
+    return node.id
+  }
+
+  // Look up the node in the index to get the current version with updated parent references
+  let currentNode = nodeIndex.get(node.id)
+  if (!currentNode) {
+    // Node not found in index
+    console.warn('[getLevelIdFromDraft] Node not found in index:', node.id)
+    return null
+  }
+
+  // Traverse up the parent chain recursively
+  while (currentNode.parent) {
+    const parentNode = nodeIndex.get(currentNode.parent)
+    if (!parentNode) {
+      // Parent not found in index, stop traversal
+      console.warn(
+        '[getLevelIdFromDraft] Parent not found in index:',
+        currentNode.parent,
+        'for node:',
+        currentNode.id,
+      )
+      break
+    }
+
+    // Check if this parent is a level
+    if (levelIds.has(parentNode.id)) {
+      return parentNode.id
+    }
+
+    // Continue up the chain
+    currentNode = parentNode
+  }
+
+  // No level found in parent chain
+  console.warn('[getLevelIdFromDraft] No level found in parent chain for node:', node.id)
+  return null
+}
+
+/**
  * Rebuild the spatial grid from the node index
  * Used after hydration from localStorage
  */
@@ -754,9 +807,9 @@ const useStore = create<StoreState>()(
               selectedFloorId: floorId,
               currentLevel: level.level,
               viewMode: 'level',
+              selectedElements: [], // Clear selection when switching floors
             })
           }
-          get().handleClear()
         },
         selectedImageIds: [],
         selectedScanIds: [],
@@ -1272,7 +1325,8 @@ const useStore = create<StoreState>()(
                 const bounds = calculateNodeBounds(node)
                 if (bounds) {
                   // Find the level ID this node belongs to
-                  const levelId = get().getLevelId(node)
+                  // Use draft nodeIndex and levels since we're inside produce()
+                  const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
                   if (levelId) {
                     draft.spatialGrid.updateNode(nodeId, levelId, bounds)
                   }
@@ -1370,6 +1424,22 @@ const useStore = create<StoreState>()(
                 const addCommand = new AddNodeCommand(newNodeData, parent)
                 resultNodeId = addCommand.getNodeId()
                 draft.commandManager.execute(addCommand, draft.levels, draft.nodeIndex)
+
+                // Update spatial grid for the newly committed node
+                const committedNode = draft.nodeIndex.get(resultNodeId)
+                if (committedNode) {
+                  const bounds = calculateNodeBounds(committedNode)
+                  if (bounds) {
+                    const levelId = getLevelIdFromDraft(
+                      committedNode,
+                      draft.levels,
+                      draft.nodeIndex,
+                    )
+                    if (levelId) {
+                      draft.spatialGrid.updateNode(resultNodeId, levelId, bounds)
+                    }
+                  }
+                }
               } else {
                 // Normal update
                 const command = new UpdateNodeCommand(nodeId, updates)
@@ -1391,7 +1461,8 @@ const useStore = create<StoreState>()(
                 const bounds = calculateNodeBounds(updatedNode)
                 if (bounds) {
                   // Find the level ID this node belongs to
-                  const levelId = get().getLevelId(updatedNode)
+                  // Use draft nodeIndex and levels since we're inside produce()
+                  const levelId = getLevelIdFromDraft(updatedNode, draft.levels, draft.nodeIndex)
                   if (levelId) {
                     // Update the node in spatial grid (handles moving between cells)
                     draft.spatialGrid.updateNode(resultNodeId, levelId, bounds)
