@@ -9,9 +9,9 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
+import { calculateLevelBoundsById } from '@/lib/graph/bounds'
 import { cn } from '@/lib/utils'
-import { NodeRenderer } from '../renderer/node-renderer'
+import { NodeRenderer } from '../../lib/graph/renderer/node-renderer'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 

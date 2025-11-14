@@ -90,149 +90,83 @@ bun run lint           # Format with Biome
 
 ### Coordinate System
 - Grid coordinates (integer) → World coordinates (float)
-- Grid Y → World Z (ground plane)
-- Parent group offset `[-15, 0, -15]` centers grid at origin
+- Default THREE.js Y axis is the vertical axis Ground plane Y=0, X and Z axes are on the horizontal plane
 
-## Node-based Architecture
+## Scene Graph Architecture
 
-The canonical model is a typed node tree per level.
+#### Scene Graph
+The scene graph logic and declaration for every lives `lib/graph/nodes/` live is organized as follows:
 
-- **Root**: `levels: LevelNode[]` (one tree per floor)
-- **Types** (`lib/nodes/types.ts`): `level`, `wall`, `door`, `window`, `column`, `roof`, `roof-segment`, `reference-image`, `scan`, `group`
-- **Grid nodes**: `position [x,y]` (grid units), `rotation` (radians), `size [width, depth]`
-  - Wall: `size = [length, thickness]` (thickness defaults to 0.2m)
-  - Roof segment: adds `height`, `leftWidth`, `rightWidth`
-- **Parent/child rules** (`lib/nodes/guards.ts`):
-  - Level → wall | roof | column | reference-image | scan | group
-  - Wall → door | window
-  - Roof → roof-segment
-  - Group → building elements | group
-- **Invariants**:
-  - IDs unique across the tree
-  - Child `parent` equals parent's `id`
-  - No cycles; `validateNodeTree` passes
-  - `opacity` in 0–100; `visible`/`locked` booleans
-  - All mutations are immutable (new arrays/objects)
+1. **Root Node** (Project Node)
+   - Stores project metadata.
 
-APIs
-- **Operations** (`lib/nodes/operations.ts`): pure add/move/update/delete (e.g., `addWallToLevel`, `addDoorToWall`, `moveNodeToParent`, `replaceWallsInLevel`)
-- **Selectors** (`lib/nodes/selectors.ts`): ergonomic queries for levels, walls, doors/windows, visibility, counts, and memoizable builders
-- **Indexes** (`lib/nodes/indexes.ts`): `NodeIndexes` for O(1) by-id/type/parent lookups and level mapping
-- **Utils** (`lib/nodes/utils.ts`): traversal (`traverseTree`, `mapTree`), search (`findNodeById`, `findNodesByType`), structure ops (`addNode`, `updateNode`, `moveNode`)
-- **Guards** (`lib/nodes/guards.ts`): runtime guards (`isWallNode`, `canBeChildOf`, `validateNodeTree`)
+2. **Environment Node**
+   - Stores environment-related data, such as:
+     - Latitude and longitude of the site
+     - North angle (X axis orientation)
+     - Data for calculating real weather, time, sun exposure
 
-Performance
-- Rebuild a minimal `nodeIndex: Map<string, BaseNode>` via `buildNodeIndex(levels)` after mutations
-- For heavy queries, maintain `indexes: NodeIndexes` via `buildNodeIndexes(levels)` and use `getNodeById`, `getNodesByType`, `getChildrenOfNode`
-- Prefer index-backed selectors in render paths (`selectNodeByIdFromIndex`)
+3. **Site Node**
+   - Contains:
+     - **Terrain Node:** Stores site topography and related metadata.
+     - **PropertyLines Node:** Stores the property/lot boundaries (PropertyLines may cover a smaller area than Terrain).
 
-## State Management
+4. **Building Node**
+   - Represents a single building structure.
 
-### Zustand Store (`hooks/use-editor.tsx`)
-Single source of truth with localStorage persistence, undo/redo (snapshots of `levels`).
+5. **Level Nodes** (children of Building Node)
+   - Each level (floor) of the building is represented by a Level node.
 
-**Core State**:
-- `levels: LevelNode[]` (canonical)
-- `nodeIndex: Map<string, BaseNode>` (fast by-id, rebuild on mutation)
-- `indexes?: NodeIndexes` (optional full indexes for large scenes)
-- `selectedLevelId: string | null`
-- `controlMode` - 'select' | 'delete' | 'building' | 'guide'
-- `viewMode` / `levelMode` / `cameraMode`
+6. **Building Elements at Each Level**
+   - Elements such as Walls, Floors, Columns, and Ceilings are direct children of Level nodes.
+   - These elements are managed in the Level node's hierarchy similarly to layers in Photoshop/Figma:
+     - The sidebar determines their visibility stacking order.
+     - Vertically, they stack according to building logic (e.g., Floor -> Wall -> Ceiling).
 
-**Mutations**:
-- Use `lib/nodes/operations.ts` (pure) to produce new `levels`
-- Immediately rebuild `nodeIndex` (and `indexes` if used)
-
-**Queries**:
-- Use `lib/nodes/selectors.ts` (e.g., `selectWallsFromLevel`, `selectDoorsFromLevel`)
-- Prefer `selectNodeByIdFromIndex`/`createSingleNodeSelector` in render paths
-
-### Editor Canvas
-Multi-floor rendering with per-floor positioning. Active floor gets interactive grid + full colors, inactive floors are muted. Keyboard shortcuts for modes (V/D/B/G), undo (Cmd+Z), camera (Space).
-
-### Viewer Mode
-Read-only presentation mode. Reuses editor components with no-op handlers. Animated floor transitions (stacked ↔ exploded), camera modes (perspective ↔ orthographic), click-to-focus floors, visibility toggles. Keyboard: C (camera), L (levels), Esc (deselect).
-
-### UI & Controls
-- **Mode Menu**: Select/Delete/Building/Guide modes, color-coded
-- **Building Menu**: Tool selection, auto-switches to building mode
-- **Camera Controls**: Mode-aware mouse bindings - left-click for panning (select mode) or tool actions (other modes)
-- **Reference Images**: 3D manipulation handles in Guide mode (translate, rotate, scale)
-
-## Key Workflows
-
-### Building
-- **Wall Placement**: Click start → hover preview → click end → auto-save to store
-- **Deletion**: Click wall + right-click menu (select mode), or two-click line selection (delete mode)
-- **Reference Images**: Upload → position/rotate/scale with 3D handles in Guide mode
-
-### Modes
-- Tool selection auto-switches to building mode
-- Esc/mode change clears placement states
-- Building logic isolated to building mode
-
-### Persistence
-- Auto-sync to localStorage via Zustand
-- JSON export/import for layouts
-- Undo/redo stacks (max 50 states)
-
-## Design Decisions
-
-### Sims-Inspired Choices
-- **Multi-Mode System**: Separate Select/Delete/Building modes (like The Sims) vs. single mode with modifiers - clearer mental model
-- **Intersection-Based Walls**: Line segments between grid points vs. tile fills - supports diagonals, matches real blueprints, cleaner state
-- **Smart Snapping**: Auto-snaps to H/V/45° axes - prevents messy off-axis walls, matches Sims behavior
-- **Visual Previews**: Green shadows for placement, red planes for deletion - see before committing, reduces mistakes
-- **Isometric View**: Camera at [10,10,10] polar 0-π/2 - classic Sims-style overhead perspective
-- **Viewer Mode**: Read-only presentation mode (like Sims camera mode) - showcase finished designs without editing
-
-### Technical Choices
-- **Zustand Over Context**: Better performance, built-in persistence, simpler API, undo/redo via stacks
-- **Geometric Deletion**: Line overlap detection - precisely cut/remove wall portions (like Sims demolish tool)
-- **Drei Grid + Custom Raycasting**: Drei for visuals, custom plane for clicks - Drei Grid is visual-only
-- **Memoized Components**: React.memo on GridTiles/Walls/Previews - smooth 60fps with hundreds of walls
-- **HTML Context Menu**: Overlay div vs. R3F component - reliable pointer coords
-- **Keyboard Shortcuts**: V/D/B/G/Esc/Space/Z (editor), C/L/Esc (viewer) - CAD/Sims-inspired power user workflow
-- **Versioned JSON**: Schema v2.0 with segment-based format - extensible for doors/windows/furniture
-- **Direct Manipulation Handles**: 3D gizmos for reference images - raycasting + pointer events for intuitive transformations, handles scale inversely to image scale for consistent size
-- **Mode-Aware Camera Controls**: Dynamic mouse button configuration - left-click reserved for mode actions (delete/build/guide) vs. camera panning (select), prevents conflicts between camera and tool interactions
-- **Mitered Wall Geometry**: 2D polygon footprints + extrusion vs. overlapping boxes - eliminates Z-fighting, supports proper GLB export, enables future wall features (cutouts, materials)
-- **Animated Transitions**: React Spring for smooth floor separation - enhances UX in viewer mode
-
-## Data Model
-
-### Canonical (nodes v2.0)
-- `levels: LevelNode[]` with typed children per `lib/nodes/types.ts`
-- Grid units = 0.5m; rotations in radians
-- Doors/windows live under their parent `wall`; roof segments under `roof`
-- Supports indexing (`lib/nodes/indexes.ts`) and validation (`validateNodeTree`)
-
-### Legacy compatibility (components v1.x)
-- Migration utilities in `lib/migration/`:
-  - `legacy-to-nodes.ts`: `componentsToNodeTree`, `associateDoorsAndWindowsWithWalls`
-  - `nodes-to-legacy.ts`: `nodeTreeToComponents(WithLevels)`
-  - `validators.ts`: integrity checks and round-trip validation
-- Use migrations only at import/export boundaries; keep editor logic node-native
-
-### Persistence
-- Auto-sync to localStorage via Zustand middleware
-- JSON export/import (`layout_YYYY-MM-DD.json`)
-- Viewer loads from localStorage (edit in main editor)
-
-## Contributing to the Node Model
-
-- **Add a new node type**
-  1) Define in `lib/nodes/types.ts`
-  2) Add guards and `canBeChildOf` in `lib/nodes/guards.ts`
-  3) Add operations/selectors as needed
-  4) Render in editor/viewer layers
-  5) Update migrations if represented in legacy format
-
-- **Do’s**
-- Prefer `operations.ts` over ad-hoc tree manipulation
-- Recompute `nodeIndex`/`indexes` after each mutation
-- Use selectors with shallow comparison in React
-
-- **Don’ts**
-- Don’t mutate nodes in place
-- Don’t traverse entire trees in hot render paths; use indexes/selectors
+#### NODE HIERARCHY:
+Root (Root node)
+├── ☀️ Environment   (Sky, Sun, etc.)
+├── 🌳 Site
+│   ├── PropertyNode (Type "": 2D/3D polygon)
+│   ├── Terrain (Type "terrain": 3D topography mesh)
+│   └── 🌿 Landscape (Type "Group")
+│       ├── Softscape (Type "softscape": trees, shrubs, lawns glTF)
+│       │   ├── Tree_1 (Type "Plant")
+│       │   └── Plant_1 (Type "Plant")
+│       ├── 🪨 Hardscape (Type "hardscape": rocks, gravel, paths, walls glTF)
+│       │   ├── Rock_1 (Type "Rock")
+│       │   └── Boulder_1 (Type "Rock")
+│       └── 💧 Waterscape (Type "waterscape": ponds, pools, fountains glTF)
+│           ├── Pond_1 (Type "Water")
+│           └── Fountain_1 (Type "Water")
+│
+└── 🏢 BuildingNode (Type "building")
+    ├── LevelNode (Type "level")
+    │   ├── Floor_Slab_1_1 (Type "Floor")
+    │   ├── Ceiling_Slab_1_1 (Type "Ceiling")
+    │   │   ├── Light_Fixture_1 (parent "Ceiling_Slab_1_1")
+    │   │   └── AC_Return_1 (parent "Ceiling_Slab_1_1")
+    │   ├── Wall_1_1 (Type "Wall")
+    │   │   └── Window_1_1 (Type "Window", parent "Wall_1_1")
+    │   ├── Wall_1_2 (Type "Wall")
+    │   │   └── Door_1_1 (Type "Door", parent "Wall_1_2")
+    │   ├── Wall_1_3 (Type "Wall")
+    │   ├── 🛋️ Kitchen_Group (Type "Group")
+    │   │   ├── Countertop_1 (parent "Kitchen_Group")
+    │   │   ├── Fridge_1 (parent "Kitchen_Group")
+    │   │   └── Stove_1 (parent "Kitchen_Group")
+    │   ├── Couch_1 (Type "Furniture", parent "Level_1")
+    │   └── Stair_to_L2 (Type "Stair", parent "Level_1")
+    │
+    ├── Level_2 (Type "Level")
+    │   ├── Floor_Slab_2_1 (Type "Floor")
+    │   ├── Ceiling_Slab_2_1 (Type "Ceiling")
+    │   │   └── Fan_1 (parent "Ceiling_Slab_2_1")
+    │   └── 🏠 Rooftop_Patio_Elements (Type "Group", parent "Level_2")
+    │       └── Patio_Roof (Type "Roof", parent "Rooftop_Patio_Elements")
+    │
+    └── Top_Level (Type "Level")
+        ├── Floor_Slab_3_1 (e.g., attic floor)
+        └── 🏠 Main_Roof_Group (Type "Group", parent "Top_Level")
+            ├── Gable_Roof_1 (Type "Roof")
+            └── Jerkin_Roof_1 (Type "Roof")

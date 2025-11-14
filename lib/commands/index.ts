@@ -6,7 +6,7 @@
  */
 
 import { current } from 'immer'
-import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { AnyNode, BaseNode, LevelNode } from '@/lib/graph/types'
 import { createId } from '@/lib/utils'
 
 // ============================================================================

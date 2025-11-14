@@ -4,7 +4,9 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
-import { type LayoutJSON, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import { safeParseSceneGraph } from '@/lib/graph/schema'
+import type { SceneGraph } from '@/lib/graph/types'
 
 export default function DynamicViewerPage() {
   const params = useParams()
@@ -32,8 +34,16 @@ export default function DynamicViewerPage() {
           throw new Error(`Failed to load demo: ${response.statusText}`)
         }
 
-        const data: LayoutJSON = await response.json()
-        loadLayout(data)
+        const data = await response.json()
+        // Validate and parse as SceneGraph
+        const sceneGraph = safeParseSceneGraph(data)
+        if (sceneGraph) {
+          loadLayout(sceneGraph)
+        } else {
+          console.error('[DynamicViewerPage] Invalid scene graph format in demo file')
+          // Try to load anyway for backward compatibility
+          loadLayout(data as SceneGraph)
+        }
         setIsLoading(false)
       } catch (err) {
         console.error('Error loading demo:', err)

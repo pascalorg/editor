@@ -1,4 +1,4 @@
-import type { BaseNode } from '@/lib/nodes/types'
+import type { BaseNode } from '@/lib/graph/types'
 
 /**
  * Bounding box in 2D space (X, Z coordinates)
