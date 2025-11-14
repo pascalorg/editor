@@ -32,7 +32,7 @@ import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
 import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
-import type { LevelNode } from '@/lib/nodes/types'
+import type { LevelNode } from '@/lib/graph/types'
 import { cn, createId } from '@/lib/utils'
 
 const buildingElementConfig: Record<

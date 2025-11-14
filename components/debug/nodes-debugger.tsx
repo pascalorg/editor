@@ -32,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode } from '@/lib/nodes/types'
+import type { BaseNode } from '@/lib/graph/types'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'nodes-debugger-state'

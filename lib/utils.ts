@@ -1,7 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { customAlphabet } from 'nanoid'
 import { twMerge } from 'tailwind-merge'
-import type { WallNode } from './nodes/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

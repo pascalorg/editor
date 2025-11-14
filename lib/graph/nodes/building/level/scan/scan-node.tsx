@@ -1,0 +1,492 @@
+'use client'
+
+import { useThree } from '@react-three/fiber'
+import { Box } from 'lucide-react'
+import { type RefObject, useCallback, useEffect, useRef } from 'react'
+import * as THREE from 'three'
+import { z } from 'zod'
+import { TILE_SIZE } from '@/components/editor'
+import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
+import { registerComponent } from '@/lib/graph/registry'
+import { createNodeSchema, registerNodeSchema } from '@/lib/graph/schema'
+import { ScanRenderer } from './scan-renderer'
+
+// ============================================================================
+// SCAN NODE SCHEMA
+// ============================================================================
+
+/**
+ * Scan node schema - extends BaseNodeSchema with scan-specific properties
+ */
+export const ScanNodeSchema = createNodeSchema(
+  'scan',
+  {
+    url: z.string(),
+    scale: z.number(),
+    yOffset: z.number().optional(),
+    createdAt: z.string(),
+  },
+  {
+    withGrid: true,
+    childrenSchema: z.array(z.never()).default([]),
+  },
+)
+
+export type ScanNode = z.infer<typeof ScanNodeSchema>
+
+// Register the schema
+registerNodeSchema('scan', ScanNodeSchema)
+
+// ============================================================================
+// SCAN RENDERER PROPS SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for scan renderer props
+ * These are renderer-specific properties, not the full node structure
+ */
+export const ScanRendererPropsSchema = z
+  .object({
+    // Add renderer-specific props here if needed
+    // e.g., quality settings, LOD, etc.
+  })
+  .optional()
+
+export type ScanRendererProps = z.infer<typeof ScanRendererPropsSchema>
+
+// ============================================================================
+// SCAN NODE EDITOR
+// ============================================================================
+
+/**
+ * Scan node editor component
+ * Uses useEditor hooks directly to manage scan manipulation
+ */
+export function ScanNodeEditor() {
+  const updateNode = useEditor((state) => state.updateNode)
+  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
+
+  // Track undo state changes for batch updates during manipulation
+  const undoStateRef = useRef<{
+    [nodeId: string]: {
+      position?: [number, number]
+      rotation?: number
+      scale?: number
+      yOffset?: number
+    }
+  }>({})
+
+  useEffect(() => {
+    const handleScanUpdate = (event: ScanUpdateEvent) => {
+      const { nodeId, updates, pushToUndo } = event
+
+      // Update the node in the store
+      updateNode(nodeId, updates)
+
+      // If pushing to undo, clear the accumulated state for this node
+      if (pushToUndo) {
+        delete undoStateRef.current[nodeId]
+      } else {
+        // Accumulate updates during drag
+        if (!undoStateRef.current[nodeId]) {
+          undoStateRef.current[nodeId] = {}
+        }
+        Object.assign(undoStateRef.current[nodeId], updates)
+      }
+    }
+
+    const handleManipulationStart = (event: ScanManipulationEvent) => {
+      const { nodeId } = event
+      // Initialize accumulated state
+      undoStateRef.current[nodeId] = {}
+      setIsManipulatingScan(true)
+    }
+
+    const handleManipulationEnd = (event: ScanManipulationEvent) => {
+      setIsManipulatingScan(false)
+    }
+
+    // Register event listeners
+    emitter.on('scan:update', handleScanUpdate)
+    emitter.on('scan:manipulation-start', handleManipulationStart)
+    emitter.on('scan:manipulation-end', handleManipulationEnd)
+
+    // Cleanup event listeners
+    return () => {
+      emitter.off('scan:update', handleScanUpdate)
+      emitter.off('scan:manipulation-start', handleManipulationStart)
+      emitter.off('scan:manipulation-end', handleManipulationEnd)
+    }
+  }, [updateNode, setIsManipulatingScan])
+
+  return null
+}
+
+// ============================================================================
+// SCAN MANIPULATION HOOK
+// ============================================================================
+
+/**
+ * Custom hook for scan manipulation handlers
+ * Provides all the pointer event handlers for transforming 3D scans
+ */
+export function useScanManipulation(
+  node: ScanNode,
+  groupRef: RefObject<THREE.Group | null>,
+  setActiveHandle?: (handleId: string | null) => void,
+) {
+  const { camera, gl } = useThree()
+  const movingCamera = useEditor((state) => state.movingCamera)
+  const controlMode = useEditor((state) => state.controlMode)
+  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
+
+  const handleSelect = useCallback(() => {
+    if (controlMode === 'guide' || controlMode === 'select') {
+      setSelectedScanIds([node.id])
+    }
+  }, [controlMode, node, setSelectedScanIds])
+
+  const handleTranslateDown = useCallback(
+    (axis: 'x' | 'z') => (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
+      setActiveHandle?.(handleId)
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const initialMouse = new THREE.Vector3()
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(e.pointer, camera)
+      raycaster.ray.intersectPlane(plane, initialMouse)
+      const initialPosition = groupRef.current.position.clone()
+      const localDir = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
+      const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
+      const worldAxis = localDir
+        .clone()
+        .applyMatrix4(groupRef.current.matrixWorld)
+        .sub(worldZero)
+        .normalize()
+      let lastPosition: [number, number] | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const mouseVec = new THREE.Vector2(mx, my)
+        raycaster.setFromCamera(mouseVec, camera)
+        const intersect = new THREE.Vector3()
+        raycaster.ray.intersectPlane(plane, intersect)
+        const delta = intersect.clone().sub(initialMouse)
+        const projected = delta.dot(worldAxis)
+        const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
+
+        let finalX = newPos.x
+        let finalZ = newPos.z
+        if (ev.shiftKey) {
+          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
+          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+        }
+
+        lastPosition = [finalX, finalZ]
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { position: lastPosition },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastPosition) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { position: lastPosition },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
+  const handleTranslateXZDown = useCallback(
+    (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      setActiveHandle?.('translate-xz')
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const initialMouse = new THREE.Vector3()
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(e.pointer, camera)
+      raycaster.ray.intersectPlane(plane, initialMouse)
+      const initialPosition = groupRef.current.position.clone()
+      let lastPosition: [number, number] | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const mouseVec = new THREE.Vector2(mx, my)
+        raycaster.setFromCamera(mouseVec, camera)
+        const intersect = new THREE.Vector3()
+        raycaster.ray.intersectPlane(plane, intersect)
+        const delta = intersect.clone().sub(initialMouse)
+        const newPos = initialPosition.clone().add(delta)
+
+        let finalX = newPos.x
+        let finalZ = newPos.z
+        if (ev.shiftKey) {
+          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
+          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+        }
+
+        lastPosition = [finalX, finalZ]
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { position: lastPosition },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastPosition) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { position: lastPosition },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
+  const handleRotationDown = useCallback(
+    (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      setActiveHandle?.('rotation')
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const center = groupRef.current.position.clone()
+      const initialMouse = new THREE.Vector3()
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(e.pointer, camera)
+      raycaster.ray.intersectPlane(plane, initialMouse)
+      const initialVector = initialMouse.clone().sub(center)
+      const initialAngle = Math.atan2(initialVector.z, initialVector.x)
+      const initialRotation = node.rotation
+      let lastRotation: number | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const mouseVec = new THREE.Vector2(mx, my)
+        raycaster.setFromCamera(mouseVec, camera)
+        const intersect = new THREE.Vector3()
+        raycaster.ray.intersectPlane(plane, intersect)
+        const vector = intersect.clone().sub(center)
+        const angle = Math.atan2(vector.z, vector.x)
+        const delta = angle - initialAngle
+        let newRotation = initialRotation - delta * (180 / Math.PI)
+
+        if (ev.shiftKey) {
+          newRotation = Math.round(newRotation / 45) * 45
+        }
+
+        lastRotation = newRotation
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { rotation: lastRotation },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastRotation !== null) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { rotation: lastRotation },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, node.rotation, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
+  const handleTranslateYDown = useCallback(
+    (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      setActiveHandle?.('translate-y')
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const initialMouseY = e.pointer.y
+      const initialYOffset = node.yOffset || 0
+      let lastYOffset: number | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const deltaY = my - initialMouseY
+        // Scale the movement - adjust multiplier as needed for responsiveness
+        let newYOffset = initialYOffset + deltaY * 2
+
+        if (ev.shiftKey) {
+          newYOffset = Math.round(newYOffset / 0.5) * 0.5
+        }
+
+        lastYOffset = newYOffset
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { yOffset: lastYOffset },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastYOffset !== null) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { yOffset: lastYOffset },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, node.yOffset, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
+  const handleScaleDown = useCallback(
+    (e: any) => {
+      if (e.button !== 0) return
+      if (movingCamera) return
+      e.stopPropagation()
+      if (!groupRef.current) return
+
+      setActiveHandle?.('scale')
+      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+
+      const center = groupRef.current.position.clone()
+      const initialMouse = new THREE.Vector3()
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(e.pointer, camera)
+      raycaster.ray.intersectPlane(plane, initialMouse)
+      const initialDist = center.distanceTo(initialMouse)
+      const initialScale = node.scale
+      let lastScale: number | null = null
+
+      const handleMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
+        const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
+        const mouseVec = new THREE.Vector2(mx, my)
+        raycaster.setFromCamera(mouseVec, camera)
+        const intersect = new THREE.Vector3()
+        raycaster.ray.intersectPlane(plane, intersect)
+        const newDist = center.distanceTo(intersect)
+        let newScale = initialScale * (newDist / initialDist)
+
+        if (ev.shiftKey) {
+          newScale = Math.round(newScale * 10) / 10
+        }
+
+        lastScale = Math.max(0.1, newScale)
+        emitter.emit('scan:update', {
+          nodeId: node.id,
+          updates: { scale: lastScale },
+          pushToUndo: false,
+        })
+      }
+
+      const handleUp = () => {
+        document.removeEventListener('pointermove', handleMove)
+        document.removeEventListener('pointerup', handleUp)
+        setActiveHandle?.(null)
+        if (lastScale !== null) {
+          emitter.emit('scan:update', {
+            nodeId: node.id,
+            updates: { scale: lastScale },
+            pushToUndo: true,
+          })
+        }
+        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+      }
+
+      document.addEventListener('pointermove', handleMove)
+      document.addEventListener('pointerup', handleUp)
+    },
+    [node.id, node.scale, movingCamera, camera, gl, groupRef, setActiveHandle],
+  )
+
+  return {
+    handleSelect,
+    handleTranslateDown,
+    handleTranslateXZDown,
+    handleRotationDown,
+    handleTranslateYDown,
+    handleScaleDown,
+  }
+}
+
+// ============================================================================
+// REGISTER SCAN COMPONENT
+// ============================================================================
+
+registerComponent({
+  nodeType: 'scan',
+  nodeName: '3D Scan',
+  nodeSchema: ScanNodeSchema,
+  editorMode: 'guide',
+  rendererPropsSchema: ScanRendererPropsSchema,
+  nodeEditor: ScanNodeEditor,
+  nodeRenderer: ScanRenderer,
+  toolIcon: Box,
+})

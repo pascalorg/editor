@@ -21,15 +21,16 @@ import {
   ReorderLevelsCommand,
   UpdateNodeCommand,
 } from '@/lib/commands'
-import { buildNodeIndex } from '@/lib/nodes/indexes'
+import { buildNodeIndex } from '@/lib/graph/indexes'
 import {
   addReferenceImageToLevel,
   addScanToLevel,
   setNodeOpacity,
   setNodeVisibility,
-} from '@/lib/nodes/operations'
+} from '@/lib/graph/operations'
+import { parseSceneGraph, safeParseSceneGraph } from '@/lib/graph/schema'
 // Node-based architecture imports
-import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { BaseNode, SceneGraph } from '@/lib/graph/types'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
 
@@ -257,123 +258,105 @@ export type LevelMode = 'stacked' | 'exploded'
 // Re-export them here for backward compatibility
 export type {
   BaseNode,
-  ColumnNode,
-  DoorNode,
   GridItem,
-  GroupNode,
-  LevelNode,
-  ReferenceImageNode,
-  RoofNode,
-  RoofSegmentNode,
-  ScanNode,
-  WallNode,
-  WindowNode,
-} from '@/lib/nodes/types'
+} from '@/lib/graph/types'
 
-export type WallComponentData = {
-  segments: WallSegment[] // Line segments between intersections
-}
+// export type WallComponentData = {
+//   segments: WallSegment[] // Line segments between intersections
+// }
 
-export type RoofComponentData = {
-  segments: RoofSegment[]
-}
+// export type RoofComponentData = {
+//   segments: RoofSegment[]
+// }
 
-export type DoorComponentData = {
-  position: [number, number]
-  rotation: number
-  width: number
-}
+// export type DoorComponentData = {
+//   position: [number, number]
+//   rotation: number
+//   width: number
+// }
 
-export type WindowComponentData = {
-  position: [number, number]
-  rotation: number
-  width: number
-}
+// export type WindowComponentData = {
+//   position: [number, number]
+//   rotation: number
+//   width: number
+// }
 
-export type ColumnComponentData = {
-  columns: Array<{
-    id: string
-    position: [number, number]
-    visible?: boolean
-    opacity?: number // 0-100, defaults to 100 if undefined
-  }>
-}
+// export type ColumnComponentData = {
+//   columns: Array<{
+//     id: string
+//     position: [number, number]
+//     visible?: boolean
+//     opacity?: number // 0-100, defaults to 100 if undefined
+//   }>
+// }
 
-export type Component =
-  | {
-      id: string
-      type: 'wall'
-      label: string
-      group: string | null
-      data: WallComponentData
-      createdAt: string
-    }
-  | {
-      id: string
-      type: 'roof'
-      label: string
-      group: string | null
-      data: RoofComponentData
-      createdAt: string
-    }
-  | {
-      id: string
-      type: 'door'
-      label: string
-      group: string | null
-      data: DoorComponentData
-      createdAt: string
-    }
-  | {
-      id: string
-      type: 'window'
-      label: string
-      group: string | null
-      data: WindowComponentData
-      createdAt: string
-    }
-  | {
-      id: string
-      type: 'column'
-      label: string
-      group: string | null
-      data: ColumnComponentData
-      createdAt: string
-    }
-  | {
-      id: string
-      type: 'group'
-      group: string | null
-      data: {
-        name: string
-        groupType: 'room' | 'floor' | 'outdoor'
-        visible: boolean
-        opacity: number
-        walls: any[]
-      }
-    }
+// export type Component =
+//   | {
+//       id: string
+//       type: 'wall'
+//       label: string
+//       group: string | null
+//       data: WallComponentData
+//       createdAt: string
+//     }
+//   | {
+//       id: string
+//       type: 'roof'
+//       label: string
+//       group: string | null
+//       data: RoofComponentData
+//       createdAt: string
+//     }
+//   | {
+//       id: string
+//       type: 'door'
+//       label: string
+//       group: string | null
+//       data: DoorComponentData
+//       createdAt: string
+//     }
+//   | {
+//       id: string
+//       type: 'window'
+//       label: string
+//       group: string | null
+//       data: WindowComponentData
+//       createdAt: string
+//     }
+//   | {
+//       id: string
+//       type: 'column'
+//       label: string
+//       group: string | null
+//       data: ColumnComponentData
+//       createdAt: string
+//     }
+//   | {
+//       id: string
+//       type: 'group'
+//       group: string | null
+//       data: {
+//         name: string
+//         groupType: 'room' | 'floor' | 'outdoor'
+//         visible: boolean
+//         opacity: number
+//         walls: any[]
+//       }
+//     }
 
-export type ComponentGroup = {
-  id: string
-  name: string
-  type: 'room' | 'floor' | 'outdoor'
-  color: string
-  level?: number
-  visible?: boolean // Optional for backward compatibility
-  opacity?: number // 0-100, defaults to 100 if undefined
-}
+// export type ComponentGroup = {
+//   id: string
+//   name: string
+//   type: 'room' | 'floor' | 'outdoor'
+//   color: string
+//   level?: number
+//   visible?: boolean // Optional for backward compatibility
+//   opacity?: number // 0-100, defaults to 100 if undefined
+// }
 
-export type LayoutJSON = {
-  version: string
-  grid: {
-    size: number
-  }
-  levels: LevelNode[]
-  // components: Component[]
-  // groups: ComponentGroup[]
-  // images?: ReferenceImage[] // Optional for backward compatibility
-  // scans?: Scan[] // Optional for backward compatibility
-}
+// SceneGraph is now imported from lib/nodes/types
+// Legacy LayoutJSON type kept for backward compatibility during migration
+export type LayoutJSON = SceneGraph
 
 export type ViewMode = 'full' | 'level'
 
@@ -455,8 +438,8 @@ type StoreState = {
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
-  serializeLayout: () => LayoutJSON
-  loadLayout: (json: LayoutJSON) => void
+  serializeLayout: () => SceneGraph
+  loadLayout: (json: SceneGraph) => void
   handleSaveLayout: () => void
   handleLoadLayout: (file: File) => void
   handleResetToDefault: () => void
@@ -1070,14 +1053,31 @@ const useStore = create<StoreState>()(
         serializeLayout: () => {
           const state = get()
 
-          // PHASE 3 MIGRATION: Serialize using node tree format
-          return {
+          // Serialize using SceneGraph format with validation
+          const sceneGraph: SceneGraph = {
             version: '2.0', // Updated version for intersection-based walls
             grid: { size: 61 }, // 61 intersections (60 divisions + 1)
             levels: state.levels, // Use node tree as source of truth
           }
+
+          return sceneGraph
         },
-        loadLayout: (json: LayoutJSON) => {
+        loadLayout: (json: SceneGraph) => {
+          // Validate scene graph before loading
+          const validatedGraph = safeParseSceneGraph(json)
+          if (!validatedGraph) {
+            console.error('[loadLayout] Invalid scene graph format:', json)
+            // Try to recover by extracting levels if they exist
+            if (json.levels && Array.isArray(json.levels)) {
+              console.warn('[loadLayout] Attempting recovery with unvalidated levels')
+            } else {
+              console.error('[loadLayout] Cannot recover scene graph, aborting load')
+              return
+            }
+          }
+
+          const graphToLoad = validatedGraph || json
+
           set({
             selectedElements: [],
             selectedImageIds: [],
@@ -1088,11 +1088,11 @@ const useStore = create<StoreState>()(
             activeTool: null,
           })
 
-          // Load from node tree format
-          if (json.levels && Array.isArray(json.levels)) {
+          // Load from validated node tree format
+          if (graphToLoad.levels && Array.isArray(graphToLoad.levels)) {
             set({
-              levels: json.levels,
-              nodeIndex: buildNodeIndex(json.levels),
+              levels: graphToLoad.levels,
+              nodeIndex: buildNodeIndex(graphToLoad.levels),
             })
           }
         },
@@ -1111,10 +1111,18 @@ const useStore = create<StoreState>()(
             const reader = new FileReader()
             reader.onload = (event) => {
               try {
-                const json = JSON.parse(event.target?.result as string) as LayoutJSON
-                get().loadLayout(json)
+                const json = JSON.parse(event.target?.result as string)
+                // Validate and parse as SceneGraph
+                const sceneGraph = safeParseSceneGraph(json)
+                if (sceneGraph) {
+                  get().loadLayout(sceneGraph)
+                } else {
+                  console.error('[handleLoadLayout] Invalid scene graph format in file')
+                  // Try to load anyway for backward compatibility
+                  get().loadLayout(json as SceneGraph)
+                }
               } catch (error) {
-                console.error('Failed to parse layout JSON:', error)
+                console.error('[handleLoadLayout] Failed to parse layout JSON:', error)
               }
             }
             reader.readAsText(file)

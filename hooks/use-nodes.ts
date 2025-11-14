@@ -23,7 +23,7 @@ import {
   selectVisibleWallsFromLevel,
   selectWallsFromLevel,
   selectWindowsFromLevel,
-} from '../lib/nodes/selectors'
+} from '../lib/graph/selectors'
 
 import type {
   BaseNode,
@@ -36,7 +36,7 @@ import type {
   ScanNode,
   WallNode,
   WindowNode,
-} from '../lib/nodes/types'
+} from '../lib/graph/types'
 import { useEditor } from './use-editor'
 
 // ============================================================================
