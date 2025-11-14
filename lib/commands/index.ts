@@ -304,6 +304,34 @@ export class DeleteNodeCommand implements Command {
 }
 
 // ============================================================================
+// BATCH DELETE COMMAND
+// ============================================================================
+
+export class BatchDeleteCommand implements Command {
+  private readonly nodeIds: string[]
+  private readonly deleteCommands: DeleteNodeCommand[] = []
+
+  constructor(nodeIds: string[]) {
+    this.nodeIds = nodeIds
+    this.deleteCommands = nodeIds.map((id) => new DeleteNodeCommand(id))
+  }
+
+  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    // Execute all delete commands
+    for (const command of this.deleteCommands) {
+      command.execute(levels, nodeIndex)
+    }
+  }
+
+  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+    // Undo in reverse order to maintain correct insertion order
+    for (let i = this.deleteCommands.length - 1; i >= 0; i--) {
+      this.deleteCommands[i].undo(levels, nodeIndex)
+    }
+  }
+}
+
+// ============================================================================
 // LEVEL COMMANDS
 // ============================================================================
 

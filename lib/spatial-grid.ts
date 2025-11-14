@@ -287,6 +287,15 @@ export class SpatialGrid {
   }
 
   /**
+   * Get the bounds of a node (if it exists in the grid)
+   * Returns null if the node is not in the grid
+   */
+  getNodeBounds(nodeId: string): BoundingBox | null {
+    const data = this.nodeBounds.get(nodeId)
+    return data ? data.bounds : null
+  }
+
+  /**
    * Get all node IDs in a level (for debugging/testing)
    */
   getNodesInLevel(levelId: string): Set<string> {

@@ -5,12 +5,15 @@ import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { SlabNode } from '@/lib/nodes/types'
+import { WALL_THICKNESS } from '../wall/wall-renderer'
 
 export const SLAB_THICKNESS = 0.2 // 20cm thickness
 
 interface SlabRendererProps {
   node: SlabNode
 }
+
+const SLAB_SPILLOVER = WALL_THICKNESS
 
 export function SlabRenderer({ node }: SlabRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
@@ -27,7 +30,12 @@ export function SlabRenderer({ node }: SlabRendererProps) {
   // Create box geometry for the slab
   const [width, depth] = node.size
   const slabGeometry = useMemo(
-    () => new THREE.BoxGeometry(width * TILE_SIZE, SLAB_THICKNESS, depth * TILE_SIZE),
+    () =>
+      new THREE.BoxGeometry(
+        width * TILE_SIZE + SLAB_SPILLOVER,
+        SLAB_THICKNESS,
+        depth * TILE_SIZE + SLAB_SPILLOVER,
+      ),
     [width, depth],
   )
 
