@@ -30,6 +30,7 @@
     "@vercel/speed-insights": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dedent": "^1.7.0",
     "idb-keyval": "^6.2.2",
     "immer": "^10.2.0",
     "lucide-react": "^0.546.0",
