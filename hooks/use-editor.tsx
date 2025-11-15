@@ -558,75 +558,79 @@ function rebuildSpatialGrid(
 
   // Iterate through all nodes and add them to the spatial grid
   for (const [nodeId, node] of nodeIndex.entries()) {
-    const bounds = calculateNodeBounds(node)
-    if (bounds) {
-      const levelId = getLevelId(node)
-      if (levelId) {
-        spatialGrid.updateNode(nodeId, levelId, bounds)
-      }
+    const levelId = getLevelId(node)
+    if (levelId) {
+      spatialGrid.updateNode(nodeId, levelId, node)
     }
   }
 }
 
 /**
- * Recompute all affected nodes using processors
- * Used after undo/redo to ensure computed properties are up to date
+ * Process all nodes in a level with their spatial neighbors
+ * Updates computed properties for all nodes in the level
+ *
+ * This ensures all computed properties are up-to-date after any change.
+ * Processing the whole level is simple and correct - no need to track
+ * which specific nodes are affected.
  */
-function recomputeAffectedNodes(
-  spatialGrid: SpatialGrid,
-  nodeIndex: Map<string, BaseNode>,
-  levels: LevelNode[],
-  processors: NodeProcessor[],
+function processLevel(
+  draft: {
+    spatialGrid: SpatialGrid
+    nodeIndex: Map<string, BaseNode>
+    nodeProcessors: NodeProcessor[]
+    levels: LevelNode[]
+  },
+  levelId: string | null,
 ): void {
-  // Track which nodes have been updated to avoid duplicate processing
-  const processedNodes = new Set<string>()
-  const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
+  if (!levelId) return
 
-  // For each level, process all nodes
-  for (const level of levels) {
-    const nodesInLevel = spatialGrid.getNodesInLevel(level.id)
+  // Get all nodes in this level
+  const nodeIds = draft.spatialGrid.getNodesInLevel(levelId)
 
-    for (const nodeId of nodesInLevel) {
-      const node = nodeIndex.get(nodeId)
-      if (!node || processedNodes.has(nodeId)) continue
+  // Process each node with its actual neighbors
+  for (const nodeId of nodeIds) {
+    const node = draft.nodeIndex.get(nodeId)
+    if (!node) continue
 
-      const bounds = calculateNodeBounds(node)
-      if (!bounds) continue
+    // Use stored bounds from spatial grid (already calculated when node was added)
+    const bounds = draft.spatialGrid.getNodeBounds(nodeId)
+    if (!bounds) continue
 
-      // Query for affected nodes
-      const affectedNodeIds = spatialGrid.query(level.id, bounds)
-      affectedNodeIds.delete(nodeId) // Remove self
+    // Query spatial neighbors
+    const neighborIds = draft.spatialGrid.query(levelId, bounds)
+    const neighbors = Array.from(neighborIds)
+      .map((id) => draft.nodeIndex.get(id))
+      .filter((n): n is BaseNode => n !== undefined)
 
-      if (affectedNodeIds.size === 0) continue
+    // Run processors
+    for (const processor of draft.nodeProcessors) {
+      const results = processor.process(neighbors)
+      const nodeResults = results.filter((r) => r.nodeId === nodeId)
 
-      // Get affected nodes
-      const affectedNodes: BaseNode[] = Array.from(affectedNodeIds)
-        .map((id) => nodeIndex.get(id))
-        .filter((node): node is BaseNode => node !== undefined)
-
-      // Run processors
-      processors.forEach((processor: NodeProcessor) => {
-        const results = processor.process(affectedNodes)
-        results.forEach((result) => {
-          if (!processedNodes.has(result.nodeId)) {
-            allUpdates.push(result)
-            processedNodes.add(result.nodeId)
-          }
-        })
+      nodeResults.forEach(({ nodeId, updates }) => {
+        // Direct execute (not through commandManager, so no undo tracking)
+        // Handles tree + nodeIndex updates correctly
+        const command = new UpdateNodeCommand(nodeId, updates)
+        command.execute(draft.levels, draft.nodeIndex)
       })
     }
   }
+}
 
-  // Apply all updates
-  allUpdates.forEach(({ nodeId, updates }) => {
-    const command = new UpdateNodeCommand(nodeId, updates)
-    command.execute(levels, nodeIndex)
-  })
-
-  if (allUpdates.length > 0) {
-    console.log(
-      `[Recompute] Applied ${allUpdates.length} computed property updates after state change`,
-    )
+/**
+ * Process all levels after undo/redo to ensure computed properties are up to date
+ */
+function recomputeAllLevels(
+  draft: {
+    spatialGrid: SpatialGrid
+    nodeIndex: Map<string, BaseNode>
+    nodeProcessors: NodeProcessor[]
+    levels: LevelNode[]
+  },
+): void {
+  // Process each level
+  for (const level of draft.levels) {
+    processLevel(draft, level.id)
   }
 }
 
@@ -1116,28 +1120,16 @@ const useStore = create<StoreState>()(
 
           set(
             produce((draft) => {
-              // Collect all affected nodes before deletion
-              const allAffectedNodeIds = new Set<string>()
-              const levelIdMap = new Map<string, string>() // nodeId -> levelId
+              // Collect affected levels before deletion
+              const affectedLevels = new Set<string>()
 
               for (const nodeId of elementIds) {
                 const node = draft.nodeIndex.get(nodeId)
                 if (!node) continue
 
-                const bounds = calculateNodeBounds(node)
-                if (bounds) {
-                  const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
-                  if (levelId) {
-                    levelIdMap.set(nodeId, levelId)
-                    // Query for affected nodes before deletion
-                    const affectedNodeIds = draft.spatialGrid.query(levelId, bounds)
-                    // Remove the node being deleted from the affected set
-                    affectedNodeIds.delete(nodeId)
-                    // Add to combined set
-                    for (const id of affectedNodeIds) {
-                      allAffectedNodeIds.add(id)
-                    }
-                  }
+                const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+                if (levelId) {
+                  affectedLevels.add(levelId)
                 }
               }
 
@@ -1150,44 +1142,9 @@ const useStore = create<StoreState>()(
                 draft.spatialGrid.removeNode(nodeId)
               }
 
-              // Process all affected nodes once after all deletions
-              if (allAffectedNodeIds.size > 0) {
-                const processors = draft.nodeProcessors
-
-                // Collect all updates from processors
-                const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
-
-                // Process each affected node individually with its actual neighbors
-                for (const affectedNodeId of allAffectedNodeIds) {
-                  const affectedNode = draft.nodeIndex.get(affectedNodeId)
-                  if (!affectedNode) continue
-
-                  // For this specific node, query what's ACTUALLY intersecting with it
-                  const nodeBounds = calculateNodeBounds(affectedNode)
-                  if (!nodeBounds) continue
-
-                  const levelId = getLevelIdFromDraft(affectedNode, draft.levels, draft.nodeIndex)
-                  if (!levelId) continue
-
-                  const nodeNeighbors = draft.spatialGrid.query(levelId, nodeBounds)
-                  const neighborNodes: BaseNode[] = Array.from(nodeNeighbors)
-                    .map((id) => draft.nodeIndex.get(id))
-                    .filter((node): node is BaseNode => node !== undefined)
-
-                  // Run processors with this node's actual context
-                  processors.forEach((processor: NodeProcessor) => {
-                    const results = processor.process(neighborNodes)
-                    // Only keep updates for the specific node we're processing
-                    const nodeResults = results.filter((r) => r.nodeId === affectedNodeId)
-                    allUpdates.push(...nodeResults)
-                  })
-                }
-
-                // Apply updates to each affected node using UpdateNodeCommand
-                allUpdates.forEach(({ nodeId, updates }) => {
-                  const command = new UpdateNodeCommand(nodeId, updates)
-                  command.execute(draft.levels, draft.nodeIndex)
-                })
+              // Process all affected levels
+              for (const levelId of affectedLevels) {
+                processLevel(draft, levelId)
               }
 
               // Clear selection
@@ -1286,14 +1243,9 @@ const useStore = create<StoreState>()(
                 draft.selectedImageIds = []
                 draft.selectedScanIds = []
 
-                // Rebuild spatial grid and recompute affected nodes
+                // Rebuild spatial grid and recompute all levels
                 rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, get().getLevelId)
-                recomputeAffectedNodes(
-                  draft.spatialGrid,
-                  draft.nodeIndex,
-                  draft.levels,
-                  draft.nodeProcessors,
-                )
+                recomputeAllLevels(draft)
               }
             }),
           ),
@@ -1307,14 +1259,9 @@ const useStore = create<StoreState>()(
                 draft.selectedImageIds = []
                 draft.selectedScanIds = []
 
-                // Rebuild spatial grid and recompute affected nodes
+                // Rebuild spatial grid and recompute all levels
                 rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, get().getLevelId)
-                recomputeAffectedNodes(
-                  draft.spatialGrid,
-                  draft.nodeIndex,
-                  draft.levels,
-                  draft.nodeProcessors,
-                )
+                recomputeAllLevels(draft)
               }
             }),
           ),
@@ -1469,61 +1416,16 @@ const useStore = create<StoreState>()(
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
 
-              // Update spatial grid for the new node
+              // Update spatial grid and process level
               const node = draft.nodeIndex.get(nodeId)
-              if (node) {
-                const bounds = calculateNodeBounds(node)
-                if (bounds) {
-                  // Find the level ID this node belongs to
-                  // Use draft nodeIndex and levels since we're inside produce()
-                  const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
-                  if (levelId) {
-                    draft.spatialGrid.updateNode(nodeId, levelId, bounds)
-
-                    // Query for affected nodes (those intersecting with this node's bounds)
-                    const affectedNodeIds = draft.spatialGrid.query(levelId, bounds)
-
-                    // Include the new node itself in processing (so it can be affected by existing nodes)
-                    // Don't remove it from the set
-
-                    // Process affected nodes (including the new node)
-                    if (affectedNodeIds.size > 0) {
-                      const processors = draft.nodeProcessors
-
-                      // Collect all updates from processors
-                      const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
-
-                      // Process each affected node individually with its actual neighbors
-                      for (const affectedNodeId of affectedNodeIds) {
-                        const affectedNode = draft.nodeIndex.get(affectedNodeId)
-                        if (!affectedNode) continue
-
-                        // For this specific node, query what's ACTUALLY intersecting with it
-                        const nodeBounds = calculateNodeBounds(affectedNode)
-                        if (!nodeBounds) continue
-
-                        const nodeNeighbors = draft.spatialGrid.query(levelId, nodeBounds)
-                        const neighborNodes: BaseNode[] = Array.from(nodeNeighbors)
-                          .map((id) => draft.nodeIndex.get(id))
-                          .filter((node): node is BaseNode => node !== undefined)
-
-                        // Run processors with this node's actual context
-                        processors.forEach((processor: NodeProcessor) => {
-                          const results = processor.process(neighborNodes)
-                          // Only keep updates for the specific node we're processing
-                          const nodeResults = results.filter((r) => r.nodeId === affectedNodeId)
-                          allUpdates.push(...nodeResults)
-                        })
-                      }
-
-                      // Apply updates to each affected node using UpdateNodeCommand
-                      allUpdates.forEach(({ nodeId: affectedNodeId, updates }) => {
-                        const command = new UpdateNodeCommand(affectedNodeId, updates)
-                        command.execute(draft.levels, draft.nodeIndex)
-                      })
-                    }
-                  }
-                }
+              if (!node) {
+                console.error('Added node not found in index:', nodeId)
+                return
+              }
+              const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+              if (levelId) {
+                draft.spatialGrid.updateNode(nodeId, levelId, node)
+                processLevel(draft, levelId)
               }
             }),
           )
@@ -1535,19 +1437,16 @@ const useStore = create<StoreState>()(
           let resultNodeId = nodeId
           let affectedNodeIds = new Set<string>()
 
-
           set(
             produce((draft) => {
-              const node = draft.nodeIndex.get(nodeId)
-
-              console.log('node', node, updates);
+              const fromNode = draft.nodeIndex.get(nodeId)
 
               // Check if we're committing a preview node (preview: true -> false)
-              const isCommittingPreview = node?.preview === true && updates.preview === false
+              const isCommittingPreview = fromNode?.preview === true && updates.preview === false
 
               if (isCommittingPreview) {
                 // Get full node data using current() to get plain object
-                const previewNode = current(node)
+                const previewNode = current(fromNode)
 
                 // Delete preview node (no undo)
                 const deleteCommand = new DeleteNodeCommand(nodeId)
@@ -1586,28 +1485,12 @@ const useStore = create<StoreState>()(
                 const addCommand = new AddNodeCommand(newNodeData, parent)
                 resultNodeId = addCommand.getNodeId()
                 draft.commandManager.execute(addCommand, draft.levels, draft.nodeIndex)
-
-                // Update spatial grid for the newly committed node
-                const committedNode = draft.nodeIndex.get(resultNodeId)
-                if (committedNode) {
-                  const bounds = calculateNodeBounds(committedNode)
-                  if (bounds) {
-                    const levelId = getLevelIdFromDraft(
-                      committedNode,
-                      draft.levels,
-                      draft.nodeIndex,
-                    )
-                    if (levelId) {
-                      draft.spatialGrid.updateNode(resultNodeId, levelId, bounds)
-                    }
-                  }
-                }
               } else {
                 // Normal update
                 const command = new UpdateNodeCommand(nodeId, updates)
 
                 // Check if we're updating a preview node
-                const isPreviewNode = node?.preview === true
+                const isPreviewNode = fromNode?.preview === true
 
                 if (isPreviewNode) {
                   // Preview node update - execute directly without undo tracking
@@ -1616,81 +1499,17 @@ const useStore = create<StoreState>()(
                   draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
                 }
               }
-              
 
-              // Update spatial grid for the updated node
-              const updatedNode = draft.nodeIndex.get(resultNodeId)
-              if (updatedNode) {
-                const newBounds = calculateNodeBounds(updatedNode)
-                if (newBounds) {
-                  // Find the level ID this node belongs to
-                  // Use draft nodeIndex and levels since we're inside produce()
-                  const levelId = getLevelIdFromDraft(updatedNode, draft.levels, draft.nodeIndex)
-                  if (levelId) {
-                    // Query OLD bounds BEFORE updating spatial grid (to find previously affected nodes)
-                    const oldBounds = draft.spatialGrid.getNodeBounds(resultNodeId)
-                    const oldAffectedNodeIds = oldBounds
-                      ? draft.spatialGrid.query(levelId, oldBounds)
-                      : new Set<string>()
-
-                    // Remove the updated node from old affected (it's not at old location anymore)
-                    oldAffectedNodeIds.delete(resultNodeId)
-
-                    // Update the node in spatial grid (handles moving between cells)
-                    draft.spatialGrid.updateNode(resultNodeId, levelId, newBounds)
-
-                    // Query NEW bounds AFTER updating spatial grid (to find currently affected nodes)
-                    const newAffectedNodeIds = draft.spatialGrid.query(levelId, newBounds)
-
-                    // Combine old and new affected nodes (union) to process both:
-                    // - Old affected (WITHOUT moved node): need recomputation since moved node left
-                    // - New affected (WITH moved node): need recomputation since moved node arrived
-                    affectedNodeIds = new Set([...oldAffectedNodeIds, ...newAffectedNodeIds])
-
-                    // Include the updated node itself in processing (so it can be affected by existing nodes)
-                    // Don't remove it from the set
-                  }
-                }
-
-                // Process affected nodes (including the updated node)
-                if (affectedNodeIds && affectedNodeIds.size > 0 && updatedNode) {
-                  const processors = draft.nodeProcessors
-                  const levelId = getLevelIdFromDraft(updatedNode, draft.levels, draft.nodeIndex)
-                  if (!levelId) return
-
-                  // Collect all updates from processors
-                  const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
-
-                  // Process each affected node individually with its actual neighbors
-                  for (const affectedNodeId of affectedNodeIds) {
-                    const affectedNode = draft.nodeIndex.get(affectedNodeId)
-                    if (!affectedNode) continue
-
-                    // For this specific node, query what's ACTUALLY intersecting with it
-                    const nodeBounds = calculateNodeBounds(affectedNode)
-                    if (!nodeBounds) continue
-
-                    const nodeNeighbors = draft.spatialGrid.query(levelId, nodeBounds)
-                    const neighborNodes: BaseNode[] = Array.from(nodeNeighbors)
-                      .map((id) => draft.nodeIndex.get(id))
-                      .filter((node): node is BaseNode => node !== undefined)
-
-                    // Run processors with this node's actual context
-                    processors.forEach((processor: NodeProcessor) => {
-                      const results = processor.process(neighborNodes)
-                      // Only keep updates for the specific node we're processing
-                      // (processor might return updates for neighbors, but we only want this node)
-                      const nodeResults = results.filter((r) => r.nodeId === affectedNodeId)
-                      allUpdates.push(...nodeResults)
-                    })
-                  }
-
-                  // Apply updates to each affected node using UpdateNodeCommand
-                  allUpdates.forEach(({ nodeId, updates }) => {
-                    const command = new UpdateNodeCommand(nodeId, updates)
-                    command.execute(draft.levels, draft.nodeIndex)
-                  })
-                }
+              // Update spatial grid and process level
+              const node = draft.nodeIndex.get(resultNodeId)
+              if (!node) {
+                console.error('Updated node not found in index:', resultNodeId)
+                return
+              }
+              const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+              if (levelId) {
+                draft.spatialGrid.updateNode(resultNodeId, levelId, node)
+                processLevel(draft, levelId)
               }
             }),
           )
@@ -1701,23 +1520,9 @@ const useStore = create<StoreState>()(
         deleteNode: (nodeId) => {
           set(
             produce((draft) => {
-              // Get the node before deletion to find affected nodes
+              // Get the node and levelId before deletion
               const node = draft.nodeIndex.get(nodeId)
-              let affectedNodeIds = new Set<string>()
-              let levelId: string | null = null
-
-              if (node) {
-                const bounds = calculateNodeBounds(node)
-                if (bounds) {
-                  levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
-                  if (levelId) {
-                    // Query for affected nodes before deletion
-                    affectedNodeIds = draft.spatialGrid.query(levelId, bounds)
-                    // Remove the node being deleted from the affected set
-                    affectedNodeIds.delete(nodeId)
-                  }
-                }
-              }
+              const levelId = node ? getLevelIdFromDraft(node, draft.levels, draft.nodeIndex) : null
 
               // Execute delete command
               const command = new DeleteNodeCommand(nodeId)
@@ -1728,44 +1533,10 @@ const useStore = create<StoreState>()(
                 draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
               }
 
-              // Remove from spatial grid
+              // Remove from spatial grid and process level
               draft.spatialGrid.removeNode(nodeId)
-
-              // Process affected nodes (they need to be recomputed now that this node is gone)
-              if (affectedNodeIds.size > 0 && levelId) {
-                const processors = draft.nodeProcessors
-
-                // Collect all updates from processors
-                const allUpdates: Array<{ nodeId: string; updates: Partial<AnyNode> }> = []
-
-                // Process each affected node individually with its actual neighbors
-                for (const affectedNodeId of affectedNodeIds) {
-                  const affectedNode = draft.nodeIndex.get(affectedNodeId)
-                  if (!affectedNode) continue
-
-                  // For this specific node, query what's ACTUALLY intersecting with it
-                  const nodeBounds = calculateNodeBounds(affectedNode)
-                  if (!nodeBounds) continue
-
-                  const nodeNeighbors = draft.spatialGrid.query(levelId, nodeBounds)
-                  const neighborNodes: BaseNode[] = Array.from(nodeNeighbors)
-                    .map((id) => draft.nodeIndex.get(id))
-                    .filter((node): node is BaseNode => node !== undefined)
-
-                  // Run processors with this node's actual context
-                  processors.forEach((processor: NodeProcessor) => {
-                    const results = processor.process(neighborNodes)
-                    // Only keep updates for the specific node we're processing
-                    const nodeResults = results.filter((r) => r.nodeId === affectedNodeId)
-                    allUpdates.push(...nodeResults)
-                  })
-                }
-
-                // Apply updates to each affected node using UpdateNodeCommand
-                allUpdates.forEach(({ nodeId: affectedNodeId, updates }) => {
-                  const command = new UpdateNodeCommand(affectedNodeId, updates)
-                  command.execute(draft.levels, draft.nodeIndex)
-                })
+              if (levelId) {
+                processLevel(draft, levelId)
               }
             }),
           )

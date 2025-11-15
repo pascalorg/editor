@@ -165,7 +165,14 @@ export class SpatialGrid {
    * Add or update a node in the spatial grid
    * Automatically handles moving nodes between cells
    */
-  updateNode(nodeId: string, levelId: string, bounds: BoundingBox): void {
+  updateNode(nodeId: string, levelId: string, node: BaseNode): void {
+    // Calculate bounds for this node
+    const bounds = calculateNodeBounds(node)
+    if (!bounds) {
+      // Node doesn't have spatial bounds, skip
+      return
+    }
+
     // Remove from old position if exists
     const existing = this.nodeBounds.get(nodeId)
     if (existing) {
