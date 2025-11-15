@@ -560,9 +560,37 @@ function rebuildSpatialGrid(
   for (const [nodeId, node] of nodeIndex.entries()) {
     const levelId = getLevelId(node)
     if (levelId) {
-      spatialGrid.updateNode(nodeId, levelId, node)
+      spatialGrid.updateNode(nodeId, levelId, node, nodeIndex)
     }
   }
+}
+
+/**
+ * Update a node's properties in both the tree and nodeIndex
+ * Finds the node in the tree structure and updates it there
+ */
+function updateNodeInDraft(
+  nodeId: string,
+  updates: Partial<AnyNode>,
+  levels: LevelNode[],
+  nodeIndex: Map<string, BaseNode>,
+): void {
+  // Find and update node in tree
+  const findAndUpdate = (nodes: BaseNode[]): boolean => {
+    for (const node of nodes) {
+      if (node.id === nodeId) {
+        Object.assign(node, updates)
+        // nodeIndex already points to the same node reference
+        return true
+      }
+      if (node.children.length > 0 && findAndUpdate(node.children)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  findAndUpdate(levels)
 }
 
 /**
@@ -608,10 +636,8 @@ function processLevel(
       const nodeResults = results.filter((r) => r.nodeId === nodeId)
 
       nodeResults.forEach(({ nodeId, updates }) => {
-        // Direct execute (not through commandManager, so no undo tracking)
-        // Handles tree + nodeIndex updates correctly
-        const command = new UpdateNodeCommand(nodeId, updates)
-        command.execute(draft.levels, draft.nodeIndex)
+        // Update node in tree (nodeIndex will reflect the change automatically)
+        updateNodeInDraft(nodeId, updates, draft.levels, draft.nodeIndex)
       })
     }
   }
@@ -1424,7 +1450,7 @@ const useStore = create<StoreState>()(
               }
               const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
               if (levelId) {
-                draft.spatialGrid.updateNode(nodeId, levelId, node)
+                draft.spatialGrid.updateNode(nodeId, levelId, node, draft.nodeIndex)
                 processLevel(draft, levelId)
               }
             }),
@@ -1508,7 +1534,7 @@ const useStore = create<StoreState>()(
               }
               const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
               if (levelId) {
-                draft.spatialGrid.updateNode(resultNodeId, levelId, node)
+                draft.spatialGrid.updateNode(resultNodeId, levelId, node, draft.nodeIndex)
                 processLevel(draft, levelId)
               }
             }),
