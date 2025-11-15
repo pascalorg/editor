@@ -1166,11 +1166,7 @@ const useStore = create<StoreState>()(
                   const nodeBounds = calculateNodeBounds(affectedNode)
                   if (!nodeBounds) continue
 
-                  const levelId = getLevelIdFromDraft(
-                    affectedNode,
-                    draft.levels,
-                    draft.nodeIndex,
-                  )
+                  const levelId = getLevelIdFromDraft(affectedNode, draft.levels, draft.nodeIndex)
                   if (!levelId) continue
 
                   const nodeNeighbors = draft.spatialGrid.query(levelId, nodeBounds)
@@ -1539,9 +1535,12 @@ const useStore = create<StoreState>()(
           let resultNodeId = nodeId
           let affectedNodeIds = new Set<string>()
 
+
           set(
             produce((draft) => {
               const node = draft.nodeIndex.get(nodeId)
+
+              console.log('node', node, updates);
 
               // Check if we're committing a preview node (preview: true -> false)
               const isCommittingPreview = node?.preview === true && updates.preview === false
@@ -1572,45 +1571,11 @@ const useStore = create<StoreState>()(
                 // Handle children - always preserve the children property if it exists
                 if (children !== undefined) {
                   if (children.length > 0) {
-                    // For groups (rooms), check if we need to convert world positions to relative
-                    const isGroup = previewNode.type === 'group'
-                    const hasPosition = 'position' in updates && updates.position !== undefined
-                    const roomPosition = hasPosition ? updates.position : [0, 0]
-
                     // Recursively strip preview/id/parent from children
-                    newNodeData.children = children.map((child: any) => {
-                      const {
-                        preview: childPreview,
-                        id: childId,
-                        parent: childParent,
-                        ...childData
-                      } = child
-
-                      // Convert wall positions to relative if this is a group with a position
-                      if (isGroup && hasPosition && child.type === 'wall') {
-                        return {
-                          ...childData,
-                          name: childData.name.replace(' Preview', '').replace('Preview ', ''),
-                          position: [
-                            (childData.position?.[0] || 0) - (roomPosition as [number, number])[0],
-                            (childData.position?.[1] || 0) - (roomPosition as [number, number])[1],
-                          ] as [number, number],
-                          start: {
-                            x: (childData.start?.x || 0) - (roomPosition as [number, number])[0],
-                            z: (childData.start?.z || 0) - (roomPosition as [number, number])[1],
-                          },
-                          end: {
-                            x: (childData.end?.x || 0) - (roomPosition as [number, number])[0],
-                            z: (childData.end?.z || 0) - (roomPosition as [number, number])[1],
-                          },
-                        }
-                      }
-
-                      return {
-                        ...childData,
-                        name: childData.name.replace(' Preview', '').replace('Preview ', ''),
-                      }
-                    })
+                    newNodeData.children = children.map((child: any) => ({
+                      ...child,
+                      preview: false,
+                    }))
                   } else {
                     // Preserve empty children array
                     newNodeData.children = []
@@ -1651,6 +1616,7 @@ const useStore = create<StoreState>()(
                   draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
                 }
               }
+              
 
               // Update spatial grid for the updated node
               const updatedNode = draft.nodeIndex.get(resultNodeId)
