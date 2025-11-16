@@ -36,7 +36,6 @@ export default function Viewer({ className }: { className?: string }) {
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
-  const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
@@ -47,16 +46,6 @@ export default function Viewer({ className }: { className?: string }) {
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
-
-  // Use a callback ref to ensure the store is updated when the group is attached
-  const allFloorsGroupCallback = useCallback(
-    (node: THREE.Group | null) => {
-      if (node) {
-        setWallsGroupRef(node)
-      }
-    },
-    [setWallsGroupRef],
-  )
 
   // State for hover effects (floor hover only in viewer)
   const [hoveredFloorId, setHoveredFloorId] = useState<string | null>(null)
@@ -121,7 +110,7 @@ export default function Viewer({ className }: { className?: string }) {
         </mesh>
 
         {/* Loop through all floors and render grid + walls for each */}
-        <group ref={allFloorsGroupCallback}>
+        <group>
           {levels
             .filter((level) => level.type === 'level' && level.visible !== false)
             .map((floor, index, visibleFloors) => {

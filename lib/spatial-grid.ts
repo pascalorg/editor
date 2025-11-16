@@ -19,7 +19,7 @@ function calculateAbsolutePosition(
   nodeIndex: Map<string, BaseNode>,
 ): [number, number] | null {
   // For nodes without position
-  if (!('position' in node) || !Array.isArray(node.position)) {
+  if (!('position' in node && Array.isArray(node.position))) {
     return null
   }
 

@@ -427,9 +427,6 @@ type StoreState = {
   reorderLevels: (levels: LevelNode[]) => void
   selectFloor: (floorId: string | null) => void
 
-  setWalls: (walls: string[]) => void
-  setRoofs: (roofs: string[]) => void
-
   handleElementSelect: (
     elementId: string,
     event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
@@ -438,7 +435,6 @@ type StoreState = {
   setSelectedScanIds: (ids: string[]) => void
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
-  setWallsGroupRef: (ref: THREE.Group | null) => void
   setActiveTool: (tool: Tool | null) => void
   setControlMode: (mode: ControlMode) => void
   setCameraMode: (mode: CameraMode) => void
@@ -646,14 +642,12 @@ function processLevel(
 /**
  * Process all levels after undo/redo to ensure computed properties are up to date
  */
-function recomputeAllLevels(
-  draft: {
-    spatialGrid: SpatialGrid
-    nodeIndex: Map<string, BaseNode>
-    nodeProcessors: NodeProcessor[]
-    levels: LevelNode[]
-  },
-): void {
+function recomputeAllLevels(draft: {
+  spatialGrid: SpatialGrid
+  nodeIndex: Map<string, BaseNode>
+  nodeProcessors: NodeProcessor[]
+  levels: LevelNode[]
+}): void {
   // Process each level
   for (const level of draft.levels) {
     processLevel(draft, level.id)
@@ -713,163 +707,6 @@ const useStore = create<StoreState>()(
             }),
           )
         },
-
-        // Building element operations
-        setWalls: (wallKeys) =>
-          set((state) => {
-            const selectedFloorId = state.selectedFloorId
-            if (!selectedFloorId) {
-              console.warn('No floor selected, cannot set walls')
-              return state
-            }
-
-            // Get existing walls to preserve their children (doors/windows)
-            const level = state.levels.find((l) => l.id === selectedFloorId)
-            if (!level) return state
-
-            const existingWalls = level.children.filter((child) => child.type === 'wall') as any[]
-            const existingWallsMap = new Map(existingWalls.map((w) => [w.id, w]))
-
-            // Convert wall keys to WallNode objects
-            const wallNodes: any[] = wallKeys.map((wallKey) => {
-              // Check if this wall already exists
-              const existingWall = existingWallsMap.get(wallKey)
-              if (existingWall) {
-                // Preserve existing wall with its children
-                return existingWall
-              }
-
-              // Parse wall key: "x1,z1-x2,z2"
-              const [start, end] = wallKey.split('-')
-              const [x1, z1] = start.split(',').map(Number)
-              const [x2, z2] = end.split(',').map(Number)
-
-              // Calculate wall properties
-              const dx = x2 - x1
-              const dz = z2 - z1
-              const length = Math.sqrt(dx * dx + dz * dz)
-              const rotation = Math.atan2(-dz, dx) // Negate dz to match 3D z-axis direction
-
-              // Create new WallNode
-              return {
-                id: createId('wall'),
-                type: 'wall',
-                name: `Wall ${wallKey}`,
-                position: [x1, z1] as [number, number],
-                rotation,
-                size: [length, 0.2] as [number, number], // 0.2m thickness
-                start: { x: x1, z: z1 }, // Start point in grid coordinates
-                end: { x: x2, z: z2 }, // End point in grid coordinates
-                visible: true,
-                opacity: 100,
-                children: [],
-                parent: selectedFloorId,
-              }
-            })
-
-            // Update the current level's walls
-            const updatedLevels = state.levels.map((level) => {
-              if (level.id === selectedFloorId) {
-                // Remove existing walls and add new/updated ones
-                const nonWalls = level.children.filter((child) => child.type !== 'wall')
-                return {
-                  ...level,
-                  children: [...nonWalls, ...wallNodes],
-                }
-              }
-              return level
-            })
-
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          }),
-        setRoofs: (roofKeys) =>
-          set((state) => {
-            const selectedFloorId = state.selectedFloorId
-            if (!selectedFloorId) {
-              console.warn('No floor selected, cannot set roofs')
-              return state
-            }
-
-            // Get existing roofs to preserve their children (roof segments)
-            const level = state.levels.find((l) => l.id === selectedFloorId)
-            if (!level) return state
-
-            const existingRoofs = level.children.filter((child) => child.type === 'roof') as any[]
-            const existingRoofsMap = new Map(existingRoofs.map((r) => [r.id, r]))
-
-            // Convert roof keys to RoofNode objects
-            const roofNodes: any[] = roofKeys.map((roofKey) => {
-              // Check if this roof already exists
-              const existingRoof = existingRoofsMap.get(roofKey)
-              if (existingRoof) {
-                // Preserve existing roof with its children
-                return existingRoof
-              }
-
-              // Parse roof key: "x1,y1-x2,y2" or "x1,y1-x2,y2:leftWidth,rightWidth"
-              // First check if there are width parameters
-              let coordsPart = roofKey
-              let leftWidth = 3 // Default 3m
-              let rightWidth = 3 // Default 3m
-
-              if (roofKey.includes(':')) {
-                const [coords, widths] = roofKey.split(':')
-                coordsPart = coords
-                const [left, right] = widths.split(',').map(Number)
-                if (!isNaN(left)) leftWidth = left
-                if (!isNaN(right)) rightWidth = right
-              }
-
-              // Parse coordinates
-              const [start, end] = coordsPart.split('-')
-              const [x1, y1] = start.split(',').map(Number)
-              const [x2, y2] = end.split(',').map(Number)
-
-              // Calculate roof properties
-              const dx = x2 - x1
-              const dy = y2 - y1
-              const length = Math.sqrt(dx * dx + dy * dy)
-              const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
-
-              // Create new RoofNode
-              return {
-                id: createId('roof'),
-                type: 'roof',
-                name: `Roof ${roofKey}`,
-                position: [x1, y1] as [number, number],
-                rotation,
-                size: [length, leftWidth + rightWidth] as [number, number],
-                height: 2.5, // 2.5m peak height
-                leftWidth,
-                rightWidth,
-                visible: true,
-                opacity: 100,
-                children: [],
-                parent: selectedFloorId,
-              }
-            })
-
-            // Update the current level's roofs
-            const updatedLevels = state.levels.map((level) => {
-              if (level.id === selectedFloorId) {
-                // Remove existing roofs and add new/updated ones
-                const nonRoofs = level.children.filter((child) => child.type !== 'roof')
-                return {
-                  ...level,
-                  children: [...nonRoofs, ...roofNodes],
-                }
-              }
-              return level
-            })
-
-            return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
-            }
-          }),
 
         selectedFloorId: null,
         viewMode: 'level', // Start in level mode with base level selected
@@ -935,7 +772,6 @@ const useStore = create<StoreState>()(
         setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
-        setWallsGroupRef: (ref) => set({ wallsGroupRef: ref }),
         setActiveTool: (tool) => {
           // Delete all preview nodes before switching tools
           get().deletePreviewNodes()
@@ -1179,7 +1015,6 @@ const useStore = create<StoreState>()(
           )
         },
         handleClear: () => {
-          get().setWalls([])
           set({ selectedElements: [] })
         },
         serializeLayout: () => {

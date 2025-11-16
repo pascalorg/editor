@@ -74,15 +74,9 @@ export default function Editor({ className }: { className?: string }) {
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
-
-  const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
-  const setIsManipulatingScan = useEditor((state) => state.setIsManipulatingScan)
   const levels = useEditor((state) => state.levels)
 
-  const updateLevels = useEditor((state) => state.updateLevels)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const viewMode = useEditor((state) => state.viewMode)
-  const setWallsGroupRef = useEditor((state) => state.setWallsGroupRef)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
