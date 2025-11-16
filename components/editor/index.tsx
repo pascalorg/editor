@@ -74,7 +74,7 @@ export default function Editor({ className }: { className?: string }) {
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)

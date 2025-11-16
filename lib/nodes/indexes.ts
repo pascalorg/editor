@@ -90,14 +90,14 @@ export function buildNodeIndexes(levels: LevelNode[]): NodeIndexes {
 /**
  * Build minimal node index (just by ID)
  */
-export function buildNodeIndex(levels: LevelNode[]): Map<string, BaseNode> {
+export function buildNodeIndex(nodes: BaseNode[]): Map<string, BaseNode> {
   const index = new Map<string, BaseNode>()
 
-  for (const level of levels) {
-    index.set(level.id, level)
+  for (const node of nodes) {
+    index.set(node.id, node)
 
-    traverseTree(level, ((node) => {
-      index.set(node.id, node)
+    traverseTree(node, ((child) => {
+      index.set(child.id, child)
     }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 

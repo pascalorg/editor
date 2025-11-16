@@ -225,7 +225,7 @@ interface WallRendererProps {
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const debug = useEditor((state) => state.debug)
-  const allLevels = useEditor((state) => state.levels)
+  const allLevels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
   const tileSize = TILE_SIZE
 
   // Check if this is a preview node

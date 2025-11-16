@@ -30,7 +30,13 @@ import {
   setNodeVisibility,
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
-import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import type {
+  AnyNode,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  RootNode,
+} from '@/lib/nodes/types'
 import type { NodeProcessor } from '@/lib/processors/types'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-manager'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
@@ -371,7 +377,8 @@ export type LayoutJSON = {
   grid: {
     size: number
   }
-  levels: LevelNode[]
+  levels?: LevelNode[] // Legacy format (version < 3.0)
+  root?: RootNode // New format (version >= 3.0)
   // components: Component[]
   // groups: ComponentGroup[]
   // images?: ReferenceImage[] // Optional for backward compatibility
@@ -386,7 +393,7 @@ type StoreState = {
   // ============================================================================
   // NODE-BASED STATE (single source of truth)
   // ============================================================================
-  levels: LevelNode[] // Node tree hierarchy
+  root: RootNode // Scene graph root: root → building → levels
   nodeIndex: Map<string, BaseNode> // Fast lookup by ID
   spatialGrid: SpatialGrid // Spatial indexing for efficient neighbor queries
 
@@ -488,14 +495,30 @@ type StoreState = {
 }
 
 /**
+ * Get the building node from root (assumes single building at root.children[0])
+ */
+function getBuilding(root: RootNode): BuildingNode | null {
+  return root.children[0] || null
+}
+
+/**
+ * Get levels array from root (shorthand for root.children[0].children)
+ */
+function getLevels(root: RootNode): LevelNode[] {
+  const building = getBuilding(root)
+  return building ? building.children : []
+}
+
+/**
  * Helper function to get level ID from a node using provided draft state
  * This is used inside Immer produce() where we can't use get() safely
  */
 function getLevelIdFromDraft(
   node: BaseNode,
-  levels: LevelNode[],
+  root: RootNode,
   nodeIndex: Map<string, BaseNode>,
 ): string | null {
+  const levels = getLevels(root)
   // Create a Set of level IDs for fast lookup
   const levelIds = new Set(levels.map((l) => l.id))
 
@@ -547,14 +570,14 @@ function getLevelIdFromDraft(
 function rebuildSpatialGrid(
   spatialGrid: SpatialGrid,
   nodeIndex: Map<string, BaseNode>,
-  getLevelId: (node: BaseNode) => string | null,
+  root: RootNode,
 ): void {
   // Clear existing data
   spatialGrid.clear()
 
   // Iterate through all nodes and add them to the spatial grid
   for (const [nodeId, node] of nodeIndex.entries()) {
-    const levelId = getLevelId(node)
+    const levelId = getLevelIdFromDraft(node, root, nodeIndex)
     if (levelId) {
       spatialGrid.updateNode(nodeId, levelId, node, nodeIndex)
     }
@@ -568,7 +591,7 @@ function rebuildSpatialGrid(
 function updateNodeInDraft(
   nodeId: string,
   updates: Partial<AnyNode>,
-  levels: LevelNode[],
+  root: RootNode,
   nodeIndex: Map<string, BaseNode>,
 ): void {
   // Find and update node in tree
@@ -586,7 +609,7 @@ function updateNodeInDraft(
     return false
   }
 
-  findAndUpdate(levels)
+  findAndUpdate([root])
 }
 
 /**
@@ -602,7 +625,7 @@ function processLevel(
     spatialGrid: SpatialGrid
     nodeIndex: Map<string, BaseNode>
     nodeProcessors: NodeProcessor[]
-    levels: LevelNode[]
+    root: RootNode
   },
   levelId: string | null,
 ): void {
@@ -633,7 +656,7 @@ function processLevel(
 
       nodeResults.forEach(({ nodeId, updates }) => {
         // Update node in tree (nodeIndex will reflect the change automatically)
-        updateNodeInDraft(nodeId, updates, draft.levels, draft.nodeIndex)
+        updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
       })
     }
   }
@@ -646,10 +669,11 @@ function recomputeAllLevels(draft: {
   spatialGrid: SpatialGrid
   nodeIndex: Map<string, BaseNode>
   nodeProcessors: NodeProcessor[]
-  levels: LevelNode[]
+  root: RootNode
 }): void {
   // Process each level
-  for (const level of draft.levels) {
+  const levels = getLevels(draft.root)
+  for (const level of levels) {
     processLevel(draft, level.id)
   }
 }
@@ -658,19 +682,31 @@ const useStore = create<StoreState>()(
   persist(
     (set, get) => {
       return {
-        // Node-based state initialization with default base level
-        levels: [
-          {
-            id: createId('level'),
-            type: 'level',
-            name: 'base level',
-            level: 0,
-            visible: true,
-            children: [],
-          },
-        ],
+        // Node-based state initialization with root → building → levels hierarchy
+        root: {
+          id: 'root',
+          type: 'root',
+          name: 'root',
+          children: [
+            {
+              id: 'building-1',
+              type: 'building',
+              name: 'building-1',
+              children: [
+                {
+                  id: createId('level'),
+                  type: 'level',
+                  name: 'base level',
+                  level: 0,
+                  visible: true,
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
         nodeProcessors: [new VerticalStackingProcessor()],
-        nodeIndex: new Map(), // Will be built from levels
+        nodeIndex: new Map(), // Will be built from root
         spatialGrid: new SpatialGrid(1), // Cell size of 1 grid unit
 
         // Undo/redo state initialization
@@ -679,15 +715,21 @@ const useStore = create<StoreState>()(
         // UI state initialization
         currentLevel: 0,
         updateLevels: (levels) =>
-          set({
-            levels,
-            nodeIndex: buildNodeIndex(levels),
+          set((state) => {
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: levels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
+            return {
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
+            }
           }),
         addLevel: (level) => {
           set(
             produce((draft) => {
               const command = new AddLevelCommand(level)
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              draft.commandManager.execute(command, draft.root, draft.nodeIndex)
             }),
           )
         },
@@ -695,7 +737,7 @@ const useStore = create<StoreState>()(
           set(
             produce((draft) => {
               const command = new DeleteLevelCommand(levelId)
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              draft.commandManager.execute(command, draft.root, draft.nodeIndex)
             }),
           )
         },
@@ -703,7 +745,7 @@ const useStore = create<StoreState>()(
           set(
             produce((draft) => {
               const command = new ReorderLevelsCommand(levels)
-              draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+              draft.commandManager.execute(command, draft.root, draft.nodeIndex)
             }),
           )
         },
@@ -728,7 +770,7 @@ const useStore = create<StoreState>()(
           }
 
           // Switch to level mode - focusing on a specific level for editing
-          const level = state.levels.find((l) => l.id === floorId)
+          const level = getLevels(state.root).find((l) => l.id === floorId)
 
           if (level) {
             set({
@@ -806,7 +848,7 @@ const useStore = create<StoreState>()(
           const selectedFloorId = state.selectedFloorId
           if (!selectedFloorId) return new Set<string>()
 
-          const level = state.levels.find((l) => l.id === selectedFloorId)
+          const level = getLevels(state.root).find((l) => l.id === selectedFloorId)
           if (!level) return new Set<string>()
 
           // Convert WallNode objects back to wall keys
@@ -824,7 +866,7 @@ const useStore = create<StoreState>()(
           const selectedFloorId = state.selectedFloorId
           if (!selectedFloorId) return new Set<string>()
 
-          const level = state.levels.find((l) => l.id === selectedFloorId)
+          const level = getLevels(state.root).find((l) => l.id === selectedFloorId)
           if (!level) return new Set<string>()
 
           // Convert RoofNode objects back to roof keys
@@ -898,11 +940,15 @@ const useStore = create<StoreState>()(
             }
 
             // Add to the appropriate level
-            const updatedLevels = addReferenceImageToLevel(state.levels, levelId, imageNode)
+            const updatedLevels = addReferenceImageToLevel(getLevels(state.root), levelId, imageNode)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
 
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           })
         },
@@ -939,11 +985,15 @@ const useStore = create<StoreState>()(
             }
 
             // Add to the appropriate level
-            const updatedLevels = addScanToLevel(state.levels, levelId, scanNode)
+            const updatedLevels = addScanToLevel(getLevels(state.root), levelId, scanNode)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
 
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           })
         },
@@ -989,7 +1039,7 @@ const useStore = create<StoreState>()(
                 const node = draft.nodeIndex.get(nodeId)
                 if (!node) continue
 
-                const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+                const levelId = getLevelIdFromDraft(node, draft.root, draft.nodeIndex)
                 if (levelId) {
                   affectedLevels.add(levelId)
                 }
@@ -997,7 +1047,7 @@ const useStore = create<StoreState>()(
 
               // Execute batch delete command (single undo operation)
               const batchCommand = new BatchDeleteCommand(elementIds)
-              draft.commandManager.execute(batchCommand, draft.levels, draft.nodeIndex)
+              draft.commandManager.execute(batchCommand, draft.root, draft.nodeIndex)
 
               // Remove all nodes from spatial grid
               for (const nodeId of elementIds) {
@@ -1020,11 +1070,11 @@ const useStore = create<StoreState>()(
         serializeLayout: () => {
           const state = get()
 
-          // PHASE 3 MIGRATION: Serialize using node tree format
+          // Serialize using root node structure
           return {
-            version: '2.0', // Updated version for intersection-based walls
+            version: '3.0', // Updated version for root → building → levels hierarchy
             grid: { size: 61 }, // 61 intersections (60 divisions + 1)
-            levels: state.levels, // Use node tree as source of truth
+            root: state.root, // Save entire scene graph from root
           }
         },
         loadLayout: (json: LayoutJSON) => {
@@ -1038,11 +1088,30 @@ const useStore = create<StoreState>()(
             activeTool: null,
           })
 
-          // Load from node tree format
-          if (json.levels && Array.isArray(json.levels)) {
+          // Load from root node structure (new format)
+          if (json.root) {
             set({
-              levels: json.levels,
-              nodeIndex: buildNodeIndex(json.levels),
+              root: json.root,
+              nodeIndex: buildNodeIndex([json.root]),
+            })
+          } else if (json.levels) {
+            // Migrate from legacy format (version < 3.0)
+            const migratedRoot: RootNode = {
+              id: 'root',
+              type: 'root',
+              name: 'root',
+              children: [
+                {
+                  id: 'building-1',
+                  type: 'building',
+                  name: 'building-1',
+                  children: json.levels,
+                },
+              ],
+            }
+            set({
+              root: migratedRoot,
+              nodeIndex: buildNodeIndex([migratedRoot]),
             })
           }
         },
@@ -1081,9 +1150,22 @@ const useStore = create<StoreState>()(
               children: [],
             },
           ]
+          const defaultRoot: RootNode = {
+            id: 'root',
+            type: 'root',
+            name: 'root',
+            children: [
+              {
+                id: 'building-1',
+                type: 'building',
+                name: 'building-1',
+                children: defaultLevels,
+              },
+            ],
+          }
           set({
-            levels: defaultLevels,
-            nodeIndex: buildNodeIndex(defaultLevels),
+            root: defaultRoot,
+            nodeIndex: buildNodeIndex([defaultRoot]),
             currentLevel: 0,
             selectedFloorId: defaultLevels[0].id,
             viewMode: 'level',
@@ -1097,7 +1179,7 @@ const useStore = create<StoreState>()(
         undo: () =>
           set(
             produce((draft) => {
-              const success = draft.commandManager.undo(draft.levels, draft.nodeIndex)
+              const success = draft.commandManager.undo(draft.root, draft.nodeIndex)
               if (success) {
                 // Clear selections after undo
                 draft.selectedElements = []
@@ -1105,7 +1187,7 @@ const useStore = create<StoreState>()(
                 draft.selectedScanIds = []
 
                 // Rebuild spatial grid and recompute all levels
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, get().getLevelId)
+                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.root)
                 recomputeAllLevels(draft)
               }
             }),
@@ -1113,7 +1195,7 @@ const useStore = create<StoreState>()(
         redo: () =>
           set(
             produce((draft) => {
-              const success = draft.commandManager.redo(draft.levels, draft.nodeIndex)
+              const success = draft.commandManager.redo(draft.root, draft.nodeIndex)
               if (success) {
                 // Clear selections after redo
                 draft.selectedElements = []
@@ -1121,19 +1203,23 @@ const useStore = create<StoreState>()(
                 draft.selectedScanIds = []
 
                 // Rebuild spatial grid and recompute all levels
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, get().getLevelId)
+                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.root)
                 recomputeAllLevels(draft)
               }
             }),
           ),
         toggleFloorVisibility: (floorId) =>
           set((state) => {
-            const updatedLevels = state.levels.map((level) =>
+            const updatedLevels = getLevels(state.root).map((level) =>
               level.id === floorId ? { ...level, visible: !(level.visible ?? true) } : level,
             )
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         toggleBuildingElementVisibility: (elementId, type) =>
@@ -1145,11 +1231,15 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(state.levels, elementId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(getLevels(state.root), elementId, !currentVisibility)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
 
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         toggleImageVisibility: (imageId) =>
@@ -1158,11 +1248,15 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(state.levels, imageId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(getLevels(state.root), imageId, !currentVisibility)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
 
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         toggleScanVisibility: (scanId) =>
@@ -1171,45 +1265,65 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(state.levels, scanId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(getLevels(state.root), scanId, !currentVisibility)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
 
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         setFloorOpacity: (floorId, opacity) =>
           set((state) => {
-            const updatedLevels = setNodeOpacity(state.levels, floorId, opacity)
+            const updatedLevels = setNodeOpacity(getLevels(state.root), floorId, opacity)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         setBuildingElementOpacity: (elementId, type, opacity) =>
           set((state) => {
             if (!state.selectedFloorId) return state
 
-            const updatedLevels = setNodeOpacity(state.levels, elementId, opacity)
+            const updatedLevels = setNodeOpacity(getLevels(state.root), elementId, opacity)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         setImageOpacity: (imageId, opacity) =>
           set((state) => {
-            const updatedLevels = setNodeOpacity(state.levels, imageId, opacity)
+            const updatedLevels = setNodeOpacity(getLevels(state.root), imageId, opacity)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         setScanOpacity: (scanId, opacity) =>
           set((state) => {
-            const updatedLevels = setNodeOpacity(state.levels, scanId, opacity)
+            const updatedLevels = setNodeOpacity(getLevels(state.root), scanId, opacity)
+            const building = state.root.children[0]
+            if (!building) return state
+            const updatedBuilding = { ...building, children: updatedLevels }
+            const updatedRoot = { ...state.root, children: [updatedBuilding] }
             return {
-              levels: updatedLevels,
-              nodeIndex: buildNodeIndex(updatedLevels),
+              root: updatedRoot,
+              nodeIndex: buildNodeIndex([updatedRoot]),
             }
           }),
         pointerPosition: null,
@@ -1218,7 +1332,7 @@ const useStore = create<StoreState>()(
           const state = get()
 
           // Create a Set of level IDs for fast lookup
-          const levelIds = new Set(state.levels.map((l) => l.id))
+          const levelIds = new Set(getLevels(state.root).map((l) => l.id))
 
           // If node is already a level, return its id
           if (levelIds.has(node.id)) {
@@ -1272,9 +1386,9 @@ const useStore = create<StoreState>()(
 
               // If it's a preview node, execute directly without adding to undo stack
               if (nodeData.preview) {
-                command.execute(draft.levels, draft.nodeIndex)
+                command.execute(draft.root, draft.nodeIndex)
               } else {
-                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+                draft.commandManager.execute(command, draft.root, draft.nodeIndex)
               }
 
               // Update spatial grid and process level
@@ -1283,7 +1397,7 @@ const useStore = create<StoreState>()(
                 console.error('Added node not found in index:', nodeId)
                 return
               }
-              const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+              const levelId = getLevelIdFromDraft(node, draft.root, draft.nodeIndex)
               if (levelId) {
                 draft.spatialGrid.updateNode(nodeId, levelId, node, draft.nodeIndex)
                 processLevel(draft, levelId)
@@ -1311,7 +1425,7 @@ const useStore = create<StoreState>()(
 
                 // Delete preview node (no undo)
                 const deleteCommand = new DeleteNodeCommand(nodeId)
-                deleteCommand.execute(draft.levels, draft.nodeIndex)
+                deleteCommand.execute(draft.root, draft.nodeIndex)
 
                 // Prepare new node data
                 const { preview, id, children, parent, ...nodeData } = previewNode as any
@@ -1345,7 +1459,7 @@ const useStore = create<StoreState>()(
                 // Create new real node (with undo)
                 const addCommand = new AddNodeCommand(newNodeData, parent)
                 resultNodeId = addCommand.getNodeId()
-                draft.commandManager.execute(addCommand, draft.levels, draft.nodeIndex)
+                draft.commandManager.execute(addCommand, draft.root, draft.nodeIndex)
               } else {
                 // Normal update
                 const command = new UpdateNodeCommand(nodeId, updates)
@@ -1355,9 +1469,9 @@ const useStore = create<StoreState>()(
 
                 if (isPreviewNode) {
                   // Preview node update - execute directly without undo tracking
-                  command.execute(draft.levels, draft.nodeIndex)
+                  command.execute(draft.root, draft.nodeIndex)
                 } else {
-                  draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+                  draft.commandManager.execute(command, draft.root, draft.nodeIndex)
                 }
               }
 
@@ -1367,7 +1481,7 @@ const useStore = create<StoreState>()(
                 console.error('Updated node not found in index:', resultNodeId)
                 return
               }
-              const levelId = getLevelIdFromDraft(node, draft.levels, draft.nodeIndex)
+              const levelId = getLevelIdFromDraft(node, draft.root, draft.nodeIndex)
               if (levelId) {
                 draft.spatialGrid.updateNode(resultNodeId, levelId, node, draft.nodeIndex)
                 processLevel(draft, levelId)
@@ -1383,15 +1497,15 @@ const useStore = create<StoreState>()(
             produce((draft) => {
               // Get the node and levelId before deletion
               const node = draft.nodeIndex.get(nodeId)
-              const levelId = node ? getLevelIdFromDraft(node, draft.levels, draft.nodeIndex) : null
+              const levelId = node ? getLevelIdFromDraft(node, draft.root, draft.nodeIndex) : null
 
               // Execute delete command
               const command = new DeleteNodeCommand(nodeId)
               if (node?.preview) {
                 // Preview node - execute directly without undo tracking
-                command.execute(draft.levels, draft.nodeIndex)
+                command.execute(draft.root, draft.nodeIndex)
               } else {
-                draft.commandManager.execute(command, draft.levels, draft.nodeIndex)
+                draft.commandManager.execute(command, draft.root, draft.nodeIndex)
               }
 
               // Remove from spatial grid and process level
@@ -1417,7 +1531,7 @@ const useStore = create<StoreState>()(
               // Delete each preview node without undo tracking
               for (const nodeId of previewNodeIds) {
                 const command = new DeleteNodeCommand(nodeId)
-                command.execute(draft.levels, draft.nodeIndex)
+                command.execute(draft.root, draft.nodeIndex)
               }
             }),
           )
@@ -1430,25 +1544,21 @@ const useStore = create<StoreState>()(
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => {
         // Filter out preview nodes before persisting
-        const filterPreviewNodes = (nodes: BaseNode[]): BaseNode[] => {
-          return nodes
-            .filter((node) => !node.preview) // Remove preview nodes
-            .map((node) => ({
-              ...node,
-              children:
-                node.children && node.children.length > 0 ? filterPreviewNodes(node.children) : [],
-            }))
+        const filterPreviewNodes = (node: BaseNode): BaseNode => {
+          return {
+            ...node,
+            children: node.children
+              .filter((child) => !child.preview) // Remove preview nodes
+              .map((child) => filterPreviewNodes(child)),
+          }
         }
 
-        const levelsWithoutPreviews = state.levels.map((level) => ({
-          ...level,
-          children: filterPreviewNodes(level.children) as LevelNode['children'],
-        }))
+        const rootWithoutPreviews = filterPreviewNodes(state.root) as RootNode
 
         return {
           // Node-based state (single source of truth)
-          levels: levelsWithoutPreviews,
-          // Note: nodeIndex is NOT persisted - it's rebuilt from levels on load
+          root: rootWithoutPreviews,
+          // Note: nodeIndex is NOT persisted - it's rebuilt from root on load
 
           // Selection state
           selectedElements: state.selectedElements,
@@ -1494,33 +1604,47 @@ const useStore = create<StoreState>()(
               .filter((node): node is BaseNode => node !== null)
           }
 
-          // Clean blob URLs from all levels
-          if (state.levels && Array.isArray(state.levels)) {
-            state.levels = state.levels.map((level) => ({
-              ...level,
-              children: cleanBlobUrls(level.children) as LevelNode['children'],
-            }))
+          // Clean blob URLs from root tree
+          if (state.root) {
+            const cleanNode = (node: BaseNode): BaseNode => ({
+              ...node,
+              children: cleanBlobUrls(node.children),
+            })
+            state.root = cleanNode(state.root) as RootNode
           }
 
-          // Initialize levels array if not present
-          if (!state.levels || state.levels.length === 0) {
-            state.levels = [
-              {
-                id: createId('level'),
-                type: 'level',
-                name: 'base level',
-                level: 0,
-                visible: true,
-                children: [],
-              },
-            ]
+          // Initialize root structure if not present
+          if (!state.root) {
+            state.root = {
+              id: 'root',
+              type: 'root',
+              name: 'root',
+              children: [
+                {
+                  id: 'building-1',
+                  type: 'building',
+                  name: 'building-1',
+                  children: [
+                    {
+                      id: createId('level'),
+                      type: 'level',
+                      name: 'base level',
+                      level: 0,
+                      visible: true,
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+            }
           }
 
-          // Always rebuild node index from levels (Maps can't be persisted)
-          state.nodeIndex = buildNodeIndex(state.levels)
+          // Always rebuild node index from root (Maps can't be persisted)
+          state.nodeIndex = buildNodeIndex([state.root])
+          const levels = getLevels(state.root)
           console.log('[Rehydration] Built node index:', {
             nodes: state.nodeIndex.size,
-            levels: state.levels.length,
+            levels: levels.length,
           })
 
           // Reinitialize command manager (can't be persisted)
@@ -1528,18 +1652,18 @@ const useStore = create<StoreState>()(
 
           // Reinitialize and rebuild spatial grid (Maps can't be persisted)
           state.spatialGrid = new SpatialGrid(1)
-          rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.getLevelId)
+          rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.root)
           console.log('[Rehydration] Rebuilt spatial grid:', {
             totalNodes: state.nodeIndex.size,
-            levels: state.levels.map((level) => ({
+            levels: levels.map((level) => ({
               id: level.id,
               nodesInGrid: state.spatialGrid.getNodesInLevel(level.id).size,
             })),
           })
 
           // Preselect base level if no level is selected
-          if (!state.selectedFloorId) {
-            state.selectedFloorId = state.levels[0].id
+          if (!state.selectedFloorId && levels.length > 0) {
+            state.selectedFloorId = levels[0].id
             state.currentLevel = 0
             state.viewMode = 'level'
           }

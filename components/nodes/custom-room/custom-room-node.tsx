@@ -39,7 +39,7 @@ export function CustomRoomNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
 
   // Use ref to persist values across renders without triggering re-renders
   const customRoomStateRef = useRef<{

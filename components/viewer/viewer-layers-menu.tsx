@@ -10,7 +10,7 @@ interface ViewerLayersMenuProps {
 }
 
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)
   const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)

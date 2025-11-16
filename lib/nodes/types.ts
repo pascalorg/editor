@@ -15,6 +15,8 @@
 export interface BaseNode {
   id: string
   type:
+    | 'root'
+    | 'building'
     | 'level'
     | 'slab'
     | 'wall'
@@ -50,6 +52,28 @@ export interface GridItem {
 export interface GridPoint {
   x: number
   z: number
+}
+
+// ============================================================================
+// SCENE HIERARCHY NODES
+// ============================================================================
+
+/**
+ * Root node of the entire scene graph
+ * Contains one or more buildings
+ */
+export interface RootNode extends BaseNode {
+  type: 'root'
+  children: BuildingNode[]
+}
+
+/**
+ * Building node containing all levels/floors
+ * Child of root node
+ */
+export interface BuildingNode extends BaseNode {
+  type: 'building'
+  children: LevelNode[]
 }
 
 // ============================================================================
@@ -162,6 +186,8 @@ export interface GroupNode extends BaseNode, GridItem {
  * Union of all possible node types
  */
 export type AnyNode =
+  | RootNode
+  | BuildingNode
   | LevelNode
   | WallNode
   | DoorNode
@@ -172,6 +198,7 @@ export type AnyNode =
   | ReferenceImageNode
   | ScanNode
   | GroupNode
+  | SlabNode
 
 /**
  * Union of all building element nodes (walls, doors, windows, columns, roofs)

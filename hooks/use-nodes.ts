@@ -80,7 +80,9 @@ export function useNodeFromIndex(nodeId: string): BaseNode | undefined {
  */
 export function useLevelChildren(levelId: string): BaseNode[] {
   return useEditor((state) => {
-    const level = state.levels.find((l) => l.id === levelId)
+    const building = state.root.children[0]
+    const levels = building ? building.children : []
+    const level = levels.find((l) => l.id === levelId)
     return level?.children || []
   })
 }
@@ -223,7 +225,9 @@ export function useNodesWithSelector<T>(
   selector: (level: LevelNode) => T,
 ): T | null {
   return useEditor((state) => {
-    const level = state.levels.find((l) => l.id === levelId)
+    const building = state.root.children[0]
+    const levels = building ? building.children : []
+    const level = levels.find((l) => l.id === levelId)
     if (!level) {
       return null
     }
@@ -235,5 +239,9 @@ export function useNodesWithSelector<T>(
  * Generic hook to select from entire node tree
  */
 export function useNodeTree<T>(selector: (levels: LevelNode[]) => T): T {
-  return useEditor((state) => selector(state.levels))
+  return useEditor((state) => {
+    const building = state.root.children[0]
+    const levels = building ? building.children : []
+    return selector(levels)
+  })
 }
