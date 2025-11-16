@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { componentRegistry } from '@/lib/nodes/registry'
 import '@/components/nodes'
 import { useEditor, type WallSegment } from '@/hooks/use-editor'
+import type { BuildingNode } from '@/lib/nodes/types'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { CustomControls } from './custom-controls'
@@ -33,32 +34,6 @@ export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axi
 
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
-/**
- * Helper component to render registry-based node editors by tool name
- */
-function RegistryNodeEditor({ toolName }: { toolName: string }) {
-  const entry = componentRegistry.getByTool(toolName)
-  if (!entry?.config.nodeEditor) return null
-  const NodeEditor = entry.config.nodeEditor
-  return <NodeEditor />
-}
-
-/**
- * Helper component to render all node editors for a specific mode
- */
-function RegistryModeEditors({ mode }: { mode: 'guide' | 'select' | 'delete' | 'building' }) {
-  const entries = componentRegistry.getByMode(mode)
-  return (
-    <>
-      {entries.map((entry) => {
-        if (!entry.config.nodeEditor) return null
-        const NodeEditor = entry.config.nodeEditor
-        return <NodeEditor key={entry.config.nodeType} />
-      })}
-    </>
-  )
-}
-
 export default function Editor({ className }: { className?: string }) {
   const selectedElements = useEditor((state) => state.selectedElements)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
@@ -74,7 +49,8 @@ export default function Editor({ className }: { className?: string }) {
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  // const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const building = useEditor((state) => state.root.children[0] as BuildingNode)
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
@@ -418,7 +394,10 @@ export default function Editor({ className }: { className?: string }) {
       <InfiniteFloor />
 
       {/* Loop through all floors and render grid + walls for each */}
-      <group>
+      <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+        <NodeRenderer node={building} />
+      </group>
+      {/* <group>
         {levels
           .filter((level) => {
             // Filter out hidden floors (visible === false or opacity === 0)
@@ -440,7 +419,6 @@ export default function Editor({ className }: { className?: string }) {
 
             return (
               <AnimatedLevel key={floor.id} positionY={yPosition}>
-                {/* Grid for visual reference only - not interactive */}
                 {showGrid && (
                   <group raycast={() => null}>
                     {floorLevel === 0 ? (
@@ -505,7 +483,7 @@ export default function Editor({ className }: { className?: string }) {
                   </group>
                 )}
 
-                {/* Show grid from level below as reference for non-base levels (only in exploded mode) */}
+
                 {showGrid &&
                   floorLevel > 0 &&
                   isActiveFloor &&
@@ -535,7 +513,6 @@ export default function Editor({ className }: { className?: string }) {
                   )}
 
                 <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                  {/* Registry-based node editors for all building tools */}
                   {controlMode === 'building' &&
                     activeTool &&
                     [
@@ -550,17 +527,16 @@ export default function Editor({ className }: { className?: string }) {
                     ].includes(activeTool) &&
                     isActiveFloor && <RegistryNodeEditor toolName={activeTool} />}
 
-                  {/* Non-building mode editors (guide mode for images and scans) */}
+                 
                   {controlMode === 'guide' && isActiveFloor && <RegistryModeEditors mode="guide" />}
 
                   <NodeRenderer node={floor} />
-                  {/* Only show interactive grid tiles for the active floor */}
                   {isActiveFloor && <GridTiles />}
                 </group>
               </AnimatedLevel>
             )
           })}
-      </group>
+      </group> */}
 
       {controlMode === 'select' && <SelectionManager />}
       <CustomControls />

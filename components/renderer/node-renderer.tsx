@@ -63,6 +63,12 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return null
   }
 
+  console.log('NodeRenderer render', {
+    nodeId: node.id,
+    nodeType: node.type,
+    renderer: RegistryRenderer,
+  })
+
   return (
     <>
       <group

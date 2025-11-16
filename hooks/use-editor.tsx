@@ -32,7 +32,7 @@ import {
 // Node-based architecture imports
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, RootNode } from '@/lib/nodes/types'
 import type { NodeProcessor } from '@/lib/processors/types'
-import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-manager'
+import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
 
