@@ -30,13 +30,7 @@ import {
   setNodeVisibility,
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
-import type {
-  AnyNode,
-  BaseNode,
-  BuildingNode,
-  LevelNode,
-  RootNode,
-} from '@/lib/nodes/types'
+import type { AnyNode, BaseNode, BuildingNode, LevelNode, RootNode } from '@/lib/nodes/types'
 import type { NodeProcessor } from '@/lib/processors/types'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-manager'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
@@ -100,6 +94,56 @@ function injectAssetsIntoLevels(levels: LevelNode[], assets: AssetMap): LevelNod
   return walk(levels) as LevelNode[]
 }
 
+/**
+ * Extracts heavy asset URLs from root node structure into a separate map.
+ */
+function extractAssetsFromRoot(root: RootNode): {
+  root: RootNode
+  assets: AssetMap
+} {
+  const assets: AssetMap = {}
+
+  const walk = (nodes: BaseNode[]): BaseNode[] =>
+    nodes.map((node) => {
+      const n: any = { ...node }
+      if (
+        (n.type === 'reference-image' || n.type === 'scan') &&
+        typeof n.url === 'string' &&
+        n.url.length > 0
+      ) {
+        assets[n.id] = n.url
+        n.url = `asset:${n.id}`
+      }
+      if (Array.isArray(n.children) && n.children.length > 0) {
+        n.children = walk(n.children as BaseNode[])
+      }
+      return n
+    })
+
+  const processedRoot = { ...root, children: walk(root.children) }
+  return { root: processedRoot as RootNode, assets }
+}
+
+/**
+ * Injects asset URLs back into root structure from the assets map.
+ */
+function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
+  const walk = (nodes: BaseNode[]): BaseNode[] =>
+    nodes.map((node) => {
+      const n: any = { ...node }
+      if (typeof n.url === 'string' && n.url.startsWith('asset:')) {
+        const id = n.url.slice('asset:'.length)
+        n.url = assets[id] ?? n.url
+      }
+      if (Array.isArray(n.children) && n.children.length > 0) {
+        n.children = walk(n.children as BaseNode[])
+      }
+      return n
+    })
+
+  return { ...root, children: walk(root.children) } as RootNode
+}
+
 // IndexedDB storage adapter for Zustand persist middleware (split keys)
 const indexedDBStorage: StateStorage = {
   getItem: async (name: string) => {
@@ -108,29 +152,70 @@ const indexedDBStorage: StateStorage = {
     if (legacy) {
       try {
         const env = JSON.parse(legacy) as PersistEnvelope
+
+        // Migrate old levels format to new root format
         if (env.state?.levels && Array.isArray(env.state.levels)) {
           const { levels, assets } = extractAssetsFromLevels(env.state.levels as LevelNode[])
+
+          // Convert to root structure
+          const root: RootNode = {
+            id: 'root',
+            type: 'root',
+            name: 'root',
+            children: [
+              {
+                id: 'building-1',
+                type: 'building',
+                name: 'building-1',
+                children: levels,
+              },
+            ],
+          }
+
           const structure = JSON.stringify({
-            state: { ...env.state, levels },
+            state: { ...env.state, root, levels: undefined }, // Remove old levels property
             version: env.version,
           })
           const assetsJson = JSON.stringify({ assets })
           await idbSet(`${name}:structure`, structure)
           await idbSet(`${name}:assets`, assetsJson)
           await idbDel(name) // Remove old single-key entry
-          // Return merged state for immediate use
+
+          // Return merged state with root
           const merged = {
             ...env,
             state: {
               ...env.state,
-              levels: injectAssetsIntoLevels(levels, assets),
+              root: injectAssetsIntoRoot(root, assets),
+              levels: undefined, // Remove old property
+            },
+          }
+          return JSON.stringify(merged)
+        }
+
+        // New format with root
+        if (env.state?.root) {
+          const { root, assets } = extractAssetsFromRoot(env.state.root as RootNode)
+          const structure = JSON.stringify({
+            state: { ...env.state, root },
+            version: env.version,
+          })
+          const assetsJson = JSON.stringify({ assets })
+          await idbSet(`${name}:structure`, structure)
+          await idbSet(`${name}:assets`, assetsJson)
+          await idbDel(name)
+
+          const merged = {
+            ...env,
+            state: {
+              ...env.state,
+              root: injectAssetsIntoRoot(root, assets),
             },
           }
           return JSON.stringify(merged)
         }
       } catch (error) {
         console.warn('[Storage] Migration failed, using legacy format:', error)
-        // If migration fails, return as-is
         return legacy
       }
     }
@@ -143,11 +228,40 @@ const indexedDBStorage: StateStorage = {
     try {
       const env = JSON.parse(structureRaw) as PersistEnvelope
       const { assets } = JSON.parse(assetsRaw) as { assets: AssetMap }
-      // Merge assets back into levels
-      env.state = {
-        ...env.state,
-        levels: injectAssetsIntoLevels(env.state.levels as LevelNode[], assets),
+
+      // Handle new root format
+      if (env.state?.root) {
+        env.state = {
+          ...env.state,
+          root: injectAssetsIntoRoot(env.state.root as RootNode, assets),
+        }
+        return JSON.stringify(env)
       }
+
+      // Legacy: handle old levels format (migrate to root)
+      if (env.state?.levels) {
+        const levels = injectAssetsIntoLevels(env.state.levels as LevelNode[], assets)
+        const root: RootNode = {
+          id: 'root',
+          type: 'root',
+          name: 'root',
+          children: [
+            {
+              id: 'building-1',
+              type: 'building',
+              name: 'building-1',
+              children: levels,
+            },
+          ],
+        }
+        env.state = {
+          ...env.state,
+          root,
+          levels: undefined,
+        }
+        return JSON.stringify(env)
+      }
+
       return JSON.stringify(env)
     } catch (error) {
       console.error('[Storage] Failed to parse split keys:', error)
@@ -158,19 +272,22 @@ const indexedDBStorage: StateStorage = {
   setItem: async (name: string, value: string) => {
     try {
       const env = JSON.parse(value) as PersistEnvelope
-      const hasValidLevels = env.state?.levels && Array.isArray(env.state.levels)
-      if (!hasValidLevels) {
+
+      // Check for new root format
+      const hasValidRoot = env.state?.root && typeof env.state.root === 'object'
+      if (!hasValidRoot) {
         // Fallback: store unmodified if structure is invalid
+        console.warn('[Storage] No valid root structure found, storing as-is')
         await idbSet(name, value)
         return
       }
 
-      // Extract assets from levels
-      const { levels, assets } = extractAssetsFromLevels(env.state.levels as LevelNode[])
+      // Extract assets from root
+      const { root, assets } = extractAssetsFromRoot(env.state.root as RootNode)
 
       // Save structure (lightweight, updates frequently)
       const structureToSave = JSON.stringify({
-        state: { ...env.state, levels },
+        state: { ...env.state, root },
         version: env.version,
       })
       await idbSet(`${name}:structure`, structureToSave)
@@ -689,7 +806,7 @@ const useStore = create<StoreState>()(
           name: 'root',
           children: [
             {
-              id: 'building-1',
+              id: createId('building'),
               type: 'building',
               name: 'building-1',
               children: [
@@ -940,7 +1057,11 @@ const useStore = create<StoreState>()(
             }
 
             // Add to the appropriate level
-            const updatedLevels = addReferenceImageToLevel(getLevels(state.root), levelId, imageNode)
+            const updatedLevels = addReferenceImageToLevel(
+              getLevels(state.root),
+              levelId,
+              imageNode,
+            )
             const building = state.root.children[0]
             if (!building) return state
             const updatedBuilding = { ...building, children: updatedLevels }
@@ -1231,7 +1352,11 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(getLevels(state.root), elementId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(
+              getLevels(state.root),
+              elementId,
+              !currentVisibility,
+            )
             const building = state.root.children[0]
             if (!building) return state
             const updatedBuilding = { ...building, children: updatedLevels }
@@ -1248,7 +1373,11 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(getLevels(state.root), imageId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(
+              getLevels(state.root),
+              imageId,
+              !currentVisibility,
+            )
             const building = state.root.children[0]
             if (!building) return state
             const updatedBuilding = { ...building, children: updatedLevels }
@@ -1265,7 +1394,11 @@ const useStore = create<StoreState>()(
             if (!node) return state
 
             const currentVisibility = node.visible ?? true
-            const updatedLevels = setNodeVisibility(getLevels(state.root), scanId, !currentVisibility)
+            const updatedLevels = setNodeVisibility(
+              getLevels(state.root),
+              scanId,
+              !currentVisibility,
+            )
             const building = state.root.children[0]
             if (!building) return state
             const updatedBuilding = { ...building, children: updatedLevels }
