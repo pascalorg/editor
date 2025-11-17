@@ -11,20 +11,90 @@ export interface BoundingBox {
 }
 
 /**
+ * Calculate absolute world position by traversing parent chain
+ * Accumulates parent positions up to the root (level)
+ */
+function calculateAbsolutePosition(
+  node: BaseNode,
+  nodeIndex: Map<string, BaseNode>,
+): [number, number] | null {
+  // For nodes without position
+  if (!('position' in node && Array.isArray(node.position))) {
+    return null
+  }
+
+  let [absoluteX, absoluteZ] = node.position as [number, number]
+
+  // Traverse up parent chain and accumulate positions
+  let currentNode: BaseNode = node
+  while (currentNode.parent) {
+    const parent = nodeIndex.get(currentNode.parent)
+    if (!parent) break
+
+    if ('position' in parent && Array.isArray(parent.position)) {
+      const [px, pz] = parent.position as [number, number]
+      absoluteX += px
+      absoluteZ += pz
+    }
+
+    currentNode = parent
+  }
+
+  return [absoluteX, absoluteZ]
+}
+
+/**
+ * Calculate absolute world position for a point (x, z) by adding parent positions
+ */
+function calculateAbsolutePoint(
+  point: { x: number; z: number },
+  node: BaseNode,
+  nodeIndex: Map<string, BaseNode>,
+): { x: number; z: number } {
+  let absoluteX = point.x
+  let absoluteZ = point.z
+
+  // Traverse up parent chain and accumulate positions
+  let currentNode: BaseNode = node
+  while (currentNode.parent) {
+    const parent = nodeIndex.get(currentNode.parent)
+    if (!parent) break
+
+    if ('position' in parent && Array.isArray(parent.position)) {
+      const [px, pz] = parent.position as [number, number]
+      absoluteX += px
+      absoluteZ += pz
+    }
+
+    currentNode = parent
+  }
+
+  return { x: absoluteX, z: absoluteZ }
+}
+
+/**
  * Calculate bounding box for a node based on its type
+ * Uses absolute world coordinates by traversing parent chain
  * Returns null for nodes that don't have spatial bounds (like levels)
  */
-export function calculateNodeBounds(node: BaseNode): BoundingBox | null {
+export function calculateNodeBounds(
+  node: BaseNode,
+  nodeIndex: Map<string, BaseNode>,
+): BoundingBox | null {
   const type = node.type as string
 
   switch (type) {
     case 'wall': {
       const wallNode = node as any
       if (wallNode.start && wallNode.end) {
-        const minX = Math.min(wallNode.start.x, wallNode.end.x)
-        const maxX = Math.max(wallNode.start.x, wallNode.end.x)
-        const minZ = Math.min(wallNode.start.z, wallNode.end.z)
-        const maxZ = Math.max(wallNode.start.z, wallNode.end.z)
+        // Calculate absolute positions for start and end (in case wall is nested)
+        const absoluteStart = calculateAbsolutePoint(wallNode.start, node, nodeIndex)
+        const absoluteEnd = calculateAbsolutePoint(wallNode.end, node, nodeIndex)
+
+        const minX = Math.min(absoluteStart.x, absoluteEnd.x)
+        const maxX = Math.max(absoluteStart.x, absoluteEnd.x)
+        const minZ = Math.min(absoluteStart.z, absoluteEnd.z)
+        const maxZ = Math.max(absoluteStart.z, absoluteEnd.z)
         return { minX, maxX, minZ, maxZ }
       }
       return null
@@ -32,8 +102,11 @@ export function calculateNodeBounds(node: BaseNode): BoundingBox | null {
 
     case 'slab': {
       const slabNode = node as any
-      if (slabNode.position && slabNode.size) {
-        const [x, z] = slabNode.position
+      if (slabNode.size) {
+        const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+        if (!absolutePos) return null
+
+        const [x, z] = absolutePos
         const [width, depth] = slabNode.size
         return {
           minX: x,
@@ -46,35 +119,34 @@ export function calculateNodeBounds(node: BaseNode): BoundingBox | null {
     }
 
     case 'column': {
-      const columnNode = node as any
-      if (columnNode.position) {
-        const [x, z] = columnNode.position
-        const radius = 0.25 // Approximate column radius
-        return {
-          minX: x - radius,
-          maxX: x + radius,
-          minZ: z - radius,
-          maxZ: z + radius,
-        }
+      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      if (!absolutePos) return null
+
+      const [x, z] = absolutePos
+      const radius = 0.25 // Approximate column radius
+      return {
+        minX: x - radius,
+        maxX: x + radius,
+        minZ: z - radius,
+        maxZ: z + radius,
       }
-      return null
     }
 
     case 'door':
     case 'window': {
+      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      if (!absolutePos) return null
+
       const openingNode = node as any
-      if (openingNode.position) {
-        const [x, z] = openingNode.position
-        const width = openingNode.width || 1
-        const halfWidth = width / 2
-        return {
-          minX: x - halfWidth,
-          maxX: x + halfWidth,
-          minZ: z - 0.2,
-          maxZ: z + 0.2,
-        }
+      const [x, z] = absolutePos
+      const width = openingNode.width || 1
+      const halfWidth = width / 2
+      return {
+        minX: x - halfWidth,
+        maxX: x + halfWidth,
+        minZ: z - 0.2,
+        maxZ: z + 0.2,
       }
-      return null
     }
 
     case 'roof': {
@@ -85,19 +157,34 @@ export function calculateNodeBounds(node: BaseNode): BoundingBox | null {
 
     case 'reference-image':
     case 'scan': {
+      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      if (!absolutePos) return null
+
       const mediaNode = node as any
-      if (mediaNode.position) {
-        const [x, z] = mediaNode.position
-        const scale = mediaNode.scale || 1
-        const size = 2 * scale // Approximate size
-        return {
-          minX: x - size,
-          maxX: x + size,
-          minZ: z - size,
-          maxZ: z + size,
-        }
+      const [x, z] = absolutePos
+      const scale = mediaNode.scale || 1
+      const size = 2 * scale // Approximate size
+      return {
+        minX: x - size,
+        maxX: x + size,
+        minZ: z - size,
+        maxZ: z + size,
       }
-      return null
+    }
+
+    case 'item': {
+      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      if (!absolutePos) return null
+
+      const itemNode = node as any
+      const [x, z] = absolutePos
+      const [width, depth] = itemNode.size || [1, 1]
+      return {
+        minX: x,
+        maxX: x + width,
+        minZ: z,
+        maxZ: z + depth,
+      }
     }
 
     default:
@@ -165,7 +252,19 @@ export class SpatialGrid {
    * Add or update a node in the spatial grid
    * Automatically handles moving nodes between cells
    */
-  updateNode(nodeId: string, levelId: string, bounds: BoundingBox): void {
+  updateNode(
+    nodeId: string,
+    levelId: string,
+    node: BaseNode,
+    nodeIndex: Map<string, BaseNode>,
+  ): void {
+    // Calculate bounds for this node (using absolute world coordinates)
+    const bounds = calculateNodeBounds(node, nodeIndex)
+    if (!bounds) {
+      // Node doesn't have spatial bounds, skip
+      return
+    }
+
     // Remove from old position if exists
     const existing = this.nodeBounds.get(nodeId)
     if (existing) {
@@ -284,6 +383,15 @@ export class SpatialGrid {
   private pointInBounds(point: [number, number], bounds: BoundingBox): boolean {
     const [x, z] = point
     return x >= bounds.minX && x <= bounds.maxX && z >= bounds.minZ && z <= bounds.maxZ
+  }
+
+  /**
+   * Get the bounds of a node (if it exists in the grid)
+   * Returns null if the node is not in the grid
+   */
+  getNodeBounds(nodeId: string): BoundingBox | null {
+    const data = this.nodeBounds.get(nodeId)
+    return data ? data.bounds : null
   }
 
   /**

@@ -15,6 +15,8 @@
 export interface BaseNode {
   id: string
   type:
+    | 'root'
+    | 'building'
     | 'level'
     | 'slab'
     | 'wall'
@@ -26,6 +28,7 @@ export interface BaseNode {
     | 'reference-image'
     | 'scan'
     | 'group'
+    | 'item'
   name: string
   visible?: boolean
   opacity?: number // 0-100, defaults to 100
@@ -44,11 +47,34 @@ export interface GridItem {
   rotation: number // radians
   size: [number, number] // width, depth in grid units
   canPlace?: boolean // Whether the item can be placed at its current position
+  elevation?: number // Y offset from base (vertical position in meters)
 }
 
 export interface GridPoint {
   x: number
   z: number
+}
+
+// ============================================================================
+// SCENE HIERARCHY NODES
+// ============================================================================
+
+/**
+ * Root node of the entire scene graph
+ * Contains one or more buildings
+ */
+export interface RootNode extends BaseNode {
+  type: 'root'
+  children: BuildingNode[]
+}
+
+/**
+ * Building node containing all levels/floors
+ * Child of root node
+ */
+export interface BuildingNode extends BaseNode {
+  type: 'building'
+  children: LevelNode[]
 }
 
 // ============================================================================
@@ -58,6 +84,8 @@ export interface GridPoint {
 export interface LevelNode extends BaseNode {
   type: 'level'
   level: number // Floor number (0 = ground floor, 1 = first floor, etc.)
+  height?: number // Height of this level in meters (calculated by processor)
+  elevation?: number // Y offset from ground (calculated based on previous levels' heights)
   children: (
     | WallNode
     | RoofNode
@@ -66,6 +94,7 @@ export interface LevelNode extends BaseNode {
     | ScanNode
     | GroupNode
     | SlabNode
+    | ItemNode
   )[]
 }
 
@@ -154,6 +183,19 @@ export interface GroupNode extends BaseNode, GridItem {
 }
 
 // ============================================================================
+// ITEM NODE
+// ============================================================================
+
+export interface ItemNode extends BaseNode, GridItem {
+  type: 'item'
+  category?: 'furniture' | 'appliance' | 'decoration' | 'lighting' | 'plumbing' | 'electric'
+  modelUrl: string // URL to the 3D model (GLTF/GLB)
+  scale?: [number, number, number] // Scale factor for the 3D model [x, y, z]
+  modelPosition?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
+  modelRotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
+}
+
+// ============================================================================
 // UNION TYPES
 // ============================================================================
 
@@ -161,6 +203,8 @@ export interface GroupNode extends BaseNode, GridItem {
  * Union of all possible node types
  */
 export type AnyNode =
+  | RootNode
+  | BuildingNode
   | LevelNode
   | WallNode
   | DoorNode
@@ -171,6 +215,7 @@ export type AnyNode =
   | ReferenceImageNode
   | ScanNode
   | GroupNode
+  | SlabNode
 
 /**
  * Union of all building element nodes (walls, doors, windows, columns, roofs)

@@ -6,7 +6,7 @@
  */
 
 import { current } from 'immer'
-import type { AnyNode, BaseNode, LevelNode } from '@/lib/nodes/types'
+import type { AnyNode, BaseNode, LevelNode, RootNode } from '@/lib/nodes/types'
 import { createId } from '@/lib/utils'
 
 // ============================================================================
@@ -15,10 +15,18 @@ import { createId } from '@/lib/utils'
 
 export interface Command {
   /** Execute the command */
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void
 
   /** Undo the command */
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void
+}
+
+/**
+ * Helper to get levels array from root (shorthand for root.children[0].children)
+ */
+function getLevels(root: RootNode): LevelNode[] {
+  const building = root.children[0]
+  return building ? building.children : []
 }
 
 // ============================================================================
@@ -40,7 +48,9 @@ export class AddNodeCommand implements Command {
     return this.nodeId
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Recursively process children to generate IDs and set parent references
     const processChildren = (children: any[], parentId: string): BaseNode[] => {
       if (!children || children.length === 0) return []
@@ -100,7 +110,9 @@ export class AddNodeCommand implements Command {
     nodeIndex.set(this.nodeId, newNode)
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Recursively remove node and all children from index
     const removeFromIndex = (node: BaseNode) => {
       nodeIndex.delete(node.id)
@@ -141,7 +153,9 @@ export class UpdateNodeCommand implements Command {
     this.updates = updates
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Find and update the node, tracking parent to update it in nodeIndex too
     const findAndUpdate = (nodes: BaseNode[], parent: BaseNode | null = null): boolean => {
       for (const node of nodes) {
@@ -178,7 +192,9 @@ export class UpdateNodeCommand implements Command {
     findAndUpdate(levels, null)
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     if (!this.previousState) return
 
     // Find and restore the node, tracking parent to update it in nodeIndex too
@@ -221,7 +237,9 @@ export class DeleteNodeCommand implements Command {
     this.nodeId = nodeId
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Recursively remove node and all children from index
     const removeFromIndex = (node: BaseNode) => {
       nodeIndex.delete(node.id)
@@ -263,7 +281,9 @@ export class DeleteNodeCommand implements Command {
     findAndDelete(levels, null, null)
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     if (!this.deletedNode) return
 
     // Re-add the node and all its children to index
@@ -304,6 +324,34 @@ export class DeleteNodeCommand implements Command {
 }
 
 // ============================================================================
+// BATCH DELETE COMMAND
+// ============================================================================
+
+export class BatchDeleteCommand implements Command {
+  private readonly nodeIds: string[]
+  private readonly deleteCommands: DeleteNodeCommand[] = []
+
+  constructor(nodeIds: string[]) {
+    this.nodeIds = nodeIds
+    this.deleteCommands = nodeIds.map((id) => new DeleteNodeCommand(id))
+  }
+
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    // Execute all delete commands
+    for (const command of this.deleteCommands) {
+      command.execute(root, nodeIndex)
+    }
+  }
+
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    // Undo in reverse order to maintain correct insertion order
+    for (let i = this.deleteCommands.length - 1; i >= 0; i--) {
+      this.deleteCommands[i].undo(root, nodeIndex)
+    }
+  }
+}
+
+// ============================================================================
 // LEVEL COMMANDS
 // ============================================================================
 
@@ -318,13 +366,17 @@ export class AddLevelCommand implements Command {
     } as LevelNode
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     levels.push(this.level)
     this.addedIndex = levels.length - 1
     nodeIndex.set(this.level.id, this.level)
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     if (this.addedIndex >= 0 && this.addedIndex < levels.length) {
       // Recursively remove level and all children from index
       const removeFromIndex = (node: BaseNode) => {
@@ -346,7 +398,9 @@ export class DeleteLevelCommand implements Command {
     this.levelId = levelId
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     const index = levels.findIndex((l) => l.id === this.levelId)
     if (index >= 0) {
       // Save for undo - use current() to get plain object from draft
@@ -364,7 +418,9 @@ export class DeleteLevelCommand implements Command {
     }
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     if (this.deletedLevel && this.deletedIndex >= 0) {
       // Re-add the level and all its children to index
       const addToIndex = (node: BaseNode) => {
@@ -386,7 +442,9 @@ export class ReorderLevelsCommand implements Command {
     this.newOrder = newOrder
   }
 
-  execute(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Save previous order for undo
     if (this.previousOrder.length === 0) {
       this.previousOrder = [...levels]
@@ -406,7 +464,9 @@ export class ReorderLevelsCommand implements Command {
     }
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    const levels = getLevels(root)
+
     // Restore previous order
     levels.splice(0, levels.length, ...this.previousOrder)
 
@@ -431,8 +491,8 @@ export class CommandManager {
   private redoStack: Command[] = []
   private readonly maxStackSize = 50
 
-  execute(command: Command, levels: LevelNode[], nodeIndex: Map<string, BaseNode>): void {
-    command.execute(levels, nodeIndex)
+  execute(command: Command, root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+    command.execute(root, nodeIndex)
 
     // Always add to undo stack when using CommandManager
     // (Preview operations bypass CommandManager entirely)
@@ -443,20 +503,20 @@ export class CommandManager {
     this.redoStack = [] // Clear redo stack on new action
   }
 
-  undo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): boolean {
+  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): boolean {
     const command = this.undoStack.pop()
     if (!command) return false
 
-    command.undo(levels, nodeIndex)
+    command.undo(root, nodeIndex)
     this.redoStack.push(command)
     return true
   }
 
-  redo(levels: LevelNode[], nodeIndex: Map<string, BaseNode>): boolean {
+  redo(root: RootNode, nodeIndex: Map<string, BaseNode>): boolean {
     const command = this.redoStack.pop()
     if (!command) return false
 
-    command.execute(levels, nodeIndex)
+    command.execute(root, nodeIndex)
     this.undoStack.push(command)
     return true
   }

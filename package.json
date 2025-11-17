@@ -40,6 +40,7 @@
     "next": "^16.0.2",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-error-boundary": "^6.0.0",
     "react-scan": "^0.4.3",
     "tailwind-merge": "^3.4.0",
     "three": "^0.180.0",

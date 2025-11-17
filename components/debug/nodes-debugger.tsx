@@ -396,7 +396,10 @@ export function NodesDebugger() {
   const [isClient, setIsClient] = useState(false)
   const dragRef = useRef<HTMLDivElement>(null)
 
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => {
+    const building = state.root.children[0]
+    return building ? building.children : []
+  })
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)
   const { selectFloor, handleElementSelect, setSelectedImageIds, setSelectedScanIds, setDebug } =

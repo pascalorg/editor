@@ -39,7 +39,7 @@ export function CustomRoomNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
 
   // Use ref to persist values across renders without triggering re-renders
   const customRoomStateRef = useRef<{
@@ -140,32 +140,10 @@ export function CustomRoomNodeEditor() {
             }
           }
 
-          // Calculate bounding box of all points for room position
-          const allX = points.map((p) => p[0])
-          const allY = points.map((p) => p[1])
-          const minX = Math.min(...allX)
-          const minY = Math.min(...allY)
-          const maxX = Math.max(...allX)
-          const maxY = Math.max(...allY)
-          const roomWidth = maxX - minX
-          const roomHeight = maxY - minY
-
-          // Count existing rooms to auto-increment the number
-          const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const existingRooms =
-            currentLevel?.children.filter(
-              (child) => child.type === 'group' && (child as any).groupType === 'room',
-            ) || []
-          const roomNumber = existingRooms.length + 1
-
           // Commit the entire group with position and size
           // useEditor will automatically convert wall positions to relative
           updateNode(previewGroupId, {
             preview: false,
-            name: `Room ${roomNumber}`,
-            position: [minX, minY] as [number, number],
-            rotation: 0,
-            size: [roomWidth, roomHeight] as [number, number],
           })
         }
 
@@ -325,33 +303,9 @@ export function CustomRoomNodeEditor() {
         if (cursorWallId) {
           deleteNode(cursorWallId)
         }
-
-        // Calculate bounding box of all points for room position
-        const allX = points.map((p) => p[0])
-        const allY = points.map((p) => p[1])
-        const minX = Math.min(...allX)
-        const minY = Math.min(...allY)
-        const maxX = Math.max(...allX)
-        const maxY = Math.max(...allY)
-        const roomWidth = maxX - minX
-        const roomHeight = maxY - minY
-
-        // Count existing rooms to auto-increment the number
-        const currentLevel = levels.find((l) => l.id === selectedFloorId)
-        const existingRooms =
-          currentLevel?.children.filter(
-            (child) => child.type === 'group' && (child as any).groupType === 'room',
-          ) || []
-        const roomNumber = existingRooms.length + 1
-
-        // Commit the entire group with position and size
-        // useEditor will automatically convert wall positions to relative
+        // Commit the entire group
         updateNode(previewGroupId, {
           preview: false,
-          name: `Room ${roomNumber}`,
-          position: [minX, minY] as [number, number],
-          rotation: 0,
-          size: [roomWidth, roomHeight] as [number, number],
         })
 
         // Reset state
