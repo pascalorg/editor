@@ -137,6 +137,21 @@ export function ItemNodeEditor() {
     }
 
     /**
+     * Check if two bounding boxes actually overlap (not just touch)
+     * Adjacent items (touching at edges) should NOT be considered overlapping
+     */
+    function boundsOverlap(
+      bounds1: { minX: number; maxX: number; minZ: number; maxZ: number },
+      bounds2: { minX: number; maxX: number; minZ: number; maxZ: number },
+    ): boolean {
+      // Check for overlap in both X and Z dimensions
+      // Use < instead of <= so touching edges don't count as overlap
+      const overlapX = bounds1.minX < bounds2.maxX && bounds1.maxX > bounds2.minX
+      const overlapZ = bounds1.minZ < bounds2.maxZ && bounds1.maxZ > bounds2.minZ
+      return overlapX && overlapZ
+    }
+
+    /**
      * Check if an item can be placed at the given position
      * Uses spatial grid to detect collisions with other objects
      */
@@ -146,14 +161,14 @@ export function ItemNodeEditor() {
 
       // Query spatial grid for objects at this position using selectedItem size
       const [width, depth] = selectedItem.size
-      const bounds = {
+      const newItemBounds = {
         minX: x,
         maxX: x + width,
         minZ: y,
         maxZ: y + depth,
       }
 
-      const nearbyNodeIds = spatialGrid.query(levelId, bounds)
+      const nearbyNodeIds = spatialGrid.query(levelId, newItemBounds)
 
       // Filter out preview nodes and check for actual collisions
       // Items can be placed on slabs and next to walls, but not on other items or columns
@@ -161,7 +176,29 @@ export function ItemNodeEditor() {
         const node = level.children.find((child: any) => child.id === nodeId)
         // Block placement only for non-preview items and columns (solid obstacles)
         if (node && !node.preview && (node.type === 'item' || node.type === 'column')) {
-          return false
+          // Check if there's actual overlap (not just touching)
+          if (node.position && node.size) {
+            const existingBounds = {
+              minX: node.position[0],
+              maxX: node.position[0] + node.size[0],
+              minZ: node.position[1],
+              maxZ: node.position[1] + node.size[1],
+            }
+            if (boundsOverlap(newItemBounds, existingBounds)) {
+              return false
+            }
+          } else if (node.type === 'column' && node.position) {
+            // Columns are point obstacles - check if they're inside the new item bounds
+            const [cx, cz] = node.position
+            if (
+              cx >= newItemBounds.minX &&
+              cx < newItemBounds.maxX &&
+              cz >= newItemBounds.minZ &&
+              cz < newItemBounds.maxZ
+            ) {
+              return false
+            }
+          }
         }
         // Allow placement on slabs, next to walls, etc.
       }
