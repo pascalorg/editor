@@ -23,7 +23,7 @@ export class VerticalStackingProcessor implements NodeProcessor {
           updates: {
             // If there's a slab, walls/columns should be elevated by slab thickness
             // Otherwise they're at ground level (0)
-            verticalStackingOffset: hasSlab ? SLAB_THICKNESS : 0,
+            elevation: hasSlab ? SLAB_THICKNESS : 0,
           },
         })
       }

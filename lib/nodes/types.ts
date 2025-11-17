@@ -46,7 +46,7 @@ export interface GridItem {
   rotation: number // radians
   size: [number, number] // width, depth in grid units
   canPlace?: boolean // Whether the item can be placed at its current position
-  verticalStackingOffset?: number // Additional Y offset due to vertical stacking
+  elevation?: number // Y offset from base (vertical position in meters)
 }
 
 export interface GridPoint {
@@ -83,6 +83,8 @@ export interface BuildingNode extends BaseNode {
 export interface LevelNode extends BaseNode {
   type: 'level'
   level: number // Floor number (0 = ground floor, 1 = first floor, etc.)
+  height?: number // Height of this level in meters (calculated by processor)
+  elevation?: number // Y offset from ground (calculated based on previous levels' heights)
   children: (
     | WallNode
     | RoofNode

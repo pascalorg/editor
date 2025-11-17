@@ -31,7 +31,8 @@ import {
 } from '@/lib/nodes/operations'
 // Node-based architecture imports
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, RootNode } from '@/lib/nodes/types'
-import type { NodeProcessor } from '@/lib/processors/types'
+import { LevelElevationProcessor } from '@/lib/processors/level-elevation-processor'
+import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
@@ -542,7 +543,10 @@ type StoreState = {
   handleClear: () => void
   pointerPosition: [number, number] | null
   debug: boolean // Debug mode flag
-  nodeProcessors: NodeProcessor[]
+  // Processors
+  verticalStackingProcessor: VerticalStackingProcessor
+  levelHeightProcessor: LevelHeightProcessor
+  levelElevationProcessor: LevelElevationProcessor
 } & {
   // Node-based operations
   updateLevels: (levels: LevelNode[]) => void
@@ -733,30 +737,36 @@ function updateNodeInDraft(
  * Process all nodes in a level with their spatial neighbors
  * Updates computed properties for all nodes in the level
  *
- * This ensures all computed properties are up-to-date after any change.
- * Processing the whole level is simple and correct - no need to track
- * which specific nodes are affected.
+ * Processors are called in this order:
+ * 1. VerticalStackingProcessor - sets elevation based on slabs (per node with neighbors)
+ * 2. LevelHeightProcessor - calculates level height based on content (current level)
+ * 3. LevelElevationProcessor - calculates cumulative level elevations (all levels in building)
  */
 function processLevel(
   draft: {
     spatialGrid: SpatialGrid
     nodeIndex: Map<string, BaseNode>
-    nodeProcessors: NodeProcessor[]
+    verticalStackingProcessor: VerticalStackingProcessor
+    levelHeightProcessor: LevelHeightProcessor
+    levelElevationProcessor: LevelElevationProcessor
     root: RootNode
   },
   levelId: string | null,
 ): void {
   if (!levelId) return
 
+  const level = draft.nodeIndex.get(levelId)
+  if (!level || level.type !== 'level') return
+
   // Get all nodes in this level
   const nodeIds = draft.spatialGrid.getNodesInLevel(levelId)
 
-  // Process each node with its actual neighbors
+  // Step 1: Process each node with VerticalStackingProcessor using spatial neighbors
   for (const nodeId of nodeIds) {
     const node = draft.nodeIndex.get(nodeId)
     if (!node) continue
 
-    // Use stored bounds from spatial grid (already calculated when node was added)
+    // Use stored bounds from spatial grid
     const bounds = draft.spatialGrid.getNodeBounds(nodeId)
     if (!bounds) continue
 
@@ -766,16 +776,29 @@ function processLevel(
       .map((id) => draft.nodeIndex.get(id))
       .filter((n): n is BaseNode => n !== undefined)
 
-    // Run processors
-    for (const processor of draft.nodeProcessors) {
-      const results = processor.process(neighbors)
-      const nodeResults = results.filter((r) => r.nodeId === nodeId)
+    // Run vertical stacking processor with neighbors
+    const results = draft.verticalStackingProcessor.process(neighbors)
+    const nodeResults = results.filter((r) => r.nodeId === nodeId)
 
-      nodeResults.forEach(({ nodeId, updates }) => {
-        // Update node in tree (nodeIndex will reflect the change automatically)
-        updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
-      })
-    }
+    nodeResults.forEach(({ nodeId, updates }) => {
+      updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
+    })
+  }
+
+  // Step 2: Calculate level height based on its content
+  const heightResults = draft.levelHeightProcessor.process([level as LevelNode])
+  heightResults.forEach(({ nodeId, updates }) => {
+    updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
+  })
+
+  // Step 3: Calculate elevation for all levels in the building
+  const building = draft.root.children[0]
+  if (building && building.type === 'building') {
+    const allLevels = building.children
+    const elevationResults = draft.levelElevationProcessor.process(allLevels)
+    elevationResults.forEach(({ nodeId, updates }) => {
+      updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
+    })
   }
 }
 
@@ -785,10 +808,12 @@ function processLevel(
 function recomputeAllLevels(draft: {
   spatialGrid: SpatialGrid
   nodeIndex: Map<string, BaseNode>
-  nodeProcessors: NodeProcessor[]
+  verticalStackingProcessor: VerticalStackingProcessor
+  levelHeightProcessor: LevelHeightProcessor
+  levelElevationProcessor: LevelElevationProcessor
   root: RootNode
 }): void {
-  // Process each level
+  // Process each level (this handles all three processors in order)
   const levels = getLevels(draft.root)
   for (const level of levels) {
     processLevel(draft, level.id)
@@ -822,7 +847,10 @@ const useStore = create<StoreState>()(
             },
           ],
         },
-        nodeProcessors: [new VerticalStackingProcessor()],
+        // Initialize processors
+        verticalStackingProcessor: new VerticalStackingProcessor(),
+        levelHeightProcessor: new LevelHeightProcessor(),
+        levelElevationProcessor: new LevelElevationProcessor(),
         nodeIndex: new Map(), // Will be built from root
         spatialGrid: new SpatialGrid(1), // Cell size of 1 grid unit
 

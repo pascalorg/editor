@@ -16,14 +16,9 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     const gridItem = node as unknown as GridItem
     if (gridItem.position) {
       const [x, y] = gridItem.position
-      console.log('gridItem verticalStackingOffset', gridItem.verticalStackingOffset)
-      return [x * TILE_SIZE, gridItem.verticalStackingOffset || 0, y * TILE_SIZE] as [
-        number,
-        number,
-        number,
-      ]
+      return [x * TILE_SIZE, gridItem.elevation || 0, y * TILE_SIZE] as [number, number, number]
     }
-    return [0, 0, 0] as [number, number, number]
+    return [0, gridItem.elevation || 0, 0] as [number, number, number]
   }, [node])
 
   const selectedElements = useEditor((state) => state.selectedElements)
@@ -63,11 +58,9 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return null
   }
 
-  console.log('NodeRenderer render', {
-    nodeId: node.id,
-    nodeType: node.type,
-    renderer: RegistryRenderer,
-  })
+  if (node.type === 'level') {
+    console.log(gridItemPosition, node)
+  }
 
   return (
     <>
