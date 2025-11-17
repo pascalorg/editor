@@ -144,25 +144,26 @@ export function ItemNodeEditor() {
       const level = levels.find((l) => l.id === levelId)
       if (!level) return false
 
-      // Query spatial grid for objects at this position
+      // Query spatial grid for objects at this position using selectedItem size
+      const [width, depth] = selectedItem.size
       const bounds = {
         minX: x,
-        maxX: x + 1, // 1m width
-        minY: y,
-        maxY: y + 1, // 1m depth
-        minZ: 0,
-        maxZ: 0,
+        maxX: x + width,
+        minZ: y,
+        maxZ: y + depth,
       }
 
       const nearbyNodeIds = spatialGrid.query(levelId, bounds)
 
       // Filter out preview nodes and check for actual collisions
+      // Items can be placed on slabs and next to walls, but not on other items or columns
       for (const nodeId of nearbyNodeIds) {
         const node = level.children.find((child: any) => child.id === nodeId)
-        if (node && !node.preview) {
-          // Found a non-preview node at this position - cannot place
+        // Block placement only for non-preview items and columns (solid obstacles)
+        if (node && !node.preview && (node.type === 'item' || node.type === 'column')) {
           return false
         }
+        // Allow placement on slabs, next to walls, etc.
       }
 
       return true

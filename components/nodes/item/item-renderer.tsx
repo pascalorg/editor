@@ -3,6 +3,7 @@
 import { Gltf } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { ItemNode } from '@/lib/nodes/types'
 
@@ -28,9 +29,9 @@ export function ItemRenderer({ node }: ItemRendererProps) {
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
 
-  // Default box geometry for items without a model
+  // Default box geometry for items without a model (scaled by TILE_SIZE for grid visualization)
   const boxGeometry = useMemo(
-    () => new THREE.BoxGeometry(node.size[0], 0.8, node.size[1]), // 0.8m default height
+    () => new THREE.BoxGeometry(node.size[0] * TILE_SIZE, 0.8, node.size[1] * TILE_SIZE),
     [node.size],
   )
 

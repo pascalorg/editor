@@ -172,6 +172,21 @@ export function calculateNodeBounds(
       }
     }
 
+    case 'item': {
+      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      if (!absolutePos) return null
+
+      const itemNode = node as any
+      const [x, z] = absolutePos
+      const [width, depth] = itemNode.size || [1, 1]
+      return {
+        minX: x,
+        maxX: x + width,
+        minZ: z,
+        maxZ: z + depth,
+      }
+    }
+
     default:
       return null
   }

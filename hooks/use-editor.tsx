@@ -962,7 +962,7 @@ const useStore = create<StoreState>()(
         selectedItem: {
           modelUrl: '/models/Couch Medium.glb',
           scale: [0.4, 0.4, 0.4],
-          size: [2, 1],
+          size: [4, 2],
         },
         handleElementSelect: (elementId, event) => {
           const currentSelection = get().selectedElements
