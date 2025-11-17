@@ -791,6 +791,8 @@ function processLevel(
     updateNodeInDraft(nodeId, updates, draft.root, draft.nodeIndex)
   })
 
+  console.log('heightResults', heightResults)
+
   // Step 3: Calculate elevation for all levels in the building
   const building = draft.root.children[0]
   if (building && building.type === 'building') {

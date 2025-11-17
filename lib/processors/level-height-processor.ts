@@ -22,15 +22,37 @@ function getNodeHeight(node: BaseNode): number {
     case 'window':
       return 1.22 // Standard window height
     case 'roof':
-      return 0.3 // Roof thickness
+      return 2.5 // Roof thickness
     default:
       return 0
   }
 }
 
 /**
+ * Recursively calculates the maximum height among a node and all its descendants
+ */
+function getMaxHeightRecursive(node: BaseNode): number {
+  // Get this node's height + elevation
+  const nodeHeight = getNodeHeight(node)
+  const nodeElevation = (node as any).elevation || 0
+  let maxHeight = nodeHeight + nodeElevation
+
+  // Recursively check all children
+  if ('children' in node && Array.isArray(node.children)) {
+    for (const child of node.children) {
+      const childMaxHeight = getMaxHeightRecursive(child)
+      if (childMaxHeight > maxHeight) {
+        maxHeight = childMaxHeight
+      }
+    }
+  }
+
+  return maxHeight
+}
+
+/**
  * LevelHeightProcessor calculates the height of each level
- * based on the maximum height of all nodes in that level.
+ * based on the maximum height of all nodes in that level (including nested children).
  *
  * The height represents how tall the level is internally (its content height).
  * This is different from elevation, which is calculated separately based on
@@ -48,16 +70,13 @@ export class LevelHeightProcessor implements NodeProcessor {
 
       const level = node as LevelNode
 
-      // Calculate the maximum height among all child nodes
+      // Calculate the maximum height among all descendant nodes (recursively)
       let maxHeight = 0
 
       level.children.forEach((child) => {
-        const childHeight = getNodeHeight(child)
-        const childElevation = (child as any).elevation || 0
-        const totalHeight = childHeight + childElevation
-
-        if (totalHeight > maxHeight) {
-          maxHeight = totalHeight
+        const childMaxHeight = getMaxHeightRecursive(child)
+        if (childMaxHeight > maxHeight) {
+          maxHeight = childMaxHeight
         }
       })
 

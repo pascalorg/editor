@@ -58,10 +58,6 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
     return null
   }
 
-  if (node.type === 'level') {
-    console.log(gridItemPosition, node)
-  }
-
   return (
     <>
       <group
