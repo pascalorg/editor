@@ -3,7 +3,7 @@ import type { BaseNode } from '../nodes/types'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 export class VerticalStackingProcessor implements NodeProcessor {
-  nodeTypes = ['wall', 'column', 'slab']
+  nodeTypes = ['wall', 'column', 'slab', 'item']
 
   process(nodes: BaseNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
@@ -21,7 +21,7 @@ export class VerticalStackingProcessor implements NodeProcessor {
         results.push({
           nodeId: node.id,
           updates: {
-            // If there's a slab, walls/columns should be elevated by slab thickness
+            // If there's a slab, walls/columns/items should be elevated by slab thickness
             // Otherwise they're at ground level (0)
             elevation: hasSlab ? SLAB_THICKNESS : 0,
           },

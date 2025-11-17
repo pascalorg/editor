@@ -28,6 +28,7 @@ export interface BaseNode {
     | 'reference-image'
     | 'scan'
     | 'group'
+    | 'item'
   name: string
   visible?: boolean
   opacity?: number // 0-100, defaults to 100
@@ -93,6 +94,7 @@ export interface LevelNode extends BaseNode {
     | ScanNode
     | GroupNode
     | SlabNode
+    | ItemNode
   )[]
 }
 
@@ -178,6 +180,17 @@ export interface GroupNode extends BaseNode, GridItem {
   groupType?: 'room' | 'floor' | 'outdoor' // Type of grouping
   color?: string // CSS color for visualization
   children: (WallNode | RoofNode | ColumnNode | DoorNode | WindowNode | GroupNode | SlabNode)[]
+}
+
+// ============================================================================
+// ITEM NODE
+// ============================================================================
+
+export interface ItemNode extends BaseNode, GridItem {
+  type: 'item'
+  category?: 'furniture' | 'appliance' | 'decoration' | 'lighting' | 'plumbing' | 'electric'
+  modelUrl: string // URL to the 3D model (GLTF/GLB)
+  scale?: [number, number, number] // Scale factor for the 3D model [x, y, z]
 }
 
 // ============================================================================

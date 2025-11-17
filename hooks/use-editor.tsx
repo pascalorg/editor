@@ -371,7 +371,7 @@ export type Tool =
   | 'roof'
   | 'column'
   | 'slab'
-  | 'dummy1'
+  | 'item'
   | 'dummy2'
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
@@ -543,6 +543,12 @@ type StoreState = {
   handleClear: () => void
   pointerPosition: [number, number] | null
   debug: boolean // Debug mode flag
+  // Item builder state
+  selectedItem: {
+    modelUrl: string
+    scale: [number, number, number]
+    size: [number, number]
+  }
   // Processors
   verticalStackingProcessor: VerticalStackingProcessor
   levelHeightProcessor: LevelHeightProcessor
@@ -875,6 +881,9 @@ const useStore = create<StoreState>()(
             produce((draft) => {
               const command = new AddLevelCommand(level)
               draft.commandManager.execute(command, draft.root, draft.nodeIndex)
+
+              // Process the new level to calculate its height and update all level elevations
+              processLevel(draft, level.id)
             }),
           )
         },
@@ -883,6 +892,9 @@ const useStore = create<StoreState>()(
             produce((draft) => {
               const command = new DeleteLevelCommand(levelId)
               draft.commandManager.execute(command, draft.root, draft.nodeIndex)
+
+              // Recalculate elevations for all remaining levels
+              recomputeAllLevels(draft)
             }),
           )
         },
@@ -891,6 +903,9 @@ const useStore = create<StoreState>()(
             produce((draft) => {
               const command = new ReorderLevelsCommand(levels)
               draft.commandManager.execute(command, draft.root, draft.nodeIndex)
+
+              // Recalculate elevations since level order affects cumulative elevations
+              recomputeAllLevels(draft)
             }),
           )
         },
@@ -944,6 +959,11 @@ const useStore = create<StoreState>()(
         isManipulatingImage: false,
         isManipulatingScan: false,
         debug: false,
+        selectedItem: {
+          modelUrl: '/models/Couch Medium.glb',
+          scale: [0.4, 0.4, 0.4],
+          size: [2, 1],
+        },
         handleElementSelect: (elementId, event) => {
           const currentSelection = get().selectedElements
           const updatedSelection = handleSimpleClick(currentSelection, elementId, event)
