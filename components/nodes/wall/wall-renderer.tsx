@@ -225,7 +225,10 @@ interface WallRendererProps {
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const debug = useEditor((state) => state.debug)
-  const allLevels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const allLevels = useEditor((state) => {
+    const building = state.root.children[0]
+    return building ? building.children : []
+  })
   const tileSize = TILE_SIZE
 
   // Check if this is a preview node
@@ -537,6 +540,7 @@ export function WallRenderer({ node }: WallRendererProps) {
                 <Base geometry={wallGeometry}>
                   <meshStandardMaterial
                     color="beige"
+                    key={`wall-material-${opacity}`}
                     metalness={0.1}
                     opacity={opacity}
                     roughness={0.7}

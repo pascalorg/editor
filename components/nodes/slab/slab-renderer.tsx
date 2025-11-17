@@ -95,6 +95,7 @@ export function SlabRenderer({ node }: SlabRendererProps) {
         >
           <meshStandardMaterial
             color="#808080"
+            key={`slab-material-${opacity}`}
             metalness={0.2}
             opacity={opacity}
             roughness={0.8}
