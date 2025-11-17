@@ -13,6 +13,7 @@ import type {
   NodeType,
   ReferenceImageNode,
   RoofNode,
+  RootNode,
   ScanNode,
   WallNode,
   WindowNode,
@@ -21,37 +22,49 @@ import type {
 import { findNodeById, findNodesByType } from './utils'
 
 // ============================================================================
+// HELPER TO GET LEVELS FROM ROOT
+// ============================================================================
+
+/**
+ * Helper to extract levels array from root structure
+ */
+function getLevelsFromRoot(root: RootNode): LevelNode[] {
+  const building = root.children[0]
+  return building ? building.children : []
+}
+
+// ============================================================================
 // STORE STATE SELECTORS
 // ============================================================================
 
 /**
  * Select all levels from store state
  */
-export const selectLevels = (state: { levels: LevelNode[] }): LevelNode[] => state.levels
+export const selectLevels = (state: { root: RootNode }): LevelNode[] => getLevelsFromRoot(state.root)
 
 /**
  * Select a specific level by ID
  */
 export const selectLevelById =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): LevelNode | null =>
-    state.levels.find((l) => l.id === levelId) || null
+  (state: { root: RootNode }): LevelNode | null =>
+    getLevelsFromRoot(state.root).find((l) => l.id === levelId) || null
 
 /**
  * Select a specific level by number
  */
 export const selectLevelByNumber =
   (levelNumber: number) =>
-  (state: { levels: LevelNode[] }): LevelNode | null =>
-    state.levels.find((l) => l.level === levelNumber) || null
+  (state: { root: RootNode }): LevelNode | null =>
+    getLevelsFromRoot(state.root).find((l) => l.level === levelNumber) || null
 
 /**
  * Select a node by ID from levels
  */
 export const selectNodeById =
   (nodeId: string) =>
-  (state: { levels: LevelNode[] }): BaseNode | null =>
-    findNodeById(state.levels, nodeId)
+  (state: { root: RootNode }): BaseNode | null =>
+    findNodeById(getLevelsFromRoot(state.root), nodeId)
 
 /**
  * Select node index from store
@@ -77,8 +90,8 @@ export const selectNodeByIdFromIndex =
  */
 export const selectLevelChildren =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): BaseNode[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  (state: { root: RootNode }): BaseNode[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     return level?.children || []
   }
 
@@ -87,8 +100,8 @@ export const selectLevelChildren =
  */
 export const selectNodesOfTypeFromLevel =
   <T extends BaseNode>(levelId: string, type: NodeType) =>
-  (state: { levels: LevelNode[] }): T[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  (state: { root: RootNode }): T[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     if (!level) {
       return []
     }
@@ -101,8 +114,8 @@ export const selectNodesOfTypeFromLevel =
  */
 export const selectWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  (state: { root: RootNode }): WallNode[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     if (!level) {
       return []
     }
@@ -128,7 +141,7 @@ export const selectWallsFromLevel =
  */
 export const selectColumnsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ColumnNode[] =>
+  (state: { root: RootNode }): ColumnNode[] =>
     selectNodesOfTypeFromLevel<ColumnNode>(levelId, 'column')(state)
 
 /**
@@ -136,7 +149,7 @@ export const selectColumnsFromLevel =
  */
 export const selectRoofsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): RoofNode[] =>
+  (state: { root: RootNode }): RoofNode[] =>
     selectNodesOfTypeFromLevel<RoofNode>(levelId, 'roof')(state)
 
 /**
@@ -144,7 +157,7 @@ export const selectRoofsFromLevel =
  */
 export const selectReferenceImagesFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+  (state: { root: RootNode }): ReferenceImageNode[] =>
     selectNodesOfTypeFromLevel<ReferenceImageNode>(levelId, 'reference-image')(state)
 
 /**
@@ -152,7 +165,7 @@ export const selectReferenceImagesFromLevel =
  */
 export const selectScansFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ScanNode[] =>
+  (state: { root: RootNode }): ScanNode[] =>
     selectNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
 
 // ============================================================================
@@ -164,8 +177,8 @@ export const selectScansFromLevel =
  */
 export const selectDoorsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): DoorNode[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  (state: { root: RootNode }): DoorNode[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     if (!level) {
       return []
     }
@@ -199,8 +212,8 @@ export const selectDoorsFromLevel =
  */
 export const selectWindowsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WindowNode[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  (state: { root: RootNode }): WindowNode[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     if (!level) {
       return []
     }
@@ -234,8 +247,8 @@ export const selectWindowsFromLevel =
  */
 export const selectDoorsFromWall =
   (wallId: string) =>
-  (state: { levels: LevelNode[] }): DoorNode[] => {
-    const wall = findNodeById(state.levels, wallId)
+  (state: { root: RootNode }): DoorNode[] => {
+    const wall = findNodeById(getLevelsFromRoot(state.root), wallId)
     if (!wall || wall.type !== 'wall') {
       return []
     }
@@ -248,8 +261,8 @@ export const selectDoorsFromWall =
  */
 export const selectWindowsFromWall =
   (wallId: string) =>
-  (state: { levels: LevelNode[] }): WindowNode[] => {
-    const wall = findNodeById(state.levels, wallId)
+  (state: { root: RootNode }): WindowNode[] => {
+    const wall = findNodeById(getLevelsFromRoot(state.root), wallId)
     if (!wall || wall.type !== 'wall') {
       return []
     }
@@ -266,7 +279,7 @@ export const selectWindowsFromWall =
  */
 export const selectVisibleNodesOfTypeFromLevel =
   <T extends BaseNode>(levelId: string, type: NodeType) =>
-  (state: { levels: LevelNode[] }): T[] => {
+  (state: { root: RootNode }): T[] => {
     const nodes = selectNodesOfTypeFromLevel<T>(levelId, type)(state)
     return nodes.filter((node) => node.visible !== false)
   }
@@ -276,7 +289,7 @@ export const selectVisibleNodesOfTypeFromLevel =
  */
 export const selectVisibleWallsFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): WallNode[] => {
+  (state: { root: RootNode }): WallNode[] => {
     const walls = selectWallsFromLevel(levelId)(state)
     return walls.filter((wall) => wall.visible !== false)
   }
@@ -286,7 +299,7 @@ export const selectVisibleWallsFromLevel =
  */
 export const selectVisibleReferenceImagesFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+  (state: { root: RootNode }): ReferenceImageNode[] =>
     selectVisibleNodesOfTypeFromLevel<ReferenceImageNode>(levelId, 'reference-image')(state)
 
 /**
@@ -294,7 +307,7 @@ export const selectVisibleReferenceImagesFromLevel =
  */
 export const selectVisibleScansFromLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): ScanNode[] =>
+  (state: { root: RootNode }): ScanNode[] =>
     selectVisibleNodesOfTypeFromLevel<ScanNode>(levelId, 'scan')(state)
 
 // ============================================================================
@@ -306,7 +319,7 @@ export const selectVisibleScansFromLevel =
  */
 export const selectNodeCountByType =
   (levelId: string, type: NodeType) =>
-  (state: { levels: LevelNode[] }): number => {
+  (state: { root: RootNode }): number => {
     const nodes = selectNodesOfTypeFromLevel(levelId, type)(state)
     return nodes.length
   }
@@ -316,7 +329,7 @@ export const selectNodeCountByType =
  */
 export const selectWallCountInLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): number => {
+  (state: { root: RootNode }): number => {
     const walls = selectWallsFromLevel(levelId)(state)
     return walls.length
   }
@@ -326,7 +339,7 @@ export const selectWallCountInLevel =
  */
 export const selectDoorCountInLevel =
   (levelId: string) =>
-  (state: { levels: LevelNode[] }): number => {
+  (state: { root: RootNode }): number => {
     const doors = selectDoorsFromLevel(levelId)(state)
     return doors.length
   }
@@ -340,25 +353,25 @@ export const selectDoorCountInLevel =
  */
 export const selectAllNodesOfType =
   <T extends BaseNode>(type: NodeType) =>
-  (state: { levels: LevelNode[] }): T[] =>
-    findNodesByType<T>(state.levels, type)
+  (state: { root: RootNode }): T[] =>
+    findNodesByType<T>(getLevelsFromRoot(state.root), type)
 
 /**
  * Select all walls across all levels
  */
-export const selectAllWalls = (state: { levels: LevelNode[] }): WallNode[] =>
+export const selectAllWalls = (state: { root: RootNode }): WallNode[] =>
   selectAllNodesOfType<WallNode>('wall')(state)
 
 /**
  * Select all reference images across all levels
  */
-export const selectAllReferenceImages = (state: { levels: LevelNode[] }): ReferenceImageNode[] =>
+export const selectAllReferenceImages = (state: { root: RootNode }): ReferenceImageNode[] =>
   selectAllNodesOfType<ReferenceImageNode>('reference-image')(state)
 
 /**
  * Select all scans across all levels
  */
-export const selectAllScans = (state: { levels: LevelNode[] }): ScanNode[] =>
+export const selectAllScans = (state: { root: RootNode }): ScanNode[] =>
   selectAllNodesOfType<ScanNode>('scan')(state)
 
 // ============================================================================
@@ -370,8 +383,8 @@ export const selectAllScans = (state: { levels: LevelNode[] }): ScanNode[] =>
  * Use with zustand's useShallow for optimal performance
  */
 export function createNodeSelector<T extends BaseNode>(levelId: string, type: NodeType) {
-  return (state: { levels: LevelNode[] }): T[] => {
-    const level = state.levels.find((l) => l.id === levelId)
+  return (state: { root: RootNode }): T[] => {
+    const level = getLevelsFromRoot(state.root).find((l) => l.id === levelId)
     if (!level) {
       return []
     }

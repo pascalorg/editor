@@ -591,7 +591,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
   const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
   const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
 
   // Track expanded state
   const [expandedIds, setExpandedIds] = useState<string[]>([levels[0].id])

@@ -35,7 +35,7 @@ export function ColumnNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => state.levels)
+  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
 
   // Use ref to persist preview state across renders without triggering re-renders
   const previewStateRef = useRef<{

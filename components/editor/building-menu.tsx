@@ -7,7 +7,7 @@ import {
   LineSegmentsIcon,
   WallIcon,
 } from '@phosphor-icons/react'
-import { Blinds, Circle, CuboidIcon, DoorOpen, Pyramid } from 'lucide-react'
+import { Blinds, Circle, CuboidIcon, DoorOpen, Pyramid, SofaIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Tool, useEditor } from '@/hooks/use-editor'
@@ -26,7 +26,7 @@ export function BuildingMenu() {
     { id: 'door', icon: DoorOpen, label: 'Door', enabled: true },
     { id: 'window', icon: Blinds, label: 'Window', enabled: true },
     { id: 'column', icon: CylinderIcon, label: 'Column', enabled: true },
-    { id: 'dummy1', icon: Circle, label: 'Tool 1', enabled: false },
+    { id: 'item', icon: SofaIcon, label: 'Item', enabled: true },
     { id: 'dummy2', icon: Circle, label: 'Tool 2', enabled: false },
   ]
 

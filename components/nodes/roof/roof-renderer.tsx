@@ -173,8 +173,9 @@ export function RoofRenderer({
         opacity: updatedSegment.opacity ?? 100,
       }
 
-      const updatedLevels = updateNodeProperties(state.levels, node.id, updates)
-      state.updateLevels(updatedLevels) // Don't push to undo during drag - final commit handled by drag handlers
+      // TODO: Refaactor to use updateNode with command manager for undo/redo
+      // const updatedLevels = updateNodeProperties(state.levels, node.id, updates)
+      // state.updateLevels(updatedLevels) // Don't push to undo during drag - final commit handled by drag handlers
     },
     [node.id],
   )
