@@ -6,7 +6,6 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import { updateNodeProperties } from '@/lib/nodes/operations'
 import type { RoofNode } from '@/lib/nodes/types'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)

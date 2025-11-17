@@ -1,13 +1,28 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, id, nodeType } from '../base'
+import { BaseNode, nodeId, nodeType } from '../base'
+import { ColumnNode } from './column'
 import { FloorNode } from './floor'
+import { GroupNode } from './group'
+import { ItemNode } from './item'
+import { RoofNode } from './roof'
 import { WallNode } from './wall'
 
 export const LevelNode = BaseNode.extend({
-  id: id('level'),
+  id: nodeId('level'),
   type: nodeType('level'),
-  children: z.array(z.discriminatedUnion('type', [FloorNode, WallNode])).default([]),
+  children: z
+    .array(
+      z.discriminatedUnion('type', [
+        FloorNode,
+        WallNode,
+        ColumnNode,
+        GroupNode,
+        ItemNode,
+        RoofNode,
+      ]),
+    )
+    .default([]),
   // Specific props
   level: z.number().default(0),
 }).describe(

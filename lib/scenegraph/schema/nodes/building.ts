@@ -1,10 +1,10 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, id, nodeType } from '../base'
+import { BaseNode, nodeId, nodeType } from '../base'
 import { LevelNode } from './level'
 
 export const BuildingNode = BaseNode.extend({
-  id: id('building'),
+  id: nodeId('building'),
   type: nodeType('building'),
   levels: z.array(LevelNode).default([LevelNode.parse({})]),
   position: z.tuple([z.number(), z.number()]).default([0, 0]), // (x, z) in site coordinate system (default is [0, 0])

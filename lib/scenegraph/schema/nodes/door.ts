@@ -1,10 +1,10 @@
 // lib/scenegraph/schema/nodes/door.ts
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, id, nodeType } from '../base'
+import { BaseNode, nodeId, nodeType } from '../base'
 
 export const DoorNode = BaseNode.extend({
-  id: id('door'),
+  id: nodeId('door'),
   type: nodeType('door'),
   // Position is in local coordinate system of the wall
   position: z.number(),

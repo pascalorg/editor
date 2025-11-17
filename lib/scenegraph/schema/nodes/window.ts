@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, id, nodeType } from '../base'
+import { BaseNode, nodeId, nodeType } from '../base'
 
 export const WindowNode = BaseNode.extend({
-  id: id('window'),
+  id: nodeId('window'),
   type: nodeType('window'),
   // Specific props: size, position on wall, etc.
   height: z.number().default(1), // height in meters of the bottom of the window
