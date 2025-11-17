@@ -5,6 +5,7 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
+  Gltf,
   Line,
   OrthographicCamera,
   PerspectiveCamera,
@@ -332,6 +333,8 @@ export default function Editor({ className }: { className?: string }) {
       {/* <fog attach="fog" args={['#212134', 30, 40]} /> */}
       <color args={['#212134']} attach="background" />
 
+      {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
+      <Gltf src="/models/Casual.gltf" />
       {/* Lighting setup with shadows */}
       <ambientLight intensity={0.1} />
       <directionalLight
@@ -397,146 +400,6 @@ export default function Editor({ className }: { className?: string }) {
       <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
         <NodeRenderer node={building} />
       </group>
-      {/* <group>
-        {levels
-          .filter((level) => {
-            // Filter out hidden floors (visible === false or opacity === 0)
-            const isHidden =
-              level.visible === false || (level.opacity !== undefined && level.opacity === 0)
-            return level.type === 'level' && !isHidden
-          })
-          .map((floor) => {
-            const floorLevel = floor.level || 0
-            const yPosition = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * floorLevel
-            const isActiveFloor = selectedFloorId === floor.id
-
-            // Find the level directly below (for reference grid)
-            const levelBelow = floorLevel > 0 ? floorLevel - 1 : null
-            const floorBelow =
-              levelBelow !== null
-                ? levels.find((level) => level.type === 'level' && level.level === levelBelow)
-                : null
-
-            return (
-              <AnimatedLevel key={floor.id} positionY={yPosition}>
-                {showGrid && (
-                  <group raycast={() => null}>
-                    {floorLevel === 0 ? (
-                      // Base level: show infinite grid
-                      isActiveFloor ? (
-                        <InfiniteGrid
-                          fadeDistance={fadeDistance}
-                          fadeStrength={fadeStrength}
-                          gridSize={tileSize}
-                          lineColor="#ffffff"
-                          lineWidth={1.0}
-                        />
-                      ) : (
-                        levelMode === 'exploded' && (
-                          <InfiniteGrid
-                            fadeDistance={fadeDistance}
-                            fadeStrength={fadeStrength}
-                            gridSize={tileSize}
-                            lineColor="#ffffff"
-                            lineWidth={1.0}
-                          />
-                        )
-                      )
-                    ) : (
-                      // Non-base level: show proximity-based grid around elements
-                      <>
-                        {isActiveFloor && (
-                          <ProximityGrid
-                            components={[]} // TODO: Migrate to use node tree
-                            fadeWidth={0.5}
-                            floorId={floor.id}
-                            gridSize={tileSize}
-                            lineColor="#ffffff"
-                            lineWidth={1.0}
-                            maxSize={GRID_SIZE}
-                            offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                            opacity={0.3}
-                            padding={1.5}
-                            previewRoof={null}
-                          />
-                        )}
-                        {!isActiveFloor && levelMode === 'exploded' && (
-                          <ProximityGrid
-                            components={[]} // TODO: Migrate to use node tree
-                            fadeWidth={0.5}
-                            floorId={floor.id}
-                            gridSize={tileSize}
-                            lineColor="#ffffff"
-                            lineWidth={1.0}
-                            maxSize={GRID_SIZE}
-                            offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                            opacity={0.15}
-                            padding={1.5}
-                            previewCustomRoom={null}
-                            previewRoof={null}
-                            previewRoom={null}
-                            previewWall={null}
-                          />
-                        )}
-                      </>
-                    )}
-                  </group>
-                )}
-
-
-                {showGrid &&
-                  floorLevel > 0 &&
-                  isActiveFloor &&
-                  floorBelow &&
-                  levelMode === 'exploded' && (
-                    <group
-                      position={[0, -(levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT), 0]}
-                      raycast={() => null}
-                    >
-                      <ProximityGrid
-                        components={[]} // TODO: Migrate to use node tree
-                        fadeWidth={0.5}
-                        floorId={floorBelow.id}
-                        gridSize={tileSize}
-                        lineColor="#ffffff"
-                        lineWidth={1.0}
-                        maxSize={GRID_SIZE}
-                        offset={[-GRID_SIZE / 2, -GRID_SIZE / 2]}
-                        opacity={0.08}
-                        padding={1.5}
-                        previewCustomRoom={null}
-                        previewRoof={null}
-                        previewRoom={null}
-                        previewWall={null}
-                      />
-                    </group>
-                  )}
-
-                <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-                  {controlMode === 'building' &&
-                    activeTool &&
-                    [
-                      'column',
-                      'wall',
-                      'slab',
-                      'door',
-                      'window',
-                      'roof',
-                      'room',
-                      'custom-room',
-                    ].includes(activeTool) &&
-                    isActiveFloor && <RegistryNodeEditor toolName={activeTool} />}
-
-                 
-                  {controlMode === 'guide' && isActiveFloor && <RegistryModeEditors mode="guide" />}
-
-                  <NodeRenderer node={floor} />
-                  {isActiveFloor && <GridTiles />}
-                </group>
-              </AnimatedLevel>
-            )
-          })}
-      </group> */}
 
       {controlMode === 'select' && <SelectionManager />}
       <CustomControls />
