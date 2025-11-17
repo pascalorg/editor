@@ -36,6 +36,7 @@ export type ItemRendererProps = z.infer<typeof ItemRendererPropsSchema>
 export function ItemNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const spatialGrid = useEditor((state) => state.spatialGrid)
   const selectedItem = useEditor((state) => state.selectedItem)
@@ -52,6 +53,17 @@ export function ItemNodeEditor() {
     previewItemId: null,
     lastPreviewPosition: null,
   })
+
+  // Delete preview when selectedItem changes (user picks a different item from catalog)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: We intentionally watch modelUrl to trigger on item change
+  useEffect(() => {
+    const previewId = previewStateRef.current.previewItemId
+    if (previewId) {
+      deleteNode(previewId)
+      previewStateRef.current.previewItemId = null
+      previewStateRef.current.lastPreviewPosition = null
+    }
+  }, [selectedItem.modelUrl, deleteNode])
 
   useEffect(() => {
     const handleGridClick = (e: GridEvent) => {
@@ -79,6 +91,8 @@ export function ItemNodeEditor() {
             category: 'furniture',
             modelUrl: selectedItem.modelUrl,
             scale: selectedItem.scale,
+            modelPosition: selectedItem.position,
+            modelRotation: selectedItem.rotation,
             children: [],
           } as any,
           selectedFloorId,
@@ -127,6 +141,8 @@ export function ItemNodeEditor() {
               category: 'furniture',
               modelUrl: selectedItem.modelUrl,
               scale: selectedItem.scale,
+              modelPosition: selectedItem.position,
+              modelRotation: selectedItem.rotation,
               children: [] as [],
             } as any,
             selectedFloorId,

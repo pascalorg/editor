@@ -191,6 +191,8 @@ export interface ItemNode extends BaseNode, GridItem {
   category?: 'furniture' | 'appliance' | 'decoration' | 'lighting' | 'plumbing' | 'electric'
   modelUrl: string // URL to the 3D model (GLTF/GLB)
   scale?: [number, number, number] // Scale factor for the 3D model [x, y, z]
+  modelPosition?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
+  modelRotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
 }
 
 // ============================================================================

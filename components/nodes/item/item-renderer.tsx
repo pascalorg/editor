@@ -1,7 +1,8 @@
 'use client'
 
 import { Gltf } from '@react-three/drei'
-import { useMemo } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
+import { ErrorBoundary } from 'react-error-boundary'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
@@ -71,7 +72,28 @@ export function ItemRenderer({ node }: ItemRendererProps) {
         </group>
       )}
 
-      <Gltf castShadow receiveShadow scale={node.scale || [1, 1, 1]} src={node.modelUrl} />
+      <ErrorBoundary fallback={null}>
+        <Suspense
+          fallback={
+            <mesh geometry={boxGeometry} position-y={0.4}>
+              <meshStandardMaterial
+                color={getColor()}
+                opacity={opacity}
+                transparent={transparent}
+              />
+            </mesh>
+          }
+        >
+          <Gltf
+            castShadow
+            position={node.modelPosition}
+            receiveShadow
+            rotation={node.modelRotation}
+            scale={node.scale || [1, 1, 1]}
+            src={node.modelUrl}
+          />
+        </Suspense>
+      </ErrorBoundary>
     </>
   )
 }

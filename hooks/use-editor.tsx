@@ -548,6 +548,8 @@ type StoreState = {
     modelUrl: string
     scale: [number, number, number]
     size: [number, number]
+    position?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
+    rotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
   }
   // Processors
   verticalStackingProcessor: VerticalStackingProcessor
@@ -578,6 +580,13 @@ type StoreState = {
   setIsManipulatingImage: (manipulating: boolean) => void
   setIsManipulatingScan: (manipulating: boolean) => void
   setDebug: (debug: boolean) => void
+  setSelectedItem: (item: {
+    modelUrl: string
+    scale: [number, number, number]
+    size: [number, number]
+    position?: [number, number, number]
+    rotation?: [number, number, number]
+  }) => void
   getWallsSet: () => Set<string>
   getRoofsSet: () => Set<string>
   getSelectedElementsSet: () => Set<SelectedElement>
@@ -960,7 +969,7 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         selectedItem: {
-          modelUrl: '/models/Couch Medium.glb',
+          modelUrl: '/items/couch-medium/model.glb',
           scale: [0.4, 0.4, 0.4],
           size: [4, 2],
         },
@@ -1008,6 +1017,7 @@ const useStore = create<StoreState>()(
         setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
         setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
         setDebug: (debug) => set({ debug }),
+        setSelectedItem: (item) => set({ selectedItem: item }),
         getWallsSet: () => {
           const state = get()
           const selectedFloorId = state.selectedFloorId
