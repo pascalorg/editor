@@ -282,34 +282,3 @@ export type NodeTypeMap = {
  * Node type string literals
  */
 export type NodeType = keyof NodeTypeMap
-
-/**
- * Helper type to get node type from type string
- */
-export type GetNodeType<T extends NodeType> = NodeTypeMap[T]
-
-// ============================================================================
-// NODE CREATION HELPERS
-// ============================================================================
-
-/**
- * Options for creating a new node
- */
-export interface CreateNodeOptions<T extends BaseNode> {
-  id?: string // Auto-generated if not provided
-  name?: string // Auto-generated if not provided
-  visible?: boolean
-  opacity?: number
-  locked?: boolean
-  parent?: string
-  metadata?: Record<string, any>
-}
-
-/**
- * Options for creating a grid item node
- */
-export interface CreateGridNodeOptions<T extends BaseNode & GridItem> extends CreateNodeOptions<T> {
-  position?: [number, number]
-  rotation?: number
-  size?: [number, number]
-}
