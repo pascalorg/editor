@@ -17,7 +17,6 @@ import type {
   LevelNode,
   ReferenceImageNode,
   RoofNode,
-  RoofSegmentNode,
   ScanNode,
   WallNode,
   WindowNode,
@@ -108,18 +107,6 @@ export function isRoofNode(node: BaseNode): node is RoofNode {
 }
 
 /**
- * Check if node is a RoofSegmentNode
- */
-export function isRoofSegmentNode(node: BaseNode): node is RoofSegmentNode {
-  return (
-    node.type === 'roof-segment' &&
-    isGridNode(node) &&
-    'height' in node &&
-    typeof (node as RoofSegmentNode).height === 'number'
-  )
-}
-
-/**
  * Check if node is a ReferenceImageNode
  */
 export function isReferenceImageNode(node: BaseNode): node is ReferenceImageNode {
@@ -167,8 +154,7 @@ export function isBuildingElementNode(node: BaseNode): node is BuildingElementNo
     isDoorNode(node) ||
     isWindowNode(node) ||
     isColumnNode(node) ||
-    isRoofNode(node) ||
-    isRoofSegmentNode(node)
+    isRoofNode(node)
   )
 }
 
@@ -270,49 +256,10 @@ export function canBeChildOf(child: BaseNode, parent: BaseNode): boolean {
     return isWallChildNode(child)
   }
 
-  if (isRoofNode(parent)) {
-    return isRoofSegmentNode(child)
-  }
-
   if (isGroupNode(parent)) {
     return isBuildingElementNode(child) || isGroupNode(child)
   }
 
   // Other nodes don't have children
   return false
-}
-
-/**
- * Validate entire node tree structure
- */
-export function validateNodeTree(node: BaseNode): boolean {
-  // Validate current node
-  if (!validateNode(node)) {
-    return false
-  }
-
-  // Validate children
-  for (const child of node.children) {
-    // Check child is valid
-    if (!validateNode(child)) {
-      return false
-    }
-
-    // Check child can be a child of this node
-    if (!canBeChildOf(child, node)) {
-      return false
-    }
-
-    // Check parent reference matches
-    if (child.parent && child.parent !== node.id) {
-      return false
-    }
-
-    // Recursively validate child tree
-    if (!validateNodeTree(child)) {
-      return false
-    }
-  }
-
-  return true
 }

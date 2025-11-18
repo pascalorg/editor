@@ -391,7 +391,6 @@ export type {
   LevelNode,
   ReferenceImageNode,
   RoofNode,
-  RoofSegmentNode,
   ScanNode,
   WallNode,
   WindowNode,

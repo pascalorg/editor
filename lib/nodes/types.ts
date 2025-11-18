@@ -24,7 +24,6 @@ export interface BaseNode {
     | 'window'
     | 'column'
     | 'roof'
-    | 'roof-segment'
     | 'reference-image'
     | 'scan'
     | 'group'
@@ -139,15 +138,7 @@ export interface ColumnNode extends BaseNode, GridItem {
 
 export interface RoofNode extends BaseNode, GridItem {
   type: 'roof'
-  children: RoofSegmentNode[]
-}
-
-export interface RoofSegmentNode extends BaseNode, GridItem {
-  type: 'roof-segment'
-  height: number // Peak height above base (meters)
-  leftWidth?: number // Distance from ridge to left edge
-  rightWidth?: number // Distance from ridge to right edge
-  children: [] // Roof segments don't have children
+  children: []
 }
 
 // ============================================================================
@@ -211,7 +202,6 @@ export type AnyNode =
   | WindowNode
   | ColumnNode
   | RoofNode
-  | RoofSegmentNode
   | ReferenceImageNode
   | ScanNode
   | GroupNode
@@ -220,13 +210,7 @@ export type AnyNode =
 /**
  * Union of all building element nodes (walls, doors, windows, columns, roofs)
  */
-export type BuildingElementNode =
-  | WallNode
-  | DoorNode
-  | WindowNode
-  | ColumnNode
-  | RoofNode
-  | RoofSegmentNode
+export type BuildingElementNode = WallNode | DoorNode | WindowNode | ColumnNode | RoofNode
 
 /**
  * Union of nodes that can be direct children of a level
@@ -253,7 +237,6 @@ export type GridNode =
   | WindowNode
   | ColumnNode
   | RoofNode
-  | RoofSegmentNode
   | ReferenceImageNode
   | ScanNode
   | GroupNode
@@ -272,7 +255,6 @@ export type NodeTypeMap = {
   window: WindowNode
   column: ColumnNode
   roof: RoofNode
-  'roof-segment': RoofSegmentNode
   'reference-image': ReferenceImageNode
   scan: ScanNode
   group: GroupNode
