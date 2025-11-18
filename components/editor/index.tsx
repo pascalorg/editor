@@ -53,7 +53,8 @@ export default function Editor({ className }: { className?: string }) {
       <color args={['#212134']} attach="background" />
 
       {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
-      <Gltf src="/models/Casual.gltf" />
+      <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
+      <Gltf position={[0, 0, 0]} scale={0.09} src="/models/Human.glb" />
       {/* Lighting setup with shadows */}
       <ambientLight intensity={0.1} />
       <directionalLight
