@@ -35,7 +35,6 @@ const sceneData = {
       latitude: 40.7128,
       longitude: -74.006,
       altitude: 10,
-      time: 43_200,
     },
     site: {
       id: 'site_test123456789',

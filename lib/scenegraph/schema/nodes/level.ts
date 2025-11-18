@@ -4,8 +4,10 @@ import { BaseNode, nodeId, nodeType } from '../base'
 import { ColumnNode } from './column'
 import { FloorNode } from './floor'
 import { GroupNode } from './group'
+import { ImageNode } from './image'
 import { ItemNode } from './item'
 import { RoofNode } from './roof'
+import { ScanNode } from './scan'
 import { WallNode } from './wall'
 
 export const LevelNode = BaseNode.extend({
@@ -20,6 +22,8 @@ export const LevelNode = BaseNode.extend({
         GroupNode,
         ItemNode,
         RoofNode,
+        ImageNode,
+        ScanNode,
       ]),
     )
     .default([]),

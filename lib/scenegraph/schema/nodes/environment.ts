@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { nodeId, nodeType } from '../base'
 
 export const EnvironmentNode = z
   .object({
@@ -9,7 +9,6 @@ export const EnvironmentNode = z
     latitude: z.number().default(0), // degrees
     longitude: z.number().default(0), // degrees
     altitude: z.number().default(0), // meters above sea level
-    time: z.number().default(0), // seconds since midnight
   })
   .describe(
     dedent`
@@ -17,7 +16,6 @@ export const EnvironmentNode = z
   - latitude: latitude in degrees
   - longitude: longitude in degrees
   - altitude: altitude in meters above sea level
-  - time: time in seconds since midnight
   `,
   )
 
