@@ -5,9 +5,10 @@ import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
+import { selectWallsFromLevel } from '@/lib/nodes/selectors'
 import type { AnyNode, GridItem, GridPoint, WallNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
@@ -169,7 +170,7 @@ function calculateJunctionIntersections(junction: Junction) {
 function findAncestors(nodeIndex: Map<string, AnyNode>, nodeId: string): AnyNode[] {
   const ancestors: AnyNode[] = []
   let current = nodeIndex.get(nodeId)
-  
+
   // @ts-expect-error - parent property check
   while (current?.parent) {
     // @ts-expect-error
@@ -262,7 +263,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     const id = getLevelId(node)
     return id
   }, [getLevelId, node])
-  const allWalls = useWalls(levelId || '')
+  const allWalls = useEditor(useShallow(selectWallsFromLevel(levelId ?? '')))
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Calculate local space coordinates for preview line

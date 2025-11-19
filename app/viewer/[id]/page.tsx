@@ -4,7 +4,8 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
-import { type LayoutJSON, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import type { Scene } from '@/lib/scenegraph/schema/index'
 
 export default function DynamicViewerPage() {
   const params = useParams()
@@ -32,7 +33,7 @@ export default function DynamicViewerPage() {
           throw new Error(`Failed to load demo: ${response.statusText}`)
         }
 
-        const data: LayoutJSON = await response.json()
+        const data: Scene = await response.json()
         loadLayout(data)
         setIsLoading(false)
       } catch (err) {

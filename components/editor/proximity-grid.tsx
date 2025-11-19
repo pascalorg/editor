@@ -4,7 +4,8 @@ import { shaderMaterial } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, DoubleSide, Vector2 } from 'three'
-import { type Component, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
+import type { SceneNode } from '@/lib/scenegraph/schema/index'
 
 // Create empty arrays for uniforms with proper initialization
 const createEmptyVector2Array = (size: number): Vector2[] => {
@@ -132,7 +133,7 @@ declare module '@react-three/fiber' {
 }
 
 interface ProximityGridProps {
-  components: Component[]
+  components: SceneNode[]
   floorId: string
   gridSize?: number
   lineColor?: string
@@ -181,42 +182,71 @@ export function ProximityGrid({
     const segments: Vector2[] = []
     const points: Vector2[] = []
 
-    // Get wall segments
-    const wallComponent = components.find((c) => c.type === 'wall' && c.group === floorId)
-    if (wallComponent && wallComponent.type === 'wall') {
-      for (const segment of wallComponent.data.segments) {
-        if (segment.visible === false) continue
-        const [x1, y1] = segment.start
-        const [x2, y2] = segment.end
+    // Iterate through all components
+    for (const component of components) {
+      // Handle Walls
+      if (component.type === 'wall') {
+        if (component.visible === false) continue
+
+        const [x1, y1] = component.start
+        const [x2, y2] = component.end
+
         // Convert grid coordinates to world coordinates
         const worldX1 = x1 * gridSize + offset[0]
         const worldY1 = y1 * gridSize + offset[1]
         const worldX2 = x2 * gridSize + offset[0]
         const worldY2 = y2 * gridSize + offset[1]
+
         segments.push(new Vector2(worldX1, worldY1))
         segments.push(new Vector2(worldX2, worldY2))
-      }
-    }
 
-    // Get roof segments (calculate full rectangular footprint from ridge line and widths)
-    const roofComponent = components.find((c) => c.type === 'roof' && c.group === floorId)
-    if (roofComponent && roofComponent.type === 'roof') {
-      for (const segment of roofComponent.data.segments) {
-        if (segment.visible === false) continue
-        const [x1, y1] = segment.start
-        const [x2, y2] = segment.end
-        const leftWidth = segment.leftWidth || 0
-        const rightWidth = segment.rightWidth || 0
+        // Handle Doors (children of walls)
+        if ('children' in component && Array.isArray(component.children)) {
+          for (const child of component.children) {
+            if (child.type === 'door') {
+              // Calculate door position in world space
+              // Door position [x, y] is relative to wall start
+              // We need to interpolate along the wall vector
+              const doorX = child.position[0]
+              // Vector along wall
+              const dx = x2 - x1
+              const dy = y2 - y1
+              const len = Math.sqrt(dx * dx + dy * dy)
+              if (len > 0) {
+                const dirX = dx / len
+                const dirY = dy / len
+
+                const doorWorldX = (x1 + dirX * doorX) * gridSize + offset[0]
+                const doorWorldY = (y1 + dirY * doorX) * gridSize + offset[1]
+
+                points.push(new Vector2(doorWorldX, doorWorldY))
+              }
+            }
+          }
+        }
+      }
+
+      // Handle Roofs
+      if (component.type === 'roof') {
+        if (component.visible === false) continue
+
+        const [x1, y1] = component.position
+        const length = component.size[0]
+        const x2 = x1 + Math.cos(component.rotation) * length
+        const y2 = y1 - Math.sin(component.rotation) * length
+
+        const leftWidth = component.leftWidth || 0
+        const rightWidth = component.rightWidth || 0
 
         // Calculate perpendicular direction to ridge line
         const dx = x2 - x1
         const dy = y2 - y1
-        const length = Math.sqrt(dx * dx + dy * dy)
+        const len = Math.sqrt(dx * dx + dy * dy)
 
-        if (length > 0) {
+        if (len > 0) {
           // Perpendicular unit vector (rotate 90 degrees)
-          const perpX = -dy / length
-          const perpY = dx / length
+          const perpX = -dy / len
+          const perpY = dx / len
 
           // Convert widths from world units to grid units
           const leftWidthGrid = leftWidth / gridSize
@@ -255,17 +285,6 @@ export function ProximityGrid({
           segments.push(new Vector2(worldC4X, worldC4Y))
           segments.push(new Vector2(worldC1X, worldC1Y))
         }
-      }
-    }
-
-    // Get door positions
-    const doorComponents = components.filter((c) => c.type === 'door' && c.group === floorId)
-    for (const doorComponent of doorComponents) {
-      if (doorComponent.type === 'door') {
-        const [x, y] = doorComponent.data.position
-        const worldX = x * gridSize + offset[0]
-        const worldY = y * gridSize + offset[1]
-        points.push(new Vector2(worldX, worldY))
       }
     }
 

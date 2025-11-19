@@ -16,6 +16,7 @@ export const BaseNode = z.object({
   id: nodeId('node'),
   type: nodeType('node'),
   name: z.string().optional(),
+  parentId: z.string().nullable().default(null),
   visible: z.boolean().default(true),
   opacity: z.number().min(0).max(100).default(100),
   metadata: z.json().default({}),

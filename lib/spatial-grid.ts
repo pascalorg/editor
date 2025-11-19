@@ -1,4 +1,4 @@
-import type { AnyNode } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, SceneNode } from '@/lib/scenegraph/schema/index'
 
 /**
  * Bounding box in 2D space (X, Z coordinates)
@@ -15,8 +15,8 @@ export interface BoundingBox {
  * Accumulates parent positions up to the root (level)
  */
 function calculateAbsolutePosition(
-  node: AnyNode,
-  nodeIndex: Map<string, AnyNode>,
+  node: SceneNode,
+  nodeIndex: Map<string, SceneNode>,
 ): [number, number] | null {
   // For nodes without position
   if (!('position' in node && Array.isArray(node.position))) {
@@ -26,7 +26,7 @@ function calculateAbsolutePosition(
   let [absoluteX, absoluteZ] = node.position as [number, number]
 
   // Traverse up parent chain and accumulate positions
-  let currentNode: AnyNode = node
+  let currentNode: SceneNode = node
   // @ts-expect-error - parent is not in all node types, but we check safely
   while (currentNode.parent) {
     // @ts-expect-error
@@ -50,14 +50,14 @@ function calculateAbsolutePosition(
  */
 function calculateAbsolutePoint(
   point: { x: number; z: number },
-  node: AnyNode,
-  nodeIndex: Map<string, AnyNode>,
+  node: SceneNode,
+  nodeIndex: Map<string, SceneNode>,
 ): { x: number; z: number } {
   let absoluteX = point.x
   let absoluteZ = point.z
 
   // Traverse up parent chain and accumulate positions
-  let currentNode: AnyNode = node
+  let currentNode: SceneNode = node
   // @ts-expect-error
   while (currentNode.parent) {
     // @ts-expect-error
@@ -82,8 +82,8 @@ function calculateAbsolutePoint(
  * Returns null for nodes that don't have spatial bounds (like levels)
  */
 export function calculateNodeBounds(
-  node: AnyNode,
-  nodeIndex: Map<string, AnyNode>,
+  node: SceneNode,
+  nodeIndex: Map<string, SceneNode>,
 ): BoundingBox | null {
   const type = node.type as string
 
@@ -259,8 +259,8 @@ export class SpatialGrid {
   updateNode(
     nodeId: string,
     levelId: string,
-    node: AnyNode,
-    nodeIndex: Map<string, AnyNode>,
+    node: SceneNode,
+    nodeIndex: Map<string, SceneNode>,
   ): void {
     // Calculate bounds for this node (using absolute world coordinates)
     const bounds = calculateNodeBounds(node, nodeIndex)

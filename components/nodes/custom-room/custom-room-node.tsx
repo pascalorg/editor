@@ -194,7 +194,7 @@ export function CustomRoomNodeEditor() {
         )
 
         // Update cursor wall parent
-        updateNode(cursorWallId, { parent: groupId })
+        updateNode(cursorWallId, { parentId: groupId })
 
         customRoomStateRef.current.cursorWallId = cursorWallId
         customRoomStateRef.current.previewGroupId = groupId

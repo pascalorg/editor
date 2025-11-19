@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useEditor } from '@/hooks/use-editor'
 import { componentRegistry } from '@/lib/nodes/registry'
-import type { AnyNode } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, SceneNode } from '@/lib/scenegraph/schema/index'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'nodes-debugger-state'
@@ -63,7 +63,7 @@ function saveState(state: DebuggerState) {
   }
 }
 
-function getNodeIcon(node: AnyNode) {
+function getNodeIcon(node: SceneNode) {
   // Try to get icon from registry first
   const registered = componentRegistry.get(node.type)
   if (registered?.config.toolIcon) {
@@ -74,7 +74,7 @@ function getNodeIcon(node: AnyNode) {
   return Building2
 }
 
-function formatNodeLabel(node: AnyNode): string {
+function formatNodeLabel(node: SceneNode): string {
   if ('name' in node && node.name) return node.name
   return `${node.type} (${node.id.slice(0, 8)}...)`
 }

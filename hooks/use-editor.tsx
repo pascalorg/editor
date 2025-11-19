@@ -32,6 +32,7 @@ import {
   initScene,
   RootNode,
   type Scene,
+  type SceneNode,
 } from '@/lib/scenegraph/schema/index'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 import { createId } from '@/lib/utils'
@@ -49,7 +50,7 @@ function extractAssetsFromRoot(root: RootNode): {
 } {
   const assets: AssetMap = {}
 
-  const walk = (node: AnyNode): AnyNode => {
+  const walk = (node: SceneNode): SceneNode => {
     const n = { ...node } as any
 
     if (
@@ -74,7 +75,7 @@ function extractAssetsFromRoot(root: RootNode): {
         }
       }
     }
-    return n as AnyNode
+    return n as SceneNode
   }
 
   const processedRoot = walk(root) as RootNode
@@ -85,7 +86,7 @@ function extractAssetsFromRoot(root: RootNode): {
  * Injects asset URLs back into root structure from the assets map.
  */
 function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
-  const walk = (node: AnyNode): AnyNode => {
+  const walk = (node: SceneNode): SceneNode => {
     const n = { ...node } as any
 
     if (typeof n.url === 'string' && n.url.startsWith('asset:')) {
@@ -106,7 +107,7 @@ function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
         }
       }
     }
-    return n as AnyNode
+    return n as SceneNode
   }
 
   const processedRoot = walk(root) as RootNode
@@ -246,7 +247,7 @@ type StoreState = {
   // SCENE GRAPH STATE
   // ============================================================================
   scene: Scene
-  nodeIndex: Map<string, AnyNode> // Mutable draft index for O(1) access
+  nodeIndex: Map<string, SceneNode> // Mutable draft index for O(1) access
   spatialGrid: SpatialGrid
 
   // ============================================================================
@@ -356,7 +357,7 @@ type StoreState = {
  */
 function rebuildSpatialGrid(
   spatialGrid: SpatialGrid,
-  nodeIndex: Map<string, AnyNode>,
+  nodeIndex: Map<string, SceneNode>,
   root: RootNode,
 ): void {
   spatialGrid.clear()
@@ -375,7 +376,7 @@ function updateNodeInDraft(
   nodeId: string,
   updates: Partial<AnyNode>,
   root: RootNode,
-  nodeIndex: Map<string, AnyNode>,
+  nodeIndex: Map<string, SceneNode>,
 ): void {
   // Using nodeIndex for direct access since it's mutable in draft
   const node = nodeIndex.get(nodeId)
@@ -390,7 +391,7 @@ function updateNodeInDraft(
 function processLevel(
   draft: {
     spatialGrid: SpatialGrid
-    nodeIndex: Map<string, AnyNode>
+    nodeIndex: Map<string, SceneNode>
     verticalStackingProcessor: VerticalStackingProcessor
     levelHeightProcessor: LevelHeightProcessor
     levelElevationProcessor: LevelElevationProcessor
@@ -444,7 +445,7 @@ function processLevel(
 
 function recomputeAllLevels(draft: {
   spatialGrid: SpatialGrid
-  nodeIndex: Map<string, AnyNode>
+  nodeIndex: Map<string, SceneNode>
   verticalStackingProcessor: VerticalStackingProcessor
   levelHeightProcessor: LevelHeightProcessor
   levelElevationProcessor: LevelElevationProcessor
@@ -1008,7 +1009,7 @@ const useStore = create<StoreState>()(
       version: 3, // Increment version to 3 for schema migration
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => {
-        const filterPreviewNodes = (node: AnyNode): AnyNode => {
+        const filterPreviewNodes = (node: SceneNode): SceneNode => {
           const n = { ...node } as any
 
           // Generic traversal
@@ -1028,7 +1029,7 @@ const useStore = create<StoreState>()(
               }
             }
           }
-          return n as AnyNode
+          return n as SceneNode
         }
 
         return {

@@ -159,10 +159,10 @@ export function RoomNodeEditor() {
         )
 
         // Now update each wall's parent to the actual group ID returned by addNode
-        updateNode(topWallId, { parent: previewRoomId })
-        updateNode(bottomWallId, { parent: previewRoomId })
-        updateNode(leftWallId, { parent: previewRoomId })
-        updateNode(rightWallId, { parent: previewRoomId })
+        updateNode(topWallId, { parentId: previewRoomId })
+        updateNode(bottomWallId, { parentId: previewRoomId })
+        updateNode(leftWallId, { parentId: previewRoomId })
+        updateNode(rightWallId, { parentId: previewRoomId })
 
         roomStateRef.current.previewRoomId = previewRoomId
       } else {
