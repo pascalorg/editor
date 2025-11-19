@@ -52,7 +52,7 @@ export function DoorNodeEditor() {
     const handleWallClick = (e: WallEvent) => {
       if (previewDoor && canPlace) {
         // Commit the preview by setting preview: false (useEditor handles the conversion)
-        updateNode(previewDoor.id, { preview: false })
+        updateNode(previewDoor.id, { editor: { preview: false } })
 
         previewDoor = null
       }
@@ -81,13 +81,9 @@ export function DoorNodeEditor() {
           position: [x, y],
           rotation: 0,
           size: [1, 2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace,
+          editor: { preview: true, canPlace },
         } as DoorNode
-        previewDoor.id = addNode(
+        addNode(
           previewDoor,
           selectedFloorId, // Parent is either wall or level
         )
@@ -105,24 +101,16 @@ export function DoorNodeEditor() {
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
       previewDoor = {
-        parent: e.node.id,
+        parentId: e.node.id,
         type: 'door',
         name: 'Door Preview',
         position: localPos, // Position RELATIVE to wall (already in wall-local coords)
         rotation: 0, // Rotation relative to wall (always 0 since door aligns with wall)
         size: [1, 2] as [number, number],
-        visible: true,
-        opacity: 100,
-        preview: true,
-        children: [],
-        canPlace,
+        editor: { preview: true, canPlace },
       } as DoorNode
       canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-      previewDoor.canPlace = canPlace
-      previewDoor.id = addNode(
-        previewDoor,
-        e.node.id, // Parent is the wall
-      )
+      addNode(previewDoor, e.node.id) // Parent is the wall
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -135,7 +123,7 @@ export function DoorNodeEditor() {
       }
 
       ignoreGridMove = true
-      if (previewDoor && e.node.id !== previewDoor.parent) {
+      if (previewDoor && e.node.id !== previewDoor.parentId) {
         // Wall changed, remove old preview
         deleteNode(previewDoor.id)
         previewDoor = null
@@ -149,26 +137,22 @@ export function DoorNodeEditor() {
         previewDoor.position = localPos // Position RELATIVE to wall
         previewDoor.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-        previewDoor.canPlace = canPlace
+        previewDoor.editor = { ...previewDoor.editor, canPlace }
         updateNode(previewDoor.id, previewDoor)
       } else {
         previewDoor = {
-          parent: e.node.id,
+          parentId: e.node.id,
           type: 'door',
           name: 'Door Preview',
           position: localPos, // Position RELATIVE to wall
           rotation: 0, // Rotation relative to wall
           size: [1, 2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace: true,
+          editor: { preview: true, canPlace },
         } as DoorNode
 
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-        previewDoor.canPlace = canPlace
-        previewDoor.id = addNode(
+        previewDoor.editor = { ...previewDoor.editor, canPlace }
+        addNode(
           previewDoor,
           e.node.id, // Parent is the wall
         )

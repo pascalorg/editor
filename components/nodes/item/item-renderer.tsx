@@ -17,7 +17,7 @@ export function ItemRenderer({ node }: ItemRendererProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
+  const isPreview = node.editor?.preview === true
   const canPlace = (node as any).canPlace !== false
 
   const levelId = useMemo(() => {
@@ -86,11 +86,11 @@ export function ItemRenderer({ node }: ItemRendererProps) {
         >
           <Gltf
             castShadow
-            position={node.modelPosition}
+            position={[node.position[0], 0, node.position[1]]}
             receiveShadow
-            rotation={node.modelRotation}
+            rotation={node.rotation}
             scale={node.scale || [1, 1, 1]}
-            src={node.modelUrl}
+            src={node.src}
           />
         </Suspense>
       </ErrorBoundary>

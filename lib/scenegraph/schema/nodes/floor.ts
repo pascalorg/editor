@@ -10,6 +10,7 @@ export const FloorNode = BaseNode.extend({
   // Grid points (x, z) in level coordinate system
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
+  size: z.tuple([z.number(), z.number()]),
 }).describe(
   dedent`
   Floor node - used to represent a floor in the building

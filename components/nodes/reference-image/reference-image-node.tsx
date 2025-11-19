@@ -276,7 +276,7 @@ export function useImageManipulation(
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialVector = initialMouse.clone().sub(center)
       const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-      const initialRotation = node.rotation
+      const initialRotation = node.rotationY
       let lastRotation: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -321,7 +321,7 @@ export function useImageManipulation(
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.rotation, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [node.id, node.rotationY, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleScaleDown = useCallback(

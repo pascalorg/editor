@@ -17,6 +17,7 @@ export const WallNode = BaseNode.extend({
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
   size: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
+  rotation: z.number(),
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building

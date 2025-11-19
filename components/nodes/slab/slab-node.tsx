@@ -96,7 +96,7 @@ export function SlabNodeEditor() {
             deleteNode(previewSlabId)
           } else {
             // Slab is valid, commit the preview by setting preview: false
-            updateNode(previewSlabId, { preview: false })
+            updateNode(previewSlabId, { editor: { preview: false } })
           }
         }
 

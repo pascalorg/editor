@@ -5,7 +5,17 @@ import { BaseNode, nodeId, nodeType } from '../base'
 export const ItemNode = BaseNode.extend({
   id: nodeId('item'),
   type: nodeType('item'),
+  category: z.string(),
   position: z.tuple([z.number(), z.number()]),
-}).describe(dedent`Item node - used to represent a item in the building`)
+  rotation: z.number(),
+  size: z.tuple([z.number(), z.number()]),
+  src: z.string(),
+  scale: z.union([z.number(), z.tuple([z.number(), z.number(), z.number()])]).default([1, 1, 1]),
+}).describe(dedent`Item node - used to represent a item in the building
+  - position: position in level coordinate system
+  - rotation: rotation in level coordinate system
+  - size: size in level coordinate system
+  - src: url of the model
+`)
 
 export type ItemNode = z.infer<typeof ItemNode>

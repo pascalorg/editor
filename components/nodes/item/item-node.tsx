@@ -7,6 +7,7 @@ import { ItemRenderer } from '@/components/nodes/item/item-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import type { LevelNode } from '@/lib/scenegraph/schema/index'
 
 // ============================================================================
 // ITEM RENDERER PROPS SCHEMA
@@ -41,7 +42,7 @@ export function ItemNodeEditor() {
   const spatialGrid = useEditor((state) => state.spatialGrid)
   const selectedItem = useEditor((state) => state.selectedItem)
   const levels = useEditor((state) => {
-    const building = state.scene.root.children[0]
+    const building = state.scene.root.buildings?.[0]
     return building ? building.children : []
   })
 
@@ -189,19 +190,21 @@ export function ItemNodeEditor() {
       // Filter out preview nodes and check for actual collisions
       // Items can be placed on slabs and next to walls, but not on other items or columns
       for (const nodeId of nearbyNodeIds) {
-        const node = level.children.find((child: any) => child.id === nodeId)
+        const node = level.children.find((child) => child.id === nodeId)
         // Block placement only for non-preview items and columns (solid obstacles)
-        if (node && !node.preview && (node.type === 'item' || node.type === 'column')) {
-          // Check if there's actual overlap (not just touching)
-          if (node.position && node.size) {
-            const existingBounds = {
-              minX: node.position[0],
-              maxX: node.position[0] + node.size[0],
-              minZ: node.position[1],
-              maxZ: node.position[1] + node.size[1],
-            }
-            if (boundsOverlap(newItemBounds, existingBounds)) {
-              return false
+        if (node && !node.editor?.preview) {
+          if (node.type === 'item') {
+            // Check if there's actual overlap (not just touching)
+            if (node.position && node.size) {
+              const existingBounds = {
+                minX: node.position[0],
+                maxX: node.position[0] + node.size[0],
+                minZ: node.position[1],
+                maxZ: node.position[1] + node.size[1],
+              }
+              if (boundsOverlap(newItemBounds, existingBounds)) {
+                return false
+              }
             }
           } else if (node.type === 'column' && node.position) {
             // Columns are point obstacles - check if they're inside the new item bounds

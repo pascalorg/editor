@@ -62,7 +62,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.children[0]
+    const building = state.scene.root.buildings?.[0]
     return building ? building.children : []
   })
   const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
@@ -147,9 +147,9 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
 
   return (
     <group
-      position={[worldX, levelNumber * FLOOR_SPACING + 0.001 + (node.yOffset || 0), worldZ]}
+      position={[worldX, levelNumber * FLOOR_SPACING + 0.001 + (node.position[2] || 0), worldZ]}
       ref={groupRef}
-      rotation={[0, (node.rotation * Math.PI) / 180, 0]}
+      rotation={[0, (node.rotation[1] * Math.PI) / 180, 0]}
     >
       {/* The 3D scan model */}
       <group scale={node.scale}>

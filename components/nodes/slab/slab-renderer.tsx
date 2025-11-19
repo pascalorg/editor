@@ -4,13 +4,13 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { SlabNode } from '@/lib/scenegraph/schema/index'
+import type { FloorNode } from '@/lib/scenegraph/schema/index'
 import { WALL_THICKNESS } from '../wall/wall-renderer'
 
 export const SLAB_THICKNESS = 0.2 // 20cm thickness
 
 interface SlabRendererProps {
-  node: SlabNode
+  node: FloorNode
 }
 
 const SLAB_SPILLOVER = WALL_THICKNESS
@@ -20,7 +20,7 @@ export function SlabRenderer({ node }: SlabRendererProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
+  const isPreview = node.editor?.preview === true
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)

@@ -16,8 +16,8 @@ export const WindowRenderer = memo(({ node }: WindowRendererProps) => {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const windowRef = useRef<THREE.Group>(null)
 
-  const isPreview = node.preview === true
-  const canPlace = (node as any).canPlace !== false
+  const isPreview = node.editor?.preview === true
+  const canPlace = node.editor?.canPlace !== false
 
   const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId

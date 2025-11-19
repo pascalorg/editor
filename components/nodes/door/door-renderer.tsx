@@ -17,8 +17,8 @@ export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
   const doorRef = useRef<THREE.Group>(null)
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
-  const canPlace = (node as any).canPlace !== false
+  const isPreview = node.editor?.preview === true
+  const canPlace = node.editor?.canPlace !== false
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)

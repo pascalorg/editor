@@ -52,7 +52,7 @@ export function WindowNodeEditor() {
     const handleWallClick = (e: WallEvent) => {
       if (previewWindow && canPlace) {
         // Commit the preview by setting preview: false (useEditor handles the conversion)
-        updateNode(previewWindow.id, { preview: false })
+        updateNode(previewWindow.id, { editor: { preview: false } })
 
         previewWindow = null
       }
