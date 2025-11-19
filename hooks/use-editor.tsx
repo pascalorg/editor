@@ -10,7 +10,6 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 // Enable Map/Set support in Immer
 enableMapSet()
 
-import type { SelectedElement } from '@/lib/building-elements'
 import { handleSimpleClick } from '@/lib/building-elements'
 import {
   AddLevelCommand,
@@ -212,8 +211,8 @@ export type {
   DoorNode,
   GridItem,
   GroupNode,
+  ImageNode,
   LevelNode,
-  ReferenceImageNode,
   RoofNode,
   ScanNode,
   WallNode,
@@ -221,7 +220,7 @@ export type {
 } from '@/lib/scenegraph/schema/index'
 
 // Using Schema types instead for internal use
-import type { LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
+import type { AnyNodeId, LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
 
 export type Tool =
   | 'slab'
@@ -247,7 +246,7 @@ type StoreState = {
   // SCENE GRAPH STATE
   // ============================================================================
   scene: Scene
-  nodeIndex: Map<string, SceneNode> // Mutable draft index for O(1) access
+  nodeIndex: Map<string, AnyNode> // Mutable draft index for O(1) access
   spatialGrid: SpatialGrid
 
   // ============================================================================
@@ -262,7 +261,7 @@ type StoreState = {
   selectedFloorId: string | null
   viewMode: ViewMode
   viewerDisplayMode: ViewerDisplayMode
-  selectedElements: SelectedElement[]
+  selectedElements: AnyNodeId[]
   selectedImageIds: string[]
   selectedScanIds: string[]
   isHelpOpen: boolean
@@ -299,7 +298,7 @@ type StoreState = {
   selectFloor: (floorId: string | null) => void
 
   handleElementSelect: (
-    elementId: string,
+    elementId: AnyNodeId,
     event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
   ) => void
   setSelectedImageIds: (ids: string[]) => void
@@ -320,7 +319,7 @@ type StoreState = {
 
   getWallsSet: () => Set<string>
   getRoofsSet: () => Set<string>
-  getSelectedElementsSet: () => Set<SelectedElement>
+  getSelectedElementsSet: () => Set<AnyNodeId>
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
 
@@ -747,7 +746,7 @@ const useStore = create<StoreState>()(
             set(
               produce((draft) => {
                 draft.scene.root = migratedRoot
-                draft.nodeIndex = buildDraftNodeIndex(migratedRoot)
+                draft.nodeIndex = buildDraftNodeIndex(draft.scene)
                 rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, migratedRoot)
               }),
             )
@@ -781,7 +780,7 @@ const useStore = create<StoreState>()(
           const initialScene = initScene()
           set({
             scene: initialScene,
-            nodeIndex: buildDraftNodeIndex(initialScene.root),
+            nodeIndex: buildDraftNodeIndex(initialScene),
             currentLevel: 0,
             selectedFloorId: initialScene.root.buildings[0].children[0].id,
             viewMode: 'level',
@@ -1070,7 +1069,7 @@ const useStore = create<StoreState>()(
             state.scene = initScene()
           }
 
-          state.nodeIndex = buildDraftNodeIndex(state.scene.root)
+          state.nodeIndex = buildDraftNodeIndex(state.scene)
           state.commandManager = new CommandManager()
           state.spatialGrid = new SpatialGrid(1)
           rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.scene.root)

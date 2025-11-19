@@ -16,6 +16,7 @@ export const WallNode = BaseNode.extend({
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
+  position: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
   size: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
   rotation: z.number(),
 }).describe(

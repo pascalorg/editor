@@ -20,7 +20,7 @@ export function ColumnRenderer({ nodeId }: ColumnRendererProps) {
       return {
         selectedFloorId: state.selectedFloorId,
         isPreview: node?.editor?.preview === true,
-        levelId: state.getLevelId(node),
+        levelId: node ? state.getLevelId(node!) : null,
       }
     }),
   )

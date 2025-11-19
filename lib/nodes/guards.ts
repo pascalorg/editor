@@ -5,22 +5,32 @@
  * different node types at runtime.
  */
 
+import type { GridItem } from '@/lib/scenegraph/common-types'
 import type {
   AnyNode,
-  BaseNode,
-  BuildingElementNode,
   ColumnNode,
   DoorNode,
-  GridItem,
-  GridNode,
   GroupNode,
   LevelNode,
-  ReferenceImageNode,
+  ImageNode as ReferenceImageNode,
   RoofNode,
   ScanNode,
+  BaseNode as SchemaBaseNode,
   WallNode,
   WindowNode,
-} from './types'
+} from '@/lib/scenegraph/schema/index'
+
+export interface BaseNode {
+  id: string
+  type: string
+  name?: string
+  children?: any[]
+  [key: string]: any
+}
+
+export type GridNode = BaseNode & GridItem
+
+export type BuildingElementNode = WallNode | DoorNode | WindowNode | ColumnNode | RoofNode
 
 // ============================================================================
 // BASE TYPE GUARDS
@@ -37,10 +47,10 @@ export function isNode(value: unknown): value is BaseNode {
     'type' in value &&
     'name' in value &&
     'children' in value &&
-    typeof (value as BaseNode).id === 'string' &&
-    typeof (value as BaseNode).type === 'string' &&
-    typeof (value as BaseNode).name === 'string' &&
-    Array.isArray((value as BaseNode).children)
+    typeof (value as any).id === 'string' &&
+    typeof (value as any).type === 'string' &&
+    typeof (value as any).name === 'string' &&
+    Array.isArray((value as any).children)
   )
 }
 
@@ -68,7 +78,7 @@ export function isGridNode(node: BaseNode): node is GridNode {
  * Check if node is a LevelNode
  */
 export function isLevelNode(node: BaseNode): node is LevelNode {
-  return node.type === 'level' && 'level' in node && typeof (node as LevelNode).level === 'number'
+  return node.type === 'level' && 'level' in node && typeof (node as any).level === 'number'
 }
 
 /**
@@ -115,8 +125,8 @@ export function isReferenceImageNode(node: BaseNode): node is ReferenceImageNode
     isGridNode(node) &&
     'url' in node &&
     'scale' in node &&
-    typeof (node as ReferenceImageNode).url === 'string' &&
-    typeof (node as ReferenceImageNode).scale === 'number'
+    typeof (node as any).url === 'string' &&
+    typeof (node as any).scale === 'number'
   )
 }
 
@@ -129,8 +139,8 @@ export function isScanNode(node: BaseNode): node is ScanNode {
     isGridNode(node) &&
     'url' in node &&
     'scale' in node &&
-    typeof (node as ScanNode).url === 'string' &&
-    typeof (node as ScanNode).scale === 'number'
+    typeof (node as any).url === 'string' &&
+    typeof (node as any).scale === 'number'
   )
 }
 

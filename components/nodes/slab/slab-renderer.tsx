@@ -27,7 +27,7 @@ export function SlabRenderer({ nodeId }: SlabRendererProps) {
         nodeSize: node?.size,
         isPreview: node?.editor?.preview === true,
         levelId: state.getLevelId(node!),
-        canPlace: 'canPlace' in (node || {}) ? node?.canPlace !== false : true,
+        canPlace: node?.editor?.canPlace !== false,
       }
     }),
   )

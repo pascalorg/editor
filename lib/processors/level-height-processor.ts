@@ -41,7 +41,6 @@ function getMaxHeightRecursive(node: AnyNode): number {
   // AnyNode union doesn't guarantee children property structure identically across all types in a simple way without narrowing
   // But for calculation purposes we can iterate if it exists
   if ('children' in node && Array.isArray(node.children)) {
-    // @ts-expect-error - we know children are AnyNode[] if they exist, but schema types might be strict
     for (const child of node.children) {
       const childMaxHeight = getMaxHeightRecursive(child)
       if (childMaxHeight > maxHeight) {

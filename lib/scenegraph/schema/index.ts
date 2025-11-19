@@ -12,12 +12,13 @@ import { LevelNode } from './nodes/level'
 import { RoofNode } from './nodes/roof'
 import { ScanNode } from './nodes/scan'
 import type { SiteNode } from './nodes/site'
+import { SlabNode } from './nodes/slab'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { RootNode } from './root'
 
 export * from '../common-types'
-export * from './base' // Export BaseNode
+export * from './base'
 export * from './environment'
 // Export all specific node types
 export * from './nodes/building'
@@ -32,13 +33,10 @@ export * from './nodes/level'
 export * from './nodes/roof'
 export * from './nodes/scan'
 export * from './nodes/site'
+export * from './nodes/slab'
 export * from './nodes/wall'
 export * from './nodes/window'
 export * from './root'
-
-// Alias for legacy compatibility if needed
-export type ReferenceImageNode = z.infer<typeof ImageNode>
-// ScanNode is already exported from ./nodes/scan
 
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),
@@ -76,6 +74,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   ItemNode,
   ImageNode,
   ScanNode,
+  SlabNode,
 ])
 export type AnyNode = z.infer<typeof AnyNode>
 export type AnyNodeType = AnyNode['type']
@@ -103,6 +102,7 @@ export type NodeTypeMap = {
   item: z.infer<typeof ItemNode>
   'reference-image': z.infer<typeof ImageNode>
   scan: z.infer<typeof ScanNode>
+  slab: z.infer<typeof SlabNode>
 }
 
 export const loadNode = (node: unknown): AnyNode => {

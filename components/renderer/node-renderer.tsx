@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { shallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
-import type { AnyNode, BaseNode, GridItem } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, AnyNodeId, BaseNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE } from '../editor'
 import { SelectionBox } from './selection-box'
 
@@ -51,7 +51,10 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const controlMode = useEditor((state) => state.controlMode)
 
-  const isSelected = useMemo(() => selectedElements.includes(nodeId), [selectedElements, nodeId])
+  const isSelected = useMemo(
+    () => selectedElements.includes(nodeId as AnyNodeId),
+    [selectedElements, nodeId],
+  )
 
   // Filter nodes based on viewer display mode (only in viewer mode)
   const shouldRenderNode = useMemo(() => {

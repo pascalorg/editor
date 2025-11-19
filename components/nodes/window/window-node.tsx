@@ -81,13 +81,9 @@ export function WindowNodeEditor() {
           position: [x, y],
           rotation: lastRotation,
           size: [1, 1.2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace,
+          editor: { canPlace, preview: true },
         } as WindowNode
-        previewWindow.id = addNode(previewWindow, selectedFloorId)
+        addNode(previewWindow, selectedFloorId)
       }
     }
 
@@ -102,21 +98,17 @@ export function WindowNodeEditor() {
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
       previewWindow = {
-        parent: e.node.id,
+        parentId: e.node.id,
         type: 'window',
         name: 'Window Preview',
         position: localPos, // Position RELATIVE to wall (already in wall-local coords)
         rotation: 0, // Rotation relative to wall (always 0 since window aligns with wall)
         size: [1, 1.2] as [number, number],
-        visible: true,
-        opacity: 100,
-        preview: true,
-        children: [],
-        canPlace,
+        editor: { canPlace, preview: true },
       } as WindowNode
       canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-      previewWindow.canPlace = canPlace
-      previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
+      previewWindow.editor = { ...previewWindow.editor, canPlace }
+      addNode(previewWindow, e.node.id) // Parent is the wall
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -129,7 +121,7 @@ export function WindowNodeEditor() {
       }
 
       ignoreGridMove = true
-      if (previewWindow && e.node.id !== previewWindow.parent) {
+      if (previewWindow && e.node.id !== previewWindow.parentId) {
         // Wall changed, remove old preview
         deleteNode(previewWindow.id)
         previewWindow = null
@@ -143,26 +135,22 @@ export function WindowNodeEditor() {
         previewWindow.position = localPos // Position RELATIVE to wall
         previewWindow.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-        previewWindow.canPlace = canPlace
+        previewWindow.editor = { ...previewWindow.editor, canPlace }
         updateNode(previewWindow.id, previewWindow)
       } else {
         previewWindow = {
-          parent: e.node.id,
+          parentId: e.node.id,
           type: 'window',
           name: 'Window Preview',
           position: localPos, // Position RELATIVE to wall
           rotation: 0, // Rotation relative to wall
           size: [1, 1.2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace: true,
+          editor: { canPlace, preview: true },
         } as WindowNode
 
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-        previewWindow.canPlace = canPlace
-        previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
+        previewWindow.editor = { ...previewWindow.editor, canPlace }
+        addNode(previewWindow, e.node.id) // Parent is the wall
       }
     }
 

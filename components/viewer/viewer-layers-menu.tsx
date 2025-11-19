@@ -11,12 +11,12 @@ interface ViewerLayersMenuProps {
 
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const levels = useEditor((state) => {
-    const building = state.scene.root.children[0]
+    const building = state.scene.root.buildings[0]
     return building ? building.children : []
   })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)
-  const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
 
   // Get sorted floor levels for rendering (highest level first)
   const floorGroups = levels
@@ -60,7 +60,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
                   )}
                   onClick={(e) => {
                     e.stopPropagation()
-                    toggleFloorVisibility(level.id)
+                    toggleNodeVisibility(level.id)
                   }}
                   size="sm"
                   variant="ghost"

@@ -13,7 +13,7 @@
 // ) => void
 
 import mitt from 'mitt'
-import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
+import type { AnyNode, ImageNode, WallNode } from '@/hooks/use-editor'
 import type { GridPoint } from '@/lib/scenegraph/schema/index'
 
 export interface GridEvent {
@@ -21,7 +21,7 @@ export interface GridEvent {
 }
 
 export interface NodeEvent {
-  node: BaseNode
+  node: AnyNode
   gridPosition: GridPoint
   position: [number, number, number] // [x, y, z] world coordinates
 }
@@ -31,7 +31,7 @@ export interface WallEvent extends NodeEvent {
 }
 
 export interface ImageEvent {
-  node: ReferenceImageNode
+  node: ImageNode
 }
 
 export interface ImageUpdateEvent {

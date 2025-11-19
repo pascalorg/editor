@@ -11,3 +11,8 @@ export interface GridItem {
   elevation?: number // Y offset from base (vertical position in meters)
 }
 
+export interface WallSegment {
+  start: [number, number]
+  end: [number, number]
+  wallId: string
+}

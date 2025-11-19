@@ -5,8 +5,8 @@
  * searching, and manipulation.
  */
 
-import { isNode } from './guards'
-import type { AnyNode, BaseNode, NodeType } from './types'
+import type { AnyNode, SceneNodeType as NodeType } from '@/lib/scenegraph/schema/index'
+import { type BaseNode, isNode } from './guards'
 
 // ============================================================================
 // TREE TRAVERSAL
@@ -31,7 +31,7 @@ export function traverseTree(
     }
 
     // Traverse children
-    if (node.children.length > 0) {
+    if (node.children && node.children.length > 0) {
       traverseTree(node.children, visitor, node, depth + 1)
     }
   }
@@ -59,8 +59,10 @@ export function traverseTreeBreadthFirst(
     }
 
     // Add children to queue
-    for (const child of node.children) {
-      queue.push({ node: child, parent: node, depth: depth + 1 })
+    if (node.children) {
+      for (const child of node.children) {
+        queue.push({ node: child, parent: node, depth: depth + 1 })
+      }
     }
   }
 }
@@ -81,7 +83,7 @@ export function mapTree<T extends BaseNode>(
     const mappedNode = mapper(node, parent, depth)
 
     // Map children recursively
-    if (mappedNode.children.length > 0) {
+    if (mappedNode.children && mappedNode.children.length > 0) {
       mappedNode.children = mapTree(
         mappedNode.children as T[],
         mapper,
@@ -145,22 +147,6 @@ export function findNodesByType<T extends BaseNode>(
 }
 
 /**
- * Find parent of a node
- */
-export function findParentNode(nodes: BaseNode | BaseNode[], childId: string): BaseNode | null {
-  let parent: BaseNode | null = null
-
-  traverseTree(nodes, (node) => {
-    if (node.children.some((child) => child.id === childId)) {
-      parent = node
-      return false // Stop traversal
-    }
-  })
-
-  return parent
-}
-
-/**
  * Find all ancestors of a node
  */
 export function findAncestors(nodes: BaseNode | BaseNode[], nodeId: string): BaseNode[] {
@@ -191,23 +177,13 @@ export function findAncestors(nodes: BaseNode | BaseNode[], nodeId: string): Bas
 export function findDescendants(node: BaseNode): BaseNode[] {
   const descendants: BaseNode[] = []
 
-  traverseTree(node.children, ((child) => {
-    descendants.push(child)
-  }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
-
-  return descendants
-}
-
-/**
- * Find siblings of a node
- */
-export function findSiblings(nodes: BaseNode | BaseNode[], nodeId: string): BaseNode[] {
-  const parent = findParentNode(nodes, nodeId)
-  if (!parent) {
-    return []
+  if (node.children) {
+    traverseTree(node.children, ((child) => {
+      descendants.push(child)
+    }) as (node: BaseNode, parent: BaseNode | null, depth: number) => boolean | undefined)
   }
 
-  return parent.children.filter((child) => child.id !== nodeId)
+  return descendants
 }
 
 // ============================================================================
@@ -242,7 +218,7 @@ export function getNodeAtPath(nodes: BaseNode | BaseNode[], path: string[]): Bas
     return node
   }
 
-  return getNodeAtPath(node.children, rest)
+  return node.children ? getNodeAtPath(node.children, rest) : null
 }
 
 // ============================================================================
@@ -262,7 +238,7 @@ export function addNode(nodes: BaseNode[], parentId: string | null, newNode: Bas
     if (node.id === parentId) {
       return {
         ...node,
-        children: [...node.children, { ...newNode, parent: node.id }],
+        children: [...(node.children || []), { ...newNode, parent: node.id }],
       }
     }
     return node
@@ -275,7 +251,7 @@ export function addNode(nodes: BaseNode[], parentId: string | null, newNode: Bas
 export function removeNode(nodes: BaseNode[], nodeId: string): BaseNode[] {
   const result = mapTree(nodes, (node) => ({
     ...node,
-    children: node.children.filter((child) => child.id !== nodeId),
+    children: (node.children || []).filter((child) => child.id !== nodeId),
   })) as BaseNode[]
   return result.filter((node) => node.id !== nodeId)
 }
@@ -325,7 +301,7 @@ export function cloneNode<T extends BaseNode>(node: T, newId?: string): T {
   return {
     ...node,
     id: newId ?? `${node.id}-copy`,
-    children: node.children.map((child) => cloneNode(child)),
+    children: (node.children || []).map((child) => cloneNode(child)),
   }
 }
 
@@ -388,8 +364,10 @@ export function hasCircularReferences(nodes: BaseNode | BaseNode[]): boolean {
     visited.add(node.id)
     const newAncestors = new Set([...ancestors, node.id])
 
-    for (const child of node.children) {
-      checkNode(child, newAncestors)
+    if (node.children) {
+      for (const child of node.children) {
+        checkNode(child, newAncestors)
+      }
     }
   }
 
@@ -436,64 +414,12 @@ export function flattenTree(nodes: BaseNode | BaseNode[]): BaseNode[] {
  * Get all leaf nodes (nodes without children)
  */
 export function getLeafNodes(nodes: BaseNode | BaseNode[]): BaseNode[] {
-  return findNodes(nodes, (node) => node.children.length === 0)
+  return findNodes(nodes, (node) => !node.children || node.children.length === 0)
 }
 
 /**
  * Get all parent nodes (nodes with children)
  */
 export function getParentNodes(nodes: BaseNode | BaseNode[]): BaseNode[] {
-  return findNodes(nodes, (node) => node.children.length > 0)
-}
-
-/**
- * Filter tree nodes
- */
-export function filterTree(
-  nodes: BaseNode | BaseNode[],
-  predicate: (node: BaseNode) => boolean,
-): BaseNode[] {
-  const nodeArray = Array.isArray(nodes) ? nodes : [nodes]
-
-  return nodeArray.filter(predicate).map((node) => ({
-    ...node,
-    children: filterTree(node.children, predicate),
-  }))
-}
-
-// ============================================================================
-// SPATIAL OPERATIONS
-// ============================================================================
-
-/**
- * Get a node's position relative to another node's local coordinate system
- *
- * @param childNode - The node whose position you want in local space
- * @param parentNode - The node whose coordinate system to transform to
- * @param scale - Optional scale factor to apply (e.g., TILE_SIZE)
- * @returns Object with localX and localZ coordinates in the parent's local space
- *
- * @example
- * ```ts
- * // Get door position in wall's local space
- * const { localX, localZ } = getNodeRelativePosition(doorNode, wallNode, TILE_SIZE)
- * ```
- */
-export function getNodeRelativePosition(
-  childNode: { position: [number, number] },
-  parentNode: { position: [number, number]; rotation: number },
-  scale = 1,
-): { localX: number; localZ: number } {
-  // Calculate offset in world space
-  const dx = childNode.position[0] - parentNode.position[0]
-  const dy = childNode.position[1] - parentNode.position[1]
-
-  // Rotate into parent's local space using 2D rotation matrix
-  const cos = Math.cos(parentNode.rotation)
-  const sin = Math.sin(parentNode.rotation)
-
-  return {
-    localX: (dx * cos - dy * sin) * scale,
-    localZ: (dx * sin + dy * cos) * scale,
-  }
+  return findNodes(nodes, (node) => !!node.children && node.children.length > 0)
 }

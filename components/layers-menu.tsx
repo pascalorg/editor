@@ -31,8 +31,8 @@ import { Button } from '@/components/ui/button'
 import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
-import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
-import { LevelNode } from '@/lib/scenegraph/schema/index'
+import { isElementSelected } from '@/lib/building-elements'
+import { type AnyNodeId, LevelNode } from '@/lib/scenegraph/schema/index'
 import { cn, createId } from '@/lib/utils'
 
 const buildingElementConfig: Record<
@@ -44,19 +44,19 @@ const buildingElementConfig: Record<
 > = {
   wall: {
     icon: <Square className="h-4 w-4 text-gray-600" />,
-    getLabel: (index) => getElementLabel('wall', index),
+    getLabel: (index) => `Wall ${index + 1}`,
   },
   roof: {
     icon: <Triangle className="h-4 w-4 text-amber-600" />,
-    getLabel: (index) => getElementLabel('roof', index),
+    getLabel: (index) => `Roof ${index + 1}`,
   },
   column: {
     icon: <CylinderIcon className="h-4 w-4 text-gray-500" />,
-    getLabel: (index) => getElementLabel('column', index),
+    getLabel: (index) => `Column ${index + 1}`,
   },
   slab: {
     icon: <CuboidIcon className="h-4 w-4 text-gray-300" />,
-    getLabel: (index) => getElementLabel('slab', index),
+    getLabel: (index) => `Floor ${index + 1}`,
   },
   group: {
     icon: <Building className="h-4 w-4 text-purple-600" />,
@@ -81,8 +81,8 @@ interface DraggableLevelItemProps {
   selectedElements: any[]
   selectedImageIds: string[]
   selectedScanIds: string[]
-  handleElementSelect: (elementId: string, event: React.MouseEvent) => void
-  handleImageSelect: (id: string, event: React.MouseEvent) => void
+  handleElementSelect: (elementId: AnyNodeId, event: React.MouseEvent) => void
+  handleImageSelect: (id: AnyNodeId, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
   toggleNodeVisibility: (id: string) => void
   setNodeOpacity: (id: string, opacity: number) => void
@@ -1005,7 +1005,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                     Object.keys(buildingElementConfig) as (keyof typeof buildingElementConfig)[]
                   ).reduce(
                     (acc, type) => {
-                      acc[type] = isSelected ? getElementsOfType(components, level.id, type) : []
+                      acc[type] = isSelected
+                        ? (level.children || []).filter((child: any) => child.type === type)
+                        : []
                       return acc
                     },
                     {} as Record<string, any[]>,

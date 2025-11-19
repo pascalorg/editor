@@ -1,4 +1,4 @@
-import type { WallSegment } from '@/hooks/use-editor'
+import type { WallSegment } from '@/lib/scenegraph/common-types'
 
 // Helper function to check if a grid point lies on a wall segment
 export function isPointOnSegment(

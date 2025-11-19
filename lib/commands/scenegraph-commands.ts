@@ -1,7 +1,7 @@
 import { current } from 'immer'
-import { createId } from '@/lib/utils'
-import type { AnyNode, RootNode, LevelNode, SceneNode } from '@/lib/scenegraph/schema/index'
 import { getLevels } from '@/lib/scenegraph/editor-utils'
+import type { AnyNode, LevelNode, RootNode, SceneNode } from '@/lib/scenegraph/schema/index'
+import { createId } from '@/lib/utils'
 
 // ============================================================================
 // COMMAND INTERFACE
@@ -63,7 +63,7 @@ export class AddNodeCommand implements Command {
       parent: this.parentId,
       // @ts-expect-error - children handling for generic AnyNode
       children: processChildren(this.nodeData.children || [], this.nodeId),
-    } as AnyNode
+    } as unknown as AnyNode
 
     if (this.parentId === null) {
       // Add to root (only for level nodes)
@@ -81,7 +81,7 @@ export class AddNodeCommand implements Command {
             if (!node.children) node.children = []
             // @ts-expect-error
             node.children.push(newNode)
-            
+
             // Update parent in index after modifying its children (important for Immer)
             // Use current() to store plain object, not draft proxy
             nodeIndex.set(this.parentId, current(node) as AnyNode)
@@ -269,8 +269,11 @@ export class DeleteNodeCommand implements Command {
 
           return true
         }
-        // @ts-expect-error
-        if (node.children && node.children.length > 0 && findAndDelete(node.children, node.id, node)) {
+        if (
+          (node as any).children &&
+          (node as any).children.length > 0 &&
+          findAndDelete((node as any).children, node.id, node)
+        ) {
           return true
         }
       }
@@ -298,9 +301,9 @@ export class DeleteNodeCommand implements Command {
         if (this.parentId === null) {
           // Root level - assuming deletedNode is a LevelNode
           if (this.deletedNode && this.deletedNode.type === 'level') {
-             levels.splice(this.indexInParent, 0, this.deletedNode as LevelNode)
-             addToIndex(this.deletedNode!)
-             return true
+            levels.splice(this.indexInParent, 0, this.deletedNode as LevelNode)
+            addToIndex(this.deletedNode!)
+            return true
           }
           return false
         }
@@ -335,11 +338,9 @@ export class DeleteNodeCommand implements Command {
 // ============================================================================
 
 export class BatchDeleteCommand implements Command {
-  private readonly nodeIds: string[]
   private readonly deleteCommands: DeleteNodeCommand[] = []
 
   constructor(nodeIds: string[]) {
-    this.nodeIds = nodeIds
     this.deleteCommands = nodeIds.map((id) => new DeleteNodeCommand(id))
   }
 
@@ -554,4 +555,3 @@ export class CommandManager {
     return [...this.redoStack]
   }
 }
-

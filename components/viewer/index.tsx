@@ -25,7 +25,7 @@ export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no f
 
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
-  const building = useEditor((state) => state.scene.root.children[0])
+  const building = useEditor((state) => state.scene.root.buildings[0])
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)

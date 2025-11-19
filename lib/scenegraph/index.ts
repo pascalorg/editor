@@ -4,10 +4,13 @@ import {
   type AnyNodeId,
   type AnyNodeType,
   buildSceneGraphIndex,
+  type byIdNodeIndex, // Added
   getNodeByPath,
   type NodeTypeMap,
   type Scene,
   type SceneGraphIndex,
+  type SceneNode,
+  type SceneNodeId,
   updateNodeByPath,
 } from '@/lib/scenegraph/schema/index'
 
@@ -80,9 +83,9 @@ export class SceneGraph {
     return this.index.byId.size
   }
 
-  getNodeById<T extends keyof NodeTypeMap>(id: AnyNodeId): SceneNodeHandle<NodeTypeMap[T]> | null
-  getNodeById(id: AnyNodeId): SceneNodeHandle | null
-  getNodeById(id: AnyNodeId) {
+  getNodeById<T extends keyof NodeTypeMap>(id: SceneNodeId): SceneNodeHandle<NodeTypeMap[T]> | null
+  getNodeById(id: SceneNodeId): SceneNodeHandle | null
+  getNodeById(id: SceneNodeId) {
     const meta = this.index.byId.get(id)
     if (!meta) {
       return null
@@ -121,7 +124,7 @@ export class SceneGraph {
     })
   }
 
-  updateNode(id: AnyNodeId, updates: Partial<AnyNode>) {
+  updateNode(id: SceneNodeId, updates: Partial<SceneNode>) {
     const meta = this.index.byId.get(id)
     if (!(meta && this.onChange)) {
       return
@@ -134,13 +137,13 @@ export class SceneGraph {
         ({
           ...node,
           ...updates,
-        }) as AnyNode,
+        }) as SceneNode,
     ) as Scene
 
     this.onChange(nextScene)
   }
 
-  deleteNode(id: AnyNodeId) {
+  deleteNode(id: SceneNodeId) {
     const meta = this.index.byId.get(id)
     if (!(meta && this.onChange)) {
       return
@@ -151,14 +154,14 @@ export class SceneGraph {
   }
 }
 
-type SceneNodeMeta = SceneGraphIndex['byId'] extends Map<AnyNodeId, infer Meta> ? Meta : never
+type SceneNodeMeta = byIdNodeIndex
 
-export class SceneNodeHandle<T extends AnyNode = AnyNode> {
+export class SceneNodeHandle<T extends SceneNode = SceneNode> {
   private readonly graph: SceneGraph
   private readonly node: T
   private readonly meta: SceneNodeMeta
 
-  constructor(graph: SceneGraph, node: AnyNode, meta: SceneNodeMeta) {
+  constructor(graph: SceneGraph, node: SceneNode, meta: SceneNodeMeta) {
     this.graph = graph
     this.node = node as T
     this.meta = meta

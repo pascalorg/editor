@@ -13,6 +13,8 @@ import {
   loadScene,
   type Scene,
   type SceneGraphIndex,
+  type SceneNode,
+  type SceneNodeId,
   updateNodeByPath,
 } from './schema/index'
 
@@ -71,10 +73,10 @@ interface SceneState {
   init: () => void
   load: (data: unknown) => void
   setScene: (nextScene: Scene) => void
-  updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => AnyNode | null
-  deleteNode: (id: AnyNodeId) => void
-  getNodeById: (id: AnyNodeId) => AnyNode | null
-  listNodesByType: (type: AnyNodeType) => AnyNode[]
+  updateNode: (id: SceneNodeId, updates: Partial<SceneNode>) => SceneNode | null
+  deleteNode: (id: SceneNodeId) => void
+  getNodeById: (id: SceneNodeId) => SceneNode | null
+  listNodesByType: (type: AnyNodeType) => SceneNode[]
 }
 
 const buildIndex = (scene: Scene | null): SceneGraphIndex | null =>
@@ -163,7 +165,7 @@ export const useSceneStore = create<SceneState>()(
             ({
               ...node,
               ...updates,
-            }) as AnyNode,
+            }) as SceneNode,
         ) as Scene
 
         replaceScene(set, updatedScene)
@@ -216,7 +218,7 @@ export const useSceneStore = create<SceneState>()(
           return []
         }
 
-        const nodes: AnyNode[] = []
+        const nodes: SceneNode[] = []
         ids.forEach((nodeId) => {
           const meta = sceneIndex.byId.get(nodeId)
           if (!meta) {

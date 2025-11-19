@@ -10,7 +10,7 @@ import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { ReferenceImageNode } from '@/lib/scenegraph/schema/index'
+import type { ImageNode } from '@/lib/scenegraph/schema/index'
 import { ImageRenderer } from './image-renderer'
 
 // ============================================================================
@@ -106,7 +106,7 @@ export function ReferenceImageNodeEditor() {
  * Provides all the pointer event handlers for transforming reference images
  */
 export function useImageManipulation(
-  nodeId: ReferenceImageNode['id'],
+  nodeId: ImageNode['id'],
   groupRef: RefObject<THREE.Group | null>,
   setActiveHandle?: (handleId: string | null) => void,
 ) {
@@ -117,7 +117,7 @@ export function useImageManipulation(
 
   const { nodeRotationY, nodeScale } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId!) as ReferenceImageNode | undefined
+      const node = state.nodeIndex.get(nodeId!) as ImageNode | undefined
       return {
         nodeRotationY: node?.rotationY || 0,
         nodeScale: node?.scale || 1,
@@ -126,10 +126,10 @@ export function useImageManipulation(
   )
 
   const handleSelect = useCallback(() => {
-    const node = useEditor.getState().nodeIndex.get(nodeId) as ReferenceImageNode | undefined
+    const node = useEditor.getState().nodeIndex.get(nodeId) as ImageNode | undefined
     if (controlMode === 'guide' || controlMode === 'select') {
       setSelectedImageIds([nodeId])
-      emitter.emit('image:select', { node })
+      emitter.emit('image:select', { node: node! })
     }
   }, [controlMode, nodeId, setSelectedImageIds])
 

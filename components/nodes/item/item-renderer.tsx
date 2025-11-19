@@ -33,7 +33,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         nodeSize: node?.size,
         isPreview: node?.editor?.preview === true,
         levelId: state.getLevelId(node!),
-        canPlace: 'canPlace' in (node || {}) ? node?.canPlace !== false : true,
+        canPlace: node?.editor?.canPlace !== false,
         nodePosition: node?.position,
         nodeRotation: node?.rotation,
         nodeCategory: node?.category,
@@ -50,7 +50,12 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
 
   // Default box geometry for items without a model (scaled by TILE_SIZE for grid visualization)
   const boxGeometry = useMemo(
-    () => new THREE.BoxGeometry(nodeSize[0] * TILE_SIZE, 0.8, nodeSize[1] * TILE_SIZE),
+    () =>
+      new THREE.BoxGeometry(
+        (nodeSize?.[0] ?? 0) * TILE_SIZE,
+        0.8,
+        (nodeSize?.[1] ?? 0) * TILE_SIZE,
+      ),
     [nodeSize],
   )
 
@@ -104,11 +109,11 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         >
           <Gltf
             castShadow
-            position={[nodePosition[0], 0, nodePosition[1]]}
+            position={[nodePosition?.[0] ?? 0, 0, nodePosition?.[1] ?? 0]}
             receiveShadow
             rotation={nodeRotation}
             scale={nodeScale || [1, 1, 1]}
-            src={nodeSrc}
+            src={nodeSrc ?? ''}
           />
         </Suspense>
       </ErrorBoundary>

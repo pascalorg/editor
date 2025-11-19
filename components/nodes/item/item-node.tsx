@@ -7,7 +7,6 @@ import { ItemRenderer } from '@/components/nodes/item/item-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { LevelNode } from '@/lib/scenegraph/schema/index'
 
 // ============================================================================
 // ITEM RENDERER PROPS SCHEMA
