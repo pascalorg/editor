@@ -3,23 +3,31 @@
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { is } from 'zod/v4/locales'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { WindowNode } from '@/lib/scenegraph/schema/index'
 
 interface WindowRendererProps {
-  node: WindowNode
+  nodeId: WindowNode['id']
 }
 
-export const WindowRenderer = memo(({ node }: WindowRendererProps) => {
-  const getLevelId = useEditor((state) => state.getLevelId)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+export const WindowRenderer = memo(({ nodeId }: WindowRendererProps) => {
   const windowRef = useRef<THREE.Group>(null)
 
-  const isPreview = node.editor?.preview === true
-  const canPlace = node.editor?.canPlace !== false
+  const { isPreview, selectedFloorId, canPlace, levelId } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as WindowNode | undefined
+      return {
+        selectedFloorId: state.selectedFloorId,
+        isPreview: node?.editor?.preview === true,
+        canPlace: 'canPlace' in (node || {}) ? node?.canPlace !== false : true,
+        levelId: state.getLevelId(node!),
+      }
+    }),
+  )
 
-  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
   const opacity = isActiveFloor ? 1 : 0.3
 

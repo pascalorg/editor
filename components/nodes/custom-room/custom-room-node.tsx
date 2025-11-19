@@ -3,7 +3,6 @@
 import { Pentagon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
-import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor, WallNode } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
@@ -348,5 +347,5 @@ registerComponent({
   toolIcon: Pentagon,
   rendererPropsSchema: CustomRoomRendererPropsSchema,
   nodeEditor: CustomRoomNodeEditor,
-  nodeRenderer: GroupRenderer,
+  nodeRenderer: null,
 })

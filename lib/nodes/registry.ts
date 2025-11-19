@@ -1,6 +1,6 @@
 import type React from 'react'
 import { z } from 'zod'
-import type { BaseNode } from './types'
+import type { BaseNode } from '../scenegraph/schema'
 
 // ============================================================================
 // COMPONENT CONFIG SCHEMA & TYPES
@@ -148,7 +148,7 @@ export function registerComponent(config: ComponentConfig): void {
 /**
  * Get renderer component for a node type
  */
-export function getRenderer(nodeType: string): React.FC<{ node: BaseNode }> | undefined {
+export function getRenderer(nodeType: string): React.FC<{ nodeId: BaseNode['id'] }> | undefined {
   const entry = componentRegistry.get(nodeType)
   return entry?.config.nodeRenderer
 }

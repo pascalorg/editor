@@ -13,7 +13,7 @@ export const nodeType = <T extends string>(type: T) => z.literal(type).default(t
 
 export const BaseNode = z.object({
   object: z.literal('node').default('node'),
-  id: nodeId('node'),
+  id: z.string(), // nodeId('node'), @Aymericr: Thing is if we specify nodeId here, when using BaseNode.extend, TS complains that the id is not assignable to the more specific type in the extended node
   type: nodeType('node'),
   name: z.string().optional(),
   parentId: z.string().nullable().default(null),

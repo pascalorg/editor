@@ -3,7 +3,6 @@
 import { BoxSelect } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
-import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
@@ -305,5 +304,5 @@ registerComponent({
   toolIcon: BoxSelect,
   rendererPropsSchema: RoomRendererPropsSchema,
   nodeEditor: RoomNodeEditor,
-  nodeRenderer: GroupRenderer,
+  nodeRenderer: null,
 })

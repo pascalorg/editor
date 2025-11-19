@@ -3,6 +3,7 @@
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
@@ -12,23 +13,32 @@ import type { LevelNode, WindowNode } from '@/lib/scenegraph/schema/index'
 import { LevelNodeEditor } from './level-node'
 
 interface LevelRendererProps {
-  node: LevelNode
+  nodeId: LevelNode['id']
 }
 
 const showGrid = true // Todo: make configurable
 
-export const LevelRenderer = memo(({ node }: LevelRendererProps) => {
+export const LevelRenderer = memo(({ nodeId }: LevelRendererProps) => {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
-  const isActiveFloor = selectedFloorId === node.id
+  const isActiveFloor = selectedFloorId === nodeId
   const { fadeDistance, fadeStrength } = useGridFadeControls()
+
+  const { nodeLevel } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as LevelNode | undefined
+      return {
+        nodeLevel: node?.level,
+      }
+    }),
+  )
 
   return (
     <>
       {isActiveFloor && <LevelNodeEditor />}
       {showGrid && (
         <group raycast={() => null}>
-          {node.level === 0 ? (
+          {nodeLevel === 0 ? (
             // Base level: show infinite grid
             isActiveFloor ? (
               <InfiniteGrid
@@ -56,7 +66,7 @@ export const LevelRenderer = memo(({ node }: LevelRendererProps) => {
                 <ProximityGrid
                   components={[]} // TODO: Migrate to use node tree
                   fadeWidth={0.5}
-                  floorId={node.id}
+                  floorId={nodeId}
                   gridSize={TILE_SIZE}
                   lineColor="#ffffff"
                   lineWidth={1.0}
@@ -71,7 +81,7 @@ export const LevelRenderer = memo(({ node }: LevelRendererProps) => {
                 <ProximityGrid
                   components={[]} // TODO: Migrate to use node tree
                   fadeWidth={0.5}
-                  floorId={node.id}
+                  floorId={nodeId}
                   gridSize={TILE_SIZE}
                   lineColor="#ffffff"
                   lineWidth={1.0}

@@ -4,7 +4,7 @@ import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 // Minimum level height (in meters)
-const MIN_LEVEL_HEIGHT = 2.5
+const MIN_LEVEL_HEIGHT = WALL_HEIGHT
 
 /**
  * Gets the height of a node based on its type
@@ -84,7 +84,7 @@ export class LevelHeightProcessor implements NodeProcessor {
       })
 
       // Use minimum level height if no children or all children have zero height
-      const levelHeight = maxHeight > 0 ? maxHeight : MIN_LEVEL_HEIGHT
+      const levelHeight = Math.max(maxHeight, MIN_LEVEL_HEIGHT)
 
       results.push({
         nodeId: level.id,

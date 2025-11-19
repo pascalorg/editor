@@ -103,7 +103,7 @@ export default function Viewer({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <NodeRenderer node={building} />
+          <NodeRenderer nodeId={building.id} />
         </group>
 
         <ViewerCustomControls />

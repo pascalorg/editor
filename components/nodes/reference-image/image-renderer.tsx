@@ -3,6 +3,7 @@
 import { useTexture } from '@react-three/drei'
 import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useImageManipulation } from '@/components/nodes/reference-image/reference-image-node'
 import { useEditor } from '@/hooks/use-editor'
@@ -32,12 +33,20 @@ const ROTATION_HIT_SCALE = 2
 const SCALE_HIT_SCALE = 1.5
 
 interface ImageRendererProps {
-  node: ReferenceImageNode
+  nodeId: ReferenceImageNode['id']
 }
 
-export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
+export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
-  const texture = useTexture(node.url)
+  const { nodeUrl } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as ReferenceImageNode | undefined
+      return {
+        nodeUrl: node?.url,
+      }
+    }),
+  )
+  const texture = useTexture(nodeUrl || '')
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
@@ -45,7 +54,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
   const movingCamera = useEditor((state) => state.movingCamera)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
 
-  const isSelected = selectedImageIds.includes(node.id)
+  const isSelected = selectedImageIds.includes(nodeId)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -58,7 +67,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
     handleTranslateXZDown,
     handleRotationDown,
     handleScaleDown,
-  } = useImageManipulation(node, groupRef, setActiveHandle)
+  } = useImageManipulation(nodeId, groupRef, setActiveHandle)
 
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)

@@ -3,6 +3,7 @@
 import { useGLTF } from '@react-three/drei'
 import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useScanManipulation } from '@/components/nodes/scan/scan-node'
 import { useEditor } from '@/hooks/use-editor'
@@ -30,12 +31,26 @@ const ROTATION_HIT_SCALE = 2
 const SCALE_HIT_SCALE = 1.5
 
 interface ScanRendererProps {
-  node: ScanNode
+  nodeId: ScanNode['id']
 }
 
-export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
+export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
-  const { scene } = useGLTF(node.url)
+
+  const { nodeUrl, levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as ScanNode | undefined
+      return {
+        nodeUrl: node?.url,
+        levelId: state.getLevelId(node!),
+        nodeOpacity: node?.opacity,
+        nodePosition: node?.position || [0, 0],
+        nodeRotation: node?.rotation || [0, 0, 0],
+        nodeScale: node?.scale || 1,
+      }
+    }),
+  )
+  const { scene } = useGLTF(nodeUrl || '')
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
@@ -43,7 +58,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
   const movingCamera = useEditor((state) => state.movingCamera)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
 
-  const isSelected = selectedScanIds.includes(node.id)
+  const isSelected = selectedScanIds.includes(nodeId)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -57,7 +72,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
     handleRotationDown,
     handleTranslateYDown,
     handleScaleDown,
-  } = useScanManipulation(node, groupRef, setActiveHandle)
+  } = useScanManipulation(nodeId, groupRef, setActiveHandle)
 
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
@@ -65,7 +80,6 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
     const building = state.scene.root.buildings?.[0]
     return building ? building.children : []
   })
-  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
   const levelNumber = level?.level ?? 0
 
@@ -78,13 +92,12 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
     cloned.traverse((child: any) => {
       if (child.isMesh && child.material) {
         child.material = child.material.clone()
-        child.material.transparent = (node.opacity ?? 100) < 100
-        child.material.opacity = (node.opacity ?? 100) / 100
+        child.material.transparent = (nodeOpacity ?? 100) < 100
+        child.material.opacity = (nodeOpacity ?? 100) / 100
       }
     })
     return cloned
-  }, [scene, node.opacity])
-
+  }, [scene, nodeOpacity])
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
@@ -141,18 +154,18 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
 
   // Convert grid position to world position
   const [worldX, worldZ] = useMemo(
-    () => [node.position[0] * TILE_SIZE, node.position[1] * TILE_SIZE],
-    [node.position],
+    () => [nodePosition[0] * TILE_SIZE, nodePosition[1] * TILE_SIZE],
+    [nodePosition],
   )
 
   return (
     <group
-      position={[worldX, levelNumber * FLOOR_SPACING + 0.001 + (node.position[2] || 0), worldZ]}
+      position={[worldX, levelNumber * FLOOR_SPACING + 0.001 + (nodePosition[2] || 0), worldZ]}
       ref={groupRef}
-      rotation={[0, (node.rotation[1] * Math.PI) / 180, 0]}
+      rotation={[0, (nodeRotation[1] * Math.PI) / 180, 0]}
     >
       {/* The 3D scan model */}
-      <group scale={node.scale}>
+      <group scale={nodeScale}>
         <primitive
           object={clonedScene}
           onPointerDown={(e: any) => {
@@ -302,7 +315,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
           </group>
 
           {/* Rotation handles at corners - Cyan curved arrows around Y axis */}
-          <group position={[(bboxSize.x * node.scale) / 2, 0, (bboxSize.z * node.scale) / 2]}>
+          <group position={[(bboxSize.x * nodeScale) / 2, 0, (bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -323,7 +336,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * node.scale) / 2, 0, (bboxSize.z * node.scale) / 2]}>
+          <group position={[-(bboxSize.x * nodeScale) / 2, 0, (bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -344,7 +357,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * node.scale) / 2, 0, -(bboxSize.z * node.scale) / 2]}>
+          <group position={[-(bboxSize.x * nodeScale) / 2, 0, -(bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -365,7 +378,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#44ffff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[(bboxSize.x * node.scale) / 2, 0, -(bboxSize.z * node.scale) / 2]}>
+          <group position={[(bboxSize.x * nodeScale) / 2, 0, -(bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -388,7 +401,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
           </group>
 
           {/* Scale handles at edge midpoints - Yellow cones pointing outward */}
-          <group position={[(bboxSize.x * node.scale) / 2, 0, 0]}>
+          <group position={[(bboxSize.x * nodeScale) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -405,7 +418,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[-(bboxSize.x * node.scale) / 2, 0, 0]}>
+          <group position={[-(bboxSize.x * nodeScale) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -422,7 +435,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, (bboxSize.z * node.scale) / 2]}>
+          <group position={[0, 0, (bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -439,7 +452,7 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, -(bboxSize.z * node.scale) / 2]}>
+          <group position={[0, 0, -(bboxSize.z * nodeScale) / 2]}>
             <mesh
               onPointerDown={handleScaleDown}
               onPointerEnter={() => setHoveredHandle('scale')}

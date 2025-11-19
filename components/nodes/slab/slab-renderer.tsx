@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { FloorNode } from '@/lib/scenegraph/schema/index'
@@ -10,25 +11,29 @@ import { WALL_THICKNESS } from '../wall/wall-renderer'
 export const SLAB_THICKNESS = 0.2 // 20cm thickness
 
 interface SlabRendererProps {
-  node: FloorNode
+  nodeId: FloorNode['id']
 }
 
 const SLAB_SPILLOVER = WALL_THICKNESS
 
-export function SlabRenderer({ node }: SlabRendererProps) {
+export function SlabRenderer({ nodeId }: SlabRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
-  // Check if this is a preview node
-  const isPreview = node.editor?.preview === true
-
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
+  const { nodeSize, isPreview, levelId, canPlace } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as FloorNode | undefined
+      return {
+        nodeSize: node?.size,
+        isPreview: node?.editor?.preview === true,
+        levelId: state.getLevelId(node!),
+        canPlace: 'canPlace' in (node || {}) ? node?.canPlace !== false : true,
+      }
+    }),
+  )
 
   // Create box geometry for the slab
-  const [width, depth] = node.size
+  const [width, depth] = nodeSize || [0, 0]
   const slabGeometry = useMemo(
     () =>
       new THREE.BoxGeometry(
@@ -53,7 +58,6 @@ export function SlabRenderer({ node }: SlabRendererProps) {
   const zOffset = (depth * TILE_SIZE) / 2
 
   // Check if this preview can be placed
-  const canPlace = 'canPlace' in node ? node.canPlace !== false : true
   const previewColor = canPlace ? '#44ff44' : '#ff4444'
   const previewEmissive = canPlace ? '#22aa22' : '#aa2222'
 

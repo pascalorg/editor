@@ -3,27 +3,29 @@
 import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import type { DoorNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE } from '../../editor'
 
 interface DoorRendererProps {
-  node: DoorNode
+  nodeId: DoorNode['id']
 }
 
-export const DoorRenderer = memo(({ node }: DoorRendererProps) => {
-  const getLevelId = useEditor((state) => state.getLevelId)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+export const DoorRenderer = memo(({ nodeId }: DoorRendererProps) => {
   const doorRef = useRef<THREE.Group>(null)
 
-  // Check if this is a preview node
-  const isPreview = node.editor?.preview === true
-  const canPlace = node.editor?.canPlace !== false
-
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
+  const { isPreview, canPlace, levelId, selectedFloorId } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as DoorNode | undefined
+      return {
+        isPreview: node?.editor?.preview === true,
+        canPlace: node?.editor?.canPlace !== false,
+        levelId: state.getLevelId(node!),
+        selectedFloorId: state.selectedFloorId,
+      }
+    }),
+  )
 
   // Determine opacity based on selected floor
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId

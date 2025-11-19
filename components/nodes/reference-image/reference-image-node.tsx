@@ -5,6 +5,7 @@ import { Image } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { z } from 'zod'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
@@ -105,7 +106,7 @@ export function ReferenceImageNodeEditor() {
  * Provides all the pointer event handlers for transforming reference images
  */
 export function useImageManipulation(
-  node: ReferenceImageNode,
+  nodeId: ReferenceImageNode['id'],
   groupRef: RefObject<THREE.Group | null>,
   setActiveHandle?: (handleId: string | null) => void,
 ) {
@@ -114,12 +115,23 @@ export function useImageManipulation(
   const controlMode = useEditor((state) => state.controlMode)
   const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
 
+  const { nodeRotationY, nodeScale } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId!) as ReferenceImageNode | undefined
+      return {
+        nodeRotationY: node?.rotationY || 0,
+        nodeScale: node?.scale || 1,
+      }
+    }),
+  )
+
   const handleSelect = useCallback(() => {
+    const node = useEditor.getState().nodeIndex.get(nodeId) as ReferenceImageNode | undefined
     if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedImageIds([node.id])
+      setSelectedImageIds([nodeId])
       emitter.emit('image:select', { node })
     }
-  }, [controlMode, node, setSelectedImageIds])
+  }, [controlMode, nodeId, setSelectedImageIds])
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'y') => (e: any) => {
@@ -130,7 +142,7 @@ export function useImageManipulation(
 
       const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
       setActiveHandle?.(handleId)
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('image:manipulation-start', { nodeId })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -168,7 +180,7 @@ export function useImageManipulation(
 
         lastPosition = [finalX, finalZ]
         emitter.emit('image:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { position: lastPosition },
           pushToUndo: false,
         })
@@ -180,18 +192,18 @@ export function useImageManipulation(
         setActiveHandle?.(null)
         if (lastPosition) {
           emitter.emit('image:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('image:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleTranslateXZDown = useCallback(
@@ -202,7 +214,7 @@ export function useImageManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('translate-xz')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('image:manipulation-start', { nodeId })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -232,7 +244,7 @@ export function useImageManipulation(
 
         lastPosition = [finalX, finalZ]
         emitter.emit('image:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { position: lastPosition },
           pushToUndo: false,
         })
@@ -244,18 +256,18 @@ export function useImageManipulation(
         setActiveHandle?.(null)
         if (lastPosition) {
           emitter.emit('image:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('image:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleRotationDown = useCallback(
@@ -266,7 +278,7 @@ export function useImageManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('rotation')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('image:manipulation-start', { nodeId })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -276,7 +288,7 @@ export function useImageManipulation(
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialVector = initialMouse.clone().sub(center)
       const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-      const initialRotation = node.rotationY
+      const initialRotation = nodeRotationY
       let lastRotation: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -298,7 +310,7 @@ export function useImageManipulation(
 
         lastRotation = newRotation
         emitter.emit('image:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { rotation: lastRotation },
           pushToUndo: false,
         })
@@ -310,18 +322,18 @@ export function useImageManipulation(
         setActiveHandle?.(null)
         if (lastRotation !== null) {
           emitter.emit('image:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { rotation: lastRotation },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('image:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.rotationY, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodeRotationY, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleScaleDown = useCallback(
@@ -332,7 +344,7 @@ export function useImageManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('scale')
-      emitter.emit('image:manipulation-start', { nodeId: node.id })
+      emitter.emit('image:manipulation-start', { nodeId })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -341,7 +353,7 @@ export function useImageManipulation(
       raycaster.setFromCamera(e.pointer, camera)
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialDist = center.distanceTo(initialMouse)
-      const initialScale = node.scale
+      const initialScale = nodeScale
       const getLocalDir = () => {
         switch (edge) {
           case 'right':
@@ -383,7 +395,7 @@ export function useImageManipulation(
 
         lastScale = Math.max(0.1, newScale)
         emitter.emit('image:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { scale: lastScale },
           pushToUndo: false,
         })
@@ -395,18 +407,18 @@ export function useImageManipulation(
         setActiveHandle?.(null)
         if (lastScale !== null) {
           emitter.emit('image:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { scale: lastScale },
             pushToUndo: true,
           })
         }
-        emitter.emit('image:manipulation-end', { nodeId: node.id })
+        emitter.emit('image:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.scale, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodeScale, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   return {

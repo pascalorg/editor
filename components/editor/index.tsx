@@ -12,6 +12,7 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
+import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,8 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 export default function Editor({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
   const cameraMode = useEditor((state) => state.cameraMode)
-  const building = useEditor((state) => state.scene.root.buildings?.[0])
+  const rootId = useEditor(useShallow((state) => state.scene.root.buildings?.[0].id))
+
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
 
   // Clear cursor position when switching floors to prevent grid artifacts
@@ -77,7 +79,7 @@ export default function Editor({ className }: { className?: string }) {
 
       {/* Loop through all floors and render grid + walls for each */}
       <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-        <NodeRenderer node={building} />
+        <NodeRenderer nodeId={rootId} />
       </group>
 
       {controlMode === 'select' && <SelectionManager />}
