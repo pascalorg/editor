@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE, WALL_HEIGHT } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { RoofNode } from '@/lib/nodes/types'
+import type { RoofNode } from '@/lib/scenegraph/schema/index'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -112,7 +112,7 @@ export function RoofRenderer({
   const { camera, gl } = useThree()
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
+  const isPreview = node.editor?.preview === true
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)

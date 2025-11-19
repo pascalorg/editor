@@ -112,7 +112,7 @@ export function WallNodeEditor() {
             end: { x, z: y },
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
+            editor: { preview: true },
             children: [],
           } as any,
           selectedFloorId,
@@ -125,7 +125,7 @@ export function WallNodeEditor() {
 
         if (previewWallId) {
           // Commit the preview by setting preview: false (useEditor handles the conversion)
-          updateNode(previewWallId, { preview: false })
+          updateNode(previewWallId, { editor: { preview: false } })
         }
 
         // Reset state
@@ -161,8 +161,8 @@ export function WallNodeEditor() {
           updateNode(previewWallId, {
             size: [length, 0.2] as [number, number],
             rotation,
-            start: { x: x1, z: y1 },
-            end: { x: x2, z: y2 },
+            start: [x1, y1],
+            end: [x2, y2],
           })
         }
       }

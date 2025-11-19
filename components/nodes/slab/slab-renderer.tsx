@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { SlabNode } from '@/lib/nodes/types'
+import type { SlabNode } from '@/lib/scenegraph/schema/index'
 import { WALL_THICKNESS } from '../wall/wall-renderer'
 
 export const SLAB_THICKNESS = 0.2 // 20cm thickness

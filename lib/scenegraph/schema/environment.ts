@@ -1,9 +1,10 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { nodeId, nodeType } from '../base'
+import { nodeId, nodeType } from './base'
 
 export const EnvironmentNode = z
   .object({
+    object: z.literal('environment').default('environment'),
     id: nodeId('environment'),
     type: nodeType('environment'),
     latitude: z.number().default(0), // degrees

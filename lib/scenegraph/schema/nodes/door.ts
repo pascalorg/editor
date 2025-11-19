@@ -7,7 +7,7 @@ export const DoorNode = BaseNode.extend({
   id: nodeId('door'),
   type: nodeType('door'),
   // Position is in local coordinate system of the wall
-  position: z.number(),
+  position: z.tuple([z.number(), z.number()]), // x along wall from wall start point, y vertical position
 }).describe(
   dedent`
   Door node - used to represent a door in the wall:

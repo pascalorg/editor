@@ -33,12 +33,12 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 export default function Editor({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
   const cameraMode = useEditor((state) => state.cameraMode)
-  const building = useEditor((state) => state.root.children[0])
+  const building = useEditor((state) => state.scene.root.buildings?.[0])
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
 
   // Clear cursor position when switching floors to prevent grid artifacts
   useEffect(() => {
-    setPointerPosition(null)
+    setPointerPosition?.(null)
   }, [setPointerPosition])
 
   useKeyboard()
@@ -54,7 +54,7 @@ export default function Editor({ className }: { className?: string }) {
 
       {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
       <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
-      <Gltf position={[0, 0, 0]} scale={0.09} src="/models/Human.glb" />
+      <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
       {/* Lighting setup with shadows */}
       <ambientLight intensity={0.1} />
       <directionalLight

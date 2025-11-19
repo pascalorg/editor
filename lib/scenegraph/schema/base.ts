@@ -12,6 +12,7 @@ export const nodeId = <T extends string>(prefix: T) => {
 export const nodeType = <T extends string>(type: T) => z.literal(type).default(type)
 
 export const BaseNode = z.object({
+  object: z.literal('node').default('node'),
   id: nodeId('node'),
   type: nodeType('node'),
   name: z.string().optional(),

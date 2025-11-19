@@ -1,6 +1,6 @@
 'use client'
 
-import { Circle } from 'lucide-react'
+import { CylinderIcon } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
@@ -35,7 +35,10 @@ export function ColumnNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const levels = useEditor((state) => {
+    const building = state.scene.root.buildings[0]
+    return building ? building.children : []
+  })
 
   // Use ref to persist preview state across renders without triggering re-renders
   const previewStateRef = useRef<{
@@ -61,7 +64,7 @@ export function ColumnNodeEditor() {
           child.type === 'column' &&
           (child as any).position[0] === x &&
           (child as any).position[1] === y &&
-          !child.preview,
+          !child.editor?.preview,
       )
 
       if (!existingColumn) {
@@ -101,7 +104,7 @@ export function ColumnNodeEditor() {
             child.type === 'column' &&
             (child as any).position[0] === x &&
             (child as any).position[1] === y &&
-            !child.preview,
+            !child.editor?.preview,
         )
 
         if (existingColumn) {
@@ -164,7 +167,7 @@ registerComponent({
   nodeName: 'Column',
   editorMode: 'building',
   toolName: 'column',
-  toolIcon: Circle,
+  toolIcon: CylinderIcon,
   rendererPropsSchema: ColumnRendererPropsSchema,
   nodeEditor: ColumnNodeEditor,
   nodeRenderer: ColumnRenderer,

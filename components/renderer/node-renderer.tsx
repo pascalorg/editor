@@ -2,12 +2,12 @@ import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
-import type { BaseNode, GridItem, ReferenceImageNode, ScanNode } from '@/lib/nodes/types'
+import type { AnyNode, GridItem } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE } from '../editor'
 import { SelectionBox } from './selection-box'
 
 interface NodeRendererProps {
-  node: BaseNode
+  node: AnyNode
   isViewer?: boolean // Set to true when rendering in viewer mode
 }
 
@@ -67,37 +67,18 @@ export function NodeRenderer({ node, isViewer = false }: NodeRendererProps) {
         userData={{
           nodeId: node.id,
         }}
-        visible={node.visible}
+        visible={'visible' in node ? node.visible : true}
       >
         <group ref={groupRef}>
           {/* Use registry renderer if available, otherwise fallback to direct imports */}
-          {RegistryRenderer ? (
-            <RegistryRenderer node={node} />
-          ) : (
-            <>
-              {/* {node.type === 'group' && <GroupRenderer node={node} />} */}
-              {/* {node.type === 'wall' && <WallRenderer node={node as WallNode} />} */}
-              {/* {node.type === 'roof' && <RoofRenderer node={node as RoofNode} />} */}
-              {/* {node.type === 'column' && <ColumnRenderer node={node as ColumnNode} />} */}
-              {/* {node.type === 'slab' && <SlabRenderer node={node as SlabNode} />} */}
-              {/* {node.type === 'door' && <DoorRenderer node={node as DoorNode} />} */}
-              {/* {node.type === 'window' && <WindowRenderer node={node as WindowNode} />} */}
-              {/* {node.type === 'reference-image' && (
-                <ImageRenderer node={node as ReferenceImageNode} />
-              )}
-              {node.type === 'scan' && <ScanRenderer node={node as ScanNode} />} */}
-            </>
-          )}
-
-          {/* Selection outline for grid items */}
-          {/* {(node as unknown as GridItem).size && isSelected && (
-        <SelectionOutline gridItem={node as unknown as GridItem} />
-      )} */}
+          {RegistryRenderer && <RegistryRenderer node={node} />}
 
           {/* Recursively render children INSIDE parent group - children use relative positions */}
-          {node.children.map((childNode) => (
-            <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
-          ))}
+          {'children' in node &&
+            Array.isArray(node.children) &&
+            node.children.map((childNode: AnyNode) => (
+              <NodeRenderer isViewer={isViewer} key={childNode.id} node={childNode} />
+            ))}
         </group>
         {isSelected && controlMode === 'select' && <SelectionBox group={groupRef} />}
       </group>

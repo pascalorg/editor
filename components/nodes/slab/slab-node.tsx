@@ -39,7 +39,7 @@ export function SlabNodeEditor() {
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.root.children[0]
+    const building = state.scene.root.buildings[0]
     return building ? building.children : []
   })
 
@@ -136,7 +136,7 @@ export function SlabNodeEditor() {
           updateNode(previewSlabId, {
             position: [slabX, slabY] as [number, number],
             size: [slabWidth, slabHeight] as [number, number],
-            canPlace,
+            editor: { canPlace },
           })
         }
       }

@@ -14,7 +14,7 @@
 
 import mitt from 'mitt'
 import type { BaseNode, ReferenceImageNode, WallNode } from '@/hooks/use-editor'
-import type { GridPoint } from '@/lib/nodes/types'
+import type { GridPoint } from '@/lib/scenegraph/schema/index'
 
 export interface GridEvent {
   position: [number, number]

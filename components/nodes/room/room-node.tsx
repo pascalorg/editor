@@ -39,7 +39,10 @@ export function RoomNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const levels = useEditor((state) => {
+    const building = state.scene.root.buildings[0]
+    return building ? building.children : []
+  })
 
   // Use ref to persist values across renders without triggering re-renders
   const roomStateRef = useRef<{
@@ -102,7 +105,7 @@ export function RoomNodeEditor() {
                 end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
               // Right wall (relative position [0, 0])
@@ -117,7 +120,7 @@ export function RoomNodeEditor() {
                 end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
               // Top wall (relative position [0, 0])
@@ -132,7 +135,7 @@ export function RoomNodeEditor() {
                 end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
               // Left wall (relative position [0, 0])
@@ -147,7 +150,7 @@ export function RoomNodeEditor() {
                 end: { x: 0, z: 0 },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
             ],
@@ -176,7 +179,7 @@ export function RoomNodeEditor() {
             deleteNode(previewRoomId)
           } else {
             // Room is valid, commit the preview by setting preview: false
-            updateNode(previewRoomId, { preview: false })
+            updateNode(previewRoomId, { editor: { preview: false } })
           }
         }
 
@@ -217,7 +220,7 @@ export function RoomNodeEditor() {
           updateNode(previewRoomId, {
             position: [roomX, roomY] as [number, number],
             size: [roomWidth, roomHeight] as [number, number],
-            canPlace,
+            editor: { canPlace },
           })
 
           // Get the room node and update its walls with RELATIVE positions
@@ -234,9 +237,9 @@ export function RoomNodeEditor() {
               position: [0, 0] as [number, number], // RELATIVE to room
               size: [roomWidth, 0.2] as [number, number],
               rotation: bottomRotation,
-              start: { x: 0, z: 0 }, // RELATIVE to room
-              end: { x: roomWidth, z: 0 },
-              canPlace,
+              start: [0, 0], // RELATIVE to room
+              end: [roomWidth, 0],
+              editor: { canPlace },
             })
 
             // Right wall: (roomWidth,0) -> (roomWidth,roomHeight) - vertical, going up
@@ -245,9 +248,9 @@ export function RoomNodeEditor() {
               position: [roomWidth, 0] as [number, number], // RELATIVE to room
               size: [roomHeight, 0.2] as [number, number],
               rotation: rightRotation,
-              start: { x: roomWidth, z: 0 }, // RELATIVE to room
-              end: { x: roomWidth, z: roomHeight },
-              canPlace,
+              start: [roomWidth, 0], // RELATIVE to room
+              end: [roomWidth, roomHeight],
+              editor: { canPlace },
             })
 
             // Top wall: (roomWidth,roomHeight) -> (0,roomHeight) - horizontal, going left
@@ -256,9 +259,9 @@ export function RoomNodeEditor() {
               position: [roomWidth, roomHeight] as [number, number], // RELATIVE to room
               size: [roomWidth, 0.2] as [number, number],
               rotation: topRotation,
-              start: { x: roomWidth, z: roomHeight }, // RELATIVE to room
-              end: { x: 0, z: roomHeight },
-              canPlace,
+              start: [roomWidth, roomHeight], // RELATIVE to room
+              end: [0, roomHeight],
+              editor: { canPlace },
             })
 
             // Left wall: (0,roomHeight) -> (0,0) - vertical, going down
@@ -267,9 +270,9 @@ export function RoomNodeEditor() {
               position: [0, roomHeight] as [number, number], // RELATIVE to room
               size: [roomHeight, 0.2] as [number, number],
               rotation: leftRotation,
-              start: { x: 0, z: roomHeight }, // RELATIVE to room
-              end: { x: 0, z: 0 },
-              canPlace,
+              start: [0, roomHeight], // RELATIVE to room
+              end: [0, 0],
+              editor: { canPlace },
             })
           }
         }

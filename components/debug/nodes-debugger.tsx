@@ -1,23 +1,7 @@
 'use client'
 
 import { CylinderIcon, TreeViewIcon } from '@phosphor-icons/react'
-import {
-  AppWindow,
-  Box,
-  Bug,
-  Building2,
-  Copy,
-  DoorOpen,
-  Eye,
-  EyeOff,
-  Group,
-  Image as ImageIcon,
-  Layers,
-  Maximize2,
-  Minimize2,
-  Square,
-  Triangle,
-} from 'lucide-react'
+import { Bug, Building2, Copy, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   TreeExpander,
@@ -32,7 +16,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useEditor } from '@/hooks/use-editor'
-import type { BaseNode } from '@/lib/nodes/types'
+import { componentRegistry } from '@/lib/nodes/registry'
+import type { AnyNode } from '@/lib/scenegraph/schema/index'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'nodes-debugger-state'
@@ -78,41 +63,26 @@ function saveState(state: DebuggerState) {
   }
 }
 
-function getNodeIcon(node: BaseNode) {
-  switch (node.type) {
-    case 'level':
-      return Layers
-    case 'wall':
-      return Square
-    case 'roof':
-      return Triangle
-    case 'roof-segment':
-      return Triangle
-    case 'door':
-      return DoorOpen
-    case 'window':
-      return AppWindow
-    case 'column':
-      return CylinderIcon
-    case 'reference-image':
-      return ImageIcon
-    case 'scan':
-      return Box
-    case 'group':
-      return Group
-    default:
-      return Building2
+function getNodeIcon(node: AnyNode) {
+  // Try to get icon from registry first
+  const registered = componentRegistry.get(node.type)
+  if (registered?.config.toolIcon) {
+    return registered.config.toolIcon
   }
+
+  // Fallback for unregistered types
+  return Building2
 }
 
-function formatNodeLabel(node: BaseNode): string {
-  if (node.name) return node.name
+function formatNodeLabel(node: AnyNode): string {
+  if ('name' in node && node.name) return node.name
   return `${node.type} (${node.id.slice(0, 8)}...)`
 }
 
-function NodeTreeItem({ node, level, isLast }: { node: BaseNode; level: number; isLast: boolean }) {
+function NodeTreeItem({ node, level, isLast }: { node: AnyNode; level: number; isLast: boolean }) {
   const Icon = getNodeIcon(node)
-  const hasChildren = node.children.length > 0
+  const children = 'children' in node && Array.isArray(node.children) ? node.children : []
+  const hasChildren = children.length > 0
 
   return (
     <TreeNode isLast={isLast} level={level} nodeId={node.id}>
@@ -121,16 +91,18 @@ function NodeTreeItem({ node, level, isLast }: { node: BaseNode; level: number; 
         <TreeIcon hasChildren={hasChildren} icon={<Icon className="h-4 w-4" />} />
         <TreeLabel>{formatNodeLabel(node)}</TreeLabel>
         <div className="ml-auto flex items-center gap-1">
-          {node.visible === false && <EyeOff className="h-3 w-3 text-muted-foreground" />}
-          {node.opacity !== undefined && node.opacity !== 100 && (
+          {'visible' in node && node.visible === false && (
+            <EyeOff className="h-3 w-3 text-muted-foreground" />
+          )}
+          {'opacity' in node && node.opacity !== undefined && node.opacity !== 100 && (
             <span className="text-muted-foreground text-xs">{node.opacity}%</span>
           )}
         </div>
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={hasChildren}>
-        {node.children.map((child, index) => (
+        {children.map((child: AnyNode, index: number) => (
           <NodeTreeItem
-            isLast={index === node.children.length - 1}
+            isLast={index === children.length - 1}
             key={child.id}
             level={level + 1}
             node={child}
@@ -143,21 +115,7 @@ function NodeTreeItem({ node, level, isLast }: { node: BaseNode; level: number; 
 
 function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
   const node = useEditor((state) => (nodeId ? state.nodeIndex.get(nodeId) : undefined))
-  const nodeIndex = useEditor((state) => state.nodeIndex)
-  const {
-    selectFloor,
-    handleElementSelect,
-    setSelectedImageIds,
-    setSelectedScanIds,
-    toggleFloorVisibility,
-    toggleBuildingElementVisibility,
-    toggleImageVisibility,
-    toggleScanVisibility,
-    setFloorOpacity,
-    setBuildingElementOpacity,
-    setImageOpacity,
-    setScanOpacity,
-  } = useEditor()
+  const { toggleNodeVisibility, setNodeOpacity } = useEditor()
 
   const [copied, setCopied] = useState(false)
 
@@ -169,75 +127,13 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
     )
   }
 
-  const handleSelect = () => {
-    switch (node.type) {
-      case 'level':
-        selectFloor(node.id)
-        break
-      case 'wall':
-      case 'roof':
-      case 'column':
-        handleElementSelect(node.id, {})
-        break
-      case 'reference-image':
-        setSelectedImageIds([node.id])
-        break
-      case 'scan':
-        setSelectedScanIds([node.id])
-        break
-      default:
-        // For doors/windows, select their parent wall
-        if (node.parent) {
-          const parentNode = nodeIndex.get(node.parent)
-          if (parentNode?.type === 'wall') {
-            handleElementSelect(node.parent, {})
-          }
-        }
-    }
-  }
-
   const handleToggleVisibility = () => {
-    switch (node.type) {
-      case 'level':
-        toggleFloorVisibility(node.id)
-        break
-      case 'wall':
-      case 'roof':
-      case 'column':
-        toggleBuildingElementVisibility(node.id, node.type)
-        break
-      case 'reference-image':
-        toggleImageVisibility(node.id)
-        break
-      case 'scan':
-        toggleScanVisibility(node.id)
-        break
-      default:
-        // Visibility toggles for doors/windows handled by parent
-        break
-    }
+    toggleNodeVisibility(node.id)
   }
 
   const handleOpacityChange = (value: number[]) => {
     const opacity = value[0]
-    switch (node.type) {
-      case 'level':
-        setFloorOpacity(node.id, opacity)
-        break
-      case 'wall':
-      case 'roof':
-      case 'column':
-        setBuildingElementOpacity(node.id, node.type, opacity)
-        break
-      case 'reference-image':
-        setImageOpacity(node.id, opacity)
-        break
-      case 'scan':
-        setScanOpacity(node.id, opacity)
-        break
-      default:
-        break
-    }
+    setNodeOpacity(node.id, opacity)
   }
 
   const handleCopyId = () => {
@@ -252,21 +148,10 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const canToggleVisibility =
-    node.type === 'level' ||
-    node.type === 'wall' ||
-    node.type === 'roof' ||
-    node.type === 'column' ||
-    node.type === 'reference-image' ||
-    node.type === 'scan'
+  const canToggleVisibility = 'visible' in node
+  const canChangeOpacity = 'opacity' in node
 
-  const canChangeOpacity =
-    node.type === 'level' ||
-    node.type === 'wall' ||
-    node.type === 'roof' ||
-    node.type === 'column' ||
-    node.type === 'reference-image' ||
-    node.type === 'scan'
+  const parentId = (node as any).parent
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -284,10 +169,10 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
               <span className="text-muted-foreground">ID:</span>{' '}
               <code className="text-xs">{node.id}</code>
             </div>
-            {node.parent && (
+            {parentId && (
               <div>
                 <span className="text-muted-foreground">Parent:</span>{' '}
-                <code className="text-xs">{node.parent}</code>
+                <code className="text-xs">{parentId}</code>
               </div>
             )}
             {'position' in node && Array.isArray(node.position) && (
@@ -312,13 +197,13 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
                 </code>
               </div>
             )}
-            {typeof node.visible === 'boolean' && (
+            {'visible' in node && typeof node.visible === 'boolean' && (
               <div>
                 <span className="text-muted-foreground">Visible:</span>{' '}
                 <code className="text-xs">{node.visible ? 'true' : 'false'}</code>
               </div>
             )}
-            {typeof node.opacity === 'number' && (
+            {'opacity' in node && typeof node.opacity === 'number' && (
               <div>
                 <span className="text-muted-foreground">Opacity:</span>{' '}
                 <code className="text-xs">{node.opacity}%</code>
@@ -331,12 +216,9 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
         <div className="space-y-2">
           <h4 className="font-semibold text-sm">Actions</h4>
           <div className="flex flex-col gap-2">
-            <Button onClick={handleSelect} size="sm" variant="outline">
-              Select in App
-            </Button>
             {canToggleVisibility && (
               <Button onClick={handleToggleVisibility} size="sm" variant="outline">
-                {node.visible === false ? (
+                {'visible' in node && node.visible === false ? (
                   <>
                     <Eye className="mr-2 h-4 w-4" />
                     Show
@@ -357,7 +239,9 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
                   min={0}
                   onValueChange={handleOpacityChange}
                   step={1}
-                  value={[node.opacity ?? 100]}
+                  value={[
+                    'opacity' in node && typeof node.opacity === 'number' ? node.opacity : 100,
+                  ]}
                 />
               </div>
             )}
@@ -389,7 +273,6 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
 
 export function NodesDebugger() {
   const [state, setState] = useState<DebuggerState>(DEFAULT_STATE)
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [pointerId, setPointerId] = useState<number | null>(null)
@@ -397,13 +280,21 @@ export function NodesDebugger() {
   const dragRef = useRef<HTMLDivElement>(null)
 
   const levels = useEditor((state) => {
-    const building = state.root.children[0]
-    return building ? building.children : []
+    const building = state.scene.root.buildings?.[0]
+    return building && 'children' in building && Array.isArray(building.children)
+      ? building.children
+      : []
   })
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)
-  const { selectFloor, handleElementSelect, setSelectedImageIds, setSelectedScanIds, setDebug } =
-    useEditor()
+  const {
+    setDebug,
+    selectedElements,
+    selectedImageIds,
+    selectedScanIds,
+    selectedFloorId,
+    selectNode,
+  } = useEditor()
 
   // Load state from localStorage only on client
   useEffect(() => {
@@ -411,50 +302,27 @@ export function NodesDebugger() {
     setState(loadState())
   }, [])
 
-  // Sync selection when node is selected in tree
-  useEffect(() => {
-    if (!selectedNodeId) return
+  const activeSelectedIds = useMemo(() => {
+    if (selectedElements.length > 0) return selectedElements
+    if (selectedImageIds.length > 0) return selectedImageIds
+    if (selectedScanIds.length > 0) return selectedScanIds
+    if (selectedFloorId) return [selectedFloorId]
+    return []
+  }, [selectedElements, selectedImageIds, selectedScanIds, selectedFloorId])
 
-    const node = nodeIndex.get(selectedNodeId)
-    if (!node) return
+  const selectedNodeId = activeSelectedIds[0] ?? null
 
-    switch (node.type) {
-      case 'level':
-        selectFloor(node.id)
-        break
-      case 'wall':
-      case 'roof':
-      case 'column':
-        handleElementSelect(node.id, {})
-        break
-      case 'reference-image':
-        setSelectedImageIds([node.id])
-        break
-      case 'scan':
-        setSelectedScanIds([node.id])
-        break
-      default:
-        // For doors/windows, select their parent wall
-        if (node.parent) {
-          const parentNode = nodeIndex.get(node.parent)
-          if (parentNode?.type === 'wall') {
-            handleElementSelect(node.parent, {})
-          }
-        }
+  const handleNodeSelect = (ids: string[]) => {
+    const nodeId = ids[0]
+    if (nodeId) {
+      selectNode(nodeId)
     }
-  }, [
-    selectedNodeId,
-    nodeIndex,
-    selectFloor,
-    handleElementSelect,
-    setSelectedImageIds,
-    setSelectedScanIds,
-  ])
+  }
 
   // Default expand all levels
   const defaultExpandedIds = useMemo(() => {
     // Collect all level IDs (levels are only at root, not nested)
-    const levelIds = levels.map((level) => level.id)
+    const levelIds = levels.map((level: AnyNode) => level.id)
     // Merge with persisted expandedIds
     return [...new Set([...levelIds, ...state.expandedIds])]
   }, [levels, state.expandedIds])
@@ -525,7 +393,7 @@ export function NodesDebugger() {
   if (!state.isOpen) {
     return (
       <button
-        className="fixed right-4 bottom-4 z-9999 rounded-md bg-primary px-3 py-2 font-medium text-primary-foreground text-sm shadow-lg hover:bg-primary/90"
+        className="fixed right-4 bottom-4 z-50 rounded-md bg-primary px-3 py-2 font-medium text-primary-foreground text-sm shadow-lg hover:bg-primary/90"
         onClick={() => setState((prev) => ({ ...prev, isOpen: true }))}
         type="button"
       >
@@ -536,7 +404,7 @@ export function NodesDebugger() {
 
   return (
     <div
-      className="fixed z-9999 flex flex-col overflow-hidden rounded-lg border bg-background shadow-xl"
+      className="fixed z-50 flex flex-col overflow-hidden rounded-lg border bg-background shadow-xl"
       onPointerCancel={(e) => handleDragEnd(e)}
       onPointerMove={handleDrag}
       onPointerUp={(e) => handleDragEnd(e)}
@@ -629,11 +497,11 @@ export function NodesDebugger() {
             <TreeProvider
               defaultExpandedIds={defaultExpandedIds}
               onExpandedChange={(ids) => setState((prev) => ({ ...prev, expandedIds: ids }))}
-              onSelectionChange={(ids) => setSelectedNodeId(ids[0] ?? null)}
-              selectedIds={selectedNodeId ? [selectedNodeId] : []}
+              onSelectionChange={handleNodeSelect}
+              selectedIds={activeSelectedIds}
             >
               <TreeView>
-                {levels.map((level, index) => (
+                {levels.map((level: AnyNode, index: number) => (
                   <NodeTreeItem
                     isLast={index === levels.length - 1}
                     key={level.id}

@@ -6,7 +6,7 @@ import { ErrorBoundary } from 'react-error-boundary'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { ItemNode } from '@/lib/nodes/types'
+import type { ItemNode } from '@/lib/scenegraph/schema/index'
 
 interface ItemRendererProps {
   node: ItemNode

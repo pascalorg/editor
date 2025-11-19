@@ -4,7 +4,7 @@ import { Gltf, useGLTF } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { DoorNode } from '@/lib/nodes/types'
+import type { DoorNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE } from '../../editor'
 
 interface DoorRendererProps {

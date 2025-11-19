@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useScanManipulation } from '@/components/nodes/scan/scan-node'
 import { useEditor } from '@/hooks/use-editor'
-import type { ScanNode } from '@/lib/nodes/types'
+import type { ScanNode } from '@/lib/scenegraph/schema/index'
 
 const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles
@@ -61,7 +61,10 @@ export const ScanRenderer = memo(({ node }: ScanRendererProps) => {
 
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const levels = useEditor((state) => {
+    const building = state.scene.root.children[0]
+    return building ? building.children : []
+  })
   const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
   const levelNumber = level?.level ?? 0

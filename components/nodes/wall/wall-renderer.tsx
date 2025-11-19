@@ -8,8 +8,7 @@ import * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { useWalls } from '@/hooks/use-nodes'
-import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
-import { findAncestors } from '@/lib/nodes/utils'
+import type { AnyNode, GridItem, GridPoint, WallNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -165,14 +164,36 @@ function calculateJunctionIntersections(junction: Junction) {
 // --- End of Junction Helpers ---
 
 /**
+ * Find all ancestors of a node using the node index
+ */
+function findAncestors(nodeIndex: Map<string, AnyNode>, nodeId: string): AnyNode[] {
+  const ancestors: AnyNode[] = []
+  let current = nodeIndex.get(nodeId)
+  
+  // @ts-expect-error - parent property check
+  while (current?.parent) {
+    // @ts-expect-error
+    const parent = nodeIndex.get(current.parent)
+    if (parent) {
+      ancestors.push(parent)
+      current = parent
+    } else {
+      break
+    }
+  }
+  return ancestors
+}
+
+/**
  * Calculate the absolute world position of a node by traversing up through all parents
  * and accumulating position and rotation transforms
  */
 function calculateWorldPosition(
-  node: BaseNode & GridItem,
-  allLevels: BaseNode[],
+  node: AnyNode & GridItem,
+  nodeIndex: Map<string, AnyNode>,
 ): { position: [number, number]; rotation: number } {
   // If node doesn't have a parent property, it's at world root
+  // @ts-expect-error
   if (!node.parent) {
     return {
       position: node.position,
@@ -181,7 +202,7 @@ function calculateWorldPosition(
   }
 
   // Get all ancestors (from immediate parent up to root)
-  const ancestors = findAncestors(allLevels, node.id)
+  const ancestors = findAncestors(nodeIndex, node.id)
 
   // Start with the node's local position and rotation
   let worldX = node.position[0]
@@ -193,7 +214,7 @@ function calculateWorldPosition(
   for (const ancestor of ancestors) {
     // Check if ancestor has GridItem properties (position, rotation, size)
     if ('position' in ancestor && 'rotation' in ancestor && 'size' in ancestor) {
-      const parent = ancestor as BaseNode & GridItem
+      const parent = ancestor as AnyNode & GridItem
       const parentRotation = parent.rotation
       const parentPos = parent.position
 
@@ -225,17 +246,14 @@ interface WallRendererProps {
 export function WallRenderer({ node }: WallRendererProps) {
   const getLevelId = useEditor((state) => state.getLevelId)
   const debug = useEditor((state) => state.debug)
-  const allLevels = useEditor((state) => {
-    const building = state.root.children[0]
-    return building ? building.children : []
-  })
+  const nodeIndex = useEditor((state) => state.nodeIndex)
   const tileSize = TILE_SIZE
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
+  const isPreview = node.editor?.preview === true
 
   // Determine preview colors based on canPlace
-  const canPlaceWall = node.canPlace !== false // Default to true if undefined
+  const canPlaceWall = node.editor?.canPlace !== false // Default to true if undefined
   const previewColor = canPlaceWall ? '#44ff44' : '#ff4444'
   const previewEmissive = canPlaceWall ? '#22aa22' : '#aa2222'
   const previewLineDim = canPlaceWall ? '#336633' : '#663333'
@@ -275,7 +293,8 @@ export function WallRenderer({ node }: WallRendererProps) {
 
     // Calculate world space coordinates for junction detection
     // Now using calculateWorldPosition to account for parent transforms
-    const worldPos = calculateWorldPosition(node, allLevels)
+    // @ts-expect-error - intersection types
+    const worldPos = calculateWorldPosition(node, nodeIndex)
     const [x1, y1] = worldPos.position
     const worldRotation = worldPos.rotation
 
@@ -289,7 +308,8 @@ export function WallRenderer({ node }: WallRendererProps) {
     // Convert all walls to LiveWall format for junction calculation
     const liveWalls: LiveWall[] = allWalls.map((w) => {
       // Calculate world position for each wall
-      const wWorldPos = calculateWorldPosition(w, allLevels)
+      // @ts-expect-error - intersection types
+      const wWorldPos = calculateWorldPosition(w, nodeIndex)
       const [wx1, wy1] = wWorldPos.position
       const wWorldRotation = wWorldPos.rotation
       const wLength = w.size[0]
@@ -379,7 +399,7 @@ export function WallRenderer({ node }: WallRendererProps) {
     geometry.rotateX(-Math.PI / 2)
 
     return geometry
-  }, [node, allWalls, allLevels])
+  }, [node, allWalls, nodeIndex])
 
   // Determine opacity based on selected floor
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -561,7 +581,7 @@ export function WallRenderer({ node }: WallRendererProps) {
                       position-y={opening.type === 'window' ? 1.12 : 1}
                       position-z={opening.position[1] * tileSize}
                       scale={scale}
-                      showOperation={opening.preview}
+                      showOperation={opening.editor?.preview}
                     >
                       <boxGeometry />
                       <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />

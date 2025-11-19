@@ -1,18 +1,44 @@
 import { z } from 'zod'
+import type { EnvironmentNode } from './environment'
 import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
 import { DoorNode } from './nodes/door'
-import { EnvironmentNode } from './nodes/environment'
 import { FloorNode } from './nodes/floor'
 import { GroupNode } from './nodes/group'
+import { ImageNode } from './nodes/image'
 import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
 import { RoofNode } from './nodes/roof'
-import { RootNode } from './nodes/root'
-import { SiteNode } from './nodes/site'
+import { ScanNode } from './nodes/scan'
+import type { SiteNode } from './nodes/site'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
+import { RootNode } from './root'
+
+export * from '../common-types'
+export * from './base' // Export BaseNode
+export * from './environment'
+// Export all specific node types
+export * from './nodes/building'
+export * from './nodes/ceiling'
+export * from './nodes/column'
+export * from './nodes/door'
+export * from './nodes/floor'
+export * from './nodes/group'
+export * from './nodes/image'
+export * from './nodes/item'
+export * from './nodes/level'
+export * from './nodes/roof'
+export * from './nodes/scan'
+export * from './nodes/site'
+export * from './nodes/wall'
+export * from './nodes/window'
+export * from './root'
+
+// Alias for legacy compatibility if needed
+export type ReferenceImageNode = z.infer<typeof ImageNode>
+// ScanNode is already exported from ./nodes/scan
 
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),
@@ -35,9 +61,8 @@ export function loadScene(scene: unknown) {
   return result.data as Scene
 }
 
+// Nodes that should not be included in the AnyNode are: RootNode, EnvironmentNode, SiteNode
 export const AnyNode = z.discriminatedUnion('type', [
-  EnvironmentNode,
-  SiteNode,
   BuildingNode,
   LevelNode,
   WallNode,
@@ -49,13 +74,20 @@ export const AnyNode = z.discriminatedUnion('type', [
   ColumnNode,
   GroupNode,
   ItemNode,
+  ImageNode,
+  ScanNode,
 ])
 export type AnyNode = z.infer<typeof AnyNode>
 export type AnyNodeType = AnyNode['type']
 export type AnyNodeId = AnyNode['id']
 
+export type SceneNode = AnyNode | RootNode | EnvironmentNode | SiteNode
+export type SceneNodeId = SceneNode['id']
+export type SceneNodeType = SceneNode['type']
+
 // Type mapping for extracting specific node types
 export type NodeTypeMap = {
+  root: RootNode
   environment: z.infer<typeof EnvironmentNode>
   site: z.infer<typeof SiteNode>
   building: z.infer<typeof BuildingNode>
@@ -69,6 +101,8 @@ export type NodeTypeMap = {
   column: z.infer<typeof ColumnNode>
   group: z.infer<typeof GroupNode>
   item: z.infer<typeof ItemNode>
+  'reference-image': z.infer<typeof ImageNode>
+  scan: z.infer<typeof ScanNode>
 }
 
 export const loadNode = (node: unknown): AnyNode => {
@@ -79,98 +113,115 @@ export const loadNode = (node: unknown): AnyNode => {
   return result.data as AnyNode
 }
 export type byIdNodeIndex = {
-  id: AnyNodeId
-  type: AnyNodeType
+  id: SceneNodeId
+  type: SceneNodeType
   path: (string | number)[]
-  parent: AnyNodeId | null
-  children: AnyNodeId[]
+  parent: SceneNodeId | null
+  children: SceneNodeId[]
+  levelId: SceneNodeId | null
+  isPreview: boolean
 }
-export type SceneIndex = {
-  byId: Map<AnyNodeId, byIdNodeIndex>
-  byType: Map<AnyNodeType, Set<AnyNodeId>>
+export type SceneGraphIndex = {
+  byId: Map<SceneNodeId, byIdNodeIndex>
+  byType: Map<SceneNodeType, Set<SceneNodeId>>
+  byLevel: Map<SceneNodeId, Set<SceneNodeId>>
+  previewIds: Set<SceneNodeId>
 }
 /**
  * Check if a value looks like a node (has type and id properties)
  */
-function isNodeLike(value: unknown): value is AnyNode {
+function isNodeLike(value: unknown): value is SceneNode {
   return (
     typeof value === 'object' &&
     value !== null &&
+    (value as any).object === 'node' &&
     'type' in value &&
-    'id' in value &&
-    typeof value.type === 'string' &&
-    typeof value.id === 'string'
+    'id' in value
   )
 }
 
-export const buildSceneIndex = (scene: Scene): SceneIndex => {
-  const byId: SceneIndex['byId'] = new Map()
-  const byType: SceneIndex['byType'] = new Map()
+export const buildSceneGraphIndex = (scene: Scene): SceneGraphIndex => {
+  const byId: SceneGraphIndex['byId'] = new Map()
+  const byType: SceneGraphIndex['byType'] = new Map()
+  const byLevel: SceneGraphIndex['byLevel'] = new Map()
+  const previewIds: SceneGraphIndex['previewIds'] = new Set()
 
-  function visitNode(node: AnyNode, parentId: AnyNodeId | null, path: (string | number)[]) {
-    // Collect children by traversing all properties
-    const childIds: AnyNodeId[] = []
+  function ensureSet<K>(map: Map<K, Set<SceneNodeId>>, key: K) {
+    if (!map.has(key)) {
+      map.set(key, new Set())
+    }
+    return map.get(key)!
+  }
 
-    // Traverse all properties looking for nodes or arrays of nodes
-    for (const [key, value] of Object.entries(node)) {
-      // Skip metadata properties
-      if (key === 'id' || key === 'type') continue
+  function visitNode(
+    node: SceneNode,
+    parentId: SceneNodeId | null,
+    path: (string | number)[],
+    currentLevelId: SceneNodeId | null,
+  ) {
+    // Collect children
+    const childIds: SceneNodeId[] = []
+    const levelId = node.type === 'level' ? node.id : currentLevelId
+    const isPreview = Boolean((node as { editor?: { preview?: boolean } }).editor?.preview)
 
-      // Check if value is a node
-      if (isNodeLike(value)) {
-        childIds.push(value.id)
-        visitNode(value, node.id, [...path, key])
-      }
-      // Check if value is an array of nodes
-      else if (Array.isArray(value)) {
-        for (let i = 0; i < value.length; i++) {
-          const item = value[i]
-          if (isNodeLike(item)) {
-            childIds.push(item.id)
-            visitNode(item, node.id, [...path, key, i])
-          }
-        }
-      }
+    if (node.type === 'root') {
+      const root = node as RootNode
+
+      // Visit environment
+      childIds.push(root.environment.id)
+      visitNode(root.environment, node.id, [...path, 'environment'], levelId)
+
+      // Visit site
+      childIds.push(root.site.id)
+      visitNode(root.site, node.id, [...path, 'site'], levelId)
+
+      // Visit buildings
+      root.buildings.forEach((building, index) => {
+        childIds.push(building.id)
+        visitNode(building, node.id, [...path, 'buildings', index], levelId)
+      })
+    } else if (node.type !== 'environment' && 'children' in node && Array.isArray(node.children)) {
+      // AnyNode or SiteNode - verify children array
+      const children = node.children as SceneNode[]
+      children.forEach((child, index) => {
+        childIds.push(child.id)
+        visitNode(child, node.id, [...path, 'children', index], levelId)
+      })
     }
 
     // Index by id
-    byId.set(node.id, {
+    const meta: byIdNodeIndex = {
       id: node.id,
       type: node.type,
       path,
       parent: parentId,
       children: childIds,
-    })
+      levelId,
+      isPreview,
+    }
+    byId.set(node.id, meta)
+    if (levelId) {
+      ensureSet(byLevel, levelId).add(node.id)
+    }
+    if (isPreview) {
+      previewIds.add(node.id)
+    }
 
     // Index by type
-    if (!byType.has(node.type)) {
-      byType.set(node.type, new Set())
+    const type = node.type
+    if (!byType.has(type)) {
+      byType.set(type, new Set())
     }
-    byType.get(node.type)?.add(node.id)
+    byType.get(type)?.add(node.id)
   }
 
   // Start traversal from root
   const root = scene.root
-  const rootChildIds: AnyNodeId[] = []
 
-  for (const [key, value] of Object.entries(root)) {
-    if (key === 'id' || key === 'type') continue
+  // Index root itself
+  visitNode(root, null, ['root'], null)
 
-    if (isNodeLike(value)) {
-      rootChildIds.push(value.id)
-      visitNode(value, null, ['root', key])
-    } else if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) {
-        const item = value[i]
-        if (isNodeLike(item)) {
-          rootChildIds.push(item.id)
-          visitNode(item, null, ['root', key, i])
-        }
-      }
-    }
-  }
-
-  return { byId, byType }
+  return { byId, byType, byLevel, previewIds }
 }
 
 /**
@@ -200,13 +251,13 @@ export function getNodeByPath<T extends keyof NodeTypeMap>(
 export function getNodeByPath(
   scene: Scene,
   path: (string | number)[],
-  nodeType?: AnyNodeType,
-): AnyNode | null
+  nodeType?: SceneNodeType,
+): SceneNode | null
 export function getNodeByPath<T extends keyof NodeTypeMap>(
   scene: Scene,
   path: (string | number)[],
   nodeType?: T,
-): NodeTypeMap[T] | AnyNode | null {
+): NodeTypeMap[T] | SceneNode | null {
   let current: unknown = scene
 
   for (const segment of path) {
@@ -242,7 +293,7 @@ export function getNodeByPath<T extends keyof NodeTypeMap>(
 export function updateNodeByPath(
   scene: Scene,
   path: (string | number)[],
-  updater: (node: AnyNode) => AnyNode,
+  updater: (node: SceneNode) => SceneNode,
 ): Scene {
   if (path.length === 0) {
     throw new Error('Path cannot be empty')
@@ -278,3 +329,80 @@ export function updateNodeByPath(
 
   return updateRecursive(scene, path) as Scene
 }
+
+// ============================================================================
+// Scene Graph Helper Utilities
+// ============================================================================
+
+export const getNodeMeta = (index: SceneGraphIndex, nodeId: SceneNodeId): byIdNodeIndex | null =>
+  index.byId.get(nodeId) ?? null
+
+export const getParentId = (index: SceneGraphIndex, nodeId: SceneNodeId): SceneNodeId | null =>
+  index.byId.get(nodeId)?.parent ?? null
+
+export const getAncestorChain = (index: SceneGraphIndex, nodeId: SceneNodeId): byIdNodeIndex[] => {
+  const chain: byIdNodeIndex[] = []
+  let current = index.byId.get(nodeId)
+
+  while (current?.parent) {
+    const parentMeta = index.byId.get(current.parent)
+    if (!parentMeta) {
+      break
+    }
+    chain.push(parentMeta)
+    current = parentMeta
+  }
+
+  return chain
+}
+
+export const getLevelIdForNode = (
+  index: SceneGraphIndex,
+  nodeId: SceneNodeId,
+): SceneNodeId | null => index.byId.get(nodeId)?.levelId ?? null
+
+export const listNodeIdsByLevel = (
+  index: SceneGraphIndex,
+  levelId: SceneNodeId,
+  types?: SceneNodeType[],
+): SceneNodeId[] => {
+  const ids = index.byLevel.get(levelId)
+  if (!ids) {
+    return []
+  }
+
+  if (!types || types.length === 0) {
+    return Array.from(ids)
+  }
+
+  const typeSet = new Set(types)
+  return Array.from(ids).filter((nodeId) => {
+    const meta = index.byId.get(nodeId)
+    return meta ? typeSet.has(meta.type) : false
+  })
+}
+
+export const listChildrenIds = (index: SceneGraphIndex, parentId: SceneNodeId): SceneNodeId[] =>
+  index.byId.get(parentId)?.children ?? []
+
+export const listChildrenIdsOfType = (
+  index: SceneGraphIndex,
+  parentId: SceneNodeId,
+  types?: SceneNodeType[],
+): SceneNodeId[] => {
+  const children = listChildrenIds(index, parentId)
+  if (!types || types.length === 0) {
+    return children
+  }
+  const typeSet = new Set(types)
+  return children.filter((childId) => {
+    const meta = index.byId.get(childId)
+    return meta ? typeSet.has(meta.type) : false
+  })
+}
+
+export const listPreviewNodeIds = (index: SceneGraphIndex): SceneNodeId[] =>
+  Array.from(index.previewIds)
+
+export const isPreviewNode = (index: SceneGraphIndex, nodeId: SceneNodeId): boolean =>
+  index.previewIds.has(nodeId)

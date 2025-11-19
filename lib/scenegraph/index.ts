@@ -3,16 +3,16 @@ import {
   type AnyNode,
   type AnyNodeId,
   type AnyNodeType,
-  buildSceneIndex,
+  buildSceneGraphIndex,
   getNodeByPath,
   type NodeTypeMap,
   type Scene,
-  type SceneIndex,
+  type SceneGraphIndex,
   updateNodeByPath,
 } from '@/lib/scenegraph/schema/index'
 
 type SceneGraphOptions = {
-  index?: SceneIndex | null
+  index?: SceneGraphIndex | null
   onChange?: (nextScene: Scene) => void
 }
 
@@ -63,12 +63,12 @@ const removeNodeAtPath = (scene: Scene, path: (string | number)[]): Scene => {
 
 export class SceneGraph {
   readonly scene: Scene
-  readonly index: SceneIndex
+  readonly index: SceneGraphIndex
   private readonly onChange?: (nextScene: Scene) => void
 
   constructor(scene: Scene, options?: SceneGraphOptions) {
     this.scene = scene
-    this.index = options?.index ?? buildSceneIndex(scene)
+    this.index = options?.index ?? buildSceneGraphIndex(scene)
     this.onChange = options?.onChange
   }
 
@@ -151,7 +151,7 @@ export class SceneGraph {
   }
 }
 
-type SceneNodeMeta = SceneIndex['byId'] extends Map<AnyNodeId, infer Meta> ? Meta : never
+type SceneNodeMeta = SceneGraphIndex['byId'] extends Map<AnyNodeId, infer Meta> ? Meta : never
 
 export class SceneNodeHandle<T extends AnyNode = AnyNode> {
   private readonly graph: SceneGraph

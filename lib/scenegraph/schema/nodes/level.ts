@@ -29,6 +29,8 @@ export const LevelNode = BaseNode.extend({
     .default([]),
   // Specific props
   level: z.number().default(0),
+  elevation: z.number().optional(),
+  height: z.number().optional(),
 }).describe(
   dedent`
   Level node - used to represent a level in the building

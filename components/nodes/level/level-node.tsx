@@ -2,6 +2,7 @@
 // REGISTER COLUMN COMPONENT
 // ============================================================================
 
+import { Layers } from 'lucide-react'
 import z from 'zod'
 import { GridTiles } from '@/components/editor/elements/grid-tiles'
 import { useEditor } from '@/hooks/use-editor'
@@ -70,4 +71,5 @@ registerComponent({
   rendererPropsSchema: LevelRendererPropsSchema,
   nodeEditor: LevelNodeEditor,
   nodeRenderer: LevelRenderer,
+  toolIcon: Layers,
 })

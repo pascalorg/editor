@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
+import { useEditor, WallNode } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import { createId } from '@/lib/utils'
 
@@ -39,7 +39,10 @@ export function CustomRoomNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const levels = useEditor((state) => {
+    const building = state.scene.root.buildings[0]
+    return building ? building.children : []
+  })
 
   // Use ref to persist values across renders without triggering re-renders
   const customRoomStateRef = useRef<{
@@ -143,7 +146,7 @@ export function CustomRoomNodeEditor() {
           // Commit the entire group with position and size
           // useEditor will automatically convert wall positions to relative
           updateNode(previewGroupId, {
-            preview: false,
+            editor: { preview: false },
           })
         }
 
@@ -169,7 +172,7 @@ export function CustomRoomNodeEditor() {
             groupType: 'room',
             visible: true,
             opacity: 100,
-            preview: true,
+            editor: { preview: true },
             children: [
               {
                 id: cursorWallId,
@@ -182,7 +185,7 @@ export function CustomRoomNodeEditor() {
                 end: { x, z: y },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
             ],
@@ -240,7 +243,7 @@ export function CustomRoomNodeEditor() {
                 end: { x, z: y },
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
               } as any,
               customRoomStateRef.current.previewGroupId!,
@@ -305,7 +308,7 @@ export function CustomRoomNodeEditor() {
         }
         // Commit the entire group
         updateNode(previewGroupId, {
-          preview: false,
+          editor: { preview: false },
         })
 
         // Reset state

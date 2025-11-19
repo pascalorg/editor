@@ -9,7 +9,7 @@ import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { ReferenceImageNode } from '@/lib/nodes/types'
+import type { ReferenceImageNode } from '@/lib/scenegraph/schema/index'
 import { ImageRenderer } from './image-renderer'
 
 // ============================================================================

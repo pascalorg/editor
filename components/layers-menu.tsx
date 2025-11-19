@@ -32,7 +32,7 @@ import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
 import { getElementLabel, getElementsOfType, isElementSelected } from '@/lib/building-elements'
-import type { LevelNode } from '@/lib/nodes/types'
+import { LevelNode } from '@/lib/scenegraph/schema/index'
 import { cn, createId } from '@/lib/utils'
 
 const buildingElementConfig: Record<
@@ -84,18 +84,8 @@ interface DraggableLevelItemProps {
   handleElementSelect: (elementId: string, event: React.MouseEvent) => void
   handleImageSelect: (id: string, event: React.MouseEvent) => void
   handleScanSelect: (id: string, event: React.MouseEvent) => void
-  toggleFloorVisibility: (id: string) => void
-  toggleBuildingElementVisibility: (id: string, type: 'wall' | 'roof' | 'column' | 'slab') => void
-  toggleImageVisibility: (id: string) => void
-  toggleScanVisibility: (id: string) => void
-  setFloorOpacity: (id: string, opacity: number) => void
-  setBuildingElementOpacity: (
-    id: string,
-    type: 'wall' | 'roof' | 'column' | 'slab',
-    opacity: number,
-  ) => void
-  setImageOpacity: (id: string, opacity: number) => void
-  setScanOpacity: (id: string, opacity: number) => void
+  toggleNodeVisibility: (id: string) => void
+  setNodeOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, levelId: string) => Promise<void>
   controls: ReturnType<typeof useDragControls>
@@ -117,14 +107,8 @@ function DraggableLevelItem({
   handleElementSelect,
   handleImageSelect,
   handleScanSelect,
-  toggleFloorVisibility,
-  toggleBuildingElementVisibility,
-  toggleImageVisibility,
-  toggleScanVisibility,
-  setFloorOpacity,
-  setBuildingElementOpacity,
-  setImageOpacity,
-  setScanOpacity,
+  toggleNodeVisibility,
+  setNodeOpacity,
   handleUpload,
   handleScanUpload,
   controls,
@@ -159,8 +143,8 @@ function DraggableLevelItem({
         <TreeIcon hasChildren={hasContent} icon={<Layers className="h-4 w-4 text-blue-500" />} />
         <TreeLabel className="flex-1">{level.name}</TreeLabel>
         <OpacityControl
-          onOpacityChange={(opacity) => setFloorOpacity(level.id, opacity)}
-          onVisibilityToggle={() => toggleFloorVisibility(level.id)}
+          onOpacityChange={(opacity) => setNodeOpacity(level.id, opacity)}
+          onVisibilityToggle={() => toggleNodeVisibility(level.id)}
           opacity={level.opacity}
           visible={level.visible}
         />
@@ -217,14 +201,8 @@ function DraggableLevelItem({
                         <TreeIcon hasChildren={groupWalls.length > 0} icon={config.icon} />
                         <TreeLabel>{config.getLabel(index, element.data)}</TreeLabel>
                         <OpacityControl
-                          onOpacityChange={(opacity) => {
-                            // Update group opacity
-                            // TODO: implement group opacity control
-                          }}
-                          onVisibilityToggle={() => {
-                            // Toggle group visibility
-                            // TODO: implement group visibility toggle
-                          }}
+                          onOpacityChange={(opacity) => setNodeOpacity(element.id, opacity)}
+                          onVisibilityToggle={() => toggleNodeVisibility(element.id)}
                           opacity={element.opacity || 100}
                           visible={element.visible !== false}
                         />
@@ -263,12 +241,8 @@ function DraggableLevelItem({
                                   />
                                   <TreeLabel>Wall {wallIndex + 1}</TreeLabel>
                                   <OpacityControl
-                                    onOpacityChange={(opacity) =>
-                                      setBuildingElementOpacity(wall.id, 'wall', opacity)
-                                    }
-                                    onVisibilityToggle={() =>
-                                      toggleBuildingElementVisibility(wall.id, 'wall')
-                                    }
+                                    onOpacityChange={(opacity) => setNodeOpacity(wall.id, opacity)}
+                                    onVisibilityToggle={() => toggleNodeVisibility(wall.id)}
                                     opacity={wall.opacity}
                                     visible={wall.visible}
                                   />
@@ -359,10 +333,8 @@ function DraggableLevelItem({
                       <TreeIcon hasChildren={hasChildren} icon={config.icon} />
                       <TreeLabel>{config.getLabel(index)}</TreeLabel>
                       <OpacityControl
-                        onOpacityChange={(opacity) =>
-                          setBuildingElementOpacity(element.id, type, opacity)
-                        }
-                        onVisibilityToggle={() => toggleBuildingElementVisibility(element.id, type)}
+                        onOpacityChange={(opacity) => setNodeOpacity(element.id, opacity)}
+                        onVisibilityToggle={() => toggleNodeVisibility(element.id)}
                         opacity={element.opacity}
                         visible={element.visible}
                       />
@@ -476,8 +448,8 @@ function DraggableLevelItem({
                   <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
                   <TreeLabel>Reference {index + 1}</TreeLabel>
                   <OpacityControl
-                    onOpacityChange={(opacity) => setImageOpacity(image.id, opacity)}
-                    onVisibilityToggle={() => toggleImageVisibility(image.id)}
+                    onOpacityChange={(opacity) => setNodeOpacity(image.id, opacity)}
+                    onVisibilityToggle={() => toggleNodeVisibility(image.id)}
                     opacity={image.opacity}
                     visible={image.visible}
                   />
@@ -548,8 +520,8 @@ function DraggableLevelItem({
                   <TreeIcon icon={<Box className="h-4 w-4 text-cyan-400" />} />
                   <TreeLabel>Scan {index + 1}</TreeLabel>
                   <OpacityControl
-                    onOpacityChange={(opacity) => setScanOpacity(scan.id, opacity)}
-                    onVisibilityToggle={() => toggleScanVisibility(scan.id)}
+                    onOpacityChange={(opacity) => setNodeOpacity(scan.id, opacity)}
+                    onVisibilityToggle={() => toggleNodeVisibility(scan.id)}
                     opacity={scan.opacity}
                     visible={scan.visible}
                   />
@@ -575,26 +547,99 @@ function LevelReorderItem(props: LevelReorderItemProps) {
   )
 }
 
-interface LayersMenuProps {
-  mounted: boolean
-}
-
 export function LayersMenu({ mounted }: LayersMenuProps) {
   // Retrieve editor state
-  const handleUpload = useEditor((state) => state.handleUpload)
-  const handleScanUpload = useEditor((state) => state.handleScanUpload)
+  const addNode = useEditor((state) => state.addNode)
   const selectedElements = useEditor((state) => state.selectedElements)
   const setControlMode = useEditor((state) => state.setControlMode)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
   const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
-  const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
-  const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+  const handleElementSelect = useEditor((state) => state.handleElementSelect)
+
+  // Select levels from scene.root (new structure)
+  const levels = useEditor((state) => {
+    const building = state.scene.root.buildings?.[0]
+    return building ? building.children : []
+  }) as LevelNode[]
+
+  const addLevel = useEditor((state) => state.addLevel)
+  const deleteLevel = useEditor((state) => state.deleteLevel)
+  const reorderLevels = useEditor((state) => state.reorderLevels)
+  const selectFloor = useEditor((state) => state.selectFloor)
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+
+  // Local implementations for uploads
+  const handleUpload = async (file: File, levelId: string) => {
+    const reader = new FileReader()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+    // Create ReferenceImageNode
+    const imageNode = {
+      id: createId('image'),
+      type: 'reference-image',
+      name: file.name,
+      url: dataUrl,
+      createdAt: new Date().toISOString(),
+      position: [0, 0],
+      rotation: 0,
+      size: [10, 10],
+      scale: 1,
+      visible: true,
+      opacity: 50,
+      children: [],
+    }
+
+    // @ts-expect-error - node data
+    addNode(imageNode, levelId)
+  }
+
+  const handleScanUpload = async (file: File, levelId: string) => {
+    const reader = new FileReader()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+    const scanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+    const scanNode = {
+      id: scanId,
+      type: 'scan',
+      name: file.name,
+      url: dataUrl,
+      createdAt: new Date().toISOString(),
+      position: [0, 0],
+      rotation: 0,
+      size: [10, 10],
+      scale: 1,
+      yOffset: 0,
+      visible: true,
+      opacity: 100,
+      children: [],
+    }
+
+    // @ts-expect-error - node data
+    addNode(scanNode, levelId)
+  }
 
   // Track expanded state
-  const [expandedIds, setExpandedIds] = useState<string[]>([levels[0].id])
+  const [expandedIds, setExpandedIds] = useState<string[]>([])
+
+  // Initialize expanded state with first level ID if available
+  useEffect(() => {
+    if (levels.length > 0 && expandedIds.length === 0) {
+      setExpandedIds([levels[0].id])
+    }
+  }, [levels, expandedIds.length])
 
   // Extract data from node tree for hierarchy display
   const components: any[] = []
@@ -602,14 +647,13 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const scans: any[] = []
 
   levels.forEach((level) => {
-    // Group walls, roofs, columns, slabs, and groups by type for the legacy format
     const walls: any[] = []
     const roofs: any[] = []
     const columns: any[] = []
     const slabs: any[] = []
     const groups: any[] = []
 
-    level.children.forEach((child) => {
+    level.children.forEach((child: any) => {
       if (child.type === 'wall') {
         walls.push({
           id: child.id,
@@ -617,7 +661,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
           opacity: child.opacity ?? 100,
         })
 
-        // Extract doors and windows from walls
         if (child.children) {
           child.children.forEach((wallChild: any) => {
             if (wallChild.type === 'door' || wallChild.type === 'window') {
@@ -630,16 +673,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   rotation: wallChild.rotation,
                   visible: wallChild.visible ?? true,
                   opacity: wallChild.opacity ?? 100,
-                  parentWallId: child.id, // Track which wall this door/window belongs to
+                  parentWallId: child.id,
                 },
               })
             }
           })
         }
       } else if (child.type === 'group') {
-        // Extract group and its walls
         const groupWalls: any[] = []
-
         child.children.forEach((groupChild: any) => {
           if (groupChild.type === 'wall') {
             groupWalls.push({
@@ -647,8 +688,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
               visible: groupChild.visible ?? true,
               opacity: groupChild.opacity ?? 100,
             })
-
-            // Extract doors and windows from walls in the group
             if (groupChild.children) {
               groupChild.children.forEach((wallChild: any) => {
                 if (wallChild.type === 'door' || wallChild.type === 'window') {
@@ -662,7 +701,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       visible: wallChild.visible ?? true,
                       opacity: wallChild.opacity ?? 100,
                       parentWallId: groupChild.id,
-                      parentGroupId: child.id, // Track which group this belongs to
+                      parentGroupId: child.id,
                     },
                   })
                 }
@@ -670,11 +709,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             }
           }
         })
-
         groups.push({
           id: child.id,
           name: child.name,
-          groupType: (child as any).groupType,
+          groupType: child.groupType,
           visible: child.visible ?? true,
           opacity: child.opacity ?? 100,
           walls: groupWalls,
@@ -688,22 +726,22 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       } else if (child.type === 'column') {
         columns.push({
           id: child.id,
-          position: (child as any).position,
+          position: child.position,
           visible: child.visible ?? true,
           opacity: child.opacity ?? 100,
         })
       } else if (child.type === 'slab') {
         slabs.push({
           id: child.id,
-          position: (child as any).position,
-          size: (child as any).size,
+          position: child.position,
+          size: child.size,
           visible: child.visible ?? true,
           opacity: child.opacity ?? 100,
         })
       } else if (child.type === 'reference-image') {
         images.push({
           id: child.id,
-          url: (child as any).url,
+          url: child.url,
           name: child.name,
           level: level.level || 0,
           visible: child.visible ?? true,
@@ -712,7 +750,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       } else if (child.type === 'scan') {
         scans.push({
           id: child.id,
-          url: (child as any).url,
+          url: child.url,
           name: child.name,
           level: level.level || 0,
           visible: child.visible ?? true,
@@ -721,121 +759,62 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     })
 
-    // Create aggregated components for walls, roofs, columns, and groups
-    if (walls.length > 0) {
+    if (walls.length > 0)
       components.push({
         id: `${level.id}-walls`,
         type: 'wall',
         group: level.id,
-        data: {
-          segments: walls,
-        },
+        data: { segments: walls },
       })
-    }
-
-    if (roofs.length > 0) {
+    if (roofs.length > 0)
       components.push({
         id: `${level.id}-roofs`,
         type: 'roof',
         group: level.id,
-        data: {
-          segments: roofs,
-        },
+        data: { segments: roofs },
       })
-    }
-
-    if (columns.length > 0) {
+    if (columns.length > 0)
       components.push({
         id: `${level.id}-columns`,
         type: 'column',
         group: level.id,
-        data: {
-          columns,
-        },
+        data: { columns },
       })
-    }
-
-    if (slabs.length > 0) {
-      components.push({
-        id: `${level.id}-slabs`,
-        type: 'slab',
-        group: level.id,
-        data: {
-          slabs,
-        },
-      })
-    }
-
-    // Add groups (rooms) to components
-    groups.forEach((groupNode) => {
-      components.push({
-        id: groupNode.id,
-        type: 'group',
-        group: level.id,
-        data: {
-          name: groupNode.name,
-          groupType: groupNode.groupType,
-          visible: groupNode.visible,
-          opacity: groupNode.opacity,
-          walls: groupNode.walls,
-        },
-      })
+    if (slabs.length > 0)
+      components.push({ id: `${level.id}-slabs`, type: 'slab', group: level.id, data: { slabs } })
+    groups.forEach((g) => {
+      components.push({ id: g.id, type: 'group', group: level.id, data: g })
     })
   })
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const selectFloor = useEditor((state) => state.selectFloor)
-  const addLevel = useEditor((state) => state.addLevel)
-  const deleteLevel = useEditor((state) => state.deleteLevel)
-  const reorderLevels = useEditor((state) => state.reorderLevels)
-  const toggleFloorVisibility = useEditor((state) => state.toggleFloorVisibility)
-  const toggleBuildingElementVisibility = useEditor(
-    (state) => state.toggleBuildingElementVisibility,
-  )
-  const toggleImageVisibility = useEditor((state) => state.toggleImageVisibility)
-  const toggleScanVisibility = useEditor((state) => state.toggleScanVisibility)
-  const setFloorOpacity = useEditor((state) => state.setFloorOpacity)
-  const setBuildingElementOpacity = useEditor((state) => state.setBuildingElementOpacity)
-  const setImageOpacity = useEditor((state) => state.setImageOpacity)
-  const setScanOpacity = useEditor((state) => state.setScanOpacity)
-  const handleElementSelect = useEditor((state) => state.handleElementSelect)
 
   const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
     const clickedIndex = images.findIndex((img) => img.id === imageId)
     let next: string[]
 
     if (event.metaKey || event.ctrlKey) {
-      // Cmd/Ctrl+click: add/remove from selection
       if (selectedImageIds.includes(imageId)) {
         next = selectedImageIds.filter((id) => id !== imageId)
       } else {
         next = [...selectedImageIds, imageId]
       }
     } else if (event.shiftKey && selectedImageIds.length > 0) {
-      // Shift+click: select range from last selected to clicked (Figma-style)
       const lastSelectedId = selectedImageIds[selectedImageIds.length - 1]
       const lastSelectedIndex = images.findIndex((img) => img.id === lastSelectedId)
 
       if (lastSelectedIndex !== -1) {
         const start = Math.min(lastSelectedIndex, clickedIndex)
         const end = Math.max(lastSelectedIndex, clickedIndex)
-
         const rangeIds = []
-        for (let i = start; i <= end; i++) {
-          rangeIds.push(images[i].id)
-        }
+        for (let i = start; i <= end; i++) rangeIds.push(images[i].id)
         next = rangeIds
       } else {
-        // Fallback if last selected not found
         next = [imageId]
       }
     } else {
-      // Regular click: select only this image
       next = [imageId]
     }
 
     setSelectedImageIds(next)
-
-    // Automatically activate guide mode when selecting an image
     setControlMode('guide')
   }
 
@@ -844,38 +823,29 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     let next: string[]
 
     if (event.metaKey || event.ctrlKey) {
-      // Cmd/Ctrl+click: add/remove from selection
       if (selectedScanIds.includes(scanId)) {
         next = selectedScanIds.filter((id) => id !== scanId)
       } else {
         next = [...selectedScanIds, scanId]
       }
     } else if (event.shiftKey && selectedScanIds.length > 0) {
-      // Shift+click: select range from last selected to clicked (Figma-style)
       const lastSelectedId = selectedScanIds[selectedScanIds.length - 1]
       const lastSelectedIndex = scans.findIndex((scan) => scan.id === lastSelectedId)
 
       if (lastSelectedIndex !== -1) {
         const start = Math.min(lastSelectedIndex, clickedIndex)
         const end = Math.max(lastSelectedIndex, clickedIndex)
-
         const rangeIds = []
-        for (let i = start; i <= end; i++) {
-          rangeIds.push(scans[i].id)
-        }
+        for (let i = start; i <= end; i++) rangeIds.push(scans[i].id)
         next = rangeIds
       } else {
-        // Fallback if last selected not found
         next = [scanId]
       }
     } else {
-      // Regular click: select only this scan
       next = [scanId]
     }
 
     setSelectedScanIds(next)
-
-    // Automatically activate guide mode when selecting a scan
     setControlMode('guide')
   }
 
@@ -885,76 +855,48 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       selectFloor(null)
       return
     }
-
-    // Check if it's a level/floor ID
     const isLevel = levels.some((level) => level.id === selectedId)
-    if (isLevel) {
-      selectFloor(selectedId)
-    }
+    if (isLevel) selectFloor(selectedId)
   }
 
   const handleAddLevel = () => {
-    // Get all existing level numbers (excluding base level which is 0)
     const levelNumbers = levels.map((l) => l.level || 0).filter((n) => n > 0)
-
-    // Find the next available number (starting from 1)
     let nextNumber = 1
-    while (levelNumbers.includes(nextNumber)) {
-      nextNumber++
-    }
+    while (levelNumbers.includes(nextNumber)) nextNumber++
 
-    const newLevel = {
-      id: createId('level'),
-      type: 'level' as const,
+    const newLevel = LevelNode.parse({
       name: `level ${nextNumber}`,
       level: nextNumber,
-      visible: true,
-    }
+    })
 
     addLevel(newLevel)
-    // Automatically select the newly created level
     selectFloor(newLevel.id)
   }
 
   const handleReorder = (newOrder: typeof levels) => {
-    // Reassign level numbers based on new order (highest in list = highest level)
-    // The visual order is reversed (highest level shown first), so we reverse the array
-    // when assigning numbers
     const reversedOrder = [...newOrder].reverse()
     const updatedLevels = reversedOrder.map((level, index) => ({
       ...level,
       level: index,
     }))
-
-    // Update levels in store
     reorderLevels(updatedLevels)
-
-    // Update currentLevel if the selected floor's level changed
     if (selectedFloorId) {
       const newLevel = updatedLevels.find((l) => l.id === selectedFloorId)?.level
-      if (newLevel !== undefined) {
-        // Trigger selectFloor to ensure currentLevel is updated
-        useEditor.getState().selectFloor(selectedFloorId)
-      }
+      if (newLevel !== undefined) useEditor.getState().selectFloor(selectedFloorId)
     }
   }
 
-  // Get sorted levels for rendering
   const floorGroups = [...levels].sort((a, b) => (b.level || 0) - (a.level || 0))
 
-  // Update expanded IDs when selection changes to reveal selected items
   useEffect(() => {
     const newExpanded = new Set(expandedIds)
     let hasChanges = false
 
-    // Expand parents of selected elements (walls, roofs, columns, doors, windows)
     selectedElements.forEach((selectedId) => {
-      // Find which level contains this element
       const levelId = components.find((c) => {
         if (c.type === 'wall' || c.type === 'roof' || c.type === 'column') {
           return c.data?.segments?.some?.((seg: any) => seg.id === selectedId)
         }
-        // For doors/windows, find by their direct match
         return c.id === selectedId
       })?.group
 
@@ -970,7 +912,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
         }
       }
 
-      // If it's a door or window, also expand its parent wall
       const component = components.find((c) => c.id === selectedId)
       if (component && (component.type === 'door' || component.type === 'window')) {
         const parentWallId = component?.data?.parentWallId
@@ -981,7 +922,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     })
 
-    // Expand parents of selected images
     selectedImageIds.forEach((imageId) => {
       const image = images.find((img) => img.id === imageId)
       if (image) {
@@ -1000,7 +940,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     })
 
-    // Expand parents of selected scans
     selectedScanIds.forEach((scanId) => {
       const scan = scans.find((s) => s.id === scanId)
       if (scan) {
@@ -1019,10 +958,17 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     })
 
-    if (hasChanges) {
-      setExpandedIds(Array.from(newExpanded))
-    }
-  }, [selectedElements, selectedImageIds, selectedScanIds, levels, expandedIds])
+    if (hasChanges) setExpandedIds(Array.from(newExpanded))
+  }, [
+    selectedElements,
+    selectedImageIds,
+    selectedScanIds,
+    levels,
+    expandedIds,
+    components,
+    images,
+    scans,
+  ])
 
   return (
     <div className="flex flex-1 flex-col px-2 py-2">
@@ -1072,7 +1018,6 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                     ? components.filter((c) => c.type === 'window' && c.group === level.id)
                     : []
                   const levelImages = images.filter((img) => img.level === (level.level || 0))
-
                   const levelScans = scans.filter((scan) => scan.level === (level.level || 0))
 
                   return (
@@ -1095,14 +1040,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                       selectedElements={selectedElements}
                       selectedImageIds={selectedImageIds}
                       selectedScanIds={selectedScanIds}
-                      setBuildingElementOpacity={setBuildingElementOpacity}
-                      setFloorOpacity={setFloorOpacity}
-                      setImageOpacity={setImageOpacity}
-                      setScanOpacity={setScanOpacity}
-                      toggleBuildingElementVisibility={toggleBuildingElementVisibility}
-                      toggleFloorVisibility={toggleFloorVisibility}
-                      toggleImageVisibility={toggleImageVisibility}
-                      toggleScanVisibility={toggleScanVisibility}
+                      setNodeOpacity={setNodeOpacity}
+                      toggleNodeVisibility={toggleNodeVisibility}
                     />
                   )
                 })}

@@ -1,13 +1,7 @@
-/**
- * Command Pattern for Undo/Redo
- *
- * Each command represents a reversible operation on the node tree.
- * Commands know how to execute and undo themselves.
- */
-
 import { current } from 'immer'
-import type { AnyNode, BaseNode, LevelNode, RootNode } from '@/lib/nodes/types'
 import { createId } from '@/lib/utils'
+import type { AnyNode, RootNode, LevelNode, SceneNode } from '@/lib/scenegraph/schema/index'
+import { getLevels } from '@/lib/scenegraph/editor-utils'
 
 // ============================================================================
 // COMMAND INTERFACE
@@ -15,18 +9,10 @@ import { createId } from '@/lib/utils'
 
 export interface Command {
   /** Execute the command */
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void
 
   /** Undo the command */
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void
-}
-
-/**
- * Helper to get levels array from root (shorthand for root.children[0].children)
- */
-function getLevels(root: RootNode): LevelNode[] {
-  const building = root.children[0]
-  return building ? building.children : []
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void
 }
 
 // ============================================================================
@@ -35,10 +21,10 @@ function getLevels(root: RootNode): LevelNode[] {
 
 export class AddNodeCommand implements Command {
   private readonly nodeId: string
-  private readonly nodeData: Omit<BaseNode, 'id'>
+  private readonly nodeData: Omit<AnyNode, 'id'>
   private readonly parentId: string | null
 
-  constructor(nodeData: Omit<BaseNode, 'id'>, parentId: string | null, nodeId?: string) {
+  constructor(nodeData: Omit<AnyNode, 'id'>, parentId: string | null, nodeId?: string) {
     this.nodeData = nodeData
     this.parentId = parentId
     this.nodeId = nodeId || createId(nodeData.type)
@@ -48,11 +34,11 @@ export class AddNodeCommand implements Command {
     return this.nodeId
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Recursively process children to generate IDs and set parent references
-    const processChildren = (children: any[], parentId: string): BaseNode[] => {
+    const processChildren = (children: any[], parentId: string): AnyNode[] => {
       if (!children || children.length === 0) return []
 
       return children.map((child) => {
@@ -62,7 +48,7 @@ export class AddNodeCommand implements Command {
           id: childId,
           parent: parentId,
           children: processChildren(child.children || [], childId),
-        } as BaseNode
+        } as AnyNode
 
         // Add child to index
         nodeIndex.set(childId, processedChild)
@@ -75,8 +61,9 @@ export class AddNodeCommand implements Command {
       ...this.nodeData,
       id: this.nodeId,
       parent: this.parentId,
+      // @ts-expect-error - children handling for generic AnyNode
       children: processChildren(this.nodeData.children || [], this.nodeId),
-    } as BaseNode
+    } as AnyNode
 
     if (this.parentId === null) {
       // Add to root (only for level nodes)
@@ -87,40 +74,47 @@ export class AddNodeCommand implements Command {
       levels.push(newNode as LevelNode)
     } else {
       // Find parent node and add to its children
-      const findAndAddToParent = (nodes: BaseNode[]): boolean => {
+      const findAndAddToParent = (nodes: AnyNode[]): boolean => {
         for (const node of nodes) {
           if (node.id === this.parentId) {
+            // @ts-expect-error - generic children access
+            if (!node.children) node.children = []
+            // @ts-expect-error
             node.children.push(newNode)
+            
             // Update parent in index after modifying its children (important for Immer)
             // Use current() to store plain object, not draft proxy
-            nodeIndex.set(this.parentId, current(node) as BaseNode)
+            nodeIndex.set(this.parentId, current(node) as AnyNode)
             return true
           }
-          if (node.children.length > 0 && findAndAddToParent(node.children)) {
+          // @ts-expect-error
+          if (node.children && node.children.length > 0 && findAndAddToParent(node.children)) {
             return true
           }
         }
         return false
       }
 
-      findAndAddToParent(levels)
+      // Cast levels to AnyNode[] for generic traversal
+      findAndAddToParent(levels as unknown as AnyNode[])
     }
 
     // Update index
     nodeIndex.set(this.nodeId, newNode)
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Recursively remove node and all children from index
-    const removeFromIndex = (node: BaseNode) => {
+    const removeFromIndex = (node: AnyNode) => {
       nodeIndex.delete(node.id)
-      node.children.forEach(removeFromIndex)
+      // @ts-expect-error
+      if (node.children) node.children.forEach(removeFromIndex)
     }
 
     // Find and remove the node
-    const findAndDelete = (nodes: BaseNode[]): boolean => {
+    const findAndDelete = (nodes: AnyNode[]): boolean => {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i]
         if (node.id === this.nodeId) {
@@ -128,14 +122,15 @@ export class AddNodeCommand implements Command {
           nodes.splice(i, 1)
           return true
         }
-        if (node.children.length > 0 && findAndDelete(node.children)) {
+        // @ts-expect-error
+        if (node.children && node.children.length > 0 && findAndDelete(node.children)) {
           return true
         }
       }
       return false
     }
 
-    findAndDelete(levels)
+    findAndDelete(levels as unknown as AnyNode[])
   }
 }
 
@@ -153,11 +148,11 @@ export class UpdateNodeCommand implements Command {
     this.updates = updates
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Find and update the node, tracking parent to update it in nodeIndex too
-    const findAndUpdate = (nodes: BaseNode[], parent: BaseNode | null = null): boolean => {
+    const findAndUpdate = (nodes: AnyNode[], parent: AnyNode | null = null): boolean => {
       for (const node of nodes) {
         if (node.id === this.nodeId) {
           // Save previous state for undo (only keys we're updating)
@@ -166,7 +161,7 @@ export class UpdateNodeCommand implements Command {
             for (const key of Object.keys(this.updates)) {
               // Use current() to get plain value from draft proxy
               const value = (node as any)[key]
-              this.previousState[key as keyof BaseNode] =
+              this.previousState[key as keyof AnyNode] =
                 value && typeof value === 'object' ? current(value) : value
             }
           }
@@ -177,28 +172,29 @@ export class UpdateNodeCommand implements Command {
           // Update parent in index after modifying its child (important for Immer)
           // Use current() to store plain object, not draft proxy
           if (parent) {
-            nodeIndex.set(parent.id, current(parent) as BaseNode)
+            nodeIndex.set(parent.id, current(parent) as AnyNode)
           }
 
           return true
         }
-        if (node.children.length > 0 && findAndUpdate(node.children, node)) {
+        // @ts-expect-error
+        if (node.children && node.children.length > 0 && findAndUpdate(node.children, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndUpdate(levels, null)
+    findAndUpdate(levels as unknown as AnyNode[], null)
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     if (!this.previousState) return
 
     // Find and restore the node, tracking parent to update it in nodeIndex too
-    const findAndRestore = (nodes: BaseNode[], parent: BaseNode | null = null): boolean => {
+    const findAndRestore = (nodes: AnyNode[], parent: AnyNode | null = null): boolean => {
       for (const node of nodes) {
         if (node.id === this.nodeId) {
           Object.assign(node, this.previousState)
@@ -207,19 +203,20 @@ export class UpdateNodeCommand implements Command {
           // Update parent in index after modifying its child (important for Immer)
           // Use current() to store plain object, not draft proxy
           if (parent) {
-            nodeIndex.set(parent.id, current(parent) as BaseNode)
+            nodeIndex.set(parent.id, current(parent) as AnyNode)
           }
 
           return true
         }
-        if (node.children.length > 0 && findAndRestore(node.children, node)) {
+        // @ts-expect-error
+        if (node.children && node.children.length > 0 && findAndRestore(node.children, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndRestore(levels, null)
+    findAndRestore(levels as unknown as AnyNode[], null)
   }
 }
 
@@ -229,7 +226,7 @@ export class UpdateNodeCommand implements Command {
 
 export class DeleteNodeCommand implements Command {
   private readonly nodeId: string
-  private deletedNode: BaseNode | null = null
+  private deletedNode: AnyNode | null = null
   private parentId: string | null = null
   private indexInParent = -1
 
@@ -237,26 +234,27 @@ export class DeleteNodeCommand implements Command {
     this.nodeId = nodeId
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Recursively remove node and all children from index
-    const removeFromIndex = (node: BaseNode) => {
+    const removeFromIndex = (node: AnyNode) => {
       nodeIndex.delete(node.id)
-      node.children.forEach(removeFromIndex)
+      // @ts-expect-error
+      if (node.children) node.children.forEach(removeFromIndex)
     }
 
     // Find and remove the node
     const findAndDelete = (
-      nodes: BaseNode[],
+      nodes: AnyNode[],
       parentId: string | null = null,
-      parent: BaseNode | null = null,
+      parent: AnyNode | null = null,
     ): boolean => {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i]
         if (node.id === this.nodeId) {
           // Save for undo - use current() to get plain object from draft
-          this.deletedNode = current(node) as BaseNode
+          this.deletedNode = current(node) as AnyNode
           this.parentId = parentId
           this.indexInParent = i
 
@@ -266,60 +264,69 @@ export class DeleteNodeCommand implements Command {
           // Update parent in index after removing child (important for Immer)
           // Use current() to store plain object, not draft proxy
           if (parent) {
-            nodeIndex.set(parent.id, current(parent) as BaseNode)
+            nodeIndex.set(parent.id, current(parent) as AnyNode)
           }
 
           return true
         }
-        if (node.children.length > 0 && findAndDelete(node.children, node.id, node)) {
+        // @ts-expect-error
+        if (node.children && node.children.length > 0 && findAndDelete(node.children, node.id, node)) {
           return true
         }
       }
       return false
     }
 
-    findAndDelete(levels, null, null)
+    findAndDelete(levels as unknown as AnyNode[], null, null)
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     if (!this.deletedNode) return
 
     // Re-add the node and all its children to index
-    const addToIndex = (node: BaseNode) => {
+    const addToIndex = (node: AnyNode) => {
       nodeIndex.set(node.id, node)
-      node.children.forEach(addToIndex)
+      // @ts-expect-error
+      if (node.children) node.children.forEach(addToIndex)
     }
 
     // Find parent and restore the node
-    const findAndRestore = (nodes: BaseNode[]): boolean => {
+    const findAndRestore = (nodes: AnyNode[]): boolean => {
       for (const node of nodes) {
         if (this.parentId === null) {
-          // Root level
-          levels.splice(this.indexInParent, 0, this.deletedNode as LevelNode)
-          addToIndex(this.deletedNode!)
-          return true
+          // Root level - assuming deletedNode is a LevelNode
+          if (this.deletedNode && this.deletedNode.type === 'level') {
+             levels.splice(this.indexInParent, 0, this.deletedNode as LevelNode)
+             addToIndex(this.deletedNode!)
+             return true
+          }
+          return false
         }
         if (node.id === this.parentId) {
           // Found parent
+          // @ts-expect-error
+          if (!node.children) node.children = []
+          // @ts-expect-error
           node.children.splice(this.indexInParent, 0, this.deletedNode!)
           addToIndex(this.deletedNode!)
 
           // Update parent in index after adding child (important for Immer)
           // Use current() to store plain object, not draft proxy
-          nodeIndex.set(node.id, current(node) as BaseNode)
+          nodeIndex.set(node.id, current(node) as AnyNode)
 
           return true
         }
-        if (node.children.length > 0 && findAndRestore(node.children)) {
+        // @ts-expect-error
+        if (node.children && node.children.length > 0 && findAndRestore(node.children)) {
           return true
         }
       }
       return false
     }
 
-    findAndRestore(levels)
+    findAndRestore(levels as unknown as AnyNode[])
   }
 }
 
@@ -336,14 +343,14 @@ export class BatchDeleteCommand implements Command {
     this.deleteCommands = nodeIds.map((id) => new DeleteNodeCommand(id))
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     // Execute all delete commands
     for (const command of this.deleteCommands) {
       command.execute(root, nodeIndex)
     }
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     // Undo in reverse order to maintain correct insertion order
     for (let i = this.deleteCommands.length - 1; i >= 0; i--) {
       this.deleteCommands[i].undo(root, nodeIndex)
@@ -366,7 +373,7 @@ export class AddLevelCommand implements Command {
     } as LevelNode
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     levels.push(this.level)
@@ -374,14 +381,15 @@ export class AddLevelCommand implements Command {
     nodeIndex.set(this.level.id, this.level)
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     if (this.addedIndex >= 0 && this.addedIndex < levels.length) {
       // Recursively remove level and all children from index
-      const removeFromIndex = (node: BaseNode) => {
+      const removeFromIndex = (node: AnyNode) => {
         nodeIndex.delete(node.id)
-        node.children.forEach(removeFromIndex)
+        // @ts-expect-error
+        if (node.children) node.children.forEach(removeFromIndex)
       }
       removeFromIndex(levels[this.addedIndex])
       levels.splice(this.addedIndex, 1)
@@ -398,7 +406,7 @@ export class DeleteLevelCommand implements Command {
     this.levelId = levelId
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     const index = levels.findIndex((l) => l.id === this.levelId)
@@ -408,9 +416,10 @@ export class DeleteLevelCommand implements Command {
       this.deletedIndex = index
 
       // Recursively remove level and all children from index
-      const removeFromIndex = (node: BaseNode) => {
+      const removeFromIndex = (node: AnyNode) => {
         nodeIndex.delete(node.id)
-        node.children.forEach(removeFromIndex)
+        // @ts-expect-error
+        if (node.children) node.children.forEach(removeFromIndex)
       }
       removeFromIndex(levels[index])
 
@@ -418,14 +427,15 @@ export class DeleteLevelCommand implements Command {
     }
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     if (this.deletedLevel && this.deletedIndex >= 0) {
       // Re-add the level and all its children to index
-      const addToIndex = (node: BaseNode) => {
+      const addToIndex = (node: AnyNode) => {
         nodeIndex.set(node.id, node)
-        node.children.forEach(addToIndex)
+        // @ts-expect-error
+        if (node.children) node.children.forEach(addToIndex)
       }
 
       levels.splice(this.deletedIndex, 0, this.deletedLevel)
@@ -442,7 +452,7 @@ export class ReorderLevelsCommand implements Command {
     this.newOrder = newOrder
   }
 
-  execute(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Save previous order for undo
@@ -456,15 +466,16 @@ export class ReorderLevelsCommand implements Command {
     // Rebuild index with new order (though IDs shouldn't change)
     nodeIndex.clear()
     for (const level of levels) {
-      const addToIndex = (node: BaseNode) => {
+      const addToIndex = (node: AnyNode) => {
         nodeIndex.set(node.id, node)
-        node.children.forEach(addToIndex)
+        // @ts-expect-error
+        if (node.children) node.children.forEach(addToIndex)
       }
       addToIndex(level)
     }
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     const levels = getLevels(root)
 
     // Restore previous order
@@ -473,9 +484,10 @@ export class ReorderLevelsCommand implements Command {
     // Rebuild index
     nodeIndex.clear()
     for (const level of levels) {
-      const addToIndex = (node: BaseNode) => {
+      const addToIndex = (node: AnyNode) => {
         nodeIndex.set(node.id, node)
-        node.children.forEach(addToIndex)
+        // @ts-expect-error
+        if (node.children) node.children.forEach(addToIndex)
       }
       addToIndex(level)
     }
@@ -491,7 +503,7 @@ export class CommandManager {
   private redoStack: Command[] = []
   private readonly maxStackSize = 50
 
-  execute(command: Command, root: RootNode, nodeIndex: Map<string, BaseNode>): void {
+  execute(command: Command, root: RootNode, nodeIndex: Map<string, SceneNode>): void {
     command.execute(root, nodeIndex)
 
     // Always add to undo stack when using CommandManager
@@ -503,7 +515,7 @@ export class CommandManager {
     this.redoStack = [] // Clear redo stack on new action
   }
 
-  undo(root: RootNode, nodeIndex: Map<string, BaseNode>): boolean {
+  undo(root: RootNode, nodeIndex: Map<string, SceneNode>): boolean {
     const command = this.undoStack.pop()
     if (!command) return false
 
@@ -512,7 +524,7 @@ export class CommandManager {
     return true
   }
 
-  redo(root: RootNode, nodeIndex: Map<string, BaseNode>): boolean {
+  redo(root: RootNode, nodeIndex: Map<string, SceneNode>): boolean {
     const command = this.redoStack.pop()
     if (!command) return false
 
@@ -542,3 +554,4 @@ export class CommandManager {
     return [...this.redoStack]
   }
 }
+

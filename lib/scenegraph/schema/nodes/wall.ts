@@ -16,6 +16,7 @@ export const WallNode = BaseNode.extend({
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
+  size: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
@@ -23,6 +24,7 @@ export const WallNode = BaseNode.extend({
   - height: height in meters
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system
+  - size: size of the wall in grid units
   `,
 )
 

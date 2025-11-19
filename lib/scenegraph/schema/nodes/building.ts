@@ -6,13 +6,13 @@ import { LevelNode } from './level'
 export const BuildingNode = BaseNode.extend({
   id: nodeId('building'),
   type: nodeType('building'),
-  levels: z.array(LevelNode).default([LevelNode.parse({})]),
+  children: z.array(LevelNode).default([LevelNode.parse({})]),
   position: z.tuple([z.number(), z.number()]).default([0, 0]), // (x, z) in site coordinate system (default is [0, 0])
   rotation: z.number().default(0), // Yaw around Y-axis in site coordinate system
 }).describe(
   dedent`
   Building node - used to represent a building
-  - levels: array of level nodes (each level is a tree of floor and wall nodes) 
+  - children: array of level nodes (each level is a tree of floor and wall nodes) 
   - position: position in site coordinate system (default is [0, 0]) anchoring the building to the site
   - rotation: rotation in site coordinate system (default is 0) yaw around Y-axis
   `,

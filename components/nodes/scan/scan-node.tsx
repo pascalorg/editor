@@ -9,7 +9,7 @@ import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { ScanNode } from '@/lib/nodes/types'
+import type { ScanNode } from '@/lib/scenegraph/schema/index'
 import { ScanRenderer } from './scan-renderer'
 
 // ============================================================================
@@ -290,7 +290,7 @@ export function useScanManipulation(
         const vector = intersect.clone().sub(center)
         const angle = Math.atan2(vector.z, vector.x)
         const delta = angle - initialAngle
-        let newRotation = initialRotation - delta * (180 / Math.PI)
+        let newRotation = initialRotation[2] ?? 0 - delta * (180 / Math.PI)
 
         if (ev.shiftKey) {
           newRotation = Math.round(newRotation / 45) * 45
@@ -335,7 +335,7 @@ export function useScanManipulation(
       emitter.emit('scan:manipulation-start', { nodeId: node.id })
 
       const initialMouseY = e.pointer.y
-      const initialYOffset = node.yOffset || 0
+      const initialYOffset = node.position[1] ?? 0
       let lastYOffset: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -374,7 +374,7 @@ export function useScanManipulation(
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.yOffset, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [node.id, node.position, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleScaleDown = useCallback(

@@ -91,7 +91,7 @@ export function RoofNodeEditor() {
         if (previewRoofId) {
           // Update the roof to remove preview flag
           updateNode(previewRoofId, {
-            preview: false as any,
+            editor: { preview: false },
             name: 'Roof',
           })
         }

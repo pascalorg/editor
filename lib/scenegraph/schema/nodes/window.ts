@@ -7,7 +7,7 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   // Specific props: size, position on wall, etc.
   height: z.number().default(1), // height in meters of the bottom of the window
-  position: z.number(), // position in local coordinate system of the wall
+  position: z.tuple([z.number(), z.number()]), // position in local coordinate system of the wall
 }).describe(
   dedent`
   Window node - used to represent a window in the wall:

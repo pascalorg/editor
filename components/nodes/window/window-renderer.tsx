@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { WindowNode } from '@/lib/nodes/types'
+import type { WindowNode } from '@/lib/scenegraph/schema/index'
 
 interface WindowRendererProps {
   node: WindowNode

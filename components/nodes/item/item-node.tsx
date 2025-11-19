@@ -41,7 +41,7 @@ export function ItemNodeEditor() {
   const spatialGrid = useEditor((state) => state.spatialGrid)
   const selectedItem = useEditor((state) => state.selectedItem)
   const levels = useEditor((state) => {
-    const building = state.root.children[0]
+    const building = state.scene.root.children[0]
     return building ? building.children : []
   })
 

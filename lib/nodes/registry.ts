@@ -24,7 +24,7 @@ export const ComponentConfigSchema = z.object({
   toolName: z.string().optional(),
 
   // Tool icon component (React component type)
-  toolIcon: z.any().optional(),
+  toolIcon: z.any(),
 
   // Zod schema for renderer component props (not the full node)
   // This validates the props passed to the 3D renderer component

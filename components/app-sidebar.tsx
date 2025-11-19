@@ -50,10 +50,10 @@ export function AppSidebar() {
   const handleExport = useEditor((state) => state.handleExport)
   const selectedElements = useEditor((state) => state.selectedElements)
   const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
-  const handleSaveLayout = useEditor((state) => state.handleSaveLayout)
-  const handleLoadLayout = useEditor((state) => state.handleLoadLayout)
   const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
   const serializeLayout = useEditor((state) => state.serializeLayout)
+  const loadLayout = useEditor((state) => state.loadLayout)
+  
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -78,6 +78,33 @@ export function AppSidebar() {
 
   const handleLoadBuildClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const handleSaveLayout = () => {
+    const layout = serializeLayout()
+    const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `layout_${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        try {
+          const json = JSON.parse(event.target?.result as string)
+          loadLayout(json)
+        } catch (error) {
+          console.error('Failed to parse layout JSON:', error)
+        }
+      }
+      reader.readAsText(file)
+    }
   }
 
   return (
@@ -149,10 +176,7 @@ export function AppSidebar() {
       <input
         accept="application/json"
         className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) handleLoadLayout(file)
-        }}
+        onChange={handleFileLoad}
         ref={fileInputRef}
         type="file"
       />
