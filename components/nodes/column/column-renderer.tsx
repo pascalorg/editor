@@ -17,7 +17,7 @@ export function ColumnRenderer({ node }: ColumnRendererProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Check if this is a preview node
-  const isPreview = node.preview === true
+  const isPreview = node.editor?.preview === true
 
   const levelId = useMemo(() => {
     const id = getLevelId(node)
