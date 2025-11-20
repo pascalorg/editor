@@ -1,10 +1,11 @@
-import type { AnyNode, SceneNode, WallNode } from '../scenegraph/schema/index'
+import { SceneGraph } from '../scenegraph/index'
+import type { AnyNode, WallNode } from '../scenegraph/schema/index'
 
 export const selectWallsFromLevel =
   (levelId: string) =>
-  (state: { nodeIndex: Map<string, SceneNode> }): WallNode[] => {
-    const level = state.nodeIndex.get(levelId)
-    if (!level || level.type !== 'level') {
+  (state: { graph: SceneGraph }): WallNode[] => {
+    const levelHandle = state.graph.getNodeById(levelId)
+    if (!levelHandle || levelHandle.type !== 'level') {
       return []
     }
 
@@ -21,9 +22,8 @@ export const selectWallsFromLevel =
       }
     }
 
-    if ('children' in level && Array.isArray(level.children)) {
-      traverse(level.children as AnyNode[])
-    }
+    const children = levelHandle.children().map(h => h.data())
+    traverse(children as AnyNode[])
 
     return walls
   }

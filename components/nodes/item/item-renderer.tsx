@@ -28,11 +28,12 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     nodeRotation,
   } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as ItemNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ItemNode | undefined
       return {
         nodeSize: node?.size,
         isPreview: node?.editor?.preview === true,
-        levelId: state.getLevelId(node!),
+        levelId: handle?.meta.levelId,
         canPlace: node?.editor?.canPlace !== false,
         nodePosition: node?.position,
         nodeRotation: node?.rotation,

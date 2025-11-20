@@ -9,11 +9,13 @@ import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { selectWallsFromLevel } from '@/lib/nodes/selectors'
+import type { SceneGraph } from '@/lib/scenegraph/index'
 import type {
   AnyNode,
   GridItem,
   GridPoint,
   SceneNode,
+  SceneNodeId,
   WallNode,
 } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
@@ -170,17 +172,19 @@ function calculateJunctionIntersections(junction: Junction) {
 }
 // --- End of Junction Helpers ---
 
+type NodeProvider = (id: string) => AnyNode | null | undefined
+
 /**
  * Find all ancestors of a node using the node index
  */
-function findAncestors(nodeIndex: Map<string, AnyNode>, nodeId: string): AnyNode[] {
+function findAncestors(getNode: NodeProvider, nodeId: string): AnyNode[] {
   const ancestors: AnyNode[] = []
-  let current = nodeIndex.get(nodeId)
+  let current = getNode(nodeId)
 
   // @ts-expect-error - parent property check
   while (current?.parent) {
     // @ts-expect-error
-    const parent = nodeIndex.get(current.parent)
+    const parent = getNode(current.parent)
     if (parent) {
       ancestors.push(parent)
       current = parent
@@ -197,7 +201,7 @@ function findAncestors(nodeIndex: Map<string, AnyNode>, nodeId: string): AnyNode
  */
 function calculateWorldPosition(
   node: AnyNode & GridItem,
-  nodeIndex: Map<string, AnyNode>,
+  getNode: NodeProvider,
 ): { position: [number, number]; rotation: number } {
   // If node doesn't have a parent property, it's at world root
   // @ts-expect-error
@@ -209,7 +213,7 @@ function calculateWorldPosition(
   }
 
   // Get all ancestors (from immediate parent up to root)
-  const ancestors = findAncestors(nodeIndex, node.id)
+  const ancestors = findAncestors(getNode, node.id)
 
   // Start with the node's local position and rotation
   let worldX = node.position[0]
@@ -251,57 +255,67 @@ interface WallRendererProps {
 }
 
 // Create a selector that returns wall IDs and their relevant properties
-export const selectWallDataFromLevel =
-  (levelId: string) => (state: { nodeIndex: Map<string, SceneNode> }) => {
-    const level = state.nodeIndex.get(levelId)
-    if (!level || level.type !== 'level') {
-      return { wallIds: [], wallData: {} }
-    }
+export const selectWallDataFromLevel = (levelId: string) => (state: { graph: SceneGraph }) => {
+  const levelHandle = state.graph.getNodeById(levelId as SceneNodeId)
 
-    const wallIds: string[] = []
-    const wallData: Record<
-      string,
-      { position: [number, number]; size: [number, number]; rotation: number }
-    > = {}
+  const level = levelHandle?.data()
+  if (!level || level.type !== 'level') {
+    return { wallIds: [], wallData: {} }
+  }
 
-    const traverse = (nodes: AnyNode[]) => {
-      for (const node of nodes) {
-        if (node.type === 'wall') {
-          const wall = node as WallNode
-          wallIds.push(wall.id)
-          wallData[wall.id] = {
-            position: wall.position,
-            size: wall.size,
-            rotation: wall.rotation || 0,
-          }
-        } else if (node.type === 'group' && 'children' in node && Array.isArray(node.children)) {
-          traverse(node.children as AnyNode[])
+  const wallIds: string[] = []
+  const wallData: Record<
+    string,
+    { position: [number, number]; size: [number, number]; rotation: number }
+  > = {}
+
+  const traverse = (nodes: AnyNode[]) => {
+    for (const node of nodes) {
+      if (node.type === 'wall') {
+        const wall = node as WallNode
+        wallIds.push(wall.id)
+        wallData[wall.id] = {
+          position: wall.position,
+          size: wall.size,
+          rotation: wall.rotation || 0,
         }
+      } else if (node.type === 'group' && 'children' in node && Array.isArray(node.children)) {
+        traverse(node.children as AnyNode[])
       }
     }
-
-    if ('children' in level && Array.isArray(level.children)) {
-      traverse(level.children as AnyNode[])
-    }
-
-    return { wallIds, wallData }
   }
+
+  // Use SceneGraph handles to get children
+  const children = levelHandle!.children().map((h) => h.data())
+  traverse(children as AnyNode[])
+
+  return { wallIds, wallData }
+}
 
 const createWallDataSelector = (levelId: string) => {
   let lastWallIds: string[] = []
   let lastWallData: Record<string, any> = {}
   let lastResult = { wallIds: lastWallIds, wallData: lastWallData }
-  return (state: { nodeIndex: Map<string, SceneNode> }) => {
-    const level = state.nodeIndex.get(levelId)
-    if (!level || level.type !== 'level') {
+  return (state: { graph: SceneGraph }) => {
+    const levelHandle = state.graph.getNodeById(levelId as SceneNodeId)
+    if (!levelHandle) {
       return lastResult // Return same reference if no level
     }
 
     const wallIds: string[] = []
     const wallData: Record<string, any> = {}
 
-    const traverse = (nodes: AnyNode[]) => {
-      for (const node of nodes) {
+    // Recursive traversal helper using scene graph handles or data
+    // Since we are inside a selector, accessing state.graph is fine, but state.graph.getNodeById returns handles wrapper around scene
+    // We can just use the raw nodes if we want, or handles.
+
+    // We need to traverse children recursively.
+    // levelHandle.children() is only direct children.
+
+    const traverse = (handle: any) => {
+      const children = handle.children()
+      for (const childHandle of children) {
+        const node = childHandle.data()
         if (node.type === 'wall') {
           const wall = node as WallNode
           wallIds.push(wall.id)
@@ -312,15 +326,13 @@ const createWallDataSelector = (levelId: string) => {
             start: wall.start,
             end: wall.end,
           }
-        } else if (node.type === 'group' && 'children' in node) {
-          traverse(node.children as AnyNode[])
+        } else if (node.type === 'group') {
+          traverse(childHandle)
         }
       }
     }
 
-    if ('children' in level && Array.isArray(level.children)) {
-      traverse(level.children as AnyNode[])
-    }
+    traverse(levelHandle)
 
     // Check if data actually changed
     const idsChanged =
@@ -357,14 +369,21 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const { isPreview, canPlace, levelId, nodeSize, nodeChildrenIdsStr } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as WallNode | undefined
-      const levelId = state.getLevelId(node!)
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as WallNode | undefined
+      // getLevelId helper in state works with node object, but we updated it to take node
+      // But store.getLevelId(node) calls graph.getNodeById.
+
+      // Actually we can just use handle.meta.levelId directly if available via selector?
+      // Yes, SceneGraph handles have meta.
+      const levelId = state.graph.index.byId.get(nodeId)?.levelId
+
       return {
         isPreview: node?.editor?.preview === true,
         canPlace: node?.editor?.canPlace !== false,
         levelId,
         nodeSize: node?.size || [0, 0],
-        nodeChildrenIdsStr: JSON.stringify(node?.children.map((child) => child.id) || []),
+        nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
       }
     }),
   )
@@ -413,9 +432,13 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
     // Calculate world space coordinates for junction detection
     // Now using calculateWorldPosition to account for parent transforms
-    const nodeIndex = useEditor.getState().nodeIndex
-    const wall = nodeIndex.get(nodeId) as WallNode
-    const worldPos = calculateWorldPosition(wall, nodeIndex)
+    const graph = useEditor.getState().graph
+    const getNode = (id: string) => graph.getNodeById(id as SceneNodeId)?.data()
+
+    const wall = getNode(nodeId) as WallNode
+    if (!wall) return null
+
+    const worldPos = calculateWorldPosition(wall, getNode)
     const [x1, y1] = worldPos.position
     const worldRotation = worldPos.rotation
 
@@ -430,8 +453,8 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       const data = wallData[wallId]
 
       // Get the actual wall node from the index
-      const wallNode = nodeIndex.get(wallId) as WallNode
-      const wWorldPos = calculateWorldPosition(wallNode, nodeIndex)
+      const wallNode = getNode(wallId) as WallNode
+      const wWorldPos = calculateWorldPosition(wallNode, getNode)
       const [wx1, wy1] = wWorldPos.position
       const wWorldRotation = wWorldPos.rotation
       const wLength = data.size[0]
@@ -562,50 +585,50 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      const node = useEditor.getState().nodeIndex.get(nodeId) as WallNode
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:click', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerEnter = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      const node = useEditor.getState().nodeIndex.get(nodeId) as WallNode
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:enter', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerLeave = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      const node = useEditor.getState().nodeIndex.get(nodeId) as WallNode
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:leave', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      const node = useEditor.getState().nodeIndex.get(nodeId) as WallNode
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:move', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint],
+    [getClosestGridPoint, nodeId],
   )
 
   if (!wallGeometry) return null
@@ -717,7 +740,8 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 const WallOpening = ({ nodeId }: { nodeId: string }) => {
   const opening = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId)
+      const handle = state.graph.getNodeById(nodeId as SceneNodeId)
+      const node = handle?.data()
 
       return {
         type: (node as any)?.type,

@@ -60,7 +60,7 @@ export function NodesDebugger() {
 
   // Get full scene from store
   const scene = useEditor((state) => state.scene)
-  const nodeIndex = useEditor((state) => state.nodeIndex)
+  const graph = useEditor((state) => state.graph)
   const debug = useEditor((state) => state.debug)
   const setDebug = useEditor((state) => state.setDebug)
 
@@ -146,7 +146,7 @@ export function NodesDebugger() {
   }
 
   // Prepare view data
-  const viewData = state.activeTab === 'scene' ? scene : Object.fromEntries(nodeIndex)
+  const viewData = state.activeTab === 'scene' ? scene : Object.fromEntries(graph.index.byId)
 
   return (
     <div

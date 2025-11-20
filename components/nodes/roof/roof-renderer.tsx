@@ -83,7 +83,6 @@ interface RoofRendererProps {
 }
 
 export function RoofRenderer({ nodeId }: RoofRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const tileSize = TILE_SIZE
   const baseHeight = WALL_HEIGHT
@@ -112,10 +111,11 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     controlMode,
   } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as RoofNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as RoofNode | undefined
       return {
         isPreview: node?.editor?.preview === true,
-        levelId: state.getLevelId(node!),
+        levelId: handle?.meta.levelId,
         nodePosition: node?.position,
         nodeVisible: node?.visible,
         nodeOpacity: node?.opacity,
@@ -193,9 +193,8 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
         opacity: updatedSegment.opacity ?? 100,
       }
 
-      // TODO: Refaactor to use updateNode with command manager for undo/redo
-      // const updatedLevels = updateNodeProperties(state.levels, nodeId, updates)
-      // state.updateLevels(updatedLevels) // Don't push to undo during drag - final commit handled by drag handlers
+      // Update node in store without pushing to undo stack (skipUndo=true)
+      state.updateNode(nodeId, updates, true)
     },
     [nodeId],
   )
@@ -370,7 +369,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
 
         // Record undo operation if there were changes
         if (hasChanged) {
-          // Use updateNode to record the change with command manager
+          // Use updateNode to record the change with command manager (skipUndo=false default)
           useEditor.getState().updateNode(nodeId, {
             position: roofSegment.start,
             size: [
@@ -857,14 +856,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   const emissive = '#8b7355'
   let emissiveIntensity = 0
 
-  // TODO: If we want to bring back the isHovered we need to add it to our useEditor state
-  // if (isSelected && isHovered) {
-  //   emissiveIntensity = 0.6
-  // } else if (isSelected) {
-  //   emissiveIntensity = 0.4
-  // } else if (isHovered) {
-  //   emissiveIntensity = 0.3
-  // }
   if (isSelected) {
     emissiveIntensity = 0.4
   }
@@ -1089,32 +1080,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           <mesh
             castShadow
             geometry={roofGeometry.frontGable}
-            // TODO: Check if we need to re-enable these features
-            // onClick={(e) => {
-            //   if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-            //     return
-            //   }
-            //   e.stopPropagation()
-            //   onClick?.(e)
-            // }}
-            // onPointerDown={(e) => {
-            //   if (movingCamera || controlMode === 'delete') {
-            //     return
-            //   }
-            //   e.stopPropagation()
-            // }}
-            // onPointerEnter={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerEnter?.()
-            //   }
-            // }}
-            // onPointerLeave={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerLeave?.()
-            //   }
-            // }}
             receiveShadow
           >
             {material}
@@ -1124,25 +1089,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           <mesh
             castShadow
             geometry={roofGeometry.backGable}
-            // onClick={(e) => {
-            //   if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-            //     return
-            //   }
-            //   e.stopPropagation()
-            //   onClick?.(e)
-            // }}
-            // onPointerEnter={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerEnter?.()
-            //   }
-            // }}
-            // onPointerLeave={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerLeave?.()
-            //   }
-            // }}
             receiveShadow
           >
             {material}
@@ -1152,25 +1098,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           <mesh
             castShadow
             geometry={roofGeometry.leftRoof}
-            // onClick={(e) => {
-            //   if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-            //     return
-            //   }
-            //   e.stopPropagation()
-            //   onClick?.(e)
-            // }}
-            // onPointerEnter={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerEnter?.()
-            //   }
-            // }}
-            // onPointerLeave={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerLeave?.()
-            //   }
-            // }}
             receiveShadow
           >
             {material}
@@ -1180,25 +1107,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           <mesh
             castShadow
             geometry={roofGeometry.rightRoof}
-            // onClick={(e) => {
-            //   if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-            //     return
-            //   }
-            //   e.stopPropagation()
-            //   onClick?.(e)
-            // }}
-            // onPointerEnter={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerEnter?.()
-            //   }
-            // }}
-            // onPointerLeave={(e) => {
-            //   if (controlMode !== 'delete' && !movingCamera) {
-            //     e.stopPropagation()
-            //     onPointerLeave?.()
-            //   }
-            // }}
             receiveShadow
           >
             {material}

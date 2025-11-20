@@ -1,7 +1,7 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import { current, enableMapSet, produce } from 'immer'
+import { enableMapSet, produce } from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
@@ -24,15 +24,10 @@ import {
 import { LevelElevationProcessor } from '@/lib/processors/level-elevation-processor'
 import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
-import {
-  buildDraftNodeIndex,
-  getLevelIdFromDraft,
-  getLevels,
-  getMainBuilding,
-} from '@/lib/scenegraph/editor-utils'
-import { SceneGraph } from '@/lib/scenegraph/index'
+import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
 import {
   type AnyNode,
+  type AnyNodeId,
   BuildingNode,
   initScene,
   RootNode,
@@ -87,10 +82,6 @@ function extractAssetsFromRoot(root: RootNode): {
   if (root.children) {
     root.children = root.children.map((site) => walk(site) as SiteNode)
   }
-  // Legacy walk
-  if ((root as any).buildings) {
-    ;(root as any).buildings = (root as any).buildings.map((b: any) => walk(b))
-  }
 
   return { root, assets }
 }
@@ -126,10 +117,6 @@ function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
   // Walk sites
   if (root.children) {
     root.children = root.children.map((site) => walk(site) as SiteNode)
-  }
-  // Legacy walk
-  if ((root as any).buildings) {
-    ;(root as any).buildings = (root as any).buildings.map((b: any) => walk(b))
   }
 
   return root
@@ -230,7 +217,7 @@ export type {
 } from '@/lib/scenegraph/schema/index'
 
 // Using Schema types instead for internal use
-import type { AnyNodeId, LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
+import type { LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
 
 export type Tool =
   | 'slab'
@@ -251,13 +238,12 @@ export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 
-type StoreState = {
+export type StoreState = {
   // ============================================================================
   // SCENE GRAPH STATE
   // ============================================================================
   scene: Scene
   graph: SceneGraph
-  nodeIndex: Map<string, AnyNode> // Mutable draft index for O(1) access
   spatialGrid: SpatialGrid
 
   // ============================================================================
@@ -328,8 +314,6 @@ type StoreState = {
   setPointerPosition: (position: [number, number] | null) => void
   setSelectedItem: (item: any) => void
 
-  getWallsSet: () => Set<string>
-  getRoofsSet: () => Set<string>
   getSelectedElementsSet: () => Set<AnyNodeId>
   getSelectedImageIdsSet: () => Set<string>
   getSelectedScanIdsSet: () => Set<string>
@@ -352,118 +336,102 @@ type StoreState = {
   setNodeOpacity: (nodeId: string, opacity: number) => void
 
   // Helper accessors
-  getLevelId: (node: AnyNode) => string | null
+  getLevelId: (nodeId: string) => string | null
+  getNode: (nodeId: string) => SceneNodeHandle | null
 
   // Generic node operations
   selectNode: (nodeId: string) => void
   addNode: (nodeData: Omit<AnyNode, 'id'>, parentId: string | null) => string
-  updateNode: (nodeId: string, updates: Partial<AnyNode>) => string
+  updateNode: (nodeId: string, updates: Partial<AnyNode>, skipUndo?: boolean) => string
   deleteNode: (nodeId: string) => void
   deletePreviewNodes: () => void
 }
 
 /**
- * Rebuild the spatial grid from the node index
+ * Rebuild the spatial grid from the scene graph
  */
-function rebuildSpatialGrid(
-  spatialGrid: SpatialGrid,
-  nodeIndex: Map<string, SceneNode>,
-  root: RootNode,
-): void {
+function rebuildSpatialGrid(spatialGrid: SpatialGrid, graph: SceneGraph): void {
   spatialGrid.clear()
-  for (const [nodeId, node] of nodeIndex.entries()) {
-    const levelId = getLevelIdFromDraft(node, nodeIndex)
-    if (levelId) {
-      spatialGrid.updateNode(nodeId, levelId, node, nodeIndex)
-    }
-  }
-}
+  const getNode = (id: string) => graph.getNodeById(id as AnyNodeId)?.data() ?? null
 
-/**
- * Update a node's properties in both the tree and nodeIndex
- */
-function updateNodeInDraft(
-  nodeId: string,
-  updates: Partial<AnyNode>,
-  root: RootNode,
-  nodeIndex: Map<string, SceneNode>,
-): void {
-  // Using nodeIndex for direct access since it's mutable in draft
-  const node = nodeIndex.get(nodeId)
-  if (node) {
-    Object.assign(node, updates)
-  }
+  graph.traverse((handle) => {
+    const node = handle.data()
+    const levelId = getLevelIdForNode(graph.index, handle.id)
+    if (levelId) {
+      spatialGrid.updateNode(node.id, levelId, node, getNode)
+    }
+  })
 }
 
 /**
  * Process all nodes in a level with their spatial neighbors
  */
 function processLevel(
-  draft: {
+  state: {
     spatialGrid: SpatialGrid
-    nodeIndex: Map<string, SceneNode>
+    graph: SceneGraph
     verticalStackingProcessor: VerticalStackingProcessor
     levelHeightProcessor: LevelHeightProcessor
     levelElevationProcessor: LevelElevationProcessor
-    scene: Scene
   },
   levelId: string | null,
 ): void {
   if (!levelId) return
 
-  const level = draft.nodeIndex.get(levelId)
-  if (!level || level.type !== 'level') return
+  const levelHandle = state.graph.getNodeById(levelId as AnyNodeId)
+  if (!levelHandle || levelHandle.type !== 'level') return
 
-  const nodeIds = draft.spatialGrid.getNodesInLevel(levelId)
+  const nodeIds = state.spatialGrid.getNodesInLevel(levelId)
 
   for (const nodeId of nodeIds) {
-    const node = draft.nodeIndex.get(nodeId)
-    if (!node) continue
+    const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+    if (!handle) continue
 
-    const bounds = draft.spatialGrid.getNodeBounds(nodeId)
+    const bounds = state.spatialGrid.getNodeBounds(nodeId)
     if (!bounds) continue
 
-    const neighborIds = draft.spatialGrid.query(levelId, bounds)
+    const neighborIds = state.spatialGrid.query(levelId, bounds)
     const neighbors = Array.from(neighborIds)
-      .map((id) => draft.nodeIndex.get(id))
+      .map((id) => state.graph.getNodeById(id as AnyNodeId)?.data())
       .filter((n): n is AnyNode => n !== undefined)
 
-    const results = draft.verticalStackingProcessor.process(neighbors)
+    const results = state.verticalStackingProcessor.process(neighbors)
     const nodeResults = results.filter((r) => r.nodeId === nodeId)
 
     nodeResults.forEach(({ nodeId, updates }) => {
-      updateNodeInDraft(nodeId, updates, draft.scene.root, draft.nodeIndex)
+      // Direct update on graph (triggers onChange)
+      state.graph.updateNode(nodeId as AnyNodeId, updates)
     })
   }
 
   // Step 2: Calculate level height
-  const heightResults = draft.levelHeightProcessor.process([level])
+  const levelNode = levelHandle.data() as unknown as SchemaLevelNode
+  const heightResults = state.levelHeightProcessor.process([levelNode])
   heightResults.forEach(({ nodeId, updates }) => {
-    updateNodeInDraft(nodeId, updates, draft.scene.root, draft.nodeIndex)
+    state.graph.updateNode(nodeId as AnyNodeId, updates)
   })
 
   // Step 3: Calculate elevation for all levels
-  const building = getMainBuilding(draft.scene.root)
-  if (building && building.type === 'building') {
-    const allLevels = building.children
-    const elevationResults = draft.levelElevationProcessor.process(allLevels)
+  const building = state.graph.nodes.find({ type: 'building' })[0]
+  if (building) {
+    const allLevels = building.children().map((h) => h.data()) as unknown as SchemaLevelNode[]
+    const elevationResults = state.levelElevationProcessor.process(allLevels)
     elevationResults.forEach(({ nodeId, updates }) => {
-      updateNodeInDraft(nodeId, updates, draft.scene.root, draft.nodeIndex)
+      state.graph.updateNode(nodeId as AnyNodeId, updates)
     })
   }
 }
 
-function recomputeAllLevels(draft: {
+function recomputeAllLevels(state: {
   spatialGrid: SpatialGrid
-  nodeIndex: Map<string, SceneNode>
+  graph: SceneGraph
   verticalStackingProcessor: VerticalStackingProcessor
   levelHeightProcessor: LevelHeightProcessor
   levelElevationProcessor: LevelElevationProcessor
-  scene: Scene
 }): void {
-  const levels = getLevels(draft.scene.root)
+  const levels = state.graph.nodes.find({ type: 'level' })
   for (const level of levels) {
-    processLevel(draft, level.id)
+    processLevel(state, level.id)
   }
 }
 
@@ -471,44 +439,24 @@ const useStore = create<StoreState>()(
   persist(
     (set, get) => {
       const initialScene = initScene()
-      const initialGraph = new SceneGraph(initialScene, {
-        onChange: (nextScene, nextIndex) => {
-          set((state) => ({
-            scene: nextScene,
-            nodeIndex: buildDraftNodeIndex(nextScene), // Sync legacy index
-            graph: new SceneGraph(nextScene, {
-              index: nextIndex,
-              onChange: state.graph['onChange'], // Reuse the same callback wrapper if possible, or we need to redefine it.
-              // Actually we can't easily access 'state.graph.onChange' if it's private/readonly.
-              // Better to extract the callback to a variable.
-            }),
-          }))
-        },
-      })
 
-      // We need to fix the onChange recursion.
-      // Let's define a stable handler.
-      // But 'set' is available here.
+      // Handler for graph changes
+      const handleGraphChange = (nextScene: Scene) => {
+        const state = get()
+        set({ scene: nextScene })
 
-      const handleGraphChange = (nextScene: Scene, nextIndex: any) => {
-        set({
-          scene: nextScene,
-          nodeIndex: buildDraftNodeIndex(nextScene),
-          graph: new SceneGraph(nextScene, {
-            index: nextIndex,
-            onChange: handleGraphChange,
-          }),
-        })
+        const currentGraph = get().graph
+        rebuildSpatialGrid(state.spatialGrid, currentGraph)
+        recomputeAllLevels(get())
       }
 
       const graph = new SceneGraph(initialScene, {
-        onChange: handleGraphChange,
+        onChange: (nextScene) => handleGraphChange(nextScene),
       })
 
       return {
         scene: initialScene,
         graph,
-        nodeIndex: new Map(),
         spatialGrid: new SpatialGrid(1),
         commandManager: new CommandManager(),
 
@@ -544,31 +492,19 @@ const useStore = create<StoreState>()(
         },
 
         addLevel: (level) => {
-          set(
-            produce((draft) => {
-              const command = new AddLevelCommand(level)
-              draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-              processLevel(draft, level.id)
-            }),
-          )
+          const { graph, commandManager } = get()
+          const command = new AddLevelCommand(level)
+          commandManager.execute(command, graph)
         },
         deleteLevel: (levelId) => {
-          set(
-            produce((draft) => {
-              const command = new DeleteLevelCommand(levelId)
-              draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-              recomputeAllLevels(draft)
-            }),
-          )
+          const { graph, commandManager } = get()
+          const command = new DeleteLevelCommand(levelId)
+          commandManager.execute(command, graph)
         },
         reorderLevels: (levels) => {
-          set(
-            produce((draft) => {
-              const command = new ReorderLevelsCommand(levels)
-              draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-              recomputeAllLevels(draft)
-            }),
-          )
+          const { graph, commandManager } = get()
+          const command = new ReorderLevelsCommand(levels)
+          commandManager.execute(command, graph)
         },
         selectFloor: (floorId) => {
           const state = get()
@@ -583,11 +519,11 @@ const useStore = create<StoreState>()(
             return
           }
 
-          const level = getLevels(state.scene.root).find((l) => l.id === floorId)
+          const level = state.graph.nodes.find({ type: 'level' }).find((l) => l.id === floorId)
           if (level) {
             set({
               selectedFloorId: floorId,
-              currentLevel: level.level,
+              currentLevel: (level.data() as unknown as SchemaLevelNode).level,
               viewMode: 'level',
               selectedElements: [],
             })
@@ -637,34 +573,6 @@ const useStore = create<StoreState>()(
             levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
           })),
 
-        getWallsSet: () => {
-          const state = get()
-          const selectedFloorId = state.selectedFloorId
-          if (!selectedFloorId) return new Set<string>()
-
-          const level = getLevels(state.scene.root).find((l) => l.id === selectedFloorId)
-          if (!level) return new Set<string>()
-
-          const wallKeys = level.children
-            .filter((child: any) => child.type === 'wall')
-            .map((wall: any) => wall.id)
-
-          return new Set(wallKeys)
-        },
-        getRoofsSet: () => {
-          const state = get()
-          const selectedFloorId = state.selectedFloorId
-          if (!selectedFloorId) return new Set<string>()
-
-          const level = getLevels(state.scene.root).find((l) => l.id === selectedFloorId)
-          if (!level) return new Set<string>()
-
-          const roofKeys = level.children
-            .filter((child: any) => child.type === 'roof')
-            .map((roof: any) => roof.id)
-
-          return new Set(roofKeys)
-        },
         getSelectedElementsSet: () => new Set(get().selectedElements),
         getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
         getSelectedScanIdsSet: () => new Set(get().selectedScanIds),
@@ -694,30 +602,11 @@ const useStore = create<StoreState>()(
           if (state.selectedElements.length === 0) return
           const elementIds = [...state.selectedElements]
 
-          set(
-            produce((draft) => {
-              const affectedLevels = new Set<string>()
-              for (const nodeId of elementIds) {
-                const node = draft.nodeIndex.get(nodeId)
-                if (!node) continue
-                const levelId = getLevelIdFromDraft(node, draft.nodeIndex)
-                if (levelId) affectedLevels.add(levelId)
-              }
+          const batchCommand = new BatchDeleteCommand(elementIds)
+          state.commandManager.execute(batchCommand, state.graph)
 
-              const batchCommand = new BatchDeleteCommand(elementIds)
-              draft.commandManager.execute(batchCommand, draft.scene.root, draft.nodeIndex)
-
-              for (const nodeId of elementIds) {
-                draft.spatialGrid.removeNode(nodeId)
-              }
-
-              for (const levelId of affectedLevels) {
-                processLevel(draft, levelId)
-              }
-
-              draft.selectedElements = []
-            }),
-          )
+          // UI updates
+          set({ selectedElements: [] })
         },
         handleDeleteSelectedImages: () => {
           const state = get()
@@ -776,436 +665,8 @@ const useStore = create<StoreState>()(
           })
 
           if (json.root) {
-            set(
-              produce((draft) => {
-                // Handle legacy structure in JSON load
-                const root = json.root as any
+            const root = json.root as any
 
-                // Helper to fix building structure
-                const fixBuilding = (b: any) => {
-                  if (b.levels && !b.children) {
-                    b.children = b.levels
-                    delete b.levels
-                  }
-                }
-
-                // Handle Root migration (Buildings -> Sites)
-                if (root.buildings && !root.children) {
-                  // Convert legacy buildings array to a Site
-                  if (Array.isArray(root.buildings)) {
-                    root.buildings.forEach(fixBuilding)
-                    const site = {
-                      id: 'site_default',
-                      type: 'site',
-                      object: 'node',
-                      children: root.buildings,
-                    }
-                    root.children = [site]
-                  }
-                  delete root.buildings
-                } else if (root.children) {
-                  // Check if children are Buildings (intermediate legacy) or Sites (new)
-                  if (root.children.length > 0 && root.children[0].type === 'building') {
-                    // Wrap buildings in site
-                    const buildings = root.children
-                    buildings.forEach(fixBuilding)
-                    const site = {
-                      id: 'site_default',
-                      type: 'site',
-                      object: 'node',
-                      children: buildings,
-                    }
-                    root.children = [site]
-                  } else {
-                    // Already sites, just fix buildings inside
-                    root.children.forEach((site: any) => {
-                      if (site.children) {
-                        site.children.forEach((c: any) => {
-                          if (c.type === 'building') fixBuilding(c)
-                        })
-                      }
-                    })
-                  }
-                }
-
-                // Ensure all nodes have object: 'node' marker for indexing
-                ensureNodeMarkers(root)
-
-                draft.scene.root = root
-                draft.nodeIndex = buildDraftNodeIndex(draft.scene.root)
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-              }),
-            )
-          } else if (json.levels) {
-            // Simple legacy migration for levels array
-            const migratedRoot = RootNode.parse({
-              children: [
-                SiteNode.parse({
-                  children: [
-                    BuildingNode.parse({
-                      children: json.levels,
-                    }),
-                  ],
-                }),
-              ],
-            })
-
-            // Ensure all nodes have object: 'node' marker for indexing
-            ensureNodeMarkers(migratedRoot)
-
-            set(
-              produce((draft) => {
-                draft.scene.root = migratedRoot
-                draft.nodeIndex = buildDraftNodeIndex(draft.scene)
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-              }),
-            )
-          }
-        },
-        handleLoadLayout: (file) => {
-          if (file && file.type === 'application/json') {
-            const reader = new FileReader()
-            reader.onload = (event) => {
-              try {
-                const json = JSON.parse(event.target?.result as string)
-                get().loadLayout(json)
-              } catch (error) {
-                console.error('Failed to parse layout JSON:', error)
-              }
-            }
-            reader.readAsText(file)
-          }
-        },
-        handleSaveLayout: () => {
-          // Implementation moved to component but keeping empty stub if needed or removing
-          // We removed it from return type? No, it's still in the interface in the user query implies "separated logic"
-          // But I will remove it from here and implement in component.
-          // Actually the interface has it. I will implement it here as it's just downloading.
-          // User said "saveLayout can be in it's own component".
-          // So I will remove it from here.
-          // Wait, I need to remove it from type definition too.
-        },
-
-        handleResetToDefault: () => {
-          const initialScene = initScene()
-          const mainBuilding = getMainBuilding(initialScene.root)
-          set({
-            scene: initialScene,
-            nodeIndex: buildDraftNodeIndex(initialScene),
-            currentLevel: 0,
-            selectedFloorId: mainBuilding?.children[0].id ?? null,
-            viewMode: 'level',
-            selectedElements: [],
-            selectedImageIds: [],
-            selectedScanIds: [],
-          })
-          get().commandManager.clear()
-          const state = get()
-          rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.scene.root)
-        },
-
-        undo: () =>
-          set(
-            produce((draft) => {
-              const success = draft.commandManager.undo(draft.scene.root, draft.nodeIndex)
-              if (success) {
-                draft.selectedElements = []
-                draft.selectedImageIds = []
-                draft.selectedScanIds = []
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-                recomputeAllLevels(draft)
-              }
-            }),
-          ),
-        redo: () =>
-          set(
-            produce((draft) => {
-              const success = draft.commandManager.redo(draft.scene.root, draft.nodeIndex)
-              if (success) {
-                draft.selectedElements = []
-                draft.selectedImageIds = []
-                draft.selectedScanIds = []
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-                recomputeAllLevels(draft)
-              }
-            }),
-          ),
-
-        // Simplified Node Operations
-        toggleNodeVisibility: (nodeId) => {
-          const node = get().nodeIndex.get(nodeId)
-          if (node && 'visible' in node) {
-            get().updateNode(nodeId, { visible: !(node.visible ?? true) } as any)
-          }
-        },
-        setNodeOpacity: (nodeId, opacity) => {
-          get().updateNode(nodeId, { opacity } as any)
-        },
-
-        getLevelId: (node) => getLevelIdFromDraft(node, get().nodeIndex),
-
-        selectNode: (nodeId) => {
-          const state = get()
-          const node = state.nodeIndex.get(nodeId)
-          if (!node) return
-
-          // Clear all selections first
-          set({
-            selectedElements: [],
-            selectedImageIds: [],
-            selectedScanIds: [],
-          })
-
-          switch (node.type) {
-            case 'level':
-              get().selectFloor(node.id)
-              break
-            case 'wall':
-            case 'roof':
-            case 'column':
-              // Use handleElementSelect which handles selection state and mode switching
-              get().handleElementSelect(node.id, {})
-              break
-            case 'image':
-              set({ selectedImageIds: [node.id] })
-              break
-            case 'scan':
-              set({ selectedScanIds: [node.id] })
-              break
-            default: {
-              // For elements like doors/windows, try to select parent wall
-              const parentId = (node as any).parent
-              if (parentId) {
-                const parentNode = state.nodeIndex.get(parentId)
-                if (parentNode?.type === 'wall') {
-                  get().handleElementSelect(parentId, {})
-                }
-              }
-              break
-            }
-          }
-        },
-
-        addNode: (nodeData, parentId) => {
-          let nodeId = ''
-          set(
-            produce((draft) => {
-              const command = new AddNodeCommand(nodeData, parentId)
-              nodeId = command.getNodeId()
-
-              if ((nodeData as any).editor?.preview) {
-                command.execute(draft.scene.root, draft.nodeIndex)
-              } else {
-                draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-              }
-
-              // Rebuild nodeIndex from tree to ensure all references are up-to-date
-              draft.nodeIndex = buildDraftNodeIndex(draft.scene)
-
-              const node = draft.nodeIndex.get(nodeId)
-
-              if (node) {
-                const levelId = getLevelIdFromDraft(node, draft.nodeIndex)
-                if (levelId) {
-                  draft.spatialGrid.updateNode(nodeId, levelId, node, draft.nodeIndex)
-                  processLevel(draft, levelId)
-                }
-              }
-            }),
-          )
-          return nodeId
-        },
-
-        updateNode: (nodeId, updates) => {
-          let resultNodeId = nodeId
-          set(
-            produce((draft) => {
-              const fromNode = draft.nodeIndex.get(nodeId)
-
-              if (!fromNode) return
-
-              const isCommittingPreview =
-                fromNode.editor?.preview === true && (updates as any).editor?.preview === false
-
-              if (isCommittingPreview) {
-                const previewNode = current(fromNode)
-                const deleteCommand = new DeleteNodeCommand(nodeId)
-                deleteCommand.execute(draft.scene.root, draft.nodeIndex)
-
-                const { editor, id, children, parent, ...nodeData } = previewNode as any
-                const cleanName =
-                  (updates as any).name ||
-                  nodeData.name?.replace(' Preview', '').replace('Preview ', '') ||
-                  nodeData.type
-
-                // Recursively clear preview flag from all children
-                const clearPreviewRecursive = (node: any): any => {
-                  const clearedNode = { ...node }
-                  if (clearedNode.editor?.preview) {
-                    clearedNode.editor = { ...clearedNode.editor, preview: false }
-                  }
-                  if (Array.isArray(clearedNode.children)) {
-                    clearedNode.children = clearedNode.children.map(clearPreviewRecursive)
-                  }
-                  return clearedNode
-                }
-
-                const newNodeData = {
-                  ...nodeData,
-                  ...updates,
-                  name: cleanName,
-                }
-
-                // Handle children cleanup if needed
-                if (Array.isArray(children)) {
-                  newNodeData.children = children.map(clearPreviewRecursive)
-                } else {
-                  newNodeData.children = []
-                }
-
-                const addCommand = new AddNodeCommand(newNodeData, parent)
-                resultNodeId = addCommand.getNodeId()
-                draft.commandManager.execute(addCommand, draft.scene.root, draft.nodeIndex)
-
-                // Rebuild nodeIndex after committing preview to ensure all children are indexed
-                draft.nodeIndex = buildDraftNodeIndex(draft.scene)
-              } else {
-                const command = new UpdateNodeCommand(nodeId, updates)
-                if (fromNode.editor?.preview) {
-                  command.execute(draft.scene.root, draft.nodeIndex)
-                } else {
-                  draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-                }
-              }
-
-              const node = draft.nodeIndex.get(resultNodeId)
-              if (node) {
-                const levelId = getLevelIdFromDraft(node, draft.nodeIndex)
-                if (levelId) {
-                  draft.spatialGrid.updateNode(resultNodeId, levelId, node, draft.nodeIndex)
-                  processLevel(draft, levelId)
-                }
-              }
-            }),
-          )
-          return resultNodeId
-        },
-
-        deleteNode: (nodeId) => {
-          set(
-            produce((draft) => {
-              const node = draft.nodeIndex.get(nodeId)
-              const levelId = node ? getLevelIdFromDraft(node, draft.nodeIndex) : null
-
-              const command = new DeleteNodeCommand(nodeId)
-              if ((node as any)?.preview) {
-                command.execute(draft.scene.root, draft.nodeIndex)
-              } else {
-                draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
-              }
-
-              draft.spatialGrid.removeNode(nodeId)
-              if (levelId) {
-                processLevel(draft, levelId)
-              }
-            }),
-          )
-        },
-
-        deletePreviewNodes: () => {
-          const previewNodeIds = Array.from(get().nodeIndex.values())
-            .filter((n) => n.editor?.preview === true)
-            .map((n) => n.id)
-          set(
-            produce((draft) => {
-              for (const nodeId of previewNodeIds) {
-                const command = new DeleteNodeCommand(nodeId)
-                command.execute(draft.scene.root, draft.nodeIndex)
-              }
-              rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-            }),
-          )
-
-          return previewNodeIds.length > 0
-        },
-
-        setPointerPosition: (position: [number, number] | null) =>
-          set({ pointerPosition: position }),
-      }
-    },
-    {
-      name: 'editor-storage',
-      version: 4, // Increment version to 4 for schema migration
-      storage: createJSONStorage(() => indexedDBStorage),
-      partialize: (state) => {
-        const filterPreviewNodes = (node: SceneNode): SceneNode => {
-          const n = { ...node } as any
-
-          // Generic traversal
-          for (const key of Object.keys(n)) {
-            const value = n[key]
-            if (typeof value === 'object' && value !== null) {
-              if ((value as any).object === 'node') {
-                n[key] = filterPreviewNodes(value)
-              } else if (Array.isArray(value)) {
-                n[key] = value
-                  .filter((item: any) => !(typeof item === 'object' && item?.editor?.preview))
-                  .map((item: any) =>
-                    typeof item === 'object' && item !== null && item.object === 'node'
-                      ? filterPreviewNodes(item)
-                      : item,
-                  )
-              }
-            }
-          }
-          return n as SceneNode
-        }
-
-        // Process sites manually since root is not a node
-        const processedRoot = { ...state.scene.root } as RootNode
-        if (processedRoot.children) {
-          processedRoot.children = processedRoot.children.map(
-            (site) => filterPreviewNodes(site) as SiteNode,
-          )
-        }
-
-        return {
-          scene: {
-            ...state.scene,
-            root: processedRoot,
-          },
-          selectedElements: state.selectedElements,
-          selectedImageIds: state.selectedImageIds,
-          selectedScanIds: state.selectedScanIds,
-          debug: state.debug,
-        }
-      },
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          // Helper to ensure all nodes have the 'object: node' marker
-          const ensureNodeMarkers = (node: any): void => {
-            if (typeof node !== 'object' || node === null) return
-
-            // Mark as node if it has id and type
-            if (node.id && node.type && !node.object) {
-              node.object = 'node'
-            }
-
-            // Recursively process all properties
-            for (const value of Object.values(node)) {
-              if (Array.isArray(value)) {
-                value.forEach(ensureNodeMarkers)
-              } else if (typeof value === 'object' && value !== null) {
-                ensureNodeMarkers(value)
-              }
-            }
-          }
-
-          // Data Migration logic for v3
-          if (state.scene?.root) {
-            const root = state.scene.root as any
-
-            // Helper to fix building structure
             const fixBuilding = (b: any) => {
               if (b.levels && !b.children) {
                 b.children = b.levels
@@ -1213,7 +674,6 @@ const useStore = create<StoreState>()(
               }
             }
 
-            // Handle Root migration (Buildings -> Sites)
             if (root.buildings && !root.children) {
               if (Array.isArray(root.buildings)) {
                 root.buildings.forEach(fixBuilding)
@@ -1248,26 +708,318 @@ const useStore = create<StoreState>()(
               }
             }
 
-            // Ensure all nodes have object: 'node' marker for indexing
             ensureNodeMarkers(root)
+
+            const newScene = { root } as unknown as Scene
+            const newGraph = new SceneGraph(newScene, {
+              onChange: (s) => handleGraphChange(s),
+            })
+
+            set({ scene: newScene, graph: newGraph })
+            rebuildSpatialGrid(get().spatialGrid, newGraph)
+          } else if (json.levels) {
+            const migratedRoot = RootNode.parse({
+              children: [
+                SiteNode.parse({
+                  children: [
+                    BuildingNode.parse({
+                      children: json.levels,
+                    }),
+                  ],
+                }),
+              ],
+            })
+            ensureNodeMarkers(migratedRoot)
+
+            const newScene = { root: migratedRoot } as unknown as Scene
+            const newGraph = new SceneGraph(newScene, {
+              onChange: (s) => handleGraphChange(s),
+            })
+            set({ scene: newScene, graph: newGraph })
+            rebuildSpatialGrid(get().spatialGrid, newGraph)
+          }
+        },
+        handleLoadLayout: (file) => {
+          if (file && file.type === 'application/json') {
+            const reader = new FileReader()
+            reader.onload = (event) => {
+              try {
+                const json = JSON.parse(event.target?.result as string)
+                get().loadLayout(json)
+              } catch (error) {
+                console.error('Failed to parse layout JSON:', error)
+              }
+            }
+            reader.readAsText(file)
+          }
+        },
+        handleResetToDefault: () => {
+          const initialScene = initScene()
+          const newGraph = new SceneGraph(initialScene, {
+            onChange: (s) => handleGraphChange(s),
+          })
+          const site = initialScene.root.children?.[0]
+          const mainBuilding = site?.children?.find((c) => c.type === 'building')
+
+          set({
+            scene: initialScene,
+            graph: newGraph,
+            currentLevel: 0,
+            selectedFloorId: mainBuilding?.children?.[0]?.id ?? null,
+            viewMode: 'level',
+            selectedElements: [],
+            selectedImageIds: [],
+            selectedScanIds: [],
+          })
+          get().commandManager.clear()
+          rebuildSpatialGrid(get().spatialGrid, newGraph)
+        },
+
+        undo: () => {
+          const { commandManager, graph } = get()
+          const success = commandManager.undo(graph)
+          if (success) {
+            set({
+              selectedElements: [],
+              selectedImageIds: [],
+              selectedScanIds: [],
+            })
+          }
+        },
+        redo: () => {
+          const { commandManager, graph } = get()
+          const success = commandManager.redo(graph)
+          if (success) {
+            set({
+              selectedElements: [],
+              selectedImageIds: [],
+              selectedScanIds: [],
+            })
+          }
+        },
+
+        toggleNodeVisibility: (nodeId) => {
+          const { graph } = get()
+          const handle = graph.getNodeById(nodeId as AnyNodeId)
+          if (handle) {
+            const node = handle.data()
+            graph.updateNode(nodeId as AnyNodeId, { visible: !(node.visible ?? true) } as any)
+          }
+        },
+        setNodeOpacity: (nodeId, opacity) => {
+          get().graph.updateNode(nodeId as AnyNodeId, { opacity } as any)
+        },
+
+        getLevelId: (nodeId) => {
+          const { graph } = get()
+          return getLevelIdForNode(graph.index, nodeId as AnyNodeId)
+        },
+        getNode: (nodeId) => {
+          const { graph } = get()
+          return graph.getNodeById(nodeId as AnyNodeId)
+        },
+
+        selectNode: (nodeId) => {
+          const state = get()
+          const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+          if (!handle) return
+
+          const node = handle.data()
+
+          set({
+            selectedElements: [],
+            selectedImageIds: [],
+            selectedScanIds: [],
+          })
+
+          switch (node.type) {
+            case 'level':
+              get().selectFloor(node.id)
+              break
+            case 'wall':
+            case 'roof':
+            case 'column':
+              get().handleElementSelect(node.id, {})
+              break
+            case 'image':
+              set({ selectedImageIds: [node.id] })
+              break
+            case 'scan':
+              set({ selectedScanIds: [node.id] })
+              break
+            default: {
+              const parent = handle.parent()
+              if (parent && parent.type === 'wall') {
+                get().handleElementSelect(parent.id, {})
+              }
+              break
+            }
+          }
+        },
+
+        addNode: (nodeData, parentId) => {
+          const { graph, commandManager } = get()
+          const command = new AddNodeCommand(nodeData, parentId)
+
+          if ((nodeData as any).editor?.preview) {
+            command.execute(graph)
           } else {
-            // Fallback initialization
+            commandManager.execute(command, graph)
+          }
+
+          return command.getNodeId()
+        },
+
+        updateNode: (nodeId, updates, skipUndo = false) => {
+          const { graph, commandManager } = get()
+
+          const handle = graph.getNodeById(nodeId as AnyNodeId)
+          if (!handle) return nodeId
+          const fromNode = handle.data()
+
+          const isCommittingPreview =
+            (fromNode as any).editor?.preview === true && (updates as any).editor?.preview === false
+
+          if (isCommittingPreview) {
+            const command = new UpdateNodeCommand(nodeId, updates)
+            commandManager.execute(command, graph)
+            return nodeId
+          }
+          const command = new UpdateNodeCommand(nodeId, updates)
+          if (skipUndo || (fromNode as any).editor?.preview) {
+            command.execute(graph)
+          } else {
+            commandManager.execute(command, graph)
+          }
+          return nodeId
+        },
+
+        deleteNode: (nodeId) => {
+          const { graph, commandManager } = get()
+          const handle = graph.getNodeById(nodeId as AnyNodeId)
+
+          const command = new DeleteNodeCommand(nodeId)
+          if ((handle?.data() as any)?.editor?.preview) {
+            command.execute(graph)
+          } else {
+            commandManager.execute(command, graph)
+          }
+        },
+
+        deletePreviewNodes: () => {
+          const { graph } = get()
+          const previewIds = Array.from(graph.index.previewIds)
+
+          previewIds.forEach((id) => {
+            const command = new DeleteNodeCommand(id)
+            command.execute(graph)
+          })
+        },
+
+        setPointerPosition: (position: [number, number] | null) =>
+          set({ pointerPosition: position }),
+      }
+    },
+    {
+      name: 'editor-storage',
+      version: 4,
+      storage: createJSONStorage(() => indexedDBStorage),
+      partialize: (state) => {
+        const filterPreviewNodes = (node: SceneNode): SceneNode => {
+          const n = { ...node } as any
+          for (const key of Object.keys(n)) {
+            const value = n[key]
+            if (typeof value === 'object' && value !== null) {
+              if ((value as any).object === 'node') {
+                n[key] = filterPreviewNodes(value)
+              } else if (Array.isArray(value)) {
+                n[key] = value
+                  .filter((item: any) => !(typeof item === 'object' && item?.editor?.preview))
+                  .map((item: any) =>
+                    typeof item === 'object' && item !== null && item.object === 'node'
+                      ? filterPreviewNodes(item)
+                      : item,
+                  )
+              }
+            }
+          }
+          return n as SceneNode
+        }
+
+        const processedRoot = { ...state.scene.root } as RootNode
+        if (processedRoot.children) {
+          processedRoot.children = processedRoot.children.map(
+            (site) => filterPreviewNodes(site) as SiteNode,
+          )
+        }
+
+        return {
+          scene: {
+            ...state.scene,
+            root: processedRoot,
+          },
+          selectedElements: state.selectedElements,
+          selectedImageIds: state.selectedImageIds,
+          selectedScanIds: state.selectedScanIds,
+          debug: state.debug,
+        }
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          if (state.scene?.root) {
+            const root = state.scene.root as any
+            const fixBuilding = (b: any) => {
+              if (b.levels && !b.children) {
+                b.children = b.levels
+                delete b.levels
+              }
+            }
+            if (root.buildings && !root.children) {
+              if (Array.isArray(root.buildings)) {
+                root.buildings.forEach(fixBuilding)
+                const site = {
+                  id: 'site_default',
+                  type: 'site',
+                  object: 'node',
+                  children: root.buildings,
+                }
+                root.children = [site]
+              }
+              delete root.buildings
+            } else if (root.children) {
+              if (root.children.length > 0 && root.children[0].type === 'building') {
+                const buildings = root.children
+                buildings.forEach(fixBuilding)
+                const site = {
+                  id: 'site_default',
+                  type: 'site',
+                  object: 'node',
+                  children: buildings,
+                }
+                root.children = [site]
+              } else {
+                root.children.forEach((site: any) => {
+                  if (site.children) {
+                    site.children.forEach((c: any) => {
+                      if (c.type === 'building') fixBuilding(c)
+                    })
+                  }
+                })
+              }
+            }
+          } else {
             state.scene = initScene()
           }
 
-          state.nodeIndex = buildDraftNodeIndex(state.scene)
           state.commandManager = new CommandManager()
           state.spatialGrid = new SpatialGrid(1)
 
-          // Rehydrate graph
-          const handleGraphChange = (nextScene: Scene, nextIndex: any) => {
-            useStore.setState({
-              scene: nextScene,
-              nodeIndex: buildDraftNodeIndex(nextScene),
-              graph: new SceneGraph(nextScene, {
-                index: nextIndex,
-                onChange: handleGraphChange,
-              }),
+          const handleGraphChange = (nextScene: Scene) => {
+            useStore.setState((s) => {
+              const currentGraph = s.graph
+              rebuildSpatialGrid(s.spatialGrid, currentGraph)
+              recomputeAllLevels(s as any)
+              return { scene: nextScene }
             })
           }
 
@@ -1275,12 +1027,12 @@ const useStore = create<StoreState>()(
             onChange: handleGraphChange,
           })
 
-          rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.scene.root)
+          rebuildSpatialGrid(state.spatialGrid, state.graph)
 
-          const levels = getLevels(state.scene.root)
+          const levels = state.graph.nodes.find({ type: 'level' })
           if (!state.selectedFloorId && levels.length > 0) {
             state.selectedFloorId = levels[0].id
-            state.currentLevel = 0
+            state.currentLevel = (levels[0].data() as unknown as SchemaLevelNode).level
             state.viewMode = 'level'
           }
 
@@ -1291,6 +1043,10 @@ const useStore = create<StoreState>()(
           }
 
           if (!state.selectedScanIds) state.selectedScanIds = []
+
+          state.verticalStackingProcessor = new VerticalStackingProcessor()
+          state.levelHeightProcessor = new LevelHeightProcessor()
+          state.levelElevationProcessor = new LevelElevationProcessor()
         }
       },
     },

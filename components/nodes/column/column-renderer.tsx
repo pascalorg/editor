@@ -16,11 +16,12 @@ interface ColumnRendererProps {
 export function ColumnRenderer({ nodeId }: ColumnRendererProps) {
   const { selectedFloorId, isPreview, levelId } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as ColumnNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ColumnNode | undefined
       return {
         selectedFloorId: state.selectedFloorId,
         isPreview: node?.editor?.preview === true,
-        levelId: node ? state.getLevelId(node!) : null,
+        levelId: state.getLevelId(nodeId),
       }
     }),
   )

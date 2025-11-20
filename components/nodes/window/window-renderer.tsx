@@ -23,7 +23,7 @@ export const WindowRenderer = memo(({ nodeId }: WindowRendererProps) => {
         selectedFloorId: state.selectedFloorId,
         isPreview: node?.editor?.preview === true,
         canPlace: node?.editor?.canPlace !== false,
-        levelId: state.getLevelId(node!),
+        levelId: state.getLevelId(nodeId),
       }
     }),
   )

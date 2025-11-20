@@ -546,6 +546,7 @@ export class SceneGraph {
   }
 
   private updateState(nextScene: Scene) {
+    if (nextScene === this._scene) return
     this._scene = nextScene
     this._index = buildNodeTreeIndex(nextScene)
     this.onChange?.(nextScene, this._index)

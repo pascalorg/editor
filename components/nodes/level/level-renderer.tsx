@@ -26,7 +26,8 @@ export const LevelRenderer = memo(({ nodeId }: LevelRendererProps) => {
 
   const { nodeLevel } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as LevelNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as LevelNode | undefined
       return {
         nodeLevel: node?.level,
       }

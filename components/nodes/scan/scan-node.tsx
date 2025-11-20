@@ -57,7 +57,8 @@ export function ScanNodeEditor() {
       const { nodeId, updates, pushToUndo } = event
 
       // Update the node in the store
-      updateNode(nodeId, updates)
+      // Pass skipUndo = !pushToUndo (if pushing to undo, skipUndo is false)
+      updateNode(nodeId, updates, !pushToUndo)
 
       // If pushing to undo, clear the accumulated state for this node
       if (pushToUndo) {
@@ -118,7 +119,8 @@ export function useScanManipulation(
 
   const { nodePosition, nodeScale, nodeRotation } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as ScanNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ScanNode | undefined
       return {
         nodePosition: node?.position || [0, 0],
         nodeScale: node?.scale || 1,

@@ -17,11 +17,12 @@ export const DoorRenderer = memo(({ nodeId }: DoorRendererProps) => {
 
   const { isPreview, canPlace, levelId, selectedFloorId } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as DoorNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as DoorNode | undefined
       return {
         isPreview: node?.editor?.preview === true,
         canPlace: node?.editor?.canPlace !== false,
-        levelId: state.getLevelId(node!),
+        levelId: handle?.meta.levelId,
         selectedFloorId: state.selectedFloorId,
       }
     }),

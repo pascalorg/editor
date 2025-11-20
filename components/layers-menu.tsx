@@ -1,6 +1,6 @@
 'use client'
 
-import { CylinderIcon } from '@phosphor-icons/react'
+import { CylinderIcon, Globe, Sun } from '@phosphor-icons/react'
 import {
   Box,
   Building,
@@ -9,6 +9,7 @@ import {
   GripVertical,
   Image,
   Layers,
+  MapPin,
   Plus,
   RectangleVertical,
   Square,
@@ -27,11 +28,13 @@ import {
   TreeNodeTrigger,
   TreeProvider,
   TreeView,
+  useTree,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useEditor } from '@/hooks/use-editor'
+import { type StoreState, useEditor } from '@/hooks/use-editor'
+import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
 import { type AnyNodeId, LevelNode } from '@/lib/scenegraph/schema/index'
 import { cn, createId } from '@/lib/utils'
 
@@ -52,12 +55,18 @@ function getNodeIcon(type: string): ReactNode {
       return <DoorOpen className="h-4 w-4 text-orange-600" />
     case 'window':
       return <RectangleVertical className="h-4 w-4 text-blue-500" />
-    case 'reference-image':
+    case 'image':
       return <Image className="h-4 w-4 text-purple-400" />
     case 'scan':
       return <Box className="h-4 w-4 text-cyan-400" />
     case 'level':
       return <Layers className="h-4 w-4 text-blue-500" />
+    case 'site':
+      return <MapPin className="h-4 w-4 text-emerald-600" />
+    case 'building':
+      return <Building className="h-4 w-4 text-indigo-600" />
+    case 'environment':
+      return <Sun className="h-4 w-4 text-yellow-500" />
     default:
       return <Box className="h-4 w-4 text-gray-400" />
   }
@@ -80,12 +89,18 @@ function getNodeLabel(type: string, index: number, name?: string): string {
       return `Door ${index + 1}`
     case 'window':
       return `Window ${index + 1}`
-    case 'reference-image':
+    case 'image':
       return `Reference ${index + 1}`
     case 'scan':
       return `Scan ${index + 1}`
     case 'level':
       return name || `Level ${index + 1}`
+    case 'site':
+      return name || 'Site'
+    case 'building':
+      return name || 'Building'
+    case 'environment':
+      return 'Environment'
     default:
       return `Node ${index + 1}`
   }
@@ -107,8 +122,9 @@ interface NodeItemProps {
 
 function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect }: NodeItemProps) {
   const { nodeType, nodeName, nodeVisible, nodeOpacity } = useEditor(
-    useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as any
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      const node = handle?.data()
       return {
         nodeType: node?.type || 'unknown',
         nodeName: node?.name,
@@ -118,9 +134,9 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
     }),
   )
   const childrenIds = useEditor(
-    useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as any
-      return node?.children?.map((c: any) => c.id) || []
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      return handle?.children().map((c: SceneNodeHandle) => c.id) || []
     }),
   )
 
@@ -169,6 +185,32 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
   )
 }
 
+function EnvironmentItem({ level = 1 }: { level?: number }) {
+  const environment = useEditor(useShallow((state: StoreState) => state.scene.root.environment))
+  const { indent } = useTree()
+
+  return (
+    <TreeNode level={level} nodeId="environment">
+      <TreeNodeTrigger>
+        <TreeExpander hasChildren={true} />
+        <TreeIcon hasChildren={true} icon={getNodeIcon('environment')} />
+        <TreeLabel>Environment</TreeLabel>
+      </TreeNodeTrigger>
+      <TreeNodeContent hasChildren={true}>
+        <div
+          className="flex items-center gap-2 py-2 text-muted-foreground text-xs"
+          style={{ paddingLeft: (level + 1) * (indent ?? 20) + 8 }}
+        >
+          <MapPin className="h-3 w-3" />
+          <span>
+            {environment?.latitude?.toFixed(4) ?? 0}, {environment?.longitude?.toFixed(4) ?? 0}
+          </span>
+        </div>
+      </TreeNodeContent>
+    </TreeNode>
+  )
+}
+
 interface DraggableLevelItemProps {
   levelId: LevelNode['id']
   levelIndex: number
@@ -177,6 +219,7 @@ interface DraggableLevelItemProps {
   handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, levelId: string) => Promise<void>
   controls: ReturnType<typeof useDragControls>
+  level: number
 }
 
 function DraggableLevelItem({
@@ -187,12 +230,14 @@ function DraggableLevelItem({
   handleUpload,
   handleScanUpload,
   controls,
+  level,
 }: DraggableLevelItemProps) {
   const isLastLevel = levelIndex === levelsCount - 1
 
   const { levelVisible, levelName, levelOpacity } = useEditor(
-    useShallow((state) => {
-      const level = state.nodeIndex.get(levelId) as any
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(levelId)
+      const level = handle?.data()
 
       return {
         levelVisible: level?.visible ?? true,
@@ -203,32 +248,35 @@ function DraggableLevelItem({
   )
 
   const childrenIds = useEditor(
-    useShallow((state) => {
-      const level = state.nodeIndex.get(levelId) as any
-      const children = level?.children || []
-      const objects = children.filter((c: any) => c.type !== 'reference-image' && c.type !== 'scan')
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(levelId as AnyNodeId)
+      const children = handle?.children() || []
+      const objects = children.filter((c: SceneNodeHandle) => {
+        const data = c.data()
+        return data.type !== 'image' && data.type !== 'scan'
+      })
 
-      return objects.map((c: any) => c.id)
+      return objects.map((c: SceneNodeHandle) => c.id)
     }),
   )
 
   const guideIds = useEditor(
-    useShallow((state) => {
-      const level = state.nodeIndex.get(levelId) as any
-      const children = level?.children || []
-      const guides = children.filter((c: any) => c.type === 'reference-image')
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(levelId as AnyNodeId)
+      const children = handle?.children() || []
+      const guides = children.filter((c: SceneNodeHandle) => c.data().type === 'image')
 
-      return guides.map((c: any) => c.id)
+      return guides.map((c: SceneNodeHandle) => c.id)
     }),
   )
 
   const scanIds = useEditor(
-    useShallow((state) => {
-      const level = state.nodeIndex.get(levelId) as any
-      const children = level?.children || []
-      const scans = children.filter((c: any) => c.type === 'scan')
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(levelId as AnyNodeId)
+      const children = handle?.children() || []
+      const scans = children.filter((c: SceneNodeHandle) => c.data().type === 'scan')
 
-      return scans.map((c: any) => c.id)
+      return scans.map((c: SceneNodeHandle) => c.id)
     }),
   )
 
@@ -247,10 +295,11 @@ function DraggableLevelItem({
 
   const handleNodeSelect = (nodeId: string, event: React.MouseEvent) => {
     // Determine node type to handle selection appropriately
-    const node = useEditor.getState().nodeIndex.get(nodeId) as any
+    const handle = useEditor.getState().graph.getNodeById(nodeId as AnyNodeId)
+    const node = handle?.data()
     if (!node) return
 
-    if (node.type === 'reference-image') {
+    if (node.type === 'image') {
       // Handle image selection
       if (event.metaKey || event.ctrlKey) {
         if (selectedImageIds.includes(nodeId)) {
@@ -281,7 +330,7 @@ function DraggableLevelItem({
   }
 
   return (
-    <TreeNode isLast={isLastLevel} nodeId={levelId}>
+    <TreeNode isLast={isLastLevel} level={level} nodeId={levelId}>
       <TreeNodeTrigger
         className={cn(
           'group/drag-item',
@@ -309,7 +358,7 @@ function DraggableLevelItem({
       <TreeNodeContent hasChildren={hasContent}>
         {/* 3D Objects Section */}
         {childrenIds.length > 0 && (
-          <TreeNode level={1} nodeId={`${levelId}-3d-objects`}>
+          <TreeNode level={level + 1} nodeId={`${levelId}-3d-objects`}>
             <TreeNodeTrigger>
               <TreeExpander hasChildren={childrenIds.length > 0} />
               <TreeIcon
@@ -325,7 +374,7 @@ function DraggableLevelItem({
                   index={index}
                   isLast={index === childrenIds.length - 1}
                   key={childId}
-                  level={2}
+                  level={level + 2}
                   nodeId={childId}
                   onNodeSelect={handleNodeSelect}
                   selectedNodeIds={selectedElements}
@@ -336,7 +385,7 @@ function DraggableLevelItem({
         )}
 
         {/* Guides Section */}
-        <TreeNode level={1} nodeId={`${levelId}-guides`}>
+        <TreeNode level={level + 1} nodeId={`${levelId}-guides`}>
           <TreeNodeTrigger className="group">
             <TreeExpander hasChildren={guideIds.length > 0} />
             <TreeIcon
@@ -379,7 +428,7 @@ function DraggableLevelItem({
                 index={index}
                 isLast={index === guideIds.length - 1}
                 key={guideId}
-                level={2}
+                level={level + 2}
                 nodeId={guideId}
                 onNodeSelect={handleNodeSelect}
                 selectedNodeIds={selectedImageIds}
@@ -389,7 +438,7 @@ function DraggableLevelItem({
         </TreeNode>
 
         {/* Scans Section */}
-        <TreeNode isLast level={1} nodeId={`${levelId}-scans`}>
+        <TreeNode isLast level={level + 1} nodeId={`${levelId}-scans`}>
           <TreeNodeTrigger className="group">
             <TreeExpander hasChildren={scanIds.length > 0} />
             <TreeIcon
@@ -432,7 +481,7 @@ function DraggableLevelItem({
                 index={index}
                 isLast={index === scanIds.length - 1}
                 key={scanId}
-                level={2}
+                level={level + 2}
                 nodeId={scanId}
                 onNodeSelect={handleNodeSelect}
                 selectedNodeIds={selectedScanIds}
@@ -457,29 +506,35 @@ function LevelReorderItem(props: LevelReorderItemProps) {
   )
 }
 
-const EMPTY_LEVELS: LevelNode[] = []
-
-export function LayersMenu({ mounted }: LayersMenuProps) {
-  // Retrieve editor state
-  const addNode = useEditor((state) => state.addNode)
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const selectedScanIds = useEditor((state) => state.selectedScanIds)
-
-  // Select levels from scene.root (new structure)
-  const levelIds = useEditor(
-    useShallow((state) => {
-      const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
-      return building ? building.children.map((child) => child.id) : []
+function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
+  const { nodeVisible, nodeName, nodeOpacity } = useEditor(
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      const node = handle?.data()
+      return {
+        nodeVisible: node?.visible ?? true,
+        nodeName: node?.name || 'Building',
+        nodeOpacity: node?.opacity ?? 100,
+      }
     }),
-  ) as LevelNode['id'][]
+  )
 
-  const addLevel = useEditor((state) => state.addLevel)
-  const reorderLevels = useEditor((state) => state.reorderLevels)
+  const levelIds = useEditor(
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      return handle?.children().map((c: SceneNodeHandle) => c.id) || []
+    }),
+  )
+
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
   const selectFloor = useEditor((state) => state.selectFloor)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const reorderLevels = useEditor((state) => state.reorderLevels)
+  const addNode = useEditor((state) => state.addNode)
+  const addLevel = useEditor((state) => state.addLevel)
 
-  // Local implementations for uploads
+  // Local implementations for uploads (passed down)
   const handleUpload = async (file: File, levelId: string) => {
     const reader = new FileReader()
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -488,15 +543,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       reader.readAsDataURL(file)
     })
 
-    // Create ReferenceImageNode
     const imageNode = {
       id: createId('image'),
-      type: 'reference-image',
+      type: 'image',
       name: file.name,
       url: dataUrl,
       createdAt: new Date().toISOString(),
       position: [0, 0],
-      rotation: 0,
+      rotationY: 0,
       size: [10, 10],
       scale: 1,
       visible: true,
@@ -538,52 +592,12 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     addNode(scanNode, levelId)
   }
 
-  // Track expanded state
-  const [expandedIds, setExpandedIds] = useState<string[]>([])
-
-  // Initialize expanded state with first level ID if available
-  useEffect(() => {
-    if (levelIds.length > 0 && expandedIds.length === 0) {
-      setExpandedIds([levelIds[0]])
-    }
-  }, [levelIds, expandedIds.length])
-
-  const handleTreeSelectionChange = (selectedIds: string[]) => {
-    const selectedId = selectedIds[0]
-    if (!selectedId) {
-      selectFloor(null)
-      return
-    }
-    const isLevel = levelIds.some((levelId) => levelId === selectedId)
-    if (isLevel) selectFloor(selectedId)
-  }
-
-  const handleAddLevel = () => {
-    // Get level numbers from all existing levels using nodeIndex
-    const levelNumbers = levelIds
-      .map((id) => {
-        const level = useEditor.getState().nodeIndex.get(id) as any
-        return level?.level || 0
-      })
-      .filter((n) => n > 0)
-
-    let nextNumber = 1
-    while (levelNumbers.includes(nextNumber)) nextNumber++
-
-    const newLevel = LevelNode.parse({
-      name: `level ${nextNumber}`,
-      level: nextNumber,
-    })
-
-    addLevel(newLevel)
-    selectFloor(newLevel.id)
-  }
-
   const handleReorder = (newLevelIds: string[]) => {
     const reversedOrder = [...newLevelIds].reverse()
     const updatedLevels = reversedOrder
       .map((levelId, index) => {
-        const level = useEditor.getState().nodeIndex.get(levelId) as any
+        const handle = useEditor.getState().graph.getNodeById(levelId as AnyNodeId)
+        const level = handle?.data()
         if (!level) return null
         return {
           ...level,
@@ -598,111 +612,186 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     }
   }
 
+  const handleAddLevel = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Get level numbers from all existing levels in this building
+    const levelNumbers = levelIds
+      .map((id: string) => {
+        const handle = useEditor.getState().graph.getNodeById(id as AnyNodeId)
+        const level = handle?.data() as any
+        return level?.level || 0
+      })
+      .filter((n: number) => n > 0)
+
+    let nextNumber = 1
+    while (levelNumbers.includes(nextNumber)) nextNumber++
+
+    const newLevel = LevelNode.parse({
+      name: `level ${nextNumber}`,
+      level: nextNumber,
+    })
+
+    addLevel(newLevel)
+    selectFloor(newLevel.id)
+  }
+
+  // Levels are typically rendered in reverse order (top to bottom) visually
   const floorGroups = [...levelIds].sort((a, b) => {
-    const levelA = useEditor.getState().nodeIndex.get(a) as any
-    const levelB = useEditor.getState().nodeIndex.get(b) as any
+    const handleA = useEditor.getState().graph.getNodeById(a as AnyNodeId)
+    const handleB = useEditor.getState().graph.getNodeById(b as AnyNodeId)
+    const levelA = handleA?.data() as any
+    const levelB = handleB?.data() as any
     return (levelB?.level || 0) - (levelA?.level || 0)
   })
 
-  // Auto-expand selected items
-  useEffect(() => {
-    const newExpanded = new Set(expandedIds)
-    let hasChanges = false
-
-    // Expand levels containing selected elements
-    selectedElements.forEach((selectedId) => {
-      const node = useEditor.getState().nodeIndex.get(selectedId)
-      if (!node) return
-
-      // Find parent level by traversing up
-      let currentNode: any = node
-      let levelId: string | null = null
-
-      while (currentNode) {
-        if ((currentNode as any).type === 'level') {
-          levelId = currentNode.id
-          break
-        }
-        // Try to find parent
-        const parentId = levelIds.find((id) => {
-          const level = useEditor.getState().nodeIndex.get(id) as any
-          return level?.children?.some((c: any) => c.id === currentNode.id)
-        })
-        if (parentId) {
-          levelId = parentId
-          break
-        }
-        break
-      }
-
-      if (levelId) {
-        if (!newExpanded.has(levelId)) {
-          newExpanded.add(levelId)
-          hasChanges = true
-        }
-        const objectsId = `${levelId}-3d-objects`
-        if (!newExpanded.has(objectsId)) {
-          newExpanded.add(objectsId)
-          hasChanges = true
-        }
-      }
-    })
-
-    // Expand levels containing selected images
-    selectedImageIds.forEach((imageId) => {
-      levelIds.forEach((levelId) => {
-        const level = useEditor.getState().nodeIndex.get(levelId) as any
-        const hasImage = level?.children?.some((c: any) => c.id === imageId)
-        if (hasImage) {
-          if (!newExpanded.has(levelId)) {
-            newExpanded.add(levelId)
-            hasChanges = true
-          }
-          const guidesId = `${levelId}-guides`
-          if (!newExpanded.has(guidesId)) {
-            newExpanded.add(guidesId)
-            hasChanges = true
-          }
-        }
-      })
-    })
-
-    // Expand levels containing selected scans
-    selectedScanIds.forEach((scanId) => {
-      levelIds.forEach((levelId) => {
-        const level = useEditor.getState().nodeIndex.get(levelId) as any
-        const hasScan = level?.children?.some((c: any) => c.id === scanId)
-        if (hasScan) {
-          if (!newExpanded.has(levelId)) {
-            newExpanded.add(levelId)
-            hasChanges = true
-          }
-          const scansId = `${levelId}-scans`
-          if (!newExpanded.has(scansId)) {
-            newExpanded.add(scansId)
-            hasChanges = true
-          }
-        }
-      })
-    })
-
-    if (hasChanges) setExpandedIds(Array.from(newExpanded))
-  }, [selectedElements, selectedImageIds, selectedScanIds, levelIds, expandedIds])
-
   return (
-    <div className="flex flex-1 flex-col px-2 py-2">
-      <div className="mb-2 flex items-center justify-between">
-        <label className="font-medium text-muted-foreground text-sm">
-          Levels ({mounted ? levelIds.length : 0})
-        </label>
+    <TreeNode level={level} nodeId={nodeId}>
+      <TreeNodeTrigger>
+        <TreeExpander hasChildren={levelIds.length > 0} />
+        <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
+        <TreeLabel className="flex-1">{nodeName}</TreeLabel>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button className="h-6 w-6 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
+            <Button className="h-5 w-5 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
               <Plus className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Add new level</TooltipContent>
         </Tooltip>
+        <OpacityControl
+          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
+          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
+          opacity={nodeOpacity}
+          visible={nodeVisible}
+        />
+      </TreeNodeTrigger>
+      <TreeNodeContent hasChildren={levelIds.length > 0}>
+        <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
+          {floorGroups.map((levelId: string, index: number) => (
+            <LevelReorderItem
+              handleScanUpload={handleScanUpload}
+              handleUpload={handleUpload}
+              isSelected={selectedFloorId === levelId}
+              key={levelId}
+              level={level + 1}
+              levelId={levelId as LevelNode['id']}
+              levelIndex={index}
+              levelsCount={floorGroups.length}
+            />
+          ))}
+        </Reorder.Group>
+      </TreeNodeContent>
+    </TreeNode>
+  )
+}
+
+function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
+  const { nodeVisible, nodeName, nodeOpacity } = useEditor(
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      const node = handle?.data()
+      return {
+        nodeVisible: node?.visible ?? true,
+        nodeName: node?.name || 'Site',
+        nodeOpacity: node?.opacity ?? 100,
+      }
+    }),
+  )
+
+  const childrenIds = useEditor(
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      return handle?.children().map((c: SceneNodeHandle) => c.id) || []
+    }),
+  )
+
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+  const selectedElements = useEditor((state) => state.selectedElements)
+  const handleElementSelect = useEditor((state) => state.handleElementSelect)
+
+  return (
+    <TreeNode level={level} nodeId={nodeId}>
+      <TreeNodeTrigger>
+        <TreeExpander hasChildren={childrenIds.length > 0} />
+        <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
+        <TreeLabel>{nodeName}</TreeLabel>
+        <OpacityControl
+          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
+          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
+          opacity={nodeOpacity}
+          visible={nodeVisible}
+        />
+      </TreeNodeTrigger>
+      <TreeNodeContent hasChildren={childrenIds.length > 0}>
+        {childrenIds.map((childId: string, index: number) => {
+          const handle = useEditor.getState().graph.getNodeById(childId as AnyNodeId)
+          const child = handle?.data()
+          if (child?.type === 'building') {
+            return <BuildingItem key={childId} level={level + 1} nodeId={childId} />
+          }
+          return (
+            <NodeItem
+              index={index}
+              isLast={index === childrenIds.length - 1}
+              key={childId}
+              level={level + 1}
+              nodeId={childId}
+              onNodeSelect={(id, e) => handleElementSelect(id as AnyNodeId, e)}
+              selectedNodeIds={selectedElements}
+            />
+          )
+        })}
+      </TreeNodeContent>
+    </TreeNode>
+  )
+}
+
+export function LayersMenu({ mounted }: LayersMenuProps) {
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectFloor = useEditor((state) => state.selectFloor)
+  const levelIds = useEditor(
+    useShallow((state: StoreState) => {
+      // Helper to find level IDs for expansion logic
+      // Use graph traversal
+      return state.graph.nodes.find({ type: 'level' }).map((h: SceneNodeHandle) => h.id)
+    }),
+  )
+
+  // Get Site IDs
+  const siteIds = useEditor(
+    useShallow((state: StoreState) => state.scene.root.children?.map((c: SceneNode) => c.id) || []),
+  )
+
+  // Track expanded state
+  const [expandedIds, setExpandedIds] = useState<string[]>([])
+
+  // Initialize expanded state
+  const [initialized, setInitialized] = useState(false)
+  useEffect(() => {
+    // Auto expand first site
+    if (!initialized && siteIds.length > 0) {
+      if (!expandedIds.some((id) => siteIds.includes(id as AnyNodeId))) {
+        setExpandedIds((prev) => [...prev, siteIds[0]])
+      }
+      setInitialized(true)
+    }
+  }, [siteIds, expandedIds, initialized])
+
+  const handleTreeSelectionChange = (selectedIds: string[]) => {
+    const selectedId = selectedIds[0]
+    if (!selectedId) {
+      // Don't clear selection on tree click, handled by items
+      return
+    }
+    const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
+    if (isLevel) selectFloor(selectedId)
+  }
+
+  return (
+    <div className="flex flex-1 flex-col px-2 py-2">
+      <div className="mb-2 flex items-center justify-between">
+        <label className="font-medium text-muted-foreground text-sm">Hierarchy</label>
       </div>
 
       <div className="no-scrollbar flex-1">
@@ -717,23 +806,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             showLines={true}
           >
             <TreeView className="p-0">
-              <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
-                {floorGroups.map((levelId, levelIndex) => {
-                  const isSelected = selectedFloorId === levelId
-
-                  return (
-                    <LevelReorderItem
-                      handleScanUpload={handleScanUpload}
-                      handleUpload={handleUpload}
-                      isSelected={isSelected}
-                      key={levelId}
-                      levelId={levelId}
-                      levelIndex={levelIndex}
-                      levelsCount={floorGroups.length}
-                    />
-                  )
-                })}
-              </Reorder.Group>
+              <EnvironmentItem level={1} />
+              {siteIds.map((siteId) => (
+                <SiteItem key={siteId} level={1} nodeId={siteId} />
+              ))}
             </TreeView>
           </TreeProvider>
         ) : (

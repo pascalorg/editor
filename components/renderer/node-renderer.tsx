@@ -15,12 +15,12 @@ interface NodeRendererProps {
 }
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
-  // const node = useEditor((state) => state.nodeIndex.get(nodeId))
-
   const { nodeType, nodeVisible, nodePosition, nodeRotation, nodeElevation, nodeChildrenIdsStr } =
     useEditor(
       useShallow((state) => {
-        const node = state.nodeIndex.get(nodeId)
+        const handle = state.graph.getNodeById(nodeId)
+        const node = handle?.data()
+        
         return {
           nodeType: node?.type,
           nodeVisible: (node as any)?.visible, // TODO: Type correctly

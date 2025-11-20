@@ -5,8 +5,11 @@ import { useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
-import { type ColumnNode, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import type { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
+import type { ColumnNode } from '@/lib/scenegraph/schema/nodes/column'
+import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
 
 // ============================================================================
 // COLUMN RENDERER PROPS SCHEMA
@@ -31,15 +34,18 @@ export type ColumnRendererProps = z.infer<typeof ColumnRendererPropsSchema>
  * Column builder component
  * Uses useEditor hooks directly to manage column placement
  */
-const EMPTY_LEVELS: any[] = []
+const EMPTY_LEVELS: LevelNode[] = []
 
 export function ColumnNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
-    return building ? building.children : EMPTY_LEVELS
+    // Use graph API to find building
+    const buildingHandle = state.graph.nodes.find({ type: 'building' })[0]
+    if (!buildingHandle) return EMPTY_LEVELS
+    // Access data() to get the node structure
+    return (buildingHandle.data() as BuildingNode).children
   })
 
   // Use ref to persist preview state across renders without triggering re-renders
@@ -64,8 +70,8 @@ export function ColumnNodeEditor() {
       const existingColumn = level.children.find(
         (child) =>
           child.type === 'column' &&
-          (child as any).position[0] === x &&
-          (child as any).position[1] === y &&
+          child.position[0] === x &&
+          child.position[1] === y &&
           !child.editor?.preview,
       )
 
@@ -95,15 +101,15 @@ export function ColumnNodeEditor() {
         const existingColumn = level.children.find(
           (child) =>
             child.type === 'column' &&
-            (child as any).position[0] === x &&
-            (child as any).position[1] === y &&
+            child.position[0] === x &&
+            child.position[1] === y &&
             !child.editor?.preview,
         )
 
         if (existingColumn) {
           // Don't show preview if there's already a column here
           if (previewStateRef.current.previewColumnId) {
-            updateNode(previewStateRef.current.previewColumnId, { visible: false } as any)
+            updateNode(previewStateRef.current.previewColumnId, { visible: false })
           }
         } else {
           // Show preview
@@ -114,23 +120,22 @@ export function ColumnNodeEditor() {
             updateNode(previewId, {
               position: [x, y] as [number, number],
               visible: true,
-            } as any)
+            })
           } else {
             // Create new preview column
-            const newPreviewId = addNode(
-              {
-                type: 'column' as const,
-                name: 'Column Preview',
-                position: [x, y] as [number, number],
-                rotation: 0,
-                size: [0.3, 0.3] as [number, number],
-                visible: true,
-                opacity: 100,
-                editor: { canPlace: true, preview: true },
-                children: [] as [],
-              } as any,
-              selectedFloorId,
-            )
+            const columnData: Omit<ColumnNode, 'id'> = {
+              type: 'column',
+              name: 'Column Preview',
+              position: [x, y],
+              visible: true,
+              opacity: 100,
+              parentId: null,
+              metadata: {},
+              editor: { canPlace: true, preview: true },
+              object: 'node', // Required discriminator
+            }
+
+            const newPreviewId = addNode(columnData, selectedFloorId)
             previewStateRef.current.previewColumnId = newPreviewId
           }
         }

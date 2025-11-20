@@ -44,7 +44,7 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
       const node = state.nodeIndex.get(nodeId) as ScanNode | undefined
       return {
         nodeUrl: node?.url,
-        levelId: state.getLevelId(node!),
+        levelId: state.getLevelId(nodeId),
         nodeOpacity: node?.opacity,
         nodePosition: node?.position || [0, 0],
         nodeRotation: node?.rotation || [0, 0, 0],

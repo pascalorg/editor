@@ -41,7 +41,7 @@ const EMPTY_LEVELS: any[] = []
 export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
   const node = useEditor(
-    useShallow((state) => state.nodeIndex.get(nodeId) as ImageNode | undefined),
+    useShallow((state) => state.graph.getNodeById(nodeId)?.data() as ImageNode | undefined),
   )
   const texture = useTexture(node?.url || '')
   const groupRef = useRef<THREE.Group>(null)
@@ -72,9 +72,9 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
     const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
   })
-  const levelId = useMemo(() => getLevelId(node!), [getLevelId, node])
+  const levelId = useMemo(() => getLevelId(nodeId), [getLevelId, nodeId])
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
-  const levelNumber = level?.level ?? 0
+  const levelNumber = (level as any)?.level ?? 0
 
   // Track hover state for the image itself
   const [isHovered, setIsHovered] = useState(false)

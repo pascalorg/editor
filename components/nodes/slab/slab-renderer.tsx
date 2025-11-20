@@ -22,11 +22,12 @@ export function SlabRenderer({ nodeId }: SlabRendererProps) {
 
   const { nodeSize, isPreview, levelId, canPlace } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as FloorNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as FloorNode | undefined
       return {
         nodeSize: node?.size,
         isPreview: node?.editor?.preview === true,
-        levelId: state.getLevelId(node!),
+        levelId: state.getLevelId(nodeId),
         canPlace: node?.editor?.canPlace !== false,
       }
     }),

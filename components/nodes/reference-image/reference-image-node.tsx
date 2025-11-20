@@ -117,7 +117,8 @@ export function useImageManipulation(
 
   const { nodeRotationY, nodeScale } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId!) as ImageNode | undefined
+      const handle = state.graph.getNodeById(nodeId!)
+      const node = handle?.data() as ImageNode | undefined
       return {
         nodeRotationY: node?.rotationY || 0,
         nodeScale: node?.scale || 1,
@@ -126,7 +127,7 @@ export function useImageManipulation(
   )
 
   const handleSelect = useCallback(() => {
-    const node = useEditor.getState().nodeIndex.get(nodeId) as ImageNode | undefined
+    const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as ImageNode | undefined
     if (controlMode === 'guide' || controlMode === 'select') {
       setSelectedImageIds([nodeId])
       emitter.emit('image:select', { node: node! })
