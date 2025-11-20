@@ -547,6 +547,8 @@ function LevelReorderItem(props: LevelReorderItemProps) {
   )
 }
 
+const EMPTY_LEVELS: LevelNode[] = []
+
 export function LayersMenu({ mounted }: LayersMenuProps) {
   // Retrieve editor state
   const addNode = useEditor((state) => state.addNode)
@@ -562,8 +564,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   // Select levels from scene.root (new structure)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings?.[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   }) as LevelNode[]
 
   const addLevel = useEditor((state) => state.addLevel)

@@ -7,6 +7,7 @@ import { ItemRenderer } from '@/components/nodes/item/item-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
 
 // ============================================================================
 // ITEM RENDERER PROPS SCHEMA
@@ -33,6 +34,8 @@ export type ItemRendererProps = z.infer<typeof ItemRendererPropsSchema>
  * Item builder component
  * Uses useEditor hooks and spatialGrid to manage item placement with collision detection
  */
+const EMPTY_LEVELS: any[] = []
+
 export function ItemNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
@@ -41,8 +44,8 @@ export function ItemNodeEditor() {
   const spatialGrid = useEditor((state) => state.spatialGrid)
   const selectedItem = useEditor((state) => state.selectedItem)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings?.[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist preview state across renders without triggering re-renders
@@ -189,7 +192,9 @@ export function ItemNodeEditor() {
       // Filter out preview nodes and check for actual collisions
       // Items can be placed on slabs and next to walls, but not on other items or columns
       for (const nodeId of nearbyNodeIds) {
-        const node = level.children.find((child) => child.id === nodeId)
+        const node = level.children.find(
+          (child: LevelNode['children'][number]) => child.id === nodeId,
+        )
         // Block placement only for non-preview items and columns (solid obstacles)
         if (node && !node.editor?.preview) {
           if (node.type === 'item') {

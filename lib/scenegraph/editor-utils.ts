@@ -39,15 +39,26 @@ export function buildDraftNodeIndex(scene: Scene): Map<string, AnyNode> {
     }
   }
 
-  traverse(scene.root)
+  // Start traversal from sites (root is not a node anymore)
+  scene.root.children.forEach((site) => traverse(site))
+  
   return index
+}
+
+/**
+ * Helper to get the main building from the root
+ */
+export function getMainBuilding(root: RootNode): BuildingNode | undefined {
+  const site = root.children?.[0]
+  if (!site) return undefined
+  return site.children.find((child) => child.type === 'building') as BuildingNode | undefined
 }
 
 /**
  * Get levels from root node
  */
 export function getLevels(root: RootNode): LevelNode[] {
-  const building = root.buildings?.[0] as BuildingNode | undefined
+  const building = getMainBuilding(root)
   // Ensure we return a valid array even if building or children are missing
   if (!building?.children) return []
   return building.children as LevelNode[]

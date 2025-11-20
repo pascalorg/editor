@@ -9,10 +9,12 @@ interface ViewerLayersMenuProps {
   mounted: boolean
 }
 
+const EMPTY_LEVELS: any[] = []
+
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectFloor = useEditor((state) => state.selectFloor)

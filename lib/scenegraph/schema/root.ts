@@ -1,25 +1,18 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from './base'
 import { EnvironmentNode } from './environment'
-import { BuildingNode } from './nodes/building'
 import { SiteNode } from './nodes/site'
 
 export const RootNode = z
   .object({
-    object: z.literal('root').default('root'),
-    id: nodeId('root'),
-    type: nodeType('root'),
     environment: EnvironmentNode.default(EnvironmentNode.parse({})),
-    site: SiteNode.default(SiteNode.parse({})),
-    buildings: z.array(BuildingNode).default([BuildingNode.parse({})]),
+    children: z.array(SiteNode).default([SiteNode.parse({})]),
   })
   .describe(
     dedent`
-  Root node - used to represent the root of the scene
-  - environment: environment node
-  - site: site node
-  - buildings: array of building nodes
+  Root object - used to represent the root of the scene
+  - environment: environment config
+  - children: array of site nodes
   `,
   )
 

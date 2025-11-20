@@ -8,7 +8,7 @@ export const WallNode = BaseNode.extend({
   id: nodeId('wall'),
   type: nodeType('wall'),
   get children() {
-    return z.array(z.discriminatedUnion('type', [DoorNode, WindowNode]))
+    return z.array(z.discriminatedUnion('type', [DoorNode, WindowNode])).default([])
   },
   // Specific props
   thickness: z.number().optional(),
@@ -29,5 +29,4 @@ export const WallNode = BaseNode.extend({
   - size: size of the wall in grid units
   `,
 )
-
 export type WallNode = z.infer<typeof WallNode>

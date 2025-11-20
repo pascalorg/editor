@@ -31,13 +31,15 @@ export type ColumnRendererProps = z.infer<typeof ColumnRendererPropsSchema>
  * Column builder component
  * Uses useEditor hooks directly to manage column placement
  */
+const EMPTY_LEVELS: any[] = []
+
 export function ColumnNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist preview state across renders without triggering re-renders

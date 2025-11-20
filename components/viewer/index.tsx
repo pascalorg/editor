@@ -25,7 +25,7 @@ export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no f
 
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
-  const building = useEditor((state) => state.scene.root.buildings[0])
+  const building = useEditor((state) => state.scene.root.children?.[0]?.children.find(c => c.type === 'building'))
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
@@ -103,7 +103,7 @@ export default function Viewer({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <NodeRenderer nodeId={building.id} />
+          {building && <NodeRenderer nodeId={building.id} />}
         </group>
 
         <ViewerCustomControls />

@@ -34,6 +34,8 @@ interface ScanRendererProps {
   nodeId: ScanNode['id']
 }
 
+const EMPTY_LEVELS: any[] = []
+
 export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
 
@@ -77,8 +79,8 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings?.[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
   const levelNumber = level?.level ?? 0

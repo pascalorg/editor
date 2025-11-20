@@ -33,14 +33,16 @@ export type SlabRendererProps = z.infer<typeof SlabRendererPropsSchema>
  * Slab node editor component
  * Uses useEditor hooks directly to manage slab creation via two-click area selection
  */
+const EMPTY_LEVELS: any[] = []
+
 export function SlabNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist state across renders without triggering re-renders

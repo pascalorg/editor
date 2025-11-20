@@ -1,223 +1,153 @@
-import {
-  buildSceneIndex,
-  getNodeByPath,
-  initScene,
-  loadScene,
-  type Scene,
-  updateNodeByPath,
-} from '@/lib/scenegraph/schema/index'
+import { SceneGraph } from '@/lib/scenegraph/index'
+import { initScene, type Scene, SceneNode } from '@/lib/scenegraph/schema/index'
+import { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
+import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import { SiteNode } from '@/lib/scenegraph/schema/nodes/site'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 
-// Test 1: Basic scene
-console.log('=== Test 1: Basic Scene ===')
+console.log('=== Initializing scene ===')
 const scene = initScene()
-const index = buildSceneIndex(scene)
+console.log('scene before create')
+// console.dir(scene, { depth: null })
+// console.log(scene)
+// Create a structure: Site -> Building -> Level -> Wall
+const wall1 = WallNode.parse({
+  children: [],
+  start: [0, 0],
+  end: [10, 0],
+  position: [0, 0],
+  size: [10, 0.2],
+  rotation: 0,
+  // BaseNode properties might be needed if not defaulted?
+  // BaseNode usually has id, type defaults?
+  // BaseNode in schema/base.ts usually defines defaults for id/type if using nodeId helper.
+  // But parse might require them if they are not optional?
+  // Zod .parse() on a schema with defaults will use defaults if undefined.
+})
 
-console.log('Nodes by type:')
-for (const [type, ids] of index.byType.entries()) {
-  console.log(`  ${type}: ${ids.size} node(s)`)
+const level1 = LevelNode.parse({
+  children: [wall1],
+  elevation: 0,
+  height: 3,
+})
+
+const building1 = BuildingNode.parse({
+  children: [level1],
+  position: [0, 0],
+  rotation: 0,
+})
+
+const site1 = SiteNode.parse({
+  children: [building1],
+  // Ensure site has an ID if we want to query by it later
+})
+
+// Replace default site
+scene.root.children = [site1]
+
+const graph = new SceneGraph(scene)
+console.log(graph)
+
+console.log('graph index before delete')
+console.dir(graph.index, { depth: null })
+
+console.log('=== Testing Find API ===')
+
+// Find all walls
+const walls = graph.nodes.find({ type: 'wall' })
+const firstWall = walls[0]
+if (firstWall) {
+  console.log('Deleting first wall...')
+  firstWall.delete()
+  // Re-query to check length
+  const remainingWalls = graph.nodes.find({ type: 'wall' })
+  console.log(`Found ${remainingWalls.length} walls (expected 0)`)
 }
-console.log('Total nodes indexed:', index.byId.size)
-console.log('\nPaths in basic scene:')
-for (const [id, nodeIndex] of index.byId.entries()) {
-  console.log(`  ${nodeIndex.type} (${id}): ${nodeIndex.path.join('.')}`)
+
+console.log('graph index after delete')
+console.dir(graph.index, { depth: null })
+
+// Find nodes in building
+const buildingNodes = graph.nodes.find({ buildingId: building1.id })
+console.log(
+  `Found ${buildingNodes.length} nodes in building (expected 2: level and the building itself, wall was deleted)`,
+)
+
+console.log('buildingNodes', buildingNodes)
+
+console.log('buildings', graph.nodes.find({ type: 'building' }))
+
+console.log('graph index after update')
+console.dir(graph.index, { depth: null })
+
+// Find walls in specific level
+const levelWalls = graph.nodes.find({ type: 'wall', levelId: level1.id })
+console.log(`Found ${levelWalls.length} walls in level1 (expected 0)`)
+
+// Find nodes in site
+const siteNodes = graph.nodes.find({ siteId: site1.id })
+console.log(`Found ${siteNodes.length} nodes in site`)
+
+console.log('=== Testing Create API ===')
+
+// 1. Get the level handle
+const levelHandle = graph.getNodeById<'level'>(level1.id)
+
+if (levelHandle) {
+  console.log('Creating new wall via level handle...')
+
+  // 2. Create a child node directly from the handle (Type-safe!)
+  // This uses the new unshift behavior
+  const newWall = levelHandle.create('wall', {
+    start: [5, 5],
+    end: [10, 5],
+    position: [5, 5],
+    size: [5, 0.2],
+    rotation: 0,
+    height: 3,
+    visible: true,
+    opacity: 100,
+    metadata: {},
+    editor: { preview: true },
+  })
+
+  console.log('New wall created:', newWall?.id)
+
+  // 3. Create another wall to test order (should be first)
+  const newerWall = levelHandle.create('wall', {
+    start: [0, 0],
+    end: [0, 5],
+    height: 3,
+    size: [5, 0.2],
+    rotation: 0,
+    position: [5, 5],
+    name: 'Newer Wall',
+    visible: true,
+    opacity: 100,
+    metadata: {},
+    editor: { preview: true },
+  })
+  console.log('Newer wall created:', newerWall?.id)
+
+  // 4. Verify children order
+  const children = levelHandle.children()
+  console.log(`Level has ${children.length} children`)
+  console.log('First child ID:', children[0].id)
+  console.log('Is first child the newer wall?', children[0].id === newerWall?.id) // Should be true due to unshift
+
+  // 5. Update the new wall
+  if (newWall) {
+    newWall.update({ name: 'Updated Created Wall' })
+    console.log('Updated wall name:', newWall.data().name)
+  }
 }
 
-// Test 2: Scene with walls and children
-console.log('\n=== Test 2: Complex Scene ===')
-const sceneData = {
-  metadata: {},
-  root: {
-    id: 'root_test123456789',
-    type: 'root',
-    environment: {
-      id: 'environment_test1234',
-      type: 'environment',
-      latitude: 40.7128,
-      longitude: -74.006,
-      altitude: 10,
-    },
-    site: {
-      id: 'site_test123456789',
-      type: 'site',
-    },
-    buildings: [
-      {
-        id: 'building_test12345',
-        type: 'building',
-        name: 'Test Building',
-        position: [0, 0],
-        rotation: 0,
-        visible: true,
-        opacity: 1,
-        metadata: {},
-        levels: [
-          {
-            id: 'level_test12345678',
-            type: 'level',
-            name: 'Ground Floor',
-            level: 0,
-            visible: true,
-            opacity: 1,
-            metadata: {},
-            children: [
-              {
-                id: 'wall_test123456789',
-                type: 'wall',
-                start: [0, 0],
-                end: [10, 0],
-                visible: true,
-                opacity: 1,
-                metadata: {},
-                children: [
-                  {
-                    id: 'door_test123456789',
-                    type: 'door',
-                    position: 5,
-                    visible: true,
-                    opacity: 1,
-                    metadata: {},
-                  },
-                  {
-                    id: 'window_test1234567',
-                    type: 'window',
-                    position: 8,
-                    height: 1,
-                    visible: true,
-                    opacity: 1,
-                    metadata: {},
-                  },
-                ],
-              },
-              {
-                id: 'column_test1234567',
-                type: 'column',
-                position: [5, 5],
-                visible: true,
-                opacity: 1,
-                metadata: {},
-              },
-              {
-                id: 'roof_test1234567',
-                type: 'roof',
-                position: [8, 8],
-                rotation: 0,
-                size: [10, 10],
-                height: 10,
-                leftWidth: 5,
-                rightWidth: 5,
-                visible: true,
-                opacity: 1,
-                metadata: {},
-              },
-            ],
-          },
-          {
-            id: 'level_test23456789',
-            type: 'level',
-            name: 'First Floor',
-            level: 1,
-            visible: true,
-            opacity: 1,
-            metadata: {},
-            children: [],
-          },
-        ],
-      },
-    ],
-  },
-} satisfies Scene
-const loadedScene = loadScene(sceneData)
+console.log('graph scene after create')
+console.dir(graph.scene, { depth: null })
 
-const sceneIndex = buildSceneIndex(loadedScene)
-
-// console.log('Scene index:')
-// console.log(sceneIndex)
-
-// console.log('Nodes by type:')
-// for (const [type, ids] of sceneIndex.byType.entries()) {
-//   console.log(`  ${type}: ${ids.size} node(s)`)
-// }
-// console.log('Total nodes indexed:', sceneIndex.byId.size)
-
-// console.log('\nNode paths and relationships:')
-// for (const [nodeId, nodeIndex] of sceneIndex.byId.entries()) {
-//   const pathStr = nodeIndex.path.join('.')
-//   console.log(`  ${nodeIndex.type} (${nodeId})`)
-//   console.log(`    path: ${pathStr}`)
-//   console.log(`    parent: ${nodeIndex.parent || 'null'}`)
-//   if (nodeIndex.children.length > 0) {
-//     console.log(`    children: ${nodeIndex.children.join(', ')}`)
-//   }
-// }
-
-// console.log('\n✅ Generic traversal successfully indexed all nodes with paths!')
-
-// // Test 3: Path-based node access
-// console.log('\n=== Test 3: Path-Based Node Access ===')
-
-// // Find the wall node in the index
-// const wallNodeIndex = Array.from(sceneIndex.byId.values()).find((n) => n.type === 'wall')
-// if (wallNodeIndex) {
-//   console.log('Wall found at path:', wallNodeIndex.path.join('.'))
-
-//   // Access the wall using its path
-//   const wallNode = getNodeByPath(loadedScene, wallNodeIndex.path)
-//   console.log('Wall node:', wallNode)
-
-//   // Update the wall's visibility using its path
-//   const updatedScene = updateNodeByPath(loadedScene, wallNodeIndex.path, (node) => ({
-//     ...node,
-//     visible: false,
-//     opacity: 0.5,
-//   }))
-
-//   // Verify the update
-//   const updatedWall = getNodeByPath(updatedScene, wallNodeIndex.path)
-//   console.log('Updated wall node:', updatedWall)
-//   if (updatedWall && 'visible' in updatedWall && 'opacity' in updatedWall) {
-//     console.log(
-//       '✅ Wall visibility updated:',
-//       updatedWall.visible,
-//       '(opacity:',
-//       updatedWall.opacity,
-//       ')',
-//     )
-//   }
-// }
-
-// // Test 4: Update a door via path
-// console.log('\n=== Test 4: Update Door Via Path ===')
-// const doorNodeIndex = Array.from(sceneIndex.byId.values()).find((n) => n.type === 'door')
-// if (doorNodeIndex) {
-//   console.log('Door found at path:', doorNodeIndex.path.join('.'))
-
-//   const updatedScene = updateNodeByPath(loadedScene, doorNodeIndex.path, (node) => {
-//     if (node.type === 'door') {
-//       return {
-//         ...node,
-//         position: 7, // Move door along wall
-//         metadata: { ...(node.metadata as Record<string, unknown>), updated: true },
-//       }
-//     }
-//     return node
-//   })
-
-//   const updatedDoor = getNodeByPath(updatedScene, doorNodeIndex.path)
-//   if (updatedDoor && 'position' in updatedDoor) {
-//     console.log('Updated door position:', updatedDoor.position)
-//     console.log('✅ Door successfully moved via path!')
-//   }
-// }
-
-const node = getNodeByPath<'wall'>(loadedScene, [
-  'root',
-  'buildings',
-  0,
-  'levels',
-  0,
-  'children',
-  0,
-])
-if (node?.type === 'wall') {
-  console.log('Wall node:', node)
-}
+const wallNodes = graph.nodes.find({ buildingId: building1.id, type: 'wall' })
+console.log(
+  'wall nodes',
+  wallNodes.map((node) => node.data()),
+)
+console.log('Done')

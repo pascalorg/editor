@@ -271,6 +271,8 @@ function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
   )
 }
 
+const EMPTY_LEVELS: any[] = []
+
 export function NodesDebugger() {
   const [state, setState] = useState<DebuggerState>(DEFAULT_STATE)
   const [isDragging, setIsDragging] = useState(false)
@@ -280,10 +282,10 @@ export function NodesDebugger() {
   const dragRef = useRef<HTMLDivElement>(null)
 
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings?.[0]
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
     return building && 'children' in building && Array.isArray(building.children)
       ? building.children
-      : []
+      : EMPTY_LEVELS
   })
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)

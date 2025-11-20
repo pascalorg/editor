@@ -24,17 +24,22 @@ import {
 import { LevelElevationProcessor } from '@/lib/processors/level-elevation-processor'
 import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
-import { buildDraftNodeIndex, getLevelIdFromDraft, getLevels } from '@/lib/scenegraph/editor-utils'
+import {
+  buildDraftNodeIndex,
+  getLevelIdFromDraft,
+  getLevels,
+  getMainBuilding,
+} from '@/lib/scenegraph/editor-utils'
+import { SceneGraph } from '@/lib/scenegraph/index'
 import {
   type AnyNode,
-  BuildingNode,
   initScene,
-  RootNode,
+  type RootNode,
   type Scene,
   type SceneNode,
+  type SiteNode,
 } from '@/lib/scenegraph/schema/index'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
-import { createId } from '@/lib/utils'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
 type AssetMap = Record<string, string>
@@ -77,8 +82,16 @@ function extractAssetsFromRoot(root: RootNode): {
     return n as SceneNode
   }
 
-  const processedRoot = walk(root) as RootNode
-  return { root: processedRoot, assets }
+  // Walk sites
+  if (root.children) {
+    root.children = root.children.map((site) => walk(site) as SiteNode)
+  }
+  // Legacy walk
+  if ((root as any).buildings) {
+    ;(root as any).buildings = (root as any).buildings.map((b: any) => walk(b))
+  }
+
+  return { root, assets }
 }
 
 /**
@@ -109,8 +122,16 @@ function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
     return n as SceneNode
   }
 
-  const processedRoot = walk(root) as RootNode
-  return processedRoot
+  // Walk sites
+  if (root.children) {
+    root.children = root.children.map((site) => walk(site) as SiteNode)
+  }
+  // Legacy walk
+  if ((root as any).buildings) {
+    ;(root as any).buildings = (root as any).buildings.map((b: any) => walk(b))
+  }
+
+  return root
 }
 
 // IndexedDB storage adapter for Zustand persist middleware (split keys)
@@ -131,18 +152,6 @@ const indexedDBStorage: StateStorage = {
       // Handle Scene structure (v3+)
       if (env.state?.scene?.root) {
         env.state.scene.root = injectAssetsIntoRoot(env.state.scene.root as RootNode, assets)
-        return JSON.stringify(env)
-      }
-
-      // Migration: Old format had root directly in state
-      if (env.state?.root) {
-        const root = injectAssetsIntoRoot(env.state.root as RootNode, assets)
-        // Migrate to scene structure
-        env.state = {
-          ...env.state,
-          scene: { root, metadata: {} },
-          root: undefined, // Remove old root
-        }
         return JSON.stringify(env)
       }
 
@@ -246,6 +255,7 @@ type StoreState = {
   // SCENE GRAPH STATE
   // ============================================================================
   scene: Scene
+  graph: SceneGraph
   nodeIndex: Map<string, AnyNode> // Mutable draft index for O(1) access
   spatialGrid: SpatialGrid
 
@@ -432,7 +442,7 @@ function processLevel(
   })
 
   // Step 3: Calculate elevation for all levels
-  const building = draft.scene.root.buildings?.[0] as BuildingNode | undefined
+  const building = getMainBuilding(draft.scene.root)
   if (building && building.type === 'building') {
     const allLevels = building.children
     const elevationResults = draft.levelElevationProcessor.process(allLevels)
@@ -460,9 +470,43 @@ const useStore = create<StoreState>()(
   persist(
     (set, get) => {
       const initialScene = initScene()
+      const initialGraph = new SceneGraph(initialScene, {
+        onChange: (nextScene, nextIndex) => {
+          set((state) => ({
+            scene: nextScene,
+            nodeIndex: buildDraftNodeIndex(nextScene), // Sync legacy index
+            graph: new SceneGraph(nextScene, {
+              index: nextIndex,
+              onChange: state.graph['onChange'], // Reuse the same callback wrapper if possible, or we need to redefine it.
+              // Actually we can't easily access 'state.graph.onChange' if it's private/readonly.
+              // Better to extract the callback to a variable.
+            }),
+          }))
+        },
+      })
+
+      // We need to fix the onChange recursion.
+      // Let's define a stable handler.
+      // But 'set' is available here.
+
+      const handleGraphChange = (nextScene: Scene, nextIndex: any) => {
+        set({
+          scene: nextScene,
+          nodeIndex: buildDraftNodeIndex(nextScene),
+          graph: new SceneGraph(nextScene, {
+            index: nextIndex,
+            onChange: handleGraphChange,
+          }),
+        })
+      }
+
+      const graph = new SceneGraph(initialScene, {
+        onChange: handleGraphChange,
+      })
 
       return {
         scene: initialScene,
+        graph,
         nodeIndex: new Map(),
         spatialGrid: new SpatialGrid(1),
         commandManager: new CommandManager(),
@@ -714,40 +758,9 @@ const useStore = create<StoreState>()(
           if (json.root) {
             set(
               produce((draft) => {
-                // Handle legacy structure in JSON load too if needed
-                const root = json.root as any
-                if (root.children && !root.buildings) {
-                  root.buildings = root.children
-                  delete root.children
-                }
-                if (root.buildings && Array.isArray(root.buildings)) {
-                  root.buildings.forEach((building: any) => {
-                    if (building.levels && !building.children) {
-                      building.children = building.levels
-                      delete building.levels
-                    }
-                  })
-                }
-
-                draft.scene.root = root
-                draft.nodeIndex = buildDraftNodeIndex(draft.scene.root)
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
-              }),
-            )
-          } else if (json.levels) {
-            // Simple legacy migration for levels array
-            const migratedRoot = RootNode.parse({
-              buildings: [
-                BuildingNode.parse({
-                  children: json.levels,
-                }),
-              ],
-            })
-            set(
-              produce((draft) => {
-                draft.scene.root = migratedRoot
+                draft.scene.root = json.root
                 draft.nodeIndex = buildDraftNodeIndex(draft.scene)
-                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, migratedRoot)
+                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
               }),
             )
           }
@@ -778,11 +791,12 @@ const useStore = create<StoreState>()(
 
         handleResetToDefault: () => {
           const initialScene = initScene()
+          const mainBuilding = getMainBuilding(initialScene.root)
           set({
             scene: initialScene,
             nodeIndex: buildDraftNodeIndex(initialScene),
             currentLevel: 0,
-            selectedFloorId: initialScene.root.buildings[0].children[0].id,
+            selectedFloorId: mainBuilding?.children[0].id ?? null,
             viewMode: 'level',
             selectedElements: [],
             selectedImageIds: [],
@@ -1005,7 +1019,7 @@ const useStore = create<StoreState>()(
     },
     {
       name: 'editor-storage',
-      version: 3, // Increment version to 3 for schema migration
+      version: 4, // Increment version to 4 for schema migration
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => {
         const filterPreviewNodes = (node: SceneNode): SceneNode => {
@@ -1031,10 +1045,18 @@ const useStore = create<StoreState>()(
           return n as SceneNode
         }
 
+        // Process sites manually since root is not a node
+        const processedRoot = { ...state.scene.root } as RootNode
+        if (processedRoot.children) {
+          processedRoot.children = processedRoot.children.map(
+            (site) => filterPreviewNodes(site) as SiteNode,
+          )
+        }
+
         return {
           scene: {
             ...state.scene,
-            root: filterPreviewNodes(state.scene.root) as RootNode,
+            root: processedRoot,
           },
           selectedElements: state.selectedElements,
           selectedImageIds: state.selectedImageIds,
@@ -1044,34 +1066,31 @@ const useStore = create<StoreState>()(
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Data Migration logic for v3
-          if (state.scene?.root) {
-            const root = state.scene.root as any
-            // Migrate children -> buildings
-            if (root.children && !root.buildings) {
-              root.buildings = root.children
-              delete root.children
-            }
-            // Migrate buildings -> children (legacy reverse check just in case)
-            // if (root.buildings && !root.children) ... NO, we want buildings.
-
-            // Migrate BuildingNode levels -> children
-            if (root.buildings && Array.isArray(root.buildings)) {
-              root.buildings.forEach((building: any) => {
-                if (building.levels && !building.children) {
-                  building.children = building.levels
-                  delete building.levels
-                }
-              })
-            }
-          } else {
-            // Fallback initialization
+          if (!state.scene?.root) {
+            // Fallback initialization if scene/root is missing
             state.scene = initScene()
           }
 
           state.nodeIndex = buildDraftNodeIndex(state.scene)
           state.commandManager = new CommandManager()
           state.spatialGrid = new SpatialGrid(1)
+
+          // Rehydrate graph
+          const handleGraphChange = (nextScene: Scene, nextIndex: any) => {
+            useStore.setState({
+              scene: nextScene,
+              nodeIndex: buildDraftNodeIndex(nextScene),
+              graph: new SceneGraph(nextScene, {
+                index: nextIndex,
+                onChange: handleGraphChange,
+              }),
+            })
+          }
+
+          state.graph = new SceneGraph(state.scene, {
+            onChange: handleGraphChange,
+          })
+
           rebuildSpatialGrid(state.spatialGrid, state.nodeIndex, state.scene.root)
 
           const levels = getLevels(state.scene.root)

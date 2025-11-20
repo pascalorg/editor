@@ -34,7 +34,7 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 export default function Editor({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
   const cameraMode = useEditor((state) => state.cameraMode)
-  const rootId = useEditor(useShallow((state) => state.scene.root.buildings?.[0].id))
+  const rootId = useEditor((state) => state.scene.root.children?.[0]?.children.find(c => c.type === 'building')?.id)
 
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
 
@@ -79,7 +79,7 @@ export default function Editor({ className }: { className?: string }) {
 
       {/* Loop through all floors and render grid + walls for each */}
       <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-        <NodeRenderer nodeId={rootId} />
+        {rootId && <NodeRenderer nodeId={rootId} />}
       </group>
 
       {controlMode === 'select' && <SelectionManager />}

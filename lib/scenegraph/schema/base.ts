@@ -17,9 +17,9 @@ export const BaseNode = z.object({
   type: nodeType('node'),
   name: z.string().optional(),
   parentId: z.string().nullable().default(null),
-  visible: z.boolean().default(true),
-  opacity: z.number().min(0).max(100).default(100),
-  metadata: z.json().default({}),
+  visible: z.boolean().optional().default(true),
+  opacity: z.number().min(0).max(100).optional().default(100),
+  metadata: z.json().optional().default({}),
   editor: z
     .object({
       canPlace: z.boolean().optional(),

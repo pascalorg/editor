@@ -33,14 +33,16 @@ export type CustomRoomRendererProps = z.infer<typeof CustomRoomRendererPropsSche
  * Custom room node editor component
  * Uses useEditor hooks directly to manage custom room creation via multi-point polygon
  */
+const EMPTY_LEVELS: any[] = []
+
 export function CustomRoomNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.buildings[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist values across renders without triggering re-renders

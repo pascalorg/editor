@@ -7,12 +7,12 @@ import {
   type AnyNode,
   type AnyNodeId,
   type AnyNodeType,
-  buildSceneGraphIndex,
+  buildNodeTreeIndex,
   getNodeByPath,
   initScene,
   loadScene,
+  type NodeTreeIndex,
   type Scene,
-  type SceneGraphIndex,
   type SceneNode,
   type SceneNodeId,
   updateNodeByPath,
@@ -69,7 +69,7 @@ const indexedDBStorage = {
 
 interface SceneState {
   scene: Scene | null
-  sceneIndex: SceneGraphIndex | null
+  sceneIndex: NodeTreeIndex | null
   init: () => void
   load: (data: unknown) => void
   setScene: (nextScene: Scene) => void
@@ -79,10 +79,10 @@ interface SceneState {
   listNodesByType: (type: AnyNodeType) => SceneNode[]
 }
 
-const buildIndex = (scene: Scene | null): SceneGraphIndex | null =>
-  scene ? buildSceneGraphIndex(scene) : null
+const buildIndex = (scene: Scene | null): NodeTreeIndex | null =>
+  scene ? buildNodeTreeIndex(scene) : null
 const defaultScene = initScene()
-const defaultIndex = buildSceneGraphIndex(defaultScene)
+const defaultIndex = buildNodeTreeIndex(defaultScene)
 
 const deleteNodeFromScene = (scene: Scene, path: (string | number)[]): Scene => {
   if (path.length === 0) {
@@ -124,7 +124,7 @@ const deleteNodeFromScene = (scene: Scene, path: (string | number)[]): Scene => 
 const replaceScene = (set: (partial: Partial<SceneState>) => void, nextScene: Scene) => {
   set({
     scene: nextScene,
-    sceneIndex: buildSceneGraphIndex(nextScene),
+    sceneIndex: buildNodeTreeIndex(nextScene),
   })
 }
 
