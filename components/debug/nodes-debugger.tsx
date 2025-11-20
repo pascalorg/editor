@@ -1,23 +1,10 @@
 'use client'
 
-import { CylinderIcon, TreeViewIcon } from '@phosphor-icons/react'
-import { Bug, Building2, Copy, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  TreeExpander,
-  TreeIcon,
-  TreeLabel,
-  TreeNode,
-  TreeNodeContent,
-  TreeNodeTrigger,
-  TreeProvider,
-  TreeView,
-} from '@/components/tree'
-import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
+import { TreeViewIcon } from '@phosphor-icons/react'
+import JsonView from '@uiw/react-json-view'
+import { Bug, Database, Maximize2, Minimize2, TreeDeciduous } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '@/hooks/use-editor'
-import { componentRegistry } from '@/lib/nodes/registry'
-import type { AnyNode, SceneNode } from '@/lib/scenegraph/schema/index'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'nodes-debugger-state'
@@ -28,7 +15,7 @@ interface DebuggerState {
   position: { x: number; y: number }
   width: number
   height: number
-  expandedIds: string[]
+  activeTab: 'scene' | 'index'
 }
 
 const DEFAULT_STATE: DebuggerState = {
@@ -37,7 +24,7 @@ const DEFAULT_STATE: DebuggerState = {
   position: { x: 100, y: 100 },
   width: 800,
   height: 600,
-  expandedIds: [],
+  activeTab: 'scene',
 }
 
 function loadState(): DebuggerState {
@@ -63,216 +50,6 @@ function saveState(state: DebuggerState) {
   }
 }
 
-function getNodeIcon(node: SceneNode) {
-  // Try to get icon from registry first
-  const registered = componentRegistry.get(node.type)
-  if (registered?.config.toolIcon) {
-    return registered.config.toolIcon
-  }
-
-  // Fallback for unregistered types
-  return Building2
-}
-
-function formatNodeLabel(node: SceneNode): string {
-  if ('name' in node && node.name) return node.name
-  return `${node.type} (${node.id.slice(0, 8)}...)`
-}
-
-function NodeTreeItem({ node, level, isLast }: { node: AnyNode; level: number; isLast: boolean }) {
-  const Icon = getNodeIcon(node)
-  const children = 'children' in node && Array.isArray(node.children) ? node.children : []
-  const hasChildren = children.length > 0
-
-  return (
-    <TreeNode isLast={isLast} level={level} nodeId={node.id}>
-      <TreeNodeTrigger>
-        <TreeExpander hasChildren={hasChildren} />
-        <TreeIcon hasChildren={hasChildren} icon={<Icon className="h-4 w-4" />} />
-        <TreeLabel>{formatNodeLabel(node)}</TreeLabel>
-        <div className="ml-auto flex items-center gap-1">
-          {'visible' in node && node.visible === false && (
-            <EyeOff className="h-3 w-3 text-muted-foreground" />
-          )}
-          {'opacity' in node && node.opacity !== undefined && node.opacity !== 100 && (
-            <span className="text-muted-foreground text-xs">{node.opacity}%</span>
-          )}
-        </div>
-      </TreeNodeTrigger>
-      <TreeNodeContent hasChildren={hasChildren}>
-        {children.map((child: AnyNode, index: number) => (
-          <NodeTreeItem
-            isLast={index === children.length - 1}
-            key={child.id}
-            level={level + 1}
-            node={child}
-          />
-        ))}
-      </TreeNodeContent>
-    </TreeNode>
-  )
-}
-
-function NodeDetailsPanel({ nodeId }: { nodeId: string | null }) {
-  const node = useEditor((state) => (nodeId ? state.nodeIndex.get(nodeId) : undefined))
-  const { toggleNodeVisibility, setNodeOpacity } = useEditor()
-
-  const [copied, setCopied] = useState(false)
-
-  if (!node) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        Select a node to view details
-      </div>
-    )
-  }
-
-  const handleToggleVisibility = () => {
-    toggleNodeVisibility(node.id)
-  }
-
-  const handleOpacityChange = (value: number[]) => {
-    const opacity = value[0]
-    setNodeOpacity(node.id, opacity)
-  }
-
-  const handleCopyId = () => {
-    navigator.clipboard.writeText(node.id)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(node, null, 2))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const canToggleVisibility = 'visible' in node
-  const canChangeOpacity = 'opacity' in node
-
-  const parentId = (node as any).parent
-
-  return (
-    <div className="flex h-full flex-col overflow-auto">
-      <div className="border-b p-4">
-        <h3 className="font-semibold text-lg">{formatNodeLabel(node)}</h3>
-        <p className="mt-1 text-muted-foreground text-sm">Type: {node.type}</p>
-      </div>
-
-      <div className="flex-1 space-y-4 overflow-auto p-4">
-        {/* Key Fields */}
-        <div className="space-y-2">
-          <h4 className="font-semibold text-sm">Key Fields</h4>
-          <div className="space-y-1 text-sm">
-            <div>
-              <span className="text-muted-foreground">ID:</span>{' '}
-              <code className="text-xs">{node.id}</code>
-            </div>
-            {parentId && (
-              <div>
-                <span className="text-muted-foreground">Parent:</span>{' '}
-                <code className="text-xs">{parentId}</code>
-              </div>
-            )}
-            {'position' in node && Array.isArray(node.position) && (
-              <div>
-                <span className="text-muted-foreground">Position:</span>{' '}
-                <code className="text-xs">
-                  [{node.position[0]}, {node.position[1]}]
-                </code>
-              </div>
-            )}
-            {'rotation' in node && typeof node.rotation === 'number' && (
-              <div>
-                <span className="text-muted-foreground">Rotation:</span>{' '}
-                <code className="text-xs">{node.rotation.toFixed(2)} rad</code>
-              </div>
-            )}
-            {'size' in node && Array.isArray(node.size) && (
-              <div>
-                <span className="text-muted-foreground">Size:</span>{' '}
-                <code className="text-xs">
-                  [{node.size[0]}, {node.size[1]}]
-                </code>
-              </div>
-            )}
-            {'visible' in node && typeof node.visible === 'boolean' && (
-              <div>
-                <span className="text-muted-foreground">Visible:</span>{' '}
-                <code className="text-xs">{node.visible ? 'true' : 'false'}</code>
-              </div>
-            )}
-            {'opacity' in node && typeof node.opacity === 'number' && (
-              <div>
-                <span className="text-muted-foreground">Opacity:</span>{' '}
-                <code className="text-xs">{node.opacity}%</code>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="space-y-2">
-          <h4 className="font-semibold text-sm">Actions</h4>
-          <div className="flex flex-col gap-2">
-            {canToggleVisibility && (
-              <Button onClick={handleToggleVisibility} size="sm" variant="outline">
-                {'visible' in node && node.visible === false ? (
-                  <>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Show
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="mr-2 h-4 w-4" />
-                    Hide
-                  </>
-                )}
-              </Button>
-            )}
-            {canChangeOpacity && (
-              <div className="space-y-2">
-                <label className="text-muted-foreground text-xs">Opacity</label>
-                <Slider
-                  max={100}
-                  min={0}
-                  onValueChange={handleOpacityChange}
-                  step={1}
-                  value={[
-                    'opacity' in node && typeof node.opacity === 'number' ? node.opacity : 100,
-                  ]}
-                />
-              </div>
-            )}
-            <div className="flex gap-2">
-              <Button onClick={handleCopyId} size="sm" variant="ghost">
-                <Copy className="mr-2 h-4 w-4" />
-                Copy ID
-              </Button>
-              <Button onClick={handleCopyJson} size="sm" variant="ghost">
-                <Copy className="mr-2 h-4 w-4" />
-                Copy JSON
-              </Button>
-            </div>
-            {copied && <p className="text-green-600 text-xs dark:text-green-400">Copied!</p>}
-          </div>
-        </div>
-
-        {/* Full JSON */}
-        <div className="space-y-2">
-          <h4 className="font-semibold text-sm">Full JSON</h4>
-          <pre className="overflow-auto rounded-md bg-muted p-2 text-xs">
-            {JSON.stringify(node, null, 2)}
-          </pre>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const EMPTY_LEVELS: any[] = []
-
 export function NodesDebugger() {
   const [state, setState] = useState<DebuggerState>(DEFAULT_STATE)
   const [isDragging, setIsDragging] = useState(false)
@@ -281,53 +58,17 @@ export function NodesDebugger() {
   const [isClient, setIsClient] = useState(false)
   const dragRef = useRef<HTMLDivElement>(null)
 
-  const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
-    return building && 'children' in building && Array.isArray(building.children)
-      ? building.children
-      : EMPTY_LEVELS
-  })
+  // Get full scene from store
+  const scene = useEditor((state) => state.scene)
   const nodeIndex = useEditor((state) => state.nodeIndex)
   const debug = useEditor((state) => state.debug)
-  const {
-    setDebug,
-    selectedElements,
-    selectedImageIds,
-    selectedScanIds,
-    selectedFloorId,
-    selectNode,
-  } = useEditor()
+  const setDebug = useEditor((state) => state.setDebug)
 
   // Load state from localStorage only on client
   useEffect(() => {
     setIsClient(true)
     setState(loadState())
   }, [])
-
-  const activeSelectedIds = useMemo(() => {
-    if (selectedElements.length > 0) return selectedElements
-    if (selectedImageIds.length > 0) return selectedImageIds
-    if (selectedScanIds.length > 0) return selectedScanIds
-    if (selectedFloorId) return [selectedFloorId]
-    return []
-  }, [selectedElements, selectedImageIds, selectedScanIds, selectedFloorId])
-
-  const selectedNodeId = activeSelectedIds[0] ?? null
-
-  const handleNodeSelect = (ids: string[]) => {
-    const nodeId = ids[0]
-    if (nodeId) {
-      selectNode(nodeId)
-    }
-  }
-
-  // Default expand all levels
-  const defaultExpandedIds = useMemo(() => {
-    // Collect all level IDs (levels are only at root, not nested)
-    const levelIds = levels.map((level: AnyNode) => level.id)
-    // Merge with persisted expandedIds
-    return [...new Set([...levelIds, ...state.expandedIds])]
-  }, [levels, state.expandedIds])
 
   useEffect(() => {
     saveState(state)
@@ -404,6 +145,9 @@ export function NodesDebugger() {
     )
   }
 
+  // Prepare view data
+  const viewData = state.activeTab === 'scene' ? scene : Object.fromEntries(nodeIndex)
+
   return (
     <div
       className="fixed z-50 flex flex-col overflow-hidden rounded-lg border bg-background shadow-xl"
@@ -426,10 +170,44 @@ export function NodesDebugger() {
         )}
         onPointerDown={handleDragStart}
       >
-        <div className="flex items-center gap-2">
-          <TreeViewIcon className="h-4 w-4" />
-          <span className="font-semibold text-sm">Nodes Debugger</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <TreeViewIcon className="h-4 w-4" />
+            <span className="font-semibold text-sm">Nodes Debugger</span>
+          </div>
+
+          {!state.isMinimized && (
+            <div className="flex items-center rounded-md bg-muted p-0.5">
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs transition-colors',
+                  state.activeTab === 'scene'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setState((prev) => ({ ...prev, activeTab: 'scene' }))}
+                type="button"
+              >
+                <TreeDeciduous className="h-3 w-3" />
+                Scene Tree
+              </button>
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs transition-colors',
+                  state.activeTab === 'index'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setState((prev) => ({ ...prev, activeTab: 'index' }))}
+                type="button"
+              >
+                <Database className="h-3 w-3" />
+                Node Index
+              </button>
+            </div>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           <button
             aria-label={debug ? 'Disable debug mode' : 'Enable debug mode'}
@@ -493,32 +271,17 @@ export function NodesDebugger() {
 
       {/* Content */}
       {!state.isMinimized && (
-        <div className="flex overflow-hidden" style={{ flex: 1 }}>
-          {/* Tree View */}
-          <div className="w-1/2 overflow-auto border-r">
-            <TreeProvider
-              defaultExpandedIds={defaultExpandedIds}
-              onExpandedChange={(ids) => setState((prev) => ({ ...prev, expandedIds: ids }))}
-              onSelectionChange={handleNodeSelect}
-              selectedIds={activeSelectedIds}
-            >
-              <TreeView>
-                {levels.map((level: AnyNode, index: number) => (
-                  <NodeTreeItem
-                    isLast={index === levels.length - 1}
-                    key={level.id}
-                    level={0}
-                    node={level}
-                  />
-                ))}
-              </TreeView>
-            </TreeProvider>
-          </div>
-
-          {/* Details Panel */}
-          <div className="w-1/2">
-            <NodeDetailsPanel nodeId={selectedNodeId} />
-          </div>
+        <div className="flex-1 overflow-auto bg-background p-4">
+          <JsonView
+            collapsed={2}
+            displayDataTypes={false}
+            shortenTextAfterLength={120}
+            style={{
+              fontSize: '12px',
+              fontFamily: 'var(--font-mono)',
+            }}
+            value={viewData}
+          />
         </div>
       )}
     </div>
