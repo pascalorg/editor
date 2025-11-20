@@ -33,11 +33,12 @@ import {
 import { SceneGraph } from '@/lib/scenegraph/index'
 import {
   type AnyNode,
+  BuildingNode,
   initScene,
-  type RootNode,
+  RootNode,
   type Scene,
   type SceneNode,
-  type SiteNode,
+  SiteNode,
 } from '@/lib/scenegraph/schema/index'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
@@ -745,6 +746,25 @@ const useStore = create<StoreState>()(
           }
         },
         loadLayout: (json) => {
+          // Helper to ensure all nodes have the 'object: node' marker
+          const ensureNodeMarkers = (node: any): void => {
+            if (typeof node !== 'object' || node === null) return
+
+            // Mark as node if it has id and type
+            if (node.id && node.type && !node.object) {
+              node.object = 'node'
+            }
+
+            // Recursively process all properties
+            for (const value of Object.values(node)) {
+              if (Array.isArray(value)) {
+                value.forEach(ensureNodeMarkers)
+              } else if (typeof value === 'object' && value !== null) {
+                ensureNodeMarkers(value)
+              }
+            }
+          }
+
           set({
             selectedElements: [],
             selectedImageIds: [],
@@ -758,7 +778,84 @@ const useStore = create<StoreState>()(
           if (json.root) {
             set(
               produce((draft) => {
-                draft.scene.root = json.root
+                // Handle legacy structure in JSON load
+                const root = json.root as any
+
+                // Helper to fix building structure
+                const fixBuilding = (b: any) => {
+                  if (b.levels && !b.children) {
+                    b.children = b.levels
+                    delete b.levels
+                  }
+                }
+
+                // Handle Root migration (Buildings -> Sites)
+                if (root.buildings && !root.children) {
+                  // Convert legacy buildings array to a Site
+                  if (Array.isArray(root.buildings)) {
+                    root.buildings.forEach(fixBuilding)
+                    const site = {
+                      id: 'site_default',
+                      type: 'site',
+                      object: 'node',
+                      children: root.buildings,
+                    }
+                    root.children = [site]
+                  }
+                  delete root.buildings
+                } else if (root.children) {
+                  // Check if children are Buildings (intermediate legacy) or Sites (new)
+                  if (root.children.length > 0 && root.children[0].type === 'building') {
+                    // Wrap buildings in site
+                    const buildings = root.children
+                    buildings.forEach(fixBuilding)
+                    const site = {
+                      id: 'site_default',
+                      type: 'site',
+                      object: 'node',
+                      children: buildings,
+                    }
+                    root.children = [site]
+                  } else {
+                    // Already sites, just fix buildings inside
+                    root.children.forEach((site: any) => {
+                      if (site.children) {
+                        site.children.forEach((c: any) => {
+                          if (c.type === 'building') fixBuilding(c)
+                        })
+                      }
+                    })
+                  }
+                }
+
+                // Ensure all nodes have object: 'node' marker for indexing
+                ensureNodeMarkers(root)
+
+                draft.scene.root = root
+                draft.nodeIndex = buildDraftNodeIndex(draft.scene.root)
+                rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
+              }),
+            )
+          } else if (json.levels) {
+            // Simple legacy migration for levels array
+            const migratedRoot = RootNode.parse({
+              children: [
+                SiteNode.parse({
+                  children: [
+                    BuildingNode.parse({
+                      children: json.levels,
+                    }),
+                  ],
+                }),
+              ],
+            })
+
+            // Ensure all nodes have object: 'node' marker for indexing
+            ensureNodeMarkers(migratedRoot)
+
+            set(
+              produce((draft) => {
+                draft.scene.root = migratedRoot
                 draft.nodeIndex = buildDraftNodeIndex(draft.scene)
                 rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
               }),
@@ -896,13 +993,17 @@ const useStore = create<StoreState>()(
               const command = new AddNodeCommand(nodeData, parentId)
               nodeId = command.getNodeId()
 
-              if ((nodeData as any).preview) {
+              if ((nodeData as any).editor?.preview) {
                 command.execute(draft.scene.root, draft.nodeIndex)
               } else {
                 draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
               }
 
+              // Rebuild nodeIndex from tree to ensure all references are up-to-date
+              draft.nodeIndex = buildDraftNodeIndex(draft.scene)
+
               const node = draft.nodeIndex.get(nodeId)
+
               if (node) {
                 const levelId = getLevelIdFromDraft(node, draft.nodeIndex)
                 if (levelId) {
@@ -920,32 +1021,44 @@ const useStore = create<StoreState>()(
           set(
             produce((draft) => {
               const fromNode = draft.nodeIndex.get(nodeId)
+
               if (!fromNode) return
 
               const isCommittingPreview =
-                (fromNode as any).preview === true && (updates as any).preview === false
+                fromNode.editor?.preview === true && (updates as any).editor?.preview === false
 
               if (isCommittingPreview) {
                 const previewNode = current(fromNode)
                 const deleteCommand = new DeleteNodeCommand(nodeId)
                 deleteCommand.execute(draft.scene.root, draft.nodeIndex)
 
-                const { preview, id, children, parent, ...nodeData } = previewNode as any
+                const { editor, id, children, parent, ...nodeData } = previewNode as any
                 const cleanName =
                   (updates as any).name ||
                   nodeData.name?.replace(' Preview', '').replace('Preview ', '') ||
                   nodeData.type
 
+                // Recursively clear preview flag from all children
+                const clearPreviewRecursive = (node: any): any => {
+                  const clearedNode = { ...node }
+                  if (clearedNode.editor?.preview) {
+                    clearedNode.editor = { ...clearedNode.editor, preview: false }
+                  }
+                  if (Array.isArray(clearedNode.children)) {
+                    clearedNode.children = clearedNode.children.map(clearPreviewRecursive)
+                  }
+                  return clearedNode
+                }
+
                 const newNodeData = {
                   ...nodeData,
                   ...updates,
                   name: cleanName,
-                  preview: false,
                 }
 
                 // Handle children cleanup if needed
                 if (Array.isArray(children)) {
-                  newNodeData.children = children.map((c: any) => ({ ...c, preview: false }))
+                  newNodeData.children = children.map(clearPreviewRecursive)
                 } else {
                   newNodeData.children = []
                 }
@@ -953,9 +1066,12 @@ const useStore = create<StoreState>()(
                 const addCommand = new AddNodeCommand(newNodeData, parent)
                 resultNodeId = addCommand.getNodeId()
                 draft.commandManager.execute(addCommand, draft.scene.root, draft.nodeIndex)
+
+                // Rebuild nodeIndex after committing preview to ensure all children are indexed
+                draft.nodeIndex = buildDraftNodeIndex(draft.scene)
               } else {
                 const command = new UpdateNodeCommand(nodeId, updates)
-                if (fromNode.preview) {
+                if (fromNode.editor?.preview) {
                   command.execute(draft.scene.root, draft.nodeIndex)
                 } else {
                   draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
@@ -997,20 +1113,20 @@ const useStore = create<StoreState>()(
         },
 
         deletePreviewNodes: () => {
+          const previewNodeIds = Array.from(get().nodeIndex.values())
+            .filter((n) => n.editor?.preview === true)
+            .map((n) => n.id)
           set(
             produce((draft) => {
-              const previewNodeIds: string[] = []
-              for (const [id, node] of draft.nodeIndex.entries()) {
-                if ((node as any).preview === true) {
-                  previewNodeIds.push(id)
-                }
-              }
               for (const nodeId of previewNodeIds) {
                 const command = new DeleteNodeCommand(nodeId)
                 command.execute(draft.scene.root, draft.nodeIndex)
               }
+              rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
             }),
           )
+
+          return previewNodeIds.length > 0
         },
 
         setPointerPosition: (position: [number, number] | null) =>
@@ -1033,7 +1149,7 @@ const useStore = create<StoreState>()(
                 n[key] = filterPreviewNodes(value)
               } else if (Array.isArray(value)) {
                 n[key] = value
-                  .filter((item: any) => !(typeof item === 'object' && item?.preview))
+                  .filter((item: any) => !(typeof item === 'object' && item?.editor?.preview))
                   .map((item: any) =>
                     typeof item === 'object' && item !== null && item.object === 'node'
                       ? filterPreviewNodes(item)
@@ -1066,8 +1182,76 @@ const useStore = create<StoreState>()(
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          if (!state.scene?.root) {
-            // Fallback initialization if scene/root is missing
+          // Helper to ensure all nodes have the 'object: node' marker
+          const ensureNodeMarkers = (node: any): void => {
+            if (typeof node !== 'object' || node === null) return
+
+            // Mark as node if it has id and type
+            if (node.id && node.type && !node.object) {
+              node.object = 'node'
+            }
+
+            // Recursively process all properties
+            for (const value of Object.values(node)) {
+              if (Array.isArray(value)) {
+                value.forEach(ensureNodeMarkers)
+              } else if (typeof value === 'object' && value !== null) {
+                ensureNodeMarkers(value)
+              }
+            }
+          }
+
+          // Data Migration logic for v3
+          if (state.scene?.root) {
+            const root = state.scene.root as any
+
+            // Helper to fix building structure
+            const fixBuilding = (b: any) => {
+              if (b.levels && !b.children) {
+                b.children = b.levels
+                delete b.levels
+              }
+            }
+
+            // Handle Root migration (Buildings -> Sites)
+            if (root.buildings && !root.children) {
+              if (Array.isArray(root.buildings)) {
+                root.buildings.forEach(fixBuilding)
+                const site = {
+                  id: 'site_default',
+                  type: 'site',
+                  object: 'node',
+                  children: root.buildings,
+                }
+                root.children = [site]
+              }
+              delete root.buildings
+            } else if (root.children) {
+              if (root.children.length > 0 && root.children[0].type === 'building') {
+                const buildings = root.children
+                buildings.forEach(fixBuilding)
+                const site = {
+                  id: 'site_default',
+                  type: 'site',
+                  object: 'node',
+                  children: buildings,
+                }
+                root.children = [site]
+              } else {
+                root.children.forEach((site: any) => {
+                  if (site.children) {
+                    site.children.forEach((c: any) => {
+                      if (c.type === 'building') fixBuilding(c)
+                    })
+                  }
+                })
+              }
+            }
+
+            // Ensure all nodes have object: 'node' marker for indexing
+            ensureNodeMarkers(root)
+          } else {
+            // Fallback initialization
             state.scene = initScene()
           }
 

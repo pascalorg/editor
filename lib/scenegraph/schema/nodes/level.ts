@@ -8,6 +8,7 @@ import { ImageNode } from './image'
 import { ItemNode } from './item'
 import { RoofNode } from './roof'
 import { ScanNode } from './scan'
+import { SlabNode } from './slab'
 import { WallNode } from './wall'
 
 export const LevelNode = BaseNode.extend({
@@ -18,6 +19,7 @@ export const LevelNode = BaseNode.extend({
       z.discriminatedUnion('type', [
         FloorNode,
         WallNode,
+        SlabNode,
         ColumnNode,
         GroupNode,
         ItemNode,

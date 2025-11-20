@@ -29,6 +29,12 @@ export function useKeyboard() {
 
       if (e.key === 'Escape') {
         e.preventDefault()
+        if (
+          useEditor.getState().controlMode === 'building' &&
+          useEditor.getState().deletePreviewNodes()
+        ) {
+          return // Stop further processing if building was cancelled
+        }
         setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()

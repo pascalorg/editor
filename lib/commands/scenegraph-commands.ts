@@ -82,9 +82,8 @@ export class AddNodeCommand implements Command {
             // @ts-expect-error
             node.children.push(newNode)
 
-            // Update parent in index after modifying its children (important for Immer)
-            // Use current() to store plain object, not draft proxy
-            nodeIndex.set(this.parentId, current(node) as AnyNode)
+            // Don't update parent in nodeIndex here - the tree structure is the source of truth
+            // and Immer will handle creating new immutable versions of all modified nodes
             return true
           }
           // @ts-expect-error

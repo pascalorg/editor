@@ -66,6 +66,7 @@ export function DoorNodeEditor() {
         return // Avoid computing for same position
       }
 
+      console.log('handleGridMove', e.position, previewDoor)
       const [x, y] = e.position
       lastPosition = [x, y]
       canPlace = false
@@ -83,10 +84,10 @@ export function DoorNodeEditor() {
           size: [1, 2] as [number, number],
           editor: { preview: true, canPlace },
         } as DoorNode
-        addNode(
+        previewDoor.id = addNode(
           previewDoor,
           selectedFloorId, // Parent is either wall or level
-        )
+        ) as DoorNode['id']
       }
     }
 
@@ -110,7 +111,7 @@ export function DoorNodeEditor() {
         editor: { preview: true, canPlace },
       } as DoorNode
       canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-      addNode(previewDoor, e.node.id) // Parent is the wall
+      previewDoor.id = addNode(previewDoor, e.node.id) as DoorNode['id']
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -152,10 +153,10 @@ export function DoorNodeEditor() {
 
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
         previewDoor.editor = { ...previewDoor.editor, canPlace }
-        addNode(
+        previewDoor.id = addNode(
           previewDoor,
           e.node.id, // Parent is the wall
-        )
+        ) as DoorNode['id']
       }
     }
 

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { SlabNode } from '@/lib/scenegraph/schema/nodes/slab'
 import { SlabRenderer } from './slab-renderer'
 
 // ============================================================================
@@ -69,17 +70,16 @@ export function SlabNodeEditor() {
 
         // Create preview slab at start position with zero size initially
         const previewSlabId = addNode(
-          {
-            type: 'slab' as const,
+          SlabNode.parse({
+            type: 'slab',
             name: 'Slab Preview',
-            position: [x, y] as [number, number],
+            position: [x, y],
             rotation: 0,
-            size: [0, 0] as [number, number], // Zero size initially
-            visible: true,
-            opacity: 100,
-            preview: true,
-            children: [] as [],
-          } as any,
+            size: [0, 0], // Zero size initially
+            editor: {
+              preview: true,
+            },
+          }),
           selectedFloorId,
         )
 
@@ -138,7 +138,7 @@ export function SlabNodeEditor() {
           updateNode(previewSlabId, {
             position: [slabX, slabY] as [number, number],
             size: [slabWidth, slabHeight] as [number, number],
-            editor: { canPlace },
+            editor: { canPlace, preview: true },
           })
         }
       }

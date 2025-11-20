@@ -83,7 +83,7 @@ export function WindowNodeEditor() {
           size: [1, 1.2] as [number, number],
           editor: { canPlace, preview: true },
         } as WindowNode
-        addNode(previewWindow, selectedFloorId)
+        previewWindow.id = addNode(previewWindow, selectedFloorId) as WindowNode['id']
       }
     }
 
@@ -108,7 +108,7 @@ export function WindowNodeEditor() {
       } as WindowNode
       canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
       previewWindow.editor = { ...previewWindow.editor, canPlace }
-      addNode(previewWindow, e.node.id) // Parent is the wall
+      previewWindow.id = addNode(previewWindow, e.node.id) as WindowNode['id'] // Parent is the wall
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -150,7 +150,7 @@ export function WindowNodeEditor() {
 
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
         previewWindow.editor = { ...previewWindow.editor, canPlace }
-        addNode(previewWindow, e.node.id) // Parent is the wall
+        previewWindow.id = addNode(previewWindow, e.node.id) as WindowNode['id'] // Parent is the wall
       }
     }
 

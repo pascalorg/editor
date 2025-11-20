@@ -291,7 +291,6 @@ const createWallDataSelector = (levelId: string) => {
   let lastWallIds: string[] = []
   let lastWallData: Record<string, any> = {}
   let lastResult = { wallIds: lastWallIds, wallData: lastWallData }
-
   return (state: { nodeIndex: Map<string, SceneNode> }) => {
     const level = state.nodeIndex.get(levelId)
     if (!level || level.type !== 'level') {
@@ -310,6 +309,8 @@ const createWallDataSelector = (levelId: string) => {
             position: wall.position,
             size: wall.size,
             rotation: wall.rotation || 0,
+            start: wall.start,
+            end: wall.end,
           }
         } else if (node.type === 'group' && 'children' in node) {
           traverse(node.children as AnyNode[])
@@ -330,10 +331,13 @@ const createWallDataSelector = (levelId: string) => {
       !Object.keys(wallData).every((key) => {
         const prev = lastWallData[key]
         const next = wallData[key]
+        // console.log('prev', prev, 'next', next)
         return (
           prev &&
           JSON.stringify(prev.position) === JSON.stringify(next.position) &&
           JSON.stringify(prev.size) === JSON.stringify(next.size) &&
+          JSON.stringify(prev.start) === JSON.stringify(next.start) &&
+          JSON.stringify(prev.end) === JSON.stringify(next.end) &&
           prev.rotation === next.rotation
         )
       })
@@ -425,7 +429,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     const liveWalls: LiveWall[] = wallIds.map((wallId) => {
       const data = wallData[wallId]
 
-      const wWorldPos = calculateWorldPosition(wall, nodeIndex)
+      // Get the actual wall node from the index
+      const wallNode = nodeIndex.get(wallId) as WallNode
+      const wWorldPos = calculateWorldPosition(wallNode, nodeIndex)
       const [wx1, wy1] = wWorldPos.position
       const wWorldRotation = wWorldPos.rotation
       const wLength = data.size[0]

@@ -17,6 +17,7 @@ import {
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/shallow'
 import {
   TreeExpander,
   TreeIcon,
@@ -31,106 +32,261 @@ import { Button } from '@/components/ui/button'
 import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
-import { isElementSelected } from '@/lib/building-elements'
 import { type AnyNodeId, LevelNode } from '@/lib/scenegraph/schema/index'
 import { cn, createId } from '@/lib/utils'
 
-const buildingElementConfig: Record<
-  'wall' | 'roof' | 'column' | 'slab' | 'group',
-  {
-    icon: ReactNode
-    getLabel: (index: number, data?: any) => string
+// Helper to get icon based on node type
+function getNodeIcon(type: string): ReactNode {
+  switch (type) {
+    case 'wall':
+      return <Square className="h-4 w-4 text-gray-600" />
+    case 'roof':
+      return <Triangle className="h-4 w-4 text-amber-600" />
+    case 'column':
+      return <CylinderIcon className="h-4 w-4 text-gray-500" />
+    case 'slab':
+      return <CuboidIcon className="h-4 w-4 text-gray-300" />
+    case 'group':
+      return <Building className="h-4 w-4 text-purple-600" />
+    case 'door':
+      return <DoorOpen className="h-4 w-4 text-orange-600" />
+    case 'window':
+      return <RectangleVertical className="h-4 w-4 text-blue-500" />
+    case 'reference-image':
+      return <Image className="h-4 w-4 text-purple-400" />
+    case 'scan':
+      return <Box className="h-4 w-4 text-cyan-400" />
+    case 'level':
+      return <Layers className="h-4 w-4 text-blue-500" />
+    default:
+      return <Box className="h-4 w-4 text-gray-400" />
   }
-> = {
-  wall: {
-    icon: <Square className="h-4 w-4 text-gray-600" />,
-    getLabel: (index) => `Wall ${index + 1}`,
-  },
-  roof: {
-    icon: <Triangle className="h-4 w-4 text-amber-600" />,
-    getLabel: (index) => `Roof ${index + 1}`,
-  },
-  column: {
-    icon: <CylinderIcon className="h-4 w-4 text-gray-500" />,
-    getLabel: (index) => `Column ${index + 1}`,
-  },
-  slab: {
-    icon: <CuboidIcon className="h-4 w-4 text-gray-300" />,
-    getLabel: (index) => `Floor ${index + 1}`,
-  },
-  group: {
-    icon: <Building className="h-4 w-4 text-purple-600" />,
-    getLabel: (index, data) => data?.name || `Room ${index + 1}`,
-  },
+}
+
+// Helper to get node label
+function getNodeLabel(type: string, index: number, name?: string): string {
+  switch (type) {
+    case 'wall':
+      return `Wall ${index + 1}`
+    case 'roof':
+      return `Roof ${index + 1}`
+    case 'column':
+      return `Column ${index + 1}`
+    case 'slab':
+      return `Floor ${index + 1}`
+    case 'group':
+      return name || `Room ${index + 1}`
+    case 'door':
+      return `Door ${index + 1}`
+    case 'window':
+      return `Window ${index + 1}`
+    case 'reference-image':
+      return `Reference ${index + 1}`
+    case 'scan':
+      return `Scan ${index + 1}`
+    case 'level':
+      return name || `Level ${index + 1}`
+    default:
+      return `Node ${index + 1}`
+  }
 }
 
 interface LayersMenuProps {
   mounted: boolean
 }
 
+// Generic node item that uses useShallow to get node data
+interface NodeItemProps {
+  nodeId: string
+  index: number
+  isLast: boolean
+  level: number
+  selectedNodeIds: string[]
+  onNodeSelect: (nodeId: string, event: React.MouseEvent) => void
+}
+
+function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect }: NodeItemProps) {
+  const { nodeType, nodeName, nodeVisible, nodeOpacity } = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as any
+      return {
+        nodeType: node?.type || 'unknown',
+        nodeName: node?.name,
+        nodeVisible: node?.visible ?? true,
+        nodeOpacity: node?.opacity ?? 100,
+      }
+    }),
+  )
+  const childrenIds = useEditor(
+    useShallow((state) => {
+      const node = state.nodeIndex.get(nodeId) as any
+      return node?.children?.map((c: any) => c.id) || []
+    }),
+  )
+
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+
+  const isSelected = selectedNodeIds.includes(nodeId)
+  const hasChildren = childrenIds.length > 0
+
+  return (
+    <TreeNode isLast={isLast} level={level} nodeId={nodeId}>
+      <TreeNodeTrigger
+        className={cn(isSelected && 'bg-accent', nodeVisible === false && 'opacity-50')}
+        onClick={(e) => {
+          e.stopPropagation()
+          onNodeSelect(nodeId, e as React.MouseEvent)
+        }}
+      >
+        <TreeExpander hasChildren={hasChildren} />
+        <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
+        <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+        <OpacityControl
+          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
+          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
+          opacity={nodeOpacity}
+          visible={nodeVisible}
+        />
+      </TreeNodeTrigger>
+
+      {hasChildren && (
+        <TreeNodeContent hasChildren={true}>
+          {childrenIds.map((childId: string, childIndex: number) => (
+            <NodeItem
+              index={childIndex}
+              isLast={childIndex === childrenIds.length - 1}
+              key={childId}
+              level={level + 1}
+              nodeId={childId}
+              onNodeSelect={onNodeSelect}
+              selectedNodeIds={selectedNodeIds}
+            />
+          ))}
+        </TreeNodeContent>
+      )}
+    </TreeNode>
+  )
+}
+
 interface DraggableLevelItemProps {
-  level: LevelNode
+  levelId: LevelNode['id']
   levelIndex: number
   levelsCount: number
   isSelected: boolean
-  elements: Record<string, any[]>
-  levelDoors: any[]
-  levelWindows: any[]
-  levelImages: any[]
-  levelScans: any[]
-  selectedElements: any[]
-  selectedImageIds: string[]
-  selectedScanIds: string[]
-  handleElementSelect: (elementId: AnyNodeId, event: React.MouseEvent) => void
-  handleImageSelect: (id: AnyNodeId, event: React.MouseEvent) => void
-  handleScanSelect: (id: string, event: React.MouseEvent) => void
-  toggleNodeVisibility: (id: string) => void
-  setNodeOpacity: (id: string, opacity: number) => void
   handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, levelId: string) => Promise<void>
   controls: ReturnType<typeof useDragControls>
 }
 
 function DraggableLevelItem({
-  level,
+  levelId,
   levelIndex,
   levelsCount,
   isSelected,
-  elements,
-  levelDoors,
-  levelWindows,
-  levelImages,
-  levelScans,
-  selectedElements,
-  selectedImageIds,
-  selectedScanIds,
-  handleElementSelect,
-  handleImageSelect,
-  handleScanSelect,
-  toggleNodeVisibility,
-  setNodeOpacity,
   handleUpload,
   handleScanUpload,
   controls,
 }: DraggableLevelItemProps) {
   const isLastLevel = levelIndex === levelsCount - 1
-  const elementTypes = Object.keys(elements) as (keyof typeof buildingElementConfig)[]
-  const totalElements = elementTypes.reduce((acc, type) => acc + elements[type].length, 0)
+
+  const { levelVisible, levelName, levelOpacity } = useEditor(
+    useShallow((state) => {
+      const level = state.nodeIndex.get(levelId) as any
+
+      return {
+        levelVisible: level?.visible ?? true,
+        levelName: level?.name || 'Level',
+        levelOpacity: level?.opacity ?? 100,
+      }
+    }),
+  )
+
+  const childrenIds = useEditor(
+    useShallow((state) => {
+      const level = state.nodeIndex.get(levelId) as any
+      const children = level?.children || []
+      const objects = children.filter((c: any) => c.type !== 'reference-image' && c.type !== 'scan')
+
+      return objects.map((c: any) => c.id)
+    }),
+  )
+
+  const guideIds = useEditor(
+    useShallow((state) => {
+      const level = state.nodeIndex.get(levelId) as any
+      const children = level?.children || []
+      const guides = children.filter((c: any) => c.type === 'reference-image')
+
+      return guides.map((c: any) => c.id)
+    }),
+  )
+
+  const scanIds = useEditor(
+    useShallow((state) => {
+      const level = state.nodeIndex.get(levelId) as any
+      const children = level?.children || []
+      const scans = children.filter((c: any) => c.type === 'scan')
+
+      return scans.map((c: any) => c.id)
+    }),
+  )
+
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+  const selectedElements = useEditor((state) => state.selectedElements)
+  const selectedImageIds = useEditor((state) => state.selectedImageIds)
+  const selectedScanIds = useEditor((state) => state.selectedScanIds)
+  const handleElementSelect = useEditor((state) => state.handleElementSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
 
   const hasContent =
-    isSelected &&
-    (totalElements > 0 ||
-      levelDoors.length > 0 ||
-      levelWindows.length > 0 ||
-      levelImages.length > 0)
+    isSelected && (childrenIds.length > 0 || guideIds.length > 0 || scanIds.length > 0)
+
+  const handleNodeSelect = (nodeId: string, event: React.MouseEvent) => {
+    // Determine node type to handle selection appropriately
+    const node = useEditor.getState().nodeIndex.get(nodeId) as any
+    if (!node) return
+
+    if (node.type === 'reference-image') {
+      // Handle image selection
+      if (event.metaKey || event.ctrlKey) {
+        if (selectedImageIds.includes(nodeId)) {
+          setSelectedImageIds(selectedImageIds.filter((id) => id !== nodeId))
+        } else {
+          setSelectedImageIds([...selectedImageIds, nodeId])
+        }
+      } else {
+        setSelectedImageIds([nodeId])
+      }
+      setControlMode('guide')
+    } else if (node.type === 'scan') {
+      // Handle scan selection
+      if (event.metaKey || event.ctrlKey) {
+        if (selectedScanIds.includes(nodeId)) {
+          setSelectedScanIds(selectedScanIds.filter((id) => id !== nodeId))
+        } else {
+          setSelectedScanIds([...selectedScanIds, nodeId])
+        }
+      } else {
+        setSelectedScanIds([nodeId])
+      }
+      setControlMode('guide')
+    } else {
+      // Handle building element selection
+      handleElementSelect(nodeId as AnyNodeId, event)
+    }
+  }
 
   return (
-    <TreeNode isLast={isLastLevel} nodeId={level.id}>
+    <TreeNode isLast={isLastLevel} nodeId={levelId}>
       <TreeNodeTrigger
         className={cn(
           'group/drag-item',
           isSelected && 'sticky top-0 z-10 bg-background',
-          level.visible === false && 'opacity-50',
+          levelVisible === false && 'opacity-50',
         )}
       >
         <div
@@ -140,262 +296,54 @@ function DraggableLevelItem({
           <GripVertical className="h-3 w-3 text-muted-foreground" />
         </div>
         <TreeExpander hasChildren={hasContent} />
-        <TreeIcon hasChildren={hasContent} icon={<Layers className="h-4 w-4 text-blue-500" />} />
-        <TreeLabel className="flex-1">{level.name}</TreeLabel>
+        <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
+        <TreeLabel className="flex-1">{levelName}</TreeLabel>
         <OpacityControl
-          onOpacityChange={(opacity) => setNodeOpacity(level.id, opacity)}
-          onVisibilityToggle={() => toggleNodeVisibility(level.id)}
-          opacity={level.opacity}
-          visible={level.visible}
+          onOpacityChange={(opacity) => setNodeOpacity(levelId, opacity)}
+          onVisibilityToggle={() => toggleNodeVisibility(levelId)}
+          opacity={levelOpacity}
+          visible={levelVisible}
         />
       </TreeNodeTrigger>
 
       <TreeNodeContent hasChildren={hasContent}>
         {/* 3D Objects Section */}
-        <TreeNode level={1} nodeId={`${level.id}-3d-objects`}>
-          <TreeNodeTrigger>
-            <TreeExpander
-              hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
-            />
-            <TreeIcon
-              hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
-              icon={<Building className="h-4 w-4 text-green-500" />}
-            />
-            <TreeLabel>
-              3D Objects ({totalElements + levelDoors.length + levelWindows.length})
-            </TreeLabel>
-          </TreeNodeTrigger>
+        {childrenIds.length > 0 && (
+          <TreeNode level={1} nodeId={`${levelId}-3d-objects`}>
+            <TreeNodeTrigger>
+              <TreeExpander hasChildren={childrenIds.length > 0} />
+              <TreeIcon
+                hasChildren={childrenIds.length > 0}
+                icon={<Building className="h-4 w-4 text-green-500" />}
+              />
+              <TreeLabel>3D Objects ({childrenIds.length})</TreeLabel>
+            </TreeNodeTrigger>
 
-          <TreeNodeContent
-            hasChildren={totalElements > 0 || levelDoors.length > 0 || levelWindows.length > 0}
-          >
-            {elementTypes.map((type) =>
-              elements[type].map((element, index, all) => {
-                const config = buildingElementConfig[type]
-                if (!config) return null
-
-                // For groups, render walls as children
-                if (type === 'group') {
-                  const groupWalls = element.data?.walls || []
-                  return (
-                    <TreeNode
-                      isLast={
-                        index === all.length - 1 &&
-                        elementTypes.indexOf(type) === elementTypes.length - 1
-                      }
-                      key={element.id}
-                      level={2}
-                      nodeId={element.id}
-                    >
-                      <TreeNodeTrigger
-                        className={cn(
-                          isElementSelected(selectedElements, element.id) && 'bg-accent',
-                          element.visible === false && 'opacity-50',
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleElementSelect(element.id, e as React.MouseEvent)
-                        }}
-                      >
-                        <TreeExpander hasChildren={groupWalls.length > 0} />
-                        <TreeIcon hasChildren={groupWalls.length > 0} icon={config.icon} />
-                        <TreeLabel>{config.getLabel(index, element.data)}</TreeLabel>
-                        <OpacityControl
-                          onOpacityChange={(opacity) => setNodeOpacity(element.id, opacity)}
-                          onVisibilityToggle={() => toggleNodeVisibility(element.id)}
-                          opacity={element.opacity || 100}
-                          visible={element.visible !== false}
-                        />
-                      </TreeNodeTrigger>
-
-                      {/* Render walls within the group */}
-                      {groupWalls.length > 0 && (
-                        <TreeNodeContent hasChildren={true}>
-                          {groupWalls.map((wall: any, wallIndex: number) => {
-                            // Get doors/windows for this wall
-                            const wallChildren = [...levelDoors, ...levelWindows].filter(
-                              (child) => child.data?.parentWallId === wall.id,
-                            )
-
-                            return (
-                              <TreeNode
-                                isLast={wallIndex === groupWalls.length - 1}
-                                key={wall.id}
-                                level={3}
-                                nodeId={wall.id}
-                              >
-                                <TreeNodeTrigger
-                                  className={cn(
-                                    isElementSelected(selectedElements, wall.id) && 'bg-accent',
-                                    wall.visible === false && 'opacity-50',
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleElementSelect(wall.id, e as React.MouseEvent)
-                                  }}
-                                >
-                                  <TreeExpander hasChildren={wallChildren.length > 0} />
-                                  <TreeIcon
-                                    hasChildren={wallChildren.length > 0}
-                                    icon={<Square className="h-4 w-4 text-gray-600" />}
-                                  />
-                                  <TreeLabel>Wall {wallIndex + 1}</TreeLabel>
-                                  <OpacityControl
-                                    onOpacityChange={(opacity) => setNodeOpacity(wall.id, opacity)}
-                                    onVisibilityToggle={() => toggleNodeVisibility(wall.id)}
-                                    opacity={wall.opacity}
-                                    visible={wall.visible}
-                                  />
-                                </TreeNodeTrigger>
-
-                                {/* Render doors/windows under walls */}
-                                {wallChildren.length > 0 && (
-                                  <TreeNodeContent hasChildren={true}>
-                                    {wallChildren.map((child, childIndex) => {
-                                      const isDoor = child.type === 'door'
-                                      return (
-                                        <TreeNode
-                                          isLast={childIndex === wallChildren.length - 1}
-                                          key={child.id}
-                                          level={4}
-                                          nodeId={child.id}
-                                        >
-                                          <TreeNodeTrigger
-                                            className={cn(
-                                              selectedElements.includes(child.id) && 'bg-accent',
-                                            )}
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleElementSelect(child.id, e as React.MouseEvent)
-                                            }}
-                                          >
-                                            <TreeExpander />
-                                            <TreeIcon
-                                              icon={
-                                                isDoor ? (
-                                                  <DoorOpen className="h-4 w-4 text-orange-600" />
-                                                ) : (
-                                                  <RectangleVertical className="h-4 w-4 text-blue-500" />
-                                                )
-                                              }
-                                            />
-                                            <TreeLabel>
-                                              {isDoor
-                                                ? `Door ${wallChildren.filter((c) => c.type === 'door').indexOf(child) + 1}`
-                                                : `Window ${wallChildren.filter((c) => c.type === 'window').indexOf(child) + 1}`}
-                                            </TreeLabel>
-                                          </TreeNodeTrigger>
-                                        </TreeNode>
-                                      )
-                                    })}
-                                  </TreeNodeContent>
-                                )}
-                              </TreeNode>
-                            )
-                          })}
-                        </TreeNodeContent>
-                      )}
-                    </TreeNode>
-                  )
-                }
-
-                // Get children for this element (doors/windows for walls)
-                const elementChildren =
-                  type === 'wall'
-                    ? [...levelDoors, ...levelWindows].filter(
-                        (child) =>
-                          child.data?.parentWallId === element.id && !child.data?.parentGroupId, // Exclude walls in groups
-                      )
-                    : []
-                const hasChildren = elementChildren.length > 0
-
-                return (
-                  <TreeNode
-                    isLast={
-                      index === all.length - 1 &&
-                      elementTypes.indexOf(type) === elementTypes.length - 1
-                    }
-                    key={element.id}
-                    level={2}
-                    nodeId={element.id}
-                  >
-                    <TreeNodeTrigger
-                      className={cn(
-                        isElementSelected(selectedElements, element.id) && 'bg-accent',
-                        element.visible === false && 'opacity-50',
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleElementSelect(element.id, e as React.MouseEvent)
-                      }}
-                    >
-                      <TreeExpander hasChildren={hasChildren} />
-                      <TreeIcon hasChildren={hasChildren} icon={config.icon} />
-                      <TreeLabel>{config.getLabel(index)}</TreeLabel>
-                      <OpacityControl
-                        onOpacityChange={(opacity) => setNodeOpacity(element.id, opacity)}
-                        onVisibilityToggle={() => toggleNodeVisibility(element.id)}
-                        opacity={element.opacity}
-                        visible={element.visible}
-                      />
-                    </TreeNodeTrigger>
-
-                    {/* Render children (doors/windows) under walls */}
-                    {hasChildren && (
-                      <TreeNodeContent hasChildren={true}>
-                        {elementChildren.map((child, childIndex) => {
-                          const isDoor = child.type === 'door'
-                          return (
-                            <TreeNode
-                              isLast={childIndex === elementChildren.length - 1}
-                              key={child.id}
-                              level={3}
-                              nodeId={child.id}
-                            >
-                              <TreeNodeTrigger
-                                className={cn(selectedElements.includes(child.id) && 'bg-accent')}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleElementSelect(child.id, e as React.MouseEvent)
-                                }}
-                              >
-                                <TreeExpander />
-                                <TreeIcon
-                                  icon={
-                                    isDoor ? (
-                                      <DoorOpen className="h-4 w-4 text-orange-600" />
-                                    ) : (
-                                      <RectangleVertical className="h-4 w-4 text-blue-500" />
-                                    )
-                                  }
-                                />
-                                <TreeLabel>
-                                  {isDoor
-                                    ? `Door ${elementChildren.filter((c) => c.type === 'door').indexOf(child) + 1}`
-                                    : `Window ${elementChildren.filter((c) => c.type === 'window').indexOf(child) + 1}`}
-                                </TreeLabel>
-                              </TreeNodeTrigger>
-                            </TreeNode>
-                          )
-                        })}
-                      </TreeNodeContent>
-                    )}
-                  </TreeNode>
-                )
-              }),
-            )}
-          </TreeNodeContent>
-        </TreeNode>
+            <TreeNodeContent hasChildren={true}>
+              {childrenIds.map((childId: string, index: number) => (
+                <NodeItem
+                  index={index}
+                  isLast={index === childrenIds.length - 1}
+                  key={childId}
+                  level={2}
+                  nodeId={childId}
+                  onNodeSelect={handleNodeSelect}
+                  selectedNodeIds={selectedElements}
+                />
+              ))}
+            </TreeNodeContent>
+          </TreeNode>
+        )}
 
         {/* Guides Section */}
-        <TreeNode level={1} nodeId={`${level.id}-guides`}>
-          <TreeNodeTrigger>
-            <TreeExpander hasChildren={levelImages.length > 0} />
+        <TreeNode level={1} nodeId={`${levelId}-guides`}>
+          <TreeNodeTrigger className="group">
+            <TreeExpander hasChildren={guideIds.length > 0} />
             <TreeIcon
-              hasChildren={levelImages.length > 0}
+              hasChildren={guideIds.length > 0}
               icon={<Image className="h-4 w-4 text-purple-500" />}
             />
-            <TreeLabel>Guides ({levelImages.length})</TreeLabel>
+            <TreeLabel>Guides ({guideIds.length})</TreeLabel>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -408,7 +356,7 @@ function DraggableLevelItem({
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
                       if (file) {
-                        handleUpload(file, level.id).catch((error: unknown) => {
+                        handleUpload(file, levelId).catch((error: unknown) => {
                           console.error('Failed to upload image:', error)
                         })
                       }
@@ -425,49 +373,30 @@ function DraggableLevelItem({
             </Tooltip>
           </TreeNodeTrigger>
 
-          <TreeNodeContent hasChildren={true}>
-            {/* Reference Images */}
-            {levelImages.map((image, index, imgs) => (
-              <TreeNode
-                isLast={index === imgs.length - 1}
-                key={image.id}
+          <TreeNodeContent hasChildren={guideIds.length > 0}>
+            {guideIds.map((guideId: string, index: number) => (
+              <NodeItem
+                index={index}
+                isLast={index === guideIds.length - 1}
+                key={guideId}
                 level={2}
-                nodeId={image.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(
-                    selectedImageIds.includes(image.id) && 'bg-accent',
-                    image.visible === false && 'opacity-50',
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleImageSelect(image.id, e as any)
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<Image className="h-4 w-4 text-purple-400" />} />
-                  <TreeLabel>Reference {index + 1}</TreeLabel>
-                  <OpacityControl
-                    onOpacityChange={(opacity) => setNodeOpacity(image.id, opacity)}
-                    onVisibilityToggle={() => toggleNodeVisibility(image.id)}
-                    opacity={image.opacity}
-                    visible={image.visible}
-                  />
-                </TreeNodeTrigger>
-              </TreeNode>
+                nodeId={guideId}
+                onNodeSelect={handleNodeSelect}
+                selectedNodeIds={selectedImageIds}
+              />
             ))}
           </TreeNodeContent>
         </TreeNode>
 
         {/* Scans Section */}
-        <TreeNode isLast level={1} nodeId={`${level.id}-scans`}>
-          <TreeNodeTrigger>
-            <TreeExpander hasChildren={levelScans.length > 0} />
+        <TreeNode isLast level={1} nodeId={`${levelId}-scans`}>
+          <TreeNodeTrigger className="group">
+            <TreeExpander hasChildren={scanIds.length > 0} />
             <TreeIcon
-              hasChildren={levelScans.length > 0}
+              hasChildren={scanIds.length > 0}
               icon={<Box className="h-4 w-4 text-cyan-500" />}
             />
-            <TreeLabel>Scans ({levelScans.length})</TreeLabel>
+            <TreeLabel>Scans ({scanIds.length})</TreeLabel>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -480,7 +409,7 @@ function DraggableLevelItem({
                     input.onchange = (event) => {
                       const file = (event.target as HTMLInputElement).files?.[0]
                       if (file) {
-                        handleScanUpload(file, level.id).catch((error: unknown) => {
+                        handleScanUpload(file, levelId).catch((error: unknown) => {
                           console.error('Failed to upload scan:', error)
                         })
                       }
@@ -497,36 +426,17 @@ function DraggableLevelItem({
             </Tooltip>
           </TreeNodeTrigger>
 
-          <TreeNodeContent hasChildren={true}>
-            {/* 3D Scans */}
-            {levelScans.map((scan, index, scans) => (
-              <TreeNode
-                isLast={index === scans.length - 1}
-                key={scan.id}
+          <TreeNodeContent hasChildren={scanIds.length > 0}>
+            {scanIds.map((scanId: string, index: number) => (
+              <NodeItem
+                index={index}
+                isLast={index === scanIds.length - 1}
+                key={scanId}
                 level={2}
-                nodeId={scan.id}
-              >
-                <TreeNodeTrigger
-                  className={cn(
-                    selectedScanIds.includes(scan.id) && 'bg-accent',
-                    scan.visible === false && 'opacity-50',
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleScanSelect(scan.id, e as any)
-                  }}
-                >
-                  <TreeExpander />
-                  <TreeIcon icon={<Box className="h-4 w-4 text-cyan-400" />} />
-                  <TreeLabel>Scan {index + 1}</TreeLabel>
-                  <OpacityControl
-                    onOpacityChange={(opacity) => setNodeOpacity(scan.id, opacity)}
-                    onVisibilityToggle={() => toggleNodeVisibility(scan.id)}
-                    opacity={scan.opacity}
-                    visible={scan.visible}
-                  />
-                </TreeNodeTrigger>
-              </TreeNode>
+                nodeId={scanId}
+                onNodeSelect={handleNodeSelect}
+                selectedNodeIds={selectedScanIds}
+              />
             ))}
           </TreeNodeContent>
         </TreeNode>
@@ -541,7 +451,7 @@ function LevelReorderItem(props: LevelReorderItemProps) {
   const controls = useDragControls()
 
   return (
-    <Reorder.Item as="div" dragControls={controls} dragListener={false} value={props.level}>
+    <Reorder.Item as="div" dragControls={controls} dragListener={false} value={props.levelId}>
       <DraggableLevelItem {...props} controls={controls} />
     </Reorder.Item>
   )
@@ -553,23 +463,18 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   // Retrieve editor state
   const addNode = useEditor((state) => state.addNode)
   const selectedElements = useEditor((state) => state.selectedElements)
-  const setControlMode = useEditor((state) => state.setControlMode)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
   const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
-  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
-  const handleElementSelect = useEditor((state) => state.handleElementSelect)
 
   // Select levels from scene.root (new structure)
-  const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
-    return building ? building.children : EMPTY_LEVELS
-  }) as LevelNode[]
+  const levelIds = useEditor(
+    useShallow((state) => {
+      const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+      return building ? building.children.map((child) => child.id) : []
+    }),
+  ) as LevelNode['id'][]
 
   const addLevel = useEditor((state) => state.addLevel)
-  const deleteLevel = useEditor((state) => state.deleteLevel)
   const reorderLevels = useEditor((state) => state.reorderLevels)
   const selectFloor = useEditor((state) => state.selectFloor)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
@@ -638,218 +543,10 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   // Initialize expanded state with first level ID if available
   useEffect(() => {
-    if (levels.length > 0 && expandedIds.length === 0) {
-      setExpandedIds([levels[0].id])
+    if (levelIds.length > 0 && expandedIds.length === 0) {
+      setExpandedIds([levelIds[0]])
     }
-  }, [levels, expandedIds.length])
-
-  // Extract data from node tree for hierarchy display
-  const components: any[] = []
-  const images: any[] = []
-  const scans: any[] = []
-
-  levels.forEach((level) => {
-    const walls: any[] = []
-    const roofs: any[] = []
-    const columns: any[] = []
-    const slabs: any[] = []
-    const groups: any[] = []
-
-    level.children.forEach((child: any) => {
-      if (child.type === 'wall') {
-        walls.push({
-          id: child.id,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-
-        if (child.children) {
-          child.children.forEach((wallChild: any) => {
-            if (wallChild.type === 'door' || wallChild.type === 'window') {
-              components.push({
-                id: wallChild.id,
-                type: wallChild.type,
-                group: level.id,
-                data: {
-                  position: wallChild.position,
-                  rotation: wallChild.rotation,
-                  visible: wallChild.visible ?? true,
-                  opacity: wallChild.opacity ?? 100,
-                  parentWallId: child.id,
-                },
-              })
-            }
-          })
-        }
-      } else if (child.type === 'group') {
-        const groupWalls: any[] = []
-        child.children.forEach((groupChild: any) => {
-          if (groupChild.type === 'wall') {
-            groupWalls.push({
-              id: groupChild.id,
-              visible: groupChild.visible ?? true,
-              opacity: groupChild.opacity ?? 100,
-            })
-            if (groupChild.children) {
-              groupChild.children.forEach((wallChild: any) => {
-                if (wallChild.type === 'door' || wallChild.type === 'window') {
-                  components.push({
-                    id: wallChild.id,
-                    type: wallChild.type,
-                    group: level.id,
-                    data: {
-                      position: wallChild.position,
-                      rotation: wallChild.rotation,
-                      visible: wallChild.visible ?? true,
-                      opacity: wallChild.opacity ?? 100,
-                      parentWallId: groupChild.id,
-                      parentGroupId: child.id,
-                    },
-                  })
-                }
-              })
-            }
-          }
-        })
-        groups.push({
-          id: child.id,
-          name: child.name,
-          groupType: child.groupType,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-          walls: groupWalls,
-        })
-      } else if (child.type === 'roof') {
-        roofs.push({
-          id: child.id,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-      } else if (child.type === 'column') {
-        columns.push({
-          id: child.id,
-          position: child.position,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-      } else if (child.type === 'slab') {
-        slabs.push({
-          id: child.id,
-          position: child.position,
-          size: child.size,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-      } else if (child.type === 'reference-image') {
-        images.push({
-          id: child.id,
-          url: child.url,
-          name: child.name,
-          level: level.level || 0,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-      } else if (child.type === 'scan') {
-        scans.push({
-          id: child.id,
-          url: child.url,
-          name: child.name,
-          level: level.level || 0,
-          visible: child.visible ?? true,
-          opacity: child.opacity ?? 100,
-        })
-      }
-    })
-
-    if (walls.length > 0)
-      components.push({
-        id: `${level.id}-walls`,
-        type: 'wall',
-        group: level.id,
-        data: { segments: walls },
-      })
-    if (roofs.length > 0)
-      components.push({
-        id: `${level.id}-roofs`,
-        type: 'roof',
-        group: level.id,
-        data: { segments: roofs },
-      })
-    if (columns.length > 0)
-      components.push({
-        id: `${level.id}-columns`,
-        type: 'column',
-        group: level.id,
-        data: { columns },
-      })
-    if (slabs.length > 0)
-      components.push({ id: `${level.id}-slabs`, type: 'slab', group: level.id, data: { slabs } })
-    groups.forEach((g) => {
-      components.push({ id: g.id, type: 'group', group: level.id, data: g })
-    })
-  })
-
-  const handleImageSelect = (imageId: string, event: React.MouseEvent) => {
-    const clickedIndex = images.findIndex((img) => img.id === imageId)
-    let next: string[]
-
-    if (event.metaKey || event.ctrlKey) {
-      if (selectedImageIds.includes(imageId)) {
-        next = selectedImageIds.filter((id) => id !== imageId)
-      } else {
-        next = [...selectedImageIds, imageId]
-      }
-    } else if (event.shiftKey && selectedImageIds.length > 0) {
-      const lastSelectedId = selectedImageIds[selectedImageIds.length - 1]
-      const lastSelectedIndex = images.findIndex((img) => img.id === lastSelectedId)
-
-      if (lastSelectedIndex !== -1) {
-        const start = Math.min(lastSelectedIndex, clickedIndex)
-        const end = Math.max(lastSelectedIndex, clickedIndex)
-        const rangeIds = []
-        for (let i = start; i <= end; i++) rangeIds.push(images[i].id)
-        next = rangeIds
-      } else {
-        next = [imageId]
-      }
-    } else {
-      next = [imageId]
-    }
-
-    setSelectedImageIds(next)
-    setControlMode('guide')
-  }
-
-  const handleScanSelect = (scanId: string, event: React.MouseEvent) => {
-    const clickedIndex = scans.findIndex((scan) => scan.id === scanId)
-    let next: string[]
-
-    if (event.metaKey || event.ctrlKey) {
-      if (selectedScanIds.includes(scanId)) {
-        next = selectedScanIds.filter((id) => id !== scanId)
-      } else {
-        next = [...selectedScanIds, scanId]
-      }
-    } else if (event.shiftKey && selectedScanIds.length > 0) {
-      const lastSelectedId = selectedScanIds[selectedScanIds.length - 1]
-      const lastSelectedIndex = scans.findIndex((scan) => scan.id === lastSelectedId)
-
-      if (lastSelectedIndex !== -1) {
-        const start = Math.min(lastSelectedIndex, clickedIndex)
-        const end = Math.max(lastSelectedIndex, clickedIndex)
-        const rangeIds = []
-        for (let i = start; i <= end; i++) rangeIds.push(scans[i].id)
-        next = rangeIds
-      } else {
-        next = [scanId]
-      }
-    } else {
-      next = [scanId]
-    }
-
-    setSelectedScanIds(next)
-    setControlMode('guide')
-  }
+  }, [levelIds, expandedIds.length])
 
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]
@@ -857,12 +554,19 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       selectFloor(null)
       return
     }
-    const isLevel = levels.some((level) => level.id === selectedId)
+    const isLevel = levelIds.some((levelId) => levelId === selectedId)
     if (isLevel) selectFloor(selectedId)
   }
 
   const handleAddLevel = () => {
-    const levelNumbers = levels.map((l) => l.level || 0).filter((n) => n > 0)
+    // Get level numbers from all existing levels using nodeIndex
+    const levelNumbers = levelIds
+      .map((id) => {
+        const level = useEditor.getState().nodeIndex.get(id) as any
+        return level?.level || 0
+      })
+      .filter((n) => n > 0)
+
     let nextNumber = 1
     while (levelNumbers.includes(nextNumber)) nextNumber++
 
@@ -875,32 +579,61 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     selectFloor(newLevel.id)
   }
 
-  const handleReorder = (newOrder: typeof levels) => {
-    const reversedOrder = [...newOrder].reverse()
-    const updatedLevels = reversedOrder.map((level, index) => ({
-      ...level,
-      level: index,
-    }))
+  const handleReorder = (newLevelIds: string[]) => {
+    const reversedOrder = [...newLevelIds].reverse()
+    const updatedLevels = reversedOrder
+      .map((levelId, index) => {
+        const level = useEditor.getState().nodeIndex.get(levelId) as any
+        if (!level) return null
+        return {
+          ...level,
+          level: index,
+        }
+      })
+      .filter(Boolean) as any[]
+
     reorderLevels(updatedLevels)
     if (selectedFloorId) {
-      const newLevel = updatedLevels.find((l) => l.id === selectedFloorId)?.level
-      if (newLevel !== undefined) useEditor.getState().selectFloor(selectedFloorId)
+      useEditor.getState().selectFloor(selectedFloorId)
     }
   }
 
-  const floorGroups = [...levels].sort((a, b) => (b.level || 0) - (a.level || 0))
+  const floorGroups = [...levelIds].sort((a, b) => {
+    const levelA = useEditor.getState().nodeIndex.get(a) as any
+    const levelB = useEditor.getState().nodeIndex.get(b) as any
+    return (levelB?.level || 0) - (levelA?.level || 0)
+  })
 
+  // Auto-expand selected items
   useEffect(() => {
     const newExpanded = new Set(expandedIds)
     let hasChanges = false
 
+    // Expand levels containing selected elements
     selectedElements.forEach((selectedId) => {
-      const levelId = components.find((c) => {
-        if (c.type === 'wall' || c.type === 'roof' || c.type === 'column') {
-          return c.data?.segments?.some?.((seg: any) => seg.id === selectedId)
+      const node = useEditor.getState().nodeIndex.get(selectedId)
+      if (!node) return
+
+      // Find parent level by traversing up
+      let currentNode: any = node
+      let levelId: string | null = null
+
+      while (currentNode) {
+        if ((currentNode as any).type === 'level') {
+          levelId = currentNode.id
+          break
         }
-        return c.id === selectedId
-      })?.group
+        // Try to find parent
+        const parentId = levelIds.find((id) => {
+          const level = useEditor.getState().nodeIndex.get(id) as any
+          return level?.children?.some((c: any) => c.id === currentNode.id)
+        })
+        if (parentId) {
+          levelId = parentId
+          break
+        }
+        break
+      }
 
       if (levelId) {
         if (!newExpanded.has(levelId)) {
@@ -913,22 +646,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
           hasChanges = true
         }
       }
-
-      const component = components.find((c) => c.id === selectedId)
-      if (component && (component.type === 'door' || component.type === 'window')) {
-        const parentWallId = component?.data?.parentWallId
-        if (parentWallId && !newExpanded.has(parentWallId)) {
-          newExpanded.add(parentWallId)
-          hasChanges = true
-        }
-      }
     })
 
+    // Expand levels containing selected images
     selectedImageIds.forEach((imageId) => {
-      const image = images.find((img) => img.id === imageId)
-      if (image) {
-        const levelId = levels.find((l) => (l.level || 0) === image.level)?.id
-        if (levelId) {
+      levelIds.forEach((levelId) => {
+        const level = useEditor.getState().nodeIndex.get(levelId) as any
+        const hasImage = level?.children?.some((c: any) => c.id === imageId)
+        if (hasImage) {
           if (!newExpanded.has(levelId)) {
             newExpanded.add(levelId)
             hasChanges = true
@@ -939,14 +664,15 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             hasChanges = true
           }
         }
-      }
+      })
     })
 
+    // Expand levels containing selected scans
     selectedScanIds.forEach((scanId) => {
-      const scan = scans.find((s) => s.id === scanId)
-      if (scan) {
-        const levelId = levels.find((l) => (l.level || 0) === scan.level)?.id
-        if (levelId) {
+      levelIds.forEach((levelId) => {
+        const level = useEditor.getState().nodeIndex.get(levelId) as any
+        const hasScan = level?.children?.some((c: any) => c.id === scanId)
+        if (hasScan) {
           if (!newExpanded.has(levelId)) {
             newExpanded.add(levelId)
             hasChanges = true
@@ -957,26 +683,17 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
             hasChanges = true
           }
         }
-      }
+      })
     })
 
     if (hasChanges) setExpandedIds(Array.from(newExpanded))
-  }, [
-    selectedElements,
-    selectedImageIds,
-    selectedScanIds,
-    levels,
-    expandedIds,
-    components,
-    images,
-    scans,
-  ])
+  }, [selectedElements, selectedImageIds, selectedScanIds, levelIds, expandedIds])
 
   return (
     <div className="flex flex-1 flex-col px-2 py-2">
       <div className="mb-2 flex items-center justify-between">
         <label className="font-medium text-muted-foreground text-sm">
-          Levels ({mounted ? levels.length : 0})
+          Levels ({mounted ? levelIds.length : 0})
         </label>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1001,51 +718,18 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
           >
             <TreeView className="p-0">
               <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
-                {floorGroups.map((level, levelIndex) => {
-                  const isSelected = selectedFloorId === level.id
-                  const levelElements = (
-                    Object.keys(buildingElementConfig) as (keyof typeof buildingElementConfig)[]
-                  ).reduce(
-                    (acc, type) => {
-                      acc[type] = isSelected
-                        ? (level.children || []).filter((child: any) => child.type === type)
-                        : []
-                      return acc
-                    },
-                    {} as Record<string, any[]>,
-                  )
-
-                  const levelDoors = isSelected
-                    ? components.filter((c) => c.type === 'door' && c.group === level.id)
-                    : []
-                  const levelWindows = isSelected
-                    ? components.filter((c) => c.type === 'window' && c.group === level.id)
-                    : []
-                  const levelImages = images.filter((img) => img.level === (level.level || 0))
-                  const levelScans = scans.filter((scan) => scan.level === (level.level || 0))
+                {floorGroups.map((levelId, levelIndex) => {
+                  const isSelected = selectedFloorId === levelId
 
                   return (
                     <LevelReorderItem
-                      elements={levelElements}
-                      handleElementSelect={handleElementSelect}
-                      handleImageSelect={handleImageSelect}
-                      handleScanSelect={handleScanSelect}
                       handleScanUpload={handleScanUpload}
                       handleUpload={handleUpload}
                       isSelected={isSelected}
-                      key={level.id}
-                      level={level}
-                      levelDoors={levelDoors}
-                      levelImages={levelImages}
+                      key={levelId}
+                      levelId={levelId}
                       levelIndex={levelIndex}
-                      levelScans={levelScans}
                       levelsCount={floorGroups.length}
-                      levelWindows={levelWindows}
-                      selectedElements={selectedElements}
-                      selectedImageIds={selectedImageIds}
-                      selectedScanIds={selectedScanIds}
-                      setNodeOpacity={setNodeOpacity}
-                      toggleNodeVisibility={toggleNodeVisibility}
                     />
                   )
                 })}
