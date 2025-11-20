@@ -935,8 +935,7 @@ const useStore = create<StoreState>()(
               if (!fromNode) return
 
               const isCommittingPreview =
-                fromNode.editor?.preview === true &&
-                (updates as any).editor?.preview === false
+                fromNode.editor?.preview === true && (updates as any).editor?.preview === false
 
               if (isCommittingPreview) {
                 const previewNode = current(fromNode)
@@ -949,16 +948,27 @@ const useStore = create<StoreState>()(
                   nodeData.name?.replace(' Preview', '').replace('Preview ', '') ||
                   nodeData.type
 
+                // Recursively clear preview flag from all children
+                const clearPreviewRecursive = (node: any): any => {
+                  const clearedNode = { ...node }
+                  if (clearedNode.editor?.preview) {
+                    clearedNode.editor = { ...clearedNode.editor, preview: false }
+                  }
+                  if (Array.isArray(clearedNode.children)) {
+                    clearedNode.children = clearedNode.children.map(clearPreviewRecursive)
+                  }
+                  return clearedNode
+                }
+
                 const newNodeData = {
                   ...nodeData,
                   ...updates,
                   name: cleanName,
-                  preview: false,
                 }
 
                 // Handle children cleanup if needed
                 if (Array.isArray(children)) {
-                  newNodeData.children = children.map((c: any) => ({ ...c, preview: false }))
+                  newNodeData.children = children.map(clearPreviewRecursive)
                 } else {
                   newNodeData.children = []
                 }

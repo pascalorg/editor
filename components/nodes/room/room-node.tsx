@@ -219,7 +219,7 @@ export function RoomNodeEditor() {
           updateNode(previewRoomId, {
             position: [roomX, roomY] as [number, number],
             size: [roomWidth, roomHeight] as [number, number],
-            editor: { canPlace },
+            editor: { canPlace, preview: true },
           })
 
           // Get the room node and update its walls with RELATIVE positions
@@ -238,7 +238,7 @@ export function RoomNodeEditor() {
               rotation: bottomRotation,
               start: [0, 0], // RELATIVE to room
               end: [roomWidth, 0],
-              editor: { canPlace },
+              editor: { canPlace, preview: true },
             })
 
             // Right wall: (roomWidth,0) -> (roomWidth,roomHeight) - vertical, going up
@@ -249,7 +249,7 @@ export function RoomNodeEditor() {
               rotation: rightRotation,
               start: [roomWidth, 0], // RELATIVE to room
               end: [roomWidth, roomHeight],
-              editor: { canPlace },
+              editor: { canPlace, preview: true },
             })
 
             // Top wall: (roomWidth,roomHeight) -> (0,roomHeight) - horizontal, going left
@@ -260,7 +260,7 @@ export function RoomNodeEditor() {
               rotation: topRotation,
               start: [roomWidth, roomHeight], // RELATIVE to room
               end: [0, roomHeight],
-              editor: { canPlace },
+              editor: { canPlace, preview: true },
             })
 
             // Left wall: (0,roomHeight) -> (0,0) - vertical, going down
@@ -271,7 +271,7 @@ export function RoomNodeEditor() {
               rotation: leftRotation,
               start: [0, roomHeight], // RELATIVE to room
               end: [0, 0],
-              editor: { canPlace },
+              editor: { canPlace, preview: true },
             })
           }
         }
