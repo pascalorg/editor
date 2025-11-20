@@ -701,6 +701,25 @@ const useStore = create<StoreState>()(
           }
         },
         loadLayout: (json) => {
+          // Helper to ensure all nodes have the 'object: node' marker
+          const ensureNodeMarkers = (node: any): void => {
+            if (typeof node !== 'object' || node === null) return
+
+            // Mark as node if it has id and type
+            if (node.id && node.type && !node.object) {
+              node.object = 'node'
+            }
+
+            // Recursively process all properties
+            for (const value of Object.values(node)) {
+              if (Array.isArray(value)) {
+                value.forEach(ensureNodeMarkers)
+              } else if (typeof value === 'object' && value !== null) {
+                ensureNodeMarkers(value)
+              }
+            }
+          }
+
           set({
             selectedElements: [],
             selectedImageIds: [],
@@ -729,6 +748,9 @@ const useStore = create<StoreState>()(
                   })
                 }
 
+                // Ensure all nodes have object: 'node' marker for indexing
+                ensureNodeMarkers(root)
+
                 draft.scene.root = root
                 draft.nodeIndex = buildDraftNodeIndex(draft.scene.root)
                 rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
@@ -743,6 +765,10 @@ const useStore = create<StoreState>()(
                 }),
               ],
             })
+
+            // Ensure all nodes have object: 'node' marker for indexing
+            ensureNodeMarkers(migratedRoot)
+
             set(
               produce((draft) => {
                 draft.scene.root = migratedRoot
@@ -909,14 +935,15 @@ const useStore = create<StoreState>()(
               if (!fromNode) return
 
               const isCommittingPreview =
-                (fromNode as any).preview === true && (updates as any).preview === false
+                fromNode.editor?.preview === true &&
+                (updates as any).editor?.preview === false
 
               if (isCommittingPreview) {
                 const previewNode = current(fromNode)
                 const deleteCommand = new DeleteNodeCommand(nodeId)
                 deleteCommand.execute(draft.scene.root, draft.nodeIndex)
 
-                const { preview, id, children, parent, ...nodeData } = previewNode as any
+                const { editor, id, children, parent, ...nodeData } = previewNode as any
                 const cleanName =
                   (updates as any).name ||
                   nodeData.name?.replace(' Preview', '').replace('Preview ', '') ||
@@ -941,7 +968,7 @@ const useStore = create<StoreState>()(
                 draft.commandManager.execute(addCommand, draft.scene.root, draft.nodeIndex)
               } else {
                 const command = new UpdateNodeCommand(nodeId, updates)
-                if (fromNode.preview) {
+                if (fromNode.editor?.preview) {
                   command.execute(draft.scene.root, draft.nodeIndex)
                 } else {
                   draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
@@ -1019,7 +1046,7 @@ const useStore = create<StoreState>()(
                 n[key] = filterPreviewNodes(value)
               } else if (Array.isArray(value)) {
                 n[key] = value
-                  .filter((item: any) => !(typeof item === 'object' && item?.preview))
+                  .filter((item: any) => !(typeof item === 'object' && item?.editor?.preview))
                   .map((item: any) =>
                     typeof item === 'object' && item !== null && item.object === 'node'
                       ? filterPreviewNodes(item)
@@ -1044,6 +1071,25 @@ const useStore = create<StoreState>()(
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // Helper to ensure all nodes have the 'object: node' marker
+          const ensureNodeMarkers = (node: any): void => {
+            if (typeof node !== 'object' || node === null) return
+
+            // Mark as node if it has id and type
+            if (node.id && node.type && !node.object) {
+              node.object = 'node'
+            }
+
+            // Recursively process all properties
+            for (const value of Object.values(node)) {
+              if (Array.isArray(value)) {
+                value.forEach(ensureNodeMarkers)
+              } else if (typeof value === 'object' && value !== null) {
+                ensureNodeMarkers(value)
+              }
+            }
+          }
+
           // Data Migration logic for v3
           if (state.scene?.root) {
             const root = state.scene.root as any
@@ -1064,6 +1110,9 @@ const useStore = create<StoreState>()(
                 }
               })
             }
+
+            // Ensure all nodes have object: 'node' marker for indexing
+            ensureNodeMarkers(root)
           } else {
             // Fallback initialization
             state.scene = initScene()
