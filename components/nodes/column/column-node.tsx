@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
+import { type ColumnNode, useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 
 // ============================================================================
@@ -69,19 +69,10 @@ export function ColumnNodeEditor() {
 
       if (!existingColumn) {
         // Create column node
-        addNode(
-          {
-            type: 'column' as const,
-            name: `Column at ${x},${y}`,
-            position: [x, y],
-            rotation: 0,
-            size: [0.3, 0.3], // 30cm x 30cm column
-            visible: true,
-            opacity: 100,
-            children: [],
-          } as any,
-          selectedFloorId,
-        )
+        updateNode(previewStateRef.current.previewColumnId!, {
+          editor: { preview: false },
+        })
+        previewStateRef.current.previewColumnId = null
       }
     }
 
@@ -133,7 +124,7 @@ export function ColumnNodeEditor() {
                 size: [0.3, 0.3] as [number, number],
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { canPlace: true, preview: true },
                 children: [] as [],
               } as any,
               selectedFloorId,
