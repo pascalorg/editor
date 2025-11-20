@@ -82,7 +82,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   // Try to get renderer from registry first
   const RegistryRenderer = getRenderer(nodeType || 'unknown')
 
-  console.log('rendering node', nodeId, nodeType, gridItemPosition)
   // Don't render if filtered out by display mode
   if (!shouldRenderNode && nodeType !== 'level') {
     return null
