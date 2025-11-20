@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { createId } from '@/lib/utils'
 
 // ============================================================================
@@ -81,79 +83,76 @@ export function RoomNodeEditor() {
         const rightWallId = createId('wall')
 
         const previewRoomId = addNode(
-          {
+          GroupNode.parse({
             type: 'group',
             name: `Room ${roomNumber} Preview`,
-            groupType: 'room',
-            position: [x, y] as [number, number], // Room position (bottom-left corner)
-            rotation: 0, // Rooms are always axis-aligned
-            size: [0, 0] as [number, number], // Zero size initially
+            position: [x, y], // Room position (bottom-left corner)
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
+            editor: { preview: true },
             children: [
               // Bottom wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: bottomWallId,
                 type: 'wall',
                 name: 'Wall Preview Bottom',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
                 editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Right wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: rightWallId,
                 type: 'wall',
                 name: 'Wall Preview Right',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
                 editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Top wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: topWallId,
                 type: 'wall',
                 name: 'Wall Preview Top',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
                 editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Left wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: leftWallId,
                 type: 'wall',
                 name: 'Wall Preview Left',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
                 editor: { preview: true },
                 children: [],
-              } as any,
+              }),
             ],
-          } as any,
+          }),
           selectedFloorId,
         )
 

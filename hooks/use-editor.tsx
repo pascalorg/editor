@@ -908,13 +908,17 @@ const useStore = create<StoreState>()(
               const command = new AddNodeCommand(nodeData, parentId)
               nodeId = command.getNodeId()
 
-              if ((nodeData as any).preview) {
+              if ((nodeData as any).editor?.preview) {
                 command.execute(draft.scene.root, draft.nodeIndex)
               } else {
                 draft.commandManager.execute(command, draft.scene.root, draft.nodeIndex)
               }
 
+              // Rebuild nodeIndex from tree to ensure all references are up-to-date
+              draft.nodeIndex = buildDraftNodeIndex(draft.scene)
+
               const node = draft.nodeIndex.get(nodeId)
+
               if (node) {
                 const levelId = getLevelIdFromDraft(node, draft.nodeIndex)
                 if (levelId) {
@@ -932,6 +936,7 @@ const useStore = create<StoreState>()(
           set(
             produce((draft) => {
               const fromNode = draft.nodeIndex.get(nodeId)
+
               if (!fromNode) return
 
               const isCommittingPreview =
@@ -976,6 +981,9 @@ const useStore = create<StoreState>()(
                 const addCommand = new AddNodeCommand(newNodeData, parent)
                 resultNodeId = addCommand.getNodeId()
                 draft.commandManager.execute(addCommand, draft.scene.root, draft.nodeIndex)
+
+                // Rebuild nodeIndex after committing preview to ensure all children are indexed
+                draft.nodeIndex = buildDraftNodeIndex(draft.scene)
               } else {
                 const command = new UpdateNodeCommand(nodeId, updates)
                 if (fromNode.editor?.preview) {
