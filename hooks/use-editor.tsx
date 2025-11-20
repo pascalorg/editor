@@ -983,20 +983,20 @@ const useStore = create<StoreState>()(
         },
 
         deletePreviewNodes: () => {
+          const previewNodeIds = Array.from(get().nodeIndex.values())
+            .filter((n) => n.editor?.preview === true)
+            .map((n) => n.id)
           set(
             produce((draft) => {
-              const previewNodeIds: string[] = []
-              for (const [id, node] of draft.nodeIndex.entries()) {
-                if ((node as any).preview === true) {
-                  previewNodeIds.push(id)
-                }
-              }
               for (const nodeId of previewNodeIds) {
                 const command = new DeleteNodeCommand(nodeId)
                 command.execute(draft.scene.root, draft.nodeIndex)
               }
+              rebuildSpatialGrid(draft.spatialGrid, draft.nodeIndex, draft.scene.root)
             }),
           )
+
+          return previewNodeIds.length > 0
         },
 
         setPointerPosition: (position: [number, number] | null) =>
