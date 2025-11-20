@@ -425,7 +425,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     const liveWalls: LiveWall[] = wallIds.map((wallId) => {
       const data = wallData[wallId]
 
-      const wWorldPos = calculateWorldPosition(wall, nodeIndex)
+      // Get the actual wall node from the index
+      const wallNode = nodeIndex.get(wallId) as WallNode
+      const wWorldPos = calculateWorldPosition(wallNode, nodeIndex)
       const [wx1, wy1] = wWorldPos.position
       const wWorldRotation = wWorldPos.rotation
       const wLength = data.size[0]
