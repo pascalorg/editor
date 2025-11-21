@@ -77,7 +77,9 @@ export function ItemNodeEditor() {
             opacity: 100,
             category: 'furniture',
             src: selectedItem.modelUrl,
-            scale: selectedItem.scale,
+            modelScale: selectedItem.scale,
+            modelPosition: selectedItem.position,
+            modelRotation: selectedItem.rotation,
             children: [],
           }),
           selectedFloorId,
@@ -108,7 +110,7 @@ export function ItemNodeEditor() {
           updateNode(previewId, {
             position: [x, y] as [number, number],
             visible: true,
-            editor: { canPlace },
+            editor: { canPlace, preview: true },
           })
         } else {
           // Create new preview item using selectedItem configuration
@@ -124,7 +126,9 @@ export function ItemNodeEditor() {
               editor: { preview: true, canPlace },
               category: 'furniture',
               src: selectedItem.modelUrl,
-              scale: selectedItem.scale,
+              modelScale: selectedItem.scale,
+              modelPosition: selectedItem.position,
+              modelRotation: selectedItem.rotation,
               children: [] as [],
             }),
             selectedFloorId,

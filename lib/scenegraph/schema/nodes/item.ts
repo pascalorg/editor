@@ -10,7 +10,11 @@ export const ItemNode = BaseNode.extend({
   rotation: z.number(),
   size: z.tuple([z.number(), z.number()]),
   src: z.string(),
-  scale: z.union([z.number(), z.tuple([z.number(), z.number(), z.number()])]).default([1, 1, 1]),
+  modelScale: z
+    .union([z.number(), z.tuple([z.number(), z.number(), z.number()])])
+    .default([1, 1, 1]),
+  modelPosition: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  modelRotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
 }).describe(dedent`Item node - used to represent a item in the building
   - position: position in level coordinate system
   - rotation: rotation in level coordinate system

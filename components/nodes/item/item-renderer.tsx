@@ -22,10 +22,10 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     levelId,
     canPlace,
     nodeCategory,
-    nodeScale,
+    modelPosition,
     nodeSrc,
-    nodePosition,
-    nodeRotation,
+    modelScale,
+    modelRotation,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
@@ -35,10 +35,10 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         isPreview: node?.editor?.preview === true,
         levelId: state.graph.index.byId.get(nodeId)?.levelId,
         canPlace: node?.editor?.canPlace !== false,
-        nodePosition: node?.position,
-        nodeRotation: node?.rotation,
+        modelPosition: node?.modelPosition,
+        modelRotation: node?.modelRotation,
         nodeCategory: node?.category,
-        nodeScale: node?.scale,
+        modelScale: node?.modelScale,
         nodeSrc: node?.src,
       }
     }),
@@ -61,7 +61,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
   )
 
   // Determine color based on preview state and placement validity
-  const getColor = () => {
+  const color = useMemo(() => {
     if (isPreview) {
       return canPlace ? '#44ff44' : '#ff4444'
     }
@@ -82,7 +82,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
       default:
         return '#808080' // Gray
     }
-  }
+  }, [isPreview, canPlace, nodeCategory])
 
   return (
     <>
@@ -91,7 +91,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         <group>
           {/* Visible/in-front version - brighter, normal depth testing */}
           <mesh geometry={boxGeometry} position-y={0.4} renderOrder={2}>
-            <meshStandardMaterial color={getColor()} depthWrite={false} opacity={0.3} transparent />
+            <meshStandardMaterial color={color} depthWrite={false} opacity={0.3} transparent />
           </mesh>
         </group>
       )}
@@ -100,20 +100,16 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         <Suspense
           fallback={
             <mesh geometry={boxGeometry} position-y={0.4}>
-              <meshStandardMaterial
-                color={getColor()}
-                opacity={opacity}
-                transparent={transparent}
-              />
+              <meshStandardMaterial color={color} opacity={opacity} transparent={transparent} />
             </mesh>
           }
         >
           <Gltf
             castShadow
-            position={[nodePosition?.[0] ?? 0, 0, nodePosition?.[1] ?? 0]}
+            position={modelPosition || [0, 0, 0]}
             receiveShadow
-            rotation={nodeRotation}
-            scale={nodeScale || [1, 1, 1]}
+            rotation={modelRotation}
+            scale={modelScale || [1, 1, 1]}
             src={nodeSrc ?? ''}
           />
         </Suspense>
