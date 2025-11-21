@@ -175,13 +175,14 @@ export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): Bou
       }
     }
 
-    case 'item': {
+    case 'item':
+    case 'stair': {
       const absolutePos = calculateAbsolutePosition(node, getNode)
       if (!absolutePos) return null
 
-      const itemNode = node as any
+      const gridNode = node as any
       const [x, z] = absolutePos
-      const [width, depth] = itemNode.size || [1, 1]
+      const [width, depth] = gridNode.size || [1, 1]
       return {
         minX: x,
         maxX: x + width,

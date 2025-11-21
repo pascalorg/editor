@@ -35,6 +35,7 @@ export const StairNode = BaseNode.extend({
   type: nodeType('stair'),
   position: z.tuple([z.number(), z.number()]).default([0, 0]), // [x, y] on grid (world x, z)
   rotation: z.number().default(0), // rotation around Y
+  elevation: z.number().optional(), // Height from floor
   size: z.tuple([z.number(), z.number()]).default([1, 3]), // Bounding box [width, length] roughly
   children: z.array(StairSegmentNode).default([]),
 }).describe(

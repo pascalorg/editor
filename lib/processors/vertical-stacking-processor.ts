@@ -3,7 +3,7 @@ import type { AnyNode } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 export class VerticalStackingProcessor implements NodeProcessor {
-  nodeTypes = ['wall', 'column', 'slab', 'item']
+  nodeTypes = ['wall', 'column', 'slab', 'item', 'stair']
 
   process(nodes: AnyNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
