@@ -112,8 +112,9 @@ export function ItemNodeEditor() {
           }),
           selectedFloorId,
         )
-        // Reset rotation after placing
-        previewStateRef.current.currentRotation = 0
+        updateNode(previewStateRef.current.previewItemId!, {
+          editor: { preview: true, canPlace: false },
+        }) // As  we placed an item here we can't place another
       }
     }
 

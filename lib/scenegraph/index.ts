@@ -223,7 +223,9 @@ export const updateNodeAtPath = (
   if (path.length === 0) return scene
 
   return produce(scene, (draft) => {
-    const node = getNodeByPath(draft as Scene, path)
+    // Use 'any' to avoid "Type instantiation is excessively deep" error
+    // This is a known limitation with immer's Draft type and recursive structures
+    const node = getNodeByPath(draft as any, path)
     if (node) {
       updater(node)
     }

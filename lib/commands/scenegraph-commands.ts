@@ -3,6 +3,14 @@ import type { SceneGraph, SceneNodeHandle } from '@/lib/scenegraph/index'
 import type { AnyNode, LevelNode, RootNode, SceneNode } from '@/lib/scenegraph/schema/index'
 import { createId } from '@/lib/utils'
 
+// Helper type for nodes that can have children
+type NodeWithChildren = Extract<AnyNode, { children: unknown }>
+
+// Helper to check if a node has children property
+function hasChildren(node: AnyNode): node is NodeWithChildren {
+  return 'children' in node && Array.isArray((node as NodeWithChildren).children)
+}
+
 // ============================================================================
 // COMMAND INTERFACE
 // ============================================================================
@@ -35,19 +43,28 @@ export class AddNodeCommand implements Command {
     } as AnyNode
 
     // Ensure children have IDs recursively
-    if ((this.nodeData as any).children) {
-      this.nodeData.children = this.ensureChildrenIds(this.nodeData.children as AnyNode[])
+    if (hasChildren(this.nodeData)) {
+      // Type assertion needed because children types vary by node type
+      this.nodeData.children = this.ensureChildrenIds(this.nodeData.children) as typeof this.nodeData.children
     }
   }
 
-  private ensureChildrenIds(children: AnyNode[]): AnyNode[] {
+  private ensureChildrenIds(children: readonly AnyNode[]): AnyNode[] {
     return children.map((child) => {
-      const childId = child.id || createId(child.type)
-      return {
+      // Type assertion needed because AnyNode is a discriminated union
+      const childAsRecord = child as Record<string, unknown> & { type: string; id?: string }
+      const childId = childAsRecord.id || createId(childAsRecord.type)
+      const updatedChild: AnyNode = {
         ...child,
         id: childId,
-        children: (child as any).children ? this.ensureChildrenIds((child as any).children) : [],
       } as AnyNode
+
+      // Recursively ensure IDs for nested children
+      if (hasChildren(child)) {
+        (updatedChild as NodeWithChildren).children = this.ensureChildrenIds(child.children) as typeof child.children
+      }
+
+      return updatedChild
     })
   }
 
@@ -57,7 +74,8 @@ export class AddNodeCommand implements Command {
 
   execute(graph: SceneGraph): void {
     if (this.parentId) {
-      graph.nodes.create(this.nodeData, this.parentId)
+      // Type assertion: runtime parentId is always a valid node ID string
+      graph.nodes.create(this.nodeData, this.parentId as AnyNode['id'])
     } else if (this.nodeData.type === 'level') {
       // Special handling for adding levels to root (via Main Building or Site)
       // Current structure: Root -> Site -> Building -> Level
@@ -80,7 +98,8 @@ export class AddNodeCommand implements Command {
   }
 
   undo(graph: SceneGraph): void {
-    graph.deleteNode(this.nodeId)
+    // Type assertion: runtime nodeId is always a valid node ID string
+    graph.deleteNode(this.nodeId as AnyNode['id'])
   }
 }
 
@@ -91,7 +110,8 @@ export class AddNodeCommand implements Command {
 export class UpdateNodeCommand implements Command {
   private readonly nodeId: string
   private readonly updates: Partial<AnyNode>
-  private previousState: Partial<AnyNode> | null = null
+  // Use Record for dynamic property storage, runtime values are type-safe
+  private previousState: Record<string, unknown> | null = null
 
   constructor(nodeId: string, updates: Partial<AnyNode>) {
     this.nodeId = nodeId
@@ -99,24 +119,28 @@ export class UpdateNodeCommand implements Command {
   }
 
   execute(graph: SceneGraph): void {
-    const handle = graph.getNodeById(this.nodeId)
+    // Type assertion: runtime nodeId is always a valid node ID string
+    const handle = graph.getNodeById(this.nodeId as AnyNode['id'])
     if (!handle) return
 
     // Save previous state for undo
     if (!this.previousState) {
       this.previousState = {}
-      const currentNode = handle.data()
+      const currentNode = handle.data() as Record<string, unknown>
       for (const key of Object.keys(this.updates)) {
-        this.previousState[key as keyof AnyNode] = (currentNode as any)[key]
+        this.previousState[key] = currentNode[key]
       }
     }
 
-    graph.updateNode(this.nodeId, this.updates)
+    // Type assertion: runtime nodeId is always a valid node ID string
+    graph.updateNode(this.nodeId as AnyNode['id'], this.updates)
   }
 
   undo(graph: SceneGraph): void {
     if (this.previousState) {
-      graph.updateNode(this.nodeId, this.previousState)
+      // Type assertion: runtime nodeId is always a valid node ID string
+      // Runtime values in previousState are correct for their keys
+      graph.updateNode(this.nodeId as AnyNode['id'], this.previousState as Partial<AnyNode>)
     }
   }
 }
@@ -136,7 +160,8 @@ export class DeleteNodeCommand implements Command {
   }
 
   execute(graph: SceneGraph): void {
-    const handle = graph.getNodeById(this.nodeId)
+    // Type assertion: runtime nodeId is always a valid node ID string
+    const handle = graph.getNodeById(this.nodeId as AnyNode['id'])
     if (!handle) return
 
     this.deletedNode = handle.data()
@@ -148,7 +173,8 @@ export class DeleteNodeCommand implements Command {
       this.indexInParent = siblings.findIndex((s) => s.id === this.nodeId)
     }
 
-    graph.deleteNode(this.nodeId)
+    // Type assertion: runtime nodeId is always a valid node ID string
+    graph.deleteNode(this.nodeId as AnyNode['id'])
   }
 
   undo(graph: SceneGraph): void {
@@ -160,8 +186,8 @@ export class DeleteNodeCommand implements Command {
     // We might need specific insertion logic in SceneGraph if we want exact index restoration.
     // For now, just adding back is enough for MVP, but order matters for rendering (sometimes).
 
-    // SceneGraph.create(node, parentId)
-    graph.nodes.create(this.deletedNode, this.parentId)
+    // Type assertion: runtime parentId is always a valid node ID string
+    graph.nodes.create(this.deletedNode, this.parentId as AnyNode['id'])
 
     // TODO: Handle index restoration if SceneGraph supports it
   }
@@ -218,7 +244,8 @@ export class AddLevelCommand implements Command {
   }
 
   undo(graph: SceneGraph): void {
-    graph.deleteNode(this.level.id)
+    // Type assertion: level.id is always a valid level ID string
+    graph.deleteNode(this.level.id as AnyNode['id'])
   }
 }
 
@@ -232,19 +259,22 @@ export class DeleteLevelCommand implements Command {
   }
 
   execute(graph: SceneGraph): void {
-    const handle = graph.getNodeById(this.levelId)
+    // Type assertion: runtime levelId is always a valid node ID string
+    const handle = graph.getNodeById(this.levelId as AnyNode['id'])
     if (!handle) return
 
     this.deletedLevel = handle.data() as LevelNode
     const parent = handle.parent()
     this.parentId = parent ? parent.id : null
 
-    graph.deleteNode(this.levelId)
+    // Type assertion: runtime levelId is always a valid node ID string
+    graph.deleteNode(this.levelId as AnyNode['id'])
   }
 
   undo(graph: SceneGraph): void {
     if (this.deletedLevel && this.parentId) {
-      graph.nodes.create(this.deletedLevel, this.parentId)
+      // Type assertion: runtime parentId is always a valid node ID string
+      graph.nodes.create(this.deletedLevel, this.parentId as AnyNode['id'])
     }
   }
 }
@@ -265,24 +295,17 @@ export class ReorderLevelsCommand implements Command {
     const currentLevels = building.children()
     this.previousOrder = currentLevels.map((h) => h.data() as LevelNode)
 
-    // We need to update the building node's children
-    // graph.updateNode merges properties.
-    // If we pass children array, does it replace?
-    // updateNodeAtPath uses Object.assign.
-    // So yes, it replaces.
-
-    // However, we need to map LevelNode[] to SceneNode[].
-    // And we need to ensure we are not losing data if we just pass objects?
-    // Wait, the newOrder contains LevelNodes.
-
-    graph.updateNode(building.id, { children: this.newOrder } as any)
+    // Update building's children array with new order
+    // TypeScript doesn't know building has children, so we use Partial with children property
+    graph.updateNode(building.id, { children: this.newOrder } as Partial<NodeWithChildren>)
   }
 
   undo(graph: SceneGraph): void {
     const building = graph.nodes.find({ type: 'building' })[0]
     if (!building) return
 
-    graph.updateNode(building.id, { children: this.previousOrder } as any)
+    // Restore previous order
+    graph.updateNode(building.id, { children: this.previousOrder } as Partial<NodeWithChildren>)
   }
 }
 

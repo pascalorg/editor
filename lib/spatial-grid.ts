@@ -29,9 +29,7 @@ function calculateAbsolutePosition(
 
   // Traverse up parent chain and accumulate positions
   let currentNode: SceneNode = node
-  // @ts-expect-error - parentId is not in all node types, but we check safely
   while (currentNode.parentId) {
-    // @ts-expect-error
     const parent = getNode(currentNode.parentId)
     if (!parent) break
 
@@ -60,9 +58,7 @@ function calculateAbsolutePoint(
 
   // Traverse up parent chain and accumulate positions
   let currentNode: SceneNode = node
-  // @ts-expect-error - parentId is not in all node types, but we check safely
   while (currentNode.parentId) {
-    // @ts-expect-error
     const parent = getNode(currentNode.parentId)
     if (!parent) break
 

@@ -4,19 +4,20 @@ import { produce } from 'immer'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
-  type AnyNode,
-  type AnyNodeId,
-  type AnyNodeType,
   buildNodeTreeIndex,
   getNodeByPath,
-  initScene,
-  loadScene,
   type NodeTreeIndex,
-  type Scene,
-  type SceneNode,
-  type SceneNodeId,
-  updateNodeByPath,
+  updateNodeAtPath,
+} from './index'
+import type {
+  AnyNode,
+  AnyNodeId,
+  AnyNodeType,
+  Scene,
+  SceneNode,
+  SceneNodeId,
 } from './schema/index'
+import { initScene, loadScene } from './schema/index'
 
 // IndexedDB storage setup (same as before)
 const dbName = 'SceneGraphDB'
@@ -158,7 +159,7 @@ export const useSceneStore = create<SceneState>()(
           return null
         }
 
-        const updatedScene = updateNodeByPath(
+        const updatedScene = updateNodeAtPath(
           scene,
           meta.path,
           (node) =>

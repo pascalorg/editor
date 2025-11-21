@@ -18,7 +18,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   const { nodeType, nodeVisible, nodePosition, nodeRotation, nodeElevation, nodeChildrenIdsStr } =
     useEditor(
       useShallow((state) => {
-        const handle = state.graph.getNodeById(nodeId)
+        const handle = state.graph.getNodeById(nodeId as AnyNodeId)
         const node = handle?.data()
         return {
           nodeType: node?.type,

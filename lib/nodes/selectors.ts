@@ -4,7 +4,8 @@ import type { AnyNode, WallNode } from '../scenegraph/schema/index'
 export const selectWallsFromLevel =
   (levelId: string) =>
   (state: { graph: SceneGraph }): WallNode[] => {
-    const levelHandle = state.graph.getNodeById(levelId)
+    // Type assertion: runtime levelId is always a valid node ID string
+    const levelHandle = state.graph.getNodeById(levelId as AnyNode['id'])
     if (!levelHandle || levelHandle.type !== 'level') {
       return []
     }
