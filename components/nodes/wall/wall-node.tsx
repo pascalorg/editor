@@ -89,16 +89,15 @@ export function WallNodeEditor() {
           {
             type: 'wall',
             name: 'Wall Preview',
-            position: [x, y] as [number, number],
+            position: [x, y],
             rotation: 0,
-            size: [0, 0.2] as [number, number], // Zero length initially
-            start: { x, z: y },
-            end: { x, z: y },
+            size: [0, 0.2], // Zero length initially
+            start: [x, y],
+            end: [x, y],
             visible: true,
             opacity: 100,
             editor: { preview: true },
-            children: [],
-          } as any,
+          } as WallNode,
           selectedFloorId,
         )
 
