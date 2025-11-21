@@ -883,29 +883,47 @@ const useStore = create<StoreState>()(
             (fromNode as any).editor?.preview === true && (updates as any).editor?.preview === false
 
           if (isCommittingPreview) {
-            // First, update the parent node
-            const command = new UpdateNodeCommand(nodeId, updates)
-            commandManager.execute(command, graph)
+            // Get parent info before deletion
+            const parentHandle = handle.parent()
+            const parentId = parentHandle ? parentHandle.id : null
 
-            // Then recursively clear preview flag from all children
-            const updatedHandle = graph.getNodeById(nodeId as AnyNodeId)
-            if (updatedHandle) {
-              const clearPreviewFromChildren = (handle: any) => {
-                const children = handle.children()
-                for (const childHandle of children) {
-                  const child = childHandle.data()
-                  if ((child as any).editor?.preview) {
-                    const childCommand = new UpdateNodeCommand(child.id, {
-                      editor: { ...(child as any).editor, preview: false },
-                    })
-                    commandManager.execute(childCommand, graph)
-                  }
-                  // Recurse into child's children
-                  clearPreviewFromChildren(childHandle)
-                }
+            // Recursively collect and clean node data
+            const cleanNodeData = (node: any): any => {
+              const cleaned = { ...node }
+
+              // Clean up preview flag
+              if (cleaned.editor?.preview) {
+                cleaned.editor = { ...cleaned.editor, preview: false }
               }
-              clearPreviewFromChildren(updatedHandle)
+
+              // Clean up name if it contains "Preview"
+              if (cleaned.name && typeof cleaned.name === 'string') {
+                cleaned.name = cleaned.name.replace(' Preview', '').replace('Preview ', '')
+              }
+
+              // Apply updates to root node
+              if (node.id === nodeId) {
+                Object.assign(cleaned, updates)
+              }
+
+              // Recursively clean children
+              if (cleaned.children && Array.isArray(cleaned.children)) {
+                cleaned.children = cleaned.children.map((child: any) => cleanNodeData(child))
+              }
+
+              return cleaned
             }
+
+            const cleanedData = cleanNodeData(fromNode)
+
+            // Delete preview node (no undo)
+            const deleteCommand = new DeleteNodeCommand(nodeId)
+            deleteCommand.execute(graph)
+
+            // Add new real node (with undo) - this is the only operation in undo stack
+            const { id, ...dataWithoutId } = cleanedData
+            const addCommand = new AddNodeCommand(dataWithoutId, parentId, nodeId)
+            commandManager.execute(addCommand, graph)
 
             return nodeId
           }
