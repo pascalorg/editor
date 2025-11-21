@@ -11,24 +11,8 @@ import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@/e
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import type { ImageNode } from '@/lib/scenegraph/schema/index'
+import { ImageNode as ImageNodeSchema } from '@/lib/scenegraph/schema/nodes/image'
 import { ImageRenderer } from './image-renderer'
-
-// ============================================================================
-// REFERENCE IMAGE RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for reference image renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ReferenceImageRendererPropsSchema = z
-  .object({
-    // Add renderer-specific props here if needed
-    // e.g., quality settings, LOD, etc.
-  })
-  .optional()
-
-export type ReferenceImageRendererProps = z.infer<typeof ReferenceImageRendererPropsSchema>
 
 // ============================================================================
 // REFERENCE IMAGE NODE EDITOR
@@ -439,7 +423,7 @@ registerComponent({
   nodeType: 'reference-image',
   nodeName: 'Reference Image',
   editorMode: 'guide',
-  rendererPropsSchema: ReferenceImageRendererPropsSchema,
+  schema: ImageNodeSchema,
   nodeEditor: ReferenceImageNodeEditor,
   nodeRenderer: ImageRenderer,
   toolIcon: Image,

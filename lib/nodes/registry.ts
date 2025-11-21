@@ -26,9 +26,8 @@ export const ComponentConfigSchema = z.object({
   // Tool icon component (React component type)
   toolIcon: z.any(),
 
-  // Zod schema for renderer component props (not the full node)
-  // This validates the props passed to the 3D renderer component
-  rendererPropsSchema: z.instanceof(z.ZodType).optional(),
+  // Zod schema for the node structure
+  schema: z.instanceof(z.ZodType).optional(),
 
   // Editor logic that maps user actions to scene graph node operations
   // This is the builder logic (add/update/delete nodes) - not a visual component

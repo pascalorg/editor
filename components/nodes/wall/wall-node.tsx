@@ -6,24 +6,8 @@ import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { WallRenderer } from './wall-renderer'
-
-// ============================================================================
-// WALL RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for wall renderer props (renderer-specific configuration)
- * The renderer receives the full node, so this is for any additional props
- */
-export const WallRendererPropsSchema = z
-  .object({
-    // Add renderer-specific props here if needed
-    // e.g., material overrides, LOD settings, etc.
-  })
-  .optional()
-
-export type WallRendererProps = z.infer<typeof WallRendererPropsSchema>
 
 // ============================================================================
 // WALL NODE EDITOR
@@ -192,7 +176,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'wall',
   toolIcon: Minus,
-  rendererPropsSchema: WallRendererPropsSchema,
+  schema: WallNode,
   nodeEditor: WallNodeEditor,
   nodeRenderer: WallRenderer,
 })

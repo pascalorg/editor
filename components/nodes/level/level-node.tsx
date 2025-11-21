@@ -7,13 +7,8 @@ import z from 'zod'
 import { GridTiles } from '@/components/editor/elements/grid-tiles'
 import { useEditor } from '@/hooks/use-editor'
 import { componentRegistry, registerComponent } from '@/lib/nodes/registry'
+import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
 import { LevelRenderer } from './level-renderer'
-
-/**
- * Zod schema for level renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const LevelRendererPropsSchema = z.object({})
 
 // ============================================================================
 // LEVEL BUILDER COMPONENT
@@ -68,7 +63,7 @@ registerComponent({
   nodeType: 'level',
   nodeName: 'Level',
   editorMode: 'building',
-  rendererPropsSchema: LevelRendererPropsSchema,
+  schema: LevelNode,
   nodeEditor: LevelNodeEditor,
   nodeRenderer: LevelRenderer,
   toolIcon: Layers,

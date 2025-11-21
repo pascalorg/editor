@@ -4,27 +4,11 @@ import { RectangleHorizontal } from 'lucide-react'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
-import { useEditor, type WindowNode } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { WindowNode } from '@/lib/scenegraph/schema/nodes/window'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
 import { WindowRenderer } from './window-renderer'
-
-// ============================================================================
-// WINDOW RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for window renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const WindowRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    modelScale: z.number().optional(),
-  })
-  .optional()
-
-export type WindowRendererProps = z.infer<typeof WindowRendererPropsSchema>
 
 // ============================================================================
 // WINDOW NODE EDITOR
@@ -197,7 +181,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'window',
   toolIcon: RectangleHorizontal,
-  rendererPropsSchema: WindowRendererPropsSchema,
+  schema: WindowNode,
   nodeEditor: WindowNodeEditor,
   nodeRenderer: WindowRenderer,
 })

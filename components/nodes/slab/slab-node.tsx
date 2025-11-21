@@ -10,23 +10,6 @@ import { SlabNode } from '@/lib/scenegraph/schema/nodes/slab'
 import { SlabRenderer } from './slab-renderer'
 
 // ============================================================================
-// SLAB RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for slab renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const SlabRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    thickness: z.number().optional(),
-  })
-  .optional()
-
-export type SlabRendererProps = z.infer<typeof SlabRendererPropsSchema>
-
-// ============================================================================
 // SLAB NODE EDITOR
 // ============================================================================
 
@@ -168,7 +151,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'slab',
   toolIcon: Square,
-  rendererPropsSchema: SlabRendererPropsSchema,
+  schema: SlabNode,
   nodeEditor: SlabNodeEditor,
   nodeRenderer: SlabRenderer,
 })

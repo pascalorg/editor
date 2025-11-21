@@ -1,12 +1,6 @@
 import { Group } from 'lucide-react'
-import { z } from 'zod'
 import { registerComponent } from '@/lib/nodes/registry'
-
-// ============================================================================
-// GROUP RENDERER PROPS SCHEMA
-// ============================================================================
-
-export const GroupRendererPropsSchema = z.object({}).optional()
+import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
 
 // ============================================================================
 // REGISTER GROUP COMPONENT
@@ -17,7 +11,7 @@ registerComponent({
   nodeName: 'Group',
   editorMode: 'building',
   toolIcon: Group,
-  rendererPropsSchema: GroupRendererPropsSchema,
+  schema: GroupNode,
   nodeEditor: () => null, // No specific editor logic for generic groups yet
   nodeRenderer: null,
 })

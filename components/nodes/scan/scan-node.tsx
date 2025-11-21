@@ -11,24 +11,8 @@ import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/eve
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import type { ScanNode } from '@/lib/scenegraph/schema/index'
+import { ScanNode as ScanNodeSchema } from '@/lib/scenegraph/schema/nodes/scan'
 import { ScanRenderer } from './scan-renderer'
-
-// ============================================================================
-// SCAN RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for scan renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ScanRendererPropsSchema = z
-  .object({
-    // Add renderer-specific props here if needed
-    // e.g., quality settings, LOD, etc.
-  })
-  .optional()
-
-export type ScanRendererProps = z.infer<typeof ScanRendererPropsSchema>
 
 // ============================================================================
 // SCAN NODE EDITOR
@@ -472,7 +456,7 @@ registerComponent({
   nodeType: 'scan',
   nodeName: '3D Scan',
   editorMode: 'guide',
-  rendererPropsSchema: ScanRendererPropsSchema,
+  schema: ScanNodeSchema,
   nodeEditor: ScanNodeEditor,
   nodeRenderer: ScanRenderer,
   toolIcon: Box,

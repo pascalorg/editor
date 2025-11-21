@@ -7,24 +7,8 @@ import { ItemRenderer } from '@/components/nodes/item/item-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { ItemNode } from '@/lib/scenegraph/schema/nodes/item'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
-
-// ============================================================================
-// ITEM RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for item renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ItemRendererPropsSchema = z.object({
-  modelUrl: z.string().optional(),
-  category: z
-    .enum(['furniture', 'appliance', 'decoration', 'lighting', 'plumbing', 'electric'])
-    .optional(),
-})
-
-export type ItemRendererProps = z.infer<typeof ItemRendererPropsSchema>
 
 // ============================================================================
 // ITEM BUILDER COMPONENT
@@ -253,7 +237,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'item',
   toolIcon: Package,
-  rendererPropsSchema: ItemRendererPropsSchema,
+  schema: ItemNode,
   nodeEditor: ItemNodeEditor,
   nodeRenderer: ItemRenderer,
 })

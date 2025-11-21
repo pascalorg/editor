@@ -11,23 +11,6 @@ import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { createId } from '@/lib/utils'
 
 // ============================================================================
-// ROOM RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for room renderer props (groups)
- * These are renderer-specific properties, not the full node structure
- */
-export const RoomRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    groupType: z.string().optional(),
-  })
-  .optional()
-
-export type RoomRendererProps = z.infer<typeof RoomRendererPropsSchema>
-
-// ============================================================================
 // ROOM NODE EDITOR
 // ============================================================================
 
@@ -303,7 +286,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'room',
   toolIcon: BoxSelect,
-  rendererPropsSchema: RoomRendererPropsSchema,
+  schema: GroupNode,
   nodeEditor: RoomNodeEditor,
   nodeRenderer: null,
 })

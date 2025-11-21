@@ -2,29 +2,13 @@
 
 import { CylinderIcon } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
-import { z } from 'zod'
 import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import type { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
-import type { ColumnNode } from '@/lib/scenegraph/schema/nodes/column'
+import { ColumnNode } from '@/lib/scenegraph/schema/nodes/column'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
-
-// ============================================================================
-// COLUMN RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for column renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ColumnRendererPropsSchema = z.object({
-  height: z.number(),
-  diameter: z.number(),
-})
-
-export type ColumnRendererProps = z.infer<typeof ColumnRendererPropsSchema>
 
 // ============================================================================
 // COLUMN BUILDER COMPONENT
@@ -166,7 +150,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'column',
   toolIcon: CylinderIcon,
-  rendererPropsSchema: ColumnRendererPropsSchema,
+  schema: ColumnNode,
   nodeEditor: ColumnNodeEditor,
   nodeRenderer: ColumnRenderer,
 })

@@ -4,27 +4,11 @@ import { DoorOpen } from 'lucide-react'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
-import { type DoorNode, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { DoorNode } from '@/lib/scenegraph/schema/nodes/door'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
 import { DoorRenderer } from './door-renderer'
-
-// ============================================================================
-// DOOR RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for door renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const DoorRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    modelScale: z.number().optional(),
-  })
-  .optional()
-
-export type DoorRendererProps = z.infer<typeof DoorRendererPropsSchema>
 
 // ============================================================================
 // DOOR NODE EDITOR
@@ -203,7 +187,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'door',
   toolIcon: DoorOpen,
-  rendererPropsSchema: DoorRendererPropsSchema,
+  schema: DoorNode,
   nodeEditor: DoorNodeEditor,
   nodeRenderer: DoorRenderer,
 })

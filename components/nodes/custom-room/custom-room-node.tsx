@@ -11,23 +11,6 @@ import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { createId } from '@/lib/utils'
 
 // ============================================================================
-// CUSTOM ROOM RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for custom room renderer props (groups)
- * These are renderer-specific properties, not the full node structure
- */
-export const CustomRoomRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    groupType: z.string().optional(),
-  })
-  .optional()
-
-export type CustomRoomRendererProps = z.infer<typeof CustomRoomRendererPropsSchema>
-
-// ============================================================================
 // CUSTOM ROOM NODE EDITOR
 // ============================================================================
 
@@ -374,7 +357,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'custom-room',
   toolIcon: Pentagon,
-  rendererPropsSchema: CustomRoomRendererPropsSchema,
+  schema: GroupNode,
   nodeEditor: CustomRoomNodeEditor,
   nodeRenderer: null,
 })
