@@ -20,7 +20,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       useShallow((state) => {
         const handle = state.graph.getNodeById(nodeId)
         const node = handle?.data()
-        
         return {
           nodeType: node?.type,
           nodeVisible: (node as any)?.visible, // TODO: Type correctly

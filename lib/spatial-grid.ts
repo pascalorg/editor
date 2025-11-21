@@ -90,9 +90,13 @@ export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): Bou
     case 'wall': {
       const wallNode = node as any
       if (wallNode.start && wallNode.end) {
+        // Convert tuple [x, z] to object { x, z } for calculateAbsolutePoint
+        const startPoint = { x: wallNode.start[0], z: wallNode.start[1] }
+        const endPoint = { x: wallNode.end[0], z: wallNode.end[1] }
+
         // Calculate absolute positions for start and end (in case wall is nested)
-        const absoluteStart = calculateAbsolutePoint(wallNode.start, node, getNode)
-        const absoluteEnd = calculateAbsolutePoint(wallNode.end, node, getNode)
+        const absoluteStart = calculateAbsolutePoint(startPoint, node, getNode)
+        const absoluteEnd = calculateAbsolutePoint(endPoint, node, getNode)
 
         const minX = Math.min(absoluteStart.x, absoluteEnd.x)
         const maxX = Math.max(absoluteStart.x, absoluteEnd.x)

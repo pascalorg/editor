@@ -416,6 +416,7 @@ function processLevel(
   if (building) {
     const allLevels = building.children().map((h) => h.data()) as unknown as SchemaLevelNode[]
     const elevationResults = state.levelElevationProcessor.process(allLevels)
+
     elevationResults.forEach(({ nodeId, updates }) => {
       state.graph.updateNode(nodeId as AnyNodeId, updates)
     })
@@ -442,12 +443,12 @@ const useStore = create<StoreState>()(
 
       // Handler for graph changes
       const handleGraphChange = (nextScene: Scene) => {
-        const state = get()
         set({ scene: nextScene })
 
-        const currentGraph = get().graph
-        rebuildSpatialGrid(state.spatialGrid, currentGraph)
-        recomputeAllLevels(get())
+        // Get fresh state after updating scene
+        const currentState = get()
+        rebuildSpatialGrid(currentState.spatialGrid, currentState.graph)
+        recomputeAllLevels(currentState)
       }
 
       const graph = new SceneGraph(initialScene, {
