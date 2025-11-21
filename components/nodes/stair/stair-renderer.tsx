@@ -1,5 +1,6 @@
 'use client'
 
+import { Edges } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
@@ -18,7 +19,7 @@ interface StairSegmentMeshProps {
 
 function StairSegmentMesh({ segment, absoluteHeight = 0 }: StairSegmentMeshProps) {
   const { width, length, height, stepCount, segmentType, fillToFloor, thickness = 0.2 } = segment
-
+  const debug = useEditor((state) => state.debug)
   const shape = useMemo(() => {
     const s = new THREE.Shape()
     if (segmentType === 'landing') {
@@ -88,6 +89,16 @@ function StairSegmentMesh({ segment, absoluteHeight = 0 }: StairSegmentMeshProps
       <mesh castShadow position={[width / 2, 0, 0]} receiveShadow rotation={[0, -Math.PI / 2, 0]}>
         <extrudeGeometry args={[shape, extrudeSettings]} />
         <meshStandardMaterial color="#e6b88a" roughness={0.5} />
+        {debug && (
+          <Edges
+            color="#000000"
+            key={segment.id}
+            linewidth={1}
+            opacity={0.1}
+            renderOrder={1000}
+            threshold={15}
+          />
+        )}
       </mesh>
     </group>
   )
@@ -202,6 +213,7 @@ export function StairRenderer({ nodeId }: { nodeId: string }) {
       return n?.type === 'stair' ? (n as StairNode) : null
     }),
   )
+  const debug = useEditor((state) => state.debug)
 
   if (!node) return null
 
