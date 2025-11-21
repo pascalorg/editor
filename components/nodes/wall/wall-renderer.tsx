@@ -1,6 +1,6 @@
 'use client'
 
-import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
 import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo } from 'react'
@@ -343,7 +343,6 @@ const createWallDataSelector = (levelId: string) => {
       !Object.keys(wallData).every((key) => {
         const prev = lastWallData[key]
         const next = wallData[key]
-        // console.log('prev', prev, 'next', next)
         return (
           prev &&
           JSON.stringify(prev.position) === JSON.stringify(next.position) &&
@@ -754,6 +753,13 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   const scale: [number, number, number] =
     opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
+
+  const { update } = useCSG()
+
+  useEffect(() => {
+    update()
+  }, [opening.position, update])
+
   return (
     <Subtraction
       position-x={opening.position[0] * TILE_SIZE}
