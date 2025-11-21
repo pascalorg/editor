@@ -25,7 +25,7 @@ export function SlabNodeEditor() {
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
   })
 
@@ -54,7 +54,6 @@ export function SlabNodeEditor() {
         // Create preview slab at start position with zero size initially
         const previewSlabId = addNode(
           SlabNode.parse({
-            type: 'slab',
             name: 'Slab Preview',
             position: [x, y],
             rotation: 0,
