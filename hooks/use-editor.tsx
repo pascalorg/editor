@@ -391,6 +391,7 @@ function processLevel(
     if (!bounds) continue
 
     const neighborIds = state.spatialGrid.query(levelId, bounds)
+
     const neighbors = Array.from(neighborIds)
       .map((id) => state.graph.getNodeById(id as AnyNodeId)?.data())
       .filter((n): n is AnyNode => n !== undefined)
