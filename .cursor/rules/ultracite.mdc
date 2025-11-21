@@ -1,9 +1,7 @@
 ---
 description: Ultracite Rules - AI-Ready Formatter and Linter
-globs: "**/*.{ts,tsx,js,jsx}"
-alwaysApply: true
+alwaysApply: false
 ---
-
 Avoid `accessKey` attr and distracting els
 No `aria-hidden="true"` on focusable els
 No ARIA roles, states, props on unsupported els

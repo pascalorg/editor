@@ -2,7 +2,6 @@
 
 import { Minus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'

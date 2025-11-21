@@ -1,6 +1,7 @@
 import Editor from '@/components/editor'
 import { BuildingMenu } from '@/components/editor/building-menu'
 import { ControlModeMenu } from '@/components/editor/control-mode-menu'
+import { StairUI } from '@/components/nodes/stair/stair-ui'
 
 export default function Home() {
   return (
@@ -35,6 +36,7 @@ export default function Home() {
 
         <ControlModeMenu />
         <BuildingMenu />
+        <StairUI />
       </div>
     </div>
   )

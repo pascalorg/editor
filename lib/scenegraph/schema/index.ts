@@ -13,6 +13,7 @@ import { RoofNode } from './nodes/roof'
 import { ScanNode } from './nodes/scan'
 import { SiteNode } from './nodes/site'
 import { SlabNode } from './nodes/slab'
+import { StairNode, StairSegmentNode } from './nodes/stair'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { RootNode } from './root'
@@ -34,6 +35,7 @@ export * from './nodes/roof'
 export * from './nodes/scan'
 export * from './nodes/site'
 export * from './nodes/slab'
+export * from './nodes/stair'
 export * from './nodes/wall'
 export * from './nodes/window'
 export * from './root'
@@ -76,6 +78,8 @@ export const AnyNode = z.discriminatedUnion('type', [
   ScanNode,
   SlabNode,
   SiteNode,
+  StairNode,
+  StairSegmentNode,
 ])
 export type AnyNode = z.infer<typeof AnyNode>
 export type AnyNodeType = AnyNode['type']
@@ -102,6 +106,8 @@ export const NodeSchemas = {
   image: ImageNode,
   scan: ScanNode,
   slab: SlabNode,
+  stair: StairNode,
+  stair_segment: StairSegmentNode,
 }
 
 export const NodeCreateSchemas = {
@@ -120,6 +126,8 @@ export const NodeCreateSchemas = {
   image: ImageNode.omit({ id: true, object: true, type: true }),
   scan: ScanNode.omit({ id: true, object: true, type: true }),
   slab: SlabNode.omit({ id: true, object: true, type: true }),
+  stair: StairNode.omit({ id: true, object: true, type: true }),
+  stair_segment: StairSegmentNode.omit({ id: true, object: true, type: true }),
 }
 
 // Type mapping for extracting specific node types
