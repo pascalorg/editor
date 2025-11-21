@@ -554,7 +554,7 @@ export class SceneGraph {
     this.onChange?.(nextScene, this._index)
   }
 
-  updateNode(id: SceneNodeId, updates: Partial<SceneNode>) {
+  updateNode(id: SceneNodeId, updates: Partial<AnyNode>) {
     const meta = this._index.byId.get(id)
     if (!meta) {
       return
