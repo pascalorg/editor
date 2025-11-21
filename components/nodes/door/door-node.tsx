@@ -50,7 +50,6 @@ export function DoorNodeEditor() {
         return // Avoid computing for same position
       }
 
-      console.log('handleGridMove', e.position, previewDoor)
       const [x, y] = e.position
       lastPosition = [x, y]
       canPlace = false
