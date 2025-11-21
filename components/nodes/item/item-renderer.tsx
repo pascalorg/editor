@@ -4,26 +4,45 @@ import { Gltf } from '@react-three/drei'
 import { Suspense, useEffect, useMemo } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { ItemNode } from '@/lib/nodes/types'
+import type { ItemNode } from '@/lib/scenegraph/schema/index'
 
 interface ItemRendererProps {
-  node: ItemNode
+  nodeId: ItemNode['id']
 }
 
-export function ItemRenderer({ node }: ItemRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
+export function ItemRenderer({ nodeId }: ItemRendererProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
-  // Check if this is a preview node
-  const isPreview = node.preview === true
-  const canPlace = (node as any).canPlace !== false
-
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
+  const {
+    nodeSize,
+    isPreview,
+    levelId,
+    canPlace,
+    nodeCategory,
+    modelPosition,
+    nodeSrc,
+    modelScale,
+    modelRotation,
+  } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ItemNode | undefined
+      return {
+        nodeSize: node?.size,
+        isPreview: node?.editor?.preview === true,
+        levelId: state.graph.index.byId.get(nodeId)?.levelId,
+        canPlace: node?.editor?.canPlace !== false,
+        modelPosition: node?.modelPosition,
+        modelRotation: node?.modelRotation,
+        nodeCategory: node?.category,
+        modelScale: node?.modelScale,
+        nodeSrc: node?.src,
+      }
+    }),
+  )
 
   // Determine opacity based on selected floor
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
@@ -32,17 +51,22 @@ export function ItemRenderer({ node }: ItemRendererProps) {
 
   // Default box geometry for items without a model (scaled by TILE_SIZE for grid visualization)
   const boxGeometry = useMemo(
-    () => new THREE.BoxGeometry(node.size[0] * TILE_SIZE, 0.8, node.size[1] * TILE_SIZE),
-    [node.size],
+    () =>
+      new THREE.BoxGeometry(
+        (nodeSize?.[0] ?? 0) * TILE_SIZE,
+        0.8,
+        (nodeSize?.[1] ?? 0) * TILE_SIZE,
+      ),
+    [nodeSize],
   )
 
   // Determine color based on preview state and placement validity
-  const getColor = () => {
+  const color = useMemo(() => {
     if (isPreview) {
       return canPlace ? '#44ff44' : '#ff4444'
     }
     // Color based on category
-    switch (node.category) {
+    switch (nodeCategory) {
       case 'furniture':
         return '#8B4513' // Brown
       case 'appliance':
@@ -58,7 +82,7 @@ export function ItemRenderer({ node }: ItemRendererProps) {
       default:
         return '#808080' // Gray
     }
-  }
+  }, [isPreview, canPlace, nodeCategory])
 
   return (
     <>
@@ -67,7 +91,7 @@ export function ItemRenderer({ node }: ItemRendererProps) {
         <group>
           {/* Visible/in-front version - brighter, normal depth testing */}
           <mesh geometry={boxGeometry} position-y={0.4} renderOrder={2}>
-            <meshStandardMaterial color={getColor()} depthWrite={false} opacity={0.3} transparent />
+            <meshStandardMaterial color={color} depthWrite={false} opacity={0.3} transparent />
           </mesh>
         </group>
       )}
@@ -76,21 +100,17 @@ export function ItemRenderer({ node }: ItemRendererProps) {
         <Suspense
           fallback={
             <mesh geometry={boxGeometry} position-y={0.4}>
-              <meshStandardMaterial
-                color={getColor()}
-                opacity={opacity}
-                transparent={transparent}
-              />
+              <meshStandardMaterial color={color} opacity={opacity} transparent={transparent} />
             </mesh>
           }
         >
           <Gltf
             castShadow
-            position={node.modelPosition}
+            position={modelPosition || [0, 0, 0]}
             receiveShadow
-            rotation={node.modelRotation}
-            scale={node.scale || [1, 1, 1]}
-            src={node.modelUrl}
+            rotation={modelRotation}
+            scale={modelScale || [1, 1, 1]}
+            src={nodeSrc ?? ''}
           />
         </Suspense>
       </ErrorBoundary>

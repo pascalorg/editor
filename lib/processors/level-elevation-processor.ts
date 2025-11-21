@@ -1,4 +1,4 @@
-import type { BaseNode, LevelNode } from '../nodes/types'
+import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 /**
@@ -15,12 +15,12 @@ import type { NodeProcessor, NodeProcessResult } from './types'
 export class LevelElevationProcessor implements NodeProcessor {
   nodeTypes = ['level']
 
-  process(nodes: BaseNode[]): NodeProcessResult[] {
+  process(nodes: AnyNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
 
     // Filter and sort levels by their level number
     const levels = nodes
-      .filter((node): node is LevelNode => node.type === 'level')
+      .filter((node): node is NodeTypeMap['level'] => node.type === 'level')
       .sort((a, b) => a.level - b.level)
 
     // Calculate cumulative elevation for each level

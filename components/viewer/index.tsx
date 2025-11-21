@@ -4,14 +4,8 @@ import { animated, useSpring } from '@react-spring/three'
 import { Environment, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type * as THREE from 'three'
-import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
-import { InfiniteGrid } from '@/components/editor/infinite-grid'
-import { ProximityGrid } from '@/components/editor/proximity-grid'
+import { useGridFadeControls } from '@/components/editor/infinite-floor'
 import { useEditor } from '@/hooks/use-editor'
-import { nodeTreeToComponentsWithLevels } from '@/lib/migration/nodes-to-legacy'
-import { calculateLevelBoundsById } from '@/lib/nodes/bounds'
-import type { BuildingNode } from '@/lib/nodes/types'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { ViewerControls } from './viewer-controls'
@@ -31,7 +25,7 @@ export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no f
 
 export default function Viewer({ className }: { className?: string }) {
   // Use individual selectors for better performance
-  const building = useEditor((state) => state.root.children[0])
+  const building = useEditor((state) => state.scene.root.children?.[0]?.children.find(c => c.type === 'building'))
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const viewMode = useEditor((state) => state.viewMode)
@@ -109,7 +103,7 @@ export default function Viewer({ className }: { className?: string }) {
 
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <NodeRenderer node={building} />
+          {building && <NodeRenderer nodeId={building.id} />}
         </group>
 
         <ViewerCustomControls />

@@ -7,23 +7,8 @@ import { ItemRenderer } from '@/components/nodes/item/item-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-
-// ============================================================================
-// ITEM RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for item renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ItemRendererPropsSchema = z.object({
-  modelUrl: z.string().optional(),
-  category: z
-    .enum(['furniture', 'appliance', 'decoration', 'lighting', 'plumbing', 'electric'])
-    .optional(),
-})
-
-export type ItemRendererProps = z.infer<typeof ItemRendererPropsSchema>
+import { ItemNode } from '@/lib/scenegraph/schema/nodes/item'
+import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
 
 // ============================================================================
 // ITEM BUILDER COMPONENT
@@ -33,6 +18,8 @@ export type ItemRendererProps = z.infer<typeof ItemRendererPropsSchema>
  * Item builder component
  * Uses useEditor hooks and spatialGrid to manage item placement with collision detection
  */
+const EMPTY_LEVELS: any[] = []
+
 export function ItemNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
@@ -41,17 +28,19 @@ export function ItemNodeEditor() {
   const spatialGrid = useEditor((state) => state.spatialGrid)
   const selectedItem = useEditor((state) => state.selectedItem)
   const levels = useEditor((state) => {
-    const building = state.root.children[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist preview state across renders without triggering re-renders
   const previewStateRef = useRef<{
     previewItemId: string | null
     lastPreviewPosition: [number, number] | null
+    currentRotation: number
   }>({
     previewItemId: null,
     lastPreviewPosition: null,
+    currentRotation: 0,
   })
 
   // Delete preview when selectedItem changes (user picks a different item from catalog)
@@ -64,6 +53,32 @@ export function ItemNodeEditor() {
       previewStateRef.current.lastPreviewPosition = null
     }
   }, [selectedItem.modelUrl, deleteNode])
+
+  // Right-click handler for rotation
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const previewId = previewStateRef.current.previewItemId
+      // Only handle if there's an active preview
+      if (previewId && selectedFloorId) {
+        e.preventDefault()
+        e.stopPropagation()
+
+        // Rotate by 45 degrees (Math.PI / 4 radians)
+        previewStateRef.current.currentRotation += Math.PI / 4
+
+        // Update preview with new rotation
+        updateNode(previewId, {
+          rotation: previewStateRef.current.currentRotation,
+        })
+      }
+    }
+
+    window.addEventListener('contextmenu', handleContextMenu)
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu)
+    }
+  }, [selectedFloorId, updateNode])
 
   useEffect(() => {
     const handleGridClick = (e: GridEvent) => {
@@ -80,23 +95,26 @@ export function ItemNodeEditor() {
       if (canPlace) {
         // Create item node using selectedItem configuration
         addNode(
-          {
+          ItemNode.parse({
             type: 'item' as const,
             name: `Item at ${x},${y}`,
             position: [x, y],
-            rotation: 0,
+            rotation: previewStateRef.current.currentRotation,
             size: selectedItem.size,
             visible: true,
             opacity: 100,
             category: 'furniture',
-            modelUrl: selectedItem.modelUrl,
-            scale: selectedItem.scale,
+            src: selectedItem.modelUrl,
+            modelScale: selectedItem.scale,
             modelPosition: selectedItem.position,
             modelRotation: selectedItem.rotation,
             children: [],
-          } as any,
+          }),
           selectedFloorId,
         )
+        updateNode(previewStateRef.current.previewItemId!, {
+          editor: { preview: true, canPlace: false },
+        }) // As  we placed an item here we can't place another
       }
     }
 
@@ -122,29 +140,29 @@ export function ItemNodeEditor() {
           // Update existing preview position and canPlace state
           updateNode(previewId, {
             position: [x, y] as [number, number],
+            rotation: previewStateRef.current.currentRotation,
             visible: true,
-            canPlace,
-          } as any)
+            editor: { canPlace, preview: true },
+          })
         } else {
           // Create new preview item using selectedItem configuration
           const newPreviewId = addNode(
-            {
+            ItemNode.parse({
               type: 'item' as const,
               name: 'Item Preview',
               position: [x, y] as [number, number],
-              rotation: 0,
+              rotation: previewStateRef.current.currentRotation,
               size: selectedItem.size as [number, number],
               visible: true,
               opacity: 100,
-              preview: true,
-              canPlace,
+              editor: { preview: true, canPlace },
               category: 'furniture',
-              modelUrl: selectedItem.modelUrl,
-              scale: selectedItem.scale,
+              src: selectedItem.modelUrl,
+              modelScale: selectedItem.scale,
               modelPosition: selectedItem.position,
               modelRotation: selectedItem.rotation,
               children: [] as [],
-            } as any,
+            }),
             selectedFloorId,
           )
           previewStateRef.current.previewItemId = newPreviewId
@@ -189,19 +207,23 @@ export function ItemNodeEditor() {
       // Filter out preview nodes and check for actual collisions
       // Items can be placed on slabs and next to walls, but not on other items or columns
       for (const nodeId of nearbyNodeIds) {
-        const node = level.children.find((child: any) => child.id === nodeId)
+        const node = level.children.find(
+          (child: LevelNode['children'][number]) => child.id === nodeId,
+        )
         // Block placement only for non-preview items and columns (solid obstacles)
-        if (node && !node.preview && (node.type === 'item' || node.type === 'column')) {
-          // Check if there's actual overlap (not just touching)
-          if (node.position && node.size) {
-            const existingBounds = {
-              minX: node.position[0],
-              maxX: node.position[0] + node.size[0],
-              minZ: node.position[1],
-              maxZ: node.position[1] + node.size[1],
-            }
-            if (boundsOverlap(newItemBounds, existingBounds)) {
-              return false
+        if (node && !node.editor?.preview) {
+          if (node.type === 'item') {
+            // Check if there's actual overlap (not just touching)
+            if (node.position && node.size) {
+              const existingBounds = {
+                minX: node.position[0],
+                maxX: node.position[0] + node.size[0],
+                minZ: node.position[1],
+                maxZ: node.position[1] + node.size[1],
+              }
+              if (boundsOverlap(newItemBounds, existingBounds)) {
+                return false
+              }
             }
           } else if (node.type === 'column' && node.position) {
             // Columns are point obstacles - check if they're inside the new item bounds
@@ -246,7 +268,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'item',
   toolIcon: Package,
-  rendererPropsSchema: ItemRendererPropsSchema,
+  schema: ItemNode,
   nodeEditor: ItemNodeEditor,
   nodeRenderer: ItemRenderer,
 })

@@ -5,29 +5,14 @@ import { Box } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { z } from 'zod'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { ScanNode } from '@/lib/nodes/types'
+import type { ScanNode } from '@/lib/scenegraph/schema/index'
+import { ScanNode as ScanNodeSchema } from '@/lib/scenegraph/schema/nodes/scan'
 import { ScanRenderer } from './scan-renderer'
-
-// ============================================================================
-// SCAN RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for scan renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const ScanRendererPropsSchema = z
-  .object({
-    // Add renderer-specific props here if needed
-    // e.g., quality settings, LOD, etc.
-  })
-  .optional()
-
-export type ScanRendererProps = z.infer<typeof ScanRendererPropsSchema>
 
 // ============================================================================
 // SCAN NODE EDITOR
@@ -56,7 +41,8 @@ export function ScanNodeEditor() {
       const { nodeId, updates, pushToUndo } = event
 
       // Update the node in the store
-      updateNode(nodeId, updates)
+      // Pass skipUndo = !pushToUndo (if pushing to undo, skipUndo is false)
+      updateNode(nodeId, updates, !pushToUndo)
 
       // If pushing to undo, clear the accumulated state for this node
       if (pushToUndo) {
@@ -106,7 +92,7 @@ export function ScanNodeEditor() {
  * Provides all the pointer event handlers for transforming 3D scans
  */
 export function useScanManipulation(
-  node: ScanNode,
+  nodeId: ScanNode['id'],
   groupRef: RefObject<THREE.Group | null>,
   setActiveHandle?: (handleId: string | null) => void,
 ) {
@@ -115,11 +101,23 @@ export function useScanManipulation(
   const controlMode = useEditor((state) => state.controlMode)
   const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
 
+  const { nodePosition, nodeScale, nodeRotation } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ScanNode | undefined
+      return {
+        nodePosition: node?.position || [0, 0],
+        nodeScale: node?.scale || 1,
+        nodeRotation: node?.rotation || [0, 0, 0],
+      }
+    }),
+  )
+
   const handleSelect = useCallback(() => {
     if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedScanIds([node.id])
+      setSelectedScanIds([nodeId])
     }
-  }, [controlMode, node, setSelectedScanIds])
+  }, [controlMode, nodeId, setSelectedScanIds])
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'z') => (e: any) => {
@@ -130,7 +128,7 @@ export function useScanManipulation(
 
       const handleId = axis === 'x' ? 'translate-x' : 'translate-z'
       setActiveHandle?.(handleId)
-      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -168,7 +166,7 @@ export function useScanManipulation(
 
         lastPosition = [finalX, finalZ]
         emitter.emit('scan:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { position: lastPosition },
           pushToUndo: false,
         })
@@ -180,18 +178,18 @@ export function useScanManipulation(
         setActiveHandle?.(null)
         if (lastPosition) {
           emitter.emit('scan:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleTranslateXZDown = useCallback(
@@ -202,7 +200,7 @@ export function useScanManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('translate-xz')
-      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId })
 
       const initialMouse = new THREE.Vector3()
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -232,7 +230,7 @@ export function useScanManipulation(
 
         lastPosition = [finalX, finalZ]
         emitter.emit('scan:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { position: lastPosition },
           pushToUndo: false,
         })
@@ -244,18 +242,18 @@ export function useScanManipulation(
         setActiveHandle?.(null)
         if (lastPosition) {
           emitter.emit('scan:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { position: lastPosition },
             pushToUndo: true,
           })
         }
-        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleRotationDown = useCallback(
@@ -266,7 +264,7 @@ export function useScanManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('rotation')
-      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -276,7 +274,7 @@ export function useScanManipulation(
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialVector = initialMouse.clone().sub(center)
       const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-      const initialRotation = node.rotation
+      const initialRotation = nodeRotation
       let lastRotation: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -290,7 +288,7 @@ export function useScanManipulation(
         const vector = intersect.clone().sub(center)
         const angle = Math.atan2(vector.z, vector.x)
         const delta = angle - initialAngle
-        let newRotation = initialRotation - delta * (180 / Math.PI)
+        let newRotation = initialRotation[2] ?? 0 - delta * (180 / Math.PI)
 
         if (ev.shiftKey) {
           newRotation = Math.round(newRotation / 45) * 45
@@ -298,7 +296,7 @@ export function useScanManipulation(
 
         lastRotation = newRotation
         emitter.emit('scan:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { rotation: lastRotation },
           pushToUndo: false,
         })
@@ -310,18 +308,18 @@ export function useScanManipulation(
         setActiveHandle?.(null)
         if (lastRotation !== null) {
           emitter.emit('scan:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { rotation: lastRotation },
             pushToUndo: true,
           })
         }
-        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.rotation, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodeRotation, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleTranslateYDown = useCallback(
@@ -332,10 +330,10 @@ export function useScanManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('translate-y')
-      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId })
 
       const initialMouseY = e.pointer.y
-      const initialYOffset = node.yOffset || 0
+      const initialYOffset = nodePosition[1] ?? 0
       let lastYOffset: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -351,7 +349,7 @@ export function useScanManipulation(
 
         lastYOffset = newYOffset
         emitter.emit('scan:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { yOffset: lastYOffset },
           pushToUndo: false,
         })
@@ -363,18 +361,18 @@ export function useScanManipulation(
         setActiveHandle?.(null)
         if (lastYOffset !== null) {
           emitter.emit('scan:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { yOffset: lastYOffset },
             pushToUndo: true,
           })
         }
-        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.yOffset, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodePosition, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleScaleDown = useCallback(
@@ -385,7 +383,7 @@ export function useScanManipulation(
       if (!groupRef.current) return
 
       setActiveHandle?.('scale')
-      emitter.emit('scan:manipulation-start', { nodeId: node.id })
+      emitter.emit('scan:manipulation-start', { nodeId })
 
       const center = groupRef.current.position.clone()
       const initialMouse = new THREE.Vector3()
@@ -394,7 +392,7 @@ export function useScanManipulation(
       raycaster.setFromCamera(e.pointer, camera)
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialDist = center.distanceTo(initialMouse)
-      const initialScale = node.scale
+      const initialScale = nodeScale
       let lastScale: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -414,7 +412,7 @@ export function useScanManipulation(
 
         lastScale = Math.max(0.1, newScale)
         emitter.emit('scan:update', {
-          nodeId: node.id,
+          nodeId,
           updates: { scale: lastScale },
           pushToUndo: false,
         })
@@ -426,18 +424,18 @@ export function useScanManipulation(
         setActiveHandle?.(null)
         if (lastScale !== null) {
           emitter.emit('scan:update', {
-            nodeId: node.id,
+            nodeId,
             updates: { scale: lastScale },
             pushToUndo: true,
           })
         }
-        emitter.emit('scan:manipulation-end', { nodeId: node.id })
+        emitter.emit('scan:manipulation-end', { nodeId })
       }
 
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [node.id, node.scale, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodeScale, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   return {
@@ -458,7 +456,7 @@ registerComponent({
   nodeType: 'scan',
   nodeName: '3D Scan',
   editorMode: 'guide',
-  rendererPropsSchema: ScanRendererPropsSchema,
+  schema: ScanNodeSchema,
   nodeEditor: ScanNodeEditor,
   nodeRenderer: ScanRenderer,
   toolIcon: Box,

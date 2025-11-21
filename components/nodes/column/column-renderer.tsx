@@ -2,27 +2,29 @@
 
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
-import type { ColumnNode } from '@/lib/nodes/types'
-import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
+import type { ColumnNode } from '@/lib/scenegraph/schema/index'
+import { WALL_HEIGHT } from '../../editor'
 
 const COLUMN_RADIUS = 0.15 // 15cm radius
 
 interface ColumnRendererProps {
-  node: ColumnNode
+  nodeId: ColumnNode['id']
 }
 
-export function ColumnRenderer({ node }: ColumnRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
-
-  // Check if this is a preview node
-  const isPreview = node.preview === true
-
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
+export function ColumnRenderer({ nodeId }: ColumnRendererProps) {
+  const { selectedFloorId, isPreview, levelId } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ColumnNode | undefined
+      return {
+        selectedFloorId: state.selectedFloorId,
+        isPreview: node?.editor?.preview === true,
+        levelId: state.getLevelId(nodeId),
+      }
+    }),
+  )
 
   // Create cylinder geometry
   const cylinderGeometry = useMemo(

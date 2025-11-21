@@ -1,11 +1,11 @@
 import { SLAB_THICKNESS } from '@/components/nodes/slab/slab-renderer'
-import type { BaseNode } from '../nodes/types'
+import type { AnyNode } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 export class VerticalStackingProcessor implements NodeProcessor {
   nodeTypes = ['wall', 'column', 'slab', 'item']
 
-  process(nodes: BaseNode[]): NodeProcessResult[] {
+  process(nodes: AnyNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
 
     // Check if there's a slab in the affected nodes
@@ -32,7 +32,7 @@ export class VerticalStackingProcessor implements NodeProcessor {
     return results
   }
 
-  private supportsVerticalStacking(node: BaseNode): boolean {
+  private supportsVerticalStacking(node: AnyNode): boolean {
     return this.nodeTypes.includes(node.type)
   }
 }

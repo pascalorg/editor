@@ -2,33 +2,14 @@
 
 import { Triangle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { z } from 'zod'
 import { RoofRenderer } from '@/components/nodes/roof/roof-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { RoofNode } from '@/lib/scenegraph/schema/nodes/roof'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
-
-// ============================================================================
-// ROOF RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for roof renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const RoofRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    height: z.number().optional(),
-    leftWidth: z.number().optional(),
-    rightWidth: z.number().optional(),
-  })
-  .optional()
-
-export type RoofRendererProps = z.infer<typeof RoofRendererPropsSchema>
 
 // ============================================================================
 // ROOF NODE EDITOR
@@ -66,7 +47,7 @@ export function RoofNodeEditor() {
 
         // Create preview roof node (zero size initially)
         const previewRoofId = addNode(
-          {
+          RoofNode.parse({
             type: 'roof',
             name: 'Roof Preview',
             position: [x, y] as [number, number],
@@ -77,9 +58,9 @@ export function RoofNodeEditor() {
             rightWidth: 0,
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
+            editor: { preview: true }, // Mark as preview
             children: [],
-          } as any,
+          }),
           selectedFloorId,
         )
 
@@ -91,7 +72,7 @@ export function RoofNodeEditor() {
         if (previewRoofId) {
           // Update the roof to remove preview flag
           updateNode(previewRoofId, {
-            preview: false as any,
+            editor: { preview: false },
             name: 'Roof',
           })
         }
@@ -206,7 +187,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'roof',
   toolIcon: Triangle,
-  rendererPropsSchema: RoofRendererPropsSchema,
+  schema: RoofNode,
   nodeEditor: RoofNodeEditor,
   nodeRenderer: RoofRenderer,
 })

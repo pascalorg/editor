@@ -1,15 +1,23 @@
 'use client'
 
-import { Base, Geometry, Subtraction } from '@react-three/csg'
+import { Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
 import { Edges, Line } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
-import type { BaseNode, GridItem, GridPoint, WallNode } from '@/lib/nodes/types'
-import { findAncestors } from '@/lib/nodes/utils'
+import { selectWallsFromLevel } from '@/lib/nodes/selectors'
+import type { SceneGraph } from '@/lib/scenegraph/index'
+import type {
+  AnyNode,
+  GridItem,
+  GridPoint,
+  SceneNode,
+  SceneNodeId,
+  WallNode,
+} from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
@@ -164,15 +172,39 @@ function calculateJunctionIntersections(junction: Junction) {
 }
 // --- End of Junction Helpers ---
 
+type NodeProvider = (id: string) => AnyNode | null | undefined
+
+/**
+ * Find all ancestors of a node using the node index
+ */
+function findAncestors(getNode: NodeProvider, nodeId: string): AnyNode[] {
+  const ancestors: AnyNode[] = []
+  let current = getNode(nodeId)
+
+  // @ts-expect-error - parent property check
+  while (current?.parent) {
+    // @ts-expect-error
+    const parent = getNode(current.parent)
+    if (parent) {
+      ancestors.push(parent)
+      current = parent
+    } else {
+      break
+    }
+  }
+  return ancestors
+}
+
 /**
  * Calculate the absolute world position of a node by traversing up through all parents
  * and accumulating position and rotation transforms
  */
 function calculateWorldPosition(
-  node: BaseNode & GridItem,
-  allLevels: BaseNode[],
+  node: AnyNode & GridItem,
+  getNode: NodeProvider,
 ): { position: [number, number]; rotation: number } {
   // If node doesn't have a parent property, it's at world root
+  // @ts-expect-error
   if (!node.parent) {
     return {
       position: node.position,
@@ -181,7 +213,7 @@ function calculateWorldPosition(
   }
 
   // Get all ancestors (from immediate parent up to root)
-  const ancestors = findAncestors(allLevels, node.id)
+  const ancestors = findAncestors(getNode, node.id)
 
   // Start with the node's local position and rotation
   let worldX = node.position[0]
@@ -193,7 +225,7 @@ function calculateWorldPosition(
   for (const ancestor of ancestors) {
     // Check if ancestor has GridItem properties (position, rotation, size)
     if ('position' in ancestor && 'rotation' in ancestor && 'size' in ancestor) {
-      const parent = ancestor as BaseNode & GridItem
+      const parent = ancestor as AnyNode & GridItem
       const parentRotation = parent.rotation
       const parentPos = parent.position
 
@@ -219,38 +251,163 @@ function calculateWorldPosition(
 }
 
 interface WallRendererProps {
-  node: WallNode
+  nodeId: WallNode['id']
 }
 
-export function WallRenderer({ node }: WallRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
-  const debug = useEditor((state) => state.debug)
-  const allLevels = useEditor((state) => {
-    const building = state.root.children[0]
-    return building ? building.children : []
-  })
-  const tileSize = TILE_SIZE
+// Create a selector that returns wall IDs and their relevant properties
+export const selectWallDataFromLevel = (levelId: string) => (state: { graph: SceneGraph }) => {
+  const levelHandle = state.graph.getNodeById(levelId as SceneNodeId)
 
-  // Check if this is a preview node
-  const isPreview = node.preview === true
+  const level = levelHandle?.data()
+  if (!level || level.type !== 'level') {
+    return { wallIds: [], wallData: {} }
+  }
+
+  const wallIds: string[] = []
+  const wallData: Record<
+    string,
+    { position: [number, number]; size: [number, number]; rotation: number }
+  > = {}
+
+  const traverse = (nodes: AnyNode[]) => {
+    for (const node of nodes) {
+      if (node.type === 'wall') {
+        const wall = node as WallNode
+        wallIds.push(wall.id)
+        wallData[wall.id] = {
+          position: wall.position,
+          size: wall.size,
+          rotation: wall.rotation || 0,
+        }
+      } else if (node.type === 'group' && 'children' in node && Array.isArray(node.children)) {
+        traverse(node.children as AnyNode[])
+      }
+    }
+  }
+
+  // Use SceneGraph handles to get children
+  const children = levelHandle!.children().map((h) => h.data())
+  traverse(children as AnyNode[])
+
+  return { wallIds, wallData }
+}
+
+const createWallDataSelector = (levelId: string) => {
+  let lastWallIds: string[] = []
+  let lastWallData: Record<string, any> = {}
+  let lastResult = { wallIds: lastWallIds, wallData: lastWallData }
+  return (state: { graph: SceneGraph }) => {
+    const levelHandle = state.graph.getNodeById(levelId as SceneNodeId)
+    if (!levelHandle) {
+      return lastResult // Return same reference if no level
+    }
+
+    const wallIds: string[] = []
+    const wallData: Record<string, any> = {}
+
+    // Recursive traversal helper using scene graph handles or data
+    // Since we are inside a selector, accessing state.graph is fine, but state.graph.getNodeById returns handles wrapper around scene
+    // We can just use the raw nodes if we want, or handles.
+
+    // We need to traverse children recursively.
+    // levelHandle.children() is only direct children.
+
+    const traverse = (handle: any) => {
+      const children = handle.children()
+      for (const childHandle of children) {
+        const node = childHandle.data()
+        if (node.type === 'wall') {
+          const wall = node as WallNode
+          wallIds.push(wall.id)
+          wallData[wall.id] = {
+            position: wall.position,
+            size: wall.size,
+            rotation: wall.rotation || 0,
+            start: wall.start,
+            end: wall.end,
+          }
+        } else if (node.type === 'group') {
+          traverse(childHandle)
+        }
+      }
+    }
+
+    traverse(levelHandle)
+
+    // Check if data actually changed
+    const idsChanged =
+      wallIds.length !== lastWallIds.length || !wallIds.every((id, i) => id === lastWallIds[i])
+
+    const dataChanged =
+      Object.keys(wallData).length !== Object.keys(lastWallData).length ||
+      !Object.keys(wallData).every((key) => {
+        const prev = lastWallData[key]
+        const next = wallData[key]
+        return (
+          prev &&
+          JSON.stringify(prev.position) === JSON.stringify(next.position) &&
+          JSON.stringify(prev.size) === JSON.stringify(next.size) &&
+          JSON.stringify(prev.start) === JSON.stringify(next.start) &&
+          JSON.stringify(prev.end) === JSON.stringify(next.end) &&
+          prev.rotation === next.rotation
+        )
+      })
+
+    if (idsChanged || dataChanged) {
+      lastWallIds = wallIds
+      lastWallData = wallData
+      lastResult = { wallIds, wallData }
+    }
+
+    return lastResult
+  }
+}
+
+export function WallRenderer({ nodeId }: WallRendererProps) {
+  const debug = useEditor((state) => state.debug)
+
+  const { isPreview, canPlace, levelId, nodeSize, nodeChildrenIdsStr } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as WallNode | undefined
+
+      // getLevelId helper in state works with node object, but we updated it to take node
+      // But store.getLevelId(node) calls graph.getNodeById.
+
+      // Actually we can just use handle.meta.levelId directly if available via selector?
+      // Yes, SceneGraph handles have meta.
+      const levelId = state.graph.index.byId.get(nodeId)?.levelId
+
+      return {
+        isPreview: node?.editor?.preview === true,
+        canPlace: node?.editor?.canPlace !== false,
+        levelId,
+        nodeSize: node?.size || [0, 0],
+        nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
+      }
+    }),
+  )
+
+  // Use it with useMemo to create a stable selector
+  const wallDataSelector = useMemo(
+    () => createWallDataSelector(levelId ?? ''),
+    [levelId, createWallDataSelector],
+  )
+  const { wallIds, wallData } = useEditor(useShallow(wallDataSelector))
+
+  const nodeChildrenIds = useMemo(() => JSON.parse(nodeChildrenIdsStr), [nodeChildrenIdsStr])
 
   // Determine preview colors based on canPlace
-  const canPlaceWall = node.canPlace !== false // Default to true if undefined
-  const previewColor = canPlaceWall ? '#44ff44' : '#ff4444'
-  const previewEmissive = canPlaceWall ? '#22aa22' : '#aa2222'
-  const previewLineDim = canPlaceWall ? '#336633' : '#663333'
+  const previewColor = canPlace ? '#44ff44' : '#ff4444'
+  const previewEmissive = canPlace ? '#22aa22' : '#aa2222'
+  const previewLineDim = canPlace ? '#336633' : '#663333'
 
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
-  const allWalls = useWalls(levelId || '')
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Calculate local space coordinates for preview line
   // The parent group already handles position & rotation, so we render in local space
   const { localEndX, localEndZ } = useMemo(() => {
-    const length = node.size[0] // Length in grid units
+    const length = nodeSize[0] // Length in grid units
     const worldLength = length * TILE_SIZE
 
     // In local space, start is always at (0, 0) and end is at (length, 0)
@@ -259,13 +416,13 @@ export function WallRenderer({ node }: WallRendererProps) {
       localEndX: worldLength,
       localEndZ: 0,
     }
-  }, [node.size])
+  }, [nodeSize])
 
   // Generate wall geometry similar to wall.tsx with junction handling
   // Note: Geometry is in LOCAL space since parent group handles position & rotation
   const wallGeometry = useMemo(() => {
     // Get wall dimensions from node
-    const length = node.size[0] // Length in grid units
+    const length = nodeSize[0] // Length in grid units
     const worldLength = length * TILE_SIZE
     const wallHeight = WALL_HEIGHT
 
@@ -275,7 +432,13 @@ export function WallRenderer({ node }: WallRendererProps) {
 
     // Calculate world space coordinates for junction detection
     // Now using calculateWorldPosition to account for parent transforms
-    const worldPos = calculateWorldPosition(node, allLevels)
+    const graph = useEditor.getState().graph
+    const getNode = (id: string) => graph.getNodeById(id as SceneNodeId)?.data()
+
+    const wall = getNode(nodeId) as WallNode
+    if (!wall) return null
+
+    const worldPos = calculateWorldPosition(wall, getNode)
     const [x1, y1] = worldPos.position
     const worldRotation = worldPos.rotation
 
@@ -286,20 +449,21 @@ export function WallRenderer({ node }: WallRendererProps) {
     const x2 = x1 + Math.cos(worldRotation) * length
     const y2 = y1 - Math.sin(worldRotation) * length
 
-    // Convert all walls to LiveWall format for junction calculation
-    const liveWalls: LiveWall[] = allWalls.map((w) => {
-      // Calculate world position for each wall
-      const wWorldPos = calculateWorldPosition(w, allLevels)
+    const liveWalls: LiveWall[] = wallIds.map((wallId) => {
+      const data = wallData[wallId]
+
+      // Get the actual wall node from the index
+      const wallNode = getNode(wallId) as WallNode
+      const wWorldPos = calculateWorldPosition(wallNode, getNode)
       const [wx1, wy1] = wWorldPos.position
       const wWorldRotation = wWorldPos.rotation
-      const wLength = w.size[0]
+      const wLength = data.size[0]
 
-      // Calculate end point
       const wx2 = wx1 + Math.cos(wWorldRotation) * wLength
       const wy2 = wy1 - Math.sin(wWorldRotation) * wLength
 
       return {
-        id: w.id,
+        id: wallId,
         start: { x: wx1 * TILE_SIZE, y: wy1 * TILE_SIZE },
         end: { x: wx2 * TILE_SIZE, y: wy2 * TILE_SIZE },
         thickness: WALL_THICKNESS,
@@ -315,13 +479,13 @@ export function WallRenderer({ node }: WallRendererProps) {
     }
 
     // Get this wall's data
-    const thisWall = liveWalls.find((w) => w.id === node.id)
+    const thisWall = liveWalls.find((w) => w.id === nodeId)
     if (!thisWall) return null
 
     const key_start = pointToKey(thisWall.start)
     const key_end = pointToKey(thisWall.end)
-    const startJunctionData = junctionData.get(key_start)?.get(node.id)
-    const endJunctionData = junctionData.get(key_end)?.get(node.id)
+    const startJunctionData = junctionData.get(key_start)?.get(nodeId)
+    const endJunctionData = junctionData.get(key_end)?.get(nodeId)
 
     // Helper to transform world point to local space
     const worldToLocal = (worldPoint: Point): { x: number; z: number } => {
@@ -379,9 +543,9 @@ export function WallRenderer({ node }: WallRendererProps) {
     geometry.rotateX(-Math.PI / 2)
 
     return geometry
-  }, [node, allWalls, allLevels])
+  }, [wallData, wallIds, nodeId, nodeSize])
 
-  // Determine opacity based on selected floor
+  // Determine opacity based on selected floo, [allWalls]r
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
@@ -400,7 +564,7 @@ export function WallRenderer({ node }: WallRendererProps) {
       const localGridZ = localPoint.z / TILE_SIZE
 
       // In wall-local space, the wall runs from (0, 0) to (length, 0) along the X-axis
-      const wallLength = node.size[0] // Wall length in grid units
+      const wallLength = nodeSize[0] // Wall length in grid units
 
       // Project onto the wall's X-axis (the wall runs horizontally in its local space)
       // Clamp to [0, wallLength]
@@ -415,52 +579,56 @@ export function WallRenderer({ node }: WallRendererProps) {
 
       return localGridPoint
     },
-    [node],
+    [nodeSize],
   )
   //  Event handlers
 
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:click', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint, node],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerEnter = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:enter', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint, node],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerLeave = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:leave', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint, node],
+    [getClosestGridPoint, nodeId],
   )
 
   const onPointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:move', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
       })
     },
-    [getClosestGridPoint, node],
+    [getClosestGridPoint, nodeId],
   )
 
   if (!wallGeometry) return null
@@ -547,27 +715,9 @@ export function WallRenderer({ node }: WallRendererProps) {
                     transparent={transparent}
                   />
                 </Base>
-                {node.children.map((opening, idx) => {
-                  // Transform opening's world position to wall's local coordinate system
-                  // const { localX, localZ } = getNodeRelativePosition(opening, node, tileSize)
-
-                  const scale: [number, number, number] =
-                    opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
-                  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
-                  return (
-                    <Subtraction
-                      key={idx}
-                      position-x={opening.position[0] * tileSize}
-                      position-y={opening.type === 'window' ? 1.12 : 1}
-                      position-z={opening.position[1] * tileSize}
-                      scale={scale}
-                      showOperation={opening.preview}
-                    >
-                      <boxGeometry />
-                      <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
-                    </Subtraction>
-                  )
-                })}
+                {nodeChildrenIds.map((openingId: string) => (
+                  <WallOpening key={openingId} nodeId={openingId} />
+                ))}
               </Geometry>
               {debug && (
                 <Edges
@@ -584,5 +734,42 @@ export function WallRenderer({ node }: WallRendererProps) {
         </>
       )}
     </>
+  )
+}
+
+const WallOpening = ({ nodeId }: { nodeId: string }) => {
+  const opening = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId as SceneNodeId)
+      const node = handle?.data()
+
+      return {
+        type: (node as any)?.type,
+        position: (node as any)?.position,
+        editor: (node as any)?.editor,
+      }
+    }),
+  )
+  const scale: [number, number, number] =
+    opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
+  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
+
+  const { update } = useCSG()
+
+  useEffect(() => {
+    update()
+  }, [opening.position, update])
+
+  return (
+    <Subtraction
+      position-x={opening.position[0] * TILE_SIZE}
+      position-y={opening.type === 'window' ? 1.12 : 1}
+      position-z={opening.position[1] * TILE_SIZE}
+      scale={scale}
+      showOperation={opening.editor?.preview}
+    >
+      <boxGeometry />
+      <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
+    </Subtraction>
   )
 }

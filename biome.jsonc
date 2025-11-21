@@ -42,7 +42,8 @@
       "performance": {
         "noNamespaceImport": "off",
         "noImgElement": "off",
-        "noBarrelFile": "off"
+        "noBarrelFile": "off",
+        "noDelete": "off"
       },
       "suspicious": {
         "noImplicitAnyLet": "off",

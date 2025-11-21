@@ -3,10 +3,11 @@
 import { useTexture } from '@react-three/drei'
 import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useImageManipulation } from '@/components/nodes/reference-image/reference-image-node'
 import { useEditor } from '@/hooks/use-editor'
-import type { ReferenceImageNode } from '@/lib/nodes/types'
+import type { ImageNode } from '@/lib/scenegraph/schema/index'
 
 const GRID_SIZE = 30 // 30m x 30m
 
@@ -32,12 +33,17 @@ const ROTATION_HIT_SCALE = 2
 const SCALE_HIT_SCALE = 1.5
 
 interface ImageRendererProps {
-  node: ReferenceImageNode
+  nodeId: ImageNode['id']
 }
 
-export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
+const EMPTY_LEVELS: any[] = []
+
+export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
-  const texture = useTexture(node.url)
+  const node = useEditor(
+    useShallow((state) => state.graph.getNodeById(nodeId)?.data() as ImageNode | undefined),
+  )
+  const texture = useTexture(node?.url || '')
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
@@ -45,7 +51,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
   const movingCamera = useEditor((state) => state.movingCamera)
   const selectedImageIds = useEditor((state) => state.selectedImageIds)
 
-  const isSelected = selectedImageIds.includes(node.id)
+  const isSelected = selectedImageIds.includes(nodeId)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -58,14 +64,17 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
     handleTranslateXZDown,
     handleRotationDown,
     handleScaleDown,
-  } = useImageManipulation(node, groupRef, setActiveHandle)
+  } = useImageManipulation(nodeId, groupRef, setActiveHandle)
 
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
-  const levelId = useMemo(() => getLevelId(node), [getLevelId, node])
+  const levels = useEditor((state) => {
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
+  })
+  const levelId = useMemo(() => getLevelId(nodeId), [getLevelId, nodeId])
   const level = useMemo(() => levels.find((l) => l.id === levelId), [levels, levelId])
-  const levelNumber = level?.level ?? 0
+  const levelNumber = (level as any)?.level ?? 0
 
   // Track hover state for the image itself
   const [isHovered, setIsHovered] = useState(false)
@@ -132,15 +141,15 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
 
   // Convert grid position to world position
   const [worldX, worldZ] = useMemo(
-    () => [node.position[0] * TILE_SIZE, node.position[1] * TILE_SIZE],
-    [node.position],
+    () => [(node?.position?.[0] ?? 0) * TILE_SIZE, (node?.position?.[1] ?? 0) * TILE_SIZE],
+    [node?.position],
   )
 
   return (
     <group
       position={[worldX, levelNumber * FLOOR_SPACING + 0.001, worldZ]}
       ref={groupRef}
-      rotation={[0, (node.rotation * Math.PI) / 180, 0]}
+      rotation={[0, ((node?.rotationY ?? 0) * Math.PI) / 180, 0]}
     >
       {/* Image plane - rotated to lie flat on XZ plane */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
@@ -160,7 +169,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
           onPointerLeave={() => {
             setIsHovered(false)
           }}
-          scale={node.scale}
+          scale={node?.scale ?? 1}
         >
           <planeGeometry args={[planeWidth, planeHeight]} />
           <meshStandardMaterial
@@ -175,7 +184,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
                 : 0
             }
             map={texture}
-            opacity={(node.opacity ?? 100) / 100}
+            opacity={(node?.opacity ?? 100) / 100}
             polygonOffset
             polygonOffsetFactor={-1}
             polygonOffsetUnits={1}
@@ -280,7 +289,13 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
           </group>
 
           {/* Rotation handles at corners - Blue curved arrows around Y axis */}
-          <group position={[(planeWidth * node.scale) / 2, 0, (planeHeight * node.scale) / 2]}>
+          <group
+            position={[
+              (planeWidth * (node?.scale ?? 1)) / 2,
+              0,
+              (planeHeight * (node?.scale ?? 1)) / 2,
+            ]}
+          >
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -301,7 +316,13 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(planeWidth * node.scale) / 2, 0, (planeHeight * node.scale) / 2]}>
+          <group
+            position={[
+              -(planeWidth * (node?.scale ?? 1)) / 2,
+              0,
+              (planeHeight * (node?.scale ?? 1)) / 2,
+            ]}
+          >
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -322,7 +343,13 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[-(planeWidth * node.scale) / 2, 0, -(planeHeight * node.scale) / 2]}>
+          <group
+            position={[
+              -(planeWidth * (node?.scale ?? 1)) / 2,
+              0,
+              -(planeHeight * (node?.scale ?? 1)) / 2,
+            ]}
+          >
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -343,7 +370,13 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#4444ff" handleId="rotation" />
             </mesh>
           </group>
-          <group position={[(planeWidth * node.scale) / 2, 0, -(planeHeight * node.scale) / 2]}>
+          <group
+            position={[
+              (planeWidth * (node?.scale ?? 1)) / 2,
+              0,
+              -(planeHeight * (node?.scale ?? 1)) / 2,
+            ]}
+          >
             <mesh
               onPointerDown={handleRotationDown}
               onPointerEnter={() => setHoveredHandle('rotation')}
@@ -366,7 +399,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
           </group>
 
           {/* Scale handles at edge midpoints - Yellow cones pointing outward */}
-          <group position={[(planeWidth * node.scale) / 2, 0, 0]}>
+          <group position={[(planeWidth * (node?.scale ?? 1)) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown('right')}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -383,7 +416,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[-(planeWidth * node.scale) / 2, 0, 0]}>
+          <group position={[-(planeWidth * (node?.scale ?? 1)) / 2, 0, 0]}>
             <mesh
               onPointerDown={handleScaleDown('left')}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -400,7 +433,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, (planeHeight * node.scale) / 2]}>
+          <group position={[0, 0, (planeHeight * (node?.scale ?? 1)) / 2]}>
             <mesh
               onPointerDown={handleScaleDown('top')}
               onPointerEnter={() => setHoveredHandle('scale')}
@@ -417,7 +450,7 @@ export const ImageRenderer = memo(({ node }: ImageRendererProps) => {
               <HandleMaterial color="#ffff44" handleId="scale" />
             </mesh>
           </group>
-          <group position={[0, 0, -(planeHeight * node.scale) / 2]}>
+          <group position={[0, 0, -(planeHeight * (node?.scale ?? 1)) / 2]}>
             <mesh
               onPointerDown={handleScaleDown('bottom')}
               onPointerEnter={() => setHoveredHandle('scale')}

@@ -6,24 +6,8 @@ import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { SlabNode } from '@/lib/scenegraph/schema/nodes/slab'
 import { SlabRenderer } from './slab-renderer'
-
-// ============================================================================
-// SLAB RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for slab renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const SlabRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    thickness: z.number().optional(),
-  })
-  .optional()
-
-export type SlabRendererProps = z.infer<typeof SlabRendererPropsSchema>
 
 // ============================================================================
 // SLAB NODE EDITOR
@@ -33,14 +17,16 @@ export type SlabRendererProps = z.infer<typeof SlabRendererPropsSchema>
  * Slab node editor component
  * Uses useEditor hooks directly to manage slab creation via two-click area selection
  */
+const EMPTY_LEVELS: any[] = []
+
 export function SlabNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levels = useEditor((state) => {
-    const building = state.root.children[0]
-    return building ? building.children : []
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
   })
 
   // Use ref to persist state across renders without triggering re-renders
@@ -67,17 +53,16 @@ export function SlabNodeEditor() {
 
         // Create preview slab at start position with zero size initially
         const previewSlabId = addNode(
-          {
-            type: 'slab' as const,
+          SlabNode.parse({
+            type: 'slab',
             name: 'Slab Preview',
-            position: [x, y] as [number, number],
+            position: [x, y],
             rotation: 0,
-            size: [0, 0] as [number, number], // Zero size initially
-            visible: true,
-            opacity: 100,
-            preview: true,
-            children: [] as [],
-          } as any,
+            size: [0, 0], // Zero size initially
+            editor: {
+              preview: true,
+            },
+          }),
           selectedFloorId,
         )
 
@@ -89,14 +74,14 @@ export function SlabNodeEditor() {
         if (previewSlabId) {
           // Get the slab node to check if it can be placed
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const slabNode = currentLevel?.children.find((child) => child.id === previewSlabId)
+          const slabNode = currentLevel?.children.find((child: any) => child.id === previewSlabId)
 
           if (slabNode && 'canPlace' in slabNode && slabNode.canPlace === false) {
             // Slab is invalid (too small), delete it
             deleteNode(previewSlabId)
           } else {
             // Slab is valid, commit the preview by setting preview: false
-            updateNode(previewSlabId, { preview: false })
+            updateNode(previewSlabId, { editor: { preview: false } })
           }
         }
 
@@ -136,7 +121,7 @@ export function SlabNodeEditor() {
           updateNode(previewSlabId, {
             position: [slabX, slabY] as [number, number],
             size: [slabWidth, slabHeight] as [number, number],
-            canPlace,
+            editor: { canPlace, preview: true },
           })
         }
       }
@@ -166,7 +151,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'slab',
   toolIcon: Square,
-  rendererPropsSchema: SlabRendererPropsSchema,
+  schema: SlabNode,
   nodeEditor: SlabNodeEditor,
   nodeRenderer: SlabRenderer,
 })

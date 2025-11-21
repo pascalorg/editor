@@ -1,6 +1,6 @@
 import type React from 'react'
 import { z } from 'zod'
-import type { BaseNode } from './types'
+import type { BaseNode } from '../scenegraph/schema'
 
 // ============================================================================
 // COMPONENT CONFIG SCHEMA & TYPES
@@ -24,11 +24,10 @@ export const ComponentConfigSchema = z.object({
   toolName: z.string().optional(),
 
   // Tool icon component (React component type)
-  toolIcon: z.any().optional(),
+  toolIcon: z.any(),
 
-  // Zod schema for renderer component props (not the full node)
-  // This validates the props passed to the 3D renderer component
-  rendererPropsSchema: z.instanceof(z.ZodType).optional(),
+  // Zod schema for the node structure
+  schema: z.instanceof(z.ZodType).optional(),
 
   // Editor logic that maps user actions to scene graph node operations
   // This is the builder logic (add/update/delete nodes) - not a visual component
@@ -148,51 +147,7 @@ export function registerComponent(config: ComponentConfig): void {
 /**
  * Get renderer component for a node type
  */
-export function getRenderer(nodeType: string): React.FC<{ node: BaseNode }> | undefined {
+export function getRenderer(nodeType: string): React.FC<{ nodeId: BaseNode['id'] }> | undefined {
   const entry = componentRegistry.get(nodeType)
   return entry?.config.nodeRenderer
-}
-
-/**
- * Get node editor (builder logic) for a tool name
- */
-export function getNodeEditor(toolName: string): React.FC | undefined {
-  const entry = componentRegistry.getByTool(toolName)
-  return entry?.config.nodeEditor
-}
-
-/**
- * Get all building tools (for building menu)
- */
-export function getBuildingTools(): Array<{
-  nodeType: string
-  toolName: string
-  nodeName: string
-  toolIcon?: React.ComponentType
-}> {
-  const buildingComponents = componentRegistry.getByMode('building')
-  return buildingComponents
-    .filter((entry) => entry.config.toolName)
-    .map((entry) => ({
-      nodeType: entry.config.nodeType,
-      toolName: entry.config.toolName!,
-      nodeName: entry.config.nodeName,
-      toolIcon: entry.config.toolIcon,
-    }))
-}
-
-/**
- * Validate renderer props against registered schema
- */
-export function validateRendererProps(nodeType: string, props: unknown): boolean {
-  const entry = componentRegistry.get(nodeType)
-  if (!entry?.config.rendererPropsSchema) return true // No schema = always valid
-
-  try {
-    entry.config.rendererPropsSchema.parse(props)
-    return true
-  } catch (error) {
-    console.error(`[Registry] Validation failed for ${nodeType}:`, error)
-    return false
-  }
 }

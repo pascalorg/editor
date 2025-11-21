@@ -6,24 +6,8 @@ import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { WallRenderer } from './wall-renderer'
-
-// ============================================================================
-// WALL RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for wall renderer props (renderer-specific configuration)
- * The renderer receives the full node, so this is for any additional props
- */
-export const WallRendererPropsSchema = z
-  .object({
-    // Add renderer-specific props here if needed
-    // e.g., material overrides, LOD settings, etc.
-  })
-  .optional()
-
-export type WallRendererProps = z.infer<typeof WallRendererPropsSchema>
 
 // ============================================================================
 // WALL NODE EDITOR
@@ -102,19 +86,19 @@ export function WallNodeEditor() {
 
         // Create preview wall node
         const previewWallId = addNode(
-          {
+          WallNode.parse({
             type: 'wall',
             name: 'Wall Preview',
-            position: [x, y] as [number, number],
+            position: [x, y],
             rotation: 0,
-            size: [0, 0.2] as [number, number], // Zero length initially
-            start: { x, z: y },
-            end: { x, z: y },
+            size: [0, 0.2], // Zero length initially
+            start: [x, y],
+            end: [x, y],
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
-            children: [],
-          } as any,
+            editor: { preview: true },
+            children: [], // Required for WallNode schema
+          }),
           selectedFloorId,
         )
 
@@ -125,7 +109,7 @@ export function WallNodeEditor() {
 
         if (previewWallId) {
           // Commit the preview by setting preview: false (useEditor handles the conversion)
-          updateNode(previewWallId, { preview: false })
+          updateNode(previewWallId, { editor: { preview: false } })
         }
 
         // Reset state
@@ -161,8 +145,8 @@ export function WallNodeEditor() {
           updateNode(previewWallId, {
             size: [length, 0.2] as [number, number],
             rotation,
-            start: { x: x1, z: y1 },
-            end: { x: x2, z: y2 },
+            start: [x1, y1],
+            end: [x2, y2],
           })
         }
       }
@@ -192,7 +176,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'wall',
   toolIcon: Minus,
-  rendererPropsSchema: WallRendererPropsSchema,
+  schema: WallNode,
   nodeEditor: WallNodeEditor,
   nodeRenderer: WallRenderer,
 })

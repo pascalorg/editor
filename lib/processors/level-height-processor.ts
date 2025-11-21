@@ -1,16 +1,16 @@
 import { WALL_HEIGHT } from '@/components/editor'
 import { SLAB_THICKNESS } from '@/components/nodes/slab/slab-renderer'
-import type { BaseNode, LevelNode } from '../nodes/types'
+import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 // Minimum level height (in meters)
-const MIN_LEVEL_HEIGHT = 2.5
+const MIN_LEVEL_HEIGHT = WALL_HEIGHT
 
 /**
  * Gets the height of a node based on its type
  */
 // TODO: Should be generified to support custom heights per node type
-function getNodeHeight(node: BaseNode): number {
+function getNodeHeight(node: AnyNode): number {
   switch (node.type) {
     case 'wall':
     case 'column':
@@ -31,13 +31,15 @@ function getNodeHeight(node: BaseNode): number {
 /**
  * Recursively calculates the maximum height among a node and all its descendants
  */
-function getMaxHeightRecursive(node: BaseNode): number {
+function getMaxHeightRecursive(node: AnyNode): number {
   // Get this node's height + elevation
   const nodeHeight = getNodeHeight(node)
   const nodeElevation = (node as any).elevation || 0
   let maxHeight = nodeHeight + nodeElevation
 
   // Recursively check all children
+  // AnyNode union doesn't guarantee children property structure identically across all types in a simple way without narrowing
+  // But for calculation purposes we can iterate if it exists
   if ('children' in node && Array.isArray(node.children)) {
     for (const child of node.children) {
       const childMaxHeight = getMaxHeightRecursive(child)
@@ -61,27 +63,27 @@ function getMaxHeightRecursive(node: BaseNode): number {
 export class LevelHeightProcessor implements NodeProcessor {
   nodeTypes = ['level']
 
-  process(nodes: BaseNode[]): NodeProcessResult[] {
+  process(nodes: AnyNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
 
     // Process each level
     nodes.forEach((node) => {
       if (node.type !== 'level') return
 
-      const level = node as LevelNode
+      const level = node as NodeTypeMap['level']
 
       // Calculate the maximum height among all descendant nodes (recursively)
       let maxHeight = 0
 
       level.children.forEach((child) => {
-        const childMaxHeight = getMaxHeightRecursive(child)
+        const childMaxHeight = getMaxHeightRecursive(child as AnyNode)
         if (childMaxHeight > maxHeight) {
           maxHeight = childMaxHeight
         }
       })
 
       // Use minimum level height if no children or all children have zero height
-      const levelHeight = maxHeight > 0 ? maxHeight : MIN_LEVEL_HEIGHT
+      const levelHeight = Math.max(maxHeight, MIN_LEVEL_HEIGHT)
 
       results.push({
         nodeId: level.id,

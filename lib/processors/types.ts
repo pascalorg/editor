@@ -1,4 +1,4 @@
-import type { AnyNode, BaseNode } from '../nodes/types'
+import type { AnyNode } from '@/lib/scenegraph/schema/index'
 
 /**
  * Computed properties to be applied to a node
@@ -18,6 +18,6 @@ export interface NodeProcessor {
    * Process nodes and return computed properties for each
    * Returns an array of node updates to apply
    */
-  process: (nodes: BaseNode[]) => NodeProcessResult[]
+  process: (nodes: AnyNode[]) => NodeProcessResult[]
   nodeTypes: string[] // Filter for node types this processor applies to
 }

@@ -4,27 +4,11 @@ import { RectangleHorizontal } from 'lucide-react'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
-import { useEditor, type WindowNode } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { WindowNode } from '@/lib/scenegraph/schema/nodes/window'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
 import { WindowRenderer } from './window-renderer'
-
-// ============================================================================
-// WINDOW RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for window renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const WindowRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    modelScale: z.number().optional(),
-  })
-  .optional()
-
-export type WindowRendererProps = z.infer<typeof WindowRendererPropsSchema>
 
 // ============================================================================
 // WINDOW NODE EDITOR
@@ -52,7 +36,7 @@ export function WindowNodeEditor() {
     const handleWallClick = (e: WallEvent) => {
       if (previewWindow && canPlace) {
         // Commit the preview by setting preview: false (useEditor handles the conversion)
-        updateNode(previewWindow.id, { preview: false })
+        updateNode(previewWindow.id, { editor: { preview: false } })
 
         previewWindow = null
       }
@@ -75,19 +59,17 @@ export function WindowNodeEditor() {
 
         updateNode(previewWindow.id, previewWindow)
       } else {
-        previewWindow = {
+        const windowData = WindowNode.parse({
           type: 'window',
           name: 'Window Preview',
           position: [x, y],
           rotation: lastRotation,
-          size: [1, 1.2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace,
-        } as WindowNode
-        previewWindow.id = addNode(previewWindow, selectedFloorId)
+          size: [1, 1.2],
+          height: 1,
+          editor: { canPlace, preview: true },
+        })
+        previewWindow = windowData as WindowNode
+        previewWindow.id = addNode(previewWindow, selectedFloorId) as WindowNode['id']
       }
     }
 
@@ -101,22 +83,20 @@ export function WindowNodeEditor() {
       // gridPosition is already in wall's local coordinate system
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
-      previewWindow = {
-        parent: e.node.id,
+      const windowData = WindowNode.parse({
+        parentId: e.node.id,
         type: 'window',
         name: 'Window Preview',
         position: localPos, // Position RELATIVE to wall (already in wall-local coords)
         rotation: 0, // Rotation relative to wall (always 0 since window aligns with wall)
-        size: [1, 1.2] as [number, number],
-        visible: true,
-        opacity: 100,
-        preview: true,
-        children: [],
-        canPlace,
-      } as WindowNode
+        size: [1, 1.2],
+        height: 1,
+        editor: { canPlace, preview: true },
+      })
+      previewWindow = windowData as WindowNode
       canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-      previewWindow.canPlace = canPlace
-      previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
+      previewWindow.editor = { ...previewWindow.editor, canPlace }
+      previewWindow.id = addNode(previewWindow, e.node.id) as WindowNode['id'] // Parent is the wall
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -129,7 +109,7 @@ export function WindowNodeEditor() {
       }
 
       ignoreGridMove = true
-      if (previewWindow && e.node.id !== previewWindow.parent) {
+      if (previewWindow && e.node.id !== previewWindow.parentId) {
         // Wall changed, remove old preview
         deleteNode(previewWindow.id)
         previewWindow = null
@@ -143,26 +123,24 @@ export function WindowNodeEditor() {
         previewWindow.position = localPos // Position RELATIVE to wall
         previewWindow.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-        previewWindow.canPlace = canPlace
+        previewWindow.editor = { ...previewWindow.editor, canPlace }
         updateNode(previewWindow.id, previewWindow)
       } else {
-        previewWindow = {
-          parent: e.node.id,
+        const windowData = WindowNode.parse({
+          parentId: e.node.id,
           type: 'window',
           name: 'Window Preview',
           position: localPos, // Position RELATIVE to wall
           rotation: 0, // Rotation relative to wall
-          size: [1, 1.2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace: true,
-        } as WindowNode
+          size: [1, 1.2],
+          height: 1,
+          editor: { canPlace, preview: true },
+        })
+        previewWindow = windowData as WindowNode
 
         canPlace = canPlaceGridItemOnWall(e.node, previewWindow, 2)
-        previewWindow.canPlace = canPlace
-        previewWindow.id = addNode(previewWindow, e.node.id) // Parent is the wall
+        previewWindow.editor = { ...previewWindow.editor, canPlace }
+        previewWindow.id = addNode(previewWindow, e.node.id) as WindowNode['id'] // Parent is the wall
       }
     }
 
@@ -209,7 +187,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'window',
   toolIcon: RectangleHorizontal,
-  rendererPropsSchema: WindowRendererPropsSchema,
+  schema: WindowNode,
   nodeEditor: WindowNodeEditor,
   nodeRenderer: WindowRenderer,
 })

@@ -3,28 +3,12 @@
 import { BoxSelect } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
-import { GroupRenderer } from '@/components/renderer/group-renderer'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { createId } from '@/lib/utils'
-
-// ============================================================================
-// ROOM RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for room renderer props (groups)
- * These are renderer-specific properties, not the full node structure
- */
-export const RoomRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    groupType: z.string().optional(),
-  })
-  .optional()
-
-export type RoomRendererProps = z.infer<typeof RoomRendererPropsSchema>
 
 // ============================================================================
 // ROOM NODE EDITOR
@@ -34,12 +18,17 @@ export type RoomRendererProps = z.infer<typeof RoomRendererPropsSchema>
  * Room node editor component
  * Uses useEditor hooks directly to manage room creation via two-click area selection
  */
+const EMPTY_LEVELS: any[] = []
+
 export function RoomNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const levels = useEditor((state) => { const building = state.root.children[0]; return building ? building.children : [] })
+  const levels = useEditor((state) => {
+    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
+  })
 
   // Use ref to persist values across renders without triggering re-renders
   const roomStateRef = useRef<{
@@ -66,7 +55,7 @@ export function RoomNodeEditor() {
         const currentLevel = levels.find((l) => l.id === selectedFloorId)
         const existingRooms =
           currentLevel?.children.filter(
-            (child) => child.type === 'group' && (child as any).groupType === 'room',
+            (child: any) => child.type === 'group' && (child as any).groupType === 'room',
           ) || []
         const roomNumber = existingRooms.length + 1
 
@@ -79,87 +68,84 @@ export function RoomNodeEditor() {
         const rightWallId = createId('wall')
 
         const previewRoomId = addNode(
-          {
+          GroupNode.parse({
             type: 'group',
             name: `Room ${roomNumber} Preview`,
-            groupType: 'room',
-            position: [x, y] as [number, number], // Room position (bottom-left corner)
-            rotation: 0, // Rooms are always axis-aligned
-            size: [0, 0] as [number, number], // Zero size initially
+            position: [x, y], // Room position (bottom-left corner)
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
+            editor: { preview: true },
             children: [
               // Bottom wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: bottomWallId,
                 type: 'wall',
                 name: 'Wall Preview Bottom',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Right wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: rightWallId,
                 type: 'wall',
                 name: 'Wall Preview Right',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Top wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: topWallId,
                 type: 'wall',
                 name: 'Wall Preview Top',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
-              } as any,
+              }),
               // Left wall (relative position [0, 0])
-              {
+              WallNode.parse({
                 id: leftWallId,
                 type: 'wall',
                 name: 'Wall Preview Left',
-                position: [0, 0] as [number, number], // RELATIVE to room
+                position: [0, 0], // RELATIVE to room
                 rotation: 0,
-                size: [0, 0.2] as [number, number],
-                start: { x: 0, z: 0 }, // RELATIVE to room
-                end: { x: 0, z: 0 },
+                size: [0, 0.2],
+                start: [0, 0], // RELATIVE to room
+                end: [0, 0],
                 visible: true,
                 opacity: 100,
-                preview: true,
+                editor: { preview: true },
                 children: [],
-              } as any,
+              }),
             ],
-          } as any,
+          }),
           selectedFloorId,
         )
 
         // Now update each wall's parent to the actual group ID returned by addNode
-        updateNode(topWallId, { parent: previewRoomId })
-        updateNode(bottomWallId, { parent: previewRoomId })
-        updateNode(leftWallId, { parent: previewRoomId })
-        updateNode(rightWallId, { parent: previewRoomId })
+        updateNode(topWallId, { parentId: previewRoomId })
+        updateNode(bottomWallId, { parentId: previewRoomId })
+        updateNode(leftWallId, { parentId: previewRoomId })
+        updateNode(rightWallId, { parentId: previewRoomId })
 
         roomStateRef.current.previewRoomId = previewRoomId
       } else {
@@ -169,14 +155,14 @@ export function RoomNodeEditor() {
         if (previewRoomId) {
           // Get the room node to check if it can be placed
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
+          const roomNode = currentLevel?.children.find((child: any) => child.id === previewRoomId)
 
           if (roomNode && 'canPlace' in roomNode && roomNode.canPlace === false) {
             // Room is invalid (too small), delete it
             deleteNode(previewRoomId)
           } else {
             // Room is valid, commit the preview by setting preview: false
-            updateNode(previewRoomId, { preview: false })
+            updateNode(previewRoomId, { editor: { preview: false } })
           }
         }
 
@@ -217,12 +203,12 @@ export function RoomNodeEditor() {
           updateNode(previewRoomId, {
             position: [roomX, roomY] as [number, number],
             size: [roomWidth, roomHeight] as [number, number],
-            canPlace,
+            editor: { canPlace, preview: true },
           })
 
           // Get the room node and update its walls with RELATIVE positions
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
+          const roomNode = currentLevel?.children.find((child: any) => child.id === previewRoomId)
 
           if (roomNode && 'children' in roomNode && roomNode.children.length === 4) {
             const [bottomWall, rightWall, topWall, leftWall] = roomNode.children
@@ -234,9 +220,9 @@ export function RoomNodeEditor() {
               position: [0, 0] as [number, number], // RELATIVE to room
               size: [roomWidth, 0.2] as [number, number],
               rotation: bottomRotation,
-              start: { x: 0, z: 0 }, // RELATIVE to room
-              end: { x: roomWidth, z: 0 },
-              canPlace,
+              start: [0, 0], // RELATIVE to room
+              end: [roomWidth, 0],
+              editor: { canPlace, preview: true },
             })
 
             // Right wall: (roomWidth,0) -> (roomWidth,roomHeight) - vertical, going up
@@ -245,9 +231,9 @@ export function RoomNodeEditor() {
               position: [roomWidth, 0] as [number, number], // RELATIVE to room
               size: [roomHeight, 0.2] as [number, number],
               rotation: rightRotation,
-              start: { x: roomWidth, z: 0 }, // RELATIVE to room
-              end: { x: roomWidth, z: roomHeight },
-              canPlace,
+              start: [roomWidth, 0], // RELATIVE to room
+              end: [roomWidth, roomHeight],
+              editor: { canPlace, preview: true },
             })
 
             // Top wall: (roomWidth,roomHeight) -> (0,roomHeight) - horizontal, going left
@@ -256,9 +242,9 @@ export function RoomNodeEditor() {
               position: [roomWidth, roomHeight] as [number, number], // RELATIVE to room
               size: [roomWidth, 0.2] as [number, number],
               rotation: topRotation,
-              start: { x: roomWidth, z: roomHeight }, // RELATIVE to room
-              end: { x: 0, z: roomHeight },
-              canPlace,
+              start: [roomWidth, roomHeight], // RELATIVE to room
+              end: [0, roomHeight],
+              editor: { canPlace, preview: true },
             })
 
             // Left wall: (0,roomHeight) -> (0,0) - vertical, going down
@@ -267,9 +253,9 @@ export function RoomNodeEditor() {
               position: [0, roomHeight] as [number, number], // RELATIVE to room
               size: [roomHeight, 0.2] as [number, number],
               rotation: leftRotation,
-              start: { x: 0, z: roomHeight }, // RELATIVE to room
-              end: { x: 0, z: 0 },
-              canPlace,
+              start: [0, roomHeight], // RELATIVE to room
+              end: [0, 0],
+              editor: { canPlace, preview: true },
             })
           }
         }
@@ -300,7 +286,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'room',
   toolIcon: BoxSelect,
-  rendererPropsSchema: RoomRendererPropsSchema,
+  schema: GroupNode,
   nodeEditor: RoomNodeEditor,
-  nodeRenderer: GroupRenderer,
+  nodeRenderer: null,
 })

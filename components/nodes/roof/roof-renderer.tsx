@@ -4,10 +4,10 @@ import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE, WALL_HEIGHT } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import { updateNodeProperties } from '@/lib/nodes/operations'
-import type { RoofNode } from '@/lib/nodes/types'
+import type { RoofNode } from '@/lib/scenegraph/schema/index'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
@@ -79,27 +79,10 @@ const HandleMaterial = ({
 )
 
 interface RoofRendererProps {
-  node: RoofNode
-  isSelected?: boolean
-  isHovered?: boolean
-  controlMode?: string
-  movingCamera?: boolean
-  onPointerEnter?: () => void
-  onPointerLeave?: () => void
-  onClick?: (e: any) => void
+  nodeId: RoofNode['id']
 }
 
-export function RoofRenderer({
-  node,
-  isSelected = false,
-  isHovered = false,
-  controlMode = 'select',
-  movingCamera = false,
-  onPointerEnter,
-  onPointerLeave,
-  onClick,
-}: RoofRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
+export function RoofRenderer({ nodeId }: RoofRendererProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const tileSize = TILE_SIZE
   const baseHeight = WALL_HEIGHT
@@ -112,44 +95,81 @@ export function RoofRenderer({
   // Three.js scene utilities
   const { camera, gl } = useThree()
 
-  // Check if this is a preview node
-  const isPreview = node.preview === true
-
-  const levelId = useMemo(() => {
-    const id = getLevelId(node)
-    return id
-  }, [getLevelId, node])
+  const {
+    isPreview,
+    levelId,
+    nodePosition,
+    nodeVisible,
+    nodeOpacity,
+    nodeHeight,
+    nodeLeftWidth,
+    nodeRightWidth,
+    nodeSize,
+    nodeRotation,
+    isSelected,
+    movingCamera,
+    controlMode,
+  } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as RoofNode | undefined
+      return {
+        isPreview: node?.editor?.preview === true,
+        levelId: state.graph.index.byId.get(nodeId)?.levelId,
+        nodePosition: node?.position,
+        nodeVisible: node?.visible,
+        nodeOpacity: node?.opacity,
+        nodeHeight: (node as any).height ?? 2.5,
+        nodeLeftWidth: (node as any).leftWidth ?? ROOF_WIDTH / 2,
+        nodeRightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
+        nodeSize: node?.size || [0, 0],
+        nodeRotation: node?.rotation || 0,
+        isSelected: state.selectedElements.includes(nodeId),
+        movingCamera: state.movingCamera,
+        controlMode: state.controlMode,
+      }
+    }),
+  )
 
   // Roof segment with ABSOLUTE grid coordinates (for manipulation handles)
   const roofSegment = useMemo(() => {
-    const [x1, y1] = node.position
-    const length = node.size[0]
-    const x2 = x1 + Math.cos(node.rotation) * length
-    const y2 = y1 - Math.sin(node.rotation) * length
+    const [x1, y1] = nodePosition || [0, 0]
+    const length = nodeSize[0]
+    const x2 = x1 + Math.cos(nodeRotation) * length
+    const y2 = y1 - Math.sin(nodeRotation) * length
 
     return {
       start: [x1, y1] as [number, number],
       end: [x2, y2] as [number, number],
-      id: node.id,
-      height: (node as any).height ?? 2.5,
-      leftWidth: (node as any).leftWidth ?? ROOF_WIDTH / 2,
-      rightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
-      visible: node.visible ?? true,
-      opacity: node.opacity ?? 100,
+      id: nodeId,
+      height: nodeHeight,
+      leftWidth: nodeLeftWidth,
+      rightWidth: nodeRightWidth,
+      visible: nodeVisible ?? true,
+      opacity: nodeOpacity ?? 100,
     }
-  }, [node])
-
+  }, [
+    nodeHeight,
+    nodeLeftWidth,
+    nodeRightWidth,
+    nodeVisible,
+    nodeOpacity,
+    nodePosition,
+    nodeSize,
+    nodeRotation,
+    nodeId,
+  ])
   // Local segment for rendering (parent group handles position & rotation)
   const localSegment = useMemo(() => {
-    const length = node.size[0]
+    const length = nodeSize[0]
     return {
       start: [0, 0] as [number, number], // Start at origin in local space
       end: [length, 0] as [number, number], // End along local X axis
-      height: (node as any).height ?? 2.5,
-      leftWidth: (node as any).leftWidth ?? ROOF_WIDTH / 2,
-      rightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
+      height: nodeHeight,
+      leftWidth: nodeLeftWidth,
+      rightWidth: nodeRightWidth,
     }
-  }, [node])
+  }, [nodeHeight, nodeLeftWidth, nodeRightWidth, nodeSize])
 
   // Update roof segment in the store
   const updateRoofSegment = useCallback(
@@ -173,11 +193,10 @@ export function RoofRenderer({
         opacity: updatedSegment.opacity ?? 100,
       }
 
-      // TODO: Refaactor to use updateNode with command manager for undo/redo
-      // const updatedLevels = updateNodeProperties(state.levels, node.id, updates)
-      // state.updateLevels(updatedLevels) // Don't push to undo during drag - final commit handled by drag handlers
+      // Update node in store without pushing to undo stack (skipUndo=true)
+      state.updateNode(nodeId, updates, true)
     },
-    [node.id],
+    [nodeId],
   )
 
   // Handle drag for edge manipulation
@@ -350,8 +369,8 @@ export function RoofRenderer({
 
         // Record undo operation if there were changes
         if (hasChanged) {
-          // Use updateNode to record the change with command manager
-          useEditor.getState().updateNode(node.id, {
+          // Use updateNode to record the change with command manager (skipUndo=false default)
+          useEditor.getState().updateNode(nodeId, {
             position: roofSegment.start,
             size: [
               Math.sqrt(
@@ -372,7 +391,7 @@ export function RoofRenderer({
       document.addEventListener('pointerup', onPointerUp)
       gl.domElement.style.cursor = 'grabbing'
     },
-    [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id],
+    [roofSegment, camera, gl, tileSize, updateRoofSegment, nodeId],
   )
 
   // Handle rotation around base center
@@ -516,7 +535,7 @@ export function RoofRenderer({
         updateRoofSegment(snappedSegment)
 
         // Record undo operation
-        useEditor.getState().updateNode(node.id, {
+        useEditor.getState().updateNode(nodeId, {
           position: snappedSegment.start,
           size: [
             Math.sqrt(
@@ -536,7 +555,7 @@ export function RoofRenderer({
     document.addEventListener('pointermove', onPointerMove)
     document.addEventListener('pointerup', onPointerUp)
     gl.domElement.style.cursor = 'grabbing'
-  }, [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id])
+  }, [roofSegment, camera, gl, tileSize, updateRoofSegment, nodeId])
 
   // Handle translation for whole roof segment
   const handleTranslationDrag = useCallback(
@@ -635,7 +654,7 @@ export function RoofRenderer({
         // Record undo operation if there were changes
         if (hasChanged) {
           // Use updateNode to record the change with command manager
-          useEditor.getState().updateNode(node.id, {
+          useEditor.getState().updateNode(nodeId, {
             position: roofSegment.start,
             size: [
               Math.sqrt(
@@ -656,7 +675,7 @@ export function RoofRenderer({
       document.addEventListener('pointerup', onPointerUp)
       gl.domElement.style.cursor = 'grabbing'
     },
-    [roofSegment, camera, gl, tileSize, updateRoofSegment, node.id],
+    [roofSegment, camera, gl, tileSize, updateRoofSegment, nodeId],
   )
 
   // Visual states for handles
@@ -837,12 +856,8 @@ export function RoofRenderer({
   const emissive = '#8b7355'
   let emissiveIntensity = 0
 
-  if (isSelected && isHovered) {
-    emissiveIntensity = 0.6
-  } else if (isSelected) {
+  if (isSelected) {
     emissiveIntensity = 0.4
-  } else if (isHovered) {
-    emissiveIntensity = 0.3
   }
 
   const material = (
@@ -875,22 +890,22 @@ export function RoofRenderer({
   // Define horizontal edge handles
   const horizontalEdges = [
     {
-      id: `${node.id}-front`,
+      id: `${nodeId}-front`,
       edge: [roofGeometry.points.bottomLeft, roofGeometry.points.bottomRight],
       color: '#ff4444',
     },
     {
-      id: `${node.id}-right`,
+      id: `${nodeId}-right`,
       edge: [roofGeometry.points.bottomRight, roofGeometry.points.bottomRightEnd],
       color: '#44ff44',
     },
     {
-      id: `${node.id}-back`,
+      id: `${nodeId}-back`,
       edge: [roofGeometry.points.bottomRightEnd, roofGeometry.points.bottomLeftEnd],
       color: '#4444ff',
     },
     {
-      id: `${node.id}-left`,
+      id: `${nodeId}-left`,
       edge: [roofGeometry.points.bottomLeftEnd, roofGeometry.points.bottomLeft],
       color: '#ffff44',
     },
@@ -924,7 +939,7 @@ export function RoofRenderer({
   ]
   const arcAngle = Math.PI / 2
   const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
-  const rotationHandleId = `${node.id}-rotation`
+  const rotationHandleId = `${nodeId}-rotation`
 
   return (
     <group>
@@ -1065,31 +1080,6 @@ export function RoofRenderer({
           <mesh
             castShadow
             geometry={roofGeometry.frontGable}
-            onClick={(e) => {
-              if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-                return
-              }
-              e.stopPropagation()
-              onClick?.(e)
-            }}
-            onPointerDown={(e) => {
-              if (movingCamera || controlMode === 'delete') {
-                return
-              }
-              e.stopPropagation()
-            }}
-            onPointerEnter={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerEnter?.()
-              }
-            }}
-            onPointerLeave={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerLeave?.()
-              }
-            }}
             receiveShadow
           >
             {material}
@@ -1099,25 +1089,6 @@ export function RoofRenderer({
           <mesh
             castShadow
             geometry={roofGeometry.backGable}
-            onClick={(e) => {
-              if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-                return
-              }
-              e.stopPropagation()
-              onClick?.(e)
-            }}
-            onPointerEnter={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerEnter?.()
-              }
-            }}
-            onPointerLeave={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerLeave?.()
-              }
-            }}
             receiveShadow
           >
             {material}
@@ -1127,25 +1098,6 @@ export function RoofRenderer({
           <mesh
             castShadow
             geometry={roofGeometry.leftRoof}
-            onClick={(e) => {
-              if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-                return
-              }
-              e.stopPropagation()
-              onClick?.(e)
-            }}
-            onPointerEnter={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerEnter?.()
-              }
-            }}
-            onPointerLeave={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerLeave?.()
-              }
-            }}
             receiveShadow
           >
             {material}
@@ -1155,25 +1107,6 @@ export function RoofRenderer({
           <mesh
             castShadow
             geometry={roofGeometry.rightRoof}
-            onClick={(e) => {
-              if (movingCamera || controlMode === 'delete' || controlMode === 'guide') {
-                return
-              }
-              e.stopPropagation()
-              onClick?.(e)
-            }}
-            onPointerEnter={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerEnter?.()
-              }
-            }}
-            onPointerLeave={(e) => {
-              if (controlMode !== 'delete' && !movingCamera) {
-                e.stopPropagation()
-                onPointerLeave?.()
-              }
-            }}
             receiveShadow
           >
             {material}
@@ -1311,7 +1244,7 @@ export function RoofRenderer({
 
               {/* Ridge handle */}
               {(() => {
-                const ridgeId = `${node.id}-ridge`
+                const ridgeId = `${nodeId}-ridge`
                 const ridgeMidX =
                   (roofGeometry.points.ridgeStart[0] + roofGeometry.points.ridgeEnd[0]) / 2
                 const ridgeMidY =
@@ -1412,7 +1345,7 @@ export function RoofRenderer({
 
               {/* Translation handles */}
               <group
-                key={`${node.id}-translation`}
+                key={`${nodeId}-translation`}
                 position={[centerX, 0, centerZ]}
                 rotation={[0, -ridgeAngle, 0]}
               >
@@ -1422,12 +1355,10 @@ export function RoofRenderer({
                     onPointerDown={(e) => {
                       if (e.button !== 0 || movingCamera || isDragging) return
                       e.stopPropagation()
-                      setActiveHandle(`${node.id}-translate-xz`)
+                      setActiveHandle(`${nodeId}-translate-xz`)
                       handleTranslationDrag('xz')
                     }}
-                    onPointerEnter={() =>
-                      !isDragging && setHoveredHandle(`${node.id}-translate-xz`)
-                    }
+                    onPointerEnter={() => !isDragging && setHoveredHandle(`${nodeId}-translate-xz`)}
                     onPointerLeave={() => !isDragging && setHoveredHandle(null)}
                     position={[0, 0, 0]}
                     renderOrder={1000}
@@ -1441,8 +1372,8 @@ export function RoofRenderer({
                     />
                     <HandleMaterial
                       color="white"
-                      emissiveIntensity={getHandleEmissiveIntensity(`${node.id}-translate-xz`)}
-                      opacity={getHandleOpacity(`${node.id}-translate-xz`)}
+                      emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-xz`)}
+                      opacity={getHandleOpacity(`${nodeId}-translate-xz`)}
                     />
                   </mesh>
                 </group>
@@ -1453,11 +1384,11 @@ export function RoofRenderer({
                     onPointerDown={(e) => {
                       if (e.button !== 0 || movingCamera || isDragging) return
                       e.stopPropagation()
-                      setActiveHandle(`${node.id}-translate-ridge`)
+                      setActiveHandle(`${nodeId}-translate-ridge`)
                       handleTranslationDrag('ridge')
                     }}
                     onPointerEnter={() =>
-                      !isDragging && setHoveredHandle(`${node.id}-translate-ridge`)
+                      !isDragging && setHoveredHandle(`${nodeId}-translate-ridge`)
                     }
                     onPointerLeave={() => !isDragging && setHoveredHandle(null)}
                     position={[transArrowHitPos, 0, 0]}
@@ -1477,8 +1408,8 @@ export function RoofRenderer({
                     />
                     <HandleMaterial
                       color="#44ff44"
-                      emissiveIntensity={getHandleEmissiveIntensity(`${node.id}-translate-ridge`)}
-                      opacity={getHandleOpacity(`${node.id}-translate-ridge`)}
+                      emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-ridge`)}
+                      opacity={getHandleOpacity(`${nodeId}-translate-ridge`)}
                     />
                   </mesh>
                   <mesh
@@ -1489,8 +1420,8 @@ export function RoofRenderer({
                     <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
                     <HandleMaterial
                       color="#44ff44"
-                      emissiveIntensity={getHandleEmissiveIntensity(`${node.id}-translate-ridge`)}
-                      opacity={getHandleOpacity(`${node.id}-translate-ridge`)}
+                      emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-ridge`)}
+                      opacity={getHandleOpacity(`${nodeId}-translate-ridge`)}
                     />
                   </mesh>
                 </group>
@@ -1501,11 +1432,11 @@ export function RoofRenderer({
                     onPointerDown={(e) => {
                       if (e.button !== 0 || movingCamera || isDragging) return
                       e.stopPropagation()
-                      setActiveHandle(`${node.id}-translate-perp`)
+                      setActiveHandle(`${nodeId}-translate-perp`)
                       handleTranslationDrag('perp')
                     }}
                     onPointerEnter={() =>
-                      !isDragging && setHoveredHandle(`${node.id}-translate-perp`)
+                      !isDragging && setHoveredHandle(`${nodeId}-translate-perp`)
                     }
                     onPointerLeave={() => !isDragging && setHoveredHandle(null)}
                     position={[0, 0, transArrowHitPos]}
@@ -1525,8 +1456,8 @@ export function RoofRenderer({
                     />
                     <HandleMaterial
                       color="#ff4444"
-                      emissiveIntensity={getHandleEmissiveIntensity(`${node.id}-translate-perp`)}
-                      opacity={getHandleOpacity(`${node.id}-translate-perp`)}
+                      emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
+                      opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
                   </mesh>
                   <mesh
@@ -1537,8 +1468,8 @@ export function RoofRenderer({
                     <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
                     <HandleMaterial
                       color="#ff4444"
-                      emissiveIntensity={getHandleEmissiveIntensity(`${node.id}-translate-perp`)}
-                      opacity={getHandleOpacity(`${node.id}-translate-perp`)}
+                      emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
+                      opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
                   </mesh>
                 </group>

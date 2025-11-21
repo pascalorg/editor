@@ -4,27 +4,11 @@ import { DoorOpen } from 'lucide-react'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
-import { type DoorNode, useEditor } from '@/hooks/use-editor'
+import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
+import { DoorNode } from '@/lib/scenegraph/schema/nodes/door'
 import { canPlaceGridItemOnWall } from '@/lib/utils'
 import { DoorRenderer } from './door-renderer'
-
-// ============================================================================
-// DOOR RENDERER PROPS SCHEMA
-// ============================================================================
-
-/**
- * Zod schema for door renderer props
- * These are renderer-specific properties, not the full node structure
- */
-export const DoorRendererPropsSchema = z
-  .object({
-    // Optional renderer configuration
-    modelScale: z.number().optional(),
-  })
-  .optional()
-
-export type DoorRendererProps = z.infer<typeof DoorRendererPropsSchema>
 
 // ============================================================================
 // DOOR NODE EDITOR
@@ -52,7 +36,7 @@ export function DoorNodeEditor() {
     const handleWallClick = (e: WallEvent) => {
       if (previewDoor && canPlace) {
         // Commit the preview by setting preview: false (useEditor handles the conversion)
-        updateNode(previewDoor.id, { preview: false })
+        updateNode(previewDoor.id, { editor: { preview: false } })
 
         previewDoor = null
       }
@@ -75,22 +59,19 @@ export function DoorNodeEditor() {
 
         updateNode(previewDoor.id, previewDoor)
       } else {
-        previewDoor = {
+        const doorData = DoorNode.parse({
           type: 'door',
           name: 'Door Preview',
           position: [x, y],
           rotation: 0,
-          size: [1, 2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace,
-        } as DoorNode
+          size: [1, 2],
+          editor: { preview: true, canPlace },
+        })
+        previewDoor = doorData as DoorNode
         previewDoor.id = addNode(
           previewDoor,
           selectedFloorId, // Parent is either wall or level
-        )
+        ) as DoorNode['id']
       }
     }
 
@@ -104,25 +85,18 @@ export function DoorNodeEditor() {
       // gridPosition is already in wall's local coordinate system
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
-      previewDoor = {
-        parent: e.node.id,
+      const doorData = DoorNode.parse({
+        parentId: e.node.id,
         type: 'door',
         name: 'Door Preview',
         position: localPos, // Position RELATIVE to wall (already in wall-local coords)
         rotation: 0, // Rotation relative to wall (always 0 since door aligns with wall)
-        size: [1, 2] as [number, number],
-        visible: true,
-        opacity: 100,
-        preview: true,
-        children: [],
-        canPlace,
-      } as DoorNode
+        size: [1, 2],
+        editor: { preview: true, canPlace },
+      })
+      previewDoor = doorData as DoorNode
       canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-      previewDoor.canPlace = canPlace
-      previewDoor.id = addNode(
-        previewDoor,
-        e.node.id, // Parent is the wall
-      )
+      previewDoor.id = addNode(previewDoor, e.node.id) as DoorNode['id']
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -135,7 +109,7 @@ export function DoorNodeEditor() {
       }
 
       ignoreGridMove = true
-      if (previewDoor && e.node.id !== previewDoor.parent) {
+      if (previewDoor && e.node.id !== previewDoor.parentId) {
         // Wall changed, remove old preview
         deleteNode(previewDoor.id)
         previewDoor = null
@@ -149,29 +123,26 @@ export function DoorNodeEditor() {
         previewDoor.position = localPos // Position RELATIVE to wall
         previewDoor.rotation = 0
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-        previewDoor.canPlace = canPlace
+        previewDoor.editor = { ...previewDoor.editor, canPlace }
         updateNode(previewDoor.id, previewDoor)
       } else {
-        previewDoor = {
-          parent: e.node.id,
+        const doorData = DoorNode.parse({
+          parentId: e.node.id,
           type: 'door',
           name: 'Door Preview',
           position: localPos, // Position RELATIVE to wall
           rotation: 0, // Rotation relative to wall
-          size: [1, 2] as [number, number],
-          visible: true,
-          opacity: 100,
-          preview: true,
-          children: [],
-          canPlace: true,
-        } as DoorNode
+          size: [1, 2],
+          editor: { preview: true, canPlace },
+        })
+        previewDoor = doorData as DoorNode
 
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
-        previewDoor.canPlace = canPlace
+        previewDoor.editor = { ...previewDoor.editor, canPlace }
         previewDoor.id = addNode(
           previewDoor,
           e.node.id, // Parent is the wall
-        )
+        ) as DoorNode['id']
       }
     }
 
@@ -218,7 +189,7 @@ registerComponent({
   editorMode: 'building',
   toolName: 'door',
   toolIcon: DoorOpen,
-  rendererPropsSchema: DoorRendererPropsSchema,
+  schema: DoorNode,
   nodeEditor: DoorNodeEditor,
   nodeRenderer: DoorRenderer,
 })

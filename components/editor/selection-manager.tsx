@@ -2,6 +2,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
+import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
 
 function SelectionManager() {
   const handleElementSelect = useEditor((state) => state.handleElementSelect)
@@ -98,7 +99,7 @@ function SelectionManager() {
       if (candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
-        handleElementSelect(topCandidate.nodeId, event)
+        handleElementSelect(topCandidate.nodeId as AnyNodeId, event)
       }
     }
 

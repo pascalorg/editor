@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from 'clsx'
 import { customAlphabet } from 'nanoid'
 import { twMerge } from 'tailwind-merge'
-import type { WallNode } from './nodes/types'
+import type { WallNode } from '@/lib/scenegraph/schema/index'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -71,7 +71,7 @@ export function canPlaceGridItemOnWall(
   // Check for overlaps with existing doors/windows on the wall
   for (const child of wall.children) {
     // Skip preview nodes
-    if (child.preview) continue
+    if (child.editor?.preview) continue
 
     // Children are also in wall-local coordinates
     const childCenter = child.position

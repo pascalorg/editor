@@ -1,4 +1,4 @@
-import type { BaseNode } from '@/lib/nodes/types'
+import type { AnyNode, SceneNode } from '@/lib/scenegraph/schema/index'
 
 /**
  * Bounding box in 2D space (X, Z coordinates)
@@ -10,13 +10,15 @@ export interface BoundingBox {
   maxZ: number
 }
 
+type NodeProvider = (id: string) => SceneNode | null
+
 /**
  * Calculate absolute world position by traversing parent chain
  * Accumulates parent positions up to the root (level)
  */
 function calculateAbsolutePosition(
-  node: BaseNode,
-  nodeIndex: Map<string, BaseNode>,
+  node: SceneNode,
+  getNode: NodeProvider,
 ): [number, number] | null {
   // For nodes without position
   if (!('position' in node && Array.isArray(node.position))) {
@@ -26,9 +28,9 @@ function calculateAbsolutePosition(
   let [absoluteX, absoluteZ] = node.position as [number, number]
 
   // Traverse up parent chain and accumulate positions
-  let currentNode: BaseNode = node
-  while (currentNode.parent) {
-    const parent = nodeIndex.get(currentNode.parent)
+  let currentNode: SceneNode = node
+  while (currentNode.parentId) {
+    const parent = getNode(currentNode.parentId)
     if (!parent) break
 
     if ('position' in parent && Array.isArray(parent.position)) {
@@ -48,16 +50,16 @@ function calculateAbsolutePosition(
  */
 function calculateAbsolutePoint(
   point: { x: number; z: number },
-  node: BaseNode,
-  nodeIndex: Map<string, BaseNode>,
+  node: SceneNode,
+  getNode: NodeProvider,
 ): { x: number; z: number } {
   let absoluteX = point.x
   let absoluteZ = point.z
 
   // Traverse up parent chain and accumulate positions
-  let currentNode: BaseNode = node
-  while (currentNode.parent) {
-    const parent = nodeIndex.get(currentNode.parent)
+  let currentNode: SceneNode = node
+  while (currentNode.parentId) {
+    const parent = getNode(currentNode.parentId)
     if (!parent) break
 
     if ('position' in parent && Array.isArray(parent.position)) {
@@ -77,19 +79,20 @@ function calculateAbsolutePoint(
  * Uses absolute world coordinates by traversing parent chain
  * Returns null for nodes that don't have spatial bounds (like levels)
  */
-export function calculateNodeBounds(
-  node: BaseNode,
-  nodeIndex: Map<string, BaseNode>,
-): BoundingBox | null {
+export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): BoundingBox | null {
   const type = node.type as string
 
   switch (type) {
     case 'wall': {
       const wallNode = node as any
       if (wallNode.start && wallNode.end) {
+        // Convert tuple [x, z] to object { x, z } for calculateAbsolutePoint
+        const startPoint = { x: wallNode.start[0], z: wallNode.start[1] }
+        const endPoint = { x: wallNode.end[0], z: wallNode.end[1] }
+
         // Calculate absolute positions for start and end (in case wall is nested)
-        const absoluteStart = calculateAbsolutePoint(wallNode.start, node, nodeIndex)
-        const absoluteEnd = calculateAbsolutePoint(wallNode.end, node, nodeIndex)
+        const absoluteStart = calculateAbsolutePoint(startPoint, node, getNode)
+        const absoluteEnd = calculateAbsolutePoint(endPoint, node, getNode)
 
         const minX = Math.min(absoluteStart.x, absoluteEnd.x)
         const maxX = Math.max(absoluteStart.x, absoluteEnd.x)
@@ -103,7 +106,7 @@ export function calculateNodeBounds(
     case 'slab': {
       const slabNode = node as any
       if (slabNode.size) {
-        const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+        const absolutePos = calculateAbsolutePosition(node, getNode)
         if (!absolutePos) return null
 
         const [x, z] = absolutePos
@@ -119,7 +122,7 @@ export function calculateNodeBounds(
     }
 
     case 'column': {
-      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      const absolutePos = calculateAbsolutePosition(node, getNode)
       if (!absolutePos) return null
 
       const [x, z] = absolutePos
@@ -134,7 +137,7 @@ export function calculateNodeBounds(
 
     case 'door':
     case 'window': {
-      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      const absolutePos = calculateAbsolutePosition(node, getNode)
       if (!absolutePos) return null
 
       const openingNode = node as any
@@ -157,7 +160,7 @@ export function calculateNodeBounds(
 
     case 'reference-image':
     case 'scan': {
-      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      const absolutePos = calculateAbsolutePosition(node, getNode)
       if (!absolutePos) return null
 
       const mediaNode = node as any
@@ -173,7 +176,7 @@ export function calculateNodeBounds(
     }
 
     case 'item': {
-      const absolutePos = calculateAbsolutePosition(node, nodeIndex)
+      const absolutePos = calculateAbsolutePosition(node, getNode)
       if (!absolutePos) return null
 
       const itemNode = node as any
@@ -252,14 +255,9 @@ export class SpatialGrid {
    * Add or update a node in the spatial grid
    * Automatically handles moving nodes between cells
    */
-  updateNode(
-    nodeId: string,
-    levelId: string,
-    node: BaseNode,
-    nodeIndex: Map<string, BaseNode>,
-  ): void {
+  updateNode(nodeId: string, levelId: string, node: SceneNode, getNode: NodeProvider): void {
     // Calculate bounds for this node (using absolute world coordinates)
-    const bounds = calculateNodeBounds(node, nodeIndex)
+    const bounds = calculateNodeBounds(node, getNode)
     if (!bounds) {
       // Node doesn't have spatial bounds, skip
       return

@@ -5,42 +5,15 @@ import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { emitter } from '@/events/bus'
-import { useEditor, type WallSegment } from '@/hooks/use-editor'
-import { useWalls } from '@/hooks/use-nodes'
+import { useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '..'
 
 const GRID_SIZE = 30 // 30m x 30m
 
 export const GridTiles = memo(() => {
-  const activeTool = useEditor((state) => state.activeTool)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const meshRef = useRef<THREE.Mesh>(null)
 
-  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastClickTimeRef = useRef<number>(0)
-
-  // Get all wall nodes for the active floor (needed for room and custom-room modes)
-  const wallNodes = useWalls(selectedFloorId || '')
-  const allWallSegments: WallSegment[] = useMemo(
-    () =>
-      wallNodes.map((node) => {
-        const [x1, y1] = node.position
-        const length = node.size[0]
-        const rotation = node.rotation
-        const x2 = x1 + Math.cos(rotation) * length
-        const y2 = y1 + Math.sin(rotation) * length
-
-        return {
-          id: node.id,
-          start: [x1, y1],
-          end: [x2, y2],
-          isHorizontal: Math.abs(Math.sin(rotation)) < 0.1,
-          visible: node.visible ?? true,
-          opacity: node.opacity ?? 100,
-        }
-      }),
-    [wallNodes],
-  )
 
   const gridSize = (GRID_INTERSECTIONS - 1) * TILE_SIZE
   const hoveredIntersection = useRef<{ x: number; y: number } | null>(null)
@@ -160,6 +133,9 @@ export const GridTiles = memo(() => {
 
   const handlePointerUp = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      if (useEditor.getState().controlMode === 'building') {
+        return
+      }
       if (e.button === 2) {
         const now = Date.now()
         const timeHeld = now - rightClickDownAt.current

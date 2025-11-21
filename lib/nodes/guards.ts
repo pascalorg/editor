@@ -5,23 +5,32 @@
  * different node types at runtime.
  */
 
+import type { GridItem } from '@/lib/scenegraph/common-types'
 import type {
   AnyNode,
-  BaseNode,
-  BuildingElementNode,
   ColumnNode,
   DoorNode,
-  GridItem,
-  GridNode,
   GroupNode,
   LevelNode,
-  ReferenceImageNode,
+  ImageNode as ReferenceImageNode,
   RoofNode,
-  RoofSegmentNode,
   ScanNode,
+  BaseNode as SchemaBaseNode,
   WallNode,
   WindowNode,
-} from './types'
+} from '@/lib/scenegraph/schema/index'
+
+export interface BaseNode {
+  id: string
+  type: string
+  name?: string
+  children?: any[]
+  [key: string]: any
+}
+
+export type GridNode = BaseNode & GridItem
+
+export type BuildingElementNode = WallNode | DoorNode | WindowNode | ColumnNode | RoofNode
 
 // ============================================================================
 // BASE TYPE GUARDS
@@ -38,10 +47,10 @@ export function isNode(value: unknown): value is BaseNode {
     'type' in value &&
     'name' in value &&
     'children' in value &&
-    typeof (value as BaseNode).id === 'string' &&
-    typeof (value as BaseNode).type === 'string' &&
-    typeof (value as BaseNode).name === 'string' &&
-    Array.isArray((value as BaseNode).children)
+    typeof (value as any).id === 'string' &&
+    typeof (value as any).type === 'string' &&
+    typeof (value as any).name === 'string' &&
+    Array.isArray((value as any).children)
   )
 }
 
@@ -69,7 +78,7 @@ export function isGridNode(node: BaseNode): node is GridNode {
  * Check if node is a LevelNode
  */
 export function isLevelNode(node: BaseNode): node is LevelNode {
-  return node.type === 'level' && 'level' in node && typeof (node as LevelNode).level === 'number'
+  return node.type === 'level' && 'level' in node && typeof (node as any).level === 'number'
 }
 
 /**
@@ -108,18 +117,6 @@ export function isRoofNode(node: BaseNode): node is RoofNode {
 }
 
 /**
- * Check if node is a RoofSegmentNode
- */
-export function isRoofSegmentNode(node: BaseNode): node is RoofSegmentNode {
-  return (
-    node.type === 'roof-segment' &&
-    isGridNode(node) &&
-    'height' in node &&
-    typeof (node as RoofSegmentNode).height === 'number'
-  )
-}
-
-/**
  * Check if node is a ReferenceImageNode
  */
 export function isReferenceImageNode(node: BaseNode): node is ReferenceImageNode {
@@ -128,8 +125,8 @@ export function isReferenceImageNode(node: BaseNode): node is ReferenceImageNode
     isGridNode(node) &&
     'url' in node &&
     'scale' in node &&
-    typeof (node as ReferenceImageNode).url === 'string' &&
-    typeof (node as ReferenceImageNode).scale === 'number'
+    typeof (node as any).url === 'string' &&
+    typeof (node as any).scale === 'number'
   )
 }
 
@@ -142,8 +139,8 @@ export function isScanNode(node: BaseNode): node is ScanNode {
     isGridNode(node) &&
     'url' in node &&
     'scale' in node &&
-    typeof (node as ScanNode).url === 'string' &&
-    typeof (node as ScanNode).scale === 'number'
+    typeof (node as any).url === 'string' &&
+    typeof (node as any).scale === 'number'
   )
 }
 
@@ -167,8 +164,7 @@ export function isBuildingElementNode(node: BaseNode): node is BuildingElementNo
     isDoorNode(node) ||
     isWindowNode(node) ||
     isColumnNode(node) ||
-    isRoofNode(node) ||
-    isRoofSegmentNode(node)
+    isRoofNode(node)
   )
 }
 
@@ -270,87 +266,10 @@ export function canBeChildOf(child: BaseNode, parent: BaseNode): boolean {
     return isWallChildNode(child)
   }
 
-  if (isRoofNode(parent)) {
-    return isRoofSegmentNode(child)
-  }
-
   if (isGroupNode(parent)) {
     return isBuildingElementNode(child) || isGroupNode(child)
   }
 
   // Other nodes don't have children
   return false
-}
-
-/**
- * Validate entire node tree structure
- */
-export function validateNodeTree(node: BaseNode): boolean {
-  // Validate current node
-  if (!validateNode(node)) {
-    return false
-  }
-
-  // Validate children
-  for (const child of node.children) {
-    // Check child is valid
-    if (!validateNode(child)) {
-      return false
-    }
-
-    // Check child can be a child of this node
-    if (!canBeChildOf(child, node)) {
-      return false
-    }
-
-    // Check parent reference matches
-    if (child.parent && child.parent !== node.id) {
-      return false
-    }
-
-    // Recursively validate child tree
-    if (!validateNodeTree(child)) {
-      return false
-    }
-  }
-
-  return true
-}
-
-// ============================================================================
-// TYPE ASSERTION HELPERS
-// ============================================================================
-
-/**
- * Assert that a value is a node, throws if not
- */
-export function assertNode(value: unknown): asserts value is BaseNode {
-  if (!isNode(value)) {
-    throw new Error('Value is not a valid node')
-  }
-}
-
-/**
- * Assert that a node is of a specific type, throws if not
- */
-export function assertNodeType<T extends BaseNode>(
-  node: BaseNode,
-  type: string,
-  guard: (node: BaseNode) => node is T,
-): asserts node is T {
-  if (!guard(node)) {
-    throw new Error(`Node ${node.id} is not of type ${type}`)
-  }
-}
-
-/**
- * Get typed node or throw error
- */
-export function getTypedNode<T extends BaseNode>(
-  node: BaseNode,
-  guard: (node: BaseNode) => node is T,
-  typeName: string,
-): T {
-  assertNodeType(node, typeName, guard)
-  return node
 }
