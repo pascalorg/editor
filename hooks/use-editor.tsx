@@ -230,7 +230,7 @@ export type Tool =
   | 'column'
   | 'slab'
   | 'item'
-  | 'dummy2'
+  | 'stair'
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 export type CameraMode = 'perspective' | 'orthographic'

@@ -4,162 +4,86 @@ alwaysApply: true
 
 # Building Editor - Project Documentation
 
-## Overview
+## 1. Overview
 
-3D building/floor plan editor built with Next.js, React Three Fiber, and Zustand. Users create multi-floor layouts by placing walls/doors/windows/roofs on a grid, similar to The Sims build mode. Includes read-only **Viewer mode** for presentation.
+3D building/floor plan editor built with Next.js, React Three Fiber, and Zustand. Users create multi-floor layouts by placing walls/doors/windows/roofs on a grid, similar to The Sims build mode. Includes a read-only **Viewer mode** for presentation.
 
-## Technology Stack
+## 2. Technology Stack
 
-### Core
-- **Next.js 16** (App Router) with **React 19** and **TypeScript**
-- **Bun** for package management
+- **Core**: Next.js 16 (App Router), React 19, TypeScript, Bun.
+- **3D**: Three.js, React Three Fiber (R3F), @react-three/drei, @react-spring/three.
+- **State**: Zustand (with localStorage & IndexedDB persistence), Immer.
+- **UI**: Tailwind CSS 4, Shadcn UI, Radix UI, Lucide/Phosphor Icons.
+- **Dev Tools**: Biome (linting/formatting), React Scan.
 
-### 3D Rendering
-- **Three.js** + **React Three Fiber (R3F)** - Declarative 3D scene management
-- **@react-three/drei** - Camera controls, helpers, environment presets
-- **@react-spring/three** - Smooth physics-based animations
+## 3. Architecture & Core Systems
 
-### State & Persistence
-- **Zustand** - Lightweight store with localStorage persistence, undo/redo stacks
-- **IndexedDB** - Large file storage (reference images)
+### Scene Graph (`@lib/scenegraph`)
+The project leverages a strict node-based architecture.
+- **Schema**: Zod schemas definition (`lib/scenegraph/schema`).
+- **Hierarchy**: `Root` -> `Site` -> `Building` -> `Level` -> `Nodes` (Wall, Slab, etc.).
+- **SceneGraph Class**: Wraps raw JSON state, provides O(1) indexing (`byId`, `byType`, `byLevel`), and returns `SceneNodeHandle` objects for safe interaction.
 
-### UI & Styling
-- **Tailwind CSS 4** - Utility-first styling
-- **Shadcn UI** + **Radix UI** - Accessible component primitives
-- **Lucide/Phosphor Icons**
+### Node Registry (`@lib/nodes/registry.ts`)
+Connects the data model to the UI. Each node type registers:
+- **Schema**: Data validation.
+- **Editor Component**: Logic for creation/manipulation (handles grid events).
+- **Renderer Component**: 3D visual representation.
+- **Metadata**: Name, tool icon, editor mode.
 
-### Development
-- **Biome** - Fast linting/formatting
-- **React Scan** - Performance monitoring
+### State Management (`hooks/use-editor.tsx`)
+Single source of truth using Zustand.
+- **Store**: Holds the `SceneGraph` instance.
+- **Mutations**: Performed via `CommandManager` (Undo/Redo support) or direct updates for previews.
+- **Persistence**: Auto-syncs to localStorage; heavy assets (images) use IndexedDB.
 
-## Project Structure
-
-```
-app/
-├── (editor)/          # Editor route with sidebar
-└── viewer/            # Read-only viewer route
-
-components/
-├── editor/            # Editor canvas, tools, grid systems, controls
-├── viewer/            # Viewer canvas and controls (read-only variants)
-├── ui/                # Shadcn/Radix UI components
-└── layers-menu.tsx    # Floor/layer management
-
-hooks/
-└── use-editor.tsx     # Zustand store (main state)
-
-lib/                   # Type definitions, utilities, validation logic
-public/models/         # 3D models (GLB)
-```
-
-## Development
-
-```bash
-bun install            # Install dependencies
-bun dev                # Start dev server (Turbopack HMR)
-bun run build          # Production build
-bun run lint           # Format with Biome
-```
-
-## Grid System
-
-### Architecture
-**Discrete intersection-based placement** (61×61 grid points, 50cm spacing) rather than continuous placement. Grid coordinates map to world coordinates (Grid Y → World Z).
-
-### Grid Types
-- **Infinite Grid**: Base floor, shader-based, fades with distance
-- **Proximity Grid**: Upper floors, dynamic bounds around elements
-- **Interactive Grid Tiles**: Single raycasting plane for click detection
-
-### Interaction
-- Raycasting from camera through cursor to grid plane
-- Smart snapping to horizontal/vertical/45° axes
-- Visual previews (green for build, red for delete)
-- Multi-floor support (stacked vs. exploded modes)
-
-### Performance
-- Single raycasting plane (not per-intersection meshes)
-- Shader-based infinite grid (no geometry)
-- Memoized components, conditional rendering
-
-## Core Architecture
+### Grid System
+- **Discrete Intersection**: 61x61 points, 50cm spacing.
+- **Coordinates**: Grid coordinates (int) map to World coordinates (float). Grid Y → World Z.
+- **Interaction**: Raycasting from camera to a single interactive plane. Smart snapping to H/V/45° axes.
 
 ### Wall Geometry
-**Mitered junctions** using 2D polygon footprints + extrusion (vs. overlapping boxes) - eliminates Z-fighting, enables GLB export. Junction detection + miter point calculation for clean wall intersections.
+- **Mitered Junctions**: Uses 2D polygon footprints + extrusion instead of overlapping boxes to prevent Z-fighting and ensure clean GLB exports.
 
-### Coordinate System
-- Grid coordinates (integer) → World coordinates (float)
-- Grid Y → World Z (ground plane)
-- Parent group offset `[-15, 0, -15]` centers grid at origin
+## 4. Development Workflow
 
-## Node-based Architecture
+### File Structure
+```
+components/
+├── editor/            # Canvas, tools, grid systems
+├── nodes/             # Node implementations (Logic + Renderers)
+│   └── [type]/        # e.g. wall/
+│       ├── [type]-node.tsx      # Editor logic
+│       └── [type]-renderer.tsx  # 3D Renderer
+└── viewer/            # Read-only viewer components
+lib/
+├── scenegraph/        # Core graph logic & schemas
+└── nodes/             # Registry & operations
+```
 
-The canonical model is a typed node tree per level with `lib/scenegraph/`
+### Adding a New Node Type
+1.  **Define Schema**: Add Zod schema in `lib/scenegraph/schema/nodes/<type>.ts`.
+2.  **Create Renderer**: Build `components/nodes/<type>/<type>-renderer.tsx`. Use `useEditor` selectors with `useShallow`.
+3.  **Create Editor**: Build `components/nodes/<type>/<type>-node.tsx`. Handle `grid:click` / `grid:move` events.
+4.  **Register**: Export and register in `components/nodes/index.ts`.
 
-## State Management
+### Best Practices
+- **Mutations**: Never mutate state directly. Use `handle.update()` or `store.addNode()`.
+- **Previews**: Use `editor: { preview: true }` for temporary nodes (excluded from Undo/Redo).
+- **Selectors**: Create specific, memoized selectors for renderers to avoid unnecessary re-renders.
+- **Type Safety**: Use `SceneNodeHandle<NodeType>` for typed access.
 
-### Zustand Store (`hooks/use-editor.tsx`)
-Single source of truth with localStorage persistence, undo/redo (snapshots of the scene graph).
+## 5. Key Workflows
 
-**Mutations**:
-- Use `lib/nodes/operations.ts` (pure) to produce new `levels`
-- Immediately rebuild `nodeIndex` (and `indexes` if used)
+### Building Mode
+- **Wall Placement**: Click start → hover preview → click end. Auto-commits to store.
+- **Tools**: Selecting a tool auto-switches `controlMode` to `building`.
+- **Previews**: Visualized in green (valid) or red (invalid).
 
-### Editor Canvas
-Multi-floor rendering with per-floor positioning. Active floor gets interactive grid + full colors, inactive floors are muted. Keyboard shortcuts for modes (V/D/B/G), undo (Cmd+Z), camera (Space).
-
-### Viewer Mode
-Read-only presentation mode. Reuses editor components with no-op handlers. Animated floor transitions (stacked ↔ exploded), camera modes (perspective ↔ orthographic), click-to-focus floors, visibility toggles. Keyboard: C (camera), L (levels), Esc (deselect).
-
-### UI & Controls
-- **Mode Menu**: Select/Delete/Building/Guide modes, color-coded
-- **Building Menu**: Tool selection, auto-switches to building mode
-- **Camera Controls**: Mode-aware mouse bindings - left-click for panning (select mode) or tool actions (other modes)
-- **Reference Images**: 3D manipulation handles in Guide mode (translate, rotate, scale)
-
-## Key Workflows
-
-### Building
-- **Wall Placement**: Click start → hover preview → click end → auto-save to store
-- **Deletion**: Click wall + right-click menu (select mode), or two-click line selection (delete mode)
-- **Reference Images**: Upload → position/rotate/scale with 3D handles in Guide mode
-
-### Modes
-- Tool selection auto-switches to building mode
-- Esc/mode change clears placement states
-- Building logic isolated to building mode
+### View Modes
+- **Editor**: Full interactivity. Active floor is fully opaque; others are muted/transparent.
+- **Viewer**: Read-only. Support for "Exploded" view (levels separated vertically) and "Stacked" view.
 
 ### Persistence
-- Auto-sync to localStorage via Zustand
-- JSON export/import for layouts
-- Undo/redo stacks (max 50 states)
-
-## Design Decisions
-
-### Sims-Inspired Choices
-- **Multi-Mode System**: Separate Select/Delete/Building modes (like The Sims) vs. single mode with modifiers - clearer mental model
-- **Intersection-Based Walls**: Line segments between grid points vs. tile fills - supports diagonals, matches real blueprints, cleaner state
-- **Smart Snapping**: Auto-snaps to H/V/45° axes - prevents messy off-axis walls, matches Sims behavior
-- **Visual Previews**: Green shadows for placement, red planes for deletion - see before committing, reduces mistakes
-- **Isometric View**: Camera at [10,10,10] polar 0-π/2 - classic Sims-style overhead perspective
-- **Viewer Mode**: Read-only presentation mode (like Sims camera mode) - showcase finished designs without editing
-
-### Technical Choices
-- **Zustand Over Context**: Better performance, built-in persistence, simpler API, undo/redo via stacks
-- **Geometric Deletion**: Line overlap detection - precisely cut/remove wall portions (like Sims demolish tool)
-- **Drei Grid + Custom Raycasting**: Drei for visuals, custom plane for clicks - Drei Grid is visual-only
-- **Memoized Components**: React.memo on GridTiles/Walls/Previews - smooth 60fps with hundreds of walls
-- **HTML Context Menu**: Overlay div vs. R3F component - reliable pointer coords
-- **Keyboard Shortcuts**: V/D/B/G/Esc/Space/Z (editor), C/L/Esc (viewer) - CAD/Sims-inspired power user workflow
-- **Versioned JSON**: Schema v2.0 with segment-based format - extensible for doors/windows/furniture
-- **Direct Manipulation Handles**: 3D gizmos for reference images - raycasting + pointer events for intuitive transformations, handles scale inversely to image scale for consistent size
-- **Mode-Aware Camera Controls**: Dynamic mouse button configuration - left-click reserved for mode actions (delete/build/guide) vs. camera panning (select), prevents conflicts between camera and tool interactions
-- **Mitered Wall Geometry**: 2D polygon footprints + extrusion vs. overlapping boxes - eliminates Z-fighting, supports proper GLB export, enables future wall features (cutouts, materials)
-- **Animated Transitions**: React Spring for smooth floor separation - enhances UX in viewer mode
-
-## Data Model
-
-### Persistence
-- Auto-sync to localStorage via Zustand middleware
-- JSON export/import
-- loads from localStorage with IndexedDB
+- **Storage**: JSON format. `use-editor.tsx` handles hydration/dehydration.
+- **Assets**: Large files (reference images) are split into a separate IndexedDB key to keep the main state lightweight.

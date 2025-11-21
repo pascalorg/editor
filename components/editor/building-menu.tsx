@@ -5,6 +5,7 @@ import {
   CylinderIcon,
   type Icon,
   LineSegmentsIcon,
+  StairsIcon,
   WallIcon,
 } from '@phosphor-icons/react'
 import { Blinds, Circle, CuboidIcon, DoorOpen, Pyramid, SofaIcon } from 'lucide-react'
@@ -27,7 +28,7 @@ export function BuildingMenu() {
     { id: 'window', icon: Blinds, label: 'Window', enabled: true },
     { id: 'column', icon: CylinderIcon, label: 'Column', enabled: true },
     { id: 'item', icon: SofaIcon, label: 'Item', enabled: true },
-    { id: 'dummy2', icon: Circle, label: 'Tool 2', enabled: false },
+    { id: 'stair', icon: StairsIcon, label: 'Stair', enabled: true },
   ]
 
   return (
