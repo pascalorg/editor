@@ -36,9 +36,11 @@ export function ItemNodeEditor() {
   const previewStateRef = useRef<{
     previewItemId: string | null
     lastPreviewPosition: [number, number] | null
+    currentRotation: number
   }>({
     previewItemId: null,
     lastPreviewPosition: null,
+    currentRotation: 0,
   })
 
   // Delete preview when selectedItem changes (user picks a different item from catalog)
@@ -51,6 +53,32 @@ export function ItemNodeEditor() {
       previewStateRef.current.lastPreviewPosition = null
     }
   }, [selectedItem.modelUrl, deleteNode])
+
+  // Right-click handler for rotation
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const previewId = previewStateRef.current.previewItemId
+      // Only handle if there's an active preview
+      if (previewId && selectedFloorId) {
+        e.preventDefault()
+        e.stopPropagation()
+
+        // Rotate by 45 degrees (Math.PI / 4 radians)
+        previewStateRef.current.currentRotation += Math.PI / 4
+
+        // Update preview with new rotation
+        updateNode(previewId, {
+          rotation: previewStateRef.current.currentRotation,
+        })
+      }
+    }
+
+    window.addEventListener('contextmenu', handleContextMenu)
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu)
+    }
+  }, [selectedFloorId, updateNode])
 
   useEffect(() => {
     const handleGridClick = (e: GridEvent) => {
@@ -71,7 +99,7 @@ export function ItemNodeEditor() {
             type: 'item' as const,
             name: `Item at ${x},${y}`,
             position: [x, y],
-            rotation: 0,
+            rotation: previewStateRef.current.currentRotation,
             size: selectedItem.size,
             visible: true,
             opacity: 100,
@@ -84,6 +112,8 @@ export function ItemNodeEditor() {
           }),
           selectedFloorId,
         )
+        // Reset rotation after placing
+        previewStateRef.current.currentRotation = 0
       }
     }
 
@@ -109,6 +139,7 @@ export function ItemNodeEditor() {
           // Update existing preview position and canPlace state
           updateNode(previewId, {
             position: [x, y] as [number, number],
+            rotation: previewStateRef.current.currentRotation,
             visible: true,
             editor: { canPlace, preview: true },
           })
@@ -119,7 +150,7 @@ export function ItemNodeEditor() {
               type: 'item' as const,
               name: 'Item Preview',
               position: [x, y] as [number, number],
-              rotation: 0,
+              rotation: previewStateRef.current.currentRotation,
               size: selectedItem.size as [number, number],
               visible: true,
               opacity: 100,

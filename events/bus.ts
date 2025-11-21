@@ -56,6 +56,7 @@ export interface ScanManipulationEvent {
 
 type EditorEvents = {
   'grid:click': GridEvent
+  'grid:rightclick': GridEvent
   'grid:move': GridEvent
   'grid:double-click': GridEvent
   'grid:enter': GridEvent

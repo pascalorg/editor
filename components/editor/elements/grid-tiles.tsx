@@ -133,6 +133,9 @@ export const GridTiles = memo(() => {
 
   const handlePointerUp = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      if (useEditor.getState().controlMode === 'building') {
+        return
+      }
       if (e.button === 2) {
         const now = Date.now()
         const timeHeld = now - rightClickDownAt.current
