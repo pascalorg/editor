@@ -157,41 +157,32 @@ export function CustomRoomNodeEditor() {
         customRoomStateRef.current.groupOrigin = [x, y] // Store group's origin
         customRoomStateRef.current.lastCursorPoint = null
 
-        // Create cursor wall (zero length initially)
-        const cursorWallId = createId('wall')
+        const cursorWall = WallNode.parse({
+          name: 'Wall Preview Cursor',
+          position: [0, 0], // Relative to group
+          rotation: 0,
+          size: [0, 0.2],
+          start: [0, 0], // Relative to group
+          end: [0, 0], // Relative to group
+          editor: { preview: true },
+        })
 
         // Create preview group at [x, y]
         // Walls inside are positioned relative to this group origin
         const groupId = addNode(
           GroupNode.parse({
-            type: 'group',
             name: 'Custom Room Preview',
             position: [x, y],
-            visible: true,
-            opacity: 100,
             editor: { preview: true },
-            children: [
-              WallNode.parse({
-                id: cursorWallId,
-                type: 'wall',
-                name: 'Wall Preview Cursor',
-                position: [0, 0], // Relative to group
-                rotation: 0,
-                size: [0, 0.2],
-                start: [0, 0], // Relative to group
-                end: [0, 0], // Relative to group
-                editor: { preview: true },
-                children: [],
-              }),
-            ],
+            children: [cursorWall],
           }),
           selectedFloorId,
         )
 
         // Update cursor wall parent
-        updateNode(cursorWallId, { parentId: groupId })
+        updateNode(cursorWall.id, { parentId: groupId })
 
-        customRoomStateRef.current.cursorWallId = cursorWallId
+        customRoomStateRef.current.cursorWallId = cursorWall.id
         customRoomStateRef.current.previewGroupId = groupId
       } else {
         // Subsequent click: update cursor wall to the click position, then finalize it
@@ -237,7 +228,6 @@ export function CustomRoomNodeEditor() {
             // Create new cursor wall starting at the point we just added (relative to group)
             const newCursorWallId = addNode(
               WallNode.parse({
-                type: 'wall',
                 name: 'Wall Preview Cursor',
                 position: [relX2, relY2],
                 rotation: 0,
