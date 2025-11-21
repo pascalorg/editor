@@ -60,14 +60,15 @@ export function DoorNodeEditor() {
 
         updateNode(previewDoor.id, previewDoor)
       } else {
-        previewDoor = {
+        const doorData = DoorNode.parse({
           type: 'door',
           name: 'Door Preview',
           position: [x, y],
           rotation: 0,
-          size: [1, 2] as [number, number],
+          size: [1, 2],
           editor: { preview: true, canPlace },
-        } as DoorNode
+        })
+        previewDoor = doorData as DoorNode
         previewDoor.id = addNode(
           previewDoor,
           selectedFloorId, // Parent is either wall or level
@@ -85,15 +86,16 @@ export function DoorNodeEditor() {
       // gridPosition is already in wall's local coordinate system
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
-      previewDoor = {
+      const doorData = DoorNode.parse({
         parentId: e.node.id,
         type: 'door',
         name: 'Door Preview',
         position: localPos, // Position RELATIVE to wall (already in wall-local coords)
         rotation: 0, // Rotation relative to wall (always 0 since door aligns with wall)
-        size: [1, 2] as [number, number],
+        size: [1, 2],
         editor: { preview: true, canPlace },
-      } as DoorNode
+      })
+      previewDoor = doorData as DoorNode
       canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
       previewDoor.id = addNode(previewDoor, e.node.id) as DoorNode['id']
     }
@@ -125,15 +127,16 @@ export function DoorNodeEditor() {
         previewDoor.editor = { ...previewDoor.editor, canPlace }
         updateNode(previewDoor.id, previewDoor)
       } else {
-        previewDoor = {
+        const doorData = DoorNode.parse({
           parentId: e.node.id,
           type: 'door',
           name: 'Door Preview',
           position: localPos, // Position RELATIVE to wall
           rotation: 0, // Rotation relative to wall
-          size: [1, 2] as [number, number],
+          size: [1, 2],
           editor: { preview: true, canPlace },
-        } as DoorNode
+        })
+        previewDoor = doorData as DoorNode
 
         canPlace = canPlaceGridItemOnWall(e.node, previewDoor, 2)
         previewDoor.editor = { ...previewDoor.editor, canPlace }

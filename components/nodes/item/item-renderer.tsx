@@ -33,7 +33,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
       return {
         nodeSize: node?.size,
         isPreview: node?.editor?.preview === true,
-        levelId: handle?.meta.levelId,
+        levelId: state.graph.index.byId.get(nodeId)?.levelId,
         canPlace: node?.editor?.canPlace !== false,
         nodePosition: node?.position,
         nodeRotation: node?.rotation,

@@ -22,7 +22,7 @@ export const DoorRenderer = memo(({ nodeId }: DoorRendererProps) => {
       return {
         isPreview: node?.editor?.preview === true,
         canPlace: node?.editor?.canPlace !== false,
-        levelId: handle?.meta.levelId,
+        levelId: state.graph.index.byId.get(nodeId)?.levelId,
         selectedFloorId: state.selectedFloorId,
       }
     }),

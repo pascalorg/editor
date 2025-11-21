@@ -55,7 +55,7 @@ export function RoomNodeEditor() {
         const currentLevel = levels.find((l) => l.id === selectedFloorId)
         const existingRooms =
           currentLevel?.children.filter(
-            (child) => child.type === 'group' && (child as any).groupType === 'room',
+            (child: any) => child.type === 'group' && (child as any).groupType === 'room',
           ) || []
         const roomNumber = existingRooms.length + 1
 
@@ -155,7 +155,7 @@ export function RoomNodeEditor() {
         if (previewRoomId) {
           // Get the room node to check if it can be placed
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
+          const roomNode = currentLevel?.children.find((child: any) => child.id === previewRoomId)
 
           if (roomNode && 'canPlace' in roomNode && roomNode.canPlace === false) {
             // Room is invalid (too small), delete it
@@ -208,7 +208,7 @@ export function RoomNodeEditor() {
 
           // Get the room node and update its walls with RELATIVE positions
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const roomNode = currentLevel?.children.find((child) => child.id === previewRoomId)
+          const roomNode = currentLevel?.children.find((child: any) => child.id === previewRoomId)
 
           if (roomNode && 'children' in roomNode && roomNode.children.length === 4) {
             const [bottomWall, rightWall, topWall, leftWall] = roomNode.children

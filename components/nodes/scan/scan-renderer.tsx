@@ -41,7 +41,8 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
 
   const { nodeUrl, levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as ScanNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as ScanNode | undefined
       return {
         nodeUrl: node?.url,
         levelId: state.getLevelId(nodeId),

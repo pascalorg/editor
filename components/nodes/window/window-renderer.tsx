@@ -18,7 +18,8 @@ export const WindowRenderer = memo(({ nodeId }: WindowRendererProps) => {
 
   const { isPreview, selectedFloorId, canPlace, levelId } = useEditor(
     useShallow((state) => {
-      const node = state.nodeIndex.get(nodeId) as WindowNode | undefined
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as WindowNode | undefined
       return {
         selectedFloorId: state.selectedFloorId,
         isPreview: node?.editor?.preview === true,

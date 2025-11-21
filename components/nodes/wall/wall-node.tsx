@@ -86,7 +86,7 @@ export function WallNodeEditor() {
 
         // Create preview wall node
         const previewWallId = addNode(
-          {
+          WallNode.parse({
             type: 'wall',
             name: 'Wall Preview',
             position: [x, y],
@@ -97,7 +97,8 @@ export function WallNodeEditor() {
             visible: true,
             opacity: 100,
             editor: { preview: true },
-          } as WallNode,
+            children: [], // Required for WallNode schema
+          }),
           selectedFloorId,
         )
 

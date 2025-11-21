@@ -115,7 +115,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
       const node = handle?.data() as RoofNode | undefined
       return {
         isPreview: node?.editor?.preview === true,
-        levelId: handle?.meta.levelId,
+        levelId: state.graph.index.byId.get(nodeId)?.levelId,
         nodePosition: node?.position,
         nodeVisible: node?.visible,
         nodeOpacity: node?.opacity,

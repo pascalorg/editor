@@ -74,7 +74,7 @@ export function SlabNodeEditor() {
         if (previewSlabId) {
           // Get the slab node to check if it can be placed
           const currentLevel = levels.find((l) => l.id === selectedFloorId)
-          const slabNode = currentLevel?.children.find((child) => child.id === previewSlabId)
+          const slabNode = currentLevel?.children.find((child: any) => child.id === previewSlabId)
 
           if (slabNode && 'canPlace' in slabNode && slabNode.canPlace === false) {
             // Slab is invalid (too small), delete it

@@ -47,7 +47,7 @@ export function RoofNodeEditor() {
 
         // Create preview roof node (zero size initially)
         const previewRoofId = addNode(
-          {
+          RoofNode.parse({
             type: 'roof',
             name: 'Roof Preview',
             position: [x, y] as [number, number],
@@ -58,9 +58,9 @@ export function RoofNodeEditor() {
             rightWidth: 0,
             visible: true,
             opacity: 100,
-            preview: true, // Mark as preview
+            editor: { preview: true }, // Mark as preview
             children: [],
-          } as any,
+          }),
           selectedFloorId,
         )
 

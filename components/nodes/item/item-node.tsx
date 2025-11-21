@@ -67,7 +67,7 @@ export function ItemNodeEditor() {
       if (canPlace) {
         // Create item node using selectedItem configuration
         addNode(
-          {
+          ItemNode.parse({
             type: 'item' as const,
             name: `Item at ${x},${y}`,
             position: [x, y],
@@ -76,12 +76,10 @@ export function ItemNodeEditor() {
             visible: true,
             opacity: 100,
             category: 'furniture',
-            modelUrl: selectedItem.modelUrl,
+            src: selectedItem.modelUrl,
             scale: selectedItem.scale,
-            modelPosition: selectedItem.position,
-            modelRotation: selectedItem.rotation,
             children: [],
-          } as any,
+          }),
           selectedFloorId,
         )
       }
@@ -110,12 +108,12 @@ export function ItemNodeEditor() {
           updateNode(previewId, {
             position: [x, y] as [number, number],
             visible: true,
-            canPlace,
-          } as any)
+            editor: { canPlace },
+          })
         } else {
           // Create new preview item using selectedItem configuration
           const newPreviewId = addNode(
-            {
+            ItemNode.parse({
               type: 'item' as const,
               name: 'Item Preview',
               position: [x, y] as [number, number],
@@ -123,15 +121,12 @@ export function ItemNodeEditor() {
               size: selectedItem.size as [number, number],
               visible: true,
               opacity: 100,
-              preview: true,
-              canPlace,
+              editor: { preview: true, canPlace },
               category: 'furniture',
-              modelUrl: selectedItem.modelUrl,
+              src: selectedItem.modelUrl,
               scale: selectedItem.scale,
-              modelPosition: selectedItem.position,
-              modelRotation: selectedItem.rotation,
               children: [] as [],
-            } as any,
+            }),
             selectedFloorId,
           )
           previewStateRef.current.previewItemId = newPreviewId

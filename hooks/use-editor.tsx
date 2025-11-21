@@ -881,8 +881,30 @@ const useStore = create<StoreState>()(
             (fromNode as any).editor?.preview === true && (updates as any).editor?.preview === false
 
           if (isCommittingPreview) {
+            // First, update the parent node
             const command = new UpdateNodeCommand(nodeId, updates)
             commandManager.execute(command, graph)
+
+            // Then recursively clear preview flag from all children
+            const updatedHandle = graph.getNodeById(nodeId as AnyNodeId)
+            if (updatedHandle) {
+              const clearPreviewFromChildren = (handle: any) => {
+                const children = handle.children()
+                for (const childHandle of children) {
+                  const child = childHandle.data()
+                  if ((child as any).editor?.preview) {
+                    const childCommand = new UpdateNodeCommand(child.id, {
+                      editor: { ...(child as any).editor, preview: false },
+                    })
+                    commandManager.execute(childCommand, graph)
+                  }
+                  // Recurse into child's children
+                  clearPreviewFromChildren(childHandle)
+                }
+              }
+              clearPreviewFromChildren(updatedHandle)
+            }
+
             return nodeId
           }
           const command = new UpdateNodeCommand(nodeId, updates)

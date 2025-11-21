@@ -371,6 +371,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as WallNode | undefined
+
       // getLevelId helper in state works with node object, but we updated it to take node
       // But store.getLevelId(node) calls graph.getNodeById.
 
