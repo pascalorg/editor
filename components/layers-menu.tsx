@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import {
   TreeExpander,
@@ -37,6 +37,21 @@ import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
 import { type AnyNodeId, LevelNode } from '@/lib/scenegraph/schema/index'
 import { cn, createId } from '@/lib/utils'
+
+// Context for layers menu interaction
+interface LayersMenuContextType {
+  handleNodeClick: (nodeId: string, hasChildren: boolean) => void
+}
+
+const LayersMenuContext = createContext<LayersMenuContextType | null>(null)
+
+function useLayersMenu() {
+  const context = useContext(LayersMenuContext)
+  if (!context) {
+    throw new Error('useLayersMenu must be used within a LayersMenu')
+  }
+  return context
+}
 
 // Helper to get icon based on node type
 function getNodeIcon(type: string): ReactNode {
@@ -121,6 +136,7 @@ interface NodeItemProps {
 }
 
 function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect }: NodeItemProps) {
+  const { handleNodeClick } = useLayersMenu()
   const { nodeType, nodeName, nodeVisible, nodeOpacity } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -153,6 +169,7 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         onClick={(e) => {
           e.stopPropagation()
           onNodeSelect(nodeId, e as React.MouseEvent)
+          handleNodeClick(nodeId, hasChildren)
         }}
       >
         <TreeExpander hasChildren={hasChildren} />
@@ -186,12 +203,18 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
 }
 
 function EnvironmentItem({ level = 1 }: { level?: number }) {
+  const { handleNodeClick } = useLayersMenu()
   const environment = useEditor(useShallow((state: StoreState) => state.scene.root.environment))
   const { indent } = useTree()
 
   return (
     <TreeNode level={level} nodeId="environment">
-      <TreeNodeTrigger>
+      <TreeNodeTrigger
+        onClick={(e) => {
+          e.stopPropagation()
+          handleNodeClick('environment', true)
+        }}
+      >
         <TreeExpander hasChildren={true} />
         <TreeIcon hasChildren={true} icon={getNodeIcon('environment')} />
         <TreeLabel>Environment</TreeLabel>
@@ -232,6 +255,7 @@ function DraggableLevelItem({
   controls,
   level,
 }: DraggableLevelItemProps) {
+  const { handleNodeClick } = useLayersMenu()
   const isLastLevel = levelIndex === levelsCount - 1
 
   const { levelVisible, levelName, levelOpacity } = useEditor(
@@ -280,54 +304,14 @@ function DraggableLevelItem({
     }),
   )
 
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const handleElementSelect = useEditor((state) => state.handleElementSelect)
-  const setControlMode = useEditor((state) => state.setControlMode)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
 
   const hasContent =
     isSelected && (childrenIds.length > 0 || guideIds.length > 0 || scanIds.length > 0)
-
-  const handleNodeSelect = (nodeId: string, event: React.MouseEvent) => {
-    // Determine node type to handle selection appropriately
-    const handle = useEditor.getState().graph.getNodeById(nodeId as AnyNodeId)
-    const node = handle?.data()
-    if (!node) return
-
-    if (node.type === 'image') {
-      // Handle image selection
-      if (event.metaKey || event.ctrlKey) {
-        if (selectedImageIds.includes(nodeId)) {
-          setSelectedImageIds(selectedImageIds.filter((id) => id !== nodeId))
-        } else {
-          setSelectedImageIds([...selectedImageIds, nodeId])
-        }
-      } else {
-        setSelectedImageIds([nodeId])
-      }
-      setControlMode('guide')
-    } else if (node.type === 'scan') {
-      // Handle scan selection
-      if (event.metaKey || event.ctrlKey) {
-        if (selectedScanIds.includes(nodeId)) {
-          setSelectedScanIds(selectedScanIds.filter((id) => id !== nodeId))
-        } else {
-          setSelectedScanIds([...selectedScanIds, nodeId])
-        }
-      } else {
-        setSelectedScanIds([nodeId])
-      }
-      setControlMode('guide')
-    } else {
-      // Handle building element selection
-      handleElementSelect(nodeId as AnyNodeId, event)
-    }
-  }
 
   return (
     <TreeNode isLast={isLastLevel} level={level} nodeId={levelId}>
@@ -337,6 +321,9 @@ function DraggableLevelItem({
           isSelected && 'sticky top-0 z-10 bg-background',
           levelVisible === false && 'opacity-50',
         )}
+        onClick={(e) => {
+          handleNodeClick(levelId, hasContent)
+        }}
       >
         <div
           className="cursor-grab touch-none p-1 hover:bg-accent active:cursor-grabbing"
@@ -359,7 +346,9 @@ function DraggableLevelItem({
         {/* 3D Objects Section */}
         {childrenIds.length > 0 && (
           <TreeNode level={level + 1} nodeId={`${levelId}-3d-objects`}>
-            <TreeNodeTrigger>
+            <TreeNodeTrigger
+              onClick={() => handleNodeClick(`${levelId}-3d-objects`, childrenIds.length > 0)}
+            >
               <TreeExpander hasChildren={childrenIds.length > 0} />
               <TreeIcon
                 hasChildren={childrenIds.length > 0}
@@ -377,7 +366,7 @@ function DraggableLevelItem({
                   level={level + 2}
                   nodeId={childId}
                   onNodeSelect={handleNodeSelect}
-                  selectedNodeIds={selectedElements}
+                  selectedNodeIds={selectedNodeIds}
                 />
               ))}
             </TreeNodeContent>
@@ -386,7 +375,10 @@ function DraggableLevelItem({
 
         {/* Guides Section */}
         <TreeNode level={level + 1} nodeId={`${levelId}-guides`}>
-          <TreeNodeTrigger className="group">
+          <TreeNodeTrigger
+            className="group"
+            onClick={() => handleNodeClick(`${levelId}-guides`, guideIds.length > 0)}
+          >
             <TreeExpander hasChildren={guideIds.length > 0} />
             <TreeIcon
               hasChildren={guideIds.length > 0}
@@ -431,7 +423,7 @@ function DraggableLevelItem({
                 level={level + 2}
                 nodeId={guideId}
                 onNodeSelect={handleNodeSelect}
-                selectedNodeIds={selectedImageIds}
+                selectedNodeIds={selectedNodeIds}
               />
             ))}
           </TreeNodeContent>
@@ -439,7 +431,10 @@ function DraggableLevelItem({
 
         {/* Scans Section */}
         <TreeNode isLast level={level + 1} nodeId={`${levelId}-scans`}>
-          <TreeNodeTrigger className="group">
+          <TreeNodeTrigger
+            className="group"
+            onClick={() => handleNodeClick(`${levelId}-scans`, scanIds.length > 0)}
+          >
             <TreeExpander hasChildren={scanIds.length > 0} />
             <TreeIcon
               hasChildren={scanIds.length > 0}
@@ -484,7 +479,7 @@ function DraggableLevelItem({
                 level={level + 2}
                 nodeId={scanId}
                 onNodeSelect={handleNodeSelect}
-                selectedNodeIds={selectedScanIds}
+                selectedNodeIds={selectedNodeIds}
               />
             ))}
           </TreeNodeContent>
@@ -507,6 +502,7 @@ function LevelReorderItem(props: LevelReorderItemProps) {
 }
 
 function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
+  const { handleNodeClick } = useLayersMenu()
   const { nodeVisible, nodeName, nodeOpacity } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -646,7 +642,7 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
 
   return (
     <TreeNode level={level} nodeId={nodeId}>
-      <TreeNodeTrigger>
+      <TreeNodeTrigger onClick={() => handleNodeClick(nodeId, levelIds.length > 0)}>
         <TreeExpander hasChildren={levelIds.length > 0} />
         <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
         <TreeLabel className="flex-1">{nodeName}</TreeLabel>
@@ -686,6 +682,7 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
 }
 
 function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
+  const { handleNodeClick } = useLayersMenu()
   const { nodeVisible, nodeName, nodeOpacity } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -707,12 +704,12 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const handleElementSelect = useEditor((state) => state.handleElementSelect)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   return (
     <TreeNode level={level} nodeId={nodeId}>
-      <TreeNodeTrigger>
+      <TreeNodeTrigger onClick={() => handleNodeClick(nodeId, childrenIds.length > 0)}>
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
         <TreeLabel>{nodeName}</TreeLabel>
@@ -737,8 +734,8 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
               key={childId}
               level={level + 1}
               nodeId={childId}
-              onNodeSelect={(id, e) => handleElementSelect(id as AnyNodeId, e)}
-              selectedNodeIds={selectedElements}
+              onNodeSelect={handleNodeSelect}
+              selectedNodeIds={selectedNodeIds}
             />
           )
         })}
@@ -766,6 +763,103 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   // Track expanded state
   const [expandedIds, setExpandedIds] = useState<string[]>([])
 
+  // Sync selection with expanded state
+  useEffect(() => {
+    if (selectedFloorId) {
+      const graph = useEditor.getState().graph
+      const handle = graph.getNodeById(selectedFloorId as AnyNodeId)
+      if (handle) {
+        const ancestors = new Set<string>()
+        let curr = handle.parent()
+        while (curr) {
+          ancestors.add(curr.id)
+          curr = curr.parent()
+        }
+
+        setExpandedIds((prev) => {
+          const next = new Set(prev)
+          ancestors.forEach((id) => {
+            next.add(id)
+          })
+          next.add(selectedFloorId)
+          return Array.from(next)
+        })
+      }
+    }
+  }, [selectedFloorId])
+
+  // Handle node click for "accordion" behavior
+  const handleNodeClick = (nodeId: string, hasChildren: boolean) => {
+    if (!hasChildren) return
+
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+
+      // Toggle current node
+      if (next.has(nodeId)) {
+        next.delete(nodeId)
+        return Array.from(next)
+      }
+
+      next.add(nodeId)
+
+      // Handle virtual nodes in Level
+      if (
+        nodeId.endsWith('-3d-objects') ||
+        nodeId.endsWith('-guides') ||
+        nodeId.endsWith('-scans')
+      ) {
+        // Extract level ID by removing the suffix
+        // Note: scan IDs might contain dashes, but the suffix is known
+        let levelId = ''
+        if (nodeId.endsWith('-3d-objects')) levelId = nodeId.slice(0, -11)
+        else if (nodeId.endsWith('-guides')) levelId = nodeId.slice(0, -7)
+        else if (nodeId.endsWith('-scans')) levelId = nodeId.slice(0, -6)
+
+        const siblings = [`${levelId}-3d-objects`, `${levelId}-guides`, `${levelId}-scans`]
+        siblings.forEach((siblingId) => {
+          if (siblingId !== nodeId) {
+            next.delete(siblingId)
+          }
+        })
+        return Array.from(next)
+      }
+
+      // Handle Environment vs Sites (Root level)
+      if (nodeId === 'environment') {
+        siteIds.forEach((id) => {
+          next.delete(id)
+        })
+        return Array.from(next)
+      }
+      if (siteIds.includes(nodeId as AnyNodeId)) {
+        next.delete('environment')
+        siteIds.forEach((id) => {
+          if (id !== nodeId) next.delete(id)
+        })
+        // Continue to graph check for children of this site?
+        // Site siblings handled here.
+      }
+
+      // Handle Graph Nodes
+      const graph = useEditor.getState().graph
+      const handle = graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        const parent = handle.parent()
+        if (parent) {
+          const siblings = parent.children()
+          siblings.forEach((sibling: SceneNodeHandle) => {
+            if (sibling.id !== nodeId) {
+              next.delete(sibling.id)
+            }
+          })
+        }
+      }
+
+      return Array.from(next)
+    })
+  }
+
   // Initialize expanded state
   const [initialized, setInitialized] = useState(false)
   useEffect(() => {
@@ -789,33 +883,35 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col px-2 py-2">
-      <div className="mb-2 flex items-center justify-between">
-        <label className="font-medium text-muted-foreground text-sm">Hierarchy</label>
-      </div>
+    <LayersMenuContext.Provider value={{ handleNodeClick }}>
+      <div className="flex flex-1 flex-col px-2 py-2">
+        <div className="mb-2 flex items-center justify-between">
+          <label className="font-medium text-muted-foreground text-sm">Hierarchy</label>
+        </div>
 
-      <div className="no-scrollbar flex-1">
-        {mounted ? (
-          <TreeProvider
-            expandedIds={expandedIds}
-            indent={16}
-            multiSelect={false}
-            onExpandedChange={setExpandedIds}
-            onSelectionChange={handleTreeSelectionChange}
-            selectedIds={selectedFloorId ? [selectedFloorId] : []}
-            showLines={true}
-          >
-            <TreeView className="p-0">
-              <EnvironmentItem level={1} />
-              {siteIds.map((siteId) => (
-                <SiteItem key={siteId} level={1} nodeId={siteId} />
-              ))}
-            </TreeView>
-          </TreeProvider>
-        ) : (
-          <div className="p-2 text-muted-foreground text-xs italic">Loading...</div>
-        )}
+        <div className="no-scrollbar flex-1">
+          {mounted ? (
+            <TreeProvider
+              expandedIds={expandedIds}
+              indent={16}
+              multiSelect={false}
+              onExpandedChange={setExpandedIds}
+              onSelectionChange={handleTreeSelectionChange}
+              selectedIds={selectedFloorId ? [selectedFloorId] : []}
+              showLines={true}
+            >
+              <TreeView className="p-0">
+                <EnvironmentItem level={1} />
+                {siteIds.map((siteId) => (
+                  <SiteItem key={siteId} level={1} nodeId={siteId} />
+                ))}
+              </TreeView>
+            </TreeProvider>
+          ) : (
+            <div className="p-2 text-muted-foreground text-xs italic">Loading...</div>
+          )}
+        </div>
       </div>
-    </div>
+    </LayersMenuContext.Provider>
   )
 }

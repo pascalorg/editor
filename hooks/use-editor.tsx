@@ -258,9 +258,7 @@ export type StoreState = {
   selectedFloorId: string | null
   viewMode: ViewMode
   viewerDisplayMode: ViewerDisplayMode
-  selectedElements: AnyNodeId[]
-  selectedImageIds: string[]
-  selectedScanIds: string[]
+  selectedNodeIds: string[]
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
@@ -294,12 +292,19 @@ export type StoreState = {
   reorderLevels: (levels: SchemaLevelNode[]) => void
   selectFloor: (floorId: string | null) => void
 
+  handleNodeSelect: (
+    nodeId: string,
+    event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
+  ) => void
+
+  // Deprecated/Compatibility aliases - mapping to handleNodeSelect/selectedNodeIds
   handleElementSelect: (
     elementId: AnyNodeId,
     event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
   ) => void
   setSelectedImageIds: (ids: string[]) => void
   setSelectedScanIds: (ids: string[]) => void
+
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
   setActiveTool: (tool: Tool | null) => void
@@ -319,6 +324,7 @@ export type StoreState = {
   getSelectedScanIdsSet: () => Set<string>
 
   handleExport: () => void
+  handleDeleteSelected: () => void
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
@@ -470,9 +476,7 @@ const useStore = create<StoreState>()(
         selectedFloorId: null,
         viewMode: 'level',
         viewerDisplayMode: 'objects',
-        selectedElements: [],
-        selectedImageIds: [],
-        selectedScanIds: [],
+        selectedNodeIds: [],
         isHelpOpen: false,
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
@@ -527,22 +531,39 @@ const useStore = create<StoreState>()(
               selectedFloorId: floorId,
               currentLevel: (level.data() as unknown as SchemaLevelNode).level,
               viewMode: 'level',
-              selectedElements: [],
+              selectedNodeIds: [],
             })
           }
         },
-        handleElementSelect: (elementId, event) => {
-          const currentSelection = get().selectedElements
-          const updatedSelection = handleSimpleClick(currentSelection, elementId, event)
-          set({ selectedElements: updatedSelection })
+        handleNodeSelect: (nodeId, event) => {
+          const currentSelection = get().selectedNodeIds
+          const updatedSelection = handleSimpleClick(
+            currentSelection as AnyNodeId[],
+            nodeId as AnyNodeId,
+            event,
+          )
+          set({ selectedNodeIds: updatedSelection })
 
-          const controlMode = get().controlMode
-          if (controlMode !== 'select') {
+          // Auto-switch control mode based on node type?
+          // For now, if we select something, we might want to switch to appropriate mode
+          // But simpler is: if not in 'select' mode, switch to 'building' (legacy logic)
+          // Or maybe 'guide' for images?
+          const state = get()
+          const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+          const node = handle?.data()
+
+          if (node?.type === 'image' || node?.type === 'scan') {
+            set({ controlMode: 'guide' })
+          } else if (state.controlMode !== 'select') {
             set({ controlMode: 'building' })
           }
         },
-        setSelectedImageIds: (ids) => set({ selectedImageIds: ids }),
-        setSelectedScanIds: (ids) => set({ selectedScanIds: ids }),
+
+        // Compatibility Wrappers
+        handleElementSelect: (elementId, event) => get().handleNodeSelect(elementId, event),
+        setSelectedImageIds: (ids) => set({ selectedNodeIds: ids }), // This overwrites selection, matching previous behavior somewhat
+        setSelectedScanIds: (ids) => set({ selectedNodeIds: ids }),
+
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
         setActiveTool: (tool) => {
@@ -575,9 +596,36 @@ const useStore = create<StoreState>()(
             levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
           })),
 
-        getSelectedElementsSet: () => new Set(get().selectedElements),
-        getSelectedImageIdsSet: () => new Set(get().selectedImageIds),
-        getSelectedScanIdsSet: () => new Set(get().selectedScanIds),
+        getSelectedElementsSet: () => {
+          const state = get()
+          const set = new Set<AnyNodeId>()
+          state.selectedNodeIds.forEach((id) => {
+            const node = state.graph.getNodeById(id as AnyNodeId)?.data()
+            // Filter out images/scans to match legacy behavior of "elements"
+            if (node && node.type !== 'image' && node.type !== 'scan') {
+              set.add(id as AnyNodeId)
+            }
+          })
+          return set
+        },
+        getSelectedImageIdsSet: () => {
+          const state = get()
+          const set = new Set<string>()
+          state.selectedNodeIds.forEach((id) => {
+            const node = state.graph.getNodeById(id as AnyNodeId)?.data()
+            if (node?.type === 'image') set.add(id)
+          })
+          return set
+        },
+        getSelectedScanIdsSet: () => {
+          const state = get()
+          const set = new Set<string>()
+          state.selectedNodeIds.forEach((id) => {
+            const node = state.graph.getNodeById(id as AnyNodeId)?.data()
+            if (node?.type === 'scan') set.add(id)
+          })
+          return set
+        },
 
         handleExport: () => {
           const ref = get().wallsGroupRef
@@ -599,34 +647,19 @@ const useStore = create<StoreState>()(
           )
         },
 
-        handleDeleteSelectedElements: () => {
+        handleDeleteSelected: () => {
           const state = get()
-          if (state.selectedElements.length === 0) return
-          const elementIds = [...state.selectedElements]
+          if (state.selectedNodeIds.length === 0) return
 
-          const batchCommand = new BatchDeleteCommand(elementIds)
+          const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          // UI updates
-          set({ selectedElements: [] })
+          set({ selectedNodeIds: [] })
         },
-        handleDeleteSelectedImages: () => {
-          const state = get()
-          const imageIds = [...state.selectedImageIds]
-          for (const id of imageIds) {
-            get().deleteNode(id)
-          }
-          set({ selectedImageIds: [] })
-        },
-        handleDeleteSelectedScans: () => {
-          const state = get()
-          const scanIds = [...state.selectedScanIds]
-          for (const id of scanIds) {
-            get().deleteNode(id)
-          }
-          set({ selectedScanIds: [] })
-        },
-        handleClear: () => set({ selectedElements: [] }),
+        handleDeleteSelectedElements: () => get().handleDeleteSelected(),
+        handleDeleteSelectedImages: () => get().handleDeleteSelected(),
+        handleDeleteSelectedScans: () => get().handleDeleteSelected(),
+        handleClear: () => set({ selectedNodeIds: [] }),
 
         serializeLayout: () => {
           const state = get()
@@ -657,9 +690,7 @@ const useStore = create<StoreState>()(
           }
 
           set({
-            selectedElements: [],
-            selectedImageIds: [],
-            selectedScanIds: [],
+            selectedNodeIds: [],
             selectedFloorId: null,
             viewMode: 'full',
             controlMode: 'select',
@@ -769,9 +800,7 @@ const useStore = create<StoreState>()(
             currentLevel: 0,
             selectedFloorId: mainBuilding?.children?.[0]?.id ?? null,
             viewMode: 'level',
-            selectedElements: [],
-            selectedImageIds: [],
-            selectedScanIds: [],
+            selectedNodeIds: [],
           })
           get().commandManager.clear()
           rebuildSpatialGrid(get().spatialGrid, newGraph)
@@ -782,9 +811,7 @@ const useStore = create<StoreState>()(
           const success = commandManager.undo(graph)
           if (success) {
             set({
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
+              selectedNodeIds: [],
             })
           }
         },
@@ -793,9 +820,7 @@ const useStore = create<StoreState>()(
           const success = commandManager.redo(graph)
           if (success) {
             set({
-              selectedElements: [],
-              selectedImageIds: [],
-              selectedScanIds: [],
+              selectedNodeIds: [],
             })
           }
         },
@@ -822,40 +847,24 @@ const useStore = create<StoreState>()(
         },
 
         selectNode: (nodeId) => {
+          // Force single selection of this node
           const state = get()
           const handle = state.graph.getNodeById(nodeId as AnyNodeId)
           if (!handle) return
 
+          // Set selection
+          set({ selectedNodeIds: [nodeId] })
+
           const node = handle.data()
 
-          set({
-            selectedElements: [],
-            selectedImageIds: [],
-            selectedScanIds: [],
-          })
-
-          switch (node.type) {
-            case 'level':
-              get().selectFloor(node.id)
-              break
-            case 'wall':
-            case 'roof':
-            case 'column':
-              get().handleElementSelect(node.id, {})
-              break
-            case 'image':
-              set({ selectedImageIds: [node.id] })
-              break
-            case 'scan':
-              set({ selectedScanIds: [node.id] })
-              break
-            default: {
-              const parent = handle.parent()
-              if (parent && parent.type === 'wall') {
-                get().handleElementSelect(parent.id, {})
-              }
-              break
-            }
+          // Switch context if needed
+          if (node.type === 'level') {
+            state.selectFloor(node.id)
+          } else if (node.type === 'image' || node.type === 'scan') {
+            // Ensure guide mode if selecting reference/scan?
+            // Legacy behavior was specific:
+            // set({ controlMode: 'guide' })
+            // We can keep that if desired, but maybe let the user decide or handle in handleNodeSelect
           }
         },
 
@@ -964,7 +973,7 @@ const useStore = create<StoreState>()(
     },
     {
       name: 'editor-storage',
-      version: 4,
+      version: 5, // Increment version for migration
       storage: createJSONStorage(() => indexedDBStorage),
       partialize: (state) => {
         const filterPreviewNodes = (node: SceneNode): SceneNode => {
@@ -1000,14 +1009,24 @@ const useStore = create<StoreState>()(
             ...state.scene,
             root: processedRoot,
           },
-          selectedElements: state.selectedElements,
-          selectedImageIds: state.selectedImageIds,
-          selectedScanIds: state.selectedScanIds,
+          selectedNodeIds: state.selectedNodeIds,
           debug: state.debug,
         }
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // Migrate old keys if present (though partialize won't save them anymore)
+          if ((state as any).selectedElements) {
+            state.selectedNodeIds = [
+              ...((state as any).selectedElements || []),
+              ...((state as any).selectedImageIds || []),
+              ...((state as any).selectedScanIds || []),
+            ]
+            delete (state as any).selectedElements
+            delete (state as any).selectedImageIds
+            delete (state as any).selectedScanIds
+          }
+
           if (state.scene?.root) {
             const root = state.scene.root as any
             const fixBuilding = (b: any) => {
@@ -1084,7 +1103,7 @@ const useStore = create<StoreState>()(
             state.viewMode = 'level'
           }
 
-          if (!state.selectedScanIds) state.selectedScanIds = []
+          if (!state.selectedNodeIds) state.selectedNodeIds = []
 
           state.verticalStackingProcessor = new VerticalStackingProcessor()
           state.levelHeightProcessor = new LevelHeightProcessor()

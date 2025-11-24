@@ -1,34 +1,27 @@
 'use client'
 
-import {
-  BoundingBoxIcon,
-  CylinderIcon,
-  type Icon,
-  LineSegmentsIcon,
-  StairsIcon,
-  WallIcon,
-} from '@phosphor-icons/react'
-import { Blinds, Circle, CuboidIcon, DoorOpen, Pyramid, SofaIcon } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Tool, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+
 export function BuildingMenu() {
   const activeTool = useEditor((state) => state.activeTool)
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const controlMode = useEditor((state) => state.controlMode)
 
-  const tools: Array<{ id: Tool; icon: Icon | typeof Pyramid; label: string; enabled: boolean }> = [
-    { id: 'slab', icon: CuboidIcon, label: 'Slab', enabled: true },
-    { id: 'wall', icon: WallIcon, label: 'Wall', enabled: true },
-    { id: 'room', icon: BoundingBoxIcon, label: 'Room', enabled: true },
-    { id: 'custom-room', icon: LineSegmentsIcon, label: 'Custom Room', enabled: true },
-    { id: 'roof', icon: Pyramid, label: 'Gable Roof', enabled: true },
-    { id: 'door', icon: DoorOpen, label: 'Door', enabled: true },
-    { id: 'window', icon: Blinds, label: 'Window', enabled: true },
-    { id: 'column', icon: CylinderIcon, label: 'Column', enabled: true },
-    { id: 'item', icon: SofaIcon, label: 'Item', enabled: true },
-    { id: 'stair', icon: StairsIcon, label: 'Stair', enabled: true },
+  const tools: Array<{ id: Tool; iconSrc: string; label: string; enabled: boolean }> = [
+    { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab', enabled: true },
+    { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall', enabled: true },
+    { id: 'room', iconSrc: '/icons/room.png', label: 'Room', enabled: true },
+    { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room', enabled: true },
+    { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof', enabled: true },
+    { id: 'door', iconSrc: '/icons/door.png', label: 'Door', enabled: true },
+    { id: 'window', iconSrc: '/icons/window.png', label: 'Window', enabled: true },
+    { id: 'column', iconSrc: '/icons/column.png', label: 'Column', enabled: true },
+    { id: 'item', iconSrc: '/icons/couch.png', label: 'Item', enabled: true },
+    { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair', enabled: true },
   ]
 
   return (
@@ -36,14 +29,12 @@ export function BuildingMenu() {
       <div
         className={cn(
           '-translate-x-1/2 fixed bottom-8 left-1/2 z-50 flex items-center gap-2',
-          'rounded-lg border bg-background/95 shadow-lg backdrop-blur-sm',
-          'opacity-70 transition-opacity hover:opacity-100',
+          'rounded-2xl border border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-md',
           'p-2',
           controlMode !== 'building' && 'cursor-not-allowed',
         )}
       >
         {tools.map((tool) => {
-          const Icon = tool.icon
           // Only show as active if the tool is selected AND we're in building mode
           const isActive = activeTool === tool.id && controlMode === 'building'
 
@@ -52,9 +43,9 @@ export function BuildingMenu() {
               <TooltipTrigger asChild>
                 <Button
                   className={cn(
-                    'size-10 transition-all',
-                    tool.enabled ? 'font-extrabold text-primary' : 'text-gray-500',
-                    isActive && tool.enabled && 'bg-primary text-primary-foreground',
+                    'size-14 rounded-xl transition-all',
+                    isActive && tool.enabled && 'bg-primary shadow-lg shadow-primary/20',
+                    !isActive && tool.enabled && 'hover:bg-white/10',
                     controlMode !== 'building' && activeTool !== tool.id && 'opacity-50',
                   )}
                   disabled={!tool.enabled}
@@ -73,7 +64,13 @@ export function BuildingMenu() {
                   size="icon"
                   variant={isActive && tool.enabled ? 'default' : 'ghost'}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Image
+                    alt={tool.label}
+                    className="size-full object-contain"
+                    height={40}
+                    src={tool.iconSrc}
+                    width={40}
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

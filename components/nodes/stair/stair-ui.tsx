@@ -12,18 +12,18 @@ type AttachmentSide = 'front' | 'left' | 'right'
 type SegmentType = 'stair' | 'landing'
 
 export function StairUI() {
-  const { addNode, deleteNode, updateNode, selectedElements } = useEditor(
+  const { addNode, deleteNode, updateNode, selectedNodeIds } = useEditor(
     useShallow((state) => ({
       addNode: state.addNode,
       deleteNode: state.deleteNode,
       updateNode: state.updateNode,
-      selectedElements: state.selectedElements,
+      selectedNodeIds: state.selectedNodeIds,
     })),
   )
 
   const node = useEditor((state) => {
-    if (state.selectedElements.length !== 1) return null
-    const n = state.graph.getNodeById(state.selectedElements[0])?.data()
+    if (state.selectedNodeIds.length !== 1) return null
+    const n = state.graph.getNodeById(state.selectedNodeIds[0] as any)?.data()
     return n?.type === 'stair' ? (n as StairNode) : null
   })
 

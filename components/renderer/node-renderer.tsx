@@ -46,13 +46,13 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return [0, nodeElevation || 0, 0] as [number, number, number]
   }, [nodePosition, nodeElevation])
 
-  const selectedElements = useEditor((state) => state.selectedElements)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const controlMode = useEditor((state) => state.controlMode)
 
   const isSelected = useMemo(
-    () => selectedElements.includes(nodeId as AnyNodeId),
-    [selectedElements, nodeId],
+    () => selectedNodeIds.includes(nodeId),
+    [selectedNodeIds, nodeId],
   )
 
   // Filter nodes based on viewer display mode (only in viewer mode)
