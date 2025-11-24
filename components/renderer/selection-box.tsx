@@ -1,5 +1,6 @@
 import type { ThreeMouseEvent } from '@pmndrs/uikit/dist/events'
 import { Billboard, Edges } from '@react-three/drei'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Container } from '@react-three/uikit'
 import { Badge, Button, Card } from '@react-three/uikit-default'
 import { Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
@@ -329,6 +330,21 @@ export function SelectionBox({ group }: SelectionBoxProps) {
     }
   }, [])
 
+  const controlPanelRef = useRef<THREE.Group>(null)
+  const { camera } = useThree()
+
+  // Scale control panel based on camera distance to maintain consistent visual size
+  useFrame(() => {
+    if (controlPanelRef.current && center) {
+      // Calculate distance from camera to the selection center (not the panel itself)
+      const distance = camera.position.distanceTo(new THREE.Vector3(center.x, center.y, center.z))
+      // Use distance to calculate appropriate scale
+      const scale = distance * 0.12 // Adjust multiplier for desired size
+      const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
+      controlPanelRef.current.scale.setScalar(finalScale)
+    }
+  })
+
   if (!(size && center)) return null
 
   const controlPanelY = center.y + size.y / 2 + 0.5 // Position above the box
@@ -344,7 +360,7 @@ export function SelectionBox({ group }: SelectionBoxProps) {
 
       {/* Control Panel using uikit - hidden when moving */}
       {!isMoving && (
-        <group position={[center.x, controlPanelY, center.z]}>
+        <group position={[center.x, controlPanelY, center.z]} ref={controlPanelRef}>
           <Billboard>
             <Container
               alignItems="center"
@@ -357,7 +373,6 @@ export function SelectionBox({ group }: SelectionBoxProps) {
               opacity={0.5}
               paddingX={16}
               paddingY={8}
-              pixelSize={0.01}
             >
               {/* Rotate Left Button */}
               <Button
