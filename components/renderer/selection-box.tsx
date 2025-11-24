@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
 
 interface SelectionBoxProps {
   group: React.RefObject<THREE.Group | null>
@@ -21,6 +22,9 @@ interface MoveState {
       position: [number, number]
       rotation: number
       wasPreview: boolean
+      // Wall-specific data
+      start?: [number, number]
+      end?: [number, number]
     }
   >
   cleanupFunctions: Array<() => void>
@@ -124,11 +128,17 @@ export function SelectionBox({ group }: SelectionBoxProps) {
     if (moveState.isMoving) {
       // Restore original positions and preview states
       moveState.originalData.forEach((data, nodeId) => {
-        updateNode(nodeId, {
+        const updates: any = {
           position: data.position,
           rotation: data.rotation,
           editor: { preview: data.wasPreview },
-        })
+        }
+        // Restore wall-specific data if present
+        if (data.start && data.end) {
+          updates.start = data.start
+          updates.end = data.end
+        }
+        updateNode(nodeId, updates)
       })
 
       // Cleanup listeners
@@ -157,12 +167,20 @@ export function SelectionBox({ group }: SelectionBoxProps) {
       const node = handle.data() as any
       if (!node) continue
 
-      // Save original state
-      moveState.originalData.set(nodeId, {
+      // Save original state (including wall-specific data if applicable)
+      const originalData: MoveState['originalData'] extends Map<string, infer T> ? T : never = {
         position: [...node.position] as [number, number],
         rotation: node.rotation || 0,
         wasPreview: node.editor?.preview,
-      })
+      }
+
+      // Save wall-specific data if this is a wall
+      if (isWallNode(node)) {
+        originalData.start = [...node.start] as [number, number]
+        originalData.end = [...node.end] as [number, number]
+      }
+
+      moveState.originalData.set(nodeId, originalData)
 
       // Convert to preview
       updateNode(nodeId, {
@@ -212,25 +230,34 @@ export function SelectionBox({ group }: SelectionBoxProps) {
           }
         }
 
-        updateNode(nodeId, {
-          position: [original.position[0] + finalDeltaX, original.position[1] + finalDeltaY] as [
-            number,
-            number,
-          ],
-        })
+        const newPosition: [number, number] = [
+          original.position[0] + finalDeltaX,
+          original.position[1] + finalDeltaY,
+        ]
+
+        // If this is a wall, also update start/end coordinates
+        if (isWallNode(node) && original.start && original.end) {
+          const wallUpdate = calculateWallPositionUpdate(
+            original.position,
+            newPosition,
+            original.start,
+            original.end,
+          )
+          updateNode(nodeId, wallUpdate)
+        } else {
+          updateNode(nodeId, {
+            position: newPosition,
+          })
+        }
       }
     }
 
     // Handle grid click to commit
     const handleGridClick = () => {
-      const { commandManager, graph, updateNode } = useEditor.getState()
+      const { updateNode } = useEditor.getState()
 
       // Commit changes: restore preview states but keep new positions
       moveState.originalData.forEach((data, nodeId) => {
-        const handle = graph.getNodeById(nodeId as any)
-        if (!handle) return
-
-        const currentNode = handle.data() as any
         updateNode(nodeId, {
           editor: { preview: data.wasPreview },
         })
@@ -255,11 +282,17 @@ export function SelectionBox({ group }: SelectionBoxProps) {
 
         // Restore original positions and states
         moveState.originalData.forEach((data, nodeId) => {
-          updateNode(nodeId, {
+          const updates: any = {
             position: data.position,
             rotation: data.rotation,
             editor: { preview: data.wasPreview },
-          })
+          }
+          // Restore wall-specific data if present
+          if (data.start && data.end) {
+            updates.start = data.start
+            updates.end = data.end
+          }
+          updateNode(nodeId, updates)
         })
 
         // Cleanup
