@@ -396,6 +396,52 @@ export function validateParentReferences(nodes: BaseNode | BaseNode[]): boolean 
 }
 
 // ============================================================================
+// WALL-SPECIFIC UTILITIES
+// ============================================================================
+
+/**
+ * Calculate updated wall coordinates when a wall is moved
+ *
+ * Walls have special `start` and `end` properties that need to be updated
+ * when the wall's position changes. This function calculates the new
+ * start/end coordinates based on the position delta.
+ *
+ * @param originalPosition - The wall's original position
+ * @param newPosition - The wall's new position
+ * @param originalStart - The wall's original start point
+ * @param originalEnd - The wall's original end point
+ * @returns Object with updated position, start, and end coordinates
+ */
+export function calculateWallPositionUpdate(
+  originalPosition: [number, number],
+  newPosition: [number, number],
+  originalStart: [number, number],
+  originalEnd: [number, number],
+): {
+  position: [number, number]
+  start: [number, number]
+  end: [number, number]
+} {
+  // Calculate the delta
+  const deltaX = newPosition[0] - originalPosition[0]
+  const deltaY = newPosition[1] - originalPosition[1]
+
+  // Apply the delta to start and end points
+  return {
+    position: newPosition,
+    start: [originalStart[0] + deltaX, originalStart[1] + deltaY] as [number, number],
+    end: [originalEnd[0] + deltaX, originalEnd[1] + deltaY] as [number, number],
+  }
+}
+
+/**
+ * Check if a node is a wall node
+ */
+export function isWallNode(node: BaseNode): boolean {
+  return node.type === 'wall' && 'start' in node && 'end' in node
+}
+
+// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 

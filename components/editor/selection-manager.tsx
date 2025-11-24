@@ -20,6 +20,8 @@ function SelectionManager() {
   useEffect(() => {
     if (!currentFloor) return
     const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return // Only left-click
+      if (controlMode !== 'select') return
       // Convert to NDC coordinates
       const rect = gl.domElement.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -81,8 +83,10 @@ function SelectionManager() {
         }
       }
 
-      // Convert back to array
-      const candidates = Array.from(candidatesByNode.values())
+      // Convert back to array and filter out level nodes
+      const candidates = Array.from(candidatesByNode.values()).filter(
+        (candidate) => !candidate.nodeId.startsWith('level_'),
+      )
 
       // Sort by distance first, then by depth if distances are very close
       candidates.sort((a, b) => {

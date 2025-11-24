@@ -1,14 +1,59 @@
-import { Edges } from '@react-three/drei'
-import { useEffect, useState } from 'react'
+import type { ThreeMouseEvent } from '@pmndrs/uikit/dist/events'
+import { Billboard, Edges } from '@react-three/drei'
+import { useFrame, useThree } from '@react-three/fiber'
+import { Container } from '@react-three/uikit'
+import { Badge, Button, Card } from '@react-three/uikit-default'
+import { Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { emitter, type GridEvent } from '@/events/bus'
+import { useEditor } from '@/hooks/use-editor'
+import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
 
 interface SelectionBoxProps {
   group: React.RefObject<THREE.Group | null>
 }
 
+interface MoveState {
+  isMoving: boolean
+  originalData: Map<
+    string,
+    {
+      position: [number, number]
+      rotation: number
+      wasPreview: boolean
+      // Wall-specific data
+      start?: [number, number]
+      end?: [number, number]
+    }
+  >
+  cleanupFunctions: Array<() => void>
+  initialGridPosition: [number, number] | null
+}
+
 export function SelectionBox({ group }: SelectionBoxProps) {
   const [size, setSize] = useState<THREE.Vector3 | null>(null)
   const [center, setCenter] = useState<THREE.Vector3 | null>(null)
+  const [isMoving, setIsMoving] = useState(false)
+  const moveStateRef = useRef<MoveState>({
+    isMoving: false,
+    originalData: new Map(),
+    cleanupFunctions: [],
+    initialGridPosition: null,
+  })
+
+  // Cleanup move mode listeners on unmount
+  useEffect(
+    () => () => {
+      const moveState = moveStateRef.current
+      if (moveState.isMoving) {
+        moveState.cleanupFunctions.forEach((cleanup) => {
+          cleanup()
+        })
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!group.current) return
@@ -68,13 +113,348 @@ export function SelectionBox({ group }: SelectionBoxProps) {
     updateBounds()
   }, [group])
 
+  const handleDelete = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    const selectedNodeIds = useEditor.getState().selectedNodeIds
+    useEditor.getState().deleteNodes(selectedNodeIds)
+  }, [])
+
+  const handleMove = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+    const moveState = moveStateRef.current
+
+    // If already moving, cancel move mode
+    if (moveState.isMoving) {
+      // Restore original positions and preview states
+      moveState.originalData.forEach((data, nodeId) => {
+        const updates: any = {
+          position: data.position,
+          rotation: data.rotation,
+          editor: { preview: data.wasPreview },
+        }
+        // Restore wall-specific data if present
+        if (data.start && data.end) {
+          updates.start = data.start
+          updates.end = data.end
+        }
+        updateNode(nodeId, updates)
+      })
+
+      // Cleanup listeners
+      moveState.cleanupFunctions.forEach((cleanup) => {
+        cleanup()
+      })
+      moveState.isMoving = false
+      moveState.originalData.clear()
+      moveState.cleanupFunctions = []
+      moveState.initialGridPosition = null
+      setIsMoving(false)
+      return
+    }
+
+    // Enter move mode
+    moveState.isMoving = true
+    moveState.originalData.clear()
+    moveState.initialGridPosition = null
+    setIsMoving(true)
+
+    // Save original data and convert to preview
+    for (const nodeId of selectedNodeIds) {
+      const handle = graph.getNodeById(nodeId as any)
+      if (!handle) continue
+
+      const node = handle.data() as any
+      if (!node) continue
+
+      // Save original state (including wall-specific data if applicable)
+      const originalData: MoveState['originalData'] extends Map<string, infer T> ? T : never = {
+        position: [...node.position] as [number, number],
+        rotation: node.rotation || 0,
+        wasPreview: node.editor?.preview,
+      }
+
+      // Save wall-specific data if this is a wall
+      if (isWallNode(node)) {
+        originalData.start = [...node.start] as [number, number]
+        originalData.end = [...node.end] as [number, number]
+      }
+
+      moveState.originalData.set(nodeId, originalData)
+
+      // Convert to preview
+      updateNode(nodeId, {
+        editor: { preview: true },
+      })
+    }
+
+    // Handle grid move to update positions
+    const handleGridMove = (e: GridEvent) => {
+      const [x, y] = e.position
+
+      // Set initial grid position on first move
+      if (!moveState.initialGridPosition) {
+        moveState.initialGridPosition = [x, y]
+        return // Don't move on first event, just record position
+      }
+
+      // Calculate relative offset from initial grid position
+      const deltaX = x - moveState.initialGridPosition[0]
+      const deltaY = y - moveState.initialGridPosition[1]
+
+      // Update all selected nodes with the relative offset
+      const { updateNode, graph } = useEditor.getState()
+      for (const nodeId of selectedNodeIds) {
+        const original = moveState.originalData.get(nodeId)
+        if (!original) continue
+
+        const handle = graph.getNodeById(nodeId as any)
+        if (!handle) continue
+
+        const node = handle.data() as any
+        let finalDeltaX = deltaX
+        let finalDeltaY = deltaY
+
+        // Check if node has a parent with rotation
+        if (node.parentId) {
+          const parentHandle = graph.getNodeById(node.parentId as any)
+          if (parentHandle) {
+            const parent = parentHandle.data() as any
+            const parentRotation = parent.rotation || 0
+
+            // Transform world delta to parent's local space
+            const cos = Math.cos(parentRotation)
+            const sin = Math.sin(parentRotation)
+            finalDeltaX = deltaX * cos - deltaY * sin
+            finalDeltaY = deltaX * sin + deltaY * cos
+          }
+        }
+
+        const newPosition: [number, number] = [
+          original.position[0] + finalDeltaX,
+          original.position[1] + finalDeltaY,
+        ]
+
+        // If this is a wall, also update start/end coordinates
+        if (isWallNode(node) && original.start && original.end) {
+          const wallUpdate = calculateWallPositionUpdate(
+            original.position,
+            newPosition,
+            original.start,
+            original.end,
+          )
+          updateNode(nodeId, wallUpdate)
+        } else {
+          updateNode(nodeId, {
+            position: newPosition,
+          })
+        }
+      }
+    }
+
+    // Handle grid click to commit
+    const handleGridClick = () => {
+      const { updateNode } = useEditor.getState()
+
+      // Commit changes: restore preview states but keep new positions
+      moveState.originalData.forEach((data, nodeId) => {
+        updateNode(nodeId, {
+          editor: { preview: data.wasPreview },
+        })
+      })
+
+      // Cleanup
+      moveState.cleanupFunctions.forEach((cleanup) => {
+        cleanup()
+      })
+      moveState.isMoving = false
+      moveState.originalData.clear()
+      moveState.cleanupFunctions = []
+      moveState.initialGridPosition = null
+      setIsMoving(false)
+    }
+
+    // Handle ESC to cancel
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopImmediatePropagation() // Prevent global keyboard handler from running
+
+        // Restore original positions and states
+        moveState.originalData.forEach((data, nodeId) => {
+          const updates: any = {
+            position: data.position,
+            rotation: data.rotation,
+            editor: { preview: data.wasPreview },
+          }
+          // Restore wall-specific data if present
+          if (data.start && data.end) {
+            updates.start = data.start
+            updates.end = data.end
+          }
+          updateNode(nodeId, updates)
+        })
+
+        // Cleanup
+        moveState.cleanupFunctions.forEach((cleanup) => {
+          cleanup()
+        })
+        moveState.isMoving = false
+        moveState.originalData.clear()
+        moveState.cleanupFunctions = []
+        moveState.initialGridPosition = null
+        setIsMoving(false)
+      }
+    }
+
+    // Register listeners
+    emitter.on('grid:move', handleGridMove)
+    emitter.on('grid:click', handleGridClick)
+    // Use capture phase to run before global keyboard handler
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+
+    // Store cleanup functions
+    moveState.cleanupFunctions = [
+      () => emitter.off('grid:move', handleGridMove),
+      () => emitter.off('grid:click', handleGridClick),
+      () => window.removeEventListener('keydown', handleKeyDown, { capture: true }),
+    ]
+  }, [])
+
+  const handleRotateCW = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+
+    // Rotate by -45 degrees (-Math.PI / 4) for clockwise rotation
+    const angle = -Math.PI / 4
+
+    for (const nodeId of selectedNodeIds) {
+      const handle = graph.getNodeById(nodeId as any)
+      if (!handle) continue
+
+      const node = handle.data() as any
+      if (!(node && 'rotation' in node)) continue
+
+      // Just update rotation, no position changes
+      updateNode(nodeId, {
+        rotation: node.rotation + angle,
+      })
+    }
+  }, [])
+
+  const handleRotateCCW = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+
+    // Rotate by 45 degrees (Math.PI / 4) for counter-clockwise rotation
+    const angle = Math.PI / 4
+
+    for (const nodeId of selectedNodeIds) {
+      const handle = graph.getNodeById(nodeId as any)
+      if (!handle) continue
+
+      const node = handle.data() as any
+      if (!(node && 'rotation' in node)) continue
+
+      // Just update rotation, no position changes
+      updateNode(nodeId, {
+        rotation: node.rotation + angle,
+      })
+    }
+  }, [])
+
+  const controlPanelRef = useRef<THREE.Group>(null)
+  const { camera } = useThree()
+
+  // Scale control panel based on camera distance to maintain consistent visual size
+  useFrame(() => {
+    if (controlPanelRef.current && center) {
+      // Calculate distance from camera to the selection center (not the panel itself)
+      const distance = camera.position.distanceTo(new THREE.Vector3(center.x, center.y, center.z))
+      // Use distance to calculate appropriate scale
+      const scale = distance * 0.12 // Adjust multiplier for desired size
+      const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
+      controlPanelRef.current.scale.setScalar(finalScale)
+    }
+  })
+
   if (!(size && center)) return null
 
+  const controlPanelY = center.y + size.y / 2 + 0.5 // Position above the box
+
   return (
-    <mesh position={center}>
-      <boxGeometry args={[size.x, size.y, size.z]} />
-      <meshBasicMaterial opacity={0} transparent />
-      <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
-    </mesh>
+    <group>
+      {/* Selection Box */}
+      <mesh position={center}>
+        <boxGeometry args={[size.x, size.y, size.z]} />
+        <meshBasicMaterial opacity={0} transparent />
+        <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
+      </mesh>
+
+      {/* Control Panel using uikit - hidden when moving */}
+      {!isMoving && (
+        <group position={[center.x, controlPanelY, center.z]} ref={controlPanelRef}>
+          <Billboard>
+            <Container
+              alignItems="center"
+              backgroundColor={'#21222a'}
+              borderRadius={16}
+              depthTest={false}
+              flexDirection="row"
+              gap={8}
+              justifyContent="space-between"
+              opacity={0.5}
+              paddingX={16}
+              paddingY={8}
+            >
+              {/* Rotate Left Button */}
+              <Button
+                backgroundColor={'#21222a'}
+                hover={{
+                  backgroundColor: '#111',
+                }}
+                onClick={handleRotateCCW}
+                size="icon"
+              >
+                <RotateCcw height={16} width={16} />
+              </Button>
+              {/* Move Button */}
+              <Button
+                backgroundColor={'#21222a'}
+                hover={{
+                  backgroundColor: '#111',
+                }}
+                onClick={handleMove}
+                size="icon"
+              >
+                <Move height={16} width={16} />
+              </Button>
+              {/* Delete Button */}
+              <Button
+                backgroundColor={'#21222a'}
+                hover={{
+                  backgroundColor: '#111',
+                }}
+                onClick={handleDelete}
+                size="icon"
+              >
+                <Trash2 height={16} width={16} />
+              </Button>
+              {/* Rotate Right Button */}
+              <Button
+                backgroundColor={'#21222a'}
+                hover={{
+                  backgroundColor: '#111',
+                }}
+                onClick={handleRotateCW}
+                size="icon"
+              >
+                <RotateCw height={16} width={16} />
+              </Button>
+            </Container>
+          </Billboard>
+        </group>
+      )}
+    </group>
   )
 }

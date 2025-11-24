@@ -173,6 +173,7 @@ export function CustomRoomNodeEditor() {
           GroupNode.parse({
             name: 'Custom Room Preview',
             position: [x, y],
+            rotation: 0,
             editor: { preview: true },
             children: [cursorWall],
           }),
@@ -239,6 +240,9 @@ export function CustomRoomNodeEditor() {
               }),
               customRoomStateRef.current.previewGroupId!,
             )
+
+            // Update cursor wall parent (must be explicit for calculateWorldPosition to work)
+            updateNode(newCursorWallId, { parentId: customRoomStateRef.current.previewGroupId! })
 
             customRoomStateRef.current.cursorWallId = newCursorWallId
           }

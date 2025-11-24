@@ -28,6 +28,7 @@ export const GroupNode = BaseNode.extend({
     )
     .default([]),
   position: z.tuple([z.number(), z.number()]),
+  rotation: z.number(),
 }).describe(
   dedent`
   Group node - used to represent a group of nodes in the building

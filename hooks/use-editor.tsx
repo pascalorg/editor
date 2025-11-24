@@ -350,6 +350,7 @@ export type StoreState = {
   addNode: (nodeData: Omit<AnyNode, 'id'>, parentId: string | null) => string
   updateNode: (nodeId: string, updates: Partial<AnyNode>, skipUndo?: boolean) => string
   deleteNode: (nodeId: string) => void
+  deleteNodes: (nodeIds: string[]) => void
   deletePreviewNodes: () => void
 }
 
@@ -955,6 +956,38 @@ const useStore = create<StoreState>()(
           } else {
             commandManager.execute(command, graph)
           }
+        },
+
+        deleteNodes: (nodeIds) => {
+          const { graph, commandManager } = get()
+
+          // Filter out preview nodes and regular nodes
+          const previewNodeIds: string[] = []
+          const regularNodeIds: string[] = []
+
+          for (const nodeId of nodeIds) {
+            const handle = graph.getNodeById(nodeId as AnyNodeId)
+            if ((handle?.data() as any)?.editor?.preview) {
+              previewNodeIds.push(nodeId)
+            } else {
+              regularNodeIds.push(nodeId)
+            }
+          }
+
+          // Delete preview nodes without adding to history
+          for (const nodeId of previewNodeIds) {
+            const command = new DeleteNodeCommand(nodeId)
+            command.execute(graph)
+          }
+
+          // Batch delete regular nodes with single history entry
+          if (regularNodeIds.length > 0) {
+            const command = new BatchDeleteCommand(regularNodeIds)
+            commandManager.execute(command, graph)
+          }
+
+          // Clear selection after deletion
+          set({ selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
