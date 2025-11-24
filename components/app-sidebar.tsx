@@ -48,8 +48,8 @@ export function AppSidebar() {
   const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
   const setIsJsonInspectorOpen = useEditor((state) => state.setIsJsonInspectorOpen)
   const handleExport = useEditor((state) => state.handleExport)
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const handleDeleteSelected = useEditor((state) => state.handleDeleteSelected)
   const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
   const serializeLayout = useEditor((state) => state.serializeLayout)
   const loadLayout = useEditor((state) => state.loadLayout)
@@ -66,15 +66,15 @@ export function AppSidebar() {
   // Handle backspace key to delete selected elements
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Backspace' && selectedElements.length > 0) {
+      if (event.key === 'Backspace' && selectedNodeIds.length > 0) {
         event.preventDefault()
-        handleDeleteSelectedElements()
+        handleDeleteSelected()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedElements, handleDeleteSelectedElements])
+  }, [selectedNodeIds, handleDeleteSelected])
 
   const handleLoadBuildClick = () => {
     fileInputRef.current?.click()

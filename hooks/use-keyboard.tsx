@@ -4,12 +4,8 @@ import { useEffect } from 'react'
 import { useEditor } from './use-editor'
 
 export function useKeyboard() {
-  const selectedElements = useEditor((state) => state.selectedElements)
-  const selectedImageIds = useEditor((state) => state.selectedImageIds)
-  const selectedScanIds = useEditor((state) => state.selectedScanIds)
-  const handleDeleteSelectedElements = useEditor((state) => state.handleDeleteSelectedElements)
-  const handleDeleteSelectedImages = useEditor((state) => state.handleDeleteSelectedImages)
-  const handleDeleteSelectedScans = useEditor((state) => state.handleDeleteSelectedScans)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const handleDeleteSelected = useEditor((state) => state.handleDeleteSelected)
   const undo = useEditor((state) => state.undo)
   const redo = useEditor((state) => state.redo)
   const activeTool = useEditor((state) => state.activeTool)
@@ -67,14 +63,8 @@ export function useKeyboard() {
         redo()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
-        if (selectedElements.length > 0) {
-          handleDeleteSelectedElements()
-        } else if (selectedImageIds.length > 0) {
-          // Handle image deletion separately (not building elements)
-          handleDeleteSelectedImages()
-        } else if (selectedScanIds.length > 0) {
-          // Handle scan deletion separately
-          handleDeleteSelectedScans()
+        if (selectedNodeIds.length > 0) {
+          handleDeleteSelected()
         }
       }
     }
@@ -88,12 +78,8 @@ export function useKeyboard() {
     activeTool,
     cameraMode,
     setCameraMode,
-    selectedElements,
-    selectedImageIds,
-    selectedScanIds,
-    handleDeleteSelectedElements,
-    handleDeleteSelectedImages,
-    handleDeleteSelectedScans,
+    selectedNodeIds,
+    handleDeleteSelected,
     toggleLevelMode,
   ])
 }

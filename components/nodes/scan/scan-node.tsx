@@ -99,7 +99,7 @@ export function useScanManipulation(
   const { camera, gl } = useThree()
   const movingCamera = useEditor((state) => state.movingCamera)
   const controlMode = useEditor((state) => state.controlMode)
-  const setSelectedScanIds = useEditor((state) => state.setSelectedScanIds)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const { nodePosition, nodeScale, nodeRotation } = useEditor(
     useShallow((state) => {
@@ -113,11 +113,11 @@ export function useScanManipulation(
     }),
   )
 
-  const handleSelect = useCallback(() => {
+  const handleSelect = useCallback((e?: any) => {
     if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedScanIds([nodeId])
+      handleNodeSelect(nodeId, e || {})
     }
-  }, [controlMode, nodeId, setSelectedScanIds])
+  }, [controlMode, nodeId, handleNodeSelect])
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'z') => (e: any) => {

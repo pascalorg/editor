@@ -59,9 +59,9 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   // Get state from store
   const controlMode = useEditor((state) => state.controlMode)
   const movingCamera = useEditor((state) => state.movingCamera)
-  const selectedScanIds = useEditor((state) => state.selectedScanIds)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
-  const isSelected = selectedScanIds.includes(nodeId)
+  const isSelected = selectedNodeIds.includes(nodeId)
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -175,7 +175,7 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
             if (e.button !== 0) return
             if ((controlMode === 'guide' || controlMode === 'select') && !movingCamera) {
               e.stopPropagation()
-              handleSelect()
+              handleSelect(e)
             }
           }}
           onPointerEnter={() => {

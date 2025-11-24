@@ -97,7 +97,7 @@ export function useImageManipulation(
   const { camera, gl } = useThree()
   const movingCamera = useEditor((state) => state.movingCamera)
   const controlMode = useEditor((state) => state.controlMode)
-  const setSelectedImageIds = useEditor((state) => state.setSelectedImageIds)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const { nodeRotationY, nodeScale } = useEditor(
     useShallow((state) => {
@@ -110,13 +110,13 @@ export function useImageManipulation(
     }),
   )
 
-  const handleSelect = useCallback(() => {
+  const handleSelect = useCallback((e?: any) => {
     const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as ImageNode | undefined
     if (controlMode === 'guide' || controlMode === 'select') {
-      setSelectedImageIds([nodeId])
+      handleNodeSelect(nodeId, e || {})
       emitter.emit('image:select', { node: node! })
     }
-  }, [controlMode, nodeId, setSelectedImageIds])
+  }, [controlMode, nodeId, handleNodeSelect])
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'y') => (e: any) => {

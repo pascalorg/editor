@@ -5,7 +5,7 @@ import { useEditor } from '@/hooks/use-editor'
 import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
 
 function SelectionManager() {
-  const handleElementSelect = useEditor((state) => state.handleElementSelect)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const controlMode = useEditor((state) => state.controlMode)
 
@@ -99,13 +99,13 @@ function SelectionManager() {
       if (candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
-        handleElementSelect(topCandidate.nodeId as AnyNodeId, event)
+        handleNodeSelect(topCandidate.nodeId, event)
       }
     }
 
     gl.domElement.addEventListener('pointerdown', handlePointerDown)
     return () => gl.domElement.removeEventListener('pointerdown', handlePointerDown)
-  }, [camera, gl, raycaster, currentFloor, handleElementSelect])
+  }, [camera, gl, raycaster, currentFloor, handleNodeSelect])
 
   return null
 }
