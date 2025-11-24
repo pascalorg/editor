@@ -240,6 +240,9 @@ export function CustomRoomNodeEditor() {
               customRoomStateRef.current.previewGroupId!,
             )
 
+            // Update cursor wall parent (must be explicit for calculateWorldPosition to work)
+            updateNode(newCursorWallId, { parentId: customRoomStateRef.current.previewGroupId! })
+
             customRoomStateRef.current.cursorWallId = newCursorWallId
           }
         }

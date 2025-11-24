@@ -181,10 +181,8 @@ function findAncestors(getNode: NodeProvider, nodeId: string): AnyNode[] {
   const ancestors: AnyNode[] = []
   let current = getNode(nodeId)
 
-  // @ts-expect-error - parent property check
-  while (current?.parent) {
-    // @ts-expect-error
-    const parent = getNode(current.parent)
+  while (current?.parentId) {
+    const parent = getNode(current.parentId)
     if (parent) {
       ancestors.push(parent)
       current = parent
@@ -203,9 +201,8 @@ function calculateWorldPosition(
   node: AnyNode & GridItem,
   getNode: NodeProvider,
 ): { position: [number, number]; rotation: number } {
-  // If node doesn't have a parent property, it's at world root
-  // @ts-expect-error
-  if (!node.parent) {
+  // If node doesn't have a parentId property, it's at world root
+  if (!node.parentId) {
     return {
       position: node.position,
       rotation: node.rotation,
@@ -223,23 +220,27 @@ function calculateWorldPosition(
   // Traverse up through ancestors (from immediate parent to root)
   // ancestors array is ordered from immediate parent to root
   for (const ancestor of ancestors) {
-    // Check if ancestor has GridItem properties (position, rotation, size)
-    if ('position' in ancestor && 'rotation' in ancestor && 'size' in ancestor) {
-      const parent = ancestor as AnyNode & GridItem
-      const parentRotation = parent.rotation
+    // Check if ancestor has at least position (groups have position but no rotation/size)
+    if ('position' in ancestor) {
+      const parent = ancestor as any
+      const parentRotation = parent.rotation || 0 // Groups don't have rotation, default to 0
       const parentPos = parent.position
 
-      // Rotate the current position by parent's rotation
-      const cos = Math.cos(parentRotation)
-      const sin = Math.sin(parentRotation)
-      const rotatedX = worldX * cos - worldY * sin
-      const rotatedY = worldX * sin + worldY * cos
+      // Rotate the current position by parent's rotation (if any)
+      if (parentRotation !== 0) {
+        const cos = Math.cos(parentRotation)
+        const sin = Math.sin(parentRotation)
+        const rotatedX = worldX * cos - worldY * sin
+        const rotatedY = worldX * sin + worldY * cos
+        worldX = parentPos[0] + rotatedX
+        worldY = parentPos[1] + rotatedY
+      } else {
+        // No rotation, just add position offset
+        worldX = parentPos[0] + worldX
+        worldY = parentPos[1] + worldY
+      }
 
-      // Add parent's position
-      worldX = parentPos[0] + rotatedX
-      worldY = parentPos[1] + rotatedY
-
-      // Add parent's rotation
+      // Add parent's rotation (if any)
       worldRotation += parentRotation
     }
   }
