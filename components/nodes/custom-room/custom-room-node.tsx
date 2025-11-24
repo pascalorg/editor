@@ -173,6 +173,7 @@ export function CustomRoomNodeEditor() {
           GroupNode.parse({
             name: 'Custom Room Preview',
             position: [x, y],
+            rotation: 0,
             editor: { preview: true },
             children: [cursorWall],
           }),
