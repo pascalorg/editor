@@ -11,6 +11,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 enableMapSet()
 
 import { handleSimpleClick } from '@/lib/building-elements'
+import { GroupNodesCommand, UngroupNodesCommand } from '@/lib/commands/group-commands'
 import {
   AddLevelCommand,
   AddNodeCommand,
@@ -328,6 +329,9 @@ export type StoreState = {
   handleDeleteSelectedElements: () => void
   handleDeleteSelectedImages: () => void
   handleDeleteSelectedScans: () => void
+
+  groupSelected: () => void
+  ungroupSelected: () => void
 
   serializeLayout: () => any
   loadLayout: (json: any) => void
@@ -662,6 +666,45 @@ const useStore = create<StoreState>()(
         handleDeleteSelectedScans: () => get().handleDeleteSelected(),
         handleClear: () => set({ selectedNodeIds: [] }),
 
+        groupSelected: () => {
+          const { graph, commandManager, selectedNodeIds } = get()
+          if (selectedNodeIds.length < 1) return // Can group 1 node effectively wrapping it, but usually 2+
+
+          const command = new GroupNodesCommand(selectedNodeIds)
+          commandManager.execute(command, graph)
+
+          // Select the new group
+          set({ selectedNodeIds: [command.getGroupNodeId()] })
+        },
+
+        ungroupSelected: () => {
+          const { graph, commandManager, selectedNodeIds } = get()
+          if (selectedNodeIds.length === 0) return
+
+          const newSelection: string[] = []
+          let didUngroup = false
+
+          // Collect all commands first
+          for (const id of selectedNodeIds) {
+            const handle = graph.getNodeById(id as AnyNodeId)
+            if (handle && handle.type === 'group') {
+              const children = handle.children()
+              children.forEach((c) => newSelection.push(c.id))
+
+              const command = new UngroupNodesCommand(id)
+              commandManager.execute(command, graph)
+              didUngroup = true
+            } else {
+              // Keep non-group nodes selected
+              newSelection.push(id)
+            }
+          }
+
+          if (didUngroup) {
+            set({ selectedNodeIds: newSelection })
+          }
+        },
+
         serializeLayout: () => {
           const state = get()
           return {
@@ -683,7 +726,7 @@ const useStore = create<StoreState>()(
             // Recursively process all properties
             for (const value of Object.values(node)) {
               if (Array.isArray(value)) {
-                value.forEach(ensureNodeMarkers)
+                value.forEach((v: any) => ensureNodeMarkers(v))
               } else if (typeof value === 'object' && value !== null) {
                 ensureNodeMarkers(value)
               }

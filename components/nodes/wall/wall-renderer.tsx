@@ -8,7 +8,6 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import { selectWallsFromLevel } from '@/lib/nodes/selectors'
 import type { SceneGraph } from '@/lib/scenegraph/index'
 import type {
   AnyNode,

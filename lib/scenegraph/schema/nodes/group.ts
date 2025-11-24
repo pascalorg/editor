@@ -9,24 +9,25 @@ import { ItemNode } from './item'
 import { WallNode } from './wall'
 import { WindowNode } from './window'
 
+// Helper to avoid circular dependencies with lazy evaluation
+const GroupChildNode = z.lazy(() =>
+  z.discriminatedUnion('type', [
+    // Building elements or items
+    FloorNode,
+    WallNode,
+    DoorNode,
+    WindowNode,
+    ColumnNode,
+    CeilingNode,
+    ItemNode,
+    GroupNode,
+  ]),
+)
+
 export const GroupNode = BaseNode.extend({
   id: nodeId('group'),
   type: nodeType('group'),
-  // TODO: test recursive GroupNode children
-  children: z
-    .array(
-      z.discriminatedUnion('type', [
-        // Building elements or items
-        FloorNode,
-        WallNode,
-        DoorNode,
-        WindowNode,
-        ColumnNode,
-        CeilingNode,
-        ItemNode,
-      ]),
-    )
-    .default([]),
+  children: z.array(GroupChildNode).default([]),
   position: z.tuple([z.number(), z.number()]),
   rotation: z.number(),
 }).describe(
