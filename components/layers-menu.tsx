@@ -554,7 +554,6 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
       children: [],
     }
 
-    // @ts-expect-error - node data
     addNode(imageNode, levelId)
   }
 
@@ -584,7 +583,6 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
       children: [],
     }
 
-    // @ts-expect-error - node data
     addNode(scanNode, levelId)
   }
 

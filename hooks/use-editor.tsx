@@ -689,7 +689,9 @@ const useStore = create<StoreState>()(
             const handle = graph.getNodeById(id as AnyNodeId)
             if (handle && handle.type === 'group') {
               const children = handle.children()
-              children.forEach((c) => newSelection.push(c.id))
+              children.forEach((c) => {
+                newSelection.push(c.id)
+              })
 
               const command = new UngroupNodesCommand(id)
               commandManager.execute(command, graph)
@@ -726,7 +728,9 @@ const useStore = create<StoreState>()(
             // Recursively process all properties
             for (const value of Object.values(node)) {
               if (Array.isArray(value)) {
-                value.forEach((v: any) => ensureNodeMarkers(v))
+                value.forEach((v: any) => {
+                  ensureNodeMarkers(v)
+                })
               } else if (typeof value === 'object' && value !== null) {
                 ensureNodeMarkers(value)
               }
