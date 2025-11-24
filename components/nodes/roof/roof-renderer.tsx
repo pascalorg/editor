@@ -124,7 +124,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
         nodeRightWidth: (node as any).rightWidth ?? ROOF_WIDTH / 2,
         nodeSize: node?.size || [0, 0],
         nodeRotation: node?.rotation || 0,
-        isSelected: state.selectedElements.includes(nodeId),
+        isSelected: state.selectedNodeIds.includes(nodeId),
         movingCamera: state.movingCamera,
         controlMode: state.controlMode,
       }
@@ -1077,38 +1077,22 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
       ) : (
         <>
           {/* Front gable end */}
-          <mesh
-            castShadow
-            geometry={roofGeometry.frontGable}
-            receiveShadow
-          >
+          <mesh castShadow geometry={roofGeometry.frontGable} receiveShadow>
             {material}
           </mesh>
 
           {/* Back gable end */}
-          <mesh
-            castShadow
-            geometry={roofGeometry.backGable}
-            receiveShadow
-          >
+          <mesh castShadow geometry={roofGeometry.backGable} receiveShadow>
             {material}
           </mesh>
 
           {/* Left roof plane */}
-          <mesh
-            castShadow
-            geometry={roofGeometry.leftRoof}
-            receiveShadow
-          >
+          <mesh castShadow geometry={roofGeometry.leftRoof} receiveShadow>
             {material}
           </mesh>
 
           {/* Right roof plane */}
-          <mesh
-            castShadow
-            geometry={roofGeometry.rightRoof}
-            receiveShadow
-          >
+          <mesh castShadow geometry={roofGeometry.rightRoof} receiveShadow>
             {material}
           </mesh>
 

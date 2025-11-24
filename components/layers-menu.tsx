@@ -307,6 +307,8 @@ function DraggableLevelItem({
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
   const setControlMode = useEditor((state) => state.setControlMode)
+  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
 
   const hasContent =
     isSelected && (childrenIds.length > 0 || guideIds.length > 0 || scanIds.length > 0)
@@ -776,7 +778,9 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
         setExpandedIds((prev) => {
           const next = new Set(prev)
-          ancestors.forEach((id) => next.add(id))
+          ancestors.forEach((id) => {
+            next.add(id)
+          })
           next.add(selectedFloorId)
           return Array.from(next)
         })
@@ -823,10 +827,12 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
       // Handle Environment vs Sites (Root level)
       if (nodeId === 'environment') {
-        siteIds.forEach((id) => next.delete(id))
+        siteIds.forEach((id) => {
+          next.delete(id)
+        })
         return Array.from(next)
       }
-      if (siteIds.includes(nodeId)) {
+      if (siteIds.includes(nodeId as AnyNodeId)) {
         next.delete('environment')
         siteIds.forEach((id) => {
           if (id !== nodeId) next.delete(id)
