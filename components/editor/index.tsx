@@ -17,6 +17,7 @@ import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
 import { NodeRenderer } from '../renderer/node-renderer'
+import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
 import { InfiniteFloor } from './infinite-floor'
 import { InfiniteLines } from './infinite-lines'
@@ -82,7 +83,12 @@ export default function Editor({ className }: { className?: string }) {
         {rootId && <NodeRenderer nodeId={rootId} />}
       </group>
 
-      {controlMode === 'select' && <SelectionManager />}
+      {controlMode === 'select' && (
+        <>
+          <SelectionManager />
+          <SelectionControls />
+        </>
+      )}
       <CustomControls />
 
       <Environment preset="city" />
