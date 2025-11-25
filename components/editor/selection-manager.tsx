@@ -36,7 +36,7 @@ function SelectionManager() {
         const selectionControlsIntersection = raycaster.intersectObject(selectionControls, true)
         if (selectionControlsIntersection.length > 0) {
           // Clicked on selection controls, ignore
-          return
+          return []
         }
       }
 
