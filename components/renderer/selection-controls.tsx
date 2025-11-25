@@ -30,25 +30,71 @@ interface MoveState {
 interface BoundingBoxData {
   size: THREE.Vector3
   center: THREE.Vector3
+  rotation: THREE.Euler
 }
 
 /**
- * Calculate world-space bounding box for a group, accounting for rotation
+ * Calculate oriented bounding box for a group (follows rotation)
  */
 function calculateWorldBounds(group: THREE.Group): BoundingBoxData | null {
   // Force update of world matrices to ensure accurate calculation
   group.updateMatrixWorld(true)
 
-  // Use THREE.Box3.setFromObject which automatically handles all transformations
+  // Calculate bounding box in local space (before rotation)
   const box = new THREE.Box3()
-  box.setFromObject(group)
+  let hasContent = false
 
-  if (box.isEmpty()) return null
+  group.traverse((child) => {
+    if (child === group) return
 
+    // For meshes with geometry
+    if (child instanceof THREE.Mesh && child.geometry) {
+      const geometry = child.geometry
+
+      if (!geometry.boundingBox) {
+        geometry.computeBoundingBox()
+      }
+
+      if (geometry.boundingBox) {
+        hasContent = true
+        const localBox = geometry.boundingBox.clone()
+
+        // Transform by the mesh's local matrix (relative to parent group)
+        const relativeMatrix = new THREE.Matrix4()
+        relativeMatrix.copy(child.matrix)
+
+        // Accumulate parent matrices within the group
+        let current = child.parent
+        while (current && current !== group) {
+          relativeMatrix.premultiply(current.matrix)
+          current = current.parent
+        }
+
+        localBox.applyMatrix4(relativeMatrix)
+        box.union(localBox)
+      }
+    }
+  })
+
+  if (!hasContent || box.isEmpty()) return null
+
+  // Get size in local space
   const size = box.getSize(new THREE.Vector3())
-  const center = box.getCenter(new THREE.Vector3())
+  const localCenter = box.getCenter(new THREE.Vector3())
 
-  return { size, center }
+  // Get world position and rotation
+  const worldPosition = new THREE.Vector3()
+  const worldQuaternion = new THREE.Quaternion()
+  const worldScale = new THREE.Vector3()
+  group.matrixWorld.decompose(worldPosition, worldQuaternion, worldScale)
+
+  // Convert local center to world position
+  const center = localCenter.clone().applyMatrix4(group.matrixWorld)
+
+  // Convert quaternion to euler for easier use
+  const rotation = new THREE.Euler().setFromQuaternion(worldQuaternion)
+
+  return { size, center, rotation }
 }
 
 export function SelectionControls() {
@@ -89,30 +135,44 @@ export function SelectionControls() {
   }, [selectedGroups, boundsNeedUpdate])
 
   // Calculate combined bounding box for all selected objects
+  // Combined box is axis-aligned in world space (doesn't rotate)
   const combinedBounds = useMemo((): BoundingBoxData | null => {
     if (individualBounds.length === 0) return null
 
     const combinedBox = new THREE.Box3()
+
+    // For each oriented bound, compute world-space AABB corners and expand
     individualBounds.forEach((bounds) => {
-      const { size, center } = bounds
-      const min = new THREE.Vector3(
-        center.x - size.x / 2,
-        center.y - size.y / 2,
-        center.z - size.z / 2,
-      )
-      const max = new THREE.Vector3(
-        center.x + size.x / 2,
-        center.y + size.y / 2,
-        center.z + size.z / 2,
-      )
-      combinedBox.expandByPoint(min)
-      combinedBox.expandByPoint(max)
+      const { size, center, rotation } = bounds
+
+      // Create a temporary box at origin
+      const halfSize = size.clone().multiplyScalar(0.5)
+      const corners = [
+        new THREE.Vector3(-halfSize.x, -halfSize.y, -halfSize.z),
+        new THREE.Vector3(halfSize.x, -halfSize.y, -halfSize.z),
+        new THREE.Vector3(-halfSize.x, halfSize.y, -halfSize.z),
+        new THREE.Vector3(halfSize.x, halfSize.y, -halfSize.z),
+        new THREE.Vector3(-halfSize.x, -halfSize.y, halfSize.z),
+        new THREE.Vector3(halfSize.x, -halfSize.y, halfSize.z),
+        new THREE.Vector3(-halfSize.x, halfSize.y, halfSize.z),
+        new THREE.Vector3(halfSize.x, halfSize.y, halfSize.z),
+      ]
+
+      // Rotate and translate corners to world space
+      const matrix = new THREE.Matrix4()
+      matrix.makeRotationFromEuler(rotation)
+      matrix.setPosition(center)
+
+      corners.forEach((corner) => {
+        corner.applyMatrix4(matrix)
+        combinedBox.expandByPoint(corner)
+      })
     })
 
     const size = combinedBox.getSize(new THREE.Vector3())
     const center = combinedBox.getCenter(new THREE.Vector3())
 
-    return { size, center }
+    return { size, center, rotation: new THREE.Euler(0, 0, 0) }
   }, [individualBounds])
 
   const handleDelete = useCallback(
@@ -398,9 +458,9 @@ export function SelectionControls() {
 
   return (
     <group>
-      {/* Individual bounding boxes for each selected item */}
+      {/* Individual bounding boxes for each selected item - oriented */}
       {individualBounds.map((bounds, i) => (
-        <mesh key={i} position={bounds.center}>
+        <mesh key={i} position={bounds.center} rotation={bounds.rotation}>
           <boxGeometry args={[bounds.size.x, bounds.size.y, bounds.size.z]} />
           <meshBasicMaterial opacity={0} transparent />
           <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
