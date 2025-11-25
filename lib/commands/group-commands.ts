@@ -1,5 +1,5 @@
 import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode, GroupNode } from '@/lib/scenegraph/schema'
+import type { AnyNode, AnyNodeId, GroupNode } from '@/lib/scenegraph/schema'
 import { createId } from '@/lib/utils'
 import type { Command } from './scenegraph-commands'
 
@@ -38,7 +38,7 @@ export class GroupNodesCommand implements Command {
 
     // 1. Validate and Collect Nodes
     for (const id of this.selectedNodeIds) {
-      const handle = graph.getNodeById(id)
+      const handle = graph.getNodeById(id as AnyNodeId)
       if (!handle) continue
 
       const node = handle.data()
@@ -84,16 +84,20 @@ export class GroupNodesCommand implements Command {
 
     // 3. Create Group Node
     const groupNode: GroupNode = {
-      id: this.groupNodeId,
+      id: this.groupNodeId as GroupNode['id'],
       type: 'group',
       children: [], // Will add children manually
       position: [centerX, centerY],
       rotation: 0,
       object: 'node',
+      parentId: commonParentId,
+      visible: true,
+      opacity: 100,
+      metadata: {},
     }
 
     // Add group to common parent
-    graph.nodes.create(groupNode, commonParentId)
+    graph.nodes.create(groupNode, commonParentId as AnyNodeId)
 
     // 4. Move Nodes to Group and adjust positions
     for (const node of nodesToGroup) {
@@ -115,19 +119,19 @@ export class GroupNodesCommand implements Command {
       }
 
       // Add to group
-      graph.nodes.create(updatedNode, this.groupNodeId)
+      graph.nodes.create(updatedNode, this.groupNodeId as AnyNodeId)
     }
   }
 
   undo(graph: SceneGraph): void {
     // 1. Delete the group node (and its children currently in the graph)
     // Note: deleteNode deletes the subtree.
-    graph.deleteNode(this.groupNodeId)
+    graph.deleteNode(this.groupNodeId as AnyNodeId)
 
     // 2. Restore original nodes to their original parents
     for (const { node, parentId } of this.originalNodes) {
       // Create restores the node with its original ID and data (including absolute position)
-      graph.nodes.create(node, parentId)
+      graph.nodes.create(node, parentId as AnyNodeId)
     }
   }
 }
@@ -143,7 +147,7 @@ export class UngroupNodesCommand implements Command {
   }
 
   execute(graph: SceneGraph): void {
-    const groupHandle = graph.getNodeById(this.groupNodeId)
+    const groupHandle = graph.getNodeById(this.groupNodeId as AnyNodeId)
     if (!groupHandle) return
 
     const groupNode = groupHandle.data() as GroupNode
@@ -191,11 +195,11 @@ export class UngroupNodesCommand implements Command {
         updatedChild.rotation = (updatedChild.rotation || 0) + groupRotation
       }
 
-      graph.nodes.create(updatedChild, this.parentId)
+      graph.nodes.create(updatedChild, this.parentId as AnyNodeId)
     }
 
     // 2. Delete Group Node
-    graph.deleteNode(this.groupNodeId)
+    graph.deleteNode(this.groupNodeId as AnyNodeId)
   }
 
   undo(graph: SceneGraph): void {
@@ -204,7 +208,7 @@ export class UngroupNodesCommand implements Command {
     // 1. Restore Group Node
     // We create it without children first
     const groupToRestore = { ...this.originalGroupNode, children: [] }
-    graph.nodes.create(groupToRestore, this.parentId)
+    graph.nodes.create(groupToRestore, this.parentId as AnyNodeId)
 
     // 2. Remove children from parent and add back to group with original local positions
     for (const child of this.originalChildren) {
@@ -212,7 +216,7 @@ export class UngroupNodesCommand implements Command {
       graph.deleteNode(child.id)
 
       // Add back to group (child data already has relative coordinates from original state)
-      graph.nodes.create(child, this.groupNodeId)
+      graph.nodes.create(child, this.groupNodeId as AnyNodeId)
     }
   }
 }

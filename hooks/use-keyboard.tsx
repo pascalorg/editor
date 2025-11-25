@@ -15,6 +15,7 @@ export function useKeyboard() {
   const setCameraMode = useEditor((state) => state.setCameraMode)
   const groupSelected = useEditor((state) => state.groupSelected)
   const ungroupSelected = useEditor((state) => state.ungroupSelected)
+  const handleClear = useEditor((state) => state.handleClear)
 
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
@@ -32,6 +33,10 @@ export function useKeyboard() {
           useEditor.getState().deletePreviewNodes()
         ) {
           return // Stop further processing if building was cancelled
+        }
+        if (selectedNodeIds.length > 0) {
+          handleClear()
+          return
         }
         setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
@@ -92,5 +97,6 @@ export function useKeyboard() {
     toggleLevelMode,
     groupSelected,
     ungroupSelected,
+    handleClear,
   ])
 }

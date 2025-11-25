@@ -10,7 +10,7 @@ import { WallNode } from './wall'
 import { WindowNode } from './window'
 
 // Helper to avoid circular dependencies with lazy evaluation
-const GroupChildNode = z.lazy(() =>
+const GroupChildNode: z.ZodType<any> = z.lazy(() =>
   z.discriminatedUnion('type', [
     // Building elements or items
     FloorNode,

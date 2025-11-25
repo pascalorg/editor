@@ -19,6 +19,7 @@ import {
   CommandManager,
   DeleteLevelCommand,
   DeleteNodeCommand,
+  MoveNodeCommand,
   ReorderLevelsCommand,
   UpdateNodeCommand,
 } from '@/lib/commands/scenegraph-commands'
@@ -352,6 +353,7 @@ export type StoreState = {
   // Generic node operations
   selectNode: (nodeId: string) => void
   addNode: (nodeData: Omit<AnyNode, 'id'>, parentId: string | null) => string
+  moveNode: (nodeId: string, parentId: string) => void
   updateNode: (nodeId: string, updates: Partial<AnyNode>, skipUndo?: boolean) => string
   deleteNode: (nodeId: string) => void
   deleteNodes: (nodeIds: string[]) => void
@@ -927,6 +929,12 @@ const useStore = create<StoreState>()(
           }
 
           return command.getNodeId()
+        },
+
+        moveNode: (nodeId, parentId) => {
+          const { graph, commandManager } = get()
+          const command = new MoveNodeCommand(nodeId, parentId)
+          commandManager.execute(command, graph)
         },
 
         updateNode: (nodeId, updates, skipUndo = false) => {

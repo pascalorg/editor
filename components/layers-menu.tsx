@@ -1,20 +1,6 @@
 'use client'
 
-import { CylinderIcon, Globe, Sun } from '@phosphor-icons/react'
-import {
-  Box,
-  Building,
-  CuboidIcon,
-  DoorOpen,
-  GripVertical,
-  Image,
-  Layers,
-  MapPin,
-  Plus,
-  RectangleVertical,
-  Square,
-  Triangle,
-} from 'lucide-react'
+import { Box, Eye, EyeOff, GripVertical, MapPin, Plus } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
@@ -31,12 +17,11 @@ import {
   useTree,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
-import { OpacityControl } from '@/components/ui/opacity-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
-import { type AnyNodeId, LevelNode } from '@/lib/scenegraph/schema/index'
-import { cn, createId } from '@/lib/utils'
+import { type AnyNodeId, ImageNode, LevelNode, ScanNode } from '@/lib/scenegraph/schema/index'
+import { cn } from '@/lib/utils'
 
 // Context for layers menu interaction
 interface LayersMenuContextType {
@@ -55,33 +40,117 @@ function useLayersMenu() {
 
 // Helper to get icon based on node type
 function getNodeIcon(type: string): ReactNode {
+  const className = 'h-4 w-4 object-contain'
+  const size = 16
+
   switch (type) {
     case 'wall':
-      return <Square className="h-4 w-4 text-gray-600" />
+      return (
+        <img alt="wall" className={className} height={size} src="/icons/wall.png" width={size} />
+      )
     case 'roof':
-      return <Triangle className="h-4 w-4 text-amber-600" />
+      return (
+        <img alt="roof" className={className} height={size} src="/icons/roof.png" width={size} />
+      )
     case 'column':
-      return <CylinderIcon className="h-4 w-4 text-gray-500" />
+      return (
+        <img
+          alt="column"
+          className={className}
+          height={size}
+          src="/icons/column.png"
+          width={size}
+        />
+      )
     case 'slab':
-      return <CuboidIcon className="h-4 w-4 text-gray-300" />
+      return (
+        <img alt="slab" className={className} height={size} src="/icons/floor.png" width={size} />
+      )
     case 'group':
-      return <Building className="h-4 w-4 text-purple-600" />
+    case 'room':
+      return (
+        <img alt="room" className={className} height={size} src="/icons/room.png" width={size} />
+      )
+    case 'custom-room':
+      return (
+        <img
+          alt="custom room"
+          className={className}
+          height={size}
+          src="/icons/custom-room.png"
+          width={size}
+        />
+      )
     case 'door':
-      return <DoorOpen className="h-4 w-4 text-orange-600" />
+      return (
+        <img alt="door" className={className} height={size} src="/icons/door.png" width={size} />
+      )
     case 'window':
-      return <RectangleVertical className="h-4 w-4 text-blue-500" />
+      return (
+        <img
+          alt="window"
+          className={className}
+          height={size}
+          src="/icons/window.png"
+          width={size}
+        />
+      )
     case 'image':
-      return <Image className="h-4 w-4 text-purple-400" />
+      return (
+        <img
+          alt="reference"
+          className={className}
+          height={size}
+          src="/icons/floorplan.png"
+          width={size}
+        />
+      )
     case 'scan':
-      return <Box className="h-4 w-4 text-cyan-400" />
+      return (
+        <img alt="scan" className={className} height={size} src="/icons/mesh.png" width={size} />
+      )
     case 'level':
-      return <Layers className="h-4 w-4 text-blue-500" />
+      return (
+        <img alt="level" className={className} height={size} src="/icons/level.png" width={size} />
+      )
     case 'site':
-      return <MapPin className="h-4 w-4 text-emerald-600" />
+      return (
+        <img alt="site" className={className} height={size} src="/icons/site.png" width={size} />
+      )
     case 'building':
-      return <Building className="h-4 w-4 text-indigo-600" />
+      return (
+        <img
+          alt="building"
+          className={className}
+          height={size}
+          src="/icons/building.png"
+          width={size}
+        />
+      )
     case 'environment':
-      return <Sun className="h-4 w-4 text-yellow-500" />
+      return (
+        <img
+          alt="environment"
+          className={className}
+          height={size}
+          src="/icons/environment.png"
+          width={size}
+        />
+      )
+    case 'stair':
+      return (
+        <img
+          alt="stairs"
+          className={className}
+          height={size}
+          src="/icons/stairs.png"
+          width={size}
+        />
+      )
+    case 'item':
+      return (
+        <img alt="item" className={className} height={size} src="/icons/item.png" width={size} />
+      )
     default:
       return <Box className="h-4 w-4 text-gray-400" />
   }
@@ -121,6 +190,25 @@ function getNodeLabel(type: string, index: number, name?: string): string {
   }
 }
 
+function VisibilityToggle({ visible, onToggle }: { visible: boolean; onToggle: () => void }) {
+  return (
+    <Button
+      className={cn(
+        'h-5 w-5 p-0 transition-opacity',
+        visible ? 'opacity-0 group-hover/item:opacity-100' : 'opacity-100',
+      )}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      size="sm"
+      variant="ghost"
+    >
+      {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+    </Button>
+  )
+}
+
 interface LayersMenuProps {
   mounted: boolean
 }
@@ -137,7 +225,7 @@ interface NodeItemProps {
 
 function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect }: NodeItemProps) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeType, nodeName, nodeVisible, nodeOpacity } = useEditor(
+  const { nodeType, nodeName, nodeVisible } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
@@ -145,7 +233,6 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         nodeType: node?.type || 'unknown',
         nodeName: node?.name,
         nodeVisible: node?.visible ?? true,
-        nodeOpacity: node?.opacity ?? 100,
       }
     }),
   )
@@ -157,30 +244,84 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
   )
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+  const moveNode = useEditor((state) => state.moveNode)
+  const graph = useEditor((state) => state.graph)
+
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const isSelected = selectedNodeIds.includes(nodeId)
   const hasChildren = childrenIds.length > 0
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation()
+    e.dataTransfer.setData('application/node-id', nodeId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (nodeType === 'group') {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragOver(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (nodeType === 'group') {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragOver(false)
+      const draggedId = e.dataTransfer.getData('application/node-id')
+
+      // Validation
+      if (!draggedId || draggedId === nodeId) return
+
+      // Check circular dependency (can't drop parent into child)
+      let current = graph.getNodeById(nodeId as AnyNodeId)
+      let isDescendant = false
+      while (current) {
+        if (current.id === draggedId) {
+          isDescendant = true
+          break
+        }
+        current = current.parent()
+      }
+
+      if (!isDescendant) {
+        moveNode(draggedId, nodeId)
+      }
+    }
+  }
+
   return (
     <TreeNode isLast={isLast} level={level} nodeId={nodeId}>
       <TreeNodeTrigger
-        className={cn(isSelected && 'bg-accent', nodeVisible === false && 'opacity-50')}
+        className={cn(
+          isSelected && 'bg-accent',
+          nodeVisible === false && 'opacity-50',
+          isDragOver && 'bg-accent ring-1 ring-primary',
+        )}
+        draggable
         onClick={(e) => {
           e.stopPropagation()
           onNodeSelect(nodeId, e as React.MouseEvent)
           handleNodeClick(nodeId, hasChildren)
         }}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDragStart={handleDragStart as any}
+        onDrop={handleDrop}
       >
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
         <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
-        <OpacityControl
-          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
-          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
-          opacity={nodeOpacity}
-          visible={nodeVisible}
-        />
+        <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
 
       {hasChildren && (
@@ -258,7 +399,7 @@ function DraggableLevelItem({
   const { handleNodeClick } = useLayersMenu()
   const isLastLevel = levelIndex === levelsCount - 1
 
-  const { levelVisible, levelName, levelOpacity } = useEditor(
+  const { levelVisible, levelName } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(levelId)
       const level = handle?.data()
@@ -266,7 +407,6 @@ function DraggableLevelItem({
       return {
         levelVisible: level?.visible ?? true,
         levelName: level?.name || 'Level',
-        levelOpacity: level?.opacity ?? 100,
       }
     }),
   )
@@ -308,10 +448,22 @@ function DraggableLevelItem({
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
   const setControlMode = useEditor((state) => state.setControlMode)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
+  const moveNode = useEditor((state) => state.moveNode)
+
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const hasContent =
     isSelected && (childrenIds.length > 0 || guideIds.length > 0 || scanIds.length > 0)
+
+  const handleLevelDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    const draggedId = e.dataTransfer.getData('application/node-id')
+    if (draggedId) {
+      moveNode(draggedId, levelId)
+    }
+  }
 
   return (
     <TreeNode isLast={isLastLevel} level={level} nodeId={levelId}>
@@ -320,10 +472,22 @@ function DraggableLevelItem({
           'group/drag-item',
           isSelected && 'sticky top-0 z-10 bg-background',
           levelVisible === false && 'opacity-50',
+          isDragOver && 'bg-accent ring-1 ring-primary',
         )}
         onClick={(e) => {
           handleNodeClick(levelId, hasContent)
         }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setIsDragOver(false)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setIsDragOver(true)
+        }}
+        onDrop={handleLevelDrop}
       >
         <div
           className="cursor-grab touch-none p-1 hover:bg-accent active:cursor-grabbing"
@@ -334,44 +498,22 @@ function DraggableLevelItem({
         <TreeExpander hasChildren={hasContent} />
         <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
         <TreeLabel className="flex-1">{levelName}</TreeLabel>
-        <OpacityControl
-          onOpacityChange={(opacity) => setNodeOpacity(levelId, opacity)}
-          onVisibilityToggle={() => toggleNodeVisibility(levelId)}
-          opacity={levelOpacity}
-          visible={levelVisible}
-        />
+        <VisibilityToggle onToggle={() => toggleNodeVisibility(levelId)} visible={levelVisible} />
       </TreeNodeTrigger>
 
       <TreeNodeContent hasChildren={hasContent}>
-        {/* 3D Objects Section */}
-        {childrenIds.length > 0 && (
-          <TreeNode level={level + 1} nodeId={`${levelId}-3d-objects`}>
-            <TreeNodeTrigger
-              onClick={() => handleNodeClick(`${levelId}-3d-objects`, childrenIds.length > 0)}
-            >
-              <TreeExpander hasChildren={childrenIds.length > 0} />
-              <TreeIcon
-                hasChildren={childrenIds.length > 0}
-                icon={<Building className="h-4 w-4 text-green-500" />}
-              />
-              <TreeLabel>3D Objects ({childrenIds.length})</TreeLabel>
-            </TreeNodeTrigger>
-
-            <TreeNodeContent hasChildren={true}>
-              {childrenIds.map((childId: string, index: number) => (
-                <NodeItem
-                  index={index}
-                  isLast={index === childrenIds.length - 1}
-                  key={childId}
-                  level={level + 2}
-                  nodeId={childId}
-                  onNodeSelect={handleNodeSelect}
-                  selectedNodeIds={selectedNodeIds}
-                />
-              ))}
-            </TreeNodeContent>
-          </TreeNode>
-        )}
+        {/* 3D Objects Section - Direct Children */}
+        {childrenIds.map((childId: string, index: number) => (
+          <NodeItem
+            index={index}
+            isLast={false}
+            key={childId}
+            level={level + 1}
+            nodeId={childId}
+            onNodeSelect={handleNodeSelect}
+            selectedNodeIds={selectedNodeIds}
+          />
+        ))}
 
         {/* Guides Section */}
         <TreeNode level={level + 1} nodeId={`${levelId}-guides`}>
@@ -382,7 +524,15 @@ function DraggableLevelItem({
             <TreeExpander hasChildren={guideIds.length > 0} />
             <TreeIcon
               hasChildren={guideIds.length > 0}
-              icon={<Image className="h-4 w-4 text-purple-500" />}
+              icon={
+                <img
+                  alt="Guides"
+                  className="h-4 w-4 object-contain"
+                  height={16}
+                  src="/icons/floorplan.png"
+                  width={16}
+                />
+              }
             />
             <TreeLabel>Guides ({guideIds.length})</TreeLabel>
             <Tooltip>
@@ -438,7 +588,15 @@ function DraggableLevelItem({
             <TreeExpander hasChildren={scanIds.length > 0} />
             <TreeIcon
               hasChildren={scanIds.length > 0}
-              icon={<Box className="h-4 w-4 text-cyan-500" />}
+              icon={
+                <img
+                  alt="Scans"
+                  className="h-4 w-4 object-contain"
+                  height={16}
+                  src="/icons/mesh.png"
+                  width={16}
+                />
+              }
             />
             <TreeLabel>Scans ({scanIds.length})</TreeLabel>
             <Tooltip>
@@ -503,14 +661,13 @@ function LevelReorderItem(props: LevelReorderItemProps) {
 
 function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeVisible, nodeName, nodeOpacity } = useEditor(
+  const { nodeVisible, nodeName } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
         nodeVisible: node?.visible ?? true,
         nodeName: node?.name || 'Building',
-        nodeOpacity: node?.opacity ?? 100,
       }
     }),
   )
@@ -523,7 +680,6 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   )
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
   const selectFloor = useEditor((state) => state.selectFloor)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const reorderLevels = useEditor((state) => state.reorderLevels)
@@ -539,22 +695,13 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
       reader.readAsDataURL(file)
     })
 
-    const imageNode = {
-      id: createId('image'),
-      type: 'image',
+    const imageNode = ImageNode.parse({
+      parentId: levelId,
       name: file.name,
       url: dataUrl,
-      createdAt: new Date().toISOString(),
-      position: [0, 0],
-      rotationY: 0,
-      size: [10, 10],
-      scale: 1,
-      visible: true,
       opacity: 50,
-      children: [],
-    }
-
-    addNode(imageNode, levelId)
+    } satisfies Partial<ImageNode>)
+    addNode(imageNode as any, levelId)
   }
 
   const handleScanUpload = async (file: File, levelId: string) => {
@@ -565,25 +712,14 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
       reader.readAsDataURL(file)
     })
 
-    const scanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-
-    const scanNode = {
-      id: scanId,
-      type: 'scan',
+    const scanNode = ScanNode.parse({
+      parentId: levelId,
       name: file.name,
       url: dataUrl,
-      createdAt: new Date().toISOString(),
-      position: [0, 0],
-      rotation: 0,
-      size: [10, 10],
-      scale: 1,
-      yOffset: 0,
-      visible: true,
       opacity: 100,
-      children: [],
-    }
+    } satisfies Partial<ScanNode>)
 
-    addNode(scanNode, levelId)
+    addNode(scanNode as any, levelId)
   }
 
   const handleReorder = (newLevelIds: string[]) => {
@@ -652,12 +788,7 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
           </TooltipTrigger>
           <TooltipContent>Add new level</TooltipContent>
         </Tooltip>
-        <OpacityControl
-          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
-          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
-          opacity={nodeOpacity}
-          visible={nodeVisible}
-        />
+        <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={levelIds.length > 0}>
         <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
@@ -681,14 +812,13 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
 
 function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeVisible, nodeName, nodeOpacity } = useEditor(
+  const { nodeVisible, nodeName } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
         nodeVisible: node?.visible ?? true,
         nodeName: node?.name || 'Site',
-        nodeOpacity: node?.opacity ?? 100,
       }
     }),
   )
@@ -701,7 +831,6 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   )
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const setNodeOpacity = useEditor((state) => state.setNodeOpacity)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
@@ -711,12 +840,7 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
         <TreeLabel>{nodeName}</TreeLabel>
-        <OpacityControl
-          onOpacityChange={(opacity) => setNodeOpacity(nodeId, opacity)}
-          onVisibilityToggle={() => toggleNodeVisibility(nodeId)}
-          opacity={nodeOpacity}
-          visible={nodeVisible}
-        />
+        <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={childrenIds.length > 0}>
         {childrenIds.map((childId: string, index: number) => {
@@ -802,19 +926,14 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       next.add(nodeId)
 
       // Handle virtual nodes in Level
-      if (
-        nodeId.endsWith('-3d-objects') ||
-        nodeId.endsWith('-guides') ||
-        nodeId.endsWith('-scans')
-      ) {
+      if (nodeId.endsWith('-guides') || nodeId.endsWith('-scans')) {
         // Extract level ID by removing the suffix
         // Note: scan IDs might contain dashes, but the suffix is known
         let levelId = ''
-        if (nodeId.endsWith('-3d-objects')) levelId = nodeId.slice(0, -11)
-        else if (nodeId.endsWith('-guides')) levelId = nodeId.slice(0, -7)
+        if (nodeId.endsWith('-guides')) levelId = nodeId.slice(0, -7)
         else if (nodeId.endsWith('-scans')) levelId = nodeId.slice(0, -6)
 
-        const siblings = [`${levelId}-3d-objects`, `${levelId}-guides`, `${levelId}-scans`]
+        const siblings = [`${levelId}-guides`, `${levelId}-scans`]
         siblings.forEach((siblingId) => {
           if (siblingId !== nodeId) {
             next.delete(siblingId)

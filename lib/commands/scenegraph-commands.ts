@@ -1,6 +1,12 @@
 import { getLevels } from '@/lib/scenegraph/editor-utils'
 import type { SceneGraph, SceneNodeHandle } from '@/lib/scenegraph/index'
-import type { AnyNode, LevelNode, RootNode, SceneNode } from '@/lib/scenegraph/schema/index'
+import type {
+  AnyNode,
+  AnyNodeId,
+  LevelNode,
+  RootNode,
+  SceneNode,
+} from '@/lib/scenegraph/schema/index'
 import { createId } from '@/lib/utils'
 
 // Helper type for nodes that can have children
@@ -45,7 +51,9 @@ export class AddNodeCommand implements Command {
     // Ensure children have IDs recursively
     if (hasChildren(this.nodeData)) {
       // Type assertion needed because children types vary by node type
-      this.nodeData.children = this.ensureChildrenIds(this.nodeData.children) as typeof this.nodeData.children
+      this.nodeData.children = this.ensureChildrenIds(
+        this.nodeData.children,
+      ) as typeof this.nodeData.children
     }
   }
 
@@ -61,7 +69,9 @@ export class AddNodeCommand implements Command {
 
       // Recursively ensure IDs for nested children
       if (hasChildren(child)) {
-        (updatedChild as NodeWithChildren).children = this.ensureChildrenIds(child.children) as typeof child.children
+        ;(updatedChild as NodeWithChildren).children = this.ensureChildrenIds(
+          child.children,
+        ) as typeof child.children
       }
 
       return updatedChild
@@ -153,7 +163,6 @@ export class DeleteNodeCommand implements Command {
   private readonly nodeId: string
   private deletedNode: AnyNode | null = null
   private parentId: string | null = null
-  private indexInParent = -1
 
   constructor(nodeId: string) {
     this.nodeId = nodeId
@@ -167,11 +176,6 @@ export class DeleteNodeCommand implements Command {
     this.deletedNode = handle.data()
     const parent = handle.parent()
     this.parentId = parent ? parent.id : null
-
-    if (parent) {
-      const siblings = parent.children()
-      this.indexInParent = siblings.findIndex((s) => s.id === this.nodeId)
-    }
 
     // Type assertion: runtime nodeId is always a valid node ID string
     graph.deleteNode(this.nodeId as AnyNode['id'])
@@ -223,7 +227,6 @@ export class BatchDeleteCommand implements Command {
 
 export class AddLevelCommand implements Command {
   private readonly level: LevelNode
-  private addedIndex = -1
 
   constructor(level: Omit<LevelNode, 'children'>) {
     this.level = {
@@ -238,9 +241,6 @@ export class AddLevelCommand implements Command {
 
     // Just add the node
     graph.nodes.create(this.level, building.id)
-
-    // Store index? SceneGraph adds to beginning (unshift).
-    this.addedIndex = 0
   }
 
   undo(graph: SceneGraph): void {
@@ -306,6 +306,119 @@ export class ReorderLevelsCommand implements Command {
 
     // Restore previous order
     graph.updateNode(building.id, { children: this.previousOrder } as Partial<NodeWithChildren>)
+  }
+}
+
+// ============================================================================
+// MOVE NODE COMMAND
+// ============================================================================
+
+export class MoveNodeCommand implements Command {
+  private readonly nodeId: string
+  private readonly newParentId: string
+  private originalNode: AnyNode | null = null
+  private originalParentId: string | null = null
+
+  constructor(nodeId: string, newParentId: string, index = -1) {
+    this.nodeId = nodeId
+    this.newParentId = newParentId
+  }
+
+  private getNodePosition(node: AnyNode): { x: number; y: number } {
+    if ('position' in node && Array.isArray(node.position)) {
+      return { x: node.position[0], y: node.position[1] }
+    }
+    return { x: 0, y: 0 }
+  }
+
+  private getRotation(node: AnyNode): number {
+    return 'rotation' in node && typeof node.rotation === 'number' ? node.rotation : 0
+  }
+
+  execute(graph: SceneGraph): void {
+    const handle = graph.getNodeById(this.nodeId as AnyNodeId)
+    if (!handle) return
+
+    const node = handle.data()
+    const parent = handle.parent()
+    if (!parent) return
+
+    // Store state for undo if not already stored
+    if (!this.originalNode) {
+      this.originalNode = JSON.parse(JSON.stringify(node))
+      this.originalParentId = parent.id
+    }
+
+    // 1. Calculate World Position
+    let worldX = 0
+    let worldY = 0
+    let worldRot = 0
+
+    const nodePos = this.getNodePosition(node)
+    const nodeRot = this.getRotation(node)
+
+    if (parent.type === 'group') {
+      const groupNode = parent.data()
+      const groupPos = this.getNodePosition(groupNode)
+      const groupRot = this.getRotation(groupNode)
+
+      const cos = Math.cos(groupRot)
+      const sin = Math.sin(groupRot)
+
+      worldX = nodePos.x * cos - nodePos.y * sin + groupPos.x
+      worldY = nodePos.x * sin + nodePos.y * cos + groupPos.y
+      worldRot = nodeRot + groupRot
+    } else {
+      worldX = nodePos.x
+      worldY = nodePos.y
+      worldRot = nodeRot
+    }
+
+    // 2. Calculate New Local Position
+    const newParentHandle = graph.getNodeById(this.newParentId as AnyNodeId)
+    if (!newParentHandle) return
+
+    const newParent = newParentHandle.data()
+    let newLocalX = worldX
+    let newLocalY = worldY
+    let newLocalRot = worldRot
+
+    if (newParent.type === 'group') {
+      const groupPos = this.getNodePosition(newParent)
+      const groupRot = this.getRotation(newParent)
+
+      const dx = worldX - groupPos.x
+      const dy = worldY - groupPos.y
+      const cos = Math.cos(-groupRot)
+      const sin = Math.sin(-groupRot)
+
+      newLocalX = dx * cos - dy * sin
+      newLocalY = dx * sin + dy * cos
+      newLocalRot = worldRot - groupRot
+    }
+
+    // 3. Move Node
+    graph.deleteNode(this.nodeId as AnyNodeId)
+
+    const updatedNode = { ...node }
+    if ('position' in updatedNode && Array.isArray(updatedNode.position)) {
+      ;(updatedNode as any).position = [newLocalX, newLocalY, updatedNode.position[2] || 0].slice(
+        0,
+        updatedNode.position.length,
+      )
+    }
+    if ('rotation' in updatedNode && typeof updatedNode.rotation === 'number') {
+      updatedNode.rotation = newLocalRot
+    }
+
+    graph.nodes.create(updatedNode, this.newParentId as AnyNodeId)
+  }
+
+  undo(graph: SceneGraph): void {
+    if (!(this.originalNode && this.originalParentId)) return
+
+    graph.deleteNode(this.nodeId as AnyNodeId)
+    graph.nodes.create(this.originalNode, this.originalParentId as AnyNodeId)
   }
 }
 

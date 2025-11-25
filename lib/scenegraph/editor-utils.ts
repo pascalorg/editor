@@ -26,11 +26,14 @@ export function buildDraftNodeIndex(scene: Scene): Map<string, AnyNode> {
     index.set(node.id, node as AnyNode)
 
     // Traverse all properties looking for nodes or arrays of nodes
-    for (const value of Object.values(node)) {
-      if (isNode(value)) {
-        traverse(value)
-      } else if (Array.isArray(value)) {
-        for (const item of value) {
+    for (const propValue of Object.values(node) as any[]) {
+      if (isNode(propValue)) {
+        traverse(propValue)
+        continue
+      }
+
+      if (Array.isArray(propValue)) {
+        for (const item of propValue as any[]) {
           if (isNode(item)) {
             traverse(item)
           }
@@ -40,8 +43,10 @@ export function buildDraftNodeIndex(scene: Scene): Map<string, AnyNode> {
   }
 
   // Start traversal from sites (root is not a node anymore)
-  scene.root.children.forEach((site) => traverse(site))
-  
+  scene.root.children.forEach((site) => {
+    traverse(site)
+  })
+
   return index
 }
 
@@ -50,7 +55,7 @@ export function buildDraftNodeIndex(scene: Scene): Map<string, AnyNode> {
  */
 export function getMainBuilding(root: RootNode): BuildingNode | undefined {
   const site = root.children?.[0]
-  if (!site) return undefined
+  if (!site) return
   return site.children.find((child) => child.type === 'building') as BuildingNode | undefined
 }
 
@@ -77,10 +82,8 @@ export function getLevelIdFromDraft(
   }
 
   let currentNode = node
-  // @ts-expect-error
-  while (currentNode.parent) {
-    // @ts-expect-error
-    const parent = nodeIndex.get(currentNode.parent)
+  while (currentNode.parentId) {
+    const parent = nodeIndex.get(currentNode.parentId)
     if (!parent) break
 
     if (parent.type === 'level') {
