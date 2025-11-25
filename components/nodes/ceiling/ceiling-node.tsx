@@ -6,7 +6,7 @@ import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import { CeilingNode } from '@/lib/scenegraph/schema/nodes/ceiling'
-import { CeilingRenderer, DEFAULT_CEILING_ELEVATION } from './ceiling-renderer'
+import { CeilingRenderer } from './ceiling-renderer'
 
 // ============================================================================
 // CEILING NODE EDITOR
@@ -51,13 +51,13 @@ export function CeilingNodeEditor() {
         ceilingStateRef.current.lastEndPoint = null
 
         // Create preview ceiling at start position with zero size initially
+        // Elevation will be calculated by vertical-stacking-processor
         const previewCeilingId = addNode(
           CeilingNode.parse({
             name: 'Ceiling Preview',
             position: [x, y],
             rotation: 0,
             size: [0, 0], // Zero size initially
-            elevation: DEFAULT_CEILING_ELEVATION,
             editor: {
               preview: true,
             },

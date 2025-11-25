@@ -36,18 +36,15 @@ function getClosestGridPoint(point: THREE.Vector3, object: THREE.Object3D): Grid
 }
 
 export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
-  const getLevelId = useEditor((state) => state.getLevelId)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
-  const { nodeSize, nodeElevation, nodeThickness, isPreview, levelId, canPlace, node } = useEditor(
+  const { nodeSize, isPreview, levelId, canPlace, node } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as CeilingNode | undefined
       return {
         node,
         nodeSize: node?.size,
-        nodeElevation: node?.elevation,
-        nodeThickness: node?.thickness,
         isPreview: node?.editor?.preview === true,
         levelId: state.getLevelId(nodeId),
         canPlace: node?.editor?.canPlace !== false,
@@ -56,8 +53,6 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
   )
 
   const [width, depth] = nodeSize || [0, 0]
-  const elevation = nodeElevation || DEFAULT_CEILING_ELEVATION
-  const thickness = nodeThickness || CEILING_THICKNESS
 
   // Create plane geometry for the ceiling
   const ceilingGeometry = useMemo(
@@ -69,9 +64,6 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
   const isActiveFloor = selectedFloorId === null || levelId === selectedFloorId
   const opacity = isActiveFloor ? 1 : 0.3
   const transparent = !isActiveFloor
-
-  // Position the ceiling at the specified elevation
-  const yPosition = elevation
 
   // Offset to position the bottom-left corner at the node's position
   // PlaneGeometry is centered, so we need to shift by half the size
@@ -131,14 +123,14 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
     <group>
       {/* Top side (visible from above) - semi-transparent */}
       <mesh
-        castShadow={!isPreview}
+        // castShadow={!isPreview}
         geometry={ceilingGeometry}
         onClick={isPreview ? undefined : handleClick}
         onPointerEnter={isPreview ? undefined : handlePointerEnter}
         onPointerLeave={isPreview ? undefined : handlePointerLeave}
         onPointerMove={isPreview ? undefined : handlePointerMove}
-        position={[xOffset, yPosition + 0.02, zOffset]}
-        receiveShadow={!isPreview}
+        position={[xOffset, 0.05, zOffset]}
+        // receiveShadow={!isPreview}
         renderOrder={isPreview ? 1 : undefined}
         rotation={[-Math.PI / 2, 0, 0]} // Rotate to horizontal
       >
@@ -158,14 +150,14 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
 
       {/* Bottom side (visible from below) - opaque or brighter preview */}
       <mesh
-        castShadow={!isPreview}
+        // castShadow={!isPreview}
         geometry={ceilingGeometry}
         onClick={isPreview ? undefined : handleClick}
         onPointerEnter={isPreview ? undefined : handlePointerEnter}
         onPointerLeave={isPreview ? undefined : handlePointerLeave}
         onPointerMove={isPreview ? undefined : handlePointerMove}
-        position={[xOffset, yPosition + 0.001, zOffset]} // Slight offset to avoid z-fighting
-        receiveShadow={!isPreview}
+        position={[xOffset, -0.05, zOffset]} // Slight offset to avoid z-fighting
+        // receiveShadow={!isPreview}
         renderOrder={isPreview ? 1 : undefined}
         rotation={[-Math.PI / 2, 0, 0]} // Rotate to horizontal
       >

@@ -1,9 +1,10 @@
 import { SLAB_THICKNESS } from '@/components/nodes/slab/slab-renderer'
+import { WALL_HEIGHT } from '@/components/editor'
 import type { AnyNode } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 export class VerticalStackingProcessor implements NodeProcessor {
-  nodeTypes = ['wall', 'column', 'slab', 'item', 'stair']
+  nodeTypes = ['wall', 'column', 'slab', 'item', 'stair', 'ceiling']
 
   process(nodes: AnyNode[]): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
@@ -18,12 +19,20 @@ export class VerticalStackingProcessor implements NodeProcessor {
       }
 
       if (this.supportsVerticalStacking(node)) {
+        let elevation: number
+
+        if (node.type === 'ceiling') {
+          // Ceiling is positioned at the top of the walls
+          elevation = hasSlab ? SLAB_THICKNESS + WALL_HEIGHT : WALL_HEIGHT
+        } else {
+          // Walls, columns, items, stairs are positioned at the bottom
+          elevation = hasSlab ? SLAB_THICKNESS : 0
+        }
+
         results.push({
           nodeId: node.id,
           updates: {
-            // If there's a slab, walls/columns/items should be elevated by slab thickness
-            // Otherwise they're at ground level (0)
-            elevation: hasSlab ? SLAB_THICKNESS : 0,
+            elevation,
           },
         })
       }

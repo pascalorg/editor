@@ -30,6 +30,9 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       }),
     )
 
+  if (nodeType === 'ceiling') {
+    console.log('nodeElevation', nodeElevation)
+  }
   const nodeChildrenIds = useMemo(
     () => JSON.parse(nodeChildrenIdsStr || '[]'),
     [nodeChildrenIdsStr],

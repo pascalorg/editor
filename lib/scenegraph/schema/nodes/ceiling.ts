@@ -11,9 +11,6 @@ export const CeilingNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number()]),
   rotation: z.number(),
   size: z.tuple([z.number(), z.number()]),
-  // Specific props
-  elevation: z.number().optional(), // Height above floor
-  thickness: z.number().optional(),
 }).describe(
   dedent`
   Ceiling node - used to represent a ceiling surface
@@ -21,7 +18,6 @@ export const CeilingNode = BaseNode.extend({
   - rotation: rotation in radians
   - size: width and depth in grid units
   - elevation: height above floor in meters
-  - thickness: thickness in meters
   `,
 )
 
