@@ -29,6 +29,17 @@ function SelectionManager() {
 
       // Single raycast on click
       raycaster.setFromCamera(new Vector2(x, y), camera)
+
+      // Prevent selecting when clicking on selection controls
+      const selectionControls = scene.getObjectByName('selection-controls')
+      if (selectionControls) {
+        const selectionControlsIntersection = raycaster.intersectObject(selectionControls, true)
+        if (selectionControlsIntersection.length > 0) {
+          // Clicked on selection controls, ignore
+          return
+        }
+      }
+
       const intersections = raycaster.intersectObject(currentFloor, true)
 
       const getNodeInfoFromIntersection = (object: Object3D) => {
