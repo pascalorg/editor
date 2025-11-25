@@ -9,7 +9,7 @@ export const ImageNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number()]).default([0, 0]),
   // rotation around Y-axis in level coordinate system (image are flat on the ground)
   rotationY: z.number().default(0),
-  scale: z.number().min(0),
+  scale: z.number().min(0).default(1),
 }).describe(
   dedent`
   Image node - used to represent a image in the building

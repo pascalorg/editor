@@ -7,9 +7,9 @@ export const ScanNode = BaseNode.extend({
   type: nodeType('scan'),
   url: z.string(), // Data URL for 3D model
   // position and rotation are in level coordinate system (scan can be adjusted around any axis)
-  position: z.tuple([z.number(), z.number(), z.number()]),
-  rotation: z.tuple([z.number(), z.number(), z.number()]),
-  scale: z.number().min(0),
+  position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  scale: z.number().min(0).default(1),
 }).describe(
   dedent`
   Scan node - used to represent a scan in the building

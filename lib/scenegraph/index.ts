@@ -615,7 +615,7 @@ export class SceneNodeHandle<T extends AnyNode = AnyNode> {
   }
 
   get type() {
-    return this.meta.type as T['type']
+    return this.meta.type as T extends { type: infer U } ? U : never
   }
 
   get value() {

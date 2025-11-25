@@ -13,6 +13,9 @@ export function useKeyboard() {
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
+  const groupSelected = useEditor((state) => state.groupSelected)
+  const ungroupSelected = useEditor((state) => state.ungroupSelected)
+  const handleClear = useEditor((state) => state.handleClear)
 
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
 
@@ -30,6 +33,10 @@ export function useKeyboard() {
           useEditor.getState().deletePreviewNodes()
         ) {
           return // Stop further processing if building was cancelled
+        }
+        if (selectedNodeIds.length > 0) {
+          handleClear()
+          return
         }
         setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
@@ -49,6 +56,13 @@ export function useKeyboard() {
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('guide')
+      } else if ((e.key === 'g' || e.key === 'G') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        if (e.shiftKey) {
+          ungroupSelected()
+        } else {
+          groupSelected()
+        }
       } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
@@ -81,5 +95,8 @@ export function useKeyboard() {
     selectedNodeIds,
     handleDeleteSelected,
     toggleLevelMode,
+    groupSelected,
+    ungroupSelected,
+    handleClear,
   ])
 }

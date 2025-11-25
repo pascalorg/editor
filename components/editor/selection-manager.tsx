@@ -6,6 +6,7 @@ import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
 
 function SelectionManager() {
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const handleClear = useEditor((state) => state.handleClear)
 
   const controlMode = useEditor((state) => state.controlMode)
 
@@ -19,9 +20,8 @@ function SelectionManager() {
 
   useEffect(() => {
     if (!currentFloor) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return // Only left-click
-      if (controlMode !== 'select') return
+
+    const performRaycast = (event: PointerEvent) => {
       // Convert to NDC coordinates
       const rect = gl.domElement.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -36,7 +36,7 @@ function SelectionManager() {
         const selectionControlsIntersection = raycaster.intersectObject(selectionControls, true)
         if (selectionControlsIntersection.length > 0) {
           // Clicked on selection controls, ignore
-          return
+          return []
         }
       }
 
@@ -110,6 +110,15 @@ function SelectionManager() {
         return distanceDiff // Closer nodes first
       })
 
+      return candidates
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return // Only left-click
+      if (controlMode !== 'select') return
+
+      const candidates = performRaycast(event)
+
       if (candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
@@ -117,9 +126,28 @@ function SelectionManager() {
       }
     }
 
+    const handleClick = (event: PointerEvent) => {
+      if (event.button !== 0) return // Only left-click
+      if (controlMode !== 'select') return
+
+      // Don't clear selection if modifiers are held (user might be trying to multi-select and missed)
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return
+
+      const candidates = performRaycast(event)
+
+      // If we didn't hit any selectable node, clear the selection
+      if (candidates.length === 0) {
+        handleClear()
+      }
+    }
+
     gl.domElement.addEventListener('pointerdown', handlePointerDown)
-    return () => gl.domElement.removeEventListener('pointerdown', handlePointerDown)
-  }, [camera, gl, raycaster, currentFloor, handleNodeSelect])
+    gl.domElement.addEventListener('click', handleClick)
+    return () => {
+      gl.domElement.removeEventListener('pointerdown', handlePointerDown)
+      gl.domElement.removeEventListener('click', handleClick)
+    }
+  }, [camera, gl, raycaster, currentFloor, handleNodeSelect, handleClear, controlMode])
 
   return null
 }
