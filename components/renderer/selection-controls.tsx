@@ -2,17 +2,13 @@ import type { ThreeMouseEvent } from '@pmndrs/uikit/dist/events'
 import { Billboard, Edges } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Container } from '@react-three/uikit'
-import { Badge, Button, Card } from '@react-three/uikit-default'
+import { Button } from '@react-three/uikit-default'
 import { Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
-
-interface SelectionBoxProps {
-  group: React.RefObject<THREE.Group | null>
-}
 
 interface MoveState {
   isMoving: boolean
@@ -31,9 +27,14 @@ interface MoveState {
   initialGridPosition: [number, number] | null
 }
 
-export function SelectionBox({ group }: SelectionBoxProps) {
-  const [size, setSize] = useState<THREE.Vector3 | null>(null)
-  const [center, setCenter] = useState<THREE.Vector3 | null>(null)
+interface BoundingBoxData {
+  size: THREE.Vector3
+  center: THREE.Vector3
+}
+
+export function SelectionControls() {
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
   const moveStateRef = useRef<MoveState>({
     isMoving: false,
@@ -55,69 +56,107 @@ export function SelectionBox({ group }: SelectionBoxProps) {
     [],
   )
 
-  useEffect(() => {
-    if (!group.current) return
+  // Find selected THREE.Group objects by name (nodeId)
+  const selectedGroups = useMemo(() => {
+    if (!scene || selectedNodeIds.length === 0) return []
+    return selectedNodeIds.map((id) => scene.getObjectByName(id)).filter(Boolean) as THREE.Group[]
+  }, [scene, selectedNodeIds])
 
-    const updateBounds = () => {
-      const innerGroup = group.current!
+  // Calculate individual bounding boxes for each selected object
+  const individualBounds = useMemo(() => {
+    return selectedGroups
+      .map((group) => {
+        // Force update of world matrices to ensure accurate calculation
+        group.updateMatrixWorld(true)
 
-      // Force update of world matrices to ensure accurate calculation
-      innerGroup.updateMatrixWorld(true)
+        // Calculate bounding box in local space
+        const box = new THREE.Box3()
+        let hasContent = false
 
-      // Calculate bounding box in local space by manually computing it
-      const box = new THREE.Box3()
-      let hasContent = false
+        group.traverse((child) => {
+          if (child === group) return
 
-      innerGroup.traverse((child) => {
-        if (child === innerGroup) return
+          // For meshes with geometry
+          if (child instanceof THREE.Mesh && child.geometry) {
+            const geometry = child.geometry
 
-        // For meshes with geometry
-        if (child instanceof THREE.Mesh && child.geometry) {
-          const geometry = child.geometry
-
-          if (!geometry.boundingBox) {
-            geometry.computeBoundingBox()
-          }
-
-          if (geometry.boundingBox) {
-            hasContent = true
-            // Get the geometry bounds in local space
-            const localBox = geometry.boundingBox.clone()
-
-            // Transform by the mesh's matrix (relative to inner group)
-            // We need the transform from inner group to this child
-            const relativeMatrix = new THREE.Matrix4()
-            relativeMatrix.copy(child.matrix)
-
-            // If child has a parent chain within innerGroup, accumulate their matrices
-            let current = child.parent
-            while (current && current !== innerGroup) {
-              relativeMatrix.premultiply(current.matrix)
-              current = current.parent
+            if (!geometry.boundingBox) {
+              geometry.computeBoundingBox()
             }
 
-            localBox.applyMatrix4(relativeMatrix)
-            box.union(localBox)
+            if (geometry.boundingBox) {
+              hasContent = true
+              const localBox = geometry.boundingBox.clone()
+
+              // Transform by the mesh's matrix (relative to group)
+              const relativeMatrix = new THREE.Matrix4()
+              relativeMatrix.copy(child.matrix)
+
+              // If child has a parent chain within group, accumulate their matrices
+              let current = child.parent
+              while (current && current !== group) {
+                relativeMatrix.premultiply(current.matrix)
+                current = current.parent
+              }
+
+              localBox.applyMatrix4(relativeMatrix)
+              box.union(localBox)
+            }
           }
+        })
+
+        if (!hasContent || box.isEmpty()) return null
+
+        const size = box.getSize(new THREE.Vector3())
+        const center = box.getCenter(new THREE.Vector3())
+
+        // Convert center to world space
+        const worldCenter = center.clone()
+        group.localToWorld(worldCenter)
+
+        return {
+          size,
+          center: worldCenter,
         }
       })
+      .filter(Boolean) as BoundingBoxData[]
+  }, [selectedGroups])
 
-      if (!hasContent || box.isEmpty()) return
+  // Calculate combined bounding box for all selected objects
+  const combinedBounds = useMemo((): BoundingBoxData | null => {
+    if (individualBounds.length === 0) return null
 
-      const size = box.getSize(new THREE.Vector3())
-      const center = box.getCenter(new THREE.Vector3())
-      setSize(size)
-      setCenter(center)
-    }
+    const combinedBox = new THREE.Box3()
+    individualBounds.forEach((bounds) => {
+      const { size, center } = bounds
+      const min = new THREE.Vector3(
+        center.x - size.x / 2,
+        center.y - size.y / 2,
+        center.z - size.z / 2,
+      )
+      const max = new THREE.Vector3(
+        center.x + size.x / 2,
+        center.y + size.y / 2,
+        center.z + size.z / 2,
+      )
+      combinedBox.expandByPoint(min)
+      combinedBox.expandByPoint(max)
+    })
 
-    updateBounds()
-  }, [group])
+    const size = combinedBox.getSize(new THREE.Vector3())
+    const center = combinedBox.getCenter(new THREE.Vector3())
 
-  const handleDelete = useCallback((e: ThreeMouseEvent) => {
-    e.stopPropagation?.()
-    const selectedNodeIds = useEditor.getState().selectedNodeIds
-    useEditor.getState().deleteNodes(selectedNodeIds)
-  }, [])
+    return { size, center }
+  }, [individualBounds])
+
+  const handleDelete = useCallback(
+    (e: ThreeMouseEvent) => {
+      e.stopPropagation?.()
+      const selectedNodeIds = useEditor.getState().selectedNodeIds
+      useEditor.getState().deleteNodes(selectedNodeIds)
+    },
+    [],
+  )
 
   const handleMove = useCallback((e: ThreeMouseEvent) => {
     e.stopPropagation?.()
@@ -368,9 +407,11 @@ export function SelectionBox({ group }: SelectionBoxProps) {
 
   // Scale control panel based on camera distance to maintain consistent visual size
   useFrame(() => {
-    if (controlPanelRef.current && center) {
-      // Calculate distance from camera to the selection center (not the panel itself)
-      const distance = camera.position.distanceTo(new THREE.Vector3(center.x, center.y, center.z))
+    if (controlPanelRef.current && combinedBounds) {
+      // Calculate distance from camera to the selection center
+      const distance = camera.position.distanceTo(
+        new THREE.Vector3(combinedBounds.center.x, combinedBounds.center.y, combinedBounds.center.z),
+      )
       // Use distance to calculate appropriate scale
       const scale = distance * 0.12 // Adjust multiplier for desired size
       const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
@@ -378,22 +419,37 @@ export function SelectionBox({ group }: SelectionBoxProps) {
     }
   })
 
-  if (!(size && center)) return null
+  // Don't render anything if nothing is selected
+  if (selectedNodeIds.length === 0 || !combinedBounds) return null
 
-  const controlPanelY = center.y + size.y / 2 + 0.5 // Position above the box
+  const controlPanelY = combinedBounds.center.y + combinedBounds.size.y / 2 + 0.5 // Position above the box
 
   return (
     <group>
-      {/* Selection Box */}
-      <mesh position={center}>
-        <boxGeometry args={[size.x, size.y, size.z]} />
-        <meshBasicMaterial opacity={0} transparent />
-        <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
-      </mesh>
+      {/* Individual bounding boxes for each selected item */}
+      {individualBounds.map((bounds, i) => (
+        <mesh key={i} position={bounds.center}>
+          <boxGeometry args={[bounds.size.x, bounds.size.y, bounds.size.z]} />
+          <meshBasicMaterial opacity={0} transparent />
+          <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
+        </mesh>
+      ))}
 
-      {/* Control Panel using uikit - hidden when moving */}
+      {/* Combined bounding box (only if multiple items selected) */}
+      {selectedNodeIds.length > 1 && (
+        <mesh position={combinedBounds.center}>
+          <boxGeometry args={[combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z]} />
+          <meshBasicMaterial opacity={0} transparent />
+          <Edges color="#ffff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
+        </mesh>
+      )}
+
+      {/* Control Panel - positioned at combined bounds center, hidden when moving */}
       {!isMoving && (
-        <group position={[center.x, controlPanelY, center.z]} ref={controlPanelRef}>
+        <group
+          position={[combinedBounds.center.x, controlPanelY, combinedBounds.center.z]}
+          ref={controlPanelRef}
+        >
           <Billboard>
             <Container
               alignItems="center"

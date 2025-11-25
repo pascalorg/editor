@@ -1,13 +1,10 @@
-import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { shallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
 import type { AnyNode, AnyNodeId, BaseNode } from '@/lib/scenegraph/schema/index'
 import { TILE_SIZE } from '../editor'
-import { SelectionBox } from './selection-box'
 
 interface NodeRendererProps {
   nodeId: BaseNode['id']
@@ -46,14 +43,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return [0, nodeElevation || 0, 0] as [number, number, number]
   }, [nodePosition, nodeElevation])
 
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
-  const controlMode = useEditor((state) => state.controlMode)
-
-  const isSelected = useMemo(
-    () => selectedNodeIds.includes(nodeId),
-    [selectedNodeIds, nodeId],
-  )
 
   // Filter nodes based on viewer display mode (only in viewer mode)
   const shouldRenderNode = useMemo(() => {
@@ -107,7 +97,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
               <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
             ))}
         </group>
-        {isSelected && controlMode === 'select' && <SelectionBox group={groupRef} />}
       </group>
     </>
   )
