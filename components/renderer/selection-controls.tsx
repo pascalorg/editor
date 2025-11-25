@@ -9,6 +9,14 @@ import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
+import { GRID_SIZE, TILE_SIZE } from '../editor'
+
+/**
+ * Calculate the grid offset to account for the scene root group position.
+ * The scene root group has an offset: [-GRID_SIZE/2, 0, -GRID_SIZE/2]
+ * This offset needs to be accounted for when converting world coords to grid coords.
+ */
+const getGridOffset = () => GRID_SIZE / TILE_SIZE / 2
 
 interface MoveState {
   isMoving: boolean
@@ -102,6 +110,8 @@ export function SelectionControls() {
   const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
   const [boundsNeedUpdate, setBoundsNeedUpdate] = useState(0)
+
+  const rotationFramesRef = useRef(0) // Track frames after rotation to update bounds
   const moveStateRef = useRef<MoveState>({
     isMoving: false,
     originalData: new Map(),
@@ -130,9 +140,13 @@ export function SelectionControls() {
 
   // Calculate individual bounding boxes for each selected object
   // Re-calculates when boundsNeedUpdate changes (triggered during movement)
-  const individualBounds = useMemo(() => {
-    return selectedGroups.map((group) => calculateWorldBounds(group)).filter(Boolean) as BoundingBoxData[]
-  }, [selectedGroups, boundsNeedUpdate])
+  const individualBounds = useMemo(
+    () =>
+      selectedGroups
+        .map((group) => calculateWorldBounds(group))
+        .filter(Boolean) as BoundingBoxData[],
+    [selectedGroups, boundsNeedUpdate],
+  )
 
   // Calculate combined bounding box for all selected objects
   // Combined box is axis-aligned in world space (doesn't rotate)
@@ -175,14 +189,11 @@ export function SelectionControls() {
     return { size, center, rotation: new THREE.Euler(0, 0, 0) }
   }, [individualBounds])
 
-  const handleDelete = useCallback(
-    (e: ThreeMouseEvent) => {
-      e.stopPropagation?.()
-      const selectedNodeIds = useEditor.getState().selectedNodeIds
-      useEditor.getState().deleteNodes(selectedNodeIds)
-    },
-    [],
-  )
+  const handleDelete = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    const selectedNodeIds = useEditor.getState().selectedNodeIds
+    useEditor.getState().deleteNodes(selectedNodeIds)
+  }, [])
 
   const handleMove = useCallback((e: ThreeMouseEvent) => {
     e.stopPropagation?.()
@@ -386,63 +397,371 @@ export function SelectionControls() {
     ]
   }, [])
 
-  const handleRotateCW = useCallback((e: ThreeMouseEvent) => {
-    e.stopPropagation?.()
-    const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+  const handleRotateCW = useCallback(
+    (e: ThreeMouseEvent) => {
+      e.stopPropagation?.()
+      const { selectedNodeIds, graph, updateNode } = useEditor.getState()
 
-    // Rotate by -45 degrees (-Math.PI / 4) for clockwise rotation
-    const angle = -Math.PI / 4
+      // Rotate by -45 degrees (-Math.PI / 4) for clockwise rotation
+      const angle = -Math.PI / 4
 
-    for (const nodeId of selectedNodeIds) {
-      const handle = graph.getNodeById(nodeId as any)
-      if (!handle) continue
+      // If multiple items, rotate around geometric center
+      if (selectedNodeIds.length > 1 && individualBounds.length > 0) {
+        // Calculate pivot as average of all geometric centers (in grid space)
+        // For walls, use actual midpoint from start/end, not bounding box
+        let sumX = 0
+        let sumY = 0
+        let validCenters = 0
 
-      const node = handle.data() as any
-      if (!(node && 'rotation' in node)) continue
+        selectedNodeIds.forEach((nodeId, index) => {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) return
 
-      // Just update rotation, no position changes
-      updateNode(nodeId, {
-        rotation: node.rotation + angle,
-      })
-    }
-  }, [])
+          const node = handle.data() as any
+          if (!node) return
 
-  const handleRotateCCW = useCallback((e: ThreeMouseEvent) => {
-    e.stopPropagation?.()
-    const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+          // For walls, calculate center from start/end points
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+            const centerX = (startX + endX) / 2
+            const centerY = (startY + endY) / 2
+            sumX += centerX
+            sumY += centerY
+            validCenters++
+          } else if (index < individualBounds.length) {
+            // For non-walls, use bounding box center
+            const bounds = individualBounds[index]
+            sumX += bounds.center.x / TILE_SIZE + getGridOffset()
+            sumY += bounds.center.z / TILE_SIZE + getGridOffset()
+            validCenters++
+          }
+        })
 
-    // Rotate by 45 degrees (Math.PI / 4) for counter-clockwise rotation
-    const angle = Math.PI / 4
+        const pivot = new THREE.Vector2(sumX / validCenters, sumY / validCenters)
 
-    for (const nodeId of selectedNodeIds) {
-      const handle = graph.getNodeById(nodeId as any)
-      if (!handle) continue
+        // Build a map of nodeId to bounds for quick lookup
+        const boundsMap = new Map<string, BoundingBoxData>()
+        selectedNodeIds.forEach((id, index) => {
+          if (index < individualBounds.length) {
+            boundsMap.set(id, individualBounds[index])
+          }
+        })
 
-      const node = handle.data() as any
-      if (!(node && 'rotation' in node)) continue
+        // Rotate each node around the pivot (using geometric centers)
+        for (const nodeId of selectedNodeIds) {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) continue
 
-      // Just update rotation, no position changes
-      updateNode(nodeId, {
-        rotation: node.rotation + angle,
-      })
-    }
-  }, [])
+          const node = handle.data() as any
+          if (!(node && 'rotation' in node && 'position' in node)) continue
+
+          const bounds = boundsMap.get(nodeId)
+          if (!bounds) continue
+
+          // Get the object's current geometric center (in grid space)
+          // Account for the scene root offset [-GRID_SIZE/2, 0, -GRID_SIZE/2]
+          const geometricCenter = new THREE.Vector2(
+            bounds.center.x / TILE_SIZE + getGridOffset(),
+            bounds.center.z / TILE_SIZE + getGridOffset(),
+          )
+
+          // Calculate offset from pivot to geometric center
+          const offset = geometricCenter.clone().sub(pivot)
+
+          // Rotate offset around origin
+          const rotatedOffset = offset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+
+          // Calculate new geometric center after group rotation
+          const newGeometricCenter = pivot.clone().add(rotatedOffset)
+
+          let newPosition: [number, number]
+
+          // For walls, calculate position from start/end rotation (not geometric center)
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+
+            // Rotate start point around pivot
+            const startOffset = new THREE.Vector2(startX, startY).sub(pivot)
+            const rotatedStart = startOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newStart = pivot.clone().add(rotatedStart)
+
+            // Rotate end point around pivot
+            const endOffset = new THREE.Vector2(endX, endY).sub(pivot)
+            const rotatedEnd = endOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newEnd = pivot.clone().add(rotatedEnd)
+
+            // For walls, position should match start point
+            newPosition = [newStart.x, newStart.y]
+          } else {
+            // For non-wall objects, calculate position from geometric center
+            const [x, y] = node.position as [number, number]
+            const positionToCenter = geometricCenter.clone().sub(new THREE.Vector2(x, y))
+
+            // After rotation, this local offset rotates by the same angle
+            const rotatedLocalOffset = positionToCenter
+              .clone()
+              .rotateAround(new THREE.Vector2(0, 0), angle)
+
+            // New position = new center - rotated local offset
+            newPosition = [
+              newGeometricCenter.x - rotatedLocalOffset.x,
+              newGeometricCenter.y - rotatedLocalOffset.y,
+            ]
+          }
+
+          // For walls, rotation property stays the same because direction is encoded in start/end
+          // For other objects, rotation changes
+          const newRotation = isWallNode(node) ? node.rotation : node.rotation + angle
+
+          const updates: any = {
+            position: newPosition,
+            rotation: newRotation,
+          }
+
+          // Add start/end for walls and recalculate rotation from direction
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+
+            // Rotate start point around pivot
+            const startOffset = new THREE.Vector2(startX, startY).sub(pivot)
+            const rotatedStart = startOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newStart = pivot.clone().add(rotatedStart)
+
+            // Rotate end point around pivot
+            const endOffset = new THREE.Vector2(endX, endY).sub(pivot)
+            const rotatedEnd = endOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newEnd = pivot.clone().add(rotatedEnd)
+
+            updates.start = [newStart.x, newStart.y] as [number, number]
+            updates.end = [newEnd.x, newEnd.y] as [number, number]
+
+            // Calculate rotation from the direction vector (start -> end)
+            const direction = new THREE.Vector2(newEnd.x - newStart.x, newEnd.y - newStart.y)
+            const calculatedRotation = Math.atan2(direction.y, direction.x)
+            updates.rotation = calculatedRotation
+          }
+
+          updateNode(nodeId, updates)
+        }
+      } else {
+        // Single item: rotate in place
+        for (const nodeId of selectedNodeIds) {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) continue
+
+          const node = handle.data() as any
+          if (!(node && 'rotation' in node)) continue
+
+          updateNode(nodeId, {
+            rotation: node.rotation + angle,
+          })
+        }
+      }
+
+      // Trigger bounds update over next few frames (wait for THREE to update)
+      rotationFramesRef.current = 3
+    },
+    [individualBounds],
+  )
+
+  const handleRotateCCW = useCallback(
+    (e: ThreeMouseEvent) => {
+      e.stopPropagation?.()
+      const { selectedNodeIds, graph, updateNode } = useEditor.getState()
+
+      // Rotate by 45 degrees (Math.PI / 4) for counter-clockwise rotation
+      const angle = Math.PI / 4
+
+      // If multiple items, rotate around geometric center
+      if (selectedNodeIds.length > 1 && individualBounds.length > 0) {
+        // Calculate pivot as average of all geometric centers (in grid space)
+        // For walls, use actual midpoint from start/end, not bounding box
+        let sumX = 0
+        let sumY = 0
+        let validCenters = 0
+
+        selectedNodeIds.forEach((nodeId, index) => {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) return
+
+          const node = handle.data() as any
+          if (!node) return
+
+          // For walls, calculate center from start/end points
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+            const centerX = (startX + endX) / 2
+            const centerY = (startY + endY) / 2
+            sumX += centerX
+            sumY += centerY
+            validCenters++
+          } else if (index < individualBounds.length) {
+            // For non-walls, use bounding box center
+            const bounds = individualBounds[index]
+            sumX += bounds.center.x / TILE_SIZE + getGridOffset()
+            sumY += bounds.center.z / TILE_SIZE + getGridOffset()
+            validCenters++
+          }
+        })
+
+        const pivot = new THREE.Vector2(sumX / validCenters, sumY / validCenters)
+
+        // Build a map of nodeId to bounds for quick lookup
+        const boundsMap = new Map<string, BoundingBoxData>()
+        selectedNodeIds.forEach((id, index) => {
+          if (index < individualBounds.length) {
+            boundsMap.set(id, individualBounds[index])
+          }
+        })
+
+        // Rotate each node around the pivot (using geometric centers)
+        for (const nodeId of selectedNodeIds) {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) continue
+
+          const node = handle.data() as any
+          if (!(node && 'rotation' in node && 'position' in node)) continue
+
+          const bounds = boundsMap.get(nodeId)
+          if (!bounds) continue
+
+          // Get the object's current geometric center (in grid space)
+          // Account for the scene root offset [-GRID_SIZE/2, 0, -GRID_SIZE/2]
+          const geometricCenter = new THREE.Vector2(
+            bounds.center.x / TILE_SIZE + getGridOffset(),
+            bounds.center.z / TILE_SIZE + getGridOffset(),
+          )
+
+          // Calculate offset from pivot to geometric center
+          const offset = geometricCenter.clone().sub(pivot)
+
+          // Rotate offset around origin
+          const rotatedOffset = offset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+
+          // Calculate new geometric center after group rotation
+          const newGeometricCenter = pivot.clone().add(rotatedOffset)
+
+          let newPosition: [number, number]
+
+          // For walls, calculate position from start/end rotation (not geometric center)
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+
+            // Rotate start point around pivot
+            const startOffset = new THREE.Vector2(startX, startY).sub(pivot)
+            const rotatedStart = startOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newStart = pivot.clone().add(rotatedStart)
+
+            // Rotate end point around pivot
+            const endOffset = new THREE.Vector2(endX, endY).sub(pivot)
+            const rotatedEnd = endOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newEnd = pivot.clone().add(rotatedEnd)
+
+            // For walls, position should match start point
+            newPosition = [newStart.x, newStart.y]
+          } else {
+            // For non-wall objects, calculate position from geometric center
+            const [x, y] = node.position as [number, number]
+            const positionToCenter = geometricCenter.clone().sub(new THREE.Vector2(x, y))
+
+            // After rotation, this local offset rotates by the same angle
+            const rotatedLocalOffset = positionToCenter
+              .clone()
+              .rotateAround(new THREE.Vector2(0, 0), angle)
+
+            // New position = new center - rotated local offset
+            newPosition = [
+              newGeometricCenter.x - rotatedLocalOffset.x,
+              newGeometricCenter.y - rotatedLocalOffset.y,
+            ]
+          }
+
+          // For walls, rotation property stays the same because direction is encoded in start/end
+          // For other objects, rotation changes
+          const newRotation = isWallNode(node) ? node.rotation : node.rotation + angle
+
+          const updates: any = {
+            position: newPosition,
+            rotation: newRotation,
+          }
+
+          // Add start/end for walls and recalculate rotation from direction
+          if (isWallNode(node)) {
+            const [startX, startY] = node.start as [number, number]
+            const [endX, endY] = node.end as [number, number]
+
+            // Rotate start point around pivot
+            const startOffset = new THREE.Vector2(startX, startY).sub(pivot)
+            const rotatedStart = startOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newStart = pivot.clone().add(rotatedStart)
+
+            // Rotate end point around pivot
+            const endOffset = new THREE.Vector2(endX, endY).sub(pivot)
+            const rotatedEnd = endOffset.clone().rotateAround(new THREE.Vector2(0, 0), angle)
+            const newEnd = pivot.clone().add(rotatedEnd)
+
+            updates.start = [newStart.x, newStart.y] as [number, number]
+            updates.end = [newEnd.x, newEnd.y] as [number, number]
+
+            // Calculate rotation from the direction vector (start -> end)
+            const direction = new THREE.Vector2(newEnd.x - newStart.x, newEnd.y - newStart.y)
+            const calculatedRotation = Math.atan2(direction.y, direction.x)
+            updates.rotation = calculatedRotation
+          }
+
+          updateNode(nodeId, updates)
+        }
+      } else {
+        // Single item: rotate in place
+        for (const nodeId of selectedNodeIds) {
+          const handle = graph.getNodeById(nodeId as any)
+          if (!handle) continue
+
+          const node = handle.data() as any
+          if (!(node && 'rotation' in node)) continue
+
+          updateNode(nodeId, {
+            rotation: node.rotation + angle,
+          })
+        }
+      }
+
+      // Trigger bounds update over next few frames (wait for THREE to update)
+      rotationFramesRef.current = 3
+    },
+    [individualBounds],
+  )
 
   const controlPanelRef = useRef<THREE.Group>(null)
   const { camera } = useThree()
 
-  // Update bounds every frame when moving, and scale control panel
+  // Update bounds every frame when moving or after rotation, and scale control panel
   useFrame(() => {
     // Trigger bounds update when moving
     if (moveStateRef.current.isMoving) {
       setBoundsNeedUpdate((prev) => prev + 1)
     }
 
+    // Trigger bounds update for a few frames after rotation (wait for THREE to update)
+    if (rotationFramesRef.current > 0) {
+      setBoundsNeedUpdate((prev) => prev + 1)
+      rotationFramesRef.current--
+    }
+
     // Scale control panel based on camera distance to maintain consistent visual size
     if (controlPanelRef.current && combinedBounds) {
       // Calculate distance from camera to the selection center
       const distance = camera.position.distanceTo(
-        new THREE.Vector3(combinedBounds.center.x, combinedBounds.center.y, combinedBounds.center.z),
+        new THREE.Vector3(
+          combinedBounds.center.x,
+          combinedBounds.center.y,
+          combinedBounds.center.z,
+        ),
       )
       // Use distance to calculate appropriate scale
       const scale = distance * 0.12 // Adjust multiplier for desired size
@@ -470,7 +789,9 @@ export function SelectionControls() {
       {/* Combined bounding box (only if multiple items selected) */}
       {selectedNodeIds.length > 1 && (
         <mesh position={combinedBounds.center}>
-          <boxGeometry args={[combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z]} />
+          <boxGeometry
+            args={[combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z]}
+          />
           <meshBasicMaterial opacity={0} transparent />
           <Edges color="#ffff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
         </mesh>
@@ -479,6 +800,7 @@ export function SelectionControls() {
       {/* Control Panel - positioned at combined bounds center, hidden when moving */}
       {!isMoving && (
         <group
+          name="selection-controls"
           position={[combinedBounds.center.x, controlPanelY, combinedBounds.center.z]}
           ref={controlPanelRef}
         >
