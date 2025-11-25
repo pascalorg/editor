@@ -66,6 +66,16 @@ function getNodeIcon(type: string): ReactNode {
       return (
         <img alt="slab" className={className} height={size} src="/icons/floor.png" width={size} />
       )
+    case 'ceiling':
+      return (
+        <img
+          alt="ceiling"
+          className={className}
+          height={size}
+          src="/icons/ceiling.png"
+          width={size}
+        />
+      )
     case 'group':
     case 'room':
       return (
@@ -167,6 +177,8 @@ function getNodeLabel(type: string, index: number, name?: string): string {
       return `Column ${index + 1}`
     case 'slab':
       return `Floor ${index + 1}`
+    case 'ceiling':
+      return `Ceiling ${index + 1}`
     case 'group':
       return name || `Room ${index + 1}`
     case 'door':

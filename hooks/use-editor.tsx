@@ -223,6 +223,7 @@ import type { LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index
 
 export type Tool =
   | 'slab'
+  | 'ceiling'
   | 'wall'
   | 'room'
   | 'custom-room'
@@ -230,7 +231,6 @@ export type Tool =
   | 'window'
   | 'roof'
   | 'column'
-  | 'slab'
   | 'item'
   | 'stair'
 

@@ -14,7 +14,7 @@
 
 import mitt from 'mitt'
 import type { AnyNode, ImageNode, WallNode } from '@/hooks/use-editor'
-import type { GridPoint } from '@/lib/scenegraph/schema/index'
+import type { CeilingNode, GridPoint } from '@/lib/scenegraph/schema/index'
 
 export interface GridEvent {
   position: [number, number]
@@ -28,6 +28,10 @@ export interface NodeEvent {
 
 export interface WallEvent extends NodeEvent {
   node: WallNode
+}
+
+export interface CeilingEvent extends NodeEvent {
+  node: CeilingNode
 }
 
 export interface ImageEvent {
@@ -65,6 +69,10 @@ type EditorEvents = {
   'wall:move': WallEvent
   'wall:enter': WallEvent
   'wall:leave': WallEvent
+  'ceiling:click': CeilingEvent
+  'ceiling:move': CeilingEvent
+  'ceiling:enter': CeilingEvent
+  'ceiling:leave': CeilingEvent
   'image:select': ImageEvent
   'image:update': ImageUpdateEvent
   'image:manipulation-start': ImageManipulationEvent
