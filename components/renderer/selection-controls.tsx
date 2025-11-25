@@ -32,10 +32,30 @@ interface BoundingBoxData {
   center: THREE.Vector3
 }
 
+/**
+ * Calculate world-space bounding box for a group, accounting for rotation
+ */
+function calculateWorldBounds(group: THREE.Group): BoundingBoxData | null {
+  // Force update of world matrices to ensure accurate calculation
+  group.updateMatrixWorld(true)
+
+  // Use THREE.Box3.setFromObject which automatically handles all transformations
+  const box = new THREE.Box3()
+  box.setFromObject(group)
+
+  if (box.isEmpty()) return null
+
+  const size = box.getSize(new THREE.Vector3())
+  const center = box.getCenter(new THREE.Vector3())
+
+  return { size, center }
+}
+
 export function SelectionControls() {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
+  const [boundsNeedUpdate, setBoundsNeedUpdate] = useState(0)
   const moveStateRef = useRef<MoveState>({
     isMoving: false,
     originalData: new Map(),
@@ -63,64 +83,10 @@ export function SelectionControls() {
   }, [scene, selectedNodeIds])
 
   // Calculate individual bounding boxes for each selected object
+  // Re-calculates when boundsNeedUpdate changes (triggered during movement)
   const individualBounds = useMemo(() => {
-    return selectedGroups
-      .map((group) => {
-        // Force update of world matrices to ensure accurate calculation
-        group.updateMatrixWorld(true)
-
-        // Calculate bounding box in local space
-        const box = new THREE.Box3()
-        let hasContent = false
-
-        group.traverse((child) => {
-          if (child === group) return
-
-          // For meshes with geometry
-          if (child instanceof THREE.Mesh && child.geometry) {
-            const geometry = child.geometry
-
-            if (!geometry.boundingBox) {
-              geometry.computeBoundingBox()
-            }
-
-            if (geometry.boundingBox) {
-              hasContent = true
-              const localBox = geometry.boundingBox.clone()
-
-              // Transform by the mesh's matrix (relative to group)
-              const relativeMatrix = new THREE.Matrix4()
-              relativeMatrix.copy(child.matrix)
-
-              // If child has a parent chain within group, accumulate their matrices
-              let current = child.parent
-              while (current && current !== group) {
-                relativeMatrix.premultiply(current.matrix)
-                current = current.parent
-              }
-
-              localBox.applyMatrix4(relativeMatrix)
-              box.union(localBox)
-            }
-          }
-        })
-
-        if (!hasContent || box.isEmpty()) return null
-
-        const size = box.getSize(new THREE.Vector3())
-        const center = box.getCenter(new THREE.Vector3())
-
-        // Convert center to world space
-        const worldCenter = center.clone()
-        group.localToWorld(worldCenter)
-
-        return {
-          size,
-          center: worldCenter,
-        }
-      })
-      .filter(Boolean) as BoundingBoxData[]
-  }, [selectedGroups])
+    return selectedGroups.map((group) => calculateWorldBounds(group)).filter(Boolean) as BoundingBoxData[]
+  }, [selectedGroups, boundsNeedUpdate])
 
   // Calculate combined bounding box for all selected objects
   const combinedBounds = useMemo((): BoundingBoxData | null => {
@@ -405,8 +371,14 @@ export function SelectionControls() {
   const controlPanelRef = useRef<THREE.Group>(null)
   const { camera } = useThree()
 
-  // Scale control panel based on camera distance to maintain consistent visual size
+  // Update bounds every frame when moving, and scale control panel
   useFrame(() => {
+    // Trigger bounds update when moving
+    if (moveStateRef.current.isMoving) {
+      setBoundsNeedUpdate((prev) => prev + 1)
+    }
+
+    // Scale control panel based on camera distance to maintain consistent visual size
     if (controlPanelRef.current && combinedBounds) {
       // Calculate distance from camera to the selection center
       const distance = camera.position.distanceTo(
