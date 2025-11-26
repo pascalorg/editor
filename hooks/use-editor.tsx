@@ -281,6 +281,7 @@ export type StoreState = {
     size: [number, number]
     position?: [number, number, number]
     rotation?: [number, number, number]
+    attachTo?: 'ceiling' | 'wall'
   }
 
   // Processors

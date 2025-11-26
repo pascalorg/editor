@@ -4,11 +4,12 @@ import { Package } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { ItemRenderer } from '@/components/nodes/item/item-renderer'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type CeilingEvent, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 import { ItemNode } from '@/lib/scenegraph/schema/nodes/item'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import { canPlaceGridItemOnWall } from '@/lib/utils'
 
 // ============================================================================
 // ITEM BUILDER COMPONENT
@@ -37,10 +38,12 @@ export function ItemNodeEditor() {
     previewItemId: string | null
     lastPreviewPosition: [number, number] | null
     currentRotation: number
+    canPlace: boolean
   }>({
     previewItemId: null,
     lastPreviewPosition: null,
     currentRotation: 0,
+    canPlace: false,
   })
 
   // Delete preview when selectedItem changes (user picks a different item from catalog)
@@ -81,8 +84,17 @@ export function ItemNodeEditor() {
   }, [selectedFloorId, updateNode])
 
   useEffect(() => {
+    // Determine attachment mode from selectedItem
+    const attachTo = selectedItem.attachTo
+
+    let ignoreGridMove = false
+
+    // ============================================================================
+    // GRID PLACEMENT (default behavior when no attachTo)
+    // ============================================================================
+
     const handleGridClick = (e: GridEvent) => {
-      if (!selectedFloorId) return
+      if (!selectedFloorId || attachTo) return // Skip if attaching to wall/ceiling
 
       const level = levels.find((l) => l.id === selectedFloorId)
       if (!level) return
@@ -108,6 +120,7 @@ export function ItemNodeEditor() {
             modelScale: selectedItem.scale,
             modelPosition: selectedItem.position,
             modelRotation: selectedItem.rotation,
+            attachTo: selectedItem.attachTo,
             children: [],
           }),
           selectedFloorId,
@@ -119,7 +132,7 @@ export function ItemNodeEditor() {
     }
 
     const handleGridMove = (e: GridEvent) => {
-      if (!selectedFloorId) return
+      if (!selectedFloorId || attachTo || ignoreGridMove) return // Skip if attaching to wall/ceiling
 
       const level = levels.find((l) => l.id === selectedFloorId)
       if (!level) return
@@ -161,6 +174,7 @@ export function ItemNodeEditor() {
               modelScale: selectedItem.scale,
               modelPosition: selectedItem.position,
               modelRotation: selectedItem.rotation,
+              attachTo: selectedItem.attachTo,
               children: [] as [],
             }),
             selectedFloorId,
@@ -168,6 +182,286 @@ export function ItemNodeEditor() {
           previewStateRef.current.previewItemId = newPreviewId
         }
       }
+    }
+
+    // ============================================================================
+    // WALL ATTACHMENT
+    // ============================================================================
+
+    const handleWallClick = (e: WallEvent) => {
+      if (attachTo !== 'wall') return
+
+      const previewId = previewStateRef.current.previewItemId
+      if (!previewId) return
+
+      if (previewStateRef.current.canPlace) {
+        // Commit the preview by setting preview: false
+        updateNode(previewId, { editor: { preview: false } })
+        previewStateRef.current.previewItemId = null
+        previewStateRef.current.lastPreviewPosition = null
+      }
+    }
+
+    const handleWallEnter = (e: WallEvent) => {
+      if (attachTo !== 'wall') return
+
+      // Delete any existing preview
+      const previewId = previewStateRef.current.previewItemId
+      if (previewId) {
+        deleteNode(previewId)
+      }
+
+      ignoreGridMove = true
+
+      // gridPosition is already in wall's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
+      // Create a temporary item to check placement
+      const tempItem = {
+        position: localPos,
+        rotation: 0,
+        size: selectedItem.size,
+      } as any
+
+      const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
+      previewStateRef.current.canPlace = canPlace
+
+      const newPreviewId = addNode(
+        ItemNode.parse({
+          parentId: e.node.id,
+          type: 'item' as const,
+          name: 'Item Preview',
+          position: localPos,
+          rotation: 0, // Rotation relative to wall
+          size: selectedItem.size,
+          visible: true,
+          opacity: 100,
+          category: 'furniture',
+          src: selectedItem.modelUrl,
+          modelScale: selectedItem.scale,
+          modelPosition: selectedItem.position,
+          modelRotation: selectedItem.rotation,
+          attachTo: selectedItem.attachTo,
+          editor: { preview: true, canPlace },
+          children: [],
+        }),
+        e.node.id, // Parent is the wall
+      )
+      previewStateRef.current.previewItemId = newPreviewId
+      previewStateRef.current.lastPreviewPosition = localPos
+    }
+
+    const handleWallMove = (e: WallEvent) => {
+      if (attachTo !== 'wall') return
+
+      const previewId = previewStateRef.current.previewItemId
+      const lastPos = previewStateRef.current.lastPreviewPosition
+
+      // Only update if position changed
+      if (lastPos && lastPos[0] === e.gridPosition.x && lastPos[1] === e.gridPosition.z) {
+        return
+      }
+
+      ignoreGridMove = true
+
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+      previewStateRef.current.lastPreviewPosition = localPos
+
+      // Create a temporary item to check placement
+      const tempItem = {
+        position: localPos,
+        rotation: 0,
+        size: selectedItem.size,
+      } as any
+
+      const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
+      previewStateRef.current.canPlace = canPlace
+
+      if (previewId) {
+        // Update existing preview
+        updateNode(previewId, {
+          position: localPos,
+          rotation: 0,
+          editor: { preview: true, canPlace },
+        })
+      } else {
+        // Create new preview
+        const newPreviewId = addNode(
+          ItemNode.parse({
+            parentId: e.node.id,
+            type: 'item' as const,
+            name: 'Item Preview',
+            position: localPos,
+            rotation: 0,
+            size: selectedItem.size,
+            visible: true,
+            opacity: 100,
+            category: 'furniture',
+            src: selectedItem.modelUrl,
+            modelScale: selectedItem.scale,
+            modelPosition: selectedItem.position,
+            modelRotation: selectedItem.rotation,
+            attachTo: selectedItem.attachTo,
+            editor: { preview: true, canPlace },
+            children: [],
+          }),
+          e.node.id,
+        )
+        previewStateRef.current.previewItemId = newPreviewId
+      }
+    }
+
+    const handleWallLeave = (e: WallEvent) => {
+      if (attachTo !== 'wall') return
+
+      const previewId = previewStateRef.current.previewItemId
+      if (previewId) {
+        deleteNode(previewId)
+        previewStateRef.current.previewItemId = null
+        previewStateRef.current.lastPreviewPosition = null
+      }
+      ignoreGridMove = false
+    }
+
+    // ============================================================================
+    // CEILING ATTACHMENT
+    // ============================================================================
+
+    const handleCeilingClick = (e: CeilingEvent) => {
+      if (attachTo !== 'ceiling') return
+
+      const previewId = previewStateRef.current.previewItemId
+      if (!previewId) return
+
+      if (previewStateRef.current.canPlace) {
+        // Commit the preview by setting preview: false
+        updateNode(previewId, { editor: { preview: false } })
+        previewStateRef.current.previewItemId = null
+        previewStateRef.current.lastPreviewPosition = null
+      }
+    }
+
+    const handleCeilingEnter = (e: CeilingEvent) => {
+      if (attachTo !== 'ceiling') return
+
+      // Delete any existing preview
+      const previewId = previewStateRef.current.previewItemId
+      if (previewId) {
+        deleteNode(previewId)
+      }
+
+      ignoreGridMove = true
+
+      // gridPosition is already in ceiling's local coordinate system
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+
+      // For ceiling, we can check if the item fits within the ceiling bounds
+      const ceilingSize = e.node.size || [0, 0]
+      const itemSize = selectedItem.size
+      const canPlace =
+        localPos[0] >= 0 &&
+        localPos[1] >= 0 &&
+        localPos[0] + itemSize[0] <= ceilingSize[0] &&
+        localPos[1] + itemSize[1] <= ceilingSize[1]
+
+      previewStateRef.current.canPlace = canPlace
+
+      const newPreviewId = addNode(
+        ItemNode.parse({
+          parentId: e.node.id,
+          type: 'item' as const,
+          name: 'Item Preview',
+          position: localPos,
+          rotation: 0,
+          size: selectedItem.size,
+          visible: true,
+          opacity: 100,
+          category: 'furniture',
+          src: selectedItem.modelUrl,
+          modelScale: selectedItem.scale,
+          modelPosition: selectedItem.position,
+          modelRotation: selectedItem.rotation,
+          attachTo: selectedItem.attachTo,
+          editor: { preview: true, canPlace },
+          children: [],
+        }),
+        e.node.id, // Parent is the ceiling
+      )
+      previewStateRef.current.previewItemId = newPreviewId
+      previewStateRef.current.lastPreviewPosition = localPos
+    }
+
+    const handleCeilingMove = (e: CeilingEvent) => {
+      if (attachTo !== 'ceiling') return
+
+      const previewId = previewStateRef.current.previewItemId
+      const lastPos = previewStateRef.current.lastPreviewPosition
+
+      // Only update if position changed
+      if (lastPos && lastPos[0] === e.gridPosition.x && lastPos[1] === e.gridPosition.z) {
+        return
+      }
+
+      ignoreGridMove = true
+
+      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+      previewStateRef.current.lastPreviewPosition = localPos
+
+      // Check if item fits within ceiling bounds
+      const ceilingSize = e.node.size || [0, 0]
+      const itemSize = selectedItem.size
+      const canPlace =
+        localPos[0] >= 0 &&
+        localPos[1] >= 0 &&
+        localPos[0] + itemSize[0] <= ceilingSize[0] &&
+        localPos[1] + itemSize[1] <= ceilingSize[1]
+
+      previewStateRef.current.canPlace = canPlace
+
+      if (previewId) {
+        // Update existing preview
+        updateNode(previewId, {
+          position: localPos,
+          rotation: 0,
+          editor: { preview: true, canPlace },
+        })
+      } else {
+        // Create new preview
+        const newPreviewId = addNode(
+          ItemNode.parse({
+            parentId: e.node.id,
+            type: 'item' as const,
+            name: 'Item Preview',
+            position: localPos,
+            rotation: 0,
+            size: selectedItem.size,
+            visible: true,
+            opacity: 100,
+            category: 'furniture',
+            src: selectedItem.modelUrl,
+            modelScale: selectedItem.scale,
+            modelPosition: selectedItem.position,
+            modelRotation: selectedItem.rotation,
+            attachTo: selectedItem.attachTo,
+            editor: { preview: true, canPlace },
+            children: [],
+          }),
+          e.node.id,
+        )
+        previewStateRef.current.previewItemId = newPreviewId
+      }
+    }
+
+    const handleCeilingLeave = (e: CeilingEvent) => {
+      if (attachTo !== 'ceiling') return
+
+      const previewId = previewStateRef.current.previewItemId
+      if (previewId) {
+        deleteNode(previewId)
+        previewStateRef.current.previewItemId = null
+        previewStateRef.current.lastPreviewPosition = null
+      }
+      ignoreGridMove = false
     }
 
     /**
@@ -244,16 +538,44 @@ export function ItemNodeEditor() {
       return true
     }
 
-    // Register event listeners
+    // Register event listeners based on attachment mode
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
+
+    if (attachTo === 'wall') {
+      emitter.on('wall:click', handleWallClick)
+      emitter.on('wall:enter', handleWallEnter)
+      emitter.on('wall:move', handleWallMove)
+      emitter.on('wall:leave', handleWallLeave)
+    }
+
+    if (attachTo === 'ceiling') {
+      emitter.on('ceiling:click', handleCeilingClick)
+      emitter.on('ceiling:enter', handleCeilingEnter)
+      emitter.on('ceiling:move', handleCeilingMove)
+      emitter.on('ceiling:leave', handleCeilingLeave)
+    }
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
+
+      if (attachTo === 'wall') {
+        emitter.off('wall:click', handleWallClick)
+        emitter.off('wall:enter', handleWallEnter)
+        emitter.off('wall:move', handleWallMove)
+        emitter.off('wall:leave', handleWallLeave)
+      }
+
+      if (attachTo === 'ceiling') {
+        emitter.off('ceiling:click', handleCeilingClick)
+        emitter.off('ceiling:enter', handleCeilingEnter)
+        emitter.off('ceiling:move', handleCeilingMove)
+        emitter.off('ceiling:leave', handleCeilingLeave)
+      }
     }
-  }, [addNode, updateNode, selectedFloorId, levels, spatialGrid, selectedItem])
+  }, [addNode, updateNode, deleteNode, selectedFloorId, levels, spatialGrid, selectedItem])
 
   return null
 }

@@ -13,6 +13,7 @@ interface CatalogItem {
   size: [number, number]
   position?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
   rotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
+  attachTo?: 'ceiling' | 'wall' // Where to attach the item
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
@@ -47,6 +48,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [3, 3, 3],
     rotation: [0, 0, 0],
     size: [1, 1],
+    attachTo: 'ceiling',
   },
   {
     thumbnail: '/items/ceiling-fan/thumbnail.webp',
@@ -54,6 +56,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [0.003, 0.003, 0.003],
     rotation: [0, 0, 0],
     size: [1, 1],
+    attachTo: 'ceiling',
   },
   {
     thumbnail: '/items/wall-art-06/thumbnail.webp',
@@ -62,6 +65,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [1, 1, 1],
     rotation: [0, 0, 0],
     size: [2, 1],
+    attachTo: 'wall',
   },
 ]
 
