@@ -45,7 +45,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   {
     thumbnail: '/items/ceiling-light/thumbnail.webp',
     modelUrl: '/items/ceiling-light/model.glb',
-    scale: [3, 3, 3],
+    scale: [1.5, 1.5, 1.5],
     rotation: [0, 0, 0],
     size: [1, 1],
     attachTo: 'ceiling',
@@ -54,6 +54,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     thumbnail: '/items/ceiling-fan/thumbnail.webp',
     modelUrl: '/items/ceiling-fan/model.glb',
     scale: [0.003, 0.003, 0.003],
+    position: [0, -0.5, 0],
     rotation: [0, 0, 0],
     size: [1, 1],
     attachTo: 'ceiling',

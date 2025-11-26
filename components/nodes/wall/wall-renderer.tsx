@@ -585,6 +585,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      // Only emit click event for left-click (button 0)
+      if (e.button !== 0) return
+
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:click', {
         node,

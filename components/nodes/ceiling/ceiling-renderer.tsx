@@ -18,15 +18,24 @@ interface CeilingRendererProps {
 
 /**
  * Get closest grid point from a THREE.js intersection point
+ * The ceiling mesh is centered, so we need to account for the offset
  */
-function getClosestGridPoint(point: THREE.Vector3, object: THREE.Object3D): GridPoint {
+function getClosestGridPoint(
+  point: THREE.Vector3,
+  object: THREE.Object3D,
+  ceilingSize: [number, number],
+): GridPoint {
   // Transform the world point to the ceiling mesh's local coordinate system
   // This automatically handles all parent transforms (level, building, etc.)
   const localPoint = object.worldToLocal(point.clone())
 
-  // Convert to grid coordinates in local space
-  const localGridX = localPoint.x / TILE_SIZE
-  const localGridZ = localPoint.z / TILE_SIZE
+  const [width, depth] = ceilingSize
+
+  // The mesh is centered and rotated [-Math.PI / 2, 0, 0]
+  // After rotation, the plane is in XZ, but worldToLocal might give us XY coordinates
+  // We need to add half the size to shift the origin to bottom-left corner
+  const localGridX = localPoint.x / TILE_SIZE + width / 2
+  const localGridZ = -localPoint.y / TILE_SIZE + depth / 2
 
   // Return the grid position rounded to nearest grid point
   return {
@@ -78,10 +87,12 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     // e.stopPropagation()
     if (!node) return
+    // Only emit click event for left-click (button 0)
+    if (e.button !== 0) return
 
     emitter.emit('ceiling:click', {
       node,
-      gridPosition: getClosestGridPoint(e.point, e.object),
+      gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }
@@ -92,7 +103,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
 
     emitter.emit('ceiling:enter', {
       node,
-      gridPosition: getClosestGridPoint(e.point, e.object),
+      gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }
@@ -103,7 +114,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
 
     emitter.emit('ceiling:leave', {
       node,
-      gridPosition: getClosestGridPoint(e.point, e.object),
+      gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }
@@ -114,7 +125,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
 
     emitter.emit('ceiling:move', {
       node,
-      gridPosition: getClosestGridPoint(e.point, e.object),
+      gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
     })
   }
