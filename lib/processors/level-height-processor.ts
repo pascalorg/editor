@@ -1,5 +1,6 @@
 import { WALL_HEIGHT } from '@/components/editor'
 import { SLAB_THICKNESS } from '@/components/nodes/slab/slab-renderer'
+import type { SceneGraph } from '@/lib/scenegraph'
 import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
@@ -63,7 +64,7 @@ function getMaxHeightRecursive(node: AnyNode): number {
 export class LevelHeightProcessor implements NodeProcessor {
   nodeTypes = ['level']
 
-  process(nodes: AnyNode[]): NodeProcessResult[] {
+  process(nodes: AnyNode[], graph: SceneGraph): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
 
     // Process each level

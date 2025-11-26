@@ -410,7 +410,7 @@ function processLevel(
       .map((id) => state.graph.getNodeById(id as AnyNodeId)?.data())
       .filter((n): n is AnyNode => n !== undefined)
 
-    const results = state.verticalStackingProcessor.process(neighbors)
+    const results = state.verticalStackingProcessor.process(neighbors, state.graph)
     const nodeResults = results.filter((r) => r.nodeId === nodeId)
 
     nodeResults.forEach(({ nodeId, updates }) => {
@@ -421,7 +421,7 @@ function processLevel(
 
   // Step 2: Calculate level height
   const levelNode = levelHandle.data() as unknown as SchemaLevelNode
-  const heightResults = state.levelHeightProcessor.process([levelNode])
+  const heightResults = state.levelHeightProcessor.process([levelNode], state.graph)
   heightResults.forEach(({ nodeId, updates }) => {
     state.graph.updateNode(nodeId as AnyNodeId, updates)
   })
@@ -430,7 +430,7 @@ function processLevel(
   const building = state.graph.nodes.find({ type: 'building' })[0]
   if (building) {
     const allLevels = building.children().map((h) => h.data()) as unknown as SchemaLevelNode[]
-    const elevationResults = state.levelElevationProcessor.process(allLevels)
+    const elevationResults = state.levelElevationProcessor.process(allLevels, state.graph)
 
     elevationResults.forEach(({ nodeId, updates }) => {
       state.graph.updateNode(nodeId as AnyNodeId, updates)

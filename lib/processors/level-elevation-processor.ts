@@ -1,3 +1,4 @@
+import type { SceneGraph } from '@/lib/scenegraph'
 import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
@@ -15,7 +16,7 @@ import type { NodeProcessor, NodeProcessResult } from './types'
 export class LevelElevationProcessor implements NodeProcessor {
   nodeTypes = ['level']
 
-  process(nodes: AnyNode[]): NodeProcessResult[] {
+  process(nodes: AnyNode[], graph: SceneGraph): NodeProcessResult[] {
     const results: NodeProcessResult[] = []
 
     // Filter and sort levels by their level number

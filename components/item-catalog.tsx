@@ -45,7 +45,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   {
     thumbnail: '/items/ceiling-light/thumbnail.webp',
     modelUrl: '/items/ceiling-light/model.glb',
-    scale: [1.5, 1.5, 1.5],
+    scale: [1, 1, 1],
     rotation: [0, 0, 0],
     size: [1, 1],
     attachTo: 'ceiling',
@@ -54,7 +54,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     thumbnail: '/items/ceiling-fan/thumbnail.webp',
     modelUrl: '/items/ceiling-fan/model.glb',
     scale: [0.003, 0.003, 0.003],
-    position: [0, -0.5, 0],
+    position: [0, -0.62, 0],
     rotation: [0, 0, 0],
     size: [1, 1],
     attachTo: 'ceiling',
@@ -62,10 +62,19 @@ const CATALOG_ITEMS: CatalogItem[] = [
   {
     thumbnail: '/items/wall-art-06/thumbnail.webp',
     modelUrl: '/items/wall-art-06/model.glb',
-    position: [0, 1, 0],
+    position: [0, 1, -0.15],
     scale: [1, 1, 1],
     rotation: [0, 0, 0],
     size: [2, 1],
+    attachTo: 'wall',
+  },
+  {
+    thumbnail: '/items/flat-screen-tv/thumbnail.webp',
+    modelUrl: '/items/flat-screen-tv/model.glb',
+    position: [-0.2, 1, -0.15],
+    scale: [0.42, 0.42, 0.42],
+    rotation: [0, Math.PI, 0],
+    size: [4, 1],
     attachTo: 'wall',
   },
 ]

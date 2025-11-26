@@ -763,6 +763,10 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
     update()
   }, [opening.position, update])
 
+  if (opening.type !== 'window' && opening.type !== 'door') {
+    return null // TODO: Handle data from node
+  }
+
   return (
     <Subtraction
       position-x={opening.position[0] * TILE_SIZE}

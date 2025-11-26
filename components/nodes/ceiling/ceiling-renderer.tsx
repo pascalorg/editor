@@ -140,7 +140,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
         onPointerEnter={isPreview ? undefined : handlePointerEnter}
         onPointerLeave={isPreview ? undefined : handlePointerLeave}
         onPointerMove={isPreview ? undefined : handlePointerMove}
-        position={[xOffset, 0.05, zOffset]}
+        position={[xOffset, 0.005, zOffset]}
         // receiveShadow={!isPreview}
         renderOrder={isPreview ? 1 : undefined}
         rotation={[-Math.PI / 2, 0, 0]} // Rotate to horizontal
@@ -167,7 +167,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
         onPointerEnter={isPreview ? undefined : handlePointerEnter}
         onPointerLeave={isPreview ? undefined : handlePointerLeave}
         onPointerMove={isPreview ? undefined : handlePointerMove}
-        position={[xOffset, -0.05, zOffset]} // Slight offset to avoid z-fighting
+        position={[xOffset, -0.005, zOffset]} // Slight offset to avoid z-fighting
         // receiveShadow={!isPreview}
         renderOrder={isPreview ? 1 : undefined}
         rotation={[-Math.PI / 2, 0, 0]} // Rotate to horizontal

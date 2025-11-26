@@ -54,7 +54,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     () =>
       new THREE.BoxGeometry(
         (nodeSize?.[0] ?? 0) * TILE_SIZE,
-        0.8,
+        0.1,
         (nodeSize?.[1] ?? 0) * TILE_SIZE,
       ),
     [nodeSize],
@@ -90,7 +90,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         // Preview rendering with X-ray effect
         <group>
           {/* Visible/in-front version - brighter, normal depth testing */}
-          <mesh geometry={boxGeometry} position-y={0.4} renderOrder={2}>
+          <mesh geometry={boxGeometry} position-y={0} renderOrder={2}>
             <meshStandardMaterial color={color} depthWrite={false} opacity={0.3} transparent />
           </mesh>
         </group>
