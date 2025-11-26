@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
 import type { AnyNode, AnyNodeId, BaseNode } from '@/lib/scenegraph/schema/index'
-import { TILE_SIZE } from '../editor'
+import { FLOOR_SPACING, TILE_SIZE } from '../editor'
 
 interface NodeRendererProps {
   nodeId: BaseNode['id']
@@ -12,39 +12,54 @@ interface NodeRendererProps {
 }
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
-  const { nodeType, nodeVisible, nodePosition, nodeRotation, nodeElevation, nodeChildrenIdsStr } =
-    useEditor(
-      useShallow((state) => {
-        const handle = state.graph.getNodeById(nodeId as AnyNodeId)
-        const node = handle?.data()
-        return {
-          nodeType: node?.type,
-          nodeVisible: (node as any)?.visible, // TODO: Type correctly
-          nodeChildrenIdsStr: JSON.stringify(
-            (node as any)?.children?.map((child: AnyNode) => child.id) || [],
-          ), // Storing into string to avoid deep equality issues
-          nodePosition: (node as any)?.position, // TODO: Type correctly
-          nodeElevation: (node as any)?.elevation, // TODO: Type correctly
-          nodeRotation: (node as any)?.rotation, // TODO: Type correctly
-        }
-      }),
-    )
+  const {
+    levelMode,
+    nodeType,
+    nodeVisible,
+    nodePosition,
+    nodeRotation,
+    nodeElevation,
+    nodeLevel,
+    nodeChildrenIdsStr,
+  } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      const node = handle?.data()
+      return {
+        levelMode: state.levelMode,
+        nodeType: node?.type,
+        nodeVisible: (node as any)?.visible, // TODO: Type correctly
+        nodeChildrenIdsStr: JSON.stringify(
+          (node as any)?.children?.map((child: AnyNode) => child.id) || [],
+        ), // Storing into string to avoid deep equality issues
+        nodePosition: (node as any)?.position, // TODO: Type correctly
+        nodeElevation: (node as any)?.elevation, // TODO: Type correctly
+        nodeRotation: (node as any)?.rotation, // TODO: Type correctly
+        nodeLevel: (node as any)?.level, // TODO: Type correctly
+      }
+    }),
+  )
 
-  if (nodeType === 'ceiling') {
-    console.log('nodeElevation', nodeElevation)
-  }
   const nodeChildrenIds = useMemo(
     () => JSON.parse(nodeChildrenIdsStr || '[]'),
     [nodeChildrenIdsStr],
   )
 
   const gridItemPosition = useMemo(() => {
+    let levelOffset = 0
+    if (nodeType === 'level' && levelMode === 'exploded') {
+      levelOffset = nodeLevel * FLOOR_SPACING
+    }
     if (nodePosition) {
       const [x, y] = nodePosition
-      return [x * TILE_SIZE, nodeElevation || 0, y * TILE_SIZE] as [number, number, number]
+      return [x * TILE_SIZE, (nodeElevation || 0) + levelOffset, y * TILE_SIZE] as [
+        number,
+        number,
+        number,
+      ]
     }
-    return [0, nodeElevation || 0, 0] as [number, number, number]
-  }, [nodePosition, nodeElevation])
+    return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
+  }, [nodePosition, nodeElevation, nodeLevel, levelMode])
 
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
