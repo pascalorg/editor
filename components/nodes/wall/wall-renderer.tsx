@@ -585,6 +585,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      // Only emit click event for left-click (button 0)
+      if (e.button !== 0) return
+
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:click', {
         node,
@@ -759,6 +762,10 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   useEffect(() => {
     update()
   }, [opening.position, update])
+
+  if (opening.type !== 'window' && opening.type !== 'door') {
+    return null // TODO: Handle data from node
+  }
 
   return (
     <Subtraction

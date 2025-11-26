@@ -36,7 +36,7 @@ function SelectionManager() {
         const selectionControlsIntersection = raycaster.intersectObject(selectionControls, true)
         if (selectionControlsIntersection.length > 0) {
           // Clicked on selection controls, ignore
-          return []
+          return null // We don't want to deselect when we click on the controls
         }
       }
 
@@ -119,7 +119,7 @@ function SelectionManager() {
 
       const candidates = performRaycast(event)
 
-      if (candidates.length > 0) {
+      if (candidates && candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
         handleNodeSelect(topCandidate.nodeId, event)
@@ -136,7 +136,7 @@ function SelectionManager() {
       const candidates = performRaycast(event)
 
       // If we didn't hit any selectable node, clear the selection
-      if (candidates.length === 0) {
+      if (candidates && candidates.length === 0) {
         handleClear()
       }
     }

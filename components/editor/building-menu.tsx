@@ -13,6 +13,7 @@ export function BuildingMenu() {
 
   const tools: Array<{ id: Tool; iconSrc: string; label: string; enabled: boolean }> = [
     { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab', enabled: true },
+    { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling', enabled: true },
     { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall', enabled: true },
     { id: 'room', iconSrc: '/icons/room.png', label: 'Room', enabled: true },
     { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room', enabled: true },

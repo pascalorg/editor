@@ -4,6 +4,7 @@
 import './wall/wall-node'
 import './column/column-node'
 import './slab/slab-node'
+import './ceiling/ceiling-node'
 import './door/door-node'
 import './window/window-node'
 import './roof/roof-node'

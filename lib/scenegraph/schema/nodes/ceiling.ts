@@ -7,19 +7,17 @@ import { ItemNode } from './item'
 export const CeilingNode = BaseNode.extend({
   id: nodeId('ceiling'),
   type: nodeType('ceiling'),
-  // Specific props
-  thickness: z.number().optional(),
-  // Grid points (x, z) in level coordinate system
-  start: z.tuple([z.number(), z.number()]),
-  end: z.tuple([z.number(), z.number()]),
-  // TODO: test custom ItemGroupNode in children
-  children: z.array(z.discriminatedUnion('type', [ItemNode])).default([]),
+  // Grid props
+  position: z.tuple([z.number(), z.number()]),
+  rotation: z.number(),
+  size: z.tuple([z.number(), z.number()]),
 }).describe(
   dedent`
-  Ceiling node - used to represent a ceiling in the building
-  - thickness: thickness in meters
-  - start: start point of the ceiling in level coordinate system
-  - end: end point of the ceiling in level coordinate system
+  Ceiling node - used to represent a ceiling surface
+  - position: bottom-left corner position in grid coordinates
+  - rotation: rotation in radians
+  - size: width and depth in grid units
+  - elevation: height above floor in meters
   `,
 )
 

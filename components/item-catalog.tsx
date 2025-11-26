@@ -13,6 +13,7 @@ interface CatalogItem {
   size: [number, number]
   position?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
   rotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
+  attachTo?: 'ceiling' | 'wall' // Where to attach the item
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
@@ -41,6 +42,41 @@ const CATALOG_ITEMS: CatalogItem[] = [
     rotation: [0, Math.PI / 2, 0],
     size: [6, 3],
   },
+  {
+    thumbnail: '/items/ceiling-light/thumbnail.webp',
+    modelUrl: '/items/ceiling-light/model.glb',
+    scale: [1, 1, 1],
+    rotation: [0, 0, 0],
+    size: [1, 1],
+    attachTo: 'ceiling',
+  },
+  {
+    thumbnail: '/items/ceiling-fan/thumbnail.webp',
+    modelUrl: '/items/ceiling-fan/model.glb',
+    scale: [0.003, 0.003, 0.003],
+    position: [0, -0.62, 0],
+    rotation: [0, 0, 0],
+    size: [1, 1],
+    attachTo: 'ceiling',
+  },
+  {
+    thumbnail: '/items/wall-art-06/thumbnail.webp',
+    modelUrl: '/items/wall-art-06/model.glb',
+    position: [0, 1, -0.15],
+    scale: [1, 1, 1],
+    rotation: [0, 0, 0],
+    size: [2, 1],
+    attachTo: 'wall',
+  },
+  {
+    thumbnail: '/items/flat-screen-tv/thumbnail.webp',
+    modelUrl: '/items/flat-screen-tv/model.glb',
+    position: [-0.2, 1, -0.15],
+    scale: [0.42, 0.42, 0.42],
+    rotation: [0, Math.PI, 0],
+    size: [4, 1],
+    attachTo: 'wall',
+  },
 ]
 
 export function ItemCatalog() {
@@ -60,7 +96,7 @@ export function ItemCatalog() {
         <h4 className="font-medium text-sm">Item Catalog</h4>
       </div>
 
-      <div className="h-[200px] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-2 gap-2 p-2">
           {CATALOG_ITEMS.map((item, index) => {
             const isSelected = selectedItem.modelUrl === item.modelUrl

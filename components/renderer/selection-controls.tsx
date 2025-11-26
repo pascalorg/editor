@@ -816,6 +816,7 @@ export function SelectionControls() {
               opacity={0.5}
               paddingX={16}
               paddingY={8}
+              renderOrder={1}
             >
               {/* Rotate Left Button */}
               <Button

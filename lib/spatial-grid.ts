@@ -103,14 +103,15 @@ export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): Bou
       return null
     }
 
-    case 'slab': {
-      const slabNode = node as any
-      if (slabNode.size) {
+    case 'slab':
+    case 'ceiling': {
+      const areaNode = node as any
+      if (areaNode.size) {
         const absolutePos = calculateAbsolutePosition(node, getNode)
         if (!absolutePos) return null
 
         const [x, z] = absolutePos
-        const [width, depth] = slabNode.size
+        const [width, depth] = areaNode.size
         return {
           minX: x,
           maxX: x + width,
