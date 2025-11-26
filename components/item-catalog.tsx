@@ -41,6 +41,28 @@ const CATALOG_ITEMS: CatalogItem[] = [
     rotation: [0, Math.PI / 2, 0],
     size: [6, 3],
   },
+  {
+    thumbnail: '/items/ceiling-light/thumbnail.webp',
+    modelUrl: '/items/ceiling-light/model.glb',
+    scale: [3, 3, 3],
+    rotation: [0, 0, 0],
+    size: [1, 1],
+  },
+  {
+    thumbnail: '/items/ceiling-fan/thumbnail.webp',
+    modelUrl: '/items/ceiling-fan/model.glb',
+    scale: [0.003, 0.003, 0.003],
+    rotation: [0, 0, 0],
+    size: [1, 1],
+  },
+  {
+    thumbnail: '/items/wall-art-06/thumbnail.webp',
+    modelUrl: '/items/wall-art-06/model.glb',
+    position: [0, 1, 0],
+    scale: [1, 1, 1],
+    rotation: [0, 0, 0],
+    size: [2, 1],
+  },
 ]
 
 export function ItemCatalog() {
@@ -60,7 +82,7 @@ export function ItemCatalog() {
         <h4 className="font-medium text-sm">Item Catalog</h4>
       </div>
 
-      <div className="h-[200px] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-2 gap-2 p-2">
           {CATALOG_ITEMS.map((item, index) => {
             const isSelected = selectedItem.modelUrl === item.modelUrl
