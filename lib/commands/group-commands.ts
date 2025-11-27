@@ -118,6 +118,9 @@ export class GroupNodesCommand implements Command {
         )
       }
 
+      // Update parentId to point to the group
+      updatedNode.parentId = this.groupNodeId
+
       // Add to group
       graph.nodes.create(updatedNode, this.groupNodeId as AnyNodeId)
     }
@@ -194,6 +197,9 @@ export class UngroupNodesCommand implements Command {
       if ('rotation' in updatedChild && typeof updatedChild.rotation === 'number') {
         updatedChild.rotation = (updatedChild.rotation || 0) + groupRotation
       }
+
+      // Update parentId to point to the new parent
+      updatedChild.parentId = this.parentId
 
       graph.nodes.create(updatedChild, this.parentId as AnyNodeId)
     }
