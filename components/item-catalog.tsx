@@ -77,6 +77,15 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [4, 1],
     attachTo: 'wall',
   },
+  {
+    thumbnail: '/items/window-small/thumbnail.webp',
+    modelUrl: '/items/window-small/model.glb',
+    position: [0, 0.5, 0],
+    scale: [1, 1, 1],
+    rotation: [0, 0, 0],
+    size: [2, 1],
+    attachTo: 'wall',
+  },
 ]
 
 export function ItemCatalog() {
