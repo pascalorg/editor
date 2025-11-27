@@ -751,6 +751,7 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
         type: (node as any)?.type,
         position: (node as any)?.position,
         modelPosition: (node as ItemNode)?.modelPosition || [0, 0, 0],
+        modelScale: (node as ItemNode)?.modelScale || [1, 1, 1],
         editor: (node as any)?.editor,
         nodeSrc: (node as ItemNode)?.src,
       }
@@ -768,20 +769,11 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
     <Suspense>
       <WallCutout
         modelPosition={opening.modelPosition}
+        modelScale={opening.modelScale}
         position={opening.position}
         src={opening.nodeSrc}
       />
     </Suspense>
-    // <Subtraction
-    //   position-x={opening.position[0] * TILE_SIZE}
-    //   position-y={opening.type === 'window' ? 1.12 : 1}
-    //   position-z={opening.position[1] * TILE_SIZE}
-    //   scale={scale}
-    //   showOperation={opening.editor?.preview}
-    // >
-    //   <boxGeometry />
-    //   <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
-    // </Subtraction>
   )
 }
 
@@ -797,10 +789,12 @@ const WallCutout = ({
   position,
   src,
   modelPosition,
+  modelScale,
 }: {
   position: ItemNode['position']
   src: ItemNode['src']
   modelPosition: ItemNode['modelPosition']
+  modelScale: ItemNode['modelScale']
 }) => {
   const { nodes } = useGLTF(src) as GLTFResult
 
@@ -823,7 +817,7 @@ const WallCutout = ({
       position-x={modelPosition[0] + position[0] * TILE_SIZE}
       position-y={modelPosition[1]}
       position-z={modelPosition[2] + position[1] * TILE_SIZE}
-      scale={[1, 1, 1]}
+      scale={modelScale}
     >
       <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
     </Subtraction>
