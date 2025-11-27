@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
-import { GRID_INTERSECTIONS, TILE_SIZE } from '..'
+import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 
 const GRID_SIZE = 30 // 30m x 30m
 

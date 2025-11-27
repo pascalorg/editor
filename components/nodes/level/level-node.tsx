@@ -4,7 +4,7 @@
 
 import { Layers } from 'lucide-react'
 import z from 'zod'
-import { GridTiles } from '@/components/editor/elements/grid-tiles'
+import { GridTiles } from '@/components/editor/grid-tiles'
 import { useEditor } from '@/hooks/use-editor'
 import { componentRegistry, registerComponent } from '@/lib/nodes/registry'
 import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'

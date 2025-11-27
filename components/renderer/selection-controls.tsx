@@ -808,59 +808,60 @@ export function SelectionControls() {
             <Container
               alignItems="center"
               backgroundColor={'#21222a'}
-              borderRadius={16}
+              borderRadius={8}
               depthTest={false}
               flexDirection="row"
-              gap={8}
-              justifyContent="space-between"
-              opacity={0.5}
-              paddingX={16}
-              paddingY={8}
+              gap={0}
+              opacity={0.9}
               renderOrder={1}
             >
-              {/* Rotate Left Button */}
               <Button
-                backgroundColor={'#21222a'}
+                backgroundColor={'transparent'}
+                borderBottomLeftRadius={8}
+                borderRadius={0}
+                borderTopLeftRadius={8}
                 hover={{
-                  backgroundColor: '#111',
+                  backgroundColor: '#3a3b45',
+                  borderBottomLeftRadius: 8,
+                  borderTopLeftRadius: 8,
                 }}
                 onClick={handleRotateCCW}
                 size="icon"
               >
-                <RotateCcw height={16} width={16} />
+                <RotateCcw color="white" height={16} width={16} />
               </Button>
-              {/* Move Button */}
               <Button
-                backgroundColor={'#21222a'}
-                hover={{
-                  backgroundColor: '#111',
-                }}
+                backgroundColor={'transparent'}
+                borderRadius={0}
+                hover={{ backgroundColor: '#3a3b45' }}
                 onClick={handleMove}
                 size="icon"
               >
-                <Move height={16} width={16} />
+                <Move color="white" height={16} width={16} />
               </Button>
-              {/* Delete Button */}
               <Button
-                backgroundColor={'#21222a'}
-                hover={{
-                  backgroundColor: '#111',
-                }}
+                backgroundColor={'transparent'}
+                borderRadius={0}
+                hover={{ backgroundColor: '#3a3b45' }}
                 onClick={handleDelete}
                 size="icon"
               >
-                <Trash2 height={16} width={16} />
+                <Trash2 color="white" height={16} width={16} />
               </Button>
-              {/* Rotate Right Button */}
               <Button
-                backgroundColor={'#21222a'}
+                backgroundColor={'transparent'}
+                borderBottomRightRadius={8}
+                borderRadius={0}
+                borderTopRightRadius={8}
                 hover={{
-                  backgroundColor: '#111',
+                  backgroundColor: '#3a3b45',
+                  borderBottomRightRadius: 8,
+                  borderTopRightRadius: 8,
                 }}
                 onClick={handleRotateCW}
                 size="icon"
               >
-                <RotateCw height={16} width={16} />
+                <RotateCw color="white" height={16} width={16} />
               </Button>
             </Container>
           </Billboard>
