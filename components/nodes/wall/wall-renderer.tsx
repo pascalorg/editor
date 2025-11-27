@@ -1,9 +1,9 @@
 'use client'
 
 import { Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
-import { Edges, Line } from '@react-three/drei'
+import { Edges, Line, useGLTF } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo } from 'react'
+import { Suspense, useCallback, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
@@ -13,6 +13,7 @@ import type {
   AnyNode,
   GridItem,
   GridPoint,
+  ItemNode,
   SceneNode,
   SceneNodeId,
   WallNode,
@@ -749,7 +750,10 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
       return {
         type: (node as any)?.type,
         position: (node as any)?.position,
+        modelPosition: (node as ItemNode)?.modelPosition || [0, 0, 0],
+        modelScale: (node as ItemNode)?.modelScale || [1, 1, 1],
         editor: (node as any)?.editor,
+        nodeSrc: (node as ItemNode)?.src,
       }
     }),
   )
@@ -757,25 +761,64 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
     opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
   // TODO: Create a WallOpening type to save properly the cut and be agnostic here
 
-  const { update } = useCSG()
-
-  useEffect(() => {
-    update()
-  }, [opening.position, update])
-
-  if (opening.type !== 'window' && opening.type !== 'door') {
+  if (!opening.nodeSrc) {
     return null // TODO: Handle data from node
   }
 
   return (
+    <Suspense>
+      <WallCutout
+        modelPosition={opening.modelPosition}
+        modelScale={opening.modelScale}
+        position={opening.position}
+        src={opening.nodeSrc}
+      />
+    </Suspense>
+  )
+}
+
+import type { GLTF } from 'three-stdlib'
+
+type GLTFResult = GLTF & {
+  nodes: {
+    cutout?: THREE.Mesh
+  }
+}
+
+const WallCutout = ({
+  position,
+  src,
+  modelPosition,
+  modelScale,
+}: {
+  position: ItemNode['position']
+  src: ItemNode['src']
+  modelPosition: ItemNode['modelPosition']
+  modelScale: ItemNode['modelScale']
+}) => {
+  const { nodes } = useGLTF(src) as GLTFResult
+
+  const { update } = useCSG()
+
+  useEffect(() => {
+    if (!nodes.cutout?.geometry) {
+      return
+    }
+    update()
+  }, [position, update, nodes])
+
+  if (!nodes.cutout?.geometry) {
+    return null
+  }
+
+  return (
     <Subtraction
-      position-x={opening.position[0] * TILE_SIZE}
-      position-y={opening.type === 'window' ? 1.12 : 1}
-      position-z={opening.position[1] * TILE_SIZE}
-      scale={scale}
-      showOperation={opening.editor?.preview}
+      geometry={nodes.cutout.geometry}
+      position-x={modelPosition[0] + position[0] * TILE_SIZE}
+      position-y={modelPosition[1]}
+      position-z={modelPosition[2] + position[1] * TILE_SIZE}
+      scale={modelScale}
     >
-      <boxGeometry />
       <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
     </Subtraction>
   )

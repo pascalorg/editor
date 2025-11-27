@@ -1,9 +1,10 @@
 'use client'
 
-import { Gltf } from '@react-three/drei'
-import { Suspense, useEffect, useMemo } from 'react'
+import { Clone, Gltf, useGLTF } from '@react-three/drei'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import * as THREE from 'three'
+import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
@@ -104,16 +105,55 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
             </mesh>
           }
         >
-          <Gltf
-            castShadow
-            position={modelPosition || [0, 0, 0]}
-            receiveShadow
-            rotation={modelRotation}
-            scale={modelScale || [1, 1, 1]}
-            src={nodeSrc ?? ''}
-          />
+          {nodeSrc && (
+            <ModelItemRenderer
+              position={modelPosition || [0, 0, 0]}
+              rotation={modelRotation}
+              scale={modelScale || [1, 1, 1]}
+              src={nodeSrc}
+            />
+          )}
         </Suspense>
       </ErrorBoundary>
+    </>
+  )
+}
+
+type GLTFResult = GLTF & {
+  nodes: {
+    cutout?: THREE.Mesh
+  }
+}
+
+const ModelItemRenderer = ({
+  position,
+  rotation,
+  scale,
+  src,
+}: {
+  position?: ItemNode['modelPosition']
+  rotation?: ItemNode['modelRotation']
+  scale?: ItemNode['modelScale']
+  src: ItemNode['src']
+}) => {
+  const { scene } = useGLTF(src)
+  const ref = useRef<THREE.Group>(null)
+
+  useEffect(() => {
+    ref.current?.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+      if (child.name === 'cutout') {
+        child.visible = false
+      }
+    })
+  }, [])
+
+  return (
+    <>
+      <Clone object={scene} position={position} ref={ref} rotation={rotation} scale={scale} />
     </>
   )
 }

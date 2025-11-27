@@ -113,8 +113,9 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const [planeWidth, planeHeight] = useMemo(() => {
     if (!texture.image) return [GRID_SIZE, GRID_SIZE]
 
-    const imageWidth = texture.image.width
-    const imageHeight = texture.image.height
+    const image = texture.image as HTMLImageElement
+    const imageWidth = image.width
+    const imageHeight = image.height
     const aspectRatio = imageWidth / imageHeight
 
     if (aspectRatio > 1) {

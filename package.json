@@ -28,7 +28,7 @@
     "@react-three/uikit": "^1.0.60",
     "@react-three/uikit-default": "^1.0.60",
     "@react-three/uikit-lucide": "^1.0.60",
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.181.0",
     "@uiw/react-json-view": "^2.0.0-alpha.39",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
@@ -47,7 +47,7 @@
     "react-error-boundary": "^6.0.0",
     "react-scan": "^0.4.3",
     "tailwind-merge": "^3.4.0",
-    "three": "^0.180.0",
+    "three": "^0.181.2",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },
