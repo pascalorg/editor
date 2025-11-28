@@ -258,10 +258,8 @@ export function SelectionControls() {
 
       moveState.originalData.set(nodeId, originalData)
 
-      // Convert to preview
-      updateNode(nodeId, {
-        editor: { preview: true },
-      })
+      // Convert to preview (skip undo - this is part of the move operation)
+      updateNode(nodeId, { editor: { preview: true } }, true)
     }
 
     // Handle grid move to update positions
@@ -330,13 +328,22 @@ export function SelectionControls() {
 
     // Handle grid click to commit
     const handleGridClick = () => {
-      const { updateNode } = useEditor.getState()
+      const { commitMove } = useEditor.getState()
 
-      // Commit changes: restore preview states but keep new positions
+      // Commit changes: use commitMove to properly record the position change for undo
       moveState.originalData.forEach((data, nodeId) => {
-        updateNode(nodeId, {
-          editor: { preview: data.wasPreview },
-        })
+        if (data.wasPreview) {
+          // For nodes that were already previews, just clear the preview flag
+          useEditor.getState().updateNode(nodeId, { editor: { preview: false } })
+        } else {
+          // Commit the move to properly record the position change for undo
+          commitMove(nodeId, {
+            position: data.position,
+            rotation: data.rotation,
+            start: data.start,
+            end: data.end,
+          })
+        }
       })
 
       // Cleanup

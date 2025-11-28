@@ -359,6 +359,10 @@ export type StoreState = {
   deleteNode: (nodeId: string) => void
   deleteNodes: (nodeIds: string[]) => void
   deletePreviewNodes: () => void
+  commitMove: (
+    nodeId: string,
+    originalData: { position: [number, number]; rotation: number; start?: [number, number]; end?: [number, number] },
+  ) => void
 }
 
 /**
@@ -1054,6 +1058,51 @@ const useStore = create<StoreState>()(
             const command = new DeleteNodeCommand(id)
             command.execute(graph)
           })
+        },
+
+        commitMove: (nodeId, originalData) => {
+          const { graph, commandManager } = get()
+          const handle = graph.getNodeById(nodeId as AnyNodeId)
+          if (!handle) return
+
+          const currentNode = handle.data() as any
+
+          // Build update with current position and preview: false
+          const updates: any = {
+            position: currentNode.position,
+            rotation: currentNode.rotation,
+            editor: { preview: false },
+          }
+          // Include wall-specific data if present
+          if (currentNode.start && currentNode.end) {
+            updates.start = currentNode.start
+            updates.end = currentNode.end
+          }
+
+          // First, clear preview flag without undo (direct graph update)
+          graph.updateNode(nodeId as AnyNodeId, { editor: { preview: false } })
+
+          // Now create an UpdateNodeCommand that records the position change
+          // The command will store originalData as previousState for undo
+          const command = new UpdateNodeCommand(nodeId, {
+            position: currentNode.position,
+            rotation: currentNode.rotation,
+            ...(currentNode.start && currentNode.end
+              ? { start: currentNode.start, end: currentNode.end }
+              : {}),
+          })
+
+          // Manually set the previousState to originalData so undo restores original position
+          ;(command as any).previousState = {
+            position: originalData.position,
+            rotation: originalData.rotation,
+            ...(originalData.start && originalData.end
+              ? { start: originalData.start, end: originalData.end }
+              : {}),
+          }
+
+          // Push to undo stack (execute is a no-op since we already have current values)
+          commandManager.execute(command, graph)
         },
 
         setPointerPosition: (position: [number, number] | null) =>
