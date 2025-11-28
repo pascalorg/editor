@@ -1,6 +1,6 @@
 'use client'
 
-import { Box, Eye, EyeOff, GripVertical, MapPin, Plus } from 'lucide-react'
+import { Box, Eye, EyeOff, GripVertical, MapPin, Plus, Settings2 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
@@ -17,6 +17,8 @@ import {
   useTree,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
@@ -360,6 +362,35 @@ function EnvironmentItem({ level = 1 }: { level?: number }) {
   const environment = useEditor(useShallow((state: StoreState) => state.scene.root.environment))
   const { indent } = useTree()
 
+  const [latitude, setLatitude] = useState(environment?.latitude ?? 0)
+  const [longitude, setLongitude] = useState(environment?.longitude ?? 0)
+  const [altitude, setAltitude] = useState(environment?.altitude ?? 0)
+
+  // Update local state when environment changes
+  useEffect(() => {
+    setLatitude(environment?.latitude ?? 0)
+    setLongitude(environment?.longitude ?? 0)
+    setAltitude(environment?.altitude ?? 0)
+  }, [environment])
+
+  // Update in real-time when values change
+  useEffect(() => {
+    useEditor.setState((state) => ({
+      scene: {
+        ...state.scene,
+        root: {
+          ...state.scene.root,
+          environment: {
+            ...state.scene.root.environment,
+            latitude,
+            longitude,
+            altitude,
+          },
+        },
+      },
+    }))
+  }, [latitude, longitude, altitude])
+
   return (
     <TreeNode level={level} nodeId="environment">
       <TreeNodeTrigger
@@ -371,6 +402,78 @@ function EnvironmentItem({ level = 1 }: { level?: number }) {
         <TreeExpander hasChildren={true} />
         <TreeIcon hasChildren={true} icon={getNodeIcon('environment')} />
         <TreeLabel>Environment</TreeLabel>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              className="h-5 w-5 p-0"
+              onClick={(e) => e.stopPropagation()}
+              size="sm"
+              variant="ghost"
+            >
+              <Settings2 className="h-3 w-3" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <h4 className="font-medium leading-none">Environment Settings</h4>
+                <p className="text-muted-foreground text-sm">
+                  Adjust the geographical location and altitude
+                </p>
+              </div>
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="latitude">
+                      Latitude
+                    </label>
+                    <span className="text-muted-foreground text-xs">{latitude.toFixed(3)}</span>
+                  </div>
+                  <Slider
+                    id="latitude"
+                    max={1}
+                    min={0}
+                    onValueChange={(value) => setLatitude(value[0])}
+                    step={0.001}
+                    value={[latitude]}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="longitude">
+                      Longitude
+                    </label>
+                    <span className="text-muted-foreground text-xs">{longitude.toFixed(3)}</span>
+                  </div>
+                  <Slider
+                    id="longitude"
+                    max={1}
+                    min={0}
+                    onValueChange={(value) => setLongitude(value[0])}
+                    step={0.001}
+                    value={[longitude]}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="altitude">
+                      Altitude
+                    </label>
+                    <span className="text-muted-foreground text-xs">{altitude.toFixed(3)}</span>
+                  </div>
+                  <Slider
+                    id="altitude"
+                    max={1}
+                    min={0}
+                    onValueChange={(value) => setAltitude(value[0])}
+                    step={0.001}
+                    value={[altitude]}
+                  />
+                </div>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={true}>
         <div
