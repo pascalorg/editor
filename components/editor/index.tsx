@@ -16,6 +16,7 @@ import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
+import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
@@ -92,12 +93,13 @@ export default function Editor({ className }: { className?: string }) {
         </>
       )}
       <CustomControls />
+      <EnvironmentRenderer />
 
       <Environment preset="city" />
+
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
       </GizmoHelper>
-      {/* <Stats/> */}
     </Canvas>
   )
 }

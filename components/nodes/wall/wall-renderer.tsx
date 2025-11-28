@@ -606,6 +606,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -618,6 +619,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -630,6 +632,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] : undefined,
       })
     },
     [getClosestGridPoint, nodeId],

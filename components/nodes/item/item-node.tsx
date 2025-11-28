@@ -38,11 +38,13 @@ export function ItemNodeEditor() {
     previewItemId: string | null
     lastPreviewPosition: [number, number] | null
     currentRotation: number
+    lastCalculatedRotation: number | null // Track last auto-calculated rotation from wall normal
     canPlace: boolean
   }>({
     previewItemId: null,
     lastPreviewPosition: null,
     currentRotation: 0,
+    lastCalculatedRotation: null,
     canPlace: false,
   })
 
@@ -88,6 +90,22 @@ export function ItemNodeEditor() {
     const attachTo = selectedItem.attachTo
 
     let ignoreGridMove = false
+
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+
+    /**
+     * Calculate rotation angle from wall normal vector
+     * The normal points outward from the wall surface
+     */
+    const calculateRotationFromNormal = (normal: [number, number, number] | undefined): number => {
+      if (!normal) return 0
+      // Calculate angle in X-Z plane (top-down view)
+      // atan2(z, x) gives the angle the vector makes with the positive X axis
+      // Add π/2 to align item's forward direction with the wall normal
+      return Math.atan2(normal[2], normal[0]) + Math.PI / 2
+    }
 
     // ============================================================================
     // GRID PLACEMENT (default behavior when no attachTo)
@@ -216,10 +234,15 @@ export function ItemNodeEditor() {
       // gridPosition is already in wall's local coordinate system
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
 
+      // Calculate rotation from wall normal
+      const rotation = calculateRotationFromNormal(e.normal)
+      previewStateRef.current.currentRotation = rotation
+      previewStateRef.current.lastCalculatedRotation = rotation
+
       // Create a temporary item to check placement
       const tempItem = {
         position: localPos,
-        rotation: 0,
+        rotation,
         size: selectedItem.size,
       } as any
 
@@ -232,7 +255,7 @@ export function ItemNodeEditor() {
           type: 'item' as const,
           name: 'Item Preview',
           position: localPos,
-          rotation: 0, // Rotation relative to wall
+          rotation, // Set rotation based on wall normal
           size: selectedItem.size,
           visible: true,
           opacity: 100,
@@ -267,10 +290,22 @@ export function ItemNodeEditor() {
       const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
       previewStateRef.current.lastPreviewPosition = localPos
 
+      // Calculate rotation from wall normal
+      const calculatedRotation = calculateRotationFromNormal(e.normal)
+
+      // Only update rotation if the calculated value changed
+      // This preserves user's manual rotation adjustments when moving along the same wall
+      let rotation = previewStateRef.current.currentRotation
+      if (calculatedRotation !== previewStateRef.current.lastCalculatedRotation) {
+        rotation = calculatedRotation
+        previewStateRef.current.currentRotation = rotation
+        previewStateRef.current.lastCalculatedRotation = calculatedRotation
+      }
+
       // Create a temporary item to check placement
       const tempItem = {
         position: localPos,
-        rotation: 0,
+        rotation,
         size: selectedItem.size,
       } as any
 
@@ -281,7 +316,7 @@ export function ItemNodeEditor() {
         // Update existing preview
         updateNode(previewId, {
           position: localPos,
-          rotation: 0,
+          rotation,
           editor: { preview: true, canPlace },
         })
       } else {
@@ -292,7 +327,7 @@ export function ItemNodeEditor() {
             type: 'item' as const,
             name: 'Item Preview',
             position: localPos,
-            rotation: 0,
+            rotation,
             size: selectedItem.size,
             visible: true,
             opacity: 100,
@@ -319,6 +354,7 @@ export function ItemNodeEditor() {
         deleteNode(previewId)
         previewStateRef.current.previewItemId = null
         previewStateRef.current.lastPreviewPosition = null
+        previewStateRef.current.lastCalculatedRotation = null
       }
       ignoreGridMove = false
     }

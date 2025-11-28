@@ -1,6 +1,7 @@
 /**
  * Node Registry Initialization
  */
+import './building/building-node'
 import './wall/wall-node'
 import './column/column-node'
 import './slab/slab-node'
