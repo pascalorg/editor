@@ -19,11 +19,7 @@ export function InfiniteFloor() {
       rotation={[-Math.PI / 2, 0, 0]}
     >
       <planeGeometry args={[FLOOR_SIZE, FLOOR_SIZE]} />
-      <meshStandardMaterial
-        color={FLOOR_COLOR}
-        metalness={FLOOR_METALNESS}
-        roughness={FLOOR_ROUGHNESS}
-      />
+      <shadowMaterial color={FLOOR_COLOR} />
     </mesh>
   )
 }
