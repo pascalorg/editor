@@ -34,7 +34,7 @@ export const BuildingRenderer = memo(({ nodeId }: BuildingRendererProps) => {
           // blending={AdditiveBlending}
           color={'#d2d1f5'}
           depthWrite={false}
-          opacity={0.25}
+          opacity={0.35}
           ref={materialRef}
           side={DoubleSide}
           toneMapped={false}
@@ -69,6 +69,29 @@ const BuildingBoundsMaterial = shaderMaterial(
   uniform float opacity;
   uniform float uTime;
   uniform float lifetime;
+
+  // Simple 2D noise function
+  float noise(vec2 st) {
+    return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+  }
+
+  // Smooth noise
+  float smoothNoise(vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    // Four corners in 2D of a tile
+    float a = noise(i);
+    float b = noise(i + vec2(1.0, 0.0));
+    float c = noise(i + vec2(0.0, 1.0));
+    float d = noise(i + vec2(1.0, 1.0));
+
+    // Smooth interpolation
+    vec2 u = f * f * (3.0 - 2.0 * f);
+
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+  }
+
   void main() {
       // Hide top and bottom faces based on world position
       // Box is centered at Y=5.2 with height 10, so top is at 10.2 and bottom is at 0.2
@@ -105,14 +128,28 @@ const BuildingBoundsMaterial = shaderMaterial(
       float dist = length(cellCenter);
 
       // Create circular dots with a smooth edge
-      float dotSize = 0.35; // Adjust for dot size
+      float dotSize = 0.25; // Adjust for dot size
       float dotsTexture = max(0.5, smoothstep(dotSize + 0.01, dotSize - 0.01, dist));
 
-      alpha *= mix(dotsTexture, 1.0, smoothstep(0.8, 1.0, vUv.y));
+      // Fade dots at both top and bottom
+      float dotsFade = max(smoothstep(0.8, 1.0, vUv.y), bottomStrength);
+      alpha *= mix(dotsTexture, 1.0, dotsFade);
       alpha *= baseAlpha;
 
       // Boost alpha at bottom edge
       alpha = mix(alpha, 1.0, bottomStrength * 0.5);
+
+      // Add animated noise to transparency
+      vec2 noiseCoord = vWorldPosition.xz * 0.05 + uTime * 0.5;
+      float noiseValue = smoothNoise(noiseCoord);
+
+      // Layer multiple octaves for more interesting movement
+      noiseValue += smoothNoise(noiseCoord * 2.0 - uTime * 0.15) * 0.5;
+      noiseValue += smoothNoise(noiseCoord * 4.0 + uTime * 0.08) * 0.25;
+      noiseValue /= 1.75; // Normalize
+
+      // Apply noise to alpha (subtle effect)
+      alpha *= mix(0.1, 1.0, noiseValue);
 
       gl_FragColor = vec4(finalColor, alpha);
   }
