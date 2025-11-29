@@ -159,10 +159,9 @@ export default function AddressAutocomplete({
 
     setIsLoading(true)
 
-    const request = {
+    const request: google.maps.places.AutocompletionRequest = {
       input,
       types: ['address'],
-      componentRestrictions: { country: 'us' },
       sessionToken: sessionTokenRef.current || undefined,
     }
 
@@ -170,34 +169,7 @@ export default function AddressAutocomplete({
       setIsLoading(false)
 
       if (status === window.google?.maps?.places.PlacesServiceStatus.OK && predictions) {
-        // Filter out general areas and non-residential places from suggestions
-        const filteredPredictions = predictions.filter((prediction) => {
-          const unwantedTypes = [
-            // General areas that lack a specific street number
-            'route', // e.g., "Main St"
-            'locality', // e.g., "San Francisco"
-            'neighborhood',
-            'postal_code',
-            'administrative_area_level_1', // State
-            'country',
-
-            // Non-residential and multi-unit types
-            'establishment',
-            'point_of_interest',
-            'apartment_building',
-            'condominium_complex',
-            'shopping_mall',
-            'store',
-            'restaurant',
-            'school',
-            'hospital',
-          ]
-
-          // A prediction is valid if none of its types are in our unwanted list.
-          return !prediction.types?.some((type) => unwantedTypes.includes(type))
-        })
-
-        const formattedSuggestions: Suggestion[] = filteredPredictions.map((prediction) => ({
+        const formattedSuggestions: Suggestion[] = predictions.map((prediction) => ({
           placeId: prediction.place_id,
           description: prediction.description,
           mainText: prediction.structured_formatting.main_text,
@@ -254,23 +226,6 @@ export default function AddressAutocomplete({
 
       placesServiceRef.current.getDetails(request, (place, status) => {
         if (status === window.google?.maps?.places.PlacesServiceStatus.OK && place) {
-          // Final validation on the selected place
-          const hasStreetNumber = place.address_components?.some((component) =>
-            component.types.includes('street_number'),
-          )
-          const isMultiUnit = place.types?.some((type) =>
-            ['apartment_building', 'condominium_complex'].includes(type),
-          )
-
-          // Must have a street number and must not be a multi-unit building
-          if (!hasStreetNumber || isMultiUnit) {
-            console.log(
-              'Invalid address selected. Please select a single-family home with a street number.',
-            )
-            // Optionally, you could show a user-facing error toast here
-            return // Abort the selection
-          }
-
           setInputValue(place.formatted_address || suggestion.description)
           setShowSuggestions(false)
           setSuggestions([])
