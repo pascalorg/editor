@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@biomejs/biome": "2.3.0",
+    "@googlemaps/js-api-loader": "^2.0.2",
     "@phosphor-icons/react": "^2.1.10",
     "@pmndrs/uikit": "^1.0.60",
     "@radix-ui/react-context-menu": "^2.2.16",

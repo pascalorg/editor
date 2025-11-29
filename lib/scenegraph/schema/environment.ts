@@ -7,6 +7,8 @@ export const EnvironmentNode = z
     latitude: z.number().default(0), // degrees
     longitude: z.number().default(0), // degrees
     altitude: z.number().default(0), // meters above sea level
+    address: z.string().optional(), // address of the environment
+    metadata: z.json().optional().default({}), // metadata for the environment
   })
   .describe(
     dedent`
