@@ -66,11 +66,43 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
       setLongitude(lng)
       setAddress(selectedAddress)
 
-      updateEnvironment({
-        latitude: lat,
-        longitude: lng,
-        address: selectedAddress,
-      })
+      // Get elevation data from Google Maps Elevation Service
+      try {
+        const elevator = new window.google.maps.ElevationService()
+        elevator.getElevationForLocations(
+          {
+            locations: [{ lat, lng }],
+          },
+          (results, status) => {
+            if (status === window.google.maps.ElevationStatus.OK && results && results[0]) {
+              const elevation = results[0].elevation
+              setAltitude(elevation)
+
+              updateEnvironment({
+                latitude: lat,
+                longitude: lng,
+                altitude: elevation,
+                address: selectedAddress,
+              })
+            } else {
+              // Fallback without elevation
+              updateEnvironment({
+                latitude: lat,
+                longitude: lng,
+                address: selectedAddress,
+              })
+            }
+          },
+        )
+      } catch (error) {
+        // Silently fail elevation lookup and just update coordinates
+        console.error('Failed to get elevation data:', error)
+        updateEnvironment({
+          latitude: lat,
+          longitude: lng,
+          address: selectedAddress,
+        })
+      }
     }
   }
 
