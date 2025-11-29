@@ -5,6 +5,7 @@ import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
+import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
 import {
   TreeExpander,
   TreeIcon,
@@ -353,139 +354,6 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
           ))}
         </TreeNodeContent>
       )}
-    </TreeNode>
-  )
-}
-
-function EnvironmentItem({ level = 1 }: { level?: number }) {
-  const { handleNodeClick } = useLayersMenu()
-  const environment = useEditor(useShallow((state: StoreState) => state.scene.root.environment))
-  const { indent } = useTree()
-
-  const [latitude, setLatitude] = useState(environment?.latitude ?? 0)
-  const [longitude, setLongitude] = useState(environment?.longitude ?? 0)
-  const [altitude, setAltitude] = useState(environment?.altitude ?? 0)
-
-  // Update local state when environment changes
-  useEffect(() => {
-    setLatitude(environment?.latitude ?? 0)
-    setLongitude(environment?.longitude ?? 0)
-    setAltitude(environment?.altitude ?? 0)
-  }, [environment])
-
-  // Update in real-time when values change
-  useEffect(() => {
-    useEditor.setState((state) => ({
-      scene: {
-        ...state.scene,
-        root: {
-          ...state.scene.root,
-          environment: {
-            ...state.scene.root.environment,
-            latitude,
-            longitude,
-            altitude,
-          },
-        },
-      },
-    }))
-  }, [latitude, longitude, altitude])
-
-  return (
-    <TreeNode level={level} nodeId="environment">
-      <TreeNodeTrigger
-        onClick={(e) => {
-          e.stopPropagation()
-          handleNodeClick('environment', true)
-        }}
-      >
-        <TreeExpander hasChildren={true} />
-        <TreeIcon hasChildren={true} icon={getNodeIcon('environment')} />
-        <TreeLabel>Environment</TreeLabel>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              className="h-5 w-5 p-0"
-              onClick={(e) => e.stopPropagation()}
-              size="sm"
-              variant="ghost"
-            >
-              <Settings2 className="h-3 w-3" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <h4 className="font-medium leading-none">Environment Settings</h4>
-                <p className="text-muted-foreground text-sm">
-                  Adjust the geographical location and altitude
-                </p>
-              </div>
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="latitude">
-                      Latitude
-                    </label>
-                    <span className="text-muted-foreground text-xs">{latitude.toFixed(3)}</span>
-                  </div>
-                  <Slider
-                    id="latitude"
-                    max={1}
-                    min={0}
-                    onValueChange={(value) => setLatitude(value[0])}
-                    step={0.001}
-                    value={[latitude]}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="longitude">
-                      Longitude
-                    </label>
-                    <span className="text-muted-foreground text-xs">{longitude.toFixed(3)}</span>
-                  </div>
-                  <Slider
-                    id="longitude"
-                    max={1}
-                    min={0}
-                    onValueChange={(value) => setLongitude(value[0])}
-                    step={0.001}
-                    value={[longitude]}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="altitude">
-                      Altitude
-                    </label>
-                    <span className="text-muted-foreground text-xs">{altitude.toFixed(3)}</span>
-                  </div>
-                  <Slider
-                    id="altitude"
-                    max={1}
-                    min={0}
-                    onValueChange={(value) => setAltitude(value[0])}
-                    step={0.001}
-                    value={[altitude]}
-                  />
-                </div>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </TreeNodeTrigger>
-      <TreeNodeContent hasChildren={true}>
-        <div
-          className="flex items-center gap-2 py-2 text-muted-foreground text-xs"
-          style={{ paddingLeft: (level + 1) * (indent ?? 20) + 8 }}
-        >
-          <MapPin className="h-3 w-3" />
-          <span>
-            {environment?.latitude?.toFixed(4) ?? 0}, {environment?.longitude?.toFixed(4) ?? 0}
-          </span>
-        </div>
-      </TreeNodeContent>
     </TreeNode>
   )
 }
@@ -1133,7 +1001,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
               showLines={true}
             >
               <TreeView className="p-0">
-                <EnvironmentItem level={1} />
+                <EnvironmentItem level={1} onNodeClick={handleNodeClick} />
                 {siteIds.map((siteId) => (
                   <SiteItem key={siteId} level={1} nodeId={siteId} />
                 ))}

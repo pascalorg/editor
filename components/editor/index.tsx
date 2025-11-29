@@ -61,20 +61,6 @@ export default function Editor({ className }: { className?: string }) {
       {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
       <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
       <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
-      {/* Lighting setup with shadows */}
-      <ambientLight intensity={0.1} />
-      <directionalLight
-        castShadow
-        intensity={2}
-        position={[20, 30, 20]}
-        shadow-bias={-0.0001}
-        shadow-camera-bottom={-30}
-        shadow-camera-far={100}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-mapSize={[2048, 2048]}
-      />
 
       {SHOW_GRID && <InfiniteLines />}
 
