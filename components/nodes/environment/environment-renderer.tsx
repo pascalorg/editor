@@ -56,22 +56,71 @@ export const EnvironmentRenderer = memo(() => {
     return new THREE.Vector3(x, y, z)
   }, [date, latitude, longitude])
 
+  const sunTexture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 512
+    canvas.height = 512
+    const context = canvas.getContext('2d')!
+
+    const gradient = context.createRadialGradient(256, 256, 20, 256, 256, 256)
+
+    // Core
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
+    gradient.addColorStop(0.1, 'rgba(255, 255, 240, 0.8)')
+
+    // Corona/Glow
+    gradient.addColorStop(0.2, 'rgba(255, 245, 220, 0.4)')
+    gradient.addColorStop(0.4, 'rgba(255, 220, 180, 0.1)')
+    gradient.addColorStop(1, 'rgba(255, 140, 0, 0)')
+
+    context.fillStyle = gradient
+    context.fillRect(0, 0, 512, 512)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    return texture
+  }, [])
+
+  // Position sprite far away but visible
+  const spritePosition = useMemo(
+    () => sunPosition.clone().normalize().multiplyScalar(400),
+    [sunPosition],
+  )
+
   return (
     <>
-      <Sky sunPosition={sunPosition} />
+      <Sky
+        distance={1000}
+        mieCoefficient={0.002}
+        mieDirectionalG={0.8}
+        rayleigh={1}
+        sunPosition={sunPosition}
+        turbidity={2}
+      />
+
+      <sprite position={spritePosition} scale={[60, 60, 1]}>
+        <spriteMaterial
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          map={sunTexture}
+          opacity={0.8}
+          toneMapped={false}
+          transparent
+        />
+      </sprite>
+
       <directionalLight
         castShadow
-        intensity={2}
+        intensity={1}
         position={sunPosition}
         shadow-bias={-0.0001}
-        shadow-camera-bottom={-30}
-        shadow-camera-far={100}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-mapSize={[2048, 2048]}
+        shadow-camera-bottom={-40}
+        shadow-camera-far={200}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-mapSize={[1024, 1024]}
       />
-      <ambientLight intensity={0.2} />
+      <ambientLight intensity={0.4} />
     </>
   )
 })
