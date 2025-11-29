@@ -1,5 +1,6 @@
-import { MapPin, Settings2 } from 'lucide-react'
+import { Clock, MapPin, Moon, Settings2, Sun, Sunrise, Sunset } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import SunCalc from 'suncalc'
 import { useShallow } from 'zustand/shallow'
 import AddressAutocomplete from '@/components/address-auto-complete'
 import {
@@ -14,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
 
 interface EnvironmentItemProps {
@@ -29,6 +31,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
   const [longitude, setLongitude] = useState(environment?.longitude ?? 0)
   const [altitude, setAltitude] = useState(environment?.altitude ?? 0)
   const [address, setAddress] = useState(environment?.address ?? '')
+  const [timeValue, setTimeValue] = useState(0)
 
   // Update local state when environment changes
   useEffect(() => {
@@ -36,6 +39,14 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
     setLongitude(environment?.longitude ?? 0)
     setAltitude(environment?.altitude ?? 0)
     setAddress(environment?.address ?? '')
+
+    // Update time slider
+    let date = new Date()
+    if (environment?.timeMode === 'custom' && environment.staticTime) {
+      date = new Date(environment.staticTime)
+    }
+    const hours = date.getHours() + date.getMinutes() / 60
+    setTimeValue(hours)
   }, [environment])
 
   // Update in real-time when values change
@@ -52,6 +63,41 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
         },
       },
     }))
+  }
+
+  const handleTimeChange = (value: number[]) => {
+    const hours = value[0]
+    setTimeValue(hours)
+
+    // Convert hours (0-24) to timestamp for today
+    const date = new Date()
+    date.setHours(Math.floor(hours))
+    date.setMinutes(Math.floor((hours % 1) * 60))
+    date.setSeconds(0)
+
+    // Check if time matches any preset range based on altitude
+    const position = SunCalc.getPosition(date, latitude, longitude)
+    const { altitude } = position
+    const sunTimes = SunCalc.getTimes(date, latitude, longitude)
+
+    let preset: 'dawn' | 'day' | 'dusk' | 'night' | 'custom' = 'custom'
+
+    if (altitude < -0.05) {
+      preset = 'night'
+    } else if (altitude > 0.1) {
+      preset = 'day'
+    } else if (date.getTime() < sunTimes.solarNoon.getTime()) {
+      // Transition period - check if before or after solar noon to distinguish dawn/dusk
+      preset = 'dawn'
+    } else {
+      preset = 'dusk'
+    }
+
+    updateEnvironment({
+      timeMode: 'custom',
+      timePreset: preset,
+      staticTime: date.getTime(),
+    })
   }
 
   const handleAddressSelect = (
@@ -155,6 +201,124 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                   onAddressSelect={handleAddressSelect}
                   placeholder={address || 'Search address...'}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-medium text-sm">Time of Day</label>
+                <div className="flex gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => {
+                          const times = SunCalc.getTimes(new Date(), latitude, longitude)
+                          updateEnvironment({
+                            timeMode: 'custom',
+                            timePreset: 'dawn',
+                            staticTime: times.dawn.getTime(),
+                          })
+                        }}
+                        size="icon"
+                        variant={environment?.timePreset === 'dawn' ? 'default' : 'outline'}
+                      >
+                        <Sunrise className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Dawn</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => {
+                          const times = SunCalc.getTimes(new Date(), latitude, longitude)
+                          updateEnvironment({
+                            timeMode: 'custom',
+                            timePreset: 'day',
+                            staticTime: times.solarNoon.getTime(),
+                          })
+                        }}
+                        size="icon"
+                        variant={environment?.timePreset === 'day' ? 'default' : 'outline'}
+                      >
+                        <Sun className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Noon</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => {
+                          const times = SunCalc.getTimes(new Date(), latitude, longitude)
+                          updateEnvironment({
+                            timeMode: 'custom',
+                            timePreset: 'dusk',
+                            staticTime: times.dusk.getTime(),
+                          })
+                        }}
+                        size="icon"
+                        variant={environment?.timePreset === 'dusk' ? 'default' : 'outline'}
+                      >
+                        <Sunset className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Dusk</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => {
+                          const times = SunCalc.getTimes(new Date(), latitude, longitude)
+                          updateEnvironment({
+                            timeMode: 'custom',
+                            timePreset: 'night',
+                            staticTime: times.nadir.getTime(),
+                          })
+                        }}
+                        size="icon"
+                        variant={environment?.timePreset === 'night' ? 'default' : 'outline'}
+                      >
+                        <Moon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Night</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => updateEnvironment({ timeMode: 'now', timePreset: 'now' })}
+                        size="icon"
+                        variant={
+                          environment?.timeMode === 'now' || !environment?.timeMode
+                            ? 'default'
+                            : 'outline'
+                        }
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Current Time</TooltipContent>
+                  </Tooltip>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <Slider
+                    max={24}
+                    min={0}
+                    onValueChange={handleTimeChange}
+                    step={0.1}
+                    value={[timeValue]}
+                  />
+                  <div className="w-12 text-right font-mono text-xs">
+                    {Math.floor(timeValue).toString().padStart(2, '0')}:
+                    {Math.floor((timeValue % 1) * 60)
+                      .toString()
+                      .padStart(2, '0')}
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-4">

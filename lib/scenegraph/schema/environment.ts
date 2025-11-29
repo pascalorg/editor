@@ -8,6 +8,9 @@ export const EnvironmentNode = z
     longitude: z.number().default(0), // degrees
     altitude: z.number().default(0), // meters above sea level
     address: z.string().optional(), // address of the environment
+    timeMode: z.enum(['now', 'custom']).default('now'),
+    timePreset: z.enum(['dawn', 'day', 'dusk', 'night', 'now', 'custom']).optional(),
+    staticTime: z.number().optional(), // timestamp for custom time
     metadata: z.json().optional().default({}), // metadata for the environment
   })
   .describe(
@@ -16,6 +19,8 @@ export const EnvironmentNode = z
   - latitude: latitude in degrees
   - longitude: longitude in degrees
   - altitude: altitude in meters above sea level
+  - timeMode: 'now' for browser time, 'custom' for staticTime
+  - staticTime: timestamp for fixed time
   `,
   )
 

@@ -6,24 +6,33 @@ import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 
 export const EnvironmentRenderer = memo(() => {
-  const { latitude, longitude } = useEditor(
+  const { latitude, longitude, timeMode, staticTime } = useEditor(
     useShallow((state) => {
       const environment = state.scene.root.environment
       return {
         latitude: environment.latitude,
         longitude: environment.longitude,
         altitude: environment.altitude,
+        timeMode: environment.timeMode,
+        staticTime: environment.staticTime,
       }
     }),
   )
 
   const [date, setDate] = useState(new Date())
 
-  // Update time every minute
+  // Update time based on mode
   useEffect(() => {
+    if (timeMode === 'custom' && staticTime) {
+      setDate(new Date(staticTime))
+      return
+    }
+
+    // Default to 'now' behavior
+    setDate(new Date())
     const timer = setInterval(() => setDate(new Date()), 60 * 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [timeMode, staticTime])
 
   const sunPosition = useMemo(() => {
     const pos = SunCalc.getPosition(date, latitude, longitude)
@@ -53,8 +62,75 @@ export const EnvironmentRenderer = memo(() => {
     const y = r * Math.sin(altitude)
     const z = r * Math.cos(altitude) * Math.sin(azimuth) * -1
 
-    return new THREE.Vector3(x, y, z)
+    return {
+      position: new THREE.Vector3(x, y, z),
+      altitude,
+      azimuth,
+    }
   }, [date, latitude, longitude])
+
+  const lighting = useMemo(() => {
+    const { altitude } = sunPosition
+    // altitude is in radians.
+    // -PI/2 (nadir) to PI/2 (zenith)
+
+    // Helper to interpolate colors
+    const lerpColor = (c1: string, c2: string, t: number) => {
+      const col1 = new THREE.Color(c1)
+      const col2 = new THREE.Color(c2)
+      return col1.lerp(col2, t)
+    }
+
+    // Helper to clamp and normalize t based on range
+    const getT = (val: number, min: number, max: number) =>
+      Math.max(0, Math.min(1, (val - min) / (max - min)))
+
+    let ambientColor = new THREE.Color('#ffffff')
+    let ambientIntensity = 0.4
+    let directionalColor = new THREE.Color('#ffffff')
+    let directionalIntensity = 1
+
+    if (altitude < -0.05) {
+      // Night (Below horizon)
+      ambientColor = new THREE.Color('#0d1b2a') // Deep night blue
+      ambientIntensity = 0.2
+      directionalColor = new THREE.Color('#415a77') // Cool moonlight
+      directionalIntensity = 0.2 // Dim moonlight
+    } else if (altitude < 0.1) {
+      // Dawn/Dusk Transition
+      const t = getT(altitude, -0.05, 0.1)
+
+      // Ambient: Night Blue -> Golden Orange -> Day White
+      if (t < 0.5) {
+        // Night to Dawn
+        const localT = t * 2
+        ambientColor = lerpColor('#0d1b2a', '#e07a5f', localT)
+        ambientIntensity = THREE.MathUtils.lerp(0.2, 0.5, localT)
+        directionalColor = lerpColor('#415a77', '#f2cc8f', localT)
+        directionalIntensity = THREE.MathUtils.lerp(0.2, 0.8, localT)
+      } else {
+        // Dawn to Day
+        const localT = (t - 0.5) * 2
+        ambientColor = lerpColor('#e07a5f', '#ffffff', localT)
+        ambientIntensity = THREE.MathUtils.lerp(0.1, 0.1, localT)
+        directionalColor = lerpColor('#f2cc8f', '#fffcf2', localT)
+        directionalIntensity = THREE.MathUtils.lerp(0.5, 0.5, localT)
+      }
+    } else {
+      // Day
+      ambientColor = new THREE.Color('#ffffff')
+      ambientIntensity = 0.1
+      directionalColor = new THREE.Color('#fffcf2') // Warm white
+      directionalIntensity = 0.1
+    }
+
+    return {
+      ambientColor,
+      ambientIntensity,
+      directionalColor,
+      directionalIntensity,
+    }
+  }, [sunPosition])
 
   const sunTexture = useMemo(() => {
     const canvas = document.createElement('canvas')
@@ -82,19 +158,21 @@ export const EnvironmentRenderer = memo(() => {
 
   // Position sprite far away but visible
   const spritePosition = useMemo(
-    () => sunPosition.clone().normalize().multiplyScalar(400),
+    () => sunPosition.position.clone().normalize().multiplyScalar(400),
     [sunPosition],
   )
+
+  const isNight = sunPosition.altitude < -0.05
 
   return (
     <>
       <Sky
         distance={1000}
-        mieCoefficient={0.002}
-        mieDirectionalG={0.8}
-        rayleigh={1}
-        sunPosition={sunPosition}
-        turbidity={2}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.7}
+        rayleigh={isNight ? 0.1 : 3}
+        sunPosition={sunPosition.position}
+        turbidity={isNight ? 10 : 1}
       />
 
       <sprite position={spritePosition} scale={[60, 60, 1]}>
@@ -102,7 +180,7 @@ export const EnvironmentRenderer = memo(() => {
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           map={sunTexture}
-          opacity={0.8}
+          opacity={isNight ? 0 : 0.8}
           toneMapped={false}
           transparent
         />
@@ -110,17 +188,18 @@ export const EnvironmentRenderer = memo(() => {
 
       <directionalLight
         castShadow
-        intensity={1}
-        position={sunPosition}
+        color={lighting.directionalColor}
+        intensity={lighting.directionalIntensity}
+        position={sunPosition.position}
         shadow-bias={-0.0001}
         shadow-camera-bottom={-40}
         shadow-camera-far={200}
         shadow-camera-left={-40}
         shadow-camera-right={40}
         shadow-camera-top={40}
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
       />
-      <ambientLight intensity={0.4} />
+      <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
     </>
   )
 })

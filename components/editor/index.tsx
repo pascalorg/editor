@@ -62,7 +62,6 @@ export default function Editor({ className }: { className?: string }) {
       <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
       <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
 
-
       {SHOW_GRID && <InfiniteLines />}
 
       {/* Infinite floor - rendered outside export group */}
