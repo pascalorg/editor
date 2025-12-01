@@ -5,13 +5,21 @@ import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 
+interface WallDeleteInfo {
+  rangeStart: number
+  rangeEnd: number
+}
+
 interface SledgehammerState {
   // Wall deletion state
   hoveredWallId: string | null
   hoveredGridIndex: number | null // Which grid cell (0 to length-1)
   isDragging: boolean
+  dragStartWallId: string | null // Wall where drag started
   dragStartIndex: number | null // Grid index where drag started
   dragEndIndex: number | null // Grid index where drag currently is
+  // Track all walls to delete during drag (wallId -> delete range)
+  wallsToDelete: Map<string, WallDeleteInfo>
 
   // Grid/item deletion state
   itemsToDelete: Set<string>
@@ -51,8 +59,10 @@ export function SledgehammerTool() {
     hoveredWallId: null,
     hoveredGridIndex: null,
     isDragging: false,
+    dragStartWallId: null,
     dragStartIndex: null,
     dragEndIndex: null,
+    wallsToDelete: new Map(),
     itemsToDelete: new Set(),
     isGridDragging: false,
     gridDragStart: null,
@@ -101,6 +111,12 @@ export function SledgehammerTool() {
       if (state.hoveredWallId) {
         clearDeletePreview(state.hoveredWallId)
       }
+      // Clear all walls in the delete set
+      state.wallsToDelete.forEach((_, wallId) => {
+        clearDeletePreview(wallId)
+      })
+      state.wallsToDelete.clear()
+
       state.itemsToDelete.forEach((itemId) => {
         const handle = graph.getNodeById(itemId as any)
         if (handle) {
@@ -125,9 +141,13 @@ export function SledgehammerTool() {
       state.hoveredGridIndex = gridIndex
 
       if (state.isDragging) {
-        // If dragging, extend the range
+        // When entering a new wall during drag, start fresh range on this wall
+        state.dragStartIndex = gridIndex
         state.dragEndIndex = gridIndex
-        setDeleteRange(wall.id, wall, state.dragStartIndex!, state.dragEndIndex)
+
+        // Add/update this wall in the delete set
+        state.wallsToDelete.set(wall.id, { rangeStart: gridIndex, rangeEnd: gridIndex })
+        setDeleteRange(wall.id, wall, gridIndex, gridIndex)
       } else {
         // Just hovering - highlight single cell
         setDeleteRange(wall.id, wall, gridIndex, gridIndex)
@@ -141,10 +161,11 @@ export function SledgehammerTool() {
 
       // Check if we moved to a different wall
       if (state.hoveredWallId && state.hoveredWallId !== wall.id) {
-        // Clear previous wall's preview
-        clearDeletePreview(state.hoveredWallId)
-
-        // Reset drag if we moved to a different wall
+        if (!state.isDragging) {
+          // Clear previous wall's preview only if not dragging
+          clearDeletePreview(state.hoveredWallId)
+        }
+        // When moving to a new wall during drag, start fresh on new wall
         if (state.isDragging) {
           state.dragStartIndex = gridIndex
         }
@@ -160,7 +181,12 @@ export function SledgehammerTool() {
       if (state.isDragging) {
         // Update drag end position
         state.dragEndIndex = gridIndex
-        setDeleteRange(wall.id, wall, state.dragStartIndex!, state.dragEndIndex)
+
+        // Update this wall's range in the delete set
+        const rangeStart = Math.min(state.dragStartIndex!, gridIndex)
+        const rangeEnd = Math.max(state.dragStartIndex!, gridIndex)
+        state.wallsToDelete.set(wall.id, { rangeStart, rangeEnd })
+        setDeleteRange(wall.id, wall, rangeStart, rangeEnd)
       } else if (indexChanged || wallChanged) {
         // Just hovering - highlight single cell when index or wall changes
         setDeleteRange(wall.id, wall, gridIndex, gridIndex)
@@ -168,11 +194,22 @@ export function SledgehammerTool() {
     }
 
     const handleWallLeave = (e: WallEvent) => {
-      // Don't clear if dragging (we want to keep the preview)
-      if (state.isDragging) return
-
       const wall = e.node
-      clearDeletePreview(wall.id)
+
+      // Don't clear preview if dragging and this wall is in the delete set
+      if (state.isDragging && state.wallsToDelete.has(wall.id)) {
+        // Keep the preview, just update hover state
+        if (state.hoveredWallId === wall.id) {
+          state.hoveredWallId = null
+          state.hoveredGridIndex = null
+        }
+        return
+      }
+
+      // Clear preview if not dragging
+      if (!state.isDragging) {
+        clearDeletePreview(wall.id)
+      }
 
       if (state.hoveredWallId === wall.id) {
         state.hoveredWallId = null
@@ -241,8 +278,16 @@ export function SledgehammerTool() {
       if (state.hoveredWallId && state.hoveredGridIndex !== null) {
         // Start drag on wall
         state.isDragging = true
+        state.dragStartWallId = state.hoveredWallId
         state.dragStartIndex = state.hoveredGridIndex
         state.dragEndIndex = state.hoveredGridIndex
+
+        // Initialize the delete set with the current wall
+        state.wallsToDelete.clear()
+        state.wallsToDelete.set(state.hoveredWallId, {
+          rangeStart: state.hoveredGridIndex,
+          rangeEnd: state.hoveredGridIndex,
+        })
       } else {
         // Start drag on grid (for items)
         state.isGridDragging = true
@@ -251,21 +296,19 @@ export function SledgehammerTool() {
     }
 
     const handlePointerUp = () => {
-      // Handle wall deletion
-      if (state.isDragging && state.hoveredWallId) {
-        const wallId = state.hoveredWallId
-        const handle = graph.getNodeById(wallId as any)
-        if (handle) {
-          const wall = handle.data() as WallNode
+      // Handle wall deletion - delete ALL walls in the delete set
+      if (state.isDragging && state.wallsToDelete.size > 0) {
+        // Process all walls in the delete set
+        state.wallsToDelete.forEach((deleteInfo, wallId) => {
+          const handle = graph.getNodeById(wallId as any)
+          if (handle) {
+            const wall = handle.data() as WallNode
+            // Perform the wall split/deletion
+            deleteWallSegment(wall, deleteInfo.rangeStart, deleteInfo.rangeEnd)
+          }
+        })
 
-          const rangeStart = Math.min(state.dragStartIndex!, state.dragEndIndex!)
-          const rangeEnd = Math.max(state.dragStartIndex!, state.dragEndIndex!)
-          const wallLength = wall.size[0]
-
-          // Perform the wall split/deletion
-          deleteWallSegment(wall, rangeStart, rangeEnd)
-        }
-
+        state.wallsToDelete.clear()
         state.hoveredWallId = null
         state.hoveredGridIndex = null
       }
@@ -280,6 +323,7 @@ export function SledgehammerTool() {
 
       state.isDragging = false
       state.isGridDragging = false
+      state.dragStartWallId = null
       state.dragStartIndex = null
       state.dragEndIndex = null
       state.gridDragStart = null
