@@ -27,12 +27,14 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     nodeSrc,
     modelScale,
     modelRotation,
+    deletePreview,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as ItemNode | undefined
       return {
         nodeSize: node?.size,
+        deletePreview: node?.editor?.deletePreview === true,
         isPreview: node?.editor?.preview === true,
         levelId: state.graph.index.byId.get(nodeId)?.levelId,
         canPlace: node?.editor?.canPlace !== false,
@@ -107,6 +109,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         >
           {nodeSrc && (
             <ModelItemRenderer
+              deletePreview={deletePreview}
               position={modelPosition || [0, 0, 0]}
               rotation={modelRotation}
               scale={modelScale || [1, 1, 1]}
@@ -130,11 +133,13 @@ const ModelItemRenderer = ({
   rotation,
   scale,
   src,
+  deletePreview,
 }: {
   position?: ItemNode['modelPosition']
   rotation?: ItemNode['modelRotation']
   scale?: ItemNode['modelScale']
   src: ItemNode['src']
+  deletePreview?: boolean
 }) => {
   const { scene } = useGLTF(src)
   const ref = useRef<THREE.Group>(null)
@@ -153,7 +158,14 @@ const ModelItemRenderer = ({
 
   return (
     <>
-      <Clone object={scene} position={position} ref={ref} rotation={rotation} scale={scale} />
+      <Clone
+        inject={deletePreview ? <meshStandardMaterial color="red" /> : undefined}
+        object={scene}
+        position={position}
+        ref={ref}
+        rotation={rotation}
+        scale={scale}
+      />
     </>
   )
 }
