@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ItemCatalog } from '@/components/item-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useEditor } from '@/hooks/use-editor'
+import { type CatalogCategory, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { BuildingTools } from './building-tools'
 import { ControlModes } from './control-modes'
@@ -11,17 +11,17 @@ import { ViewToggles } from './view-toggles'
 
 export function ActionMenu({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
-  const activeTool = useEditor((state) => state.activeTool)
+  const catalogCategory = useEditor((state) => state.catalogCategory)
   const showBuildingTools = controlMode === 'building'
-  const showItemCatalog = controlMode === 'building' && activeTool === 'item'
 
   // Delayed state for building tools exit animation
   const [shouldRenderTools, setShouldRenderTools] = useState(showBuildingTools)
   const [isToolsVisible, setIsToolsVisible] = useState(showBuildingTools)
 
   // Delayed state for item catalog exit animation
-  const [shouldRenderCatalog, setShouldRenderCatalog] = useState(showItemCatalog)
-  const [isCatalogVisible, setIsCatalogVisible] = useState(showItemCatalog)
+  const [shouldRenderCatalog, setShouldRenderCatalog] = useState(catalogCategory !== null)
+  const [isCatalogVisible, setIsCatalogVisible] = useState(catalogCategory !== null)
+  const [currentCategory, setCurrentCategory] = useState<CatalogCategory | null>(catalogCategory)
 
   useEffect(() => {
     if (showBuildingTools) {
@@ -35,15 +35,19 @@ export function ActionMenu({ className }: { className?: string }) {
   }, [showBuildingTools])
 
   useEffect(() => {
-    if (showItemCatalog) {
+    if (catalogCategory) {
+      setCurrentCategory(catalogCategory)
       setShouldRenderCatalog(true)
       requestAnimationFrame(() => setIsCatalogVisible(true))
     } else {
       setIsCatalogVisible(false)
-      const timeout = setTimeout(() => setShouldRenderCatalog(false), 200)
+      const timeout = setTimeout(() => {
+        setShouldRenderCatalog(false)
+        setCurrentCategory(null)
+      }, 200)
       return () => clearTimeout(timeout)
     }
-  }, [showItemCatalog])
+  }, [catalogCategory])
 
   return (
     <TooltipProvider>
@@ -56,7 +60,7 @@ export function ActionMenu({ className }: { className?: string }) {
         )}
       >
         {/* Item Catalog Row - Animated, above Building Tools */}
-        {shouldRenderCatalog && (
+        {shouldRenderCatalog && currentCategory && (
           <div
             className={cn(
               'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
@@ -65,7 +69,7 @@ export function ActionMenu({ className }: { className?: string }) {
                 : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
             )}
           >
-            <ItemCatalog />
+            <ItemCatalog category={currentCategory} />
           </div>
         )}
 

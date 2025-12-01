@@ -1,12 +1,12 @@
 'use client'
 
 import Image from 'next/image'
-import { Button } from '@/components/ui/button'
-import { useEditor } from '@/hooks/use-editor'
+import { useEffect } from 'react'
+import { type CatalogCategory, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 interface CatalogItem {
-  category: 'item' | 'window' | 'door'
+  category: CatalogCategory
   thumbnail: string
   modelUrl: string
   scale: [number, number, number]
@@ -137,13 +137,25 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
 ]
 
-export function ItemCatalog() {
+export function ItemCatalog({ category }: { category: CatalogCategory }) {
   const selectedItem = useEditor((state) => state.selectedItem)
   const setSelectedItem = useEditor((state) => state.setSelectedItem)
 
+  const filteredItems = CATALOG_ITEMS.filter((item) => item.category === category)
+
+  // Auto-select first item if current selection is not in the filtered list
+  useEffect(() => {
+    const isCurrentItemInCategory = filteredItems.some(
+      (item) => item.modelUrl === selectedItem.modelUrl,
+    )
+    if (!isCurrentItemInCategory && filteredItems.length > 0) {
+      setSelectedItem(filteredItems[0])
+    }
+  }, [filteredItems, selectedItem.modelUrl, setSelectedItem])
+
   return (
-    <div className="-my-2 -mx-2 flex gap-2 overflow-x-auto p-2">
-      {CATALOG_ITEMS.map((item, index) => {
+    <div className="-mx-2 -my-2 flex gap-2 overflow-x-auto p-2">
+      {filteredItems.map((item, index) => {
         const isSelected = selectedItem.modelUrl === item.modelUrl
         return (
           <button
@@ -153,6 +165,7 @@ export function ItemCatalog() {
             )}
             key={index}
             onClick={() => setSelectedItem(item)}
+            type="button"
           >
             <Image
               alt={`Item ${index + 1}`}
