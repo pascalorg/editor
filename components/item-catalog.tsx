@@ -160,7 +160,7 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
         return (
           <button
             className={cn(
-              'relative aspect-square h-14 w-14 shrink-0 flex-col gap-px rounded-lg transition-all duration-200 ease-out',
+              'relative aspect-square h-14 w-14 shrink-0 flex-col gap-px rounded-lg transition-all duration-200 ease-out hover:scale-105 hover:cursor-pointer',
               isSelected && 'ring-2 ring-primary-foreground',
             )}
             key={index}
