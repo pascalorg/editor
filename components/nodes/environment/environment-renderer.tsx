@@ -1,4 +1,4 @@
-import { Sky } from '@react-three/drei'
+import { Sky, SoftShadows } from '@react-three/drei'
 import { memo, useEffect, useMemo, useState } from 'react'
 import SunCalc from 'suncalc'
 import * as THREE from 'three'
@@ -119,9 +119,9 @@ export const EnvironmentRenderer = memo(() => {
     } else {
       // Day
       ambientColor = new THREE.Color('#ffffff')
-      ambientIntensity = 0.1
+      ambientIntensity = 0.4
       directionalColor = new THREE.Color('#fffcf2') // Warm white
-      directionalIntensity = 0.1
+      directionalIntensity = 1
     }
 
     return {

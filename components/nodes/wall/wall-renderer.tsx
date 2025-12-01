@@ -815,6 +815,7 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   return (
     <Suspense>
       <WallCutout
+        key={`${opening.position.join(',')}-${opening.nodeSrc}`}
         modelPosition={opening.modelPosition}
         modelScale={opening.modelScale}
         position={opening.position}
