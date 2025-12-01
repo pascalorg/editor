@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ItemCatalog } from '@/components/item-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
@@ -10,24 +11,39 @@ import { ViewToggles } from './view-toggles'
 
 export function ActionMenu({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
+  const activeTool = useEditor((state) => state.activeTool)
   const showBuildingTools = controlMode === 'building'
+  const showItemCatalog = controlMode === 'building' && activeTool === 'item'
 
-  // Delayed state for exit animation
-  const [shouldRender, setShouldRender] = useState(showBuildingTools)
-  const [isVisible, setIsVisible] = useState(showBuildingTools)
+  // Delayed state for building tools exit animation
+  const [shouldRenderTools, setShouldRenderTools] = useState(showBuildingTools)
+  const [isToolsVisible, setIsToolsVisible] = useState(showBuildingTools)
+
+  // Delayed state for item catalog exit animation
+  const [shouldRenderCatalog, setShouldRenderCatalog] = useState(showItemCatalog)
+  const [isCatalogVisible, setIsCatalogVisible] = useState(showItemCatalog)
 
   useEffect(() => {
     if (showBuildingTools) {
-      setShouldRender(true)
-      // Small delay to trigger enter animation
-      requestAnimationFrame(() => setIsVisible(true))
+      setShouldRenderTools(true)
+      requestAnimationFrame(() => setIsToolsVisible(true))
     } else {
-      setIsVisible(false)
-      // Wait for exit animation before unmounting
-      const timeout = setTimeout(() => setShouldRender(false), 200)
+      setIsToolsVisible(false)
+      const timeout = setTimeout(() => setShouldRenderTools(false), 200)
       return () => clearTimeout(timeout)
     }
   }, [showBuildingTools])
+
+  useEffect(() => {
+    if (showItemCatalog) {
+      setShouldRenderCatalog(true)
+      requestAnimationFrame(() => setIsCatalogVisible(true))
+    } else {
+      setIsCatalogVisible(false)
+      const timeout = setTimeout(() => setShouldRenderCatalog(false), 200)
+      return () => clearTimeout(timeout)
+    }
+  }, [showItemCatalog])
 
   return (
     <TooltipProvider>
@@ -39,12 +55,26 @@ export function ActionMenu({ className }: { className?: string }) {
           className,
         )}
       >
-        {/* Building Tools Row - Animated */}
-        {shouldRender && (
+        {/* Item Catalog Row - Animated, above Building Tools */}
+        {shouldRenderCatalog && (
           <div
             className={cn(
               'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
-              isVisible
+              isCatalogVisible
+                ? 'max-h-96 border-b px-2 py-2 opacity-100'
+                : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
+            )}
+          >
+            <ItemCatalog />
+          </div>
+        )}
+
+        {/* Building Tools Row - Animated */}
+        {shouldRenderTools && (
+          <div
+            className={cn(
+              'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
+              isToolsVisible
                 ? 'max-h-20 border-b px-2 py-2 opacity-100'
                 : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
             )}

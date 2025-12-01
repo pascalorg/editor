@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { ItemCatalog } from '@/components/item-catalog'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -165,9 +164,6 @@ export function AppSidebar() {
           {/* Tree-based Hierarchical Layers View */}
           <SidebarMenuItem className="flex flex-1 flex-col">
             <LayersMenu mounted={mounted} />
-          </SidebarMenuItem>
-          <SidebarMenuItem className="flex flex-1 flex-col">
-            <ItemCatalog />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
