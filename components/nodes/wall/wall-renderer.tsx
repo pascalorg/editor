@@ -760,6 +760,20 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 {nodeChildrenIds.map((openingId: string) => (
                   <WallOpening key={openingId} nodeId={openingId} />
                 ))}
+                {/* Delete preview overlay - only shows the segment to be deleted */}
+                {deletePreview && deleteSegmentGeometry && (
+                  <Subtraction geometry={deleteSegmentGeometry} renderOrder={100} showOperation>
+                    <meshStandardMaterial
+                      color={deleteColor}
+                      depthTest={true}
+                      depthWrite={false}
+                      emissive={deleteEmissive}
+                      emissiveIntensity={0.6}
+                      opacity={0.6}
+                      transparent
+                    />
+                  </Subtraction>
+                )}
               </Geometry>
               {debug && (
                 <Edges
@@ -772,21 +786,6 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 />
               )}
             </mesh>
-
-            {/* Delete preview overlay - only shows the segment to be deleted */}
-            {deletePreview && deleteSegmentGeometry && (
-              <mesh geometry={deleteSegmentGeometry} renderOrder={100}>
-                <meshStandardMaterial
-                  color={deleteColor}
-                  depthTest={true}
-                  depthWrite={false}
-                  emissive={deleteEmissive}
-                  emissiveIntensity={0.6}
-                  opacity={0.6}
-                  transparent
-                />
-              </mesh>
-            )}
           </group>
         </>
       )}
