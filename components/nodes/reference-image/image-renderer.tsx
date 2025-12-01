@@ -69,7 +69,7 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   // Get level for Y position
   const getLevelId = useEditor((state) => state.getLevelId)
   const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
   })
   const levelId = useMemo(() => getLevelId(nodeId), [getLevelId, nodeId])

@@ -202,10 +202,10 @@ export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): Bou
       // Calculate the union of all children's bounds
       // Note: calculateNodeBounds already returns bounds in absolute world coordinates
       // because it calls calculateAbsolutePosition which traverses the parent chain
-      let minX = Infinity
-      let maxX = -Infinity
-      let minZ = Infinity
-      let maxZ = -Infinity
+      let minX = Number.POSITIVE_INFINITY
+      let maxX = Number.NEGATIVE_INFINITY
+      let minZ = Number.POSITIVE_INFINITY
+      let maxZ = Number.NEGATIVE_INFINITY
 
       for (const child of groupNode.children) {
         const childBounds = calculateNodeBounds(child, getNode)
@@ -219,7 +219,7 @@ export function calculateNodeBounds(node: SceneNode, getNode: NodeProvider): Bou
       }
 
       // If no valid children bounds were found, return null
-      if (minX === Infinity) {
+      if (minX === Number.POSITIVE_INFINITY) {
         return null
       }
 

@@ -364,7 +364,12 @@ export type StoreState = {
   deletePreviewNodes: () => void
   commitMove: (
     nodeId: string,
-    originalData: { position: [number, number]; rotation: number; start?: [number, number]; end?: [number, number] },
+    originalData: {
+      position: [number, number]
+      rotation: number
+      start?: [number, number]
+      end?: [number, number]
+    },
   ) => void
 }
 
@@ -589,7 +594,7 @@ const useStore = create<StoreState>()(
             catalogCategory !== undefined
               ? catalogCategory
               : tool === 'item'
-                ? get().catalogCategory ?? 'item'
+                ? (get().catalogCategory ?? 'item')
                 : null
           set({ activeTool: tool, catalogCategory: newCatalogCategory })
           if (tool !== null) {

@@ -367,27 +367,30 @@ const createWallDataSelector = (levelId: string) => {
 export function WallRenderer({ nodeId }: WallRendererProps) {
   const debug = useEditor((state) => state.debug)
 
-  const { isPreview, canPlace, levelId, nodeSize, nodeChildrenIdsStr } = useEditor(
-    useShallow((state) => {
-      const handle = state.graph.getNodeById(nodeId)
-      const node = handle?.data() as WallNode | undefined
+  const { isPreview, canPlace, deletePreview, deleteRange, levelId, nodeSize, nodeChildrenIdsStr } =
+    useEditor(
+      useShallow((state) => {
+        const handle = state.graph.getNodeById(nodeId)
+        const node = handle?.data() as WallNode | undefined
 
-      // getLevelId helper in state works with node object, but we updated it to take node
-      // But store.getLevelId(node) calls graph.getNodeById.
+        // getLevelId helper in state works with node object, but we updated it to take node
+        // But store.getLevelId(node) calls graph.getNodeById.
 
-      // Actually we can just use handle.meta.levelId directly if available via selector?
-      // Yes, SceneGraph handles have meta.
-      const levelId = state.graph.index.byId.get(nodeId)?.levelId
+        // Actually we can just use handle.meta.levelId directly if available via selector?
+        // Yes, SceneGraph handles have meta.
+        const levelId = state.graph.index.byId.get(nodeId)?.levelId
 
-      return {
-        isPreview: node?.editor?.preview === true,
-        canPlace: node?.editor?.canPlace !== false,
-        levelId,
-        nodeSize: node?.size || [0, 0],
-        nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
-      }
-    }),
-  )
+        return {
+          isPreview: node?.editor?.preview === true,
+          canPlace: node?.editor?.canPlace !== false,
+          deletePreview: node?.editor?.deletePreview === true,
+          deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
+          levelId,
+          nodeSize: node?.size || [0, 0],
+          nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
+        }
+      }),
+    )
 
   // Use it with useMemo to create a stable selector
   const wallDataSelector = useMemo(
@@ -402,6 +405,10 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const previewColor = canPlace ? '#44ff44' : '#ff4444'
   const previewEmissive = canPlace ? '#22aa22' : '#aa2222'
   const previewLineDim = canPlace ? '#336633' : '#663333'
+
+  // Delete preview colors (red/orange tint)
+  const deleteColor = '#ff4444'
+  const deleteEmissive = '#aa2222'
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
@@ -545,6 +552,34 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
     return geometry
   }, [wallData, wallIds, nodeId, nodeSize])
+
+  // Generate geometry for the delete preview segment (only the portion to be deleted)
+  const deleteSegmentGeometry = useMemo(() => {
+    if (!deleteRange) return null
+
+    const [rangeStart, rangeEnd] = deleteRange
+    const wallHeight = WALL_HEIGHT
+    const halfT = WALL_THICKNESS / 2
+
+    // Calculate segment bounds in world units
+    const segmentStartX = rangeStart * TILE_SIZE
+    const segmentEndX = (rangeEnd + 1) * TILE_SIZE // +1 because range is inclusive
+
+    // Simple box geometry for the segment (no junction handling for preview)
+    const shapePoints = [
+      new THREE.Vector2(segmentStartX, halfT),
+      new THREE.Vector2(segmentEndX, halfT),
+      new THREE.Vector2(segmentEndX, -halfT),
+      new THREE.Vector2(segmentStartX, -halfT),
+    ]
+    const shape = new THREE.Shape(shapePoints)
+
+    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+    geometry.rotateX(-Math.PI / 2)
+
+    return geometry
+  }, [deleteRange])
 
   // Determine opacity based on selected floo, [allWalls]r
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -737,6 +772,21 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 />
               )}
             </mesh>
+
+            {/* Delete preview overlay - only shows the segment to be deleted */}
+            {deletePreview && deleteSegmentGeometry && (
+              <mesh geometry={deleteSegmentGeometry} renderOrder={100}>
+                <meshStandardMaterial
+                  color={deleteColor}
+                  depthTest={true}
+                  depthWrite={false}
+                  emissive={deleteEmissive}
+                  emissiveIntensity={0.6}
+                  opacity={0.6}
+                  transparent
+                />
+              </mesh>
+            )}
           </group>
         </>
       )}
@@ -751,18 +801,13 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
       const node = handle?.data()
 
       return {
-        type: (node as any)?.type,
         position: (node as any)?.position,
         modelPosition: (node as ItemNode)?.modelPosition || [0, 0, 0],
         modelScale: (node as ItemNode)?.modelScale || [1, 1, 1],
-        editor: (node as any)?.editor,
         nodeSrc: (node as ItemNode)?.src,
       }
     }),
   )
-  const scale: [number, number, number] =
-    opening.type === 'door' ? [0.98, 2, 0.3] : [0.9, 1.22, 0.3] // Adjust scale based on type
-  // TODO: Create a WallOpening type to save properly the cut and be agnostic here
 
   if (!opening.nodeSrc) {
     return null // TODO: Handle data from node
@@ -808,7 +853,7 @@ const WallCutout = ({
       return
     }
     update()
-  }, [position, update, nodes])
+  }, [update, nodes])
 
   if (!nodes.cutout?.geometry) {
     return null

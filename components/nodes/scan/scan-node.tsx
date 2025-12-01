@@ -113,11 +113,14 @@ export function useScanManipulation(
     }),
   )
 
-  const handleSelect = useCallback((e?: any) => {
-    if (controlMode === 'guide' || controlMode === 'select') {
-      handleNodeSelect(nodeId, e || {})
-    }
-  }, [controlMode, nodeId, handleNodeSelect])
+  const handleSelect = useCallback(
+    (e?: any) => {
+      if (controlMode === 'guide' || controlMode === 'select') {
+        handleNodeSelect(nodeId, e || {})
+      }
+    },
+    [controlMode, nodeId, handleNodeSelect],
+  )
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'z') => (e: any) => {

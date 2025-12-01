@@ -18,4 +18,3 @@ export const SlabNode = BaseNode.extend({
 )
 
 export type SlabNode = z.infer<typeof SlabNode>
-

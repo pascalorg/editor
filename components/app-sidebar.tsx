@@ -52,7 +52,7 @@ export function AppSidebar() {
   const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
   const serializeLayout = useEditor((state) => state.serializeLayout)
   const loadLayout = useEditor((state) => state.loadLayout)
-  
+
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)

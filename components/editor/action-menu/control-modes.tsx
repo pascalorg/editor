@@ -87,8 +87,7 @@ export function ControlModes() {
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {mode.label} ({mode.shortcut})
-                {isActive && mode.id !== 'select' && ' • Esc to exit'}
+                {mode.label} ({mode.shortcut}){isActive && mode.id !== 'select' && ' • Esc to exit'}
               </p>
             </TooltipContent>
           </Tooltip>
@@ -97,4 +96,3 @@ export function ControlModes() {
     </div>
   )
 }
-

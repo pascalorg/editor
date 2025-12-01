@@ -5,18 +5,17 @@ import {
   GizmoHelper,
   GizmoViewport,
   Gltf,
-  Line,
   OrthographicCamera,
   PerspectiveCamera,
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
-import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
+import { SledgehammerTool } from '../nodes/sledgehammer/sledgehammer-tool'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
@@ -78,6 +77,10 @@ export default function Editor({ className }: { className?: string }) {
           <SelectionControls />
         </>
       )}
+
+      {/* Sledgehammer tool for deleting walls and items */}
+      {controlMode === 'delete' && <SledgehammerTool />}
+
       <CustomControls />
       <EnvironmentRenderer />
 
