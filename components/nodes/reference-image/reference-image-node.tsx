@@ -110,13 +110,16 @@ export function useImageManipulation(
     }),
   )
 
-  const handleSelect = useCallback((e?: any) => {
-    const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as ImageNode | undefined
-    if (controlMode === 'guide' || controlMode === 'select') {
-      handleNodeSelect(nodeId, e || {})
-      emitter.emit('image:select', { node: node! })
-    }
-  }, [controlMode, nodeId, handleNodeSelect])
+  const handleSelect = useCallback(
+    (e?: any) => {
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as ImageNode | undefined
+      if (controlMode === 'guide' || controlMode === 'select') {
+        handleNodeSelect(nodeId, e || {})
+        emitter.emit('image:select', { node: node! })
+      }
+    },
+    [controlMode, nodeId, handleNodeSelect],
+  )
 
   const handleTranslateDown = useCallback(
     (axis: 'x' | 'y') => (e: any) => {

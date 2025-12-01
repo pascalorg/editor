@@ -1,4 +1,4 @@
-import { SceneGraph } from '../scenegraph/index'
+import type { SceneGraph } from '../scenegraph/index'
 import type { AnyNode, WallNode } from '../scenegraph/schema/index'
 
 export const selectWallsFromLevel =
@@ -23,7 +23,7 @@ export const selectWallsFromLevel =
       }
     }
 
-    const children = levelHandle.children().map(h => h.data())
+    const children = levelHandle.children().map((h) => h.data())
     traverse(children as AnyNode[])
 
     return walls

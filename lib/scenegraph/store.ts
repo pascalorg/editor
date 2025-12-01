@@ -3,20 +3,8 @@
 import { produce } from 'immer'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import {
-  buildNodeTreeIndex,
-  getNodeByPath,
-  type NodeTreeIndex,
-  updateNodeAtPath,
-} from './index'
-import type {
-  AnyNode,
-  AnyNodeId,
-  AnyNodeType,
-  Scene,
-  SceneNode,
-  SceneNodeId,
-} from './schema/index'
+import { buildNodeTreeIndex, getNodeByPath, type NodeTreeIndex, updateNodeAtPath } from './index'
+import type { AnyNode, AnyNodeId, AnyNodeType, Scene, SceneNode, SceneNodeId } from './schema/index'
 import { initScene, loadScene } from './schema/index'
 
 // IndexedDB storage setup (same as before)

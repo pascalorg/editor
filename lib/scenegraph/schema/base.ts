@@ -25,6 +25,10 @@ export const BaseNode = z.object({
       canPlace: z.boolean().optional(),
       preview: z.boolean().optional(),
       locked: z.boolean().optional(),
+      deletePreview: z.boolean().optional(),
+      // Delete range: grid cell indices [startIndex, endIndex] (inclusive)
+      // For a wall of length 5, indices are 0-4
+      deleteRange: z.tuple([z.number(), z.number()]).optional(),
     })
     .optional(),
 })

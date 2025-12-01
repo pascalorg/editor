@@ -227,12 +227,13 @@ export type Tool =
   | 'wall'
   | 'room'
   | 'custom-room'
-  | 'door'
-  | 'window'
   | 'roof'
   | 'column'
   | 'item'
   | 'stair'
+
+// Catalog categories for the item tool
+export type CatalogCategory = 'item' | 'window' | 'door'
 
 export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
 export type CameraMode = 'perspective' | 'orthographic'
@@ -265,6 +266,7 @@ export type StoreState = {
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
   activeTool: Tool | null
+  catalogCategory: CatalogCategory | null
   controlMode: ControlMode
   cameraMode: CameraMode
   levelMode: LevelMode
@@ -310,7 +312,8 @@ export type StoreState = {
 
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
-  setActiveTool: (tool: Tool | null) => void
+  setActiveTool: (tool: Tool | null, catalogCategory?: CatalogCategory | null) => void
+  setCatalogCategory: (category: CatalogCategory | null) => void
   setControlMode: (mode: ControlMode) => void
   setCameraMode: (mode: CameraMode) => void
   toggleLevelMode: () => void
@@ -361,7 +364,12 @@ export type StoreState = {
   deletePreviewNodes: () => void
   commitMove: (
     nodeId: string,
-    originalData: { position: [number, number]; rotation: number; start?: [number, number]; end?: [number, number] },
+    originalData: {
+      position: [number, number]
+      rotation: number
+      start?: [number, number]
+      end?: [number, number]
+    },
   ) => void
 }
 
@@ -493,6 +501,7 @@ const useStore = create<StoreState>()(
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
         activeTool: 'wall',
+        catalogCategory: null,
         controlMode: 'building',
         cameraMode: 'perspective',
         levelMode: 'stacked',
@@ -578,22 +587,30 @@ const useStore = create<StoreState>()(
 
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
-        setActiveTool: (tool) => {
+        setActiveTool: (tool, catalogCategory) => {
           get().deletePreviewNodes()
-          set({ activeTool: tool })
+          // If catalogCategory is explicitly passed, use it; otherwise clear it unless tool is 'item'
+          const newCatalogCategory =
+            catalogCategory !== undefined
+              ? catalogCategory
+              : tool === 'item'
+                ? (get().catalogCategory ?? 'item')
+                : null
+          set({ activeTool: tool, catalogCategory: newCatalogCategory })
           if (tool !== null) {
             set({ controlMode: 'building' })
           } else {
             set({ controlMode: 'select' })
           }
         },
+        setCatalogCategory: (category) => set({ catalogCategory: category }),
         setControlMode: (mode) => {
           if (mode !== 'building') {
             get().deletePreviewNodes()
           }
           set({ controlMode: mode })
           if (mode !== 'building') {
-            set({ activeTool: null })
+            set({ activeTool: null, catalogCategory: null })
           }
         },
         setCameraMode: (mode) => set({ cameraMode: mode }),

@@ -13,7 +13,7 @@ const EMPTY_LEVELS: any[] = []
 
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const levels = useEditor((state) => {
-    const building = state.scene.root.children?.[0]?.children.find(c => c.type === 'building')
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
   })
   const selectedFloorId = useEditor((state) => state.selectedFloorId)

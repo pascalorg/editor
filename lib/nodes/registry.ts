@@ -17,14 +17,14 @@ export const ComponentConfigSchema = z.object({
   // Human-readable name for the component
   nodeName: z.string(),
 
-  // Editor mode where this component is active
-  editorMode: z.enum(['select', 'delete', 'building', 'guide']),
+  // Editor mode where this component is active (optional for render-only components)
+  editorMode: z.enum(['select', 'delete', 'building', 'guide']).optional(),
 
   // Tool name (for building mode)
   toolName: z.string().optional(),
 
-  // Tool icon component (React component type)
-  toolIcon: z.any(),
+  // Tool icon component (React component type, optional for render-only components)
+  toolIcon: z.any().optional(),
 
   // Zod schema for the node structure
   schema: z.instanceof(z.ZodType).optional(),

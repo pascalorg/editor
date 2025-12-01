@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { ItemCatalog } from '@/components/item-catalog'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -53,7 +52,7 @@ export function AppSidebar() {
   const handleResetToDefault = useEditor((state) => state.handleResetToDefault)
   const serializeLayout = useEditor((state) => state.serializeLayout)
   const loadLayout = useEditor((state) => state.loadLayout)
-  
+
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -165,9 +164,6 @@ export function AppSidebar() {
           {/* Tree-based Hierarchical Layers View */}
           <SidebarMenuItem className="flex flex-1 flex-col">
             <LayersMenu mounted={mounted} />
-          </SidebarMenuItem>
-          <SidebarMenuItem className="flex flex-1 flex-col">
-            <ItemCatalog />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>

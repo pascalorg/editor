@@ -19,7 +19,7 @@ export function InfiniteFloor() {
       rotation={[-Math.PI / 2, 0, 0]}
     >
       <planeGeometry args={[FLOOR_SIZE, FLOOR_SIZE]} />
-      <shadowMaterial color={FLOOR_COLOR} />
+      <shadowMaterial color={FLOOR_COLOR} opacity={0.2} transparent />
     </mesh>
   )
 }
