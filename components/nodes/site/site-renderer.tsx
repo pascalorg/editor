@@ -20,8 +20,9 @@ interface SiteRendererProps {
  */
 export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
   const materialRef = useRef<any>(null)
+  const groupRef = useRef<THREE.Group>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
-  const { camera, raycaster } = useThree()
+  const { camera } = useThree()
 
   const { polygon, isSelected } = useEditor(
     useShallow((state) => {
@@ -85,51 +86,43 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
     if (e.button !== 0) return
 
     setDraggingIndex(index)
-    const el = e.target as HTMLElement
+    const el = e.nativeEvent.target as HTMLElement
     el.setPointerCapture?.(e.pointerId)
   }, [])
 
   const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     setDraggingIndex(null)
-    const el = e.target as HTMLElement
+    const el = e.nativeEvent.target as HTMLElement
     el.releasePointerCapture?.(e.pointerId)
   }, [])
 
   const onPointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      if (draggingIndex === null) return
+      if (draggingIndex === null || !groupRef.current) return
       e.stopPropagation()
 
-      // Raycast to ground plane (y=0)
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-      const point = new THREE.Vector3()
+      // Convert world point to local space
+      const worldPoint = e.point.clone()
+      const localPoint = groupRef.current.worldToLocal(worldPoint)
 
-      // We need to raycast manually because the event.point might be on the handle itself
-      // or we can use the event.ray from the event which is already in world space?
-      // THREE.Event from R3F usually has `ray`
+      // Snap to grid (0.5m)
+      const snap = TILE_SIZE
+      const x = Math.round(localPoint.x / snap) * snap
+      const z = Math.round(localPoint.z / snap) * snap
 
-      raycaster.ray.intersectPlane(plane, point)
+      // Update points
+      const newPoints = [...points]
+      newPoints[draggingIndex] = [x, z]
 
-      if (point) {
-        // Snap to grid (0.5m)
-        const snap = TILE_SIZE
-        const x = Math.round(point.x / snap) * snap
-        const z = Math.round(point.z / snap) * snap
-
-        // Update points
-        const newPoints = [...points]
-        newPoints[draggingIndex] = [x, z]
-
-        updateNode(nodeId, {
-          polygon: {
-            type: 'polygon',
-            points: newPoints,
-          },
-        })
-      }
+      updateNode(nodeId, {
+        polygon: {
+          type: 'polygon',
+          points: newPoints,
+        },
+      })
     },
-    [draggingIndex, points, updateNode, nodeId, raycaster],
+    [draggingIndex, points, updateNode, nodeId],
   )
 
   // Drag plane (invisible) to catch move events when dragging
@@ -140,9 +133,9 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
         onPointerUp={onPointerUp}
         position={[0, 0, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-        visible={false}
       >
         <planeGeometry args={[1000, 1000]} />
+        <meshBasicMaterial color="red" depthWrite={false} opacity={0} transparent />
       </mesh>
     ),
     [onPointerMove, onPointerUp],
@@ -151,7 +144,7 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
   if (!geometry) return null
 
   return (
-    <group>
+    <group ref={groupRef}>
       <mesh
         geometry={geometry}
         // Position offset: The extrusion starts at Z=0 (local) which becomes Y=0 (world)

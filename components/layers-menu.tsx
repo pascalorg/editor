@@ -655,6 +655,9 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
     }),
   )
 
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const isSelected = selectedNodeIds.includes(nodeId)
+
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -669,6 +672,7 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   const addNode = useEditor((state) => state.addNode)
   const addLevel = useEditor((state) => state.addLevel)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
 
   // Local implementations for uploads (passed down)
   const handleUpload = async (file: File, levelId: string) => {
@@ -761,8 +765,10 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   return (
     <TreeNode level={level} nodeId={nodeId}>
       <TreeNodeTrigger
+        className={cn(isSelected && 'bg-accent')}
         onClick={(e) => {
           e.stopPropagation()
+          setControlMode('select')
           handleNodeSelect(nodeId, e)
         }}
       >
