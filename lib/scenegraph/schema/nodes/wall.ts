@@ -2,13 +2,14 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeId, nodeType } from '../base'
 import { DoorNode } from './door'
+import { ItemNode } from './item'
 import { WindowNode } from './window'
 
 export const WallNode = BaseNode.extend({
   id: nodeId('wall'),
   type: nodeType('wall'),
   get children() {
-    return z.array(z.discriminatedUnion('type', [DoorNode, WindowNode])).default([])
+    return z.array(z.discriminatedUnion('type', [DoorNode, WindowNode, ItemNode])).default([])
   },
   // Specific props
   thickness: z.number().optional(),

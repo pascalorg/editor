@@ -331,6 +331,9 @@ export function SledgehammerTool() {
 
     /**
      * Delete a segment of a wall, potentially creating 1 or 2 remaining walls
+     * Also handles children (doors/windows):
+     * - Children in the deleted segment are deleted
+     * - Children in remaining segments have their positions adjusted
      * @param wall The wall to modify
      * @param rangeStart Start grid index of segment to delete (inclusive)
      * @param rangeEnd End grid index of segment to delete (inclusive)
@@ -347,11 +350,35 @@ export function SledgehammerTool() {
       const hasPartBefore = rangeStart > 0
       const hasPartAfter = rangeEnd < wallLength - 1
 
+      // Categorize children based on their position along the wall
+      const children = wall.children || []
+      const childrenBefore: typeof children = []
+      const childrenAfter: typeof children = []
+
+      for (const child of children) {
+        const childX = child.position[0] // Position along the wall in grid units
+
+        if (childX < rangeStart) {
+          // Child is in the "before" segment - keep as is
+          childrenBefore.push(child)
+        } else if (childX > rangeEnd) {
+          // Child is in the "after" segment - adjust position
+          // New position = old position - (rangeEnd + 1) since the "after" wall starts at 0
+          const afterStart = rangeEnd + 1
+          childrenAfter.push({
+            ...child,
+            position: [childX - afterStart, child.position[1]] as [number, number],
+          })
+        }
+        // Children within [rangeStart, rangeEnd] are deleted (not added to either array)
+      }
+
       // Calculate remaining wall parts
       const parts: Array<{
         start: [number, number]
         end: [number, number]
         length: number
+        children: typeof children
       }> = []
 
       // Part before the deleted segment
@@ -360,6 +387,7 @@ export function SledgehammerTool() {
           start: [startX, startZ],
           end: [startX + dx * rangeStart, startZ + dz * rangeStart],
           length: rangeStart,
+          children: childrenBefore,
         })
       }
 
@@ -370,6 +398,7 @@ export function SledgehammerTool() {
           start: [startX + dx * afterStart, startZ + dz * afterStart],
           end: [endX, endZ],
           length: wallLength - afterStart,
+          children: childrenAfter,
         })
       }
 
@@ -378,16 +407,23 @@ export function SledgehammerTool() {
       const parentId = parentHandle?.id ?? selectedFloorId
 
       if (parts.length === 0) {
-        // Delete entire wall
+        // Delete entire wall (and all its children)
         deleteNode(wall.id)
       } else if (parts.length === 1) {
         // Update original wall to the remaining part
         const part = parts[0]
+
+        // If this is the "after" part (rangeStart === 0), we need to adjust children positions
+        // since the wall start is moving
+        const isAfterPart = rangeStart === 0
+        const adjustedChildren = isAfterPart ? childrenAfter : childrenBefore
+
         updateNode(wall.id, {
           start: part.start,
           end: part.end,
           position: part.start,
           size: [part.length, wall.size[1]],
+          children: adjustedChildren,
           editor: { ...wall.editor, deletePreview: false, deleteRange: undefined },
         })
       } else {
@@ -395,16 +431,17 @@ export function SledgehammerTool() {
         const firstPart = parts[0]
         const secondPart = parts[1]
 
-        // Update original wall to first part
+        // Update original wall to first part (keeps children in "before" segment)
         updateNode(wall.id, {
           start: firstPart.start,
           end: firstPart.end,
           position: firstPart.start,
           size: [firstPart.length, wall.size[1]],
+          children: childrenBefore,
           editor: { ...wall.editor, deletePreview: false, deleteRange: undefined },
         })
 
-        // Create new wall for second part
+        // Create new wall for second part with adjusted children positions
         addNode(
           WallNode.parse({
             type: 'wall',
@@ -413,7 +450,7 @@ export function SledgehammerTool() {
             position: secondPart.start,
             size: [secondPart.length, wall.size[1]],
             rotation: wall.rotation,
-            children: [],
+            children: childrenAfter,
           }),
           parentId!,
         )
