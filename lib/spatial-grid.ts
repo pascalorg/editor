@@ -405,6 +405,54 @@ export class SpatialGrid {
   }
 
   /**
+   * Query all nodes that intersect with the given rectangle
+   */
+  queryRect(
+    levelId: string,
+    min: [number, number],
+    max: [number, number],
+  ): string[] {
+    const grid = this.grids.get(levelId)
+    if (!grid) return []
+
+    const [minX, minZ] = min
+    const [maxX, maxZ] = max
+
+    const queryBounds: BoundingBox = { minX, maxX, minZ, maxZ }
+
+    // Get all cells that might intersect the query rect
+    const minCellX = Math.floor(minX / this.cellSize)
+    const maxCellX = Math.floor(maxX / this.cellSize)
+    const minCellZ = Math.floor(minZ / this.cellSize)
+    const maxCellZ = Math.floor(maxZ / this.cellSize)
+
+    const candidates = new Set<string>()
+
+    for (let cx = minCellX; cx <= maxCellX; cx++) {
+      for (let cz = minCellZ; cz <= maxCellZ; cz++) {
+        const cellKey = `${cx},${cz}`
+        const cellNodes = grid.get(cellKey)
+        if (cellNodes) {
+          for (const nodeId of cellNodes) {
+            candidates.add(nodeId)
+          }
+        }
+      }
+    }
+
+    // Filter to only nodes that actually intersect the query rect
+    const result: string[] = []
+    for (const nodeId of candidates) {
+      const nodeData = this.nodeBounds.get(nodeId)
+      if (nodeData && this.boundsIntersect(queryBounds, nodeData.bounds)) {
+        result.push(nodeId)
+      }
+    }
+
+    return result
+  }
+
+  /**
    * Check if two bounding boxes intersect
    */
   private boundsIntersect(a: BoundingBox, b: BoundingBox): boolean {
