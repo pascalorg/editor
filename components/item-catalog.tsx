@@ -111,7 +111,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     modelUrl: '/items/window1-black-open-1731/model.glb',
     position: [0, 0.5, 0],
     scale: [0.4, 0.4, 0.4],
-    rotation: [0, 0, 0],
+    rotation: [0, Math.PI, 0],
     size: [2, 1],
     attachTo: 'wall',
   },

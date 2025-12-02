@@ -470,7 +470,19 @@ const useStore = create<StoreState>()(
 
       // Handler for graph changes
       const handleGraphChange = (nextScene: Scene) => {
-        set({ scene: nextScene })
+        const currentScene = get().scene
+
+        // Always preserve the current store's environment - the graph doesn't manage environment,
+        // it's managed directly via setState in updateEnvironment. The graph's scene copy
+        // may have stale environment data.
+        const sceneWithCurrentEnv = {
+          ...nextScene,
+          root: {
+            ...nextScene.root,
+            environment: currentScene.root.environment,
+          },
+        }
+        set({ scene: sceneWithCurrentEnv })
 
         // Get fresh state after updating scene
         const currentState = get()
@@ -1235,7 +1247,19 @@ const useStore = create<StoreState>()(
               const currentGraph = s.graph
               rebuildSpatialGrid(s.spatialGrid, currentGraph)
               recomputeAllLevels(s as any)
-              return { scene: nextScene }
+
+              // Always preserve the current store's environment - the graph doesn't manage environment,
+              // it's managed directly via setState in updateEnvironment. The graph's scene copy
+              // may have stale environment data.
+              return {
+                scene: {
+                  ...nextScene,
+                  root: {
+                    ...nextScene.root,
+                    environment: s.scene.root.environment,
+                  },
+                },
+              }
             })
           }
 
