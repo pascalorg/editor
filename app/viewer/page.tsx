@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
+import { useEditor } from '@/hooks/use-editor'
 
 export default function ViewerPage() {
   const [mounted, setMounted] = useState(false)
@@ -10,6 +11,7 @@ export default function ViewerPage() {
   // Handle hydration
   useEffect(() => {
     setMounted(true)
+    useEditor.getState().setControlMode('select')
   }, [])
 
   return (

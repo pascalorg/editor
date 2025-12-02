@@ -7,8 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import SelectionManager from '../editor/selection-manager'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
+import { SelectionControls } from '../renderer/selection-controls'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -79,7 +81,7 @@ export default function Viewer({ className }: { className?: string }) {
 
   const onCanvasClick = useCallback(() => {
     // Clicking on the canvas background deselects all floors
-    selectFloor(null)
+    // selectFloor(null)
   }, [selectFloor])
 
   return (
@@ -110,6 +112,8 @@ export default function Viewer({ className }: { className?: string }) {
           {building && <NodeRenderer nodeId={building.id} />}
         </group>
 
+        <SelectionManager />
+        <SelectionControls controls={false} />
         <ViewerCustomControls />
         <EnvironmentRenderer />
         {/* Infinite floor - rendered outside export group */}

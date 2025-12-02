@@ -1271,8 +1271,14 @@ const useStore = create<StoreState>()(
 
           const levels = state.graph.nodes.find({ type: 'level' })
           if (!state.selectedFloorId && levels.length > 0) {
-            state.selectedFloorId = levels[0].id
-            state.currentLevel = (levels[0].data() as unknown as SchemaLevelNode).level
+            const mainLevel = levels.find((lvl) => (lvl.data() as any).level === 0)
+            if (mainLevel) {
+              state.selectedFloorId = mainLevel.id
+              state.currentLevel = 0
+            } else {
+              state.selectedFloorId = levels[0].id
+              state.currentLevel = (levels[0].data() as unknown as SchemaLevelNode).level
+            }
             state.viewMode = 'level'
           }
 
