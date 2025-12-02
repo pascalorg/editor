@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { Line } from '@react-three/drei'
+import { useEffect, useRef, useState } from 'react'
 import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 
 interface WallDeleteInfo {
   rangeStart: number
@@ -24,7 +26,8 @@ interface SledgehammerState {
   // Grid/item deletion state
   itemsToDelete: Set<string>
   isGridDragging: boolean
-  gridDragStart: [number, number] | null
+  gridDragStartPos: [number, number] | null // Grid coordinates where drag started
+  gridDragEndPos: [number, number] | null // Grid coordinates where drag currently is
 }
 
 /**
@@ -65,8 +68,15 @@ export function SledgehammerTool() {
     wallsToDelete: new Map(),
     itemsToDelete: new Set(),
     isGridDragging: false,
-    gridDragStart: null,
+    gridDragStartPos: null,
+    gridDragEndPos: null,
   })
+
+  // State for the delete rectangle visualization
+  const [deleteRect, setDeleteRect] = useState<{
+    start: [number, number]
+    end: [number, number]
+  } | null>(null)
 
   useEffect(() => {
     if (!selectedFloorId) return
@@ -250,12 +260,39 @@ export function SledgehammerTool() {
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      // If dragging on grid, flag items for deletion
-      if (state.isGridDragging) {
+      // If dragging on grid, update rectangle and mark items for deletion
+      if (state.isGridDragging && state.gridDragStartPos) {
         const [x, y] = e.position
-        const nodesAtPoint = spatialGrid.queryPoint(selectedFloorId, [x, y])
+        state.gridDragEndPos = [x, y]
 
-        for (const nodeId of nodesAtPoint) {
+        // Update the visual rectangle
+        setDeleteRect({
+          start: state.gridDragStartPos,
+          end: [x, y],
+        })
+
+        // Query all items in the rectangle and mark for deletion
+        const minX = Math.min(state.gridDragStartPos[0], x)
+        const maxX = Math.max(state.gridDragStartPos[0], x)
+        const minY = Math.min(state.gridDragStartPos[1], y)
+        const maxY = Math.max(state.gridDragStartPos[1], y)
+
+        const nodesInRect = spatialGrid.queryRect(selectedFloorId, [minX, minY], [maxX, maxY])
+
+        // Clear previous items that are no longer in the rect
+        state.itemsToDelete.forEach((itemId) => {
+          if (!nodesInRect.includes(itemId)) {
+            const handle = graph.getNodeById(itemId as any)
+            if (handle) {
+              const node = handle.data() as any
+              updateNode(itemId, { editor: { ...node.editor, deletePreview: false } })
+            }
+            state.itemsToDelete.delete(itemId)
+          }
+        })
+
+        // Add new items in the rect
+        for (const nodeId of nodesInRect) {
           const handle = graph.getNodeById(nodeId as any)
           if (!handle) continue
 
@@ -268,34 +305,64 @@ export function SledgehammerTool() {
       }
     }
 
-    // ========================================================================
-    // POINTER EVENT HANDLERS (for drag detection)
-    // ========================================================================
+    const handleGridPointerDown = (e: GridEvent) => {
+      if (!selectedFloorId) return
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (e.button !== 0) return // Only left click
+      // Don't start grid drag if we're on a wall
+      if (state.hoveredWallId) return
 
-      if (state.hoveredWallId && state.hoveredGridIndex !== null) {
-        // Start drag on wall
-        state.isDragging = true
-        state.dragStartWallId = state.hoveredWallId
-        state.dragStartIndex = state.hoveredGridIndex
-        state.dragEndIndex = state.hoveredGridIndex
-
-        // Initialize the delete set with the current wall
-        state.wallsToDelete.clear()
-        state.wallsToDelete.set(state.hoveredWallId, {
-          rangeStart: state.hoveredGridIndex,
-          rangeEnd: state.hoveredGridIndex,
-        })
-      } else {
-        // Start drag on grid (for items)
-        state.isGridDragging = true
-        state.gridDragStart = [e.clientX, e.clientY]
-      }
+      const [x, y] = e.position
+      state.isGridDragging = true
+      state.gridDragStartPos = [x, y]
+      state.gridDragEndPos = [x, y]
+      setDeleteRect({ start: [x, y], end: [x, y] })
     }
 
-    const handlePointerUp = () => {
+    const handleGridPointerUp = (e: GridEvent) => {
+      if (!selectedFloorId) return
+
+      // Handle item deletion when releasing on grid
+      if (state.isGridDragging && state.itemsToDelete.size > 0) {
+        state.itemsToDelete.forEach((itemId) => {
+          deleteNode(itemId)
+        })
+        state.itemsToDelete.clear()
+      }
+
+      state.isGridDragging = false
+      state.gridDragStartPos = null
+      state.gridDragEndPos = null
+      setDeleteRect(null)
+    }
+
+    // ========================================================================
+    // WALL POINTER EVENT HANDLERS
+    // ========================================================================
+
+    const handleWallPointerDown = (e: WallEvent) => {
+      const wall = e.node
+      const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
+
+      // Start drag on wall
+      state.isDragging = true
+      state.hoveredWallId = wall.id
+      state.hoveredGridIndex = gridIndex
+      state.dragStartWallId = wall.id
+      state.dragStartIndex = gridIndex
+      state.dragEndIndex = gridIndex
+
+      // Initialize the delete set with the current wall
+      state.wallsToDelete.clear()
+      state.wallsToDelete.set(wall.id, {
+        rangeStart: gridIndex,
+        rangeEnd: gridIndex,
+      })
+
+      // Set the delete preview
+      setDeleteRange(wall.id, wall, gridIndex, gridIndex)
+    }
+
+    const handleWallPointerUp = (e: WallEvent) => {
       // Handle wall deletion - delete ALL walls in the delete set
       if (state.isDragging && state.wallsToDelete.size > 0) {
         // Process all walls in the delete set
@@ -313,24 +380,17 @@ export function SledgehammerTool() {
         state.hoveredGridIndex = null
       }
 
-      // Handle item deletion
-      if (state.isGridDragging && state.itemsToDelete.size > 0) {
-        state.itemsToDelete.forEach((itemId) => {
-          deleteNode(itemId)
-        })
-        state.itemsToDelete.clear()
-      }
-
       state.isDragging = false
-      state.isGridDragging = false
       state.dragStartWallId = null
       state.dragStartIndex = null
       state.dragEndIndex = null
-      state.gridDragStart = null
     }
 
     /**
      * Delete a segment of a wall, potentially creating 1 or 2 remaining walls
+     * Also handles children (doors/windows):
+     * - Children in the deleted segment are deleted
+     * - Children in remaining segments have their positions adjusted
      * @param wall The wall to modify
      * @param rangeStart Start grid index of segment to delete (inclusive)
      * @param rangeEnd End grid index of segment to delete (inclusive)
@@ -347,11 +407,35 @@ export function SledgehammerTool() {
       const hasPartBefore = rangeStart > 0
       const hasPartAfter = rangeEnd < wallLength - 1
 
+      // Categorize children based on their position along the wall
+      const children = wall.children || []
+      const childrenBefore: typeof children = []
+      const childrenAfter: typeof children = []
+
+      for (const child of children) {
+        const childX = child.position[0] // Position along the wall in grid units
+
+        if (childX < rangeStart) {
+          // Child is in the "before" segment - keep as is
+          childrenBefore.push(child)
+        } else if (childX > rangeEnd) {
+          // Child is in the "after" segment - adjust position
+          // New position = old position - (rangeEnd + 1) since the "after" wall starts at 0
+          const afterStart = rangeEnd + 1
+          childrenAfter.push({
+            ...child,
+            position: [childX - afterStart, child.position[1]] as [number, number],
+          })
+        }
+        // Children within [rangeStart, rangeEnd] are deleted (not added to either array)
+      }
+
       // Calculate remaining wall parts
       const parts: Array<{
         start: [number, number]
         end: [number, number]
         length: number
+        children: typeof children
       }> = []
 
       // Part before the deleted segment
@@ -360,6 +444,7 @@ export function SledgehammerTool() {
           start: [startX, startZ],
           end: [startX + dx * rangeStart, startZ + dz * rangeStart],
           length: rangeStart,
+          children: childrenBefore,
         })
       }
 
@@ -370,6 +455,7 @@ export function SledgehammerTool() {
           start: [startX + dx * afterStart, startZ + dz * afterStart],
           end: [endX, endZ],
           length: wallLength - afterStart,
+          children: childrenAfter,
         })
       }
 
@@ -378,16 +464,23 @@ export function SledgehammerTool() {
       const parentId = parentHandle?.id ?? selectedFloorId
 
       if (parts.length === 0) {
-        // Delete entire wall
+        // Delete entire wall (and all its children)
         deleteNode(wall.id)
       } else if (parts.length === 1) {
         // Update original wall to the remaining part
         const part = parts[0]
+
+        // If this is the "after" part (rangeStart === 0), we need to adjust children positions
+        // since the wall start is moving
+        const isAfterPart = rangeStart === 0
+        const adjustedChildren = isAfterPart ? childrenAfter : childrenBefore
+
         updateNode(wall.id, {
           start: part.start,
           end: part.end,
           position: part.start,
           size: [part.length, wall.size[1]],
+          children: adjustedChildren,
           editor: { ...wall.editor, deletePreview: false, deleteRange: undefined },
         })
       } else {
@@ -395,16 +488,17 @@ export function SledgehammerTool() {
         const firstPart = parts[0]
         const secondPart = parts[1]
 
-        // Update original wall to first part
+        // Update original wall to first part (keeps children in "before" segment)
         updateNode(wall.id, {
           start: firstPart.start,
           end: firstPart.end,
           position: firstPart.start,
           size: [firstPart.length, wall.size[1]],
+          children: childrenBefore,
           editor: { ...wall.editor, deletePreview: false, deleteRange: undefined },
         })
 
-        // Create new wall for second part
+        // Create new wall for second part with adjusted children positions
         addNode(
           WallNode.parse({
             type: 'wall',
@@ -413,7 +507,7 @@ export function SledgehammerTool() {
             position: secondPart.start,
             size: [secondPart.length, wall.size[1]],
             rotation: wall.rotation,
-            children: [],
+            children: childrenAfter,
           }),
           parentId!,
         )
@@ -425,27 +519,58 @@ export function SledgehammerTool() {
     emitter.on('wall:move', handleWallMove)
     emitter.on('wall:leave', handleWallLeave)
     emitter.on('wall:click', handleWallClick)
+    emitter.on('wall:pointerdown', handleWallPointerDown)
+    emitter.on('wall:pointerup', handleWallPointerUp)
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
-
-    window.addEventListener('pointerdown', handlePointerDown)
-    window.addEventListener('pointerup', handlePointerUp)
+    emitter.on('grid:pointerdown', handleGridPointerDown)
+    emitter.on('grid:pointerup', handleGridPointerUp)
 
     // Cleanup
     return () => {
       clearDeleteFlags()
+      setDeleteRect(null)
 
       emitter.off('wall:enter', handleWallEnter)
       emitter.off('wall:move', handleWallMove)
       emitter.off('wall:leave', handleWallLeave)
       emitter.off('wall:click', handleWallClick)
+      emitter.off('wall:pointerdown', handleWallPointerDown)
+      emitter.off('wall:pointerup', handleWallPointerUp)
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
-
-      window.removeEventListener('pointerdown', handlePointerDown)
-      window.removeEventListener('pointerup', handlePointerUp)
+      emitter.off('grid:pointerdown', handleGridPointerDown)
+      emitter.off('grid:pointerup', handleGridPointerUp)
     }
   }, [graph, updateNode, deleteNode, addNode, selectedFloorId, spatialGrid])
 
-  return null
+  // Render the delete rectangle when dragging on grid
+  if (!deleteRect) return null
+
+  // Convert grid coordinates to world coordinates
+  // Grid is offset by -GRID_SIZE/2 in the editor, so we need to account for that
+  const x1 = deleteRect.start[0] * TILE_SIZE
+  const z1 = deleteRect.start[1] * TILE_SIZE
+  const x2 = deleteRect.end[0] * TILE_SIZE
+  const z2 = deleteRect.end[1] * TILE_SIZE
+
+  // Create rectangle corners (at a small height above the floor)
+  const y = 0.05
+  const points: [number, number, number][] = [
+    [x1, y, z1],
+    [x2, y, z1],
+    [x2, y, z2],
+    [x1, y, z2],
+    [x1, y, z1], // Close the rectangle
+  ]
+
+  return (
+    <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+      <Line
+        color="#ff4444"
+        lineWidth={2}
+        points={points}
+      />
+    </group>
+  )
 }

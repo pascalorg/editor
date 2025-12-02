@@ -105,7 +105,11 @@ function calculateWorldBounds(group: THREE.Group): BoundingBoxData | null {
   return { size, center, rotation }
 }
 
-export function SelectionControls() {
+interface SelectionControlsProps {
+  controls?: boolean
+}
+
+export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls = true }) => {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
@@ -805,7 +809,7 @@ export function SelectionControls() {
       )}
 
       {/* Control Panel - positioned at combined bounds center, hidden when moving */}
-      {!isMoving && (
+      {!isMoving && controls && (
         <group
           name="selection-controls"
           position={[combinedBounds.center.x, controlPanelY, combinedBounds.center.z]}

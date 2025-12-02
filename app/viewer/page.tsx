@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
+import { RequestPanel } from '@/components/viewer/request-panel'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
+import { useEditor } from '@/hooks/use-editor'
 
 export default function ViewerPage() {
   const [mounted, setMounted] = useState(false)
@@ -10,6 +12,7 @@ export default function ViewerPage() {
   // Handle hydration
   useEffect(() => {
     setMounted(true)
+    useEditor.getState().setControlMode('select')
   }, [])
 
   return (
@@ -23,6 +26,9 @@ export default function ViewerPage() {
           <ViewerLayersMenu mounted={mounted} />
         </div>
       </aside>
+
+      {/* Floating Request Panel */}
+      <RequestPanel />
     </main>
   )
 }

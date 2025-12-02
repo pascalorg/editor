@@ -470,7 +470,19 @@ const useStore = create<StoreState>()(
 
       // Handler for graph changes
       const handleGraphChange = (nextScene: Scene) => {
-        set({ scene: nextScene })
+        const currentScene = get().scene
+
+        // Always preserve the current store's environment - the graph doesn't manage environment,
+        // it's managed directly via setState in updateEnvironment. The graph's scene copy
+        // may have stale environment data.
+        const sceneWithCurrentEnv = {
+          ...nextScene,
+          root: {
+            ...nextScene.root,
+            environment: currentScene.root.environment,
+          },
+        }
+        set({ scene: sceneWithCurrentEnv })
 
         // Get fresh state after updating scene
         const currentState = get()
@@ -1235,7 +1247,19 @@ const useStore = create<StoreState>()(
               const currentGraph = s.graph
               rebuildSpatialGrid(s.spatialGrid, currentGraph)
               recomputeAllLevels(s as any)
-              return { scene: nextScene }
+
+              // Always preserve the current store's environment - the graph doesn't manage environment,
+              // it's managed directly via setState in updateEnvironment. The graph's scene copy
+              // may have stale environment data.
+              return {
+                scene: {
+                  ...nextScene,
+                  root: {
+                    ...nextScene.root,
+                    environment: s.scene.root.environment,
+                  },
+                },
+              }
             })
           }
 
@@ -1247,8 +1271,14 @@ const useStore = create<StoreState>()(
 
           const levels = state.graph.nodes.find({ type: 'level' })
           if (!state.selectedFloorId && levels.length > 0) {
-            state.selectedFloorId = levels[0].id
-            state.currentLevel = (levels[0].data() as unknown as SchemaLevelNode).level
+            const mainLevel = levels.find((lvl) => (lvl.data() as any).level === 0)
+            if (mainLevel) {
+              state.selectedFloorId = mainLevel.id
+              state.currentLevel = 0
+            } else {
+              state.selectedFloorId = levels[0].id
+              state.currentLevel = (levels[0].data() as unknown as SchemaLevelNode).level
+            }
             state.viewMode = 'level'
           }
 

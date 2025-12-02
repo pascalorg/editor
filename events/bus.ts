@@ -66,10 +66,14 @@ type EditorEvents = {
   'grid:double-click': GridEvent
   'grid:enter': GridEvent
   'grid:leave': GridEvent
+  'grid:pointerdown': GridEvent
+  'grid:pointerup': GridEvent
   'wall:click': WallEvent
   'wall:move': WallEvent
   'wall:enter': WallEvent
   'wall:leave': WallEvent
+  'wall:pointerdown': WallEvent
+  'wall:pointerup': WallEvent
   'ceiling:click': CeilingEvent
   'ceiling:move': CeilingEvent
   'ceiling:enter': CeilingEvent

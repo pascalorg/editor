@@ -98,8 +98,8 @@ export function SlabRenderer({ nodeId }: SlabRendererProps) {
           position={[xOffset, yPosition, zOffset]}
           receiveShadow
         >
-          <meshStandardMaterial
-            color="#808080"
+          <meshPhysicalMaterial
+            color="#dcdcf7"
             key={`slab-material-${opacity}`}
             metalness={0.2}
             opacity={opacity}

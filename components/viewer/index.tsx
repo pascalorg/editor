@@ -1,13 +1,16 @@
 'use client'
 
 import { animated, useSpring } from '@react-spring/three'
-import { Environment, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
+import { Environment, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useGridFadeControls } from '@/components/editor/infinite-floor'
+import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import SelectionManager from '../editor/selection-manager'
+import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
+import { SelectionControls } from '../renderer/selection-controls'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -78,12 +81,13 @@ export default function Viewer({ className }: { className?: string }) {
 
   const onCanvasClick = useCallback(() => {
     // Clicking on the canvas background deselects all floors
-    selectFloor(null)
+    // selectFloor(null)
   }, [selectFloor])
 
   return (
     <div className="relative h-full w-full">
       <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
+        <SoftShadows focus={1} samples={16} size={25} />
         {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
         ) : (
@@ -108,8 +112,12 @@ export default function Viewer({ className }: { className?: string }) {
           {building && <NodeRenderer nodeId={building.id} />}
         </group>
 
+        <SelectionManager />
+        <SelectionControls controls={false} />
         <ViewerCustomControls />
-        <Environment preset="city" />
+        <EnvironmentRenderer />
+        {/* Infinite floor - rendered outside export group */}
+        <InfiniteFloor />
       </Canvas>
 
       {/* Viewer Controls */}

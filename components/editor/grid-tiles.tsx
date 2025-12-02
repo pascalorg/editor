@@ -106,6 +106,13 @@ export const GridTiles = memo(() => {
 
     e.stopPropagation()
 
+    // Emit grid:pointerdown event
+    if (hoveredIntersection.current) {
+      emitter.emit('grid:pointerdown', {
+        position: [hoveredIntersection.current.x, hoveredIntersection.current.y],
+      })
+    }
+
     // Special handling for guide mode - allow clicks for deselection
     if (controlMode === 'guide') {
       handleIntersectionClick(0, 0) // Trigger deselection (coordinates don't matter)
@@ -133,6 +140,13 @@ export const GridTiles = memo(() => {
 
   const handlePointerUp = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
+      // Emit grid:pointerup event for left-click
+      if (e.button === 0 && hoveredIntersection.current) {
+        emitter.emit('grid:pointerup', {
+          position: [hoveredIntersection.current.x, hoveredIntersection.current.y],
+        })
+      }
+
       if (useEditor.getState().controlMode === 'building') {
         return
       }

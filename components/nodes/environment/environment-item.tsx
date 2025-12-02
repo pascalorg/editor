@@ -27,6 +27,12 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
   const environment = useEditor(useShallow((state) => state.scene.root.environment))
   const { indent } = useTree()
 
+  // Derived values from environment for rendering
+  const envTimePreset = environment?.timePreset
+  const envTimeMode = environment?.timeMode
+  const envLatitude = environment?.latitude ?? 0
+  const envLongitude = environment?.longitude ?? 0
+
   const [latitude, setLatitude] = useState(environment?.latitude ?? 0)
   const [longitude, setLongitude] = useState(environment?.longitude ?? 0)
   const [altitude, setAltitude] = useState(environment?.altitude ?? 0)
@@ -50,7 +56,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
   }, [environment])
 
   // Update in real-time when values change
-  const updateEnvironment = (updates: Partial<typeof environment>) => {
+  const updateEnvironment = (updates: Record<string, unknown>) => {
     useEditor.setState((state) => ({
       scene: {
         ...state.scene,
@@ -218,7 +224,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                           })
                         }}
                         size="icon"
-                        variant={environment?.timePreset === 'dawn' ? 'default' : 'outline'}
+                        variant={envTimePreset === 'dawn' ? 'default' : 'outline'}
                       >
                         <Sunrise className="h-4 w-4" />
                       </Button>
@@ -238,7 +244,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                           })
                         }}
                         size="icon"
-                        variant={environment?.timePreset === 'day' ? 'default' : 'outline'}
+                        variant={envTimePreset === 'day' ? 'default' : 'outline'}
                       >
                         <Sun className="h-4 w-4" />
                       </Button>
@@ -258,7 +264,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                           })
                         }}
                         size="icon"
-                        variant={environment?.timePreset === 'dusk' ? 'default' : 'outline'}
+                        variant={envTimePreset === 'dusk' ? 'default' : 'outline'}
                       >
                         <Sunset className="h-4 w-4" />
                       </Button>
@@ -278,7 +284,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                           })
                         }}
                         size="icon"
-                        variant={environment?.timePreset === 'night' ? 'default' : 'outline'}
+                        variant={envTimePreset === 'night' ? 'default' : 'outline'}
                       >
                         <Moon className="h-4 w-4" />
                       </Button>
@@ -291,11 +297,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
                       <Button
                         onClick={() => updateEnvironment({ timeMode: 'now', timePreset: 'now' })}
                         size="icon"
-                        variant={
-                          environment?.timeMode === 'now' || !environment?.timeMode
-                            ? 'default'
-                            : 'outline'
-                        }
+                        variant={envTimeMode === 'now' || !envTimeMode ? 'default' : 'outline'}
                       >
                         <Clock className="h-4 w-4" />
                       </Button>
@@ -391,8 +393,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
         >
           <MapPin className="h-3 w-3" />
           <span className="truncate">
-            {address ||
-              `${environment?.latitude?.toFixed(4) ?? 0}, ${environment?.longitude?.toFixed(4) ?? 0}`}
+            {address || `${envLatitude.toFixed(4)}, ${envLongitude.toFixed(4)}`}
           </span>
         </div>
       </TreeNodeContent>

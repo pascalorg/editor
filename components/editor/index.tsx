@@ -7,10 +7,12 @@ import {
   Gltf,
   OrthographicCamera,
   PerspectiveCamera,
+  SoftShadows,
 } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
+import { ACESFilmicToneMapping, PCFSoftShadowMap } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
@@ -50,6 +52,7 @@ export default function Editor({ className }: { className?: string }) {
 
   return (
     <Canvas className={cn('bg-[#303035]', className)} shadows>
+      <SoftShadows focus={1} samples={16} size={25} />
       {cameraMode === 'perspective' ? (
         <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
       ) : (
@@ -83,8 +86,6 @@ export default function Editor({ className }: { className?: string }) {
 
       <CustomControls />
       <EnvironmentRenderer />
-
-      {/* <Environment preset="city" /> */}
 
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />

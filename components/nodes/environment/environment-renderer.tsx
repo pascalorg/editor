@@ -1,9 +1,16 @@
-import { Sky, SoftShadows } from '@react-three/drei'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { useGSAP } from '@gsap/react'
+import { Environment, Sky, SoftShadows, SpotLight } from '@react-three/drei'
+import gsap from 'gsap'
+import { memo, type Ref, RefAttributes, useEffect, useMemo, useRef, useState } from 'react'
 import SunCalc from 'suncalc'
 import * as THREE from 'three'
+import { degToRad } from 'three/src/math/MathUtils.js'
+import { Sky as SkyImpl } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
+
+const tempVec = new THREE.Vector3()
+const yAxis = new THREE.Vector3(0, 1, 0)
 
 export const EnvironmentRenderer = memo(() => {
   const { latitude, longitude, timeMode, staticTime } = useEditor(
@@ -162,11 +169,106 @@ export const EnvironmentRenderer = memo(() => {
     [sunPosition],
   )
 
-  const isNight = sunPosition.altitude < -0.05
+  // const isNight = sunPosition.altitude < -0.05
+
+  const keyLightRef = useRef<THREE.DirectionalLight>(null)
+  const fillLightRef = useRef<THREE.DirectionalLight>(null)
+  const backLightRef = useRef<THREE.DirectionalLight>(null)
+  const pointLightRef = useRef<THREE.PointLight>(null)
+
+  const [sky] = useState(() => new SkyImpl())
+  useGSAP(() => {
+    gsap.to(sky.material.uniforms.sunPosition.value, {
+      x: sunPosition.position.x,
+      y: sunPosition.position.y,
+      z: sunPosition.position.z,
+      duration: 4,
+    })
+
+    // Adjusting 3 lights' positions
+    if (
+      !(
+        keyLightRef.current &&
+        fillLightRef.current &&
+        backLightRef.current &&
+        pointLightRef.current
+      )
+    )
+      return
+
+    const keyPos = sunPosition.position
+    const radius = keyPos.length() // or use a fixed radius if you prefer
+
+    // Key light: follows sun directly
+    gsap.to(keyLightRef.current.position, {
+      x: keyPos.x,
+      y: keyPos.y,
+      z: keyPos.z,
+      duration: 4,
+    })
+
+    // Fill light: ~120° around Y axis, lower intensity in your material
+    // Positioned opposite-ish to soften shadows
+    tempVec.copy(keyPos)
+    tempVec.y = 0 // project to XZ plane for rotation
+    tempVec.applyAxisAngle(yAxis, degToRad(120))
+    tempVec.y = keyPos.y * 0.25 // lower elevation than key
+    tempVec.normalize().multiplyScalar(radius * 0.8)
+
+    gsap.to(fillLightRef.current.position, {
+      x: tempVec.x,
+      y: tempVec.y,
+      z: tempVec.z,
+      duration: 4,
+    })
+
+    // Back light: ~200° around, higher up for rim lighting effect
+    tempVec.copy(keyPos)
+    tempVec.y = 0
+    tempVec.applyAxisAngle(yAxis, degToRad(240))
+    tempVec.y = keyPos.y * 0.5 // higher elevation
+    tempVec.normalize().multiplyScalar(radius * 0.6)
+
+    gsap.to(backLightRef.current.position, {
+      x: tempVec.x,
+      y: tempVec.y,
+      z: tempVec.z,
+      duration: 4,
+    })
+
+    gsap.to(pointLightRef.current, {
+      intensity: sunPosition.altitude < 0 ? 25.5 : 0,
+      duration: 4,
+      delay: 2,
+    })
+  }, [sunPosition])
+
+  useGSAP(() => {
+    if (!(keyLightRef.current && fillLightRef.current && backLightRef.current)) return
+
+    gsap.to(keyLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+    gsap.to(fillLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+    gsap.to(backLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+  }, [lighting])
 
   return (
     <>
-      <Sky
+      {/* <Sky
         distance={1000}
         mieCoefficient={0.005}
         mieDirectionalG={0.7}
@@ -184,14 +286,37 @@ export const EnvironmentRenderer = memo(() => {
           toneMapped={false}
           transparent
         />
-      </sprite>
+      </sprite> */}
+
+      {/* <Environment preset="city" /> */}
+
+      <primitive
+        material-uniforms-mieCoefficient-value={0.005}
+        material-uniforms-mieDirectionalG-value={0.8}
+        material-uniforms-rayleigh-value={0.5}
+        material-uniforms-turbidity-value={10}
+        object={sky}
+        scale={1000}
+      />
+      {/* <Sky
+        // azimuth={sunPosition.azimuth}
+        // inclination={sunPosition.altitude}
+        sunPosition={sunPosition.position}
+      /> */}
+      <pointLight
+        castShadow
+        distance={50}
+        intensity={15.5}
+        position={[0, 2.5, 0]}
+        ref={pointLightRef}
+      />
 
       <directionalLight
         castShadow
-        color={lighting.directionalColor}
-        intensity={lighting.directionalIntensity}
-        position={sunPosition.position}
-        shadow-bias={-0.0001}
+        intensity={2}
+        position={[-3, 1, -3]} //lighting.directionalIntensity}
+        ref={keyLightRef}
+        shadow-bias={-0.000_05}
         shadow-camera-bottom={-40}
         shadow-camera-far={200}
         shadow-camera-left={-40}
@@ -199,7 +324,16 @@ export const EnvironmentRenderer = memo(() => {
         shadow-camera-top={40}
         shadow-mapSize={[2048, 2048]}
       />
-      <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
+      <directionalLight
+        intensity={2}
+        position={[3, 1, 3]} //lighting.directionalIntensity}
+        ref={fillLightRef} //sunPosition.position}
+      />
+      <directionalLight
+        intensity={1}
+        position={[-3, 1, 3]} //lighting.directionalIntensity}
+        ref={backLightRef} //sunPosition.position}
+      />
     </>
   )
 })

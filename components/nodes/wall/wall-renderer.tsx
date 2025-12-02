@@ -621,11 +621,28 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const onPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      // Only emit click event for left-click (button 0)
+      // Only emit events for left-click (button 0)
       if (e.button !== 0) return
 
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
-      emitter.emit('wall:click', {
+      const eventData = {
+        node,
+        gridPosition: getClosestGridPoint(e.point, e.object),
+        position: [e.point.x, e.point.y, e.point.z] as [number, number, number],
+      }
+      emitter.emit('wall:click', eventData)
+      emitter.emit('wall:pointerdown', eventData)
+    },
+    [getClosestGridPoint, nodeId],
+  )
+
+  const onPointerUp = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      // Only emit events for left-click (button 0)
+      if (e.button !== 0) return
+
+      const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      emitter.emit('wall:pointerup', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
@@ -742,14 +759,15 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 onPointerEnter={onPointerEnter}
                 onPointerLeave={onPointerLeave}
                 onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
                 visible={false}
               />
             )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
                 <Base geometry={wallGeometry}>
-                  <meshStandardMaterial
-                    color="beige"
+                  <meshPhysicalMaterial
+                    color="#dcdcf7"
                     key={`wall-material-${opacity}`}
                     metalness={0.1}
                     opacity={opacity}
