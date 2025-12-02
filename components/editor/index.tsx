@@ -52,7 +52,7 @@ export default function Editor({ className }: { className?: string }) {
 
   return (
     <Canvas className={cn('bg-[#303035]', className)} shadows>
-      <SoftShadows focus={0.5} samples={16} size={15} />
+      <SoftShadows focus={1} samples={16} size={25} />
       {cameraMode === 'perspective' ? (
         <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
       ) : (
