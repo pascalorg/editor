@@ -1,5 +1,5 @@
 import { useGSAP } from '@gsap/react'
-import { Environment, Sky, SoftShadows } from '@react-three/drei'
+import { Environment, Sky, SoftShadows, SpotLight } from '@react-three/drei'
 import gsap from 'gsap'
 import { memo, type Ref, RefAttributes, useEffect, useMemo, useRef, useState } from 'react'
 import SunCalc from 'suncalc'
