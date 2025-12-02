@@ -1,7 +1,10 @@
-import { Sky, SoftShadows } from '@react-three/drei'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { useGSAP } from '@gsap/react'
+import { Environment, Sky, SoftShadows } from '@react-three/drei'
+import gsap from 'gsap'
+import { memo, type Ref, RefAttributes, useEffect, useMemo, useRef, useState } from 'react'
 import SunCalc from 'suncalc'
 import * as THREE from 'three'
+import { Sky as SkyImpl } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
 
@@ -164,9 +167,47 @@ export const EnvironmentRenderer = memo(() => {
 
   const isNight = sunPosition.altitude < -0.05
 
+  const keyLightRef = useRef<THREE.DirectionalLight>(null)
+  const fillLightRef = useRef<THREE.DirectionalLight>(null)
+  const backLightRef = useRef<THREE.DirectionalLight>(null)
+
+  const [sky] = useState(() => new SkyImpl())
+  useGSAP(() => {
+    console.log('sky.material.uniforms.sunPosition.value', sky.material.uniforms.sunPosition.value)
+    gsap.to(sky.material.uniforms.sunPosition.value, {
+      x: sunPosition.position.x,
+      y: sunPosition.position.y,
+      z: sunPosition.position.z,
+      duration: 4,
+    })
+  }, [sunPosition])
+
+  useGSAP(() => {
+    if (!(keyLightRef.current && fillLightRef.current && backLightRef.current)) return
+
+    gsap.to(keyLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+    gsap.to(fillLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+    gsap.to(backLightRef.current.color, {
+      r: lighting.directionalColor.r,
+      g: lighting.directionalColor.g,
+      b: lighting.directionalColor.b,
+      duration: 4,
+    })
+  }, [lighting])
+
   return (
     <>
-      <Sky
+      {/* <Sky
         distance={1000}
         mieCoefficient={0.005}
         mieDirectionalG={0.7}
@@ -184,14 +225,33 @@ export const EnvironmentRenderer = memo(() => {
           toneMapped={false}
           transparent
         />
-      </sprite>
+      </sprite> */}
+
+      {/* <Environment preset="city" /> */}
+
+      <primitive
+        material-uniforms-mieCoefficient-value={0.005}
+        material-uniforms-mieDirectionalG-value={0.8}
+        material-uniforms-rayleigh-value={0.5}
+        material-uniforms-turbidity-value={10}
+        object={sky}
+        scale={1000}
+      />
+      {/* <Sky
+        // azimuth={sunPosition.azimuth}
+        // inclination={sunPosition.altitude}
+        sunPosition={sunPosition.position}
+      /> */}
+      <pointLight castShadow distance={50} intensity={15.5} position={[0, 2, 0]} />
 
       <directionalLight
         castShadow
-        color={lighting.directionalColor}
-        intensity={lighting.directionalIntensity}
-        position={sunPosition.position}
-        shadow-bias={-0.0001}
+        // color={lighting.directionalColor}
+        intensity={2}
+        position={[-3, 1, -3]} //lighting.directionalIntensity}
+        ref={keyLightRef}
+        // position={sunPosition.position}
+        shadow-bias={-0.000_05}
         shadow-camera-bottom={-40}
         shadow-camera-far={200}
         shadow-camera-left={-40}
@@ -199,7 +259,19 @@ export const EnvironmentRenderer = memo(() => {
         shadow-camera-top={40}
         shadow-mapSize={[2048, 2048]}
       />
-      <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
+      <directionalLight
+        // color={lighting.directionalColor}
+        intensity={1}
+        position={[3, 1, 3]} //lighting.directionalIntensity}
+        ref={fillLightRef} //sunPosition.position}
+      />
+      <directionalLight
+        // color={lighting.directionalColor}
+        intensity={0.5}
+        position={[-3, 1, 3]} //lighting.directionalIntensity}
+        ref={backLightRef} //sunPosition.position}
+      />
+      {/* <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} /> */}
     </>
   )
 })

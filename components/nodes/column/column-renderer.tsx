@@ -72,8 +72,8 @@ export function ColumnRenderer({ nodeId }: ColumnRendererProps) {
         </group>
       ) : (
         <mesh castShadow geometry={cylinderGeometry} position-y={yPosition} receiveShadow>
-          <meshStandardMaterial
-            color="beige"
+          <meshPhysicalMaterial
+            color="#dcdcf7"
             metalness={0.1}
             opacity={opacity}
             roughness={0.7}

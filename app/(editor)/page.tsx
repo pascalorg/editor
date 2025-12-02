@@ -1,6 +1,10 @@
+import { useGSAP } from '@gsap/react'
+import gsap from 'gsap'
 import Editor from '@/components/editor'
 import { ActionMenu } from '@/components/editor/action-menu/index'
 import { StairUI } from '@/components/nodes/stair/stair-ui'
+
+gsap.registerPlugin(useGSAP)
 
 export default function Home() {
   return (

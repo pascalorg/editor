@@ -766,8 +766,8 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
                 <Base geometry={wallGeometry}>
-                  <meshStandardMaterial
-                    color="beige"
+                  <meshPhysicalMaterial
+                    color="#dcdcf7"
                     key={`wall-material-${opacity}`}
                     metalness={0.1}
                     opacity={opacity}

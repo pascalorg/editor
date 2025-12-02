@@ -139,7 +139,12 @@ export function InfiniteGrid({
   })
 
   return (
-    <mesh position={[0, 0.005, 0]} renderOrder={-1} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh
+      frustumCulled={false}
+      position={[0, 0.005, 0]}
+      renderOrder={1}
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
       <planeGeometry args={[1000, 1000]} />
       <infiniteGridMaterial
         depthTest
