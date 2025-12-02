@@ -6,22 +6,40 @@ import { BaseNode, nodeId, nodeType } from '../base'
 import { BuildingNode } from './building'
 import { ItemNode } from './item'
 
+// 2D Polygon
+const PropertyLineData = z.object({
+  type: z.literal('polygon'),
+  points: z.array(z.tuple([z.number(), z.number()])),
+})
+
+// 3D Polygon/Mesh
+// const TerrainData = z.object({
+//   type: z.literal('terrain'),
+//   points: z.array(z.tuple([z.number(), z.number(), z.number()])),
+// })
+
 export const SiteNode = BaseNode.extend({
   id: nodeId('site'),
   type: nodeType('site'),
-  // Specific props: none for now
-  //   propertyLines: PropertyLineNode, // TODO: Add property line node
-  //   terrain: TerrainNode, // TODO: Add terrain node
-  // landscape: z.array(z.discriminatedUnion('type', [PlantNode])), // TODO: Add landscape node
+  // Specific props
+  polygon: PropertyLineData.optional().default({
+    type: 'polygon',
+    // Default 30x30 square matching GRID_SIZE
+    points: [
+      [0, 0],
+      [30, 0],
+      [30, 30],
+      [0, 30],
+    ],
+  }),
+  // terrain: TerrainData,
   children: z
     .array(z.discriminatedUnion('type', [BuildingNode, ItemNode]))
     .default([BuildingNode.parse({})]),
 }).describe(
   dedent`
   Site node - used to represent a site
-  - propertyLines: property line node
-  - terrain: terrain node
-  - landscape: landscape node
+  - polygon: polygon data
   - children: array of building and item nodes
   `,
 )

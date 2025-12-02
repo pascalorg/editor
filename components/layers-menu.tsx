@@ -326,7 +326,6 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         onClick={(e) => {
           e.stopPropagation()
           onNodeSelect(nodeId, e as React.MouseEvent)
-          handleNodeClick(nodeId, hasChildren)
         }}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -458,7 +457,8 @@ function DraggableLevelItem({
           isDragOver && 'bg-accent ring-1 ring-primary',
         )}
         onClick={(e) => {
-          handleNodeClick(levelId, hasContent)
+          e.stopPropagation()
+          handleNodeSelect(levelId, e)
         }}
         onDragLeave={(e) => {
           e.preventDefault()
@@ -668,6 +668,7 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   const reorderLevels = useEditor((state) => state.reorderLevels)
   const addNode = useEditor((state) => state.addNode)
   const addLevel = useEditor((state) => state.addLevel)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   // Local implementations for uploads (passed down)
   const handleUpload = async (file: File, levelId: string) => {
@@ -759,7 +760,12 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
 
   return (
     <TreeNode level={level} nodeId={nodeId}>
-      <TreeNodeTrigger onClick={() => handleNodeClick(nodeId, levelIds.length > 0)}>
+      <TreeNodeTrigger
+        onClick={(e) => {
+          e.stopPropagation()
+          handleNodeSelect(nodeId, e)
+        }}
+      >
         <TreeExpander hasChildren={levelIds.length > 0} />
         <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
         <TreeLabel className="flex-1">{nodeName}</TreeLabel>
@@ -819,7 +825,12 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
 
   return (
     <TreeNode level={level} nodeId={nodeId}>
-      <TreeNodeTrigger onClick={() => handleNodeClick(nodeId, childrenIds.length > 0)}>
+      <TreeNodeTrigger
+        onClick={(e) => {
+          e.stopPropagation()
+          handleNodeSelect(nodeId, e)
+        }}
+      >
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
         <TreeLabel>{nodeName}</TreeLabel>
