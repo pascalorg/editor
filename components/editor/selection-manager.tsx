@@ -17,11 +17,13 @@ function SelectionManager() {
     if (!currentFloorId) return
     const currentFloor = scene.getObjectByName(currentFloorId)
 
-    if (!currentFloor) {
-      console.warn(`[SelectionManager] Current floor with ID ${currentFloorId} not found in scene.`)
-    }
-
     const performRaycast = (event: PointerEvent) => {
+      if (!currentFloor) {
+        console.warn(
+          `[SelectionManager] Current floor with ID ${currentFloorId} not found in scene.`,
+        )
+        return
+      }
       // Convert to NDC coordinates
       const rect = gl.domElement.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
