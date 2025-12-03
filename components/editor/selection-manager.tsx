@@ -13,15 +13,17 @@ function SelectionManager() {
   const { camera, scene, gl, raycaster } = useThree()
   const currentFloorId = useEditor((state) => state.selectedFloorId)
 
-  const currentFloor = useMemo(
-    () => (currentFloorId ? scene.getObjectByName(currentFloorId) : null),
-    [scene, currentFloorId],
-  )
-
   useEffect(() => {
-    if (!currentFloor) return
+    if (!currentFloorId) return
+    const currentFloor = scene.getObjectByName(currentFloorId)
 
     const performRaycast = (event: PointerEvent) => {
+      if (!currentFloor) {
+        console.warn(
+          `[SelectionManager] Current floor with ID ${currentFloorId} not found in scene.`,
+        )
+        return
+      }
       // Convert to NDC coordinates
       const rect = gl.domElement.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -147,7 +149,7 @@ function SelectionManager() {
       gl.domElement.removeEventListener('pointerdown', handlePointerDown)
       gl.domElement.removeEventListener('click', handleClick)
     }
-  }, [camera, gl, raycaster, currentFloor, handleNodeSelect, handleClear, controlMode])
+  }, [camera, gl, raycaster, currentFloorId, handleNodeSelect, handleClear, controlMode])
 
   return null
 }

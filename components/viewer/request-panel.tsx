@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowRight, Box, Mic, Paperclip } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { useEditor } from '@/hooks/use-editor'
@@ -137,6 +137,19 @@ export function RequestPanel() {
   const selectedNodeData = selectedNode?.data()
   const parentNode = selectedNode?.parent()
   const parentNodeData = parentNode?.data()
+
+  const levels = useEditor((state) => {
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : []
+  })
+  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectFloor = useEditor((state) => state.selectFloor)
+
+  useEffect(() => {
+    if (!selectedFloorId && levels.length > 0) {
+      selectFloor(levels[0].id)
+    }
+  }, [selectedFloorId, levels, selectFloor])
 
   return (
     <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">

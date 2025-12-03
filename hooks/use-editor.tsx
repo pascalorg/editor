@@ -1300,3 +1300,19 @@ const useStore = create<StoreState>()(
 )
 
 export const useEditor = useStore
+
+// Helper to wait for hydration to complete before performing actions
+export const waitForHydration = (): Promise<void> => {
+  return new Promise((resolve) => {
+    // Check if already hydrated
+    if (useStore.persist.hasHydrated()) {
+      resolve()
+      return
+    }
+    // Otherwise wait for hydration
+    const unsubscribe = useStore.persist.onFinishHydration(() => {
+      unsubscribe()
+      resolve()
+    })
+  })
+}

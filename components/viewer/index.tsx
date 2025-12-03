@@ -119,9 +119,6 @@ export default function Viewer({ className }: { className?: string }) {
         {/* Infinite floor - rendered outside export group */}
         <InfiniteFloor />
       </Canvas>
-
-      {/* Viewer Controls */}
-      <ViewerControls />
     </div>
   )
 }

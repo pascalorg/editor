@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { RequestPanel } from '@/components/viewer/request-panel'
+import { ViewerControls } from '@/components/viewer/viewer-controls'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
 import { useEditor } from '@/hooks/use-editor'
 
@@ -17,6 +18,9 @@ export default function ViewerPage() {
 
   return (
     <main className="relative h-screen w-screen">
+      {/* Viewer Controls */}
+      <ViewerControls />
+
       {/* Main Viewer */}
       <Viewer />
 
@@ -26,9 +30,6 @@ export default function ViewerPage() {
           <ViewerLayersMenu mounted={mounted} />
         </div>
       </aside>
-
-      {/* Floating Request Panel */}
-      <RequestPanel />
     </main>
   )
 }

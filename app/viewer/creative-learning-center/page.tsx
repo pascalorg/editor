@@ -1,19 +1,24 @@
 'use client'
 
-import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
-import { ViewerControls } from '@/components/viewer/viewer-controls'
+import { RequestPanel } from '@/components/viewer/request-panel'
+import { UserMenu } from '@/components/viewer/user-menu'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
-import { useEditor } from '@/hooks/use-editor'
-import type { Scene } from '@/lib/scenegraph/schema/index'
+import { useEditor, waitForHydration } from '@/hooks/use-editor'
+import type { Scene } from '@/lib/scenegraph'
 
-export default function DynamicViewerPage() {
-  const params = useParams()
-  const id = params.id as string
+export default function ViewerPage() {
   const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Handle hydration
+  useEffect(() => {
+    setMounted(true)
+    useEditor.getState().setControlMode('select')
+  }, [])
+
   const loadLayout = useEditor((state) => state.loadLayout)
 
   // Handle hydration
@@ -28,7 +33,12 @@ export default function DynamicViewerPage() {
         setIsLoading(true)
         setError(null)
 
-        const response = await fetch(`/demos/${id}.json`)
+        // Wait for Zustand persist hydration to complete first
+        // Otherwise the loaded layout will be overwritten by rehydration
+        await waitForHydration()
+        console.log('[ViewerPage] Hydration complete, loading demo...')
+
+        const response = await fetch('/demos/creative-learning-center.json')
 
         if (!response.ok) {
           throw new Error(`Failed to load demo: ${response.statusText}`)
@@ -37,24 +47,22 @@ export default function DynamicViewerPage() {
         const data: Scene = await response.json()
         loadLayout(data)
         setIsLoading(false)
+        console.log('[ViewerPage] Demo loaded successfully')
       } catch (err) {
         console.error('Error loading demo:', err)
         setError(err instanceof Error ? err.message : 'Failed to load demo')
         setIsLoading(false)
       }
     }
-
-    if (id) {
-      loadDemo()
-    }
-  }, [id, loadLayout])
+    loadDemo()
+  }, [loadLayout])
 
   if (isLoading) {
     return (
       <main className="flex h-screen w-screen items-center justify-center bg-[#303035]">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-white" />
-          <p className="text-white/60">Loading demo...</p>
+          <p className="text-white/60">Loading Creative Learning Center...</p>
         </div>
       </main>
     )
@@ -76,15 +84,13 @@ export default function DynamicViewerPage() {
       {/* Main Viewer */}
       <Viewer />
 
-      {/* Viewer Controls */}
-      <ViewerControls />
+      {/* Floating Request Panel */}
+      <RequestPanel />
 
-      {/* Floating Layers Menu */}
-      <aside className="pointer-events-none fixed top-20 left-4 z-40 max-h-[calc(100vh-7rem)]">
-        <div className="pointer-events-auto rounded-lg border border-white/10 bg-black/20 shadow-lg backdrop-blur-md transition-opacity hover:bg-black/30">
-          <ViewerLayersMenu mounted={mounted} />
-        </div>
-      </aside>
+      {/* User Menu - Top Right */}
+      <div className="fixed top-4 right-4 z-50">
+        <UserMenu />
+      </div>
     </main>
   )
 }
