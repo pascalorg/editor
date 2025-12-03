@@ -752,10 +752,6 @@ const useStore = create<StoreState>()(
           }
         },
         loadLayout: (json) => {
-          console.log('[loadLayout] Starting layout load')
-          console.log('[loadLayout] Input JSON keys:', Object.keys(json))
-          console.log('[loadLayout] Input JSON:', JSON.stringify(json, null, 2).slice(0, 1000) + '...')
-
           // Helper to ensure all nodes have the 'object: node' marker
           const ensureNodeMarkers = (node: any): void => {
             if (typeof node !== 'object' || node === null) return
@@ -777,7 +773,6 @@ const useStore = create<StoreState>()(
             }
           }
 
-          console.log('[loadLayout] Resetting UI state')
           set({
             selectedNodeIds: [],
             selectedFloorId: null,
@@ -787,24 +782,16 @@ const useStore = create<StoreState>()(
           })
 
           if (json.root) {
-            console.log('[loadLayout] Found json.root - processing root-based layout')
             const root = json.root as any
-            console.log('[loadLayout] root.type:', root.type)
-            console.log('[loadLayout] root has children:', !!root.children, 'count:', root.children?.length)
-            console.log('[loadLayout] root has buildings:', !!root.buildings, 'count:', root.buildings?.length)
 
             const fixBuilding = (b: any) => {
-              console.log('[loadLayout] fixBuilding called for:', b.id, '| has levels:', !!b.levels, '| has children:', !!b.children)
-              console.log('[loadLayout] fixBuilding building keys:', Object.keys(b))
               if (b.levels && !b.children) {
-                console.log('[loadLayout] fixBuilding: migrating levels to children for building:', b.id)
                 b.children = b.levels
                 delete b.levels
               }
             }
 
             if (root.buildings && !root.children) {
-              console.log('[loadLayout] BRANCH: root.buildings exists but no root.children - migrating buildings to site')
               if (Array.isArray(root.buildings)) {
                 root.buildings.forEach(fixBuilding)
                 const site = {
@@ -814,14 +801,10 @@ const useStore = create<StoreState>()(
                   children: root.buildings,
                 }
                 root.children = [site]
-                console.log('[loadLayout] Created site_default with buildings as children')
               }
               delete root.buildings
             } else if (root.children) {
-              console.log('[loadLayout] BRANCH: root.children exists')
-              console.log('[loadLayout] First child type:', root.children[0]?.type)
               if (root.children.length > 0 && root.children[0].type === 'building') {
-                console.log('[loadLayout] SUB-BRANCH: First child is building - wrapping in site')
                 const buildings = root.children
                 buildings.forEach(fixBuilding)
                 const site = {
@@ -832,58 +815,26 @@ const useStore = create<StoreState>()(
                 }
                 root.children = [site]
               } else {
-                console.log('[loadLayout] SUB-BRANCH: First child is NOT building (probably site) - processing nested buildings')
-                root.children.forEach((site: any, i: number) => {
-                  console.log(`[loadLayout] Processing site ${i}: type=${site.type}, children count=${site.children?.length}`)
+                root.children.forEach((site: any) => {
                   if (site.children) {
                     site.children.forEach((c: any) => {
-                      if (c.type === 'building') {
-                        console.log('[loadLayout] Found building in site, fixing:', c.id)
-                        fixBuilding(c)
-                      }
+                      if (c.type === 'building') fixBuilding(c)
                     })
                   }
                 })
               }
-            } else {
-              console.log('[loadLayout] BRANCH: root has neither buildings nor children!')
             }
 
-            console.log('[loadLayout] Ensuring node markers on root')
             ensureNodeMarkers(root)
 
-            console.log('[loadLayout] Creating new Scene and SceneGraph')
-            console.log('[loadLayout] Final root structure:', JSON.stringify(root, null, 2).slice(0, 2000))
             const newScene = { root } as unknown as Scene
-            console.log('[loadLayout] newScene created, root.children count:', newScene.root?.children?.length)
+            const newGraph = new SceneGraph(newScene, {
+              onChange: (s) => handleGraphChange(s),
+            })
 
-            try {
-              const newGraph = new SceneGraph(newScene, {
-                onChange: (s) => handleGraphChange(s),
-              })
-              console.log('[loadLayout] SceneGraph created successfully')
-              console.log('[loadLayout] Graph node count:', newGraph.index.byId.size)
-              console.log('[loadLayout] Graph levels:', newGraph.nodes.find({ type: 'level' }).map(l => l.id))
-              console.log('[loadLayout] Graph buildings:', newGraph.nodes.find({ type: 'building' }).map(b => b.id))
-              console.log('[loadLayout] Graph sites:', newGraph.nodes.find({ type: 'site' }).map(s => s.id))
-
-              console.log('[loadLayout] Setting new scene and graph in store')
-              set({ scene: newScene, graph: newGraph })
-
-              const stateAfterSet = get()
-              console.log('[loadLayout] State after set - scene.root.children count:', stateAfterSet.scene.root?.children?.length)
-              console.log('[loadLayout] State after set - graph node count:', stateAfterSet.graph.index.byId.size)
-
-              console.log('[loadLayout] Rebuilding spatial grid')
-              rebuildSpatialGrid(get().spatialGrid, newGraph)
-              console.log('[loadLayout] Done with root-based layout')
-            } catch (error) {
-              console.error('[loadLayout] ERROR creating SceneGraph:', error)
-              throw error
-            }
+            set({ scene: newScene, graph: newGraph })
+            rebuildSpatialGrid(get().spatialGrid, newGraph)
           } else if (json.levels) {
-            console.log('[loadLayout] BRANCH: No root but found json.levels - legacy format')
-            console.log('[loadLayout] levels count:', json.levels?.length)
             const migratedRoot = RootNode.parse({
               children: [
                 SiteNode.parse({
@@ -903,9 +854,6 @@ const useStore = create<StoreState>()(
             })
             set({ scene: newScene, graph: newGraph })
             rebuildSpatialGrid(get().spatialGrid, newGraph)
-            console.log('[loadLayout] Done with legacy levels-based layout')
-          } else {
-            console.log('[loadLayout] WARNING: No root and no levels found in JSON - nothing to load!')
           }
         },
         handleLoadLayout: (file) => {

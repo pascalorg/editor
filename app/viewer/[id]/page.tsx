@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
+import { ViewerControls } from '@/components/viewer/viewer-controls'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
 import { useEditor } from '@/hooks/use-editor'
 import type { Scene } from '@/lib/scenegraph/schema/index'
@@ -74,6 +75,9 @@ export default function DynamicViewerPage() {
     <main className="relative h-screen w-screen">
       {/* Main Viewer */}
       <Viewer />
+
+      {/* Viewer Controls */}
+      <ViewerControls />
 
       {/* Floating Layers Menu */}
       <aside className="pointer-events-none fixed top-20 left-4 z-40 max-h-[calc(100vh-7rem)]">
