@@ -100,7 +100,7 @@ export function StairUI() {
   }
 
   return (
-    <div className="pointer-events-auto fixed top-20 left-20 z-50 flex h-[calc(100vh-6rem)] w-80 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
+    <div className="pointer-events-auto fixed top-20 right-4 z-50 flex h-[calc(100vh-6rem)] w-80 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
       <div className="flex items-center justify-between border-b p-4">
         <h1 className="font-bold text-foreground text-lg">Stair Designer</h1>
       </div>

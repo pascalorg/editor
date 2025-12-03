@@ -1,6 +1,6 @@
 'use client'
 
-import { Box, Eye, EyeOff, GripVertical, MapPin, Plus, Settings2 } from 'lucide-react'
+import { Box, Eye, EyeOff, GripVertical, MapPin, Pencil, Plus, Settings2 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
@@ -828,10 +828,23 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const controlMode = useEditor((state) => state.controlMode)
+
+  const isSelected = selectedNodeIds.includes(nodeId)
+  const isEditing = isSelected && controlMode === 'edit'
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Select the site node and switch to edit mode
+    handleNodeSelect(nodeId, e)
+    setControlMode('edit')
+  }
 
   return (
     <TreeNode level={level} nodeId={nodeId}>
       <TreeNodeTrigger
+        className={cn(isSelected && 'bg-accent')}
         onClick={(e) => {
           e.stopPropagation()
           handleNodeSelect(nodeId, e)
@@ -839,7 +852,25 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
       >
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
-        <TreeLabel>{nodeName}</TreeLabel>
+        <TreeLabel className="flex-1">{nodeName}</TreeLabel>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-5 w-5 p-0 transition-opacity',
+                isEditing
+                  ? 'text-orange-400 opacity-100'
+                  : 'opacity-0 group-hover/item:opacity-100',
+              )}
+              onClick={handleEditClick}
+              size="sm"
+              variant="ghost"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Edit property line</TooltipContent>
+        </Tooltip>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={childrenIds.length > 0}>
@@ -1006,7 +1037,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
           <label className="font-medium text-muted-foreground text-sm">Hierarchy</label>
         </div>
 
-        <div className="no-scrollbar flex-1">
+        <div className="no-scrollbar flex-1 overflow-y-auto">
           {mounted ? (
             <TreeProvider
               expandedIds={expandedIds}

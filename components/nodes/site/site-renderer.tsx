@@ -24,13 +24,14 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const { camera } = useThree()
 
-  const { polygon, isSelected } = useEditor(
+  const { polygon, isSelected, isEditing } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as SiteNode
       return {
         polygon: node?.polygon,
         isSelected: state.selectedNodeIds.includes(nodeId),
+        isEditing: state.selectedNodeIds.includes(nodeId) && state.controlMode === 'edit',
       }
     }),
   )
@@ -166,8 +167,8 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
         />
       </mesh>
 
-      {/* Handles */}
-      {isSelected && (
+      {/* Handles - only visible in edit mode */}
+      {isEditing && (
         <>
           {points.map(([x, y], i) => (
             <mesh
