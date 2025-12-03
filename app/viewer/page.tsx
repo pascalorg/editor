@@ -26,9 +26,6 @@ export default function ViewerPage() {
           <ViewerLayersMenu mounted={mounted} />
         </div>
       </aside>
-
-      {/* Floating Request Panel */}
-      <RequestPanel />
     </main>
   )
 }
