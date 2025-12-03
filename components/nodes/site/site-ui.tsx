@@ -97,23 +97,29 @@ function PointItem({ point, index, onUpdate, onDelete, canDelete }: PointItemPro
  * Only visible when a site node is selected and in edit mode
  */
 export function SiteUI() {
-  const { nodeId, polygon, nodeName, setControlMode, isEditMode } = useEditor(
+  const { nodeId, polygon, nodeName, setControlMode } = useEditor(
     useShallow((state: StoreState) => {
+      const base = {
+        nodeId: null as string | null,
+        polygon: undefined as SiteNode['polygon'] | undefined,
+        nodeName: 'Site',
+        setControlMode: state.setControlMode,
+      }
+
       // Only show when in edit mode
-      if (state.controlMode !== 'edit') return { nodeId: null, isEditMode: false }
+      if (state.controlMode !== 'edit') return base
 
       // Find selected site node
-      if (state.selectedNodeIds.length !== 1) return { nodeId: null, isEditMode: false }
+      if (state.selectedNodeIds.length !== 1) return base
       const handle = state.graph.getNodeById(state.selectedNodeIds[0] as any)
       const node = handle?.data()
-      if (node?.type !== 'site') return { nodeId: null, isEditMode: false }
+      if (node?.type !== 'site') return base
 
       return {
         nodeId: node.id,
         polygon: (node as SiteNode)?.polygon,
         nodeName: node?.name || 'Site',
         setControlMode: state.setControlMode,
-        isEditMode: true,
       }
     }),
   )
@@ -196,7 +202,7 @@ export function SiteUI() {
   )
 
   const handleClose = useCallback(() => {
-    setControlMode?.('select')
+    setControlMode('select')
   }, [setControlMode])
 
   // Calculate area (using shoelace formula)
