@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import {
   type ComponentProps,
   createContext,
+  forwardRef,
   type HTMLAttributes,
   type ReactNode,
   useCallback,
@@ -440,6 +441,9 @@ export const TreeIcon = ({ icon, hasChildren = false, className, ...props }: Tre
 
 export type TreeLabelProps = HTMLAttributes<HTMLSpanElement>
 
-export const TreeLabel = ({ className, ...props }: TreeLabelProps) => (
-  <span className={cn('font flex-1 truncate text-sm', className)} {...props} />
+export const TreeLabel = forwardRef<HTMLSpanElement, TreeLabelProps>(
+  ({ className, ...props }, ref) => (
+    <span ref={ref} className={cn('font flex-1 truncate text-sm', className)} {...props} />
+  ),
 )
+TreeLabel.displayName = 'TreeLabel'
