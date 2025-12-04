@@ -127,7 +127,7 @@ export function ItemNodeEditor() {
         addNode(
           ItemNode.parse({
             type: 'item' as const,
-            name: `Item at ${x},${y}`,
+            name: selectedItem.name || 'Item',
             position: [x, y],
             rotation: previewStateRef.current.currentRotation,
             size: selectedItem.size,
@@ -180,7 +180,7 @@ export function ItemNodeEditor() {
           const newPreviewId = addNode(
             ItemNode.parse({
               type: 'item' as const,
-              name: 'Item Preview',
+              name: `${selectedItem.name || 'Item'} (Preview)`,
               position: [x, y] as [number, number],
               rotation: previewStateRef.current.currentRotation,
               size: selectedItem.size as [number, number],
@@ -253,7 +253,7 @@ export function ItemNodeEditor() {
         ItemNode.parse({
           parentId: e.node.id,
           type: 'item' as const,
-          name: 'Item Preview',
+          name: `${selectedItem.name || 'Item'} (Preview)`,
           position: localPos,
           rotation, // Set rotation based on wall normal
           size: selectedItem.size,
@@ -325,7 +325,7 @@ export function ItemNodeEditor() {
           ItemNode.parse({
             parentId: e.node.id,
             type: 'item' as const,
-            name: 'Item Preview',
+            name: `${selectedItem.name || 'Item'} (Preview)`,
             position: localPos,
             rotation,
             size: selectedItem.size,
@@ -406,7 +406,7 @@ export function ItemNodeEditor() {
         ItemNode.parse({
           parentId: e.node.id,
           type: 'item' as const,
-          name: 'Item Preview',
+          name: `${selectedItem.name || 'Item'} (Preview)`,
           position: localPos,
           rotation: 0,
           size: selectedItem.size,
@@ -467,7 +467,7 @@ export function ItemNodeEditor() {
           ItemNode.parse({
             parentId: e.node.id,
             type: 'item' as const,
-            name: 'Item Preview',
+            name: `${selectedItem.name || 'Item'} (Preview)`,
             position: localPos,
             rotation: 0,
             size: selectedItem.size,

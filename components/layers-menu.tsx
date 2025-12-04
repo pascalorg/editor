@@ -1,9 +1,9 @@
 'use client'
 
-import { Box, Eye, EyeOff, GripVertical, MapPin, Pencil, Plus, Settings2 } from 'lucide-react'
+import { Box, Check, Eye, EyeOff, GripVertical, MapPin, Pencil, Plus, Settings2, X } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
 import {
@@ -18,7 +18,8 @@ import {
   useTree,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
@@ -171,6 +172,11 @@ function getNodeIcon(type: string): ReactNode {
 
 // Helper to get node label
 function getNodeLabel(type: string, index: number, name?: string): string {
+  // If a custom name is provided, use it for most node types
+  if (name) {
+    return name
+  }
+
   switch (type) {
     case 'wall':
       return `Wall ${index + 1}`
@@ -183,7 +189,7 @@ function getNodeLabel(type: string, index: number, name?: string): string {
     case 'ceiling':
       return `Ceiling ${index + 1}`
     case 'group':
-      return name || `Room ${index + 1}`
+      return `Room ${index + 1}`
     case 'door':
       return `Door ${index + 1}`
     case 'window':
@@ -193,11 +199,13 @@ function getNodeLabel(type: string, index: number, name?: string): string {
     case 'scan':
       return `Scan ${index + 1}`
     case 'level':
-      return name || `Level ${index + 1}`
+      return `Level ${index + 1}`
     case 'site':
-      return name || 'Site'
+      return 'Site'
     case 'building':
-      return name || 'Building'
+      return 'Building'
+    case 'item':
+      return `Item ${index + 1}`
     case 'environment':
       return 'Environment'
     default:
@@ -221,6 +229,92 @@ function VisibilityToggle({ visible, onToggle }: { visible: boolean; onToggle: (
     >
       {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
     </Button>
+  )
+}
+
+interface RenamePopoverProps {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  currentName: string
+  onRename: (newName: string) => void
+  anchorRef: React.RefObject<HTMLSpanElement | null>
+}
+
+function RenamePopover({ isOpen, onOpenChange, currentName, onRename, anchorRef }: RenamePopoverProps) {
+  const [name, setName] = useState(currentName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(currentName)
+      // Focus the input after popover opens
+      setTimeout(() => inputRef.current?.select(), 0)
+    }
+  }, [isOpen, currentName])
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (name.trim()) {
+      onRename(name.trim())
+      onOpenChange(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation()
+    if (e.key === 'Escape') {
+      onOpenChange(false)
+    } else if (e.key === 'Enter') {
+      handleSubmit()
+    }
+  }
+
+  return (
+    <Popover open={isOpen} onOpenChange={onOpenChange}>
+      <PopoverAnchor virtualRef={anchorRef as React.RefObject<{ getBoundingClientRect: () => DOMRect }>} />
+      <PopoverContent
+        align="start"
+        className="dark w-52 p-2"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        sideOffset={4}
+      >
+        <form className="flex items-center gap-1" onSubmit={handleSubmit}>
+          <Input
+            autoFocus
+            className="h-7 flex-1 text-sm"
+            onChange={(e) => setName(e.target.value)}
+            ref={inputRef}
+            value={name}
+          />
+          <Button
+            className="h-7 w-7 p-0"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleSubmit()
+            }}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <Check className="h-3 w-3" />
+          </Button>
+          <Button
+            className="h-7 w-7 p-0"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenChange(false)
+            }}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -260,9 +354,16 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const moveNode = useEditor((state) => state.moveNode)
+  const updateNode = useEditor((state) => state.updateNode)
   const graph = useEditor((state) => state.graph)
 
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const labelRef = useRef<HTMLSpanElement>(null)
+
+  const handleRename = (newName: string) => {
+    updateNode(nodeId, { name: newName })
+  }
 
   const isSelected = selectedNodeIds.includes(nodeId)
   const hasChildren = childrenIds.length > 0
@@ -334,7 +435,23 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
       >
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
-        <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+        <TreeLabel
+          ref={labelRef}
+          className="cursor-text"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setIsRenaming(true)
+          }}
+        >
+          {getNodeLabel(nodeType, index, nodeName)}
+        </TreeLabel>
+        <RenamePopover
+          anchorRef={labelRef}
+          currentName={getNodeLabel(nodeType, index, nodeName)}
+          isOpen={isRenaming}
+          onOpenChange={setIsRenaming}
+          onRename={handleRename}
+        />
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
 
@@ -431,8 +548,15 @@ function DraggableLevelItem({
   const setControlMode = useEditor((state) => state.setControlMode)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const moveNode = useEditor((state) => state.moveNode)
+  const updateNode = useEditor((state) => state.updateNode)
 
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const labelRef = useRef<HTMLSpanElement>(null)
+
+  const handleRename = (newName: string) => {
+    updateNode(levelId, { name: newName })
+  }
 
   const hasContent =
     isSelected && (childrenIds.length > 0 || guideIds.length > 0 || scanIds.length > 0)
@@ -480,7 +604,23 @@ function DraggableLevelItem({
         </div>
         <TreeExpander hasChildren={hasContent} />
         <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
-        <TreeLabel className="flex-1">{levelName}</TreeLabel>
+        <TreeLabel
+          ref={labelRef}
+          className="flex-1 cursor-text"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setIsRenaming(true)
+          }}
+        >
+          {levelName}
+        </TreeLabel>
+        <RenamePopover
+          anchorRef={labelRef}
+          currentName={levelName}
+          isOpen={isRenaming}
+          onOpenChange={setIsRenaming}
+          onRename={handleRename}
+        />
         <VisibilityToggle onToggle={() => toggleNodeVisibility(levelId)} visible={levelVisible} />
       </TreeNodeTrigger>
 
@@ -673,6 +813,14 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   const addLevel = useEditor((state) => state.addLevel)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
   const setControlMode = useEditor((state) => state.setControlMode)
+  const updateNode = useEditor((state) => state.updateNode)
+
+  const [isRenaming, setIsRenaming] = useState(false)
+  const labelRef = useRef<HTMLSpanElement>(null)
+
+  const handleRename = (newName: string) => {
+    updateNode(nodeId, { name: newName })
+  }
 
   // Local implementations for uploads (passed down)
   const handleUpload = async (file: File, levelId: string) => {
@@ -774,7 +922,23 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
       >
         <TreeExpander hasChildren={levelIds.length > 0} />
         <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
-        <TreeLabel className="flex-1">{nodeName}</TreeLabel>
+        <TreeLabel
+          ref={labelRef}
+          className="flex-1 cursor-text"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setIsRenaming(true)
+          }}
+        >
+          {nodeName}
+        </TreeLabel>
+        <RenamePopover
+          anchorRef={labelRef}
+          currentName={nodeName}
+          isOpen={isRenaming}
+          onOpenChange={setIsRenaming}
+          onRename={handleRename}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button className="h-5 w-5 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
@@ -830,9 +994,17 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
   const setControlMode = useEditor((state) => state.setControlMode)
   const controlMode = useEditor((state) => state.controlMode)
+  const updateNode = useEditor((state) => state.updateNode)
+
+  const [isRenaming, setIsRenaming] = useState(false)
+  const labelRef = useRef<HTMLSpanElement>(null)
 
   const isSelected = selectedNodeIds.includes(nodeId)
   const isEditing = isSelected && controlMode === 'edit'
+
+  const handleRename = (newName: string) => {
+    updateNode(nodeId, { name: newName })
+  }
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -852,7 +1024,23 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
       >
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
-        <TreeLabel className="flex-1">{nodeName}</TreeLabel>
+        <TreeLabel
+          ref={labelRef}
+          className="flex-1 cursor-text"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setIsRenaming(true)
+          }}
+        >
+          {nodeName}
+        </TreeLabel>
+        <RenamePopover
+          anchorRef={labelRef}
+          currentName={nodeName}
+          isOpen={isRenaming}
+          onOpenChange={setIsRenaming}
+          onRename={handleRename}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

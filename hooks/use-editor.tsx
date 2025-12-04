@@ -278,6 +278,7 @@ export type StoreState = {
   debug: boolean
 
   selectedItem: {
+    name?: string
     modelUrl: string
     scale: [number, number, number]
     size: [number, number]
