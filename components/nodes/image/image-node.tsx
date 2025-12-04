@@ -30,7 +30,7 @@ export function ImageNodeEditor() {
   const undoStateRef = useRef<{
     [nodeId: string]: {
       position?: [number, number]
-      rotation?: number
+      rotation?: [number, number, number]
       scale?: number
     }
   }>({})
@@ -99,12 +99,12 @@ export function useImageManipulation(
   const controlMode = useEditor((state) => state.controlMode)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
-  const { nodeRotationY, nodeScale, nodePosition } = useEditor(
+  const { nodeRotation, nodeScale, nodePosition } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId!)
       const node = handle?.data() as ImageNode | undefined
       return {
-        nodeRotationY: node?.rotationY || 0,
+        nodeRotation: node?.rotation || [0, 0, 0],
         nodeScale: node?.scale || 1,
         nodePosition: node?.position || [0, 0],
       }
@@ -320,16 +320,23 @@ export function useImageManipulation(
       setActiveHandle?.('rotation')
       emitter.emit('image:manipulation-start', { nodeId })
 
-      const center = groupRef.current.position.clone()
+      // Hierarchy: ImageRenderer Group -> NodeRenderer Inner Group -> NodeRenderer Outer Group -> Parent
+      const imageGroup = groupRef.current
+      if (!imageGroup?.parent?.parent) return
+
+      const nodeGroup = imageGroup.parent.parent
+
+      const nodeOrigin = new THREE.Vector3().setFromMatrixPosition(nodeGroup.matrixWorld)
+      const center = nodeOrigin.clone()
       const initialMouse = new THREE.Vector3()
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -nodeOrigin.y)
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(e.pointer, camera)
       raycaster.ray.intersectPlane(plane, initialMouse)
       const initialVector = initialMouse.clone().sub(center)
       const initialAngle = Math.atan2(initialVector.z, initialVector.x)
-      const initialRotation = nodeRotationY
-      let lastRotation: number | null = null
+      const initialYRotation = nodeRotation[1] // Y component in radians
+      let lastRotation: [number, number, number] | null = null
 
       const handleMove = (ev: PointerEvent) => {
         const rect = gl.domElement.getBoundingClientRect()
@@ -338,17 +345,19 @@ export function useImageManipulation(
         const mouseVec = new THREE.Vector2(mx, my)
         raycaster.setFromCamera(mouseVec, camera)
         const intersect = new THREE.Vector3()
-        raycaster.ray.intersectPlane(plane, intersect)
+        if (!raycaster.ray.intersectPlane(plane, intersect)) return
+
         const vector = intersect.clone().sub(center)
         const angle = Math.atan2(vector.z, vector.x)
         const delta = angle - initialAngle
-        let newRotation = initialRotation - delta * (180 / Math.PI)
+        let newYRotation = initialYRotation - delta // Already in radians
 
         if (ev.shiftKey) {
-          newRotation = Math.round(newRotation / 45) * 45
+          // Snap to 45° increments (π/4 radians)
+          newYRotation = Math.round(newYRotation / (Math.PI / 4)) * (Math.PI / 4)
         }
 
-        lastRotation = newRotation
+        lastRotation = [nodeRotation[0], newYRotation, nodeRotation[2]]
         emitter.emit('image:update', {
           nodeId,
           updates: { rotation: lastRotation },
@@ -373,7 +382,7 @@ export function useImageManipulation(
       document.addEventListener('pointermove', handleMove)
       document.addEventListener('pointerup', handleUp)
     },
-    [nodeId, nodeRotationY, movingCamera, camera, gl, groupRef, setActiveHandle],
+    [nodeId, nodeRotation, movingCamera, camera, gl, groupRef, setActiveHandle],
   )
 
   const handleScaleDown = useCallback(

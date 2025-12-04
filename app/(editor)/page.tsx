@@ -2,6 +2,7 @@ import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import Editor from '@/components/editor'
 import { ActionMenu } from '@/components/editor/action-menu/index'
+import { ImageUI } from '@/components/nodes/image/image-ui'
 import { SiteUI } from '@/components/nodes/site/site-ui'
 import { StairUI } from '@/components/nodes/stair/stair-ui'
 
@@ -15,6 +16,7 @@ export default function Home() {
         <ActionMenu />
         <SiteUI />
         <StairUI />
+        <ImageUI />
       </div>
     </div>
   )

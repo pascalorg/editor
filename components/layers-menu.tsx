@@ -260,12 +260,29 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const moveNode = useEditor((state) => state.moveNode)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const controlMode = useEditor((state) => state.controlMode)
   const graph = useEditor((state) => state.graph)
 
   const [isDragOver, setIsDragOver] = useState(false)
 
   const isSelected = selectedNodeIds.includes(nodeId)
   const hasChildren = childrenIds.length > 0
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Select the site node and switch to edit mode
+    handleNodeSelect(nodeId, e)
+    setControlMode('edit')
+  }
+
+  // Handle Edit Click for Image Nodes
+  const handleImageEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    handleNodeSelect(nodeId, e)
+    setControlMode('guide') // Images use 'guide' mode, but we can treat it similar to edit for UI
+  }
 
   const handleDragStart = (e: React.DragEvent) => {
     e.stopPropagation()
@@ -335,6 +352,29 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
         <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+
+        {/* Edit Button for Reference Images */}
+        {nodeType === 'reference-image' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  isSelected && useEditor.getState().controlMode === 'guide'
+                    ? 'text-purple-400 opacity-100'
+                    : 'opacity-0 group-hover/item:opacity-100',
+                )}
+                onClick={handleImageEditClick}
+                size="sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit Image</TooltipContent>
+          </Tooltip>
+        )}
+
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
 
