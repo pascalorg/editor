@@ -1,5 +1,5 @@
 import type { ThreeMouseEvent } from '@pmndrs/uikit/dist/events'
-import { Billboard, Edges } from '@react-three/drei'
+import { Billboard, Line } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Container } from '@react-three/uikit'
 import { Button } from '@react-three/uikit-default'
@@ -103,6 +103,76 @@ function calculateWorldBounds(group: THREE.Group): BoundingBoxData | null {
   const rotation = new THREE.Euler().setFromQuaternion(worldQuaternion)
 
   return { size, center, rotation }
+}
+
+/**
+ * Generate edge line points for a box
+ */
+function getBoxEdgePoints(size: THREE.Vector3): [number, number, number][] {
+  const hx = size.x / 2
+  const hy = size.y / 2
+  const hz = size.z / 2
+
+  // 12 edges of a box, each edge is 2 points
+  // We'll create line segments for all 12 edges
+  return [
+    // Bottom face edges
+    [-hx, -hy, -hz],
+    [hx, -hy, -hz],
+    [hx, -hy, -hz],
+    [hx, -hy, hz],
+    [hx, -hy, hz],
+    [-hx, -hy, hz],
+    [-hx, -hy, hz],
+    [-hx, -hy, -hz],
+    // Top face edges
+    [-hx, hy, -hz],
+    [hx, hy, -hz],
+    [hx, hy, -hz],
+    [hx, hy, hz],
+    [hx, hy, hz],
+    [-hx, hy, hz],
+    [-hx, hy, hz],
+    [-hx, hy, -hz],
+    // Vertical edges
+    [-hx, -hy, -hz],
+    [-hx, hy, -hz],
+    [hx, -hy, -hz],
+    [hx, hy, -hz],
+    [hx, -hy, hz],
+    [hx, hy, hz],
+    [-hx, -hy, hz],
+    [-hx, hy, hz],
+  ]
+}
+
+interface SelectionBoxProps {
+  size: THREE.Vector3
+  center: THREE.Vector3
+  rotation: THREE.Euler
+  color: string
+}
+
+function SelectionBox({ size, center, rotation, color }: SelectionBoxProps) {
+  const points = useMemo(() => getBoxEdgePoints(size), [size])
+
+  return (
+    <group position={center} rotation={rotation}>
+      <Line
+        color={color}
+        dashed
+        dashSize={0.2}
+        depthTest={false}
+        depthWrite={false}
+        gapSize={0.05}
+        lineWidth={1.5}
+        points={points}
+        renderOrder={999}
+        segments
+        transparent
+      />
+    </group>
+  )
 }
 
 interface SelectionControlsProps {
@@ -790,22 +860,23 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
     <group>
       {/* Individual bounding boxes for each selected item - oriented */}
       {individualBounds.map((bounds, i) => (
-        <mesh key={i} position={bounds.center} rotation={bounds.rotation}>
-          <boxGeometry args={[bounds.size.x, bounds.size.y, bounds.size.z]} />
-          <meshBasicMaterial opacity={0} transparent />
-          <Edges color="#00ff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
-        </mesh>
+        <SelectionBox
+          center={bounds.center}
+          color="#00ff00"
+          key={i}
+          rotation={bounds.rotation}
+          size={bounds.size}
+        />
       ))}
 
       {/* Combined bounding box (only if multiple items selected) */}
       {selectedNodeIds.length > 1 && (
-        <mesh position={combinedBounds.center}>
-          <boxGeometry
-            args={[combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z]}
-          />
-          <meshBasicMaterial opacity={0} transparent />
-          <Edges color="#ffff00" dashSize={0.1} depthTest={false} gapSize={0.05} linewidth={2} />
-        </mesh>
+        <SelectionBox
+          center={combinedBounds.center}
+          color="#ffff00"
+          rotation={new THREE.Euler(0, 0, 0)}
+          size={combinedBounds.size}
+        />
       )}
 
       {/* Control Panel - positioned at combined bounds center, hidden when moving */}

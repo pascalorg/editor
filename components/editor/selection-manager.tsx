@@ -97,7 +97,8 @@ function SelectionManager() {
 
       // Convert back to array and filter out level nodes
       const candidates = Array.from(candidatesByNode.values()).filter(
-        (candidate) => !candidate.nodeId.startsWith('level_'),
+        (candidate) =>
+          !(candidate.nodeId.startsWith('level_') || candidate.nodeId.startsWith('ceiling_')),
       )
 
       // Sort by distance first, then by depth if distances are very close
