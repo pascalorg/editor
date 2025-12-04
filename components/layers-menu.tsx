@@ -108,7 +108,7 @@ function getNodeIcon(type: string): ReactNode {
           width={size}
         />
       )
-    case 'image':
+    case 'reference-image':
       return (
         <img
           alt="reference"
@@ -188,7 +188,7 @@ function getNodeLabel(type: string, index: number, name?: string): string {
       return `Door ${index + 1}`
     case 'window':
       return `Window ${index + 1}`
-    case 'image':
+    case 'reference-image':
       return `Reference ${index + 1}`
     case 'scan':
       return `Scan ${index + 1}`
@@ -399,7 +399,7 @@ function DraggableLevelItem({
       const children = handle?.children() || []
       const objects = children.filter((c: SceneNodeHandle) => {
         const data = c.data()
-        return data.type !== 'image' && data.type !== 'scan'
+        return data.type !== 'reference-image' && data.type !== 'scan'
       })
 
       return objects.map((c: SceneNodeHandle) => c.id)
@@ -410,7 +410,7 @@ function DraggableLevelItem({
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(levelId as AnyNodeId)
       const children = handle?.children() || []
-      const guides = children.filter((c: SceneNodeHandle) => c.data().type === 'image')
+      const guides = children.filter((c: SceneNodeHandle) => c.data().type === 'reference-image')
 
       return guides.map((c: SceneNodeHandle) => c.id)
     }),

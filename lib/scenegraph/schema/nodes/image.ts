@@ -4,7 +4,7 @@ import { BaseNode, nodeId, nodeType } from '../base'
 
 export const ImageNode = BaseNode.extend({
   id: nodeId('image'),
-  type: nodeType('image'),
+  type: nodeType('reference-image'),
   url: z.string(), // Data URL for image
   position: z.tuple([z.number(), z.number()]).default([0, 0]),
   // rotation around Y-axis in level coordinate system (image are flat on the ground)

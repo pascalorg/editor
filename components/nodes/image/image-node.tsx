@@ -22,7 +22,7 @@ import { ImageRenderer } from './image-renderer'
  * Reference image node editor component
  * Uses useEditor hooks directly to manage image manipulation
  */
-export function ReferenceImageNodeEditor() {
+export function ImageNodeEditor() {
   const updateNode = useEditor((state) => state.updateNode)
   const setIsManipulatingImage = useEditor((state) => state.setIsManipulatingImage)
 
@@ -99,13 +99,14 @@ export function useImageManipulation(
   const controlMode = useEditor((state) => state.controlMode)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
-  const { nodeRotationY, nodeScale } = useEditor(
+  const { nodeRotationY, nodeScale, nodePosition } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId!)
       const node = handle?.data() as ImageNode | undefined
       return {
         nodeRotationY: node?.rotationY || 0,
         nodeScale: node?.scale || 1,
+        nodePosition: node?.position || [0, 0],
       }
     }),
   )
@@ -132,19 +133,37 @@ export function useImageManipulation(
       setActiveHandle?.(handleId)
       emitter.emit('image:manipulation-start', { nodeId })
 
+      // Hierarchy: ImageRenderer Group -> NodeRenderer Inner Group -> NodeRenderer Outer Group -> Parent
+      const imageGroup = groupRef.current
+      if (!imageGroup?.parent?.parent) return
+
+      const nodeGroup = imageGroup.parent.parent
+      const parentGroup = nodeGroup.parent
+      if (!parentGroup) return
+
+      // 1. Calculate World Axis Direction
+      const localAxis = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
+      const nodeOrigin = new THREE.Vector3().setFromMatrixPosition(nodeGroup.matrixWorld)
+      // Get a point 1 unit along the axis in local space, convert to world
+      const pointOnAxis = localAxis.clone().applyMatrix4(nodeGroup.matrixWorld)
+      // The direction is the difference
+      const worldAxis = pointOnAxis.sub(nodeOrigin).normalize()
+
+      // 2. Setup Intersection Plane
       const initialMouse = new THREE.Vector3()
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -nodeOrigin.y)
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(e.pointer, camera)
       raycaster.ray.intersectPlane(plane, initialMouse)
-      const initialPosition = groupRef.current.position.clone()
-      const localDir = axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
-      const worldZero = new THREE.Vector3().applyMatrix4(groupRef.current.matrixWorld)
-      const worldAxis = localDir
-        .clone()
-        .applyMatrix4(groupRef.current.matrixWorld)
-        .sub(worldZero)
-        .normalize()
+
+      // 3. Calculate initial projection offset
+      // This is the distance from the node origin to the clicked point along the axis
+      const clickOffsetVector = initialMouse.clone().sub(nodeOrigin)
+      const initialProjection = clickOffsetVector.dot(worldAxis)
+
+      // Capture starting position
+      const startWorldPos = nodeOrigin.clone()
+
       let lastPosition: [number, number] | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -152,21 +171,31 @@ export function useImageManipulation(
         const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
         const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
         const mouseVec = new THREE.Vector2(mx, my)
+
         raycaster.setFromCamera(mouseVec, camera)
         const intersect = new THREE.Vector3()
-        raycaster.ray.intersectPlane(plane, intersect)
-        const delta = intersect.clone().sub(initialMouse)
-        const projected = delta.dot(worldAxis)
-        const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
+        if (!raycaster.ray.intersectPlane(plane, intersect)) return
 
-        let finalX = newPos.x
-        let finalZ = newPos.z
+        // 4. Calculate new projection
+        const vectorFromStart = intersect.clone().sub(startWorldPos)
+        const currentProjection = vectorFromStart.dot(worldAxis)
+
+        // 5. Calculate delta (movement required)
+        let delta = currentProjection - initialProjection
+
         if (ev.shiftKey) {
-          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+          delta = Math.round(delta / TILE_SIZE) * TILE_SIZE
         }
 
-        lastPosition = [finalX, finalZ]
+        // 6. Apply delta along world axis to start position
+        const newWorldPos = startWorldPos.clone().add(worldAxis.clone().multiplyScalar(delta))
+
+        // 7. Convert back to local space for storage
+        const newLocalPos = parentGroup.worldToLocal(newWorldPos)
+
+        // Store as simple X/Z
+        lastPosition = [newLocalPos.x / TILE_SIZE, newLocalPos.z / TILE_SIZE]
+
         emitter.emit('image:update', {
           nodeId,
           updates: { position: lastPosition },
@@ -204,12 +233,29 @@ export function useImageManipulation(
       setActiveHandle?.('translate-xz')
       emitter.emit('image:manipulation-start', { nodeId })
 
+      // Get the NodeRenderer's outer group (the one with the actual position)
+      // Hierarchy: ImageRenderer Group -> NodeRenderer Inner Group -> NodeRenderer Outer Group -> Parent
+      const imageGroup = groupRef.current
+      if (!imageGroup?.parent?.parent) return
+
+      const nodeGroup = imageGroup.parent.parent
+      const parentGroup = nodeGroup.parent
+      if (!parentGroup) return
+
+      // Calculate the offset between the click point and the node's origin in world space
       const initialMouse = new THREE.Vector3()
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      const plane = new THREE.Plane(
+        new THREE.Vector3(0, 1, 0),
+        -nodeGroup.getWorldPosition(new THREE.Vector3()).y,
+      )
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(e.pointer, camera)
       raycaster.ray.intersectPlane(plane, initialMouse)
-      const initialPosition = groupRef.current.position.clone()
+
+      const nodeWorldPos = new THREE.Vector3()
+      nodeGroup.getWorldPosition(nodeWorldPos)
+      const clickOffset = nodeWorldPos.clone().sub(initialMouse)
+
       let lastPosition: [number, number] | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -217,20 +263,26 @@ export function useImageManipulation(
         const mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1
         const my = -((ev.clientY - rect.top) / rect.height) * 2 + 1
         const mouseVec = new THREE.Vector2(mx, my)
+
         raycaster.setFromCamera(mouseVec, camera)
         const intersect = new THREE.Vector3()
-        raycaster.ray.intersectPlane(plane, intersect)
-        const delta = intersect.clone().sub(initialMouse)
-        const newPos = initialPosition.clone().add(delta)
+        if (!raycaster.ray.intersectPlane(plane, intersect)) return
 
-        let finalX = newPos.x
-        let finalZ = newPos.z
+        // Calculate target world position
+        const targetWorldPos = intersect.clone().add(clickOffset)
+
+        // Convert to parent local space
+        const targetLocalPos = parentGroup.worldToLocal(targetWorldPos.clone())
+
+        let finalX = targetLocalPos.x
+        let finalZ = targetLocalPos.z
+
         if (ev.shiftKey) {
-          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+          finalX = Math.round(finalX / TILE_SIZE) * TILE_SIZE
+          finalZ = Math.round(finalZ / TILE_SIZE) * TILE_SIZE
         }
 
-        lastPosition = [finalX, finalZ]
+        lastPosition = [finalX / TILE_SIZE, finalZ / TILE_SIZE]
         emitter.emit('image:update', {
           nodeId,
           updates: { position: lastPosition },
@@ -427,7 +479,7 @@ registerComponent({
   nodeName: 'Reference Image',
   editorMode: 'guide',
   schema: ImageNodeSchema,
-  nodeEditor: ReferenceImageNodeEditor,
+  nodeEditor: ImageNodeEditor,
   nodeRenderer: ImageRenderer,
   toolIcon: Image,
 })
