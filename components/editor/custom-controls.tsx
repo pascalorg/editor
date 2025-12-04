@@ -66,8 +66,8 @@ export function CustomControls() {
       }
     }
 
-    // In delete, build, and guide modes, disable left-click for camera
-    // (reserved for mode-specific actions)
+    // In edit, delete, build, and guide modes, disable left-click for camera
+    // (reserved for mode-specific actions like dragging property line handles)
     return {
       left: CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,

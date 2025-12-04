@@ -235,7 +235,7 @@ export type Tool =
 // Catalog categories for the item tool
 export type CatalogCategory = 'item' | 'window' | 'door'
 
-export type ControlMode = 'select' | 'delete' | 'building' | 'guide'
+export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide'
 export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
@@ -577,17 +577,17 @@ const useStore = create<StoreState>()(
           )
           set({ selectedNodeIds: updatedSelection })
 
-          // Auto-switch control mode based on node type?
-          // For now, if we select something, we might want to switch to appropriate mode
-          // But simpler is: if not in 'select' mode, switch to 'building' (legacy logic)
-          // Or maybe 'guide' for images?
+          // Auto-switch control mode based on node type
           const state = get()
           const handle = state.graph.getNodeById(nodeId as AnyNodeId)
           const node = handle?.data()
 
-          if (node?.type === 'image' || node?.type === 'scan') {
+          if (node?.type === 'site') {
+            // Site nodes should enter edit mode for property line editing
+            set({ controlMode: 'edit' })
+          } else if (node?.type === 'image' || node?.type === 'scan') {
             set({ controlMode: 'guide' })
-          } else if (state.controlMode !== 'select') {
+          } else if (state.controlMode !== 'select' && state.controlMode !== 'edit') {
             set({ controlMode: 'building' })
           }
         },

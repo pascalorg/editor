@@ -42,6 +42,9 @@ export function useKeyboard() {
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('select')
+      } else if (e.key === 'e' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('edit')
       } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('delete')
