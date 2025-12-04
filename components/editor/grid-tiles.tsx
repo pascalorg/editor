@@ -168,7 +168,8 @@ export const GridTiles = memo(() => {
         onPointerLeave={handlePointerLeave}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        position={[gridSize / 2, 0.002, gridSize / 2]}
+        // Center the raycast plane to cover negative coordinates as well
+        position={[0, 0.002, 0]}
         ref={meshRef}
         rotation={[-Math.PI / 2, 0, 0]}
       >
