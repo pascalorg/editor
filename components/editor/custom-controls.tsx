@@ -5,7 +5,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import { FLOOR_SPACING, GRID_SIZE, WALL_HEIGHT } from './index'
+import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode)
@@ -34,8 +34,8 @@ export function CustomControls() {
       ;(controls as CameraControlsImpl).getTarget(currentTarget)
       ;(controls as CameraControlsImpl).moveTo(currentTarget.x, floorY, currentTarget.z, true)
       const boundaryBox = new Box3(
-        new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
-        new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
+        new Vector3(-200, floorY - 25, -200),
+        new Vector3(200, floorY + 25, 200),
       )
       ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
 
@@ -79,7 +79,7 @@ export function CustomControls() {
   return (
     <CameraControls
       makeDefault
-      maxDistance={50}
+      maxDistance={100}
       maxPolarAngle={Math.PI / 2 - 0.1}
       minDistance={10}
       minPolarAngle={0}
