@@ -175,8 +175,8 @@ export function SiteUI() {
     const lastPoint = points[points.length - 1]
     const firstPoint = points[0]
     const newPoint: [number, number] = [
-      Math.round(((lastPoint[0] + firstPoint[0]) / 2) * 2) / 2, // Snap to 0.5m grid
-      Math.round(((lastPoint[1] + firstPoint[1]) / 2) * 2) / 2,
+      Math.round(((lastPoint[0] + firstPoint[0]) / 2) * 100) / 100, // Round to 2 decimals
+      Math.round(((lastPoint[1] + firstPoint[1]) / 2) * 100) / 100,
     ]
 
     updateNode(nodeId, {

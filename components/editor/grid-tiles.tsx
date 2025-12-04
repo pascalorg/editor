@@ -15,7 +15,7 @@ export const GridTiles = memo(() => {
 
   const lastClickTimeRef = useRef<number>(0)
 
-  const gridSize = (GRID_INTERSECTIONS - 1) * TILE_SIZE
+  const gridSize = 10_000 // Large enough to be effectively infinite
   const hoveredIntersection = useRef<{ x: number; y: number } | null>(null)
   const setPointerPosition = useEditor((state) => state.setPointerPosition)
   const movingCamera = useEditor((state) => state.movingCamera)
@@ -84,13 +84,8 @@ export const GridTiles = memo(() => {
       const x = Math.round(localX / TILE_SIZE)
       const y = Math.round(localZ / TILE_SIZE) // y in grid space is z in 3D space
 
-      if (x >= 0 && x < GRID_INTERSECTIONS && y >= 0 && y < GRID_INTERSECTIONS) {
-        hoveredIntersection.current = { x, y }
-        handleIntersectionHover(x, y)
-      } else {
-        hoveredIntersection.current = null
-        setPointerPosition(null)
-      }
+      hoveredIntersection.current = { x, y }
+      handleIntersectionHover(x, y)
     }
   }
 

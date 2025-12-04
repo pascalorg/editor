@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { DoubleSide } from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
+import { GRID_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { SiteNode } from '@/lib/scenegraph/schema/index'
 
@@ -60,8 +60,8 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
   })
 
   // Create geometry from points
-  const geometry = useMemo(() => {
-    if (points.length < 3) return null
+  const { geometry, selectionGeometry } = useMemo(() => {
+    if (points.length < 3) return { geometry: null, selectionGeometry: null }
 
     // Create shape (negate Z for correct orientation when rotated)
     const shapePoints = points.map(([x, y]) => new THREE.Vector2(x, -y))
@@ -76,8 +76,11 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
     // Rotate to align with world (XY -> XZ)
     geom.rotateX(-Math.PI / 2)
 
+    const selGeom = new THREE.ShapeGeometry(shape)
+    selGeom.rotateX(-Math.PI / 2)
+
     // ExtrudeGeometry creates UVs, but we'll use world position in shader
-    return geom
+    return { geometry: geom, selectionGeometry: selGeom }
   }, [points])
 
   // Drag handlers
@@ -107,10 +110,9 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
       const worldPoint = e.point.clone()
       const localPoint = groupRef.current.worldToLocal(worldPoint)
 
-      // Snap to grid (0.5m)
-      const snap = TILE_SIZE
-      const x = Math.round(localPoint.x / snap) * snap
-      const z = Math.round(localPoint.z / snap) * snap
+      // Allow free coordinate editing (round to 2 decimal places for precision)
+      const x = Math.round(localPoint.x * 100) / 100
+      const z = Math.round(localPoint.z * 100) / 100
 
       // Update points
       const newPoints = [...points]
@@ -132,7 +134,7 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
       <mesh
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        position={[0, 0, 0]}
+        position={[0, 0.5, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <planeGeometry args={[1000, 1000]} />
@@ -142,10 +144,11 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
     [onPointerMove, onPointerUp],
   )
 
-  if (!geometry) return null
+  if (!geometry || !selectionGeometry) return null
 
   return (
     <group ref={groupRef}>
+      {/* Visual Boundary Volume (No Raycast) */}
       <mesh
         geometry={geometry}
         // Position offset: The extrusion starts at Z=0 (local) which becomes Y=0 (world)
@@ -154,6 +157,7 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
         // Extrusion of 10 at Y=0 goes 0 to 10.
         // Let's put it at 0.2 to avoid Z-fighting with floor if needed, or 0.
         position={[0, 0.2, 0]}
+        raycast={() => null}
       >
         {/* @ts-expect-error - Custom shader material from extend() */}
         <siteBoundsMaterial
@@ -165,6 +169,11 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
           toneMapped={false}
           transparent
         />
+      </mesh>
+
+      {/* Selection Plane (Invisible, Raycastable) */}
+      <mesh position={[0, 0.2, 0]} geometry={selectionGeometry}>
+        <meshBasicMaterial depthWrite={false} opacity={0} transparent />
       </mesh>
 
       {/* Handles - only visible in edit mode */}
