@@ -1214,7 +1214,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           )}
 
           {/* Edge manipulation handles */}
-          {isSelected && controlMode === 'building' && (
+          {isSelected && (controlMode === 'building' || controlMode === 'edit') && (
             <>
               {/* Horizontal edge handles */}
               {horizontalEdges.map(({ id, edge, color }) => {

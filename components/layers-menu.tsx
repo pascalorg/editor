@@ -454,6 +454,27 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
         <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
 
+        {/* Edit Button for Roof */}
+        {nodeType === 'roof' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  isSelected && useEditor.getState().controlMode === 'edit'
+                    ? 'text-orange-400 opacity-100'
+                    : 'opacity-0 group-hover/item:opacity-100',
+                )}
+                onClick={handleEditClick}
+                size="sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit Roof</TooltipContent>
+          </Tooltip>
+        )}
         {/* Edit Button for Reference Images */}
         {nodeType === 'reference-image' && (
           <Tooltip>

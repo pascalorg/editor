@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import Editor from '@/components/editor'
 import { ActionMenu } from '@/components/editor/action-menu/index'
 import { ImageUI } from '@/components/nodes/image/image-ui'
+import { RoofUI } from '@/components/nodes/roof/roof-ui'
 import { SiteUI } from '@/components/nodes/site/site-ui'
 import { StairUI } from '@/components/nodes/stair/stair-ui'
 
@@ -15,6 +16,7 @@ export default function Home() {
         <Editor />
         <ActionMenu />
         <SiteUI />
+        <RoofUI />
         <StairUI />
         <ImageUI />
       </div>
