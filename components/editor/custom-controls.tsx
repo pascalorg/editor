@@ -16,6 +16,7 @@ export function CustomControls() {
   const currentLevel = useEditor((state) => state.currentLevel)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
+  const debug = useEditor((state) => state.debug)
 
   useEffect(() => {
     if (!controls) return
@@ -28,7 +29,7 @@ export function CustomControls() {
   useEffect(() => {
     if (!controls) return
 
-    if (selectedFloorId) {
+    if (selectedFloorId && !debug) {
       const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
       const currentTarget = new Vector3()
       ;(controls as CameraControlsImpl).getTarget(currentTarget)
@@ -43,10 +44,12 @@ export function CustomControls() {
       // const boxHelper = new Box3Helper(boundaryBox, 0xff0000);
       // scene.add(boxHelper);
     } else {
-      ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
       ;(controls as CameraControlsImpl).setBoundary() // No argument to remove boundaries
+      if (!debug) {
+        ;(controls as CameraControlsImpl).setLookAt(40, 40, 40, 0, 0, 0, true)
+      }
     }
-  }, [currentLevel, controls, selectedFloorId, levelMode])
+  }, [currentLevel, controls, selectedFloorId, levelMode, debug])
 
   // Configure mouse buttons based on control mode and camera mode
   const mouseButtons = useMemo(() => {
@@ -79,9 +82,9 @@ export function CustomControls() {
   return (
     <CameraControls
       makeDefault
-      maxDistance={100}
-      maxPolarAngle={Math.PI / 2 - 0.1}
-      minDistance={10}
+      maxDistance={debug ? 1000 : 100}
+      maxPolarAngle={debug ? Math.PI : Math.PI / 2 - 0.1}
+      minDistance={debug ? 0.1 : 10}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
       onEnd={() => setMovingCamera(false)}
