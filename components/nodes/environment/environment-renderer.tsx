@@ -113,15 +113,21 @@ export const EnvironmentRenderer = memo(() => {
     let directionalColor = new THREE.Color('#ffffff')
     let directionalIntensity = 1
 
-    if (altitude < -0.05) {
+    // Civil Twilight starts at ~-6deg (-0.1 rad)
+    // We start transition at Civil Dawn (-0.1) and end at full Day (0.1)
+    // This puts the midpoint (Sunrise/Sunset) at ~0 altitude, where we want the golden colors.
+    const dawnAltitude = -0.1
+    const dayAltitude = 0.1
+
+    if (altitude < dawnAltitude) {
       // Night (Below horizon)
       ambientColor = new THREE.Color('#0d1b2a') // Deep night blue
       ambientIntensity = 0.2
       directionalColor = new THREE.Color('#415a77') // Cool moonlight
       directionalIntensity = 0 // Sun is off at night
-    } else if (altitude < 0.1) {
+    } else if (altitude < dayAltitude) {
       // Dawn/Dusk Transition
-      const t = getT(altitude, -0.05, 0.1)
+      const t = getT(altitude, dawnAltitude, dayAltitude)
 
       // Ambient: Night Blue -> Golden Orange -> Day White
       if (t < 0.5) {

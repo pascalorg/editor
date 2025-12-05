@@ -21,6 +21,7 @@ import { SledgehammerTool } from '../nodes/sledgehammer/sledgehammer-tool'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
+import { GridTiles } from './grid-tiles'
 import { InfiniteFloor } from './infinite-floor'
 import { InfiniteLines } from './infinite-lines'
 import SelectionManager from './selection-manager'
@@ -63,6 +64,9 @@ export default function Editor({ className }: { className?: string }) {
       <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
 
       {SHOW_GRID && <InfiniteLines />}
+
+      {/* Grid Tiles - Handles grid interaction events */}
+      <GridTiles />
 
       {/* Infinite floor - rendered outside export group */}
       <InfiniteFloor />

@@ -1,6 +1,17 @@
 'use client'
 
-import { Box, Check, Eye, EyeOff, GripVertical, MapPin, Pencil, Plus, Settings2, X } from 'lucide-react'
+import {
+  Box,
+  Check,
+  Eye,
+  EyeOff,
+  GripVertical,
+  MapPin,
+  Pencil,
+  Plus,
+  Settings2,
+  X,
+} from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
@@ -24,7 +35,10 @@ import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
-import { type AnyNodeId, ImageNode, LevelNode, ScanNode } from '@/lib/scenegraph/schema/index'
+import { ImageNode } from '@/lib/scenegraph/schema/nodes/image'
+import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import { ScanNode } from '@/lib/scenegraph/schema/nodes/scan'
+import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
 import { cn } from '@/lib/utils'
 
 // Context for layers menu interaction
@@ -240,7 +254,13 @@ interface RenamePopoverProps {
   anchorRef: React.RefObject<HTMLSpanElement | null>
 }
 
-function RenamePopover({ isOpen, onOpenChange, currentName, onRename, anchorRef }: RenamePopoverProps) {
+function RenamePopover({
+  isOpen,
+  onOpenChange,
+  currentName,
+  onRename,
+  anchorRef,
+}: RenamePopoverProps) {
   const [name, setName] = useState(currentName)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -271,8 +291,10 @@ function RenamePopover({ isOpen, onOpenChange, currentName, onRename, anchorRef 
   }
 
   return (
-    <Popover open={isOpen} onOpenChange={onOpenChange}>
-      <PopoverAnchor virtualRef={anchorRef as React.RefObject<{ getBoundingClientRect: () => DOMRect }>} />
+    <Popover onOpenChange={onOpenChange} open={isOpen}>
+      <PopoverAnchor
+        virtualRef={anchorRef as React.RefObject<{ getBoundingClientRect: () => DOMRect }>}
+      />
       <PopoverContent
         align="start"
         className="dark w-52 p-2"
@@ -649,12 +671,12 @@ function DraggableLevelItem({
         <TreeExpander hasChildren={hasContent} />
         <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
         <TreeLabel
-          ref={labelRef}
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
           }}
+          ref={labelRef}
         >
           {levelName}
         </TreeLabel>
@@ -967,12 +989,12 @@ function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
         <TreeExpander hasChildren={levelIds.length > 0} />
         <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
         <TreeLabel
-          ref={labelRef}
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
           }}
+          ref={labelRef}
         >
           {nodeName}
         </TreeLabel>
@@ -1069,12 +1091,12 @@ function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
         <TreeLabel
-          ref={labelRef}
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
           }}
+          ref={labelRef}
         >
           {nodeName}
         </TreeLabel>

@@ -1,11 +1,11 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 import { GroupNode } from './group'
 import { ItemNode } from './item'
 
 export const CeilingNode = BaseNode.extend({
-  id: nodeId('ceiling'),
+  id: objectId('ceiling'),
   type: nodeType('ceiling'),
   // Grid props
   position: z.tuple([z.number(), z.number()]),

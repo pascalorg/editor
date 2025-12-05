@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const FloorNode = BaseNode.extend({
-  id: nodeId('floor'),
+  id: objectId('floor'),
   type: nodeType('floor'),
   // Specific props
   thickness: z.number().optional(),

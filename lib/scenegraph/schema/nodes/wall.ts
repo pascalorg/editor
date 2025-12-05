@@ -1,12 +1,12 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { WindowNode } from './window'
 
 export const WallNode = BaseNode.extend({
-  id: nodeId('wall'),
+  id: objectId('wall'),
   type: nodeType('wall'),
   get children() {
     return z.array(z.discriminatedUnion('type', [DoorNode, WindowNode, ItemNode])).default([])

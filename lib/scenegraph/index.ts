@@ -3,31 +3,22 @@ import {
   type AnyNode,
   type AnyNodeId,
   type AnyNodeType,
-  initScene,
-  type NodeCreateTypeMap,
   NodeSchemas,
-  type NodeTypeMap,
-  type Scene,
   type SceneNode,
   type SceneNodeId,
   type SceneNodeType,
-} from '@/lib/scenegraph/schema/index'
+} from '@/lib/scenegraph/schema/types'
+import { initScene, type NodeCreateTypeMap, type Scene } from './schema'
 
 // Re-export from schema that are used elsewhere
-export {
-  type AnyNode,
-  type AnyNodeId,
-  type AnyNodeType,
-  initScene,
-  type NodeCreateTypeMap,
-  NodeSchemas,
-  type NodeTypeMap,
-  type Scene,
-  type SceneNode,
-  type SceneNodeId,
-  type SceneNodeType,
-} from '@/lib/scenegraph/schema/index'
-
+export type {
+  AnyNode,
+  AnyNodeId,
+  AnyNodeType,
+  SceneNode,
+  SceneNodeId,
+  SceneNodeType,
+} from '@/lib/scenegraph/schema/types'
 // ============================================================================
 // Scene Graph Index Types
 // ============================================================================

@@ -2,7 +2,6 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
 
 function SelectionManager() {
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)

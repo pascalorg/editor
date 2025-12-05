@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const ColumnNode = BaseNode.extend({
-  id: nodeId('column'),
+  id: objectId('column'),
   type: nodeType('column'),
   diameter: z.number().optional(),
   height: z.number().optional(),
