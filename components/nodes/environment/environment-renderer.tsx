@@ -76,6 +76,22 @@ export const EnvironmentRenderer = memo(() => {
     }
   }, [date, latitude, longitude])
 
+  const moonPosition = useMemo(() => {
+    const pos = SunCalc.getMoonPosition(date, latitude, longitude)
+    const { azimuth, altitude } = pos
+
+    const r = 100
+    const x = r * Math.cos(altitude) * Math.cos(azimuth)
+    const y = r * Math.sin(altitude)
+    const z = r * Math.cos(altitude) * Math.sin(azimuth) * -1
+
+    return {
+      position: new THREE.Vector3(x, y, z),
+      altitude,
+      azimuth,
+    }
+  }, [date, latitude, longitude])
+
   const lighting = useMemo(() => {
     const { altitude } = sunPosition
     // altitude is in radians.
@@ -102,7 +118,7 @@ export const EnvironmentRenderer = memo(() => {
       ambientColor = new THREE.Color('#0d1b2a') // Deep night blue
       ambientIntensity = 0.2
       directionalColor = new THREE.Color('#415a77') // Cool moonlight
-      directionalIntensity = 0.2 // Dim moonlight
+      directionalIntensity = 0 // Sun is off at night
     } else if (altitude < 0.1) {
       // Dawn/Dusk Transition
       const t = getT(altitude, -0.05, 0.1)
@@ -114,14 +130,14 @@ export const EnvironmentRenderer = memo(() => {
         ambientColor = lerpColor('#0d1b2a', '#e07a5f', localT)
         ambientIntensity = THREE.MathUtils.lerp(0.2, 0.5, localT)
         directionalColor = lerpColor('#415a77', '#f2cc8f', localT)
-        directionalIntensity = THREE.MathUtils.lerp(0.2, 0.8, localT)
+        directionalIntensity = THREE.MathUtils.lerp(0, 0.8, localT)
       } else {
         // Dawn to Day
         const localT = (t - 0.5) * 2
         ambientColor = lerpColor('#e07a5f', '#ffffff', localT)
-        ambientIntensity = THREE.MathUtils.lerp(0.1, 0.1, localT)
+        ambientIntensity = THREE.MathUtils.lerp(0.5, 0.4, localT) // Smooth transition to day ambient (0.4)
         directionalColor = lerpColor('#f2cc8f', '#fffcf2', localT)
-        directionalIntensity = THREE.MathUtils.lerp(0.5, 0.5, localT)
+        directionalIntensity = THREE.MathUtils.lerp(0.8, 1, localT)
       }
     } else {
       // Day
@@ -131,13 +147,23 @@ export const EnvironmentRenderer = memo(() => {
       directionalIntensity = 1
     }
 
+    // Moon calculation
+    let moonIntensity = 0
+    if (moonPosition.altitude > 0) {
+      // Moon is visible
+      // Fade in/out near horizon
+      const horizonFade = Math.max(0, Math.min(1, moonPosition.altitude / 0.1))
+      moonIntensity = 0.4 * horizonFade
+    }
+
     return {
       ambientColor,
       ambientIntensity,
       directionalColor,
       directionalIntensity,
+      moonIntensity,
     }
-  }, [sunPosition])
+  }, [sunPosition, moonPosition])
 
   const sunTexture = useMemo(() => {
     const canvas = document.createElement('canvas')
@@ -175,6 +201,7 @@ export const EnvironmentRenderer = memo(() => {
   const fillLightRef = useRef<THREE.DirectionalLight>(null)
   const backLightRef = useRef<THREE.DirectionalLight>(null)
   const pointLightRef = useRef<THREE.PointLight>(null)
+  const moonLightRef = useRef<THREE.DirectionalLight>(null)
 
   const [sky] = useState(() => new SkyImpl())
   useGSAP(() => {
@@ -191,7 +218,8 @@ export const EnvironmentRenderer = memo(() => {
         keyLightRef.current &&
         fillLightRef.current &&
         backLightRef.current &&
-        pointLightRef.current
+        pointLightRef.current &&
+        moonLightRef.current
       )
     )
       return
@@ -204,6 +232,20 @@ export const EnvironmentRenderer = memo(() => {
       x: keyPos.x,
       y: keyPos.y,
       z: keyPos.z,
+      duration: 4,
+    })
+
+    // Moon light: real position
+    gsap.to(moonLightRef.current.position, {
+      x: moonPosition.position.x,
+      y: moonPosition.position.y,
+      z: moonPosition.position.z,
+      duration: 4,
+    })
+
+    // Moon intensity
+    gsap.to(moonLightRef.current, {
+      intensity: lighting.moonIntensity,
       duration: 4,
     })
 
@@ -241,7 +283,7 @@ export const EnvironmentRenderer = memo(() => {
       duration: 4,
       delay: 2,
     })
-  }, [sunPosition])
+  }, [sunPosition, moonPosition])
 
   useGSAP(() => {
     if (!(keyLightRef.current && fillLightRef.current && backLightRef.current)) return
@@ -333,6 +375,20 @@ export const EnvironmentRenderer = memo(() => {
         intensity={1}
         position={[-3, 1, 3]} //lighting.directionalIntensity}
         ref={backLightRef} //sunPosition.position}
+      />
+      <directionalLight
+        castShadow
+        color="#b0c4de"
+        intensity={0}
+        position={[0, -100, 0]}
+        ref={moonLightRef}
+        shadow-bias={-0.000_05}
+        shadow-camera-bottom={-40}
+        shadow-camera-far={200}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-mapSize={[2048, 2048]}
       />
     </>
   )
