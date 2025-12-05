@@ -767,20 +767,21 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
 
     const getSideProfile = (dir: 1 | -1) => {
       // Direction: 1 for Left (Positive Z), -1 for Right (Negative Z)
-      // Left Side (Positive Z): wall is at Z = wallDistLeft.
-      // Right Side (Negative Z): wall is at Z = -wallDistRight.
+      // Left Side (Positive Z): wall center is at Z = wallDistLeft.
+      // Right Side (Negative Z): wall center is at Z = -wallDistRight.
 
       const width = dir === 1 ? wallDistLeft : wallDistRight
+      const halfWall = WALL_THICKNESS / 2
 
       // Run is distance from pivot (inner wall face) to centerline (approx)
-      // Pivot Z = dir * (width - WALL_THICKNESS).
-      const pivotZ = dir * (width - WALL_THICKNESS)
+      // Pivot Z = dir * (width - halfWall).
+      const pivotZ = dir * (width - halfWall)
 
       // Calculate Pitch based on Total Height and Run
       // Rise = roofHeight - BASE_HEIGHT
       const rise = Math.max(0, roofHeight - BASE_HEIGHT)
-      // Run = width - WALL_THICKNESS (horizontal distance covered by slope)
-      const run = width - WALL_THICKNESS
+      // Run = width - halfWall (horizontal distance from ridge to inner wall face)
+      const run = width - halfWall
 
       const angle = solvePitch(rise, run, THICKNESS_A, THICKNESS_B)
       const tanA = Math.tan(angle)
@@ -800,7 +801,8 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
       // const overhangDy = EAVE_OVERHANG * sinA // Unused directly
 
       // Eave Top Point (Cover Layer A)
-      const eaveTopZ = width + overhangDx
+      // Eave starts from outer wall face
+      const eaveTopZ = width + halfWall + overhangDx
       const eaveTopY = ridgeTopY - eaveTopZ * tanA
 
       // Eave tip extended by cover overhang
@@ -841,8 +843,8 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
       ]
 
       // Side Wall (C3/C4)
-      const zInner = width - WALL_THICKNESS
-      const zOuter = width
+      const zInner = width - halfWall
+      const zOuter = width + halfWall
 
       const pointsSide = [
         { x: dir * zInner, y: 0 },
@@ -887,17 +889,17 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
         C2Right: createShape(rightP.pointsC2),
       },
       lengths: {
-        A: ridgeLength + 2 * RAKE_OVERHANG + 2 * ROOF_COVER_OVERHANG,
-        B: ridgeLength + 2 * RAKE_OVERHANG,
-        Side: ridgeLength,
+        A: ridgeLength + 2 * RAKE_OVERHANG + 2 * ROOF_COVER_OVERHANG + WALL_THICKNESS,
+        B: ridgeLength + 2 * RAKE_OVERHANG + WALL_THICKNESS,
+        Side: ridgeLength + WALL_THICKNESS,
         Gable: WALL_THICKNESS,
       },
       offsets: {
-        A: -RAKE_OVERHANG - ROOF_COVER_OVERHANG,
-        B: -RAKE_OVERHANG,
-        Side: 0,
-        GableFront: 0,
-        GableBack: ridgeLength - WALL_THICKNESS,
+        A: -RAKE_OVERHANG - ROOF_COVER_OVERHANG - WALL_THICKNESS / 2,
+        B: -RAKE_OVERHANG - WALL_THICKNESS / 2,
+        Side: -WALL_THICKNESS / 2,
+        GableFront: -WALL_THICKNESS / 2,
+        GableBack: ridgeLength - WALL_THICKNESS / 2,
       },
       points: {
         bottomLeft,
