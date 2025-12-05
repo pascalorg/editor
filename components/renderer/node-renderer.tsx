@@ -34,7 +34,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
         ), // Storing into string to avoid deep equality issues
         nodePosition: (node as any)?.position, // TODO: Type correctly
         nodeElevation: (node as any)?.elevation, // TODO: Type correctly
-        nodeRotation: (node as any)?.rotation, // TODO: Type correctly
+        nodeRotation: (node as any)?.rotation, // TODO: Type correctly - can be number or [x,y,z] tuple
         nodeLevel: (node as any)?.level, // TODO: Type correctly
       }
     }),
@@ -99,7 +99,11 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       <group
         name={nodeId}
         position={gridItemPosition}
-        rotation-y={nodeRotation}
+        rotation={
+          Array.isArray(nodeRotation)
+            ? (nodeRotation as [number, number, number])
+            : [0, nodeRotation ?? 0, 0]
+        }
         userData={{
           nodeId,
         }}

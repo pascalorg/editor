@@ -109,7 +109,7 @@ function getNodeIcon(type: string): ReactNode {
           width={size}
         />
       )
-    case 'image':
+    case 'reference-image':
       return (
         <img
           alt="reference"
@@ -194,7 +194,7 @@ function getNodeLabel(type: string, index: number, name?: string): string {
       return `Door ${index + 1}`
     case 'window':
       return `Window ${index + 1}`
-    case 'image':
+    case 'reference-image':
       return `Reference ${index + 1}`
     case 'scan':
       return `Scan ${index + 1}`
@@ -354,6 +354,9 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
 
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const moveNode = useEditor((state) => state.moveNode)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const setControlMode = useEditor((state) => state.setControlMode)
+  const controlMode = useEditor((state) => state.controlMode)
   const updateNode = useEditor((state) => state.updateNode)
   const graph = useEditor((state) => state.graph)
 
@@ -367,6 +370,20 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
 
   const isSelected = selectedNodeIds.includes(nodeId)
   const hasChildren = childrenIds.length > 0
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Select the site node and switch to edit mode
+    handleNodeSelect(nodeId, e)
+    setControlMode('edit')
+  }
+
+  // Handle Edit Click for Image Nodes
+  const handleImageEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    handleNodeSelect(nodeId, e)
+    setControlMode('guide') // Images use 'guide' mode, but we can treat it similar to edit for UI
+  }
 
   const handleDragStart = (e: React.DragEvent) => {
     e.stopPropagation()
@@ -435,23 +452,29 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
       >
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
-        <TreeLabel
-          ref={labelRef}
-          className="cursor-text"
-          onDoubleClick={(e) => {
-            e.stopPropagation()
-            setIsRenaming(true)
-          }}
-        >
-          {getNodeLabel(nodeType, index, nodeName)}
-        </TreeLabel>
-        <RenamePopover
-          anchorRef={labelRef}
-          currentName={getNodeLabel(nodeType, index, nodeName)}
-          isOpen={isRenaming}
-          onOpenChange={setIsRenaming}
-          onRename={handleRename}
-        />
+        <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+
+        {/* Edit Button for Reference Images */}
+        {nodeType === 'reference-image' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  isSelected && useEditor.getState().controlMode === 'guide'
+                    ? 'text-purple-400 opacity-100'
+                    : 'opacity-0 group-hover/item:opacity-100',
+                )}
+                onClick={handleImageEditClick}
+                size="sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit Image</TooltipContent>
+          </Tooltip>
+        )}
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
 
@@ -516,7 +539,7 @@ function DraggableLevelItem({
       const children = handle?.children() || []
       const objects = children.filter((c: SceneNodeHandle) => {
         const data = c.data()
-        return data.type !== 'image' && data.type !== 'scan'
+        return data.type !== 'reference-image' && data.type !== 'scan'
       })
 
       return objects.map((c: SceneNodeHandle) => c.id)
@@ -527,7 +550,7 @@ function DraggableLevelItem({
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(levelId as AnyNodeId)
       const children = handle?.children() || []
-      const guides = children.filter((c: SceneNodeHandle) => c.data().type === 'image')
+      const guides = children.filter((c: SceneNodeHandle) => c.data().type === 'reference-image')
 
       return guides.map((c: SceneNodeHandle) => c.id)
     }),

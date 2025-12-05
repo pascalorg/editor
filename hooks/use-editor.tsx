@@ -586,7 +586,7 @@ const useStore = create<StoreState>()(
           if (node?.type === 'site') {
             // Site nodes should enter edit mode for property line editing
             set({ controlMode: 'edit' })
-          } else if (node?.type === 'image' || node?.type === 'scan') {
+          } else if (node?.type === 'reference-image' || node?.type === 'scan') {
             set({ controlMode: 'guide' })
           } else if (state.controlMode !== 'select' && state.controlMode !== 'edit') {
             set({ controlMode: 'building' })
@@ -644,7 +644,7 @@ const useStore = create<StoreState>()(
           state.selectedNodeIds.forEach((id) => {
             const node = state.graph.getNodeById(id as AnyNodeId)?.data()
             // Filter out images/scans to match legacy behavior of "elements"
-            if (node && node.type !== 'image' && node.type !== 'scan') {
+            if (node && node.type !== 'reference-image' && node.type !== 'scan') {
               set.add(id as AnyNodeId)
             }
           })
@@ -655,7 +655,7 @@ const useStore = create<StoreState>()(
           const set = new Set<string>()
           state.selectedNodeIds.forEach((id) => {
             const node = state.graph.getNodeById(id as AnyNodeId)?.data()
-            if (node?.type === 'image') set.add(id)
+            if (node?.type === 'reference-image') set.add(id)
           })
           return set
         },
@@ -945,7 +945,7 @@ const useStore = create<StoreState>()(
           // Switch context if needed
           if (node.type === 'level') {
             state.selectFloor(node.id)
-          } else if (node.type === 'image' || node.type === 'scan') {
+          } else if (node.type === 'reference-image' || node.type === 'scan') {
             // Ensure guide mode if selecting reference/scan?
             // Legacy behavior was specific:
             // set({ controlMode: 'guide' })

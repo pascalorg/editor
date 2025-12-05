@@ -5,7 +5,7 @@ import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
-import { useImageManipulation } from '@/components/nodes/reference-image/reference-image-node'
+import { useImageManipulation } from '@/components/nodes/image/image-node'
 import { useEditor } from '@/hooks/use-editor'
 import type { ImageNode } from '@/lib/scenegraph/schema/index'
 
@@ -141,17 +141,11 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const arrowHeadPos = originMarkerEdge + ARROW_SHAFT_LENGTH + ARROW_HEAD_LENGTH / 2
 
   // Convert grid position to world position
-  const [worldX, worldZ] = useMemo(
-    () => [(node?.position?.[0] ?? 0) * TILE_SIZE, (node?.position?.[1] ?? 0) * TILE_SIZE],
-    [node?.position],
-  )
+
+  const isInteractive = controlMode === 'guide' || controlMode === 'select'
 
   return (
-    <group
-      position={[worldX, levelNumber * FLOOR_SPACING + 0.001, worldZ]}
-      ref={groupRef}
-      rotation={[0, ((node?.rotationY ?? 0) * Math.PI) / 180, 0]}
-    >
+    <group ref={groupRef}>
       {/* Image plane - rotated to lie flat on XZ plane */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         <mesh
@@ -170,6 +164,7 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
           onPointerLeave={() => {
             setIsHovered(false)
           }}
+          raycast={isInteractive ? undefined : () => null}
           scale={node?.scale ?? 1}
         >
           <planeGeometry args={[planeWidth, planeHeight]} />

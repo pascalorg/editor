@@ -41,7 +41,11 @@ export interface ImageEvent {
 
 export interface ImageUpdateEvent {
   nodeId: string
-  updates: Partial<{ position: [number, number]; rotation: number; scale: number }>
+  updates: Partial<{
+    position: [number, number]
+    rotation: [number, number, number]
+    scale: number
+  }>
   pushToUndo: boolean
 }
 
