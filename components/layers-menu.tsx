@@ -454,6 +454,27 @@ function NodeItem({ nodeId, index, isLast, level, selectedNodeIds, onNodeSelect 
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
         <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
 
+        {/* Edit Button for Roof */}
+        {nodeType === 'roof' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  isSelected && useEditor.getState().controlMode === 'edit'
+                    ? 'text-orange-400 opacity-100'
+                    : 'opacity-0 group-hover/item:opacity-100',
+                )}
+                onClick={handleEditClick}
+                size="sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit Roof</TooltipContent>
+          </Tooltip>
+        )}
         {/* Edit Button for Reference Images */}
         {nodeType === 'reference-image' && (
           <Tooltip>
@@ -1233,12 +1254,26 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]
+
+    // Deselect if no node is selected (e.g. clicking the active level again)
     if (!selectedId) {
-      // Don't clear selection on tree click, handled by items
+      if (selectedFloorId) selectFloor(null)
       return
     }
+
     const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
-    if (isLevel) selectFloor(selectedId)
+    if (isLevel) {
+      if (selectedFloorId !== selectedId) selectFloor(selectedId)
+    } else {
+      // Check if the selected node is a child of a level
+      const getLevelId = useEditor.getState().getLevelId
+      const parentLevelId = getLevelId(selectedId)
+
+      // If not a child of a level (e.g. Building, Site), unselect the level
+      if (!parentLevelId && selectedFloorId) {
+        selectFloor(null)
+      }
+    }
   }
 
   return (

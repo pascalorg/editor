@@ -21,6 +21,7 @@ const FADE_STRENGTH = 5
 export function InfiniteFloor() {
   return (
     <mesh
+      castShadow
       position={[0, -0.01, 0]}
       raycast={() => null}
       receiveShadow

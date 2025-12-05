@@ -1,16 +1,25 @@
 'use client'
 
-import { Line } from '@react-three/drei'
+import { Edges, Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { TILE_SIZE, WALL_HEIGHT } from '@/components/editor'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { RoofNode } from '@/lib/scenegraph/schema/index'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
+
+// Constants for detailed geometry (in meters)
+const THICKNESS_A = 0.05 // Roof cover thickness
+const THICKNESS_B = 0.1 // Structure thickness
+const ROOF_COVER_OVERHANG = 0.05 // Extension of cover past structure (Rake/Eave side extension)
+const EAVE_OVERHANG = 0.4 // Horizontal eave overhang
+const RAKE_OVERHANG = 0.3 // Overhang at gable ends
+const WALL_THICKNESS = 0.2 // Gable wall thickness
+const BASE_HEIGHT = 0.5 // Base height (knee wall / truss heel)
 
 // Handle geometry dimensions
 const DEBUG = false
@@ -50,6 +59,42 @@ function createEdgeCylinder(start: number[], end: number[]) {
   return { geometry, midpoint, axis, angle }
 }
 
+// Helper to create a Three.js Shape from polygon points
+function createShape(points: { x: number; y: number }[]): THREE.Shape {
+  const shape = new THREE.Shape()
+  if (points.length === 0) return shape
+  shape.moveTo(points[0].x, points[0].y)
+  for (let i = 1; i < points.length; i++) {
+    shape.lineTo(points[i].x, points[i].y)
+  }
+  shape.closePath()
+  return shape
+}
+
+// Helper to solve pitch angle analytically given rise, run and thicknesses
+// Solves: run * tan(a) + (ThickA + ThickB)/cos(a) = rise
+// Equivalent to finding 'a' such that the roof peak is at 'rise' height
+// while passing through the pivot point with specified thickness.
+function solvePitch(rise: number, run: number, thickA: number, thickB: number) {
+  const T = thickA + thickB
+  // If run is too small, default to 0
+  if (run < 0.01) return 0
+
+  // Analytic solution: angle = phi - asin(T/R)
+  // where phi = atan2(rise, run) and R = sqrt(run^2 + rise^2)
+  const R = Math.sqrt(run * run + rise * rise)
+
+  // Clamp if thickness exceeds geometric diagonal (impossible geometry)
+  if (R <= T) {
+    return Math.atan2(rise, run) * 0.5 // Fallback
+  }
+
+  const phi = Math.atan2(rise, run)
+  const shift = Math.asin(T / R)
+
+  return phi - shift
+}
+
 // Material components for handles
 const HitMaterial = () => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
@@ -83,9 +128,9 @@ interface RoofRendererProps {
 }
 
 export function RoofRenderer({ nodeId }: RoofRendererProps) {
+  const debug = useEditor((state) => state.debug)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const tileSize = TILE_SIZE
-  const baseHeight = WALL_HEIGHT
 
   // Track hover and active states for handles
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null)
@@ -159,6 +204,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     nodeRotation,
     nodeId,
   ])
+
   // Local segment for rendering (parent group handles position & rotation)
   const localSegment = useMemo(() => {
     const length = nodeSize[0]
@@ -689,8 +735,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     return 0.05
   }
 
-  // Pre-calculate roof geometry
-  // NOTE: Geometry is in LOCAL space - parent group handles position & rotation
+  // Detailed Geometry Calculation
   const roofGeometry = useMemo(() => {
     // Convert local grid coordinates to local world coordinates
     const startWorld = [localSegment.start[0] * tileSize, localSegment.start[1] * tileSize]
@@ -702,126 +747,160 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
 
     if (ridgeLength < 0.1) return null
 
-    const ridgeDir = { x: dx / ridgeLength, z: dz / ridgeLength }
-    const perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
+    const wallDistLeft = localSegment.leftWidth ?? ROOF_WIDTH / 2
+    const wallDistRight = localSegment.rightWidth ?? ROOF_WIDTH / 2
+    const roofHeight = localSegment.height || 2.5
 
-    const leftWidth = localSegment.leftWidth ?? ROOF_WIDTH / 2
-    const rightWidth = localSegment.rightWidth ?? ROOF_WIDTH / 2
-    const roofHeight = localSegment.height || 2
+    // Points for handles (The Base Footprint of Walls)
+    // Local coordinates: X = Length, Z = Width (centered at 0?).
+    // No, Z=0 is the ridge line (if centered). But here "leftWidth" is dist from ridge.
+    // So Left is Z = +leftWidth, Right is Z = -rightWidth.
+    const bottomLeft = [0, 0, wallDistLeft]
+    const bottomRight = [0, 0, -wallDistRight]
+    const bottomLeftEnd = [ridgeLength, 0, wallDistLeft]
+    const bottomRightEnd = [ridgeLength, 0, -wallDistRight]
+    const ridgeStart = [0, roofHeight, 0]
+    const ridgeEnd = [ridgeLength, roofHeight, 0]
 
-    // Bottom corners (at grid level y = 0)
-    const bottomLeft = [
-      startWorld[0] + perpDir.x * leftWidth,
-      0,
-      startWorld[1] + perpDir.z * leftWidth,
-    ]
-    const bottomRight = [
-      startWorld[0] - perpDir.x * rightWidth,
-      0,
-      startWorld[1] - perpDir.z * rightWidth,
-    ]
-    const bottomLeftEnd = [
-      endWorld[0] + perpDir.x * leftWidth,
-      0,
-      endWorld[1] + perpDir.z * leftWidth,
-    ]
-    const bottomRightEnd = [
-      endWorld[0] - perpDir.x * rightWidth,
-      0,
-      endWorld[1] - perpDir.z * rightWidth,
-    ]
+    // --- Detailed Profile Generation (YZ Plane) ---
+    // Y is Up, Z is Width. Extrusion along X (Length).
 
-    // Ridge points (at roofHeight above grid)
-    const ridgeStart = [startWorld[0], roofHeight, startWorld[1]]
-    const ridgeEnd = [endWorld[0], roofHeight, endWorld[1]]
+    const getSideProfile = (dir: 1 | -1) => {
+      // Direction: 1 for Left (Positive Z), -1 for Right (Negative Z)
+      // Left Side (Positive Z): wall center is at Z = wallDistLeft.
+      // Right Side (Negative Z): wall center is at Z = -wallDistRight.
 
-    // Create gable end geometries
-    const frontGableGeometry = new THREE.BufferGeometry()
-    const frontGableVertices = new Float32Array([
-      bottomLeft[0],
-      bottomLeft[1],
-      bottomLeft[2],
-      bottomRight[0],
-      bottomRight[1],
-      bottomRight[2],
-      ridgeStart[0],
-      ridgeStart[1],
-      ridgeStart[2],
-    ])
-    frontGableGeometry.setAttribute('position', new THREE.BufferAttribute(frontGableVertices, 3))
-    frontGableGeometry.computeVertexNormals()
+      const width = dir === 1 ? wallDistLeft : wallDistRight
+      const halfWall = WALL_THICKNESS / 2
 
-    const backGableGeometry = new THREE.BufferGeometry()
-    const backGableVertices = new Float32Array([
-      bottomLeftEnd[0],
-      bottomLeftEnd[1],
-      bottomLeftEnd[2],
-      ridgeEnd[0],
-      ridgeEnd[1],
-      ridgeEnd[2],
-      bottomRightEnd[0],
-      bottomRightEnd[1],
-      bottomRightEnd[2],
-    ])
-    backGableGeometry.setAttribute('position', new THREE.BufferAttribute(backGableVertices, 3))
-    backGableGeometry.computeVertexNormals()
+      // Run is distance from pivot (inner wall face) to centerline (approx)
+      // Pivot Z = dir * (width - halfWall).
+      const pivotZ = dir * (width - halfWall)
 
-    // Create sloped roof planes
-    const leftRoofGeometry = new THREE.BufferGeometry()
-    const leftRoofVertices = new Float32Array([
-      bottomLeft[0],
-      bottomLeft[1],
-      bottomLeft[2],
-      bottomLeftEnd[0],
-      bottomLeftEnd[1],
-      bottomLeftEnd[2],
-      ridgeEnd[0],
-      ridgeEnd[1],
-      ridgeEnd[2],
+      // Calculate Pitch based on Total Height and Run
+      // Rise = roofHeight - BASE_HEIGHT
+      const rise = Math.max(0, roofHeight - BASE_HEIGHT)
+      // Run = width - halfWall (horizontal distance from ridge to inner wall face)
+      const run = width - halfWall
 
-      bottomLeft[0],
-      bottomLeft[1],
-      bottomLeft[2],
-      ridgeEnd[0],
-      ridgeEnd[1],
-      ridgeEnd[2],
-      ridgeStart[0],
-      ridgeStart[1],
-      ridgeStart[2],
-    ])
-    leftRoofGeometry.setAttribute('position', new THREE.BufferAttribute(leftRoofVertices, 3))
-    leftRoofGeometry.computeVertexNormals()
+      const angle = solvePitch(rise, run, THICKNESS_A, THICKNESS_B)
+      const tanA = Math.tan(angle)
+      const cosA = Math.cos(angle)
+      const sinA = Math.sin(angle)
 
-    const rightRoofGeometry = new THREE.BufferGeometry()
-    const rightRoofVertices = new Float32Array([
-      bottomRight[0],
-      bottomRight[1],
-      bottomRight[2],
-      ridgeStart[0],
-      ridgeStart[1],
-      ridgeStart[2],
-      ridgeEnd[0],
-      ridgeEnd[1],
-      ridgeEnd[2],
+      // Calculate key heights
+      const ridgeUnderY = BASE_HEIGHT + run * tanA
+      const ridgeInterfaceY = ridgeUnderY + THICKNESS_B / cosA
+      const ridgeTopY = ridgeInterfaceY + THICKNESS_A / cosA
 
-      bottomRight[0],
-      bottomRight[1],
-      bottomRight[2],
-      ridgeEnd[0],
-      ridgeEnd[1],
-      ridgeEnd[2],
-      bottomRightEnd[0],
-      bottomRightEnd[1],
-      bottomRightEnd[2],
-    ])
-    rightRoofGeometry.setAttribute('position', new THREE.BufferAttribute(rightRoofVertices, 3))
-    rightRoofGeometry.computeVertexNormals()
+      // Wall Outer Top Height
+      const wallOuterTopY = BASE_HEIGHT - WALL_THICKNESS * tanA
+
+      // Overhangs
+      const overhangDx = EAVE_OVERHANG * cosA
+      // const overhangDy = EAVE_OVERHANG * sinA // Unused directly
+
+      // Eave Top Point (Cover Layer A)
+      // Eave starts from outer wall face
+      const eaveTopZ = width + halfWall + overhangDx
+      const eaveTopY = ridgeTopY - eaveTopZ * tanA
+
+      // Eave tip extended by cover overhang
+      const coverExtDx = ROOF_COVER_OVERHANG * cosA
+      const coverExtDy = ROOF_COVER_OVERHANG * sinA
+
+      const eaveTopExtZ = eaveTopZ + coverExtDx
+      const eaveTopExtY = eaveTopY - coverExtDy
+
+      // Interface/Bottom of A
+      const eaveInterfaceExtZ = eaveTopExtZ - THICKNESS_A * sinA
+      const eaveInterfaceExtY = eaveTopExtY - THICKNESS_A * cosA
+
+      const eaveInterfaceZ = eaveTopZ
+      // const eaveInterfaceY = eaveTopY - THICKNESS_A / cosA // Unused
+
+      // Bottom of B
+      const eaveBottomZ = eaveTopZ
+      const eaveBottomY = ridgeUnderY - eaveTopZ * tanA
+
+      // Construct Polygons (in +Z coords for simplicity, then flip if needed)
+      // Z=0 is ridge.
+
+      // Layer A (Cover)
+      const pointsA = [
+        { x: 0, y: ridgeTopY }, // Ridge Top
+        { x: dir * eaveTopExtZ, y: eaveTopExtY }, // Eave Top Extended
+        { x: dir * eaveInterfaceExtZ, y: eaveInterfaceExtY }, // Eave Bottom Extended
+        { x: 0, y: ridgeInterfaceY }, // Ridge Bottom
+      ]
+
+      // Layer B (Structure)
+      const pointsB = [
+        { x: 0, y: ridgeInterfaceY },
+        { x: dir * eaveInterfaceZ, y: ridgeInterfaceY - eaveTopZ * tanA }, // Interface at Eave
+        { x: dir * eaveBottomZ, y: eaveBottomY }, // Bottom at Eave
+        { x: 0, y: ridgeUnderY },
+      ]
+
+      // Side Wall (C3/C4)
+      const zInner = width - halfWall
+      const zOuter = width + halfWall
+
+      const pointsSide = [
+        { x: dir * zInner, y: 0 },
+        { x: dir * zOuter, y: 0 },
+        { x: dir * zOuter, y: Math.max(0, wallOuterTopY) }, // Clamp to 0
+        { x: dir * zInner, y: BASE_HEIGHT },
+      ]
+
+      // Gable Top (C1 part)
+      const pointsC1 = [
+        { x: 0, y: BASE_HEIGHT }, // Center Base
+        { x: dir * zInner, y: BASE_HEIGHT }, // Inner Wall Base
+        { x: dir * zInner, y: BASE_HEIGHT }, // Inner Wall Top (Redundant but closed)
+        { x: 0, y: ridgeUnderY }, // Ridge Under
+      ]
+
+      // Gable Base (C2 part)
+      const pointsC2 = [
+        { x: 0, y: 0 },
+        { x: dir * zInner, y: 0 },
+        { x: dir * zInner, y: BASE_HEIGHT },
+        { x: 0, y: BASE_HEIGHT },
+      ]
+
+      return { pointsA, pointsB, pointsSide, pointsC1, pointsC2 }
+    }
+
+    const leftP = getSideProfile(1)
+    const rightP = getSideProfile(-1)
 
     return {
-      frontGable: frontGableGeometry,
-      backGable: backGableGeometry,
-      leftRoof: leftRoofGeometry,
-      rightRoof: rightRoofGeometry,
+      shapes: {
+        ALeft: createShape(leftP.pointsA),
+        ARight: createShape(rightP.pointsA),
+        BLeft: createShape(leftP.pointsB),
+        BRight: createShape(rightP.pointsB),
+        SideLeft: createShape(leftP.pointsSide),
+        SideRight: createShape(rightP.pointsSide),
+        C1Left: createShape(leftP.pointsC1),
+        C1Right: createShape(rightP.pointsC1),
+        C2Left: createShape(leftP.pointsC2),
+        C2Right: createShape(rightP.pointsC2),
+      },
+      lengths: {
+        A: ridgeLength + 2 * RAKE_OVERHANG + 2 * ROOF_COVER_OVERHANG + WALL_THICKNESS,
+        B: ridgeLength + 2 * RAKE_OVERHANG + WALL_THICKNESS,
+        Side: ridgeLength + WALL_THICKNESS,
+        Gable: WALL_THICKNESS,
+      },
+      offsets: {
+        A: -RAKE_OVERHANG - ROOF_COVER_OVERHANG - WALL_THICKNESS / 2,
+        B: -RAKE_OVERHANG - WALL_THICKNESS / 2,
+        Side: -WALL_THICKNESS / 2,
+        GableFront: -WALL_THICKNESS / 2,
+        GableBack: ridgeLength - WALL_THICKNESS / 2,
+      },
       points: {
         bottomLeft,
         bottomRight,
@@ -852,22 +931,43 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     (roofSegment.opacity !== undefined && roofSegment.opacity === 0)
   if (isHidden) return null
 
-  const color = '#8b7355' // Brown roof color
-  const emissive = '#8b7355'
-  let emissiveIntensity = 0
-
-  if (isSelected) {
-    emissiveIntensity = 0.4
-  }
-
-  const material = (
+  // Materials
+  const materialA = (
     <meshStandardMaterial
-      color={color}
-      emissive={emissive}
-      emissiveIntensity={emissiveIntensity}
+      color="#93c5fd"
       metalness={0.1}
       opacity={opacity}
       roughness={0.8}
+      side={THREE.DoubleSide}
+      transparent={transparent}
+    />
+  )
+  const materialB = (
+    <meshStandardMaterial
+      color="#6ee7b7"
+      metalness={0.1}
+      opacity={opacity}
+      roughness={0.8}
+      side={THREE.DoubleSide}
+      transparent={transparent}
+    />
+  )
+  const materialC = (
+    <meshPhysicalMaterial
+      color="#dcdcf7"
+      metalness={0.1}
+      opacity={opacity}
+      roughness={0.7}
+      side={THREE.DoubleSide}
+      transparent={transparent}
+    />
+  )
+  const materialSide = (
+    <meshPhysicalMaterial
+      color="#dcdcf7"
+      metalness={0.1}
+      opacity={opacity}
+      roughness={0.7}
       side={THREE.DoubleSide}
       transparent={transparent}
     />
@@ -912,12 +1012,6 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   ]
 
   // Calculate values for handle positioning (all in local space)
-  const localStartWorld = [localSegment.start[0] * tileSize, localSegment.start[1] * tileSize]
-  const localEndWorld = [localSegment.end[0] * tileSize, localSegment.end[1] * tileSize]
-  const localDx = localEndWorld[0] - localStartWorld[0]
-  const localDz = localEndWorld[1] - localStartWorld[1]
-  const ridgeAngle = Math.atan2(localDz, localDx)
-
   const centerX =
     (roofGeometry.points.bottomLeft[0] +
       roofGeometry.points.bottomRight[0] +
@@ -941,14 +1035,24 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
   const rotationHandleId = `${nodeId}-rotation`
 
+  // Helper to render a mesh part
+  const RenderPart = ({ shape, depth, material, position }: any) => (
+    <mesh castShadow position={position} receiveShadow rotation={[0, Math.PI / 2, 0]}>
+      <extrudeGeometry args={[shape, { depth, bevelEnabled: false }]} />
+      {material}
+      {debug && (
+        <Edges color="#000000" linewidth={1} opacity={0.1} renderOrder={1000} threshold={15} />
+      )}
+    </mesh>
+  )
+
   return (
     <group>
       {isPreview ? (
-        <>
-          {/* Preview rectangular footprint outline */}
+        // Simplified preview
+        <group>
           <Line
             color="#336633"
-            dashed={false}
             depthTest={false}
             lineWidth={2}
             opacity={0.3}
@@ -957,144 +1061,106 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
               roofGeometry.points.bottomRight as [number, number, number],
               roofGeometry.points.bottomRightEnd as [number, number, number],
               roofGeometry.points.bottomLeftEnd as [number, number, number],
-              roofGeometry.points.bottomLeft as [number, number, number], // Close the rectangle
+              roofGeometry.points.bottomLeft as [number, number, number],
             ]}
             transparent
           />
-          <Line
-            color="#44ff44"
-            dashed={false}
-            depthTest={true}
-            lineWidth={3}
-            points={[
-              roofGeometry.points.bottomLeft as [number, number, number],
-              roofGeometry.points.bottomRight as [number, number, number],
-              roofGeometry.points.bottomRightEnd as [number, number, number],
-              roofGeometry.points.bottomLeftEnd as [number, number, number],
-              roofGeometry.points.bottomLeft as [number, number, number], // Close the rectangle
-            ]}
+        </group>
+      ) : (
+        <group>
+          {/* Layer A (Cover) */}
+          <RenderPart
+            depth={roofGeometry.lengths.A}
+            material={materialA}
+            position={[roofGeometry.offsets.A, 0, 0]}
+            shape={roofGeometry.shapes.ALeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.A}
+            material={materialA}
+            position={[roofGeometry.offsets.A, 0, 0]}
+            shape={roofGeometry.shapes.ARight}
           />
 
-          {/* Preview geometry */}
-          <mesh geometry={roofGeometry.frontGable} renderOrder={1}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={false}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.1}
-              opacity={0.15}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.backGable} renderOrder={1}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={false}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.1}
-              opacity={0.15}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.leftRoof} renderOrder={1}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={false}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.1}
-              opacity={0.15}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.rightRoof} renderOrder={1}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={false}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.1}
-              opacity={0.15}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
+          {/* Layer B (Structure) */}
+          <RenderPart
+            depth={roofGeometry.lengths.B}
+            material={materialB}
+            position={[roofGeometry.offsets.B, 0, 0]}
+            shape={roofGeometry.shapes.BLeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.B}
+            material={materialB}
+            position={[roofGeometry.offsets.B, 0, 0]}
+            shape={roofGeometry.shapes.BRight}
+          />
 
-          <mesh geometry={roofGeometry.frontGable} renderOrder={2}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={true}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.4}
-              opacity={0.5}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.backGable} renderOrder={2}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={true}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.4}
-              opacity={0.5}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.leftRoof} renderOrder={2}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={true}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.4}
-              opacity={0.5}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-          <mesh geometry={roofGeometry.rightRoof} renderOrder={2}>
-            <meshStandardMaterial
-              color="#44ff44"
-              depthTest={true}
-              depthWrite={false}
-              emissive="#22aa22"
-              emissiveIntensity={0.4}
-              opacity={0.5}
-              side={THREE.DoubleSide}
-              transparent
-            />
-          </mesh>
-        </>
-      ) : (
-        <>
-          {/* Front gable end */}
-          <mesh castShadow geometry={roofGeometry.frontGable} receiveShadow>
-            {material}
-          </mesh>
+          {/* Side Walls */}
+          <RenderPart
+            depth={roofGeometry.lengths.Side}
+            material={materialSide}
+            position={[roofGeometry.offsets.Side, 0, 0]}
+            shape={roofGeometry.shapes.SideLeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Side}
+            material={materialSide}
+            position={[roofGeometry.offsets.Side, 0, 0]}
+            shape={roofGeometry.shapes.SideRight}
+          />
 
-          {/* Back gable end */}
-          <mesh castShadow geometry={roofGeometry.backGable} receiveShadow>
-            {material}
-          </mesh>
+          {/* Gable Walls (Front) */}
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C1Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C1Right}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C2Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C2Right}
+          />
 
-          {/* Left roof plane */}
-          <mesh castShadow geometry={roofGeometry.leftRoof} receiveShadow>
-            {material}
-          </mesh>
-
-          {/* Right roof plane */}
-          <mesh castShadow geometry={roofGeometry.rightRoof} receiveShadow>
-            {material}
-          </mesh>
+          {/* Gable Walls (Back) */}
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C1Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C1Right}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C2Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C2Right}
+          />
 
           {/* Selection outline */}
           {isSelected && (
@@ -1150,7 +1216,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
           )}
 
           {/* Edge manipulation handles */}
-          {isSelected && controlMode === 'building' && (
+          {isSelected && (controlMode === 'building' || controlMode === 'edit') && (
             <>
               {/* Horizontal edge handles */}
               {horizontalEdges.map(({ id, edge, color }) => {
@@ -1328,11 +1394,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
               })}
 
               {/* Translation handles */}
-              <group
-                key={`${nodeId}-translation`}
-                position={[centerX, 0, centerZ]}
-                rotation={[0, -ridgeAngle, 0]}
-              >
+              <group key={`${nodeId}-translation`} position={[centerX, 0, centerZ]}>
                 {/* Center origin marker for XZ translation */}
                 <group position={[0, 0, 0]}>
                   <mesh
@@ -1439,7 +1501,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
                       args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]}
                     />
                     <HandleMaterial
-                      color="#ff4444"
+                      color="#ff44ff"
                       emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
                       opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
@@ -1451,7 +1513,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
                   >
                     <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
                     <HandleMaterial
-                      color="#ff4444"
+                      color="#ff44ff"
                       emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
                       opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
@@ -1460,7 +1522,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
               </group>
             </>
           )}
-        </>
+        </group>
       )}
     </group>
   )
