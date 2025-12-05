@@ -27,6 +27,7 @@ import { LevelElevationProcessor } from '@/lib/processors/level-elevation-proces
 import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
+import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -37,7 +38,6 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
-import { CollectionSchema, type Collection } from '@/lib/scenegraph/schema/collections'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -719,7 +719,13 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(state.selectedNodeIds)
+          const updatedCollections = (state.scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -767,14 +773,7 @@ const useStore = create<StoreState>()(
           }
         },
 
-        serializeLayout: () => {
-          const state = get()
-          return {
-            version: '3.0',
-            grid: { size: 61 },
-            root: state.scene.root,
-          }
-        },
+        serializeLayout: () => get().scene,
         loadLayout: (json) => {
           // Helper to ensure all nodes have the 'object: node' marker
           const ensureNodeMarkers = (node: any): void => {
@@ -851,7 +850,11 @@ const useStore = create<StoreState>()(
 
             ensureNodeMarkers(root)
 
-            const newScene = { root } as unknown as Scene
+            // Parse collections if present
+            const collections = Array.isArray(json.collections) ? json.collections : []
+            const metadata = json.metadata || {}
+
+            const newScene = { root, collections, metadata } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -872,7 +875,11 @@ const useStore = create<StoreState>()(
             })
             ensureNodeMarkers(migratedRoot)
 
-            const newScene = { root: migratedRoot } as unknown as Scene
+            const newScene = {
+              root: migratedRoot,
+              collections: [],
+              metadata: {},
+            } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -1060,7 +1067,7 @@ const useStore = create<StoreState>()(
         },
 
         deleteNode: (nodeId) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1069,10 +1076,17 @@ const useStore = create<StoreState>()(
           } else {
             commandManager.execute(command, graph)
           }
+
+          // Remove the node from any collections it belongs to
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections } })
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1099,8 +1113,13 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Clear selection after deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(nodeIds)
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
