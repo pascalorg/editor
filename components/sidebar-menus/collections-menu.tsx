@@ -100,6 +100,7 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
   const deleteCollection = useEditor((state) => state.deleteCollection)
   const confirmAddToCollection = useEditor((state) => state.confirmAddToCollection)
   const addToCollectionState = useEditor((state) => state.addToCollectionState)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
@@ -114,24 +115,36 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    // If in add-to-collection mode, confirm the add and prevent bubbling
+    e.stopPropagation()
+
+    // If in add-to-collection mode, confirm the add
     if (addToCollectionState.isActive) {
-      e.stopPropagation()
       e.preventDefault()
       confirmAddToCollection(collection.id)
       return
     }
-    // Otherwise, toggle expand/collapse
+
+    // Select all nodes in the collection
+    if (nodeCount > 0) {
+      useEditor.setState({ selectedNodeIds: [...collection.nodeIds] })
+    }
+
+    // Also toggle expand/collapse
     onNodeClick(collection.id, nodeCount > 0)
   }
 
   const nodeCount = collection.nodeIds?.length || 0
+
+  // Check if all nodes in the collection are selected
+  const allNodesSelected =
+    nodeCount > 0 && collection.nodeIds.every((id) => selectedNodeIds.includes(id))
 
   return (
     <TreeNode isLast={isLast} level={level} nodeId={collection.id}>
       <TreeNodeTrigger
         className={cn(
           'group',
+          allNodesSelected && 'bg-accent',
           addToCollectionState.isActive &&
             'cursor-pointer ring-1 ring-amber-500/50 hover:bg-amber-500/10',
         )}
