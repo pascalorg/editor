@@ -110,6 +110,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
           {nodeSrc && (
             <ModelItemRenderer
               deletePreview={deletePreview}
+              isActiveFloor={isActiveFloor}
               position={modelPosition || [0, 0, 0]}
               rotation={modelRotation}
               scale={modelScale || [1, 1, 1]}
@@ -134,12 +135,14 @@ const ModelItemRenderer = ({
   scale,
   src,
   deletePreview,
+  isActiveFloor,
 }: {
   position?: ItemNode['modelPosition']
   rotation?: ItemNode['modelRotation']
   scale?: ItemNode['modelScale']
   src: ItemNode['src']
   deletePreview?: boolean
+  isActiveFloor: boolean
 }) => {
   const { scene } = useGLTF(src)
   const ref = useRef<THREE.Group>(null)
@@ -147,8 +150,16 @@ const ModelItemRenderer = ({
   useEffect(() => {
     ref.current?.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.castShadow = true
-        child.receiveShadow = true
+        if (
+          child.material instanceof THREE.Material &&
+          child.material.name.toLowerCase().includes('glass')
+        ) {
+          child.castShadow = false
+          child.receiveShadow = false
+        } else {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
       }
       if (child.name === 'cutout') {
         child.visible = false
@@ -159,7 +170,13 @@ const ModelItemRenderer = ({
   return (
     <>
       <Clone
-        inject={deletePreview ? <meshStandardMaterial color="red" /> : undefined}
+        inject={
+          deletePreview ? (
+            <meshStandardMaterial color="red" />
+          ) : isActiveFloor ? undefined : (
+            <meshStandardMaterial opacity={0.3} transparent />
+          )
+        }
         object={scene}
         position={position}
         ref={ref}

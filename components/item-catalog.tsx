@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 
 interface CatalogItem {
   category: CatalogCategory
+  name: string
   thumbnail: string
   modelUrl: string
   scale: [number, number, number]
@@ -19,6 +20,7 @@ interface CatalogItem {
 const CATALOG_ITEMS: CatalogItem[] = [
   {
     category: 'item',
+    name: 'Couch',
     thumbnail: '/items/couch-medium/thumbnail.webp',
     modelUrl: '/items/couch-medium/model.glb',
     scale: [0.4, 0.4, 0.4],
@@ -26,6 +28,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Small Couch',
     thumbnail: '/items/couch-small/thumbnail.webp',
     modelUrl: '/items/couch-small/model.glb',
     scale: [0.4, 0.4, 0.4],
@@ -33,6 +36,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Desk',
     thumbnail: '/items/desk/thumbnail.webp',
     modelUrl: '/items/desk/model.glb',
     scale: [1, 1, 1],
@@ -40,6 +44,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Table',
     thumbnail: '/items/table/thumbnail.webp',
     modelUrl: '/items/table/model.glb',
     scale: [1, 1, 1],
@@ -48,6 +53,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Ceiling Light',
     thumbnail: '/items/ceiling-light/thumbnail.webp',
     modelUrl: '/items/ceiling-light/model.glb',
     scale: [1, 1, 1],
@@ -57,6 +63,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Ceiling Fan',
     thumbnail: '/items/ceiling-fan/thumbnail.webp',
     modelUrl: '/items/ceiling-fan/model.glb',
     scale: [0.003, 0.003, 0.003],
@@ -67,6 +74,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Wall Art',
     thumbnail: '/items/wall-art-06/thumbnail.webp',
     modelUrl: '/items/wall-art-06/model.glb',
     position: [0, 1, -0.15],
@@ -77,6 +85,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Flat Screen TV',
     thumbnail: '/items/flat-screen-tv/thumbnail.webp',
     modelUrl: '/items/flat-screen-tv/model.glb',
     position: [-0.2, 1, -0.15],
@@ -87,6 +96,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Air Conditioner',
     thumbnail: '/items/air-conditioner/thumbnail.webp',
     modelUrl: '/items/air-conditioner/model.glb',
     position: [0, 2, -0.3],
@@ -97,6 +107,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'item',
+    name: 'Air Conditioner Block',
     thumbnail: '/items/air-conditioner-block/thumbnail.webp',
     modelUrl: '/items/air-conditioner-block/model.glb',
     position: [0, 0.5, 0.06],
@@ -106,6 +117,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'window',
+    name: 'Window',
     thumbnail: '/items/window-small/thumbnail.webp',
     modelUrl: '/items/window-small/model.glb',
     position: [0, 0.5, 0],
@@ -116,6 +128,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'window',
+    name: 'Window',
     thumbnail: '/items/window-round/thumbnail.webp',
     modelUrl: '/items/window-round/model.glb',
     position: [0, 0.5, 0],
@@ -126,6 +139,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'window',
+    name: 'Window',
     thumbnail: '/items/window1-black-open-1731/thumbnail.webp',
     modelUrl: '/items/window1-black-open-1731/model.glb',
     position: [0, 0.5, 0],
@@ -136,6 +150,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'door',
+    name: 'Door',
     thumbnail: '/items/doorway-front/thumbnail.webp',
     modelUrl: '/items/doorway-front/model.glb',
     position: [0, 0, 0],
@@ -146,6 +161,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
   },
   {
     category: 'door',
+    name: 'Door',
     thumbnail: '/items/door/thumbnail.webp',
     modelUrl: '/items/door/model.glb',
     position: [0, 0, 0],
