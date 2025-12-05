@@ -953,21 +953,21 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     />
   )
   const materialC = (
-    <meshStandardMaterial
-      color="#d1d5db"
+    <meshPhysicalMaterial
+      color="#dcdcf7"
       metalness={0.1}
       opacity={opacity}
-      roughness={0.8}
+      roughness={0.7}
       side={THREE.DoubleSide}
       transparent={transparent}
     />
   )
   const materialSide = (
-    <meshStandardMaterial
-      color="#e5e7eb" // Light gray for side walls
+    <meshPhysicalMaterial
+      color="#dcdcf7"
       metalness={0.1}
       opacity={opacity}
-      roughness={0.8}
+      roughness={0.7}
       side={THREE.DoubleSide}
       transparent={transparent}
     />
