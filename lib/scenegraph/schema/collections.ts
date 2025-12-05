@@ -1,14 +1,13 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { objectId } from './base'
-import { AnyNode } from './types'
 
 export const CollectionSchema = z
   .object({
     id: objectId('collection'),
     object: z.literal('collection').default('collection'),
     name: z.string(),
-    nodeIds: z.array(AnyNode.transform((node) => node.id)),
+    nodeIds: z.array(z.string()).default([]),
     metadata: z.json().optional().default({}),
   })
   .describe(

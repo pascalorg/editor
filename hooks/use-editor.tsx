@@ -37,6 +37,7 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
+import { CollectionSchema, type Collection } from '@/lib/scenegraph/schema/collections'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -241,6 +242,12 @@ export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 
+// Add to collection workflow state
+export type AddToCollectionState = {
+  isActive: boolean
+  nodeIds: string[]
+}
+
 export type StoreState = {
   // ============================================================================
   // SCENE GRAPH STATE
@@ -276,6 +283,9 @@ export type StoreState = {
   handleClear: () => void
   pointerPosition: [number, number] | null
   debug: boolean
+
+  // Add to collection workflow
+  addToCollectionState: AddToCollectionState
 
   selectedItem: {
     name?: string
@@ -372,6 +382,18 @@ export type StoreState = {
       end?: [number, number]
     },
   ) => void
+
+  // Collection operations
+  addCollection: (name: string) => Collection
+  deleteCollection: (collectionId: string) => void
+  renameCollection: (collectionId: string, name: string) => void
+  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
+  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+
+  // Add to collection workflow
+  startAddToCollection: () => void
+  confirmAddToCollection: (collectionId: string) => void
+  cancelAddToCollection: () => void
 }
 
 /**
@@ -523,6 +545,7 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
+        addToCollectionState: { isActive: false, nodeIds: [] },
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
           scale: [0.4, 0.4, 0.4],
@@ -1137,6 +1160,94 @@ const useStore = create<StoreState>()(
 
         setPointerPosition: (position: [number, number] | null) =>
           set({ pointerPosition: position }),
+
+        // Collection operations
+        addCollection: (name: string) => {
+          const collection = CollectionSchema.parse({ name })
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: [...(state.scene.collections || []), collection],
+            },
+          })
+          return collection
+        },
+
+        deleteCollection: (collectionId: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).filter((c) => c.id !== collectionId),
+            },
+          })
+        },
+
+        renameCollection: (collectionId: string, name: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, name } : c,
+              ),
+            },
+          })
+        },
+
+        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                // Add only node IDs that aren't already in the collection
+                const existingIds = new Set(c.nodeIds || [])
+                const newIds = nodeIds.filter((id) => !existingIds.has(id))
+                return { ...c, nodeIds: [...(c.nodeIds || []), ...newIds] }
+              }),
+            },
+          })
+        },
+
+        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          const idsToRemove = new Set(nodeIds)
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
+              }),
+            },
+          })
+        },
+
+        // Add to collection workflow
+        startAddToCollection: () => {
+          const { selectedNodeIds } = get()
+          if (selectedNodeIds.length === 0) return
+          set({
+            addToCollectionState: {
+              isActive: true,
+              nodeIds: [...selectedNodeIds],
+            },
+          })
+        },
+
+        confirmAddToCollection: (collectionId: string) => {
+          const { addToCollectionState, addNodesToCollection } = get()
+          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
+          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
+
+        cancelAddToCollection: () => {
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
       }
     },
     {
@@ -1176,6 +1287,7 @@ const useStore = create<StoreState>()(
           scene: {
             ...state.scene,
             root: processedRoot,
+            collections: state.scene.collections || [],
           },
           selectedNodeIds: state.selectedNodeIds,
           debug: state.debug,
