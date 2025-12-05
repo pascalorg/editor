@@ -1,7 +1,6 @@
 import { useGSAP } from '@gsap/react'
-import { Environment, Sky, SoftShadows, SpotLight } from '@react-three/drei'
 import gsap from 'gsap'
-import { memo, type Ref, RefAttributes, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import SunCalc from 'suncalc'
 import * as THREE from 'three'
 import { degToRad } from 'three/src/math/MathUtils.js'

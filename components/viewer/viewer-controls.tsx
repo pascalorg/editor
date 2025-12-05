@@ -1,11 +1,32 @@
 'use client'
 
 import { StackIcon } from '@phosphor-icons/react'
-import { Box, Camera, Eye, ScanLine } from 'lucide-react'
+import { Box, Camera, Clock, Eye, Moon, ScanLine, Sun, Sunrise, Sunset } from 'lucide-react'
+import SunCalc from 'suncalc'
+import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+
+const TIME_PRESETS = ['now', 'dawn', 'day', 'dusk', 'night'] as const
+type TimePreset = (typeof TIME_PRESETS)[number]
+
+const PRESET_ICONS: Record<TimePreset, React.ReactNode> = {
+  now: <Clock className="h-4 w-4" />,
+  dawn: <Sunrise className="h-4 w-4" />,
+  day: <Sun className="h-4 w-4" />,
+  dusk: <Sunset className="h-4 w-4" />,
+  night: <Moon className="h-4 w-4" />,
+}
+
+const PRESET_LABELS: Record<TimePreset, string> = {
+  now: 'Current Time',
+  dawn: 'Dawn',
+  day: 'Noon',
+  dusk: 'Dusk',
+  night: 'Night',
+}
 
 export function ViewerControls({ className }: { className?: string }) {
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -14,6 +35,67 @@ export function ViewerControls({ className }: { className?: string }) {
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const setViewerDisplayMode = useEditor((state) => state.setViewerDisplayMode)
+
+  const { timePreset, timeMode, latitude, longitude } = useEditor(
+    useShallow((state) => {
+      const env = state.scene.root.environment
+      return {
+        timePreset: env.timePreset,
+        timeMode: env.timeMode,
+        latitude: env.latitude,
+        longitude: env.longitude,
+      }
+    }),
+  )
+
+  // Determine current preset - if timeMode is 'now' or no preset, default to 'now'
+  const currentPreset: TimePreset =
+    timeMode === 'now' || !timePreset ? 'now' : (timePreset as TimePreset)
+
+  const cycleTimePreset = () => {
+    const currentIndex = TIME_PRESETS.indexOf(currentPreset)
+    const nextIndex = (currentIndex + 1) % TIME_PRESETS.length
+    const nextPreset = TIME_PRESETS[nextIndex]
+
+    if (nextPreset === 'now') {
+      useEditor.setState((state) => ({
+        scene: {
+          ...state.scene,
+          root: {
+            ...state.scene.root,
+            environment: {
+              ...state.scene.root.environment,
+              timeMode: 'now',
+              timePreset: 'now',
+            },
+          },
+        },
+      }))
+    } else {
+      const times = SunCalc.getTimes(new Date(), latitude, longitude)
+      const timeMap: Record<Exclude<TimePreset, 'now'>, number> = {
+        dawn: times.dawn.getTime(),
+        day: times.solarNoon.getTime(),
+        dusk: times.dusk.getTime(),
+        night: times.nadir.getTime(),
+      }
+
+      useEditor.setState((state) => ({
+        scene: {
+          ...state.scene,
+          root: {
+            ...state.scene.root,
+            environment: {
+              ...state.scene.root.environment,
+              timeMode: 'custom',
+              timePreset: nextPreset,
+              staticTime: timeMap[nextPreset],
+            },
+          },
+        },
+      }))
+    }
+  }
 
   return (
     <TooltipProvider>
@@ -104,6 +186,30 @@ export function ViewerControls({ className }: { className?: string }) {
           </TooltipTrigger>
           <TooltipContent>
             <p>Display: {viewerDisplayMode === 'scans' ? 'Scans' : '3D Objects'}</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Separator */}
+        <div className="mx-1 h-6 w-px bg-gray-700" />
+
+        {/* Time of day preset toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 w-8 transition-all',
+                currentPreset !== 'now' && 'bg-amber-600/20 text-amber-400',
+                'text-white hover:bg-gray-800 hover:text-white',
+              )}
+              onClick={cycleTimePreset}
+              size="icon"
+              variant="ghost"
+            >
+              {PRESET_ICONS[currentPreset]}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Time: {PRESET_LABELS[currentPreset]}</p>
           </TooltipContent>
         </Tooltip>
       </div>

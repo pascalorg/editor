@@ -165,7 +165,23 @@ export function NodeItem({
       >
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
-        <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+        <TreeLabel
+          className="flex-1 cursor-text"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setIsRenaming(true)
+          }}
+          ref={labelRef}
+        >
+          {getNodeLabel(nodeType, index, nodeName)}
+        </TreeLabel>
+        <RenamePopover
+          anchorRef={labelRef}
+          currentName={nodeName || ''}
+          isOpen={isRenaming}
+          onOpenChange={setIsRenaming}
+          onRename={handleRename}
+        />
 
         {/* Edit Button for Roof */}
         {nodeType === 'roof' && (

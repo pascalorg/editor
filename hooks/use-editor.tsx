@@ -27,7 +27,11 @@ import { LevelElevationProcessor } from '@/lib/processors/level-elevation-proces
 import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
-import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
+import {
+  type Collection,
+  CollectionSchema,
+  type CollectionType,
+} from '@/lib/scenegraph/schema/collections'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -387,6 +391,7 @@ export type StoreState = {
   addCollection: (name: string) => Collection
   deleteCollection: (collectionId: string) => void
   renameCollection: (collectionId: string, name: string) => void
+  setCollectionType: (collectionId: string, type: CollectionType) => void
   addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
   removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
 
@@ -495,17 +500,21 @@ const useStore = create<StoreState>()(
       const handleGraphChange = (nextScene: Scene) => {
         const currentScene = get().scene
 
-        // Always preserve the current store's environment - the graph doesn't manage environment,
-        // it's managed directly via setState in updateEnvironment. The graph's scene copy
-        // may have stale environment data.
-        const sceneWithCurrentEnv = {
+        // Preserve data that is managed outside the graph:
+        // - environment: managed directly via setState in updateEnvironment
+        // - collections: managed via collection operations in the store
+        // - metadata: scene-level metadata not managed by the graph
+        // The graph's scene copy may have stale data for these fields.
+        const sceneWithPreservedData = {
           ...nextScene,
+          collections: currentScene.collections,
+          metadata: currentScene.metadata,
           root: {
             ...nextScene.root,
             environment: currentScene.root.environment,
           },
         }
-        set({ scene: sceneWithCurrentEnv })
+        set({ scene: sceneWithPreservedData })
 
         // Get fresh state after updating scene
         const currentState = get()
@@ -1215,6 +1224,18 @@ const useStore = create<StoreState>()(
           })
         },
 
+        setCollectionType: (collectionId: string, type: CollectionType) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, type } : c,
+              ),
+            },
+          })
+        },
+
         addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
           const state = get()
           set({
@@ -1225,7 +1246,20 @@ const useStore = create<StoreState>()(
                 // Add only node IDs that aren't already in the collection
                 const existingIds = new Set(c.nodeIds || [])
                 const newIds = nodeIds.filter((id) => !existingIds.has(id))
-                return { ...c, nodeIds: [...(c.nodeIds || []), ...newIds] }
+
+                // If this is the first node being added, set the levelId from that node
+                const isFirstNode = existingIds.size === 0 && newIds.length > 0
+                const levelId = isFirstNode
+                  ? (getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId) as
+                      | `level_${string}`
+                      | null)
+                  : c.levelId
+
+                return {
+                  ...c,
+                  nodeIds: [...(c.nodeIds || []), ...newIds],
+                  levelId,
+                }
               }),
             },
           })
@@ -1380,12 +1414,16 @@ const useStore = create<StoreState>()(
               rebuildSpatialGrid(s.spatialGrid, currentGraph)
               recomputeAllLevels(s as any)
 
-              // Always preserve the current store's environment - the graph doesn't manage environment,
-              // it's managed directly via setState in updateEnvironment. The graph's scene copy
-              // may have stale environment data.
+              // Preserve data that is managed outside the graph:
+              // - environment: managed directly via setState in updateEnvironment
+              // - collections: managed via collection operations in the store
+              // - metadata: scene-level metadata not managed by the graph
+              // The graph's scene copy may have stale data for these fields.
               return {
                 scene: {
                   ...nextScene,
+                  collections: s.scene.collections,
+                  metadata: s.scene.metadata,
                   root: {
                     ...nextScene.root,
                     environment: s.scene.root.environment,
