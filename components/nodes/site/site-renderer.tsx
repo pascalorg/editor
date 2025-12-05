@@ -144,7 +144,7 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
     [onPointerMove, onPointerUp],
   )
 
-  if (!geometry || !selectionGeometry) return null
+  if (!(geometry && selectionGeometry)) return null
 
   return (
     <group ref={groupRef}>
@@ -172,7 +172,7 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
       </mesh>
 
       {/* Selection Plane (Invisible, Raycastable) */}
-      <mesh position={[0, 0.2, 0]} geometry={selectionGeometry}>
+      <mesh geometry={selectionGeometry} position={[0, 0.2, 0]}>
         <meshBasicMaterial depthWrite={false} opacity={0} transparent />
       </mesh>
 
@@ -196,6 +196,28 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
           ))}
           {/* Active dragging plane */}
           {draggingIndex !== null && dragPlane}
+
+          {/* Segment Measurements */}
+          {points.map((p1, i) => {
+            const p2 = points[(i + 1) % points.length]
+            const midX = (p1[0] + p2[0]) / 2
+            const midZ = (p1[1] + p2[1]) / 2
+            const dist = Math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+
+            return (
+              <Html
+                center
+                key={`dist-${i}`}
+                position={[midX, 0.5, midZ]}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+                zIndexRange={[100, 0]}
+              >
+                <div className="whitespace-nowrap rounded bg-black/75 px-1.5 py-0.5 font-mono text-white text-xs backdrop-blur-sm">
+                  {dist.toFixed(2)}m
+                </div>
+              </Html>
+            )
+          })}
         </>
       )}
     </group>
