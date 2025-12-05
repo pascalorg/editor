@@ -1,11 +1,11 @@
 'use client'
 
-import { Line } from '@react-three/drei'
+import { Edges, Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { TILE_SIZE, WALL_HEIGHT } from '@/components/editor'
+import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import type { RoofNode } from '@/lib/scenegraph/schema/index'
 
@@ -14,11 +14,12 @@ const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders
 
 // Constants for detailed geometry (in meters)
 const THICKNESS_A = 0.05 // Roof cover thickness
-const THICKNESS_B = 0.15 // Structure thickness
-const ROOF_COVER_OVERHANG = 0.02 // Cover overhang past structure
+const THICKNESS_B = 0.1 // Structure thickness
+const ROOF_COVER_OVERHANG = 0.05 // Extension of cover past structure (Rake/Eave side extension)
+const EAVE_OVERHANG = 0.4 // Horizontal eave overhang
 const RAKE_OVERHANG = 0.3 // Overhang at gable ends
-const WALL_INSET = 0.3 // Horizontal distance from eave to wall (drip edge overhang)
-const WALL_THICKNESS = 0.3 // Gable wall thickness
+const WALL_THICKNESS = 0.2 // Gable wall thickness
+const BASE_HEIGHT = 0.5 // Base height (knee wall / truss heel)
 
 // Handle geometry dimensions
 const DEBUG = false
@@ -70,6 +71,30 @@ function createShape(points: { x: number; y: number }[]): THREE.Shape {
   return shape
 }
 
+// Helper to solve pitch angle analytically given rise, run and thicknesses
+// Solves: run * tan(a) + (ThickA + ThickB)/cos(a) = rise
+// Equivalent to finding 'a' such that the roof peak is at 'rise' height
+// while passing through the pivot point with specified thickness.
+function solvePitch(rise: number, run: number, thickA: number, thickB: number) {
+  const T = thickA + thickB
+  // If run is too small, default to 0
+  if (run < 0.01) return 0
+
+  // Analytic solution: angle = phi - asin(T/R)
+  // where phi = atan2(rise, run) and R = sqrt(run^2 + rise^2)
+  const R = Math.sqrt(run * run + rise * rise)
+
+  // Clamp if thickness exceeds geometric diagonal (impossible geometry)
+  if (R <= T) {
+    return Math.atan2(rise, run) * 0.5 // Fallback
+  }
+
+  const phi = Math.atan2(rise, run)
+  const shift = Math.asin(T / R)
+
+  return phi - shift
+}
+
 // Material components for handles
 const HitMaterial = () => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
@@ -103,6 +128,7 @@ interface RoofRendererProps {
 }
 
 export function RoofRenderer({ nodeId }: RoofRendererProps) {
+  const debug = useEditor((state) => state.debug)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const tileSize = TILE_SIZE
 
@@ -721,180 +747,158 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
 
     if (ridgeLength < 0.1) return null
 
-    const leftWidth = localSegment.leftWidth ?? ROOF_WIDTH / 2
-    const rightWidth = localSegment.rightWidth ?? ROOF_WIDTH / 2
-    const roofHeight = localSegment.height || 2
+    const wallDistLeft = localSegment.leftWidth ?? ROOF_WIDTH / 2
+    const wallDistRight = localSegment.rightWidth ?? ROOF_WIDTH / 2
+    const roofHeight = localSegment.height || 2.5
 
-    // Calculate basic points for handles and outlines
-    // Note: These are in local space where ridge starts at (0,0) and runs along X
-    // Width is along Z. Height is Y.
-    // Left = +Z, Right = -Z (based on handle logic: Left handle is at +perpDir)
-    // Wait, let's check handle logic again.
-    // perpDir = { x: -ridgeDir.z, z: ridgeDir.x }
-    // In local space: ridgeDir = (1,0), perpDir = (0,1) -> +Z
-    // Left edge handle: uses perpDir. So Left is +Z. Right is -Z.
-
-    const bottomLeft = [0, 0, leftWidth]
-    const bottomRight = [0, 0, -rightWidth]
-    const bottomLeftEnd = [ridgeLength, 0, leftWidth]
-    const bottomRightEnd = [ridgeLength, 0, -rightWidth]
+    // Points for handles (The Base Footprint of Walls)
+    // Local coordinates: X = Length, Z = Width (centered at 0?).
+    // No, Z=0 is the ridge line (if centered). But here "leftWidth" is dist from ridge.
+    // So Left is Z = +leftWidth, Right is Z = -rightWidth.
+    const bottomLeft = [0, 0, wallDistLeft]
+    const bottomRight = [0, 0, -wallDistRight]
+    const bottomLeftEnd = [ridgeLength, 0, wallDistLeft]
+    const bottomRightEnd = [ridgeLength, 0, -wallDistRight]
     const ridgeStart = [0, roofHeight, 0]
     const ridgeEnd = [ridgeLength, roofHeight, 0]
 
     // --- Detailed Profile Generation (YZ Plane) ---
-    // We generate shapes in YZ plane then extrude along X (Length)
-    // Y is Up, Z is Width.
+    // Y is Up, Z is Width. Extrusion along X (Length).
 
-    // Calculations for LEFT side (Positive Z)
-    // Pitch angle
-    const runLeft = leftWidth - WALL_INSET
-    const pitchAngleLeft = Math.atan2(roofHeight, runLeft)
-    const cosL = Math.cos(pitchAngleLeft)
-    const sinL = Math.sin(pitchAngleLeft)
-    const tanL = Math.tan(pitchAngleLeft)
-
-    // Calculations for RIGHT side (Negative Z)
-    const runRight = rightWidth - WALL_INSET
-    const pitchAngleRight = Math.atan2(roofHeight, runRight)
-    const cosR = Math.cos(pitchAngleRight)
-    const sinR = Math.sin(pitchAngleRight)
-    const tanR = Math.tan(pitchAngleRight)
-
-    // Helper to get profile points for one side
-    // dir: -1 for Left (+Z after rotation), 1 for Right (-Z after rotation)
     const getSideProfile = (dir: 1 | -1) => {
-      // Use the corresponding width based on whether this is for Left or Right profile
-      // When dir is -1 (Left side target), we use leftWidth
-      // When dir is 1 (Right side target), we use rightWidth
-      const isLeft = dir === -1
-      const width = isLeft ? leftWidth : rightWidth
-      const run = isLeft ? runLeft : runRight
-      const cos = isLeft ? cosL : cosR
-      const sin = isLeft ? sinL : sinR
-      const tan = isLeft ? tanL : tanR
+      // Direction: 1 for Left (Positive Z), -1 for Right (Negative Z)
+      // Left Side (Positive Z): wall is at Z = wallDistLeft.
+      // Right Side (Negative Z): wall is at Z = -wallDistRight.
 
-      // Key Y coordinates (relative to base Y=0)
-      // Note: In user code, pivotY = baseHeight. Here base is 0.
-      // Ridge points
-      const ridgeUnderY = 0 + run * tan // Height at ridge intersection from wall plate
-      // Wait, Ridge Y is fixed at `roofHeight`.
-      // So wall plate Y must be adjusted if we keep ridge fixed.
-      // Or we keep wall plate at 0.
-      // If wall plate is at 0, ridge height is `run * tan`.
-      // But `roofHeight` is user input. So `tan = roofHeight / run`. This matches above.
+      const width = dir === 1 ? wallDistLeft : wallDistRight
 
-      // Thickness offsets
-      // Vertical thickness = thickness / cos(theta)
-      const vertThickA = THICKNESS_A / cos
-      const vertThickB = THICKNESS_B / cos
+      // Run is distance from pivot (inner wall face) to centerline (approx)
+      // Pivot Z = dir * (width - WALL_THICKNESS).
+      const pivotZ = dir * (width - WALL_THICKNESS)
 
-      const ridgeTopY = roofHeight
-      const ridgeInterfaceY = ridgeTopY - vertThickA
-      const ridgeBottomY = ridgeInterfaceY - vertThickB
+      // Calculate Pitch based on Total Height and Run
+      // Rise = roofHeight - BASE_HEIGHT
+      const rise = Math.max(0, roofHeight - BASE_HEIGHT)
+      // Run = width - WALL_THICKNESS (horizontal distance covered by slope)
+      const run = width - WALL_THICKNESS
 
-      // Eave points (at distance `width` from ridge)
-      // Eave X (in Z axis term) = dir * width
-      // Eave Top Y = roofHeight - width * tan
-      const eaveTopY = roofHeight - width * tan
+      const angle = solvePitch(rise, run, THICKNESS_A, THICKNESS_B)
+      const tanA = Math.tan(angle)
+      const cosA = Math.cos(angle)
+      const sinA = Math.sin(angle)
 
-      // Apply overhang extension for Cover (A)
-      // extends by ROOF_COVER_OVERHANG parallel to slope
-      const overhangDx = ROOF_COVER_OVERHANG * cos
-      const overhangDy = ROOF_COVER_OVERHANG * sin
-      const eaveTopExtendedZ = dir * (width + overhangDx)
-      const eaveTopExtendedY = eaveTopY - overhangDy
+      // Calculate key heights
+      const ridgeUnderY = BASE_HEIGHT + run * tanA
+      const ridgeInterfaceY = ridgeUnderY + THICKNESS_B / cosA
+      const ridgeTopY = ridgeInterfaceY + THICKNESS_A / cosA
 
-      const eaveInterfaceExtendedZ = dir * (width + overhangDx - THICKNESS_A * sin)
-      const eaveInterfaceExtendedY = eaveTopY - overhangDy - THICKNESS_A * cos
+      // Wall Outer Top Height
+      const wallOuterTopY = BASE_HEIGHT - WALL_THICKNESS * tanA
 
-      // Bottom of B at eave
-      // Eave is cut vertically at `width`? Or perpendicular?
-      // User code: "Layer B (Right) - unchanged". "eaveInterfaceX", "eaveBottomX".
-      // User code creates a vertical cut at the eave.
-      const eaveInterfaceZ = dir * width
-      const eaveInterfaceY = eaveTopY - vertThickA
+      // Overhangs
+      const overhangDx = EAVE_OVERHANG * cosA
+      // const overhangDy = EAVE_OVERHANG * sinA // Unused directly
 
-      const eaveBottomZ = dir * width
-      const eaveBottomY = eaveInterfaceY - vertThickB
+      // Eave Top Point (Cover Layer A)
+      const eaveTopZ = width + overhangDx
+      const eaveTopY = ridgeTopY - eaveTopZ * tanA
 
-      // Layer A (Cover) Points
+      // Eave tip extended by cover overhang
+      const coverExtDx = ROOF_COVER_OVERHANG * cosA
+      const coverExtDy = ROOF_COVER_OVERHANG * sinA
+
+      const eaveTopExtZ = eaveTopZ + coverExtDx
+      const eaveTopExtY = eaveTopY - coverExtDy
+
+      // Interface/Bottom of A
+      const eaveInterfaceExtZ = eaveTopExtZ - THICKNESS_A * sinA
+      const eaveInterfaceExtY = eaveTopExtY - THICKNESS_A * cosA
+
+      const eaveInterfaceZ = eaveTopZ
+      // const eaveInterfaceY = eaveTopY - THICKNESS_A / cosA // Unused
+
+      // Bottom of B
+      const eaveBottomZ = eaveTopZ
+      const eaveBottomY = ridgeUnderY - eaveTopZ * tanA
+
+      // Construct Polygons (in +Z coords for simplicity, then flip if needed)
+      // Z=0 is ridge.
+
+      // Layer A (Cover)
       const pointsA = [
         { x: 0, y: ridgeTopY }, // Ridge Top
-        { x: eaveTopExtendedZ, y: eaveTopExtendedY }, // Eave Top (Extended)
-        { x: eaveInterfaceExtendedZ, y: eaveInterfaceExtendedY }, // Eave Bottom (Extended)
+        { x: dir * eaveTopExtZ, y: eaveTopExtY }, // Eave Top Extended
+        { x: dir * eaveInterfaceExtZ, y: eaveInterfaceExtY }, // Eave Bottom Extended
         { x: 0, y: ridgeInterfaceY }, // Ridge Bottom
       ]
 
-      // Layer B (Structure) Points
+      // Layer B (Structure)
       const pointsB = [
         { x: 0, y: ridgeInterfaceY },
-        { x: eaveInterfaceZ, y: eaveInterfaceY },
-        { x: eaveBottomZ, y: eaveBottomY },
-        { x: 0, y: ridgeBottomY },
+        { x: dir * eaveInterfaceZ, y: ridgeInterfaceY - eaveTopZ * tanA }, // Interface at Eave
+        { x: dir * eaveBottomZ, y: eaveBottomY }, // Bottom at Eave
+        { x: 0, y: ridgeUnderY },
       ]
 
-      return { pointsA, pointsB, ridgeBottomY }
+      // Side Wall (C3/C4)
+      const zInner = width - WALL_THICKNESS
+      const zOuter = width
+
+      const pointsSide = [
+        { x: dir * zInner, y: 0 },
+        { x: dir * zOuter, y: 0 },
+        { x: dir * zOuter, y: Math.max(0, wallOuterTopY) }, // Clamp to 0
+        { x: dir * zInner, y: BASE_HEIGHT },
+      ]
+
+      // Gable Top (C1 part)
+      const pointsC1 = [
+        { x: 0, y: BASE_HEIGHT }, // Center Base
+        { x: dir * zInner, y: BASE_HEIGHT }, // Inner Wall Base
+        { x: dir * zInner, y: BASE_HEIGHT }, // Inner Wall Top (Redundant but closed)
+        { x: 0, y: ridgeUnderY }, // Ridge Under
+      ]
+
+      // Gable Base (C2 part)
+      const pointsC2 = [
+        { x: 0, y: 0 },
+        { x: dir * zInner, y: 0 },
+        { x: dir * zInner, y: BASE_HEIGHT },
+        { x: 0, y: BASE_HEIGHT },
+      ]
+
+      return { pointsA, pointsB, pointsSide, pointsC1, pointsC2 }
     }
 
-    const leftProfile = getSideProfile(-1)
-    const rightProfile = getSideProfile(1)
-
-    // Wall (C) Profile
-    // Defined by the wall plates under the eaves
-    // Left side corresponds to Shape X < 0 (World +Z)
-    // Right side corresponds to Shape X > 0 (World -Z)
-
-    // Calculate wall plate X positions (inset from eaves)
-    // Note: These are Shape X coordinates
-    // Left eave is at -leftWidth. Wall is at -leftWidth + WALL_INSET
-    // Right eave is at +rightWidth. Wall is at +rightWidth - WALL_INSET
-    const wallLeftX = -leftWidth + WALL_INSET
-    const wallRightX = rightWidth - WALL_INSET
-
-    // Ridge Bottom is min of left/right bottom if asymmetric?
-    // Or just connect them.
-    // We use the calculated ridgeBottomY
-    const ridgeBottomY = Math.min(leftProfile.ridgeBottomY, rightProfile.ridgeBottomY)
-
-    const pointsC1 = [
-      { x: wallLeftX, y: 0 }, // Wall Plate Left
-      { x: 0, y: ridgeBottomY }, // Peak
-      { x: wallRightX, y: 0 }, // Wall Plate Right
-    ]
-
-    // Create Shapes
-    const shapeALeft = createShape(leftProfile.pointsA)
-    const shapeARight = createShape(rightProfile.pointsA)
-    const shapeBLeft = createShape(leftProfile.pointsB)
-    const shapeBRight = createShape(rightProfile.pointsB)
-    const shapeC1 = createShape(pointsC1)
-
-    // Extrusion Settings
-    // We extrude along X. Three.js extrudes along Z. We'll rotate the mesh.
-    // Lengths:
-    // A: ridgeLength + 2 * RAKE_OVERHANG + 2 * ROOF_COVER_OVERHANG
-    // B: ridgeLength + 2 * RAKE_OVERHANG
-    // C: ridgeLength (No overhang, just the wall length)
+    const leftP = getSideProfile(1)
+    const rightP = getSideProfile(-1)
 
     return {
       shapes: {
-        ALeft: shapeALeft,
-        ARight: shapeARight,
-        BLeft: shapeBLeft,
-        BRight: shapeBRight,
-        C1: shapeC1,
+        ALeft: createShape(leftP.pointsA),
+        ARight: createShape(rightP.pointsA),
+        BLeft: createShape(leftP.pointsB),
+        BRight: createShape(rightP.pointsB),
+        SideLeft: createShape(leftP.pointsSide),
+        SideRight: createShape(rightP.pointsSide),
+        C1Left: createShape(leftP.pointsC1),
+        C1Right: createShape(rightP.pointsC1),
+        C2Left: createShape(leftP.pointsC2),
+        C2Right: createShape(rightP.pointsC2),
       },
       lengths: {
         A: ridgeLength + 2 * RAKE_OVERHANG + 2 * ROOF_COVER_OVERHANG,
         B: ridgeLength + 2 * RAKE_OVERHANG,
-        C: ridgeLength,
+        Side: ridgeLength,
+        Gable: WALL_THICKNESS,
       },
       offsets: {
         A: -RAKE_OVERHANG - ROOF_COVER_OVERHANG,
         B: -RAKE_OVERHANG,
-        C: 0,
+        Side: 0,
+        GableFront: 0,
+        GableBack: ridgeLength - WALL_THICKNESS,
       },
-      // Keep original points for handles
       points: {
         bottomLeft,
         bottomRight,
@@ -949,6 +953,16 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   const materialC = (
     <meshStandardMaterial
       color="#d1d5db"
+      metalness={0.1}
+      opacity={opacity}
+      roughness={0.8}
+      side={THREE.DoubleSide}
+      transparent={transparent}
+    />
+  )
+  const materialSide = (
+    <meshStandardMaterial
+      color="#e5e7eb" // Light gray for side walls
       metalness={0.1}
       opacity={opacity}
       roughness={0.8}
@@ -1019,32 +1033,24 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   const rotationHitThickness = ROTATION_HANDLE_THICKNESS * ROTATION_HIT_SCALE
   const rotationHandleId = `${nodeId}-rotation`
 
-  // Helper for extrusions
-  // Rotated to align: Extrude Z -> World X. Y -> World Y. X -> World Z.
-  // We generated shapes in YZ plane. X in shape corresponds to Z in world. Y in shape to Y in world.
-  // We need to extrude along World X.
-  // Three.js ExtrudeGeometry extrudes along Z axis of the shape.
-  // So we want Shape X -> World Z, Shape Y -> World Y.
-  // Then rotate the whole mesh -90 deg around Y? No.
-  // Shape is in YZ plane (X=0). Shape coordinates are (z, y).
-  // But `createShape` takes {x,y}. We passed {x: z_coord, y: y_coord}.
-  // So Shape X = World Z. Shape Y = World Y.
-  // Extrusion is along Shape Z. We want World X.
-  // So we need to rotate the extruded mesh such that Shape Z aligns with World X.
-  // Rotation: Y axis +90 deg.
-  // (New X) = (Old Z). (New Z) = -(Old X).
-  // Shape X was World Z. So New Z = -World Z. This flips Z.
-  // We might need to adjust the rotation or shape points.
+  // Helper to render a mesh part
+  const RenderPart = ({ shape, depth, material, position }: any) => (
+    <mesh castShadow position={position} receiveShadow rotation={[0, Math.PI / 2, 0]}>
+      <extrudeGeometry args={[shape, { depth, bevelEnabled: false }]} />
+      {material}
+      {debug && (
+        <Edges color="#000000" linewidth={1} opacity={0.1} renderOrder={1000} threshold={15} />
+      )}
+    </mesh>
+  )
 
   return (
     <group>
       {isPreview ? (
-        // Simplified preview for dragging
+        // Simplified preview
         <group>
-          {/* Preview rectangular footprint outline */}
           <Line
             color="#336633"
-            dashed={false}
             depthTest={false}
             lineWidth={2}
             opacity={0.3}
@@ -1053,105 +1059,106 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
               roofGeometry.points.bottomRight as [number, number, number],
               roofGeometry.points.bottomRightEnd as [number, number, number],
               roofGeometry.points.bottomLeftEnd as [number, number, number],
-              roofGeometry.points.bottomLeft as [number, number, number], // Close the rectangle
+              roofGeometry.points.bottomLeft as [number, number, number],
             ]}
             transparent
           />
-          {/* Render basic shape for preview */}
-          <mesh position={[0, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <extrudeGeometry
-              args={[
-                roofGeometry.shapes.C1,
-                { depth: roofGeometry.lengths.C, bevelEnabled: false },
-              ]}
-            />
-            <meshStandardMaterial color="#44ff44" opacity={0.5} transparent />
-          </mesh>
         </group>
       ) : (
         <group>
-          {/* Layer A Left */}
-          <mesh
-            castShadow
+          {/* Layer A (Cover) */}
+          <RenderPart
+            depth={roofGeometry.lengths.A}
+            material={materialA}
             position={[roofGeometry.offsets.A, 0, 0]}
-            receiveShadow
-            rotation={[0, Math.PI / 2, 0]}
-          >
-            <extrudeGeometry
-              args={[
-                roofGeometry.shapes.ALeft,
-                { depth: roofGeometry.lengths.A, bevelEnabled: false },
-              ]}
-            />
-            {materialA}
-          </mesh>
-
-          {/* Layer A Right */}
-          <mesh
-            castShadow
+            shape={roofGeometry.shapes.ALeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.A}
+            material={materialA}
             position={[roofGeometry.offsets.A, 0, 0]}
-            receiveShadow
-            rotation={[0, Math.PI / 2, 0]}
-          >
-            <extrudeGeometry
-              args={[
-                roofGeometry.shapes.ARight,
-                { depth: roofGeometry.lengths.A, bevelEnabled: false },
-              ]}
-            />
-            {materialA}
-          </mesh>
+            shape={roofGeometry.shapes.ARight}
+          />
 
-          {/* Layer B Left */}
-          <mesh
-            castShadow
+          {/* Layer B (Structure) */}
+          <RenderPart
+            depth={roofGeometry.lengths.B}
+            material={materialB}
             position={[roofGeometry.offsets.B, 0, 0]}
-            receiveShadow
-            rotation={[0, Math.PI / 2, 0]}
-          >
-            <extrudeGeometry
-              args={[
-                roofGeometry.shapes.BLeft,
-                { depth: roofGeometry.lengths.B, bevelEnabled: false },
-              ]}
-            />
-            {materialB}
-          </mesh>
-
-          {/* Layer B Right */}
-          <mesh
-            castShadow
+            shape={roofGeometry.shapes.BLeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.B}
+            material={materialB}
             position={[roofGeometry.offsets.B, 0, 0]}
-            receiveShadow
-            rotation={[0, Math.PI / 2, 0]}
-          >
-            <extrudeGeometry
-              args={[
-                roofGeometry.shapes.BRight,
-                { depth: roofGeometry.lengths.B, bevelEnabled: false },
-              ]}
-            />
-            {materialB}
-          </mesh>
+            shape={roofGeometry.shapes.BRight}
+          />
 
-          {/* Gable C1 Front */}
-          <mesh position={[roofGeometry.offsets.C, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <extrudeGeometry
-              args={[roofGeometry.shapes.C1, { depth: WALL_THICKNESS, bevelEnabled: false }]}
-            />
-            {materialC}
-          </mesh>
+          {/* Side Walls */}
+          <RenderPart
+            depth={roofGeometry.lengths.Side}
+            material={materialSide}
+            position={[roofGeometry.offsets.Side, 0, 0]}
+            shape={roofGeometry.shapes.SideLeft}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Side}
+            material={materialSide}
+            position={[roofGeometry.offsets.Side, 0, 0]}
+            shape={roofGeometry.shapes.SideRight}
+          />
 
-          {/* Gable C1 Back */}
-          <mesh
-            position={[roofGeometry.lengths.C - WALL_THICKNESS, 0, 0]}
-            rotation={[0, Math.PI / 2, 0]}
-          >
-            <extrudeGeometry
-              args={[roofGeometry.shapes.C1, { depth: WALL_THICKNESS, bevelEnabled: false }]}
-            />
-            {materialC}
-          </mesh>
+          {/* Gable Walls (Front) */}
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C1Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C1Right}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C2Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableFront, 0, 0]}
+            shape={roofGeometry.shapes.C2Right}
+          />
+
+          {/* Gable Walls (Back) */}
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C1Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C1Right}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C2Left}
+          />
+          <RenderPart
+            depth={roofGeometry.lengths.Gable}
+            material={materialC}
+            position={[roofGeometry.offsets.GableBack, 0, 0]}
+            shape={roofGeometry.shapes.C2Right}
+          />
 
           {/* Selection outline */}
           {isSelected && (
@@ -1385,11 +1392,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
               })}
 
               {/* Translation handles */}
-              <group
-                key={`${nodeId}-translation`}
-                position={[centerX, 0, centerZ]}
-                // rotation={[0, -ridgeAngle, 0]} // No rotation for local handles group, it's already in local space
-              >
+              <group key={`${nodeId}-translation`} position={[centerX, 0, centerZ]}>
                 {/* Center origin marker for XZ translation */}
                 <group position={[0, 0, 0]}>
                   <mesh
@@ -1496,7 +1499,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
                       args={[ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, ARROW_SHAFT_LENGTH, 16]}
                     />
                     <HandleMaterial
-                      color="#ff4444"
+                      color="#ff44ff"
                       emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
                       opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
@@ -1508,7 +1511,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
                   >
                     <coneGeometry args={[ARROW_HEAD_RADIUS, ARROW_HEAD_LENGTH, 16]} />
                     <HandleMaterial
-                      color="#ff4444"
+                      color="#ff44ff"
                       emissiveIntensity={getHandleEmissiveIntensity(`${nodeId}-translate-perp`)}
                       opacity={getHandleOpacity(`${nodeId}-translate-perp`)}
                     />
