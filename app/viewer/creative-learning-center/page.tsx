@@ -91,6 +91,14 @@ export default function ViewerPage() {
       <div className="fixed top-4 right-4 z-50">
         <UserMenu />
       </div>
+
+      {/* Layers Menu - Left side */}
+      <div className="fixed top-4 left-4 z-50 rounded-lg border border-gray-800 bg-[#1b1c1f]/90 shadow-lg backdrop-blur-sm">
+        <div className="border-white/10 border-b px-3 py-2">
+          <span className="font-medium text-sm text-white">Layers</span>
+        </div>
+        <ViewerLayersMenu mounted={mounted} />
+      </div>
     </main>
   )
 }

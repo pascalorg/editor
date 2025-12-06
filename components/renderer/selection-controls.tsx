@@ -181,9 +181,13 @@ interface SelectionControlsProps {
 
 export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls = true }) => {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
   const [boundsNeedUpdate, setBoundsNeedUpdate] = useState(0)
+
+  // In viewer mode (controls=false) with a collection selected, only show combined bounds
+  const isViewerCollectionMode = !controls && !!selectedCollectionId
 
   const rotationFramesRef = useRef(0) // Track frames after rotation to update bounds
   const moveStateRef = useRef<MoveState>({
@@ -864,21 +868,25 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
   return (
     <group>
       {/* Individual bounding boxes for each selected item - oriented */}
-      {individualBounds.map((bounds, i) => (
-        <SelectionBox
-          center={bounds.center}
-          color="#00ff00"
-          key={i}
-          rotation={bounds.rotation}
-          size={bounds.size}
-        />
-      ))}
+      {/* In viewer collection mode, skip individual boxes and only show combined */}
+      {!isViewerCollectionMode &&
+        individualBounds.map((bounds, i) => (
+          <SelectionBox
+            center={bounds.center}
+            color="#00ff00"
+            key={i}
+            rotation={bounds.rotation}
+            size={bounds.size}
+          />
+        ))}
 
-      {/* Combined bounding box (only if multiple items selected) */}
-      {selectedNodeIds.length > 1 && (
+      {/* Combined bounding box */}
+      {/* In editor: show only when multiple items selected */}
+      {/* In viewer collection mode: always show as the room boundary */}
+      {(isViewerCollectionMode || selectedNodeIds.length > 1) && (
         <SelectionBox
           center={combinedBounds.center}
-          color="#ffff00"
+          color={isViewerCollectionMode ? '#f59e0b' : '#ffff00'}
           rotation={new THREE.Euler(0, 0, 0)}
           size={combinedBounds.size}
         />

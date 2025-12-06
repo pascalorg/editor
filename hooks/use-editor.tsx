@@ -291,6 +291,9 @@ export type StoreState = {
   // Add to collection workflow
   addToCollectionState: AddToCollectionState
 
+  // Collection/Room selection (for viewer room focus)
+  selectedCollectionId: string | null
+
   selectedItem: {
     name?: string
     modelUrl: string
@@ -311,6 +314,7 @@ export type StoreState = {
   deleteLevel: (levelId: string) => void
   reorderLevels: (levels: SchemaLevelNode[]) => void
   selectFloor: (floorId: string | null) => void
+  selectCollection: (collectionId: string | null) => void
 
   handleNodeSelect: (
     nodeId: string,
@@ -555,6 +559,7 @@ const useStore = create<StoreState>()(
         debug: false,
         pointerPosition: null,
         addToCollectionState: { isActive: false, nodeIds: [] },
+        selectedCollectionId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
           scale: [0.4, 0.4, 0.4],
@@ -598,8 +603,42 @@ const useStore = create<StoreState>()(
               currentLevel: (level.data() as unknown as SchemaLevelNode).level,
               viewMode: 'level',
               selectedNodeIds: [],
+              selectedCollectionId: null, // Clear collection selection when floor changes
             })
           }
+        },
+        selectCollection: (collectionId) => {
+          const state = get()
+          if (!collectionId) {
+            set({
+              selectedCollectionId: null,
+              selectedNodeIds: [],
+            })
+            return
+          }
+
+          // Find the collection
+          const collection = state.scene.collections?.find((c) => c.id === collectionId)
+          if (!collection) return
+
+          // If collection has a levelId, ensure that level is selected
+          if (collection.levelId && collection.levelId !== state.selectedFloorId) {
+            const level = state.graph.nodes
+              .find({ type: 'level' })
+              .find((l) => l.id === collection.levelId)
+            if (level) {
+              set({
+                selectedFloorId: collection.levelId,
+                currentLevel: (level.data() as unknown as SchemaLevelNode).level,
+                viewMode: 'level',
+              })
+            }
+          }
+
+          set({
+            selectedCollectionId: collectionId,
+            selectedNodeIds: [...collection.nodeIds],
+          })
         },
         handleNodeSelect: (nodeId, event) => {
           const currentSelection = get().selectedNodeIds
@@ -608,7 +647,10 @@ const useStore = create<StoreState>()(
             nodeId as AnyNodeId,
             event,
           )
-          set({ selectedNodeIds: updatedSelection })
+          set({
+            selectedNodeIds: updatedSelection,
+            selectedCollectionId: null, // Clear collection selection when individual nodes are selected
+          })
 
           // Auto-switch control mode based on node type
           const state = get()
