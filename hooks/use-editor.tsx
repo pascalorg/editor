@@ -28,6 +28,11 @@ import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
 import {
+  type Collection,
+  CollectionSchema,
+  type CollectionType,
+} from '@/lib/scenegraph/schema/collections'
+import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
@@ -241,6 +246,12 @@ export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 
+// Add to collection workflow state
+export type AddToCollectionState = {
+  isActive: boolean
+  nodeIds: string[]
+}
+
 export type StoreState = {
   // ============================================================================
   // SCENE GRAPH STATE
@@ -277,6 +288,12 @@ export type StoreState = {
   pointerPosition: [number, number] | null
   debug: boolean
 
+  // Add to collection workflow
+  addToCollectionState: AddToCollectionState
+
+  // Collection/Room selection (for viewer room focus)
+  selectedCollectionId: string | null
+
   selectedItem: {
     name?: string
     modelUrl: string
@@ -297,6 +314,7 @@ export type StoreState = {
   deleteLevel: (levelId: string) => void
   reorderLevels: (levels: SchemaLevelNode[]) => void
   selectFloor: (floorId: string | null) => void
+  selectCollection: (collectionId: string | null) => void
 
   handleNodeSelect: (
     nodeId: string,
@@ -372,6 +390,19 @@ export type StoreState = {
       end?: [number, number]
     },
   ) => void
+
+  // Collection operations
+  addCollection: (name: string) => Collection
+  deleteCollection: (collectionId: string) => void
+  renameCollection: (collectionId: string, name: string) => void
+  setCollectionType: (collectionId: string, type: CollectionType) => void
+  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
+  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+
+  // Add to collection workflow
+  startAddToCollection: () => void
+  confirmAddToCollection: (collectionId: string) => void
+  cancelAddToCollection: () => void
 }
 
 /**
@@ -473,17 +504,21 @@ const useStore = create<StoreState>()(
       const handleGraphChange = (nextScene: Scene) => {
         const currentScene = get().scene
 
-        // Always preserve the current store's environment - the graph doesn't manage environment,
-        // it's managed directly via setState in updateEnvironment. The graph's scene copy
-        // may have stale environment data.
-        const sceneWithCurrentEnv = {
+        // Preserve data that is managed outside the graph:
+        // - environment: managed directly via setState in updateEnvironment
+        // - collections: managed via collection operations in the store
+        // - metadata: scene-level metadata not managed by the graph
+        // The graph's scene copy may have stale data for these fields.
+        const sceneWithPreservedData = {
           ...nextScene,
+          collections: currentScene.collections,
+          metadata: currentScene.metadata,
           root: {
             ...nextScene.root,
             environment: currentScene.root.environment,
           },
         }
-        set({ scene: sceneWithCurrentEnv })
+        set({ scene: sceneWithPreservedData })
 
         // Get fresh state after updating scene
         const currentState = get()
@@ -523,6 +558,8 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
+        addToCollectionState: { isActive: false, nodeIds: [] },
+        selectedCollectionId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
           scale: [0.4, 0.4, 0.4],
@@ -566,8 +603,42 @@ const useStore = create<StoreState>()(
               currentLevel: (level.data() as unknown as SchemaLevelNode).level,
               viewMode: 'level',
               selectedNodeIds: [],
+              selectedCollectionId: null, // Clear collection selection when floor changes
             })
           }
+        },
+        selectCollection: (collectionId) => {
+          const state = get()
+          if (!collectionId) {
+            set({
+              selectedCollectionId: null,
+              selectedNodeIds: [],
+            })
+            return
+          }
+
+          // Find the collection
+          const collection = state.scene.collections?.find((c) => c.id === collectionId)
+          if (!collection) return
+
+          // If collection has a levelId, ensure that level is selected
+          if (collection.levelId && collection.levelId !== state.selectedFloorId) {
+            const level = state.graph.nodes
+              .find({ type: 'level' })
+              .find((l) => l.id === collection.levelId)
+            if (level) {
+              set({
+                selectedFloorId: collection.levelId,
+                currentLevel: (level.data() as unknown as SchemaLevelNode).level,
+                viewMode: 'level',
+              })
+            }
+          }
+
+          set({
+            selectedCollectionId: collectionId,
+            selectedNodeIds: [...collection.nodeIds],
+          })
         },
         handleNodeSelect: (nodeId, event) => {
           const currentSelection = get().selectedNodeIds
@@ -576,7 +647,10 @@ const useStore = create<StoreState>()(
             nodeId as AnyNodeId,
             event,
           )
-          set({ selectedNodeIds: updatedSelection })
+          set({
+            selectedNodeIds: updatedSelection,
+            selectedCollectionId: null, // Clear collection selection when individual nodes are selected
+          })
 
           // Auto-switch control mode based on node type
           const state = get()
@@ -696,7 +770,13 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(state.selectedNodeIds)
+          const updatedCollections = (state.scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -744,14 +824,7 @@ const useStore = create<StoreState>()(
           }
         },
 
-        serializeLayout: () => {
-          const state = get()
-          return {
-            version: '3.0',
-            grid: { size: 61 },
-            root: state.scene.root,
-          }
-        },
+        serializeLayout: () => get().scene,
         loadLayout: (json) => {
           // Helper to ensure all nodes have the 'object: node' marker
           const ensureNodeMarkers = (node: any): void => {
@@ -828,7 +901,11 @@ const useStore = create<StoreState>()(
 
             ensureNodeMarkers(root)
 
-            const newScene = { root } as unknown as Scene
+            // Parse collections if present
+            const collections = Array.isArray(json.collections) ? json.collections : []
+            const metadata = json.metadata || {}
+
+            const newScene = { root, collections, metadata } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -849,7 +926,11 @@ const useStore = create<StoreState>()(
             })
             ensureNodeMarkers(migratedRoot)
 
-            const newScene = { root: migratedRoot } as unknown as Scene
+            const newScene = {
+              root: migratedRoot,
+              collections: [],
+              metadata: {},
+            } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -1037,7 +1118,7 @@ const useStore = create<StoreState>()(
         },
 
         deleteNode: (nodeId) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1046,10 +1127,17 @@ const useStore = create<StoreState>()(
           } else {
             commandManager.execute(command, graph)
           }
+
+          // Remove the node from any collections it belongs to
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections } })
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1076,8 +1164,13 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Clear selection after deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(nodeIds)
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
@@ -1137,6 +1230,119 @@ const useStore = create<StoreState>()(
 
         setPointerPosition: (position: [number, number] | null) =>
           set({ pointerPosition: position }),
+
+        // Collection operations
+        addCollection: (name: string) => {
+          const collection = CollectionSchema.parse({ name })
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: [...(state.scene.collections || []), collection],
+            },
+          })
+          return collection
+        },
+
+        deleteCollection: (collectionId: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).filter((c) => c.id !== collectionId),
+            },
+          })
+        },
+
+        renameCollection: (collectionId: string, name: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, name } : c,
+              ),
+            },
+          })
+        },
+
+        setCollectionType: (collectionId: string, type: CollectionType) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, type } : c,
+              ),
+            },
+          })
+        },
+
+        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                // Add only node IDs that aren't already in the collection
+                const existingIds = new Set(c.nodeIds || [])
+                const newIds = nodeIds.filter((id) => !existingIds.has(id))
+
+                // If this is the first node being added, set the levelId from that node
+                const isFirstNode = existingIds.size === 0 && newIds.length > 0
+                const levelId = isFirstNode
+                  ? (getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId) as
+                      | `level_${string}`
+                      | null)
+                  : c.levelId
+
+                return {
+                  ...c,
+                  nodeIds: [...(c.nodeIds || []), ...newIds],
+                  levelId,
+                }
+              }),
+            },
+          })
+        },
+
+        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          const idsToRemove = new Set(nodeIds)
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
+              }),
+            },
+          })
+        },
+
+        // Add to collection workflow
+        startAddToCollection: () => {
+          const { selectedNodeIds } = get()
+          if (selectedNodeIds.length === 0) return
+          set({
+            addToCollectionState: {
+              isActive: true,
+              nodeIds: [...selectedNodeIds],
+            },
+          })
+        },
+
+        confirmAddToCollection: (collectionId: string) => {
+          const { addToCollectionState, addNodesToCollection } = get()
+          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
+          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
+
+        cancelAddToCollection: () => {
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
       }
     },
     {
@@ -1176,6 +1382,7 @@ const useStore = create<StoreState>()(
           scene: {
             ...state.scene,
             root: processedRoot,
+            collections: state.scene.collections || [],
           },
           selectedNodeIds: state.selectedNodeIds,
           debug: state.debug,
@@ -1249,12 +1456,16 @@ const useStore = create<StoreState>()(
               rebuildSpatialGrid(s.spatialGrid, currentGraph)
               recomputeAllLevels(s as any)
 
-              // Always preserve the current store's environment - the graph doesn't manage environment,
-              // it's managed directly via setState in updateEnvironment. The graph's scene copy
-              // may have stale environment data.
+              // Preserve data that is managed outside the graph:
+              // - environment: managed directly via setState in updateEnvironment
+              // - collections: managed via collection operations in the store
+              // - metadata: scene-level metadata not managed by the graph
+              // The graph's scene copy may have stale data for these fields.
               return {
                 scene: {
                   ...nextScene,
+                  collections: s.scene.collections,
+                  metadata: s.scene.metadata,
                   root: {
                     ...nextScene.root,
                     environment: s.scene.root.environment,

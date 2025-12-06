@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const SlabNode = BaseNode.extend({
-  id: nodeId('slab'),
+  id: objectId('slab'),
   type: nodeType('slab'),
   // Grid props
   position: z.tuple([z.number(), z.number()]),

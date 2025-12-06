@@ -50,7 +50,6 @@ export function LevelNodeEditor() {
     <>
       {controlMode === 'building' && activeTool && <RegistryNodeEditor toolName={activeTool} />}
       {controlMode === 'guide' && <RegistryModeEditors mode="guide" />}
-      <GridTiles />
     </>
   )
 }

@@ -2,7 +2,6 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { type Object3D, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
 
 function SelectionManager() {
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
@@ -138,9 +137,15 @@ function SelectionManager() {
 
       const candidates = performRaycast(event)
 
-      // If we didn't hit any selectable node, clear the selection
+      // If we didn't hit any selectable node, clear the selection and cancel add-to-collection
       if (candidates && candidates.length === 0) {
         handleClear()
+
+        // Cancel add-to-collection mode if active
+        const { addToCollectionState, cancelAddToCollection } = useEditor.getState()
+        if (addToCollectionState.isActive) {
+          cancelAddToCollection()
+        }
       }
     }
 

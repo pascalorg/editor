@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const ScanNode = BaseNode.extend({
-  id: nodeId('scan'),
+  id: objectId('scan'),
   type: nodeType('scan'),
   url: z.string(), // Data URL for 3D model
   // position and rotation are in level coordinate system (scan can be adjusted around any axis)

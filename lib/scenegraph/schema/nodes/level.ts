@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 import { ColumnNode } from './column'
 import { FloorNode } from './floor'
 import { GroupNode } from './group'
@@ -12,7 +12,7 @@ import { SlabNode } from './slab'
 import { WallNode } from './wall'
 
 export const LevelNode = BaseNode.extend({
-  id: nodeId('level'),
+  id: objectId('level'),
   type: nodeType('level'),
   children: z
     .array(

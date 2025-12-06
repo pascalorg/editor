@@ -1,8 +1,11 @@
 'use client'
 
-import { Eye, EyeOff, Layers } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, EyeOff, Grid2x2, Layers } from 'lucide-react'
+import { useState } from 'react'
+import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
-import { useEditor } from '@/hooks/use-editor'
+import { type StoreState, useEditor } from '@/hooks/use-editor'
+import type { Collection } from '@/lib/scenegraph/schema/collections'
 import { cn } from '@/lib/utils'
 
 interface ViewerLayersMenuProps {
@@ -16,16 +19,42 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
   })
+
+  // Get room collections grouped by levelId
+  const roomCollections = useEditor(
+    useShallow((state: StoreState) =>
+      (state.scene.collections || []).filter((c) => c.type === 'room'),
+    ),
+  )
+
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const selectFloor = useEditor((state) => state.selectFloor)
+  const selectCollection = useEditor((state) => state.selectCollection)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+
+  // Track expanded levels
+  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set())
 
   // Get sorted floor levels for rendering (highest level first)
   const floorGroups = levels
     .filter((level) => level.type === 'level')
     .sort((a, b) => (b.level || 0) - (a.level || 0))
 
+  // Group room collections by levelId
+  const roomsByLevel = roomCollections.reduce<Record<string, Collection[]>>((acc, collection) => {
+    const levelId = collection.levelId || 'unassigned'
+    if (!acc[levelId]) acc[levelId] = []
+    acc[levelId].push(collection)
+    return acc
+  }, {})
+
   const handleFloorClick = (floorId: string) => {
+    // Clear collection selection when clicking a floor
+    if (selectedCollectionId) {
+      selectCollection(null)
+    }
     if (selectedFloorId === floorId) {
       // Deselect if clicking the same floor
       selectFloor(null)
@@ -34,41 +63,121 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     }
   }
 
+  const toggleLevelExpansion = (levelId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpandedLevels((prev) => {
+      const next = new Set(prev)
+      if (next.has(levelId)) {
+        next.delete(levelId)
+      } else {
+        next.add(levelId)
+      }
+      return next
+    })
+  }
+
+  const handleRoomClick = (collection: Collection, levelId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Select the level if not already selected
+    if (selectedFloorId !== levelId) {
+      selectFloor(levelId)
+    }
+    // Use selectCollection to focus on the room
+    selectCollection(collection.id)
+  }
+
+  // Check if this room collection is currently selected
+  const isRoomSelected = (collection: Collection): boolean => {
+    return selectedCollectionId === collection.id
+  }
+
   return (
-    <div className="w-48 min-w-48">
+    <div className="w-52 min-w-52">
       {mounted ? (
         <div className="space-y-0.5 p-2">
           {floorGroups.map((level) => {
             const isSelected = selectedFloorId === level.id
             const isVisible = level.visible !== false
+            const levelRooms = roomsByLevel[level.id] || []
+            const hasRooms = levelRooms.length > 0
+            const isExpanded = expandedLevels.has(level.id)
 
             return (
-              <div
-                className={cn(
-                  'group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-all',
-                  'hover:bg-white/10',
-                  isSelected && 'bg-white/15',
-                  !isVisible && 'opacity-40',
-                )}
-                key={level.id}
-                onClick={() => handleFloorClick(level.id)}
-              >
-                <Layers className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                <span className="flex-1 text-sm text-white">{level.name}</span>
-                <Button
+              <div key={level.id}>
+                {/* Level row */}
+                <div
                   className={cn(
-                    'h-5 w-5 p-0 text-white transition-opacity hover:bg-white/20',
-                    isVisible ? 'opacity-0 group-hover:opacity-70' : 'opacity-70',
+                    'group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-all',
+                    'hover:bg-white/10',
+                    isSelected && 'bg-white/15',
+                    !isVisible && 'opacity-40',
                   )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleNodeVisibility(level.id)
-                  }}
-                  size="sm"
-                  variant="ghost"
+                  onClick={() => handleFloorClick(level.id)}
                 >
-                  {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                </Button>
+                  {/* Expand/collapse button for levels with rooms */}
+                  {hasRooms ? (
+                    <button
+                      className="flex h-4 w-4 shrink-0 items-center justify-center text-white/60 hover:text-white"
+                      onClick={(e) => toggleLevelExpansion(level.id, e)}
+                      type="button"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  ) : (
+                    <div className="w-4 shrink-0" />
+                  )}
+                  <Layers className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                  <span className="flex-1 text-sm text-white">{level.name}</span>
+                  {hasRooms && (
+                    <span className="text-white/40 text-xs">{levelRooms.length}</span>
+                  )}
+                  <Button
+                    className={cn(
+                      'h-5 w-5 p-0 text-white transition-opacity hover:bg-white/20',
+                      isVisible ? 'opacity-0 group-hover:opacity-70' : 'opacity-70',
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleNodeVisibility(level.id)
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                  </Button>
+                </div>
+
+                {/* Room collections for this level */}
+                {hasRooms && isExpanded && (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-white/10 border-l pl-2">
+                    {levelRooms.map((room) => {
+                      const roomSelected = isRoomSelected(room)
+                      return (
+                        <div
+                          className={cn(
+                            'group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-all',
+                            'hover:bg-white/10',
+                            roomSelected && 'bg-amber-500/20',
+                          )}
+                          key={room.id}
+                          onClick={(e) => handleRoomClick(room, level.id, e)}
+                        >
+                          <Grid2x2 className="h-3 w-3 shrink-0 text-amber-400" />
+                          <span className="flex-1 text-white/90 text-xs">{room.name}</span>
+                          {room.nodeIds.length > 0 && (
+                            <span className="text-white/40 text-xs">
+                              {room.nodeIds.length}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}

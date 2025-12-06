@@ -1,13 +1,13 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 // Helper schemas
 const SegmentTypeSchema = z.enum(['stair', 'landing'])
 const AttachmentSideSchema = z.enum(['front', 'left', 'right'])
 
 export const StairSegmentNode = BaseNode.extend({
-  id: nodeId('stairsegment'),
+  id: objectId('stairsegment'),
   type: nodeType('stairsegment'),
 
   // Dimensions
@@ -31,7 +31,7 @@ export const StairSegmentNode = BaseNode.extend({
 export type StairSegmentNode = z.infer<typeof StairSegmentNode>
 
 export const StairNode = BaseNode.extend({
-  id: nodeId('stair'),
+  id: objectId('stair'),
   type: nodeType('stair'),
   position: z.tuple([z.number(), z.number()]).default([0, 0]), // [x, y] on grid (world x, z)
   rotation: z.number().default(0), // rotation around Y

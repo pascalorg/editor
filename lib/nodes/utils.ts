@@ -5,8 +5,73 @@
  * searching, and manipulation.
  */
 
-import type { AnyNode, SceneNodeType as NodeType } from '@/lib/scenegraph/schema/index'
+import * as THREE from 'three'
+import type { AnyNode, SceneNodeType as NodeType, Scene } from '@/lib/scenegraph/schema/index'
 import { type BaseNode, isNode } from './guards'
+
+// ============================================================================
+// COORDINATE TRANSFORMATION
+// ============================================================================
+
+/**
+ * Convert Global Grid Coordinates to Local Node Coordinates
+ *
+ * Used to transform grid events (which are in global/root space) into the
+ * local coordinate system of a target parent node (e.g., placing a wall inside a rotated/moved building).
+ *
+ * @param globalGridPos - [x, y] grid coordinates from GridTiles
+ * @param parentId - ID of the target parent node (e.g., Level ID)
+ * @param scene - The scene graph
+ * @param tileSize - Size of a grid tile (default 0.5)
+ */
+export function getLocalGridPosition(
+  globalGridPos: [number, number],
+  parentId: string,
+  scene: Scene,
+  tileSize = 0.5,
+): [number, number] {
+  // Find ancestors path
+  const ancestors = findAncestors(scene.root.children, parentId)
+  const parent = findNodeById(scene.root.children, parentId)
+
+  if (!parent) return globalGridPos
+
+  // Build chain from root -> parent
+  const chain = [...ancestors, parent]
+
+  // Calculate cumulative transform matrix
+  const matrix = new THREE.Matrix4()
+
+  for (const node of chain) {
+    if (node.id === 'root') continue
+
+    const pos = (node as any).position || [0, 0]
+    const rot = (node as any).rotation || 0
+
+    const localMatrix = new THREE.Matrix4()
+    // Create transformation components
+    const translation = new THREE.Matrix4().makeTranslation(pos[0] * tileSize, 0, pos[1] * tileSize)
+    const rotation = new THREE.Matrix4().makeRotationY(rot)
+
+    // Compose: Translation * Rotation (standard SRT order where scale is 1)
+    localMatrix.multiplyMatrices(translation, rotation)
+
+    matrix.multiply(localMatrix)
+  }
+
+  // Invert to get World -> Local matrix
+  const inverseMatrix = matrix.invert()
+
+  // Convert Grid Point to World Units (relative to Root Group origin)
+  const rootX = globalGridPos[0] * tileSize
+  const rootZ = globalGridPos[1] * tileSize
+
+  const vec = new THREE.Vector3(rootX, 0, rootZ)
+  vec.applyMatrix4(inverseMatrix)
+
+  // Convert back to Grid Units
+  return [vec.x / tileSize, vec.z / tileSize]
+}
 
 // ============================================================================
 // TREE TRAVERSAL

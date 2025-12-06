@@ -200,7 +200,13 @@ const DownArrow = () => {
   if (!cursorPosition) return null
 
   return (
-    <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
+    <group
+      position={[
+        cursorPosition[0] * TILE_SIZE - GRID_SIZE / 2,
+        2,
+        cursorPosition[1] * TILE_SIZE - GRID_SIZE / 2,
+      ]}
+    >
       {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
       <mesh position={[0, -shaftHeight / 2, 0]}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />

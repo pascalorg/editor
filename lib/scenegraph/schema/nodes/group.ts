@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { DoorNode } from './door'
@@ -25,7 +25,7 @@ const GroupChildNode: z.ZodType<any> = z.lazy(() =>
 )
 
 export const GroupNode = BaseNode.extend({
-  id: nodeId('group'),
+  id: objectId('group'),
   type: nodeType('group'),
   children: z.array(GroupChildNode).default([]),
   position: z.tuple([z.number(), z.number()]),

@@ -5,7 +5,7 @@ import { extend, useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, DoubleSide, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { SceneNode } from '@/lib/scenegraph/schema/index'
+import type { SceneNode } from '@/lib/scenegraph/schema/types'
 
 // Create empty arrays for uniforms with proper initialization
 const createEmptyVector2Array = (size: number): Vector2[] => {

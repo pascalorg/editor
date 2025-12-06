@@ -2,7 +2,7 @@
 
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 import { BuildingNode } from './building'
 import { ItemNode } from './item'
 
@@ -19,8 +19,10 @@ const PropertyLineData = z.object({
 // })
 
 export const SiteNode = BaseNode.extend({
-  id: nodeId('site'),
+  id: objectId('site'),
   type: nodeType('site'),
+  position: z.tuple([z.number(), z.number()]).default([0, 0]),
+  rotation: z.number().default(0),
   // Specific props
   polygon: PropertyLineData.optional().default({
     type: 'polygon',
@@ -39,6 +41,8 @@ export const SiteNode = BaseNode.extend({
 }).describe(
   dedent`
   Site node - used to represent a site
+  - position: position in world coordinate system (default is [0, 0])
+  - rotation: rotation in world coordinate system (default is 0)
   - polygon: polygon data
   - children: array of building and item nodes
   `,

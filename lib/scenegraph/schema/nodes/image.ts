@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const ImageNode = BaseNode.extend({
-  id: nodeId('image'),
+  id: objectId('image'),
   type: nodeType('reference-image'),
   url: z.string(), // Data URL for image
   position: z.tuple([z.number(), z.number()]).default([0, 0]),

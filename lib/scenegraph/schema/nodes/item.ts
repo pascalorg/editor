@@ -1,9 +1,9 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeId, nodeType } from '../base'
+import { BaseNode, nodeType, objectId } from '../base'
 
 export const ItemNode = BaseNode.extend({
-  id: nodeId('item'),
+  id: objectId('item'),
   type: nodeType('item'),
   category: z.string(),
   position: z.tuple([z.number(), z.number()]),
