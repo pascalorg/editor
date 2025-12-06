@@ -3,7 +3,7 @@
 import { animated, useSpring } from '@react-spring/three'
 import { Environment, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ import SelectionManager from '../editor/selection-manager'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
+import { LevelHoverManager } from './level-hover-manager'
 import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -43,9 +44,6 @@ export default function Viewer({ className }: { className?: string }) {
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
-
-  // State for hover effects (floor hover only in viewer)
-  const [hoveredFloorId, setHoveredFloorId] = useState<string | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -112,8 +110,9 @@ export default function Viewer({ className }: { className?: string }) {
           {building && <NodeRenderer nodeId={building.id} />}
         </group>
 
-        <SelectionManager />
+        {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}
         <SelectionControls controls={false} />
+        <LevelHoverManager />
         <ViewerCustomControls />
         <EnvironmentRenderer />
         {/* Infinite floor - rendered outside export group */}
