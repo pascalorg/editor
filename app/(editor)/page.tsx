@@ -4,6 +4,7 @@ import Editor from '@/components/editor'
 import { ActionMenu } from '@/components/editor/action-menu/index'
 import { ImageUI } from '@/components/nodes/image/image-ui'
 import { RoofUI } from '@/components/nodes/roof/roof-ui'
+import { ScanUI } from '@/components/nodes/scan/scan-ui'
 import { SiteUI } from '@/components/nodes/site/site-ui'
 import { StairUI } from '@/components/nodes/stair/stair-ui'
 
@@ -19,6 +20,7 @@ export default function Home() {
         <RoofUI />
         <StairUI />
         <ImageUI />
+        <ScanUI />
       </div>
     </div>
   )

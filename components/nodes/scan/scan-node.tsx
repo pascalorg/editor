@@ -99,6 +99,7 @@ export function useScanManipulation(
   const { camera, gl } = useThree()
   const movingCamera = useEditor((state) => state.movingCamera)
   const controlMode = useEditor((state) => state.controlMode)
+  const setControlMode = useEditor((state) => state.setControlMode)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const { nodePosition, nodeScale, nodeRotation } = useEditor(
@@ -106,7 +107,7 @@ export function useScanManipulation(
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as ScanNode | undefined
       return {
-        nodePosition: node?.position || [0, 0],
+        nodePosition: node?.position || [0, 0, 0],
         nodeScale: node?.scale || 1,
         nodeRotation: node?.rotation || [0, 0, 0],
       }
@@ -117,9 +118,10 @@ export function useScanManipulation(
     (e?: any) => {
       if (controlMode === 'guide' || controlMode === 'select') {
         handleNodeSelect(nodeId, e || {})
+        setControlMode('guide')
       }
     },
-    [controlMode, nodeId, handleNodeSelect],
+    [controlMode, nodeId, handleNodeSelect, setControlMode],
   )
 
   const handleTranslateDown = useCallback(
@@ -160,17 +162,17 @@ export function useScanManipulation(
         const projected = delta.dot(worldAxis)
         const newPos = initialPosition.clone().add(worldAxis.clone().multiplyScalar(projected))
 
-        let finalX = newPos.x
-        let finalZ = newPos.z
+        let finalX = newPos.x / TILE_SIZE
+        let finalZ = newPos.z / TILE_SIZE
         if (ev.shiftKey) {
-          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+          finalX = Math.round(finalX)
+          finalZ = Math.round(finalZ)
         }
 
         lastPosition = [finalX, finalZ]
         emitter.emit('scan:update', {
           nodeId,
-          updates: { position: lastPosition },
+          updates: { position: [finalX, finalZ, nodePosition[2]] },
           pushToUndo: false,
         })
       }
@@ -182,7 +184,7 @@ export function useScanManipulation(
         if (lastPosition) {
           emitter.emit('scan:update', {
             nodeId,
-            updates: { position: lastPosition },
+            updates: { position: [lastPosition[0], lastPosition[1], nodePosition[2]] },
             pushToUndo: true,
           })
         }
@@ -224,17 +226,17 @@ export function useScanManipulation(
         const delta = intersect.clone().sub(initialMouse)
         const newPos = initialPosition.clone().add(delta)
 
-        let finalX = newPos.x
-        let finalZ = newPos.z
+        let finalX = newPos.x / TILE_SIZE
+        let finalZ = newPos.z / TILE_SIZE
         if (ev.shiftKey) {
-          finalX = Math.round(newPos.x / TILE_SIZE) * TILE_SIZE
-          finalZ = Math.round(newPos.z / TILE_SIZE) * TILE_SIZE
+          finalX = Math.round(finalX)
+          finalZ = Math.round(finalZ)
         }
 
         lastPosition = [finalX, finalZ]
         emitter.emit('scan:update', {
           nodeId,
-          updates: { position: lastPosition },
+          updates: { position: [finalX, finalZ, nodePosition[2]] },
           pushToUndo: false,
         })
       }
@@ -246,7 +248,7 @@ export function useScanManipulation(
         if (lastPosition) {
           emitter.emit('scan:update', {
             nodeId,
-            updates: { position: lastPosition },
+            updates: { position: [lastPosition[0], lastPosition[1], nodePosition[2]] },
             pushToUndo: true,
           })
         }
@@ -291,7 +293,7 @@ export function useScanManipulation(
         const vector = intersect.clone().sub(center)
         const angle = Math.atan2(vector.z, vector.x)
         const delta = angle - initialAngle
-        let newRotation = initialRotation[2] ?? 0 - delta * (180 / Math.PI)
+        let newRotation = (initialRotation[1] ?? 0) - delta * (180 / Math.PI)
 
         if (ev.shiftKey) {
           newRotation = Math.round(newRotation / 45) * 45
@@ -300,7 +302,7 @@ export function useScanManipulation(
         lastRotation = newRotation
         emitter.emit('scan:update', {
           nodeId,
-          updates: { rotation: lastRotation },
+          updates: { rotation: [initialRotation[0], lastRotation, initialRotation[2]] },
           pushToUndo: false,
         })
       }
@@ -312,7 +314,7 @@ export function useScanManipulation(
         if (lastRotation !== null) {
           emitter.emit('scan:update', {
             nodeId,
-            updates: { rotation: lastRotation },
+            updates: { rotation: [initialRotation[0], lastRotation, initialRotation[2]] },
             pushToUndo: true,
           })
         }
@@ -336,7 +338,7 @@ export function useScanManipulation(
       emitter.emit('scan:manipulation-start', { nodeId })
 
       const initialMouseY = e.pointer.y
-      const initialYOffset = nodePosition[1] ?? 0
+      const initialYOffset = nodePosition[2] ?? 0
       let lastYOffset: number | null = null
 
       const handleMove = (ev: PointerEvent) => {
@@ -353,7 +355,7 @@ export function useScanManipulation(
         lastYOffset = newYOffset
         emitter.emit('scan:update', {
           nodeId,
-          updates: { yOffset: lastYOffset },
+          updates: { position: [nodePosition[0], nodePosition[1], lastYOffset] },
           pushToUndo: false,
         })
       }
@@ -365,7 +367,7 @@ export function useScanManipulation(
         if (lastYOffset !== null) {
           emitter.emit('scan:update', {
             nodeId,
-            updates: { yOffset: lastYOffset },
+            updates: { position: [nodePosition[0], nodePosition[1], lastYOffset] },
             pushToUndo: true,
           })
         }
