@@ -29,8 +29,8 @@ export function ScanNodeEditor() {
   // Track undo state changes for batch updates during manipulation
   const undoStateRef = useRef<{
     [nodeId: string]: {
-      position?: [number, number]
-      rotation?: number
+      position?: [number, number, number]
+      rotation?: [number, number, number]
       scale?: number
       yOffset?: number
     }
@@ -42,7 +42,7 @@ export function ScanNodeEditor() {
 
       // Update the node in the store
       // Pass skipUndo = !pushToUndo (if pushing to undo, skipUndo is false)
-      updateNode(nodeId, updates, !pushToUndo)
+      updateNode(nodeId, updates as Partial<ScanNode>, !pushToUndo)
 
       // If pushing to undo, clear the accumulated state for this node
       if (pushToUndo) {

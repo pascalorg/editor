@@ -21,7 +21,8 @@ const useGLTFKTX2 = (path: string) => {
 
   return useGLTF(path, true, true, (loader) => {
     ktx2LoaderInstance.detectSupport(gl)
-    loader.setKTX2Loader(ktx2LoaderInstance)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loader.setKTX2Loader(ktx2LoaderInstance as any)
     loader.setMeshoptDecoder(MeshoptDecoder)
   })
 }

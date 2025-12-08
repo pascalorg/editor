@@ -55,7 +55,7 @@ export interface ImageManipulationEvent {
 
 export interface ScanUpdateEvent {
   nodeId: string
-  updates: Partial<{ position: [number, number]; rotation: number; scale: number; yOffset: number }>
+  updates: Partial<{ position: [number, number, number]; rotation: [number, number, number]; scale: number; yOffset: number }>
   pushToUndo: boolean
 }
 
