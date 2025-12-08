@@ -558,95 +558,107 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     const shape = new THREE.Shape(shapePoints)
 
     // Create Extrude Geometry
-    // Shape vertices order: [p_start_R, p_end_R, (end_center?), p_end_L, p_start_L, (start_center?)]
-    // ExtrudeGeometry face order:
-    // 1. Bottom cap (becomes back face after rotation) - triangulated from shape
-    // 2. Top cap (becomes front face after rotation) - triangulated from shape
-    // 3. Side walls in vertex order: edge 0-1 (back wall), edge 1-2 (end cap or end junction),
-    //    edge 2-3 (front wall), edge 3-0 or 3-4-0 (start cap or start junction)
-    const numShapePoints = polyPoints.length
-
     const extrudeSettings: THREE.ExtrudeGeometryOptions = {
       depth: wallHeight,
       bevelEnabled: false,
       UVGenerator: {
-        generateTopUV: (geometry, vertices, indexA, indexB, indexC) => [
-          new THREE.Vector2(vertices[indexA * 3] + 0.5, vertices[indexA * 3 + 1] + 0.5),
-          new THREE.Vector2(vertices[indexB * 3] + 0.5, vertices[indexB * 3 + 1] + 0.5),
-          new THREE.Vector2(vertices[indexC * 3] + 0.5, vertices[indexC * 3 + 1] + 0.5),
-        ],
-        generateSideWallUV: (geometry, vertices, indexA, indexB, indexC, indexD) => {
-          const ax = vertices[indexA * 3]
-          const ay = vertices[indexA * 3 + 1]
-          const bx = vertices[indexB * 3]
-          const by = vertices[indexB * 3 + 1]
-          const cx = vertices[indexC * 3]
-          const cy = vertices[indexC * 3 + 1]
-          const dx = vertices[indexD * 3]
-          const dy = vertices[indexD * 3 + 1]
-
-          // Use X for horizontal, Y for vertical (height)
+        generateTopUV: (_geo, vertices, ...idx) => {
+          const [a, b, c] = idx
           return [
-            new THREE.Vector2(ax, ay),
-            new THREE.Vector2(bx, by),
-            new THREE.Vector2(cx, cy),
-            new THREE.Vector2(dx, dy),
+            new THREE.Vector2(vertices[a * 3] + 0.5, vertices[a * 3 + 1] + 0.5),
+            new THREE.Vector2(vertices[b * 3] + 0.5, vertices[b * 3 + 1] + 0.5),
+            new THREE.Vector2(vertices[c * 3] + 0.5, vertices[c * 3 + 1] + 0.5),
+          ]
+        },
+        generateSideWallUV: (_geo, vertices, ...idx) => {
+          const [a, b, c, d] = idx
+          return [
+            new THREE.Vector2(vertices[a * 3], vertices[a * 3 + 1]),
+            new THREE.Vector2(vertices[b * 3], vertices[b * 3 + 1]),
+            new THREE.Vector2(vertices[c * 3], vertices[c * 3 + 1]),
+            new THREE.Vector2(vertices[d * 3], vertices[d * 3 + 1]),
           ]
         },
       },
     }
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
 
-    // Assign material groups based on face type
-    // ExtrudeGeometry structure:
-    // - Bottom cap: (numShapePoints - 2) triangles = (numShapePoints - 2) * 3 indices
-    // - Top cap: same count
-    // - Side walls: numShapePoints quads = numShapePoints * 6 indices (2 triangles each)
-    const capTriangles = numShapePoints - 2
-    const bottomCapIndices = capTriangles * 3
-    const topCapIndices = capTriangles * 3
-    const sideIndicesPerEdge = 6 // 2 triangles * 3 indices
+    // Rotate to lie on XZ plane and extrude along Y
+    geometry.rotateX(-Math.PI / 2)
+
+    // Assign material groups based on face normals (after rotation)
+    // Material indices: 0 = front (+Z), 1 = back (-Z), 2 = sides (top/bottom/ends)
+    const positions = geometry.getAttribute('position')
+    const indices = geometry.getIndex()
 
     geometry.clearGroups()
 
-    // Bottom cap → back material (index 1) - after rotation this is negative Z
-    geometry.addGroup(0, bottomCapIndices, 1)
+    // Helper vectors for computing face normal
+    const vA = new THREE.Vector3()
+    const vB = new THREE.Vector3()
+    const vC = new THREE.Vector3()
+    const ab = new THREE.Vector3()
+    const ac = new THREE.Vector3()
+    const faceNormal = new THREE.Vector3()
 
-    // Top cap → front material (index 0) - after rotation this is positive Z
-    geometry.addGroup(bottomCapIndices, topCapIndices, 0)
+    // Determine number of triangles and how to access vertex indices
+    const isIndexed = indices !== null
+    const numTriangles = isIndexed ? indices.count / 3 : positions.count / 3
 
-    // Side walls - assign based on edge orientation
-    // For a simple 4-point wall: edges are back-wall, end-cap, front-wall, start-cap
-    // For junction walls with extra points, we need to identify which edges are front/back
-    let sideStart = bottomCapIndices + topCapIndices
-    for (let edge = 0; edge < numShapePoints; edge++) {
-      const nextEdge = (edge + 1) % numShapePoints
-      const p1 = polyPoints[edge]
-      const p2 = polyPoints[nextEdge]
+    // Process each triangle and assign to material group based on computed face normal
+    let currentGroup: { start: number; count: number; materialIndex: number } | null = null
 
-      // Determine if this edge is front, back, or side based on its orientation
-      // Front/back walls run along X (large dx, small dz)
-      // Side caps run along Z (small dx, large dz)
-      const dx = Math.abs(p2.x - p1.x)
-      const dz = Math.abs(p2.z - p1.z)
+    for (let i = 0; i < numTriangles; i++) {
+      const triStart = i * 3
 
+      // Get vertex indices - for non-indexed geometry, vertices are sequential
+      const idxA = isIndexed ? indices.getX(triStart) : triStart
+      const idxB = isIndexed ? indices.getX(triStart + 1) : triStart + 1
+      const idxC = isIndexed ? indices.getX(triStart + 2) : triStart + 2
+
+      // Get triangle vertices
+      vA.fromBufferAttribute(positions, idxA)
+      vB.fromBufferAttribute(positions, idxB)
+      vC.fromBufferAttribute(positions, idxC)
+
+      // Compute face normal using cross product
+      ab.subVectors(vB, vA)
+      ac.subVectors(vC, vA)
+      faceNormal.crossVectors(ab, ac).normalize()
+
+      const nx = faceNormal.x
+      const ny = faceNormal.y
+      const nz = faceNormal.z
+
+      // Determine material based on dominant normal direction
       let materialIndex: number
-      if (dx > dz * 2) {
-        // Horizontal edge (front or back wall)
-        // Back wall has negative Z (p_start_R to p_end_R)
-        // Front wall has positive Z (p_end_L to p_start_L)
-        const avgZ = (p1.z + p2.z) / 2
-        materialIndex = avgZ < 0 ? 1 : 0 // 1 = back, 0 = front
+      const absX = Math.abs(nx)
+      const absY = Math.abs(ny)
+      const absZ = Math.abs(nz)
+
+      if (absZ > absX && absZ > absY) {
+        // Z-facing: front or back wall surfaces
+        materialIndex = nz > 0 ? 0 : 1 // 0 = front (+Z), 1 = back (-Z)
       } else {
-        // Vertical edge (side cap) or junction edge
-        materialIndex = 2 // sides material
+        // X or Y facing: sides (end caps, top, bottom)
+        materialIndex = 2
       }
 
-      geometry.addGroup(sideStart + edge * sideIndicesPerEdge, sideIndicesPerEdge, materialIndex)
+      // Group consecutive triangles with same material
+      if (currentGroup === null || currentGroup.materialIndex !== materialIndex) {
+        if (currentGroup !== null) {
+          geometry.addGroup(currentGroup.start, currentGroup.count, currentGroup.materialIndex)
+        }
+        currentGroup = { start: triStart, count: 3, materialIndex }
+      } else {
+        currentGroup.count += 3
+      }
     }
 
-    // Rotate to lie on XZ plane and extrude along Y
-    geometry.rotateX(-Math.PI / 2)
+    // Add the last group
+    if (currentGroup !== null) {
+      geometry.addGroup(currentGroup.start, currentGroup.count, currentGroup.materialIndex)
+    }
 
     return geometry
   }, [wallData, wallIds, nodeId, nodeSize])
@@ -790,7 +802,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const frontMaterial = useMaterial(materialFront)
   const backMaterial = useMaterial(materialBack)
-  const sidesMaterial = useMaterial('white')
+  const sidesMaterial = useMaterial('yellow')
 
   if (!wallGeometry) return null
 
