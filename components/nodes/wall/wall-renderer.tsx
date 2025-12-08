@@ -803,6 +803,12 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const frontMaterial = useMaterial(materialFront)
   const backMaterial = useMaterial(materialBack)
   const sidesMaterial = useMaterial('white')
+  const ghostMaterial = useMaterial('ghost')
+
+  const wallMaterial = useMemo(
+    () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
+    [isActiveFloor, frontMaterial, backMaterial, sidesMaterial, ghostMaterial],
+  )
 
   if (!wallGeometry) return null
 
@@ -879,10 +885,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
             )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
-                <Base
-                  geometry={wallGeometry}
-                  material={[frontMaterial, backMaterial, sidesMaterial]}
-                />
+                <Base geometry={wallGeometry} material={wallMaterial} />
                 {nodeChildrenIds.map((openingId: string) => (
                   <WallOpening key={openingId} nodeId={openingId} />
                 ))}

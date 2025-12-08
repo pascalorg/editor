@@ -50,7 +50,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   },
   glass: {
     name: 'glass',
-    type: 'physical',
+    type: 'standard',
     color: COLORS.glass,
     opacity: 0.2,
     transparent: true,
@@ -137,7 +137,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   brick: {
     name: 'brick',
     type: 'standard',
-    color: 0xaa6644,
+    color: 0xaa_66_44,
     metalness: 0,
     roughness: 0.9,
     textureUrl: '/textures/brick/diffuse.jpg',
@@ -147,7 +147,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   wood: {
     name: 'wood',
     type: 'standard',
-    color: 0xbb8855,
+    color: 0xbb_88_55,
     metalness: 0,
     roughness: 0.7,
     textureUrl: '/textures/wood/diffuse.jpg',
@@ -157,7 +157,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   concrete: {
     name: 'concrete',
     type: 'standard',
-    color: 0x999999,
+    color: 0x99_99_99,
     metalness: 0,
     roughness: 0.95,
     textureUrl: '/textures/concrete/diffuse.jpg',
@@ -167,7 +167,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   tile: {
     name: 'tile',
     type: 'standard',
-    color: 0xdddddd,
+    color: 0xdd_dd_dd,
     metalness: 0.1,
     roughness: 0.3,
     textureUrl: '/textures/tile/diffuse.jpg',
@@ -176,7 +176,7 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   marble: {
     name: 'marble',
     type: 'standard',
-    color: 0xf0f0f0,
+    color: 0xf0_f0_f0,
     metalness: 0.2,
     roughness: 0.2,
     textureUrl: '/textures/marble/diffuse.jpg',

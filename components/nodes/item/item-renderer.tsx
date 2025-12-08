@@ -8,6 +8,7 @@ import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
+import { getMaterial, useMaterial } from '@/lib/materials'
 import type { ItemNode } from '@/lib/scenegraph/schema/index'
 
 interface ItemRendererProps {
@@ -147,6 +148,9 @@ const ModelItemRenderer = ({
   const { scene } = useGLTF(src)
   const ref = useRef<THREE.Group>(null)
 
+  const deleteMaterial = useMaterial('delete')
+  const ghostMaterial = useMaterial('ghost')
+
   useEffect(() => {
     ref.current?.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -154,9 +158,19 @@ const ModelItemRenderer = ({
           child.material instanceof THREE.Material &&
           child.material.name.toLowerCase().includes('glass')
         ) {
+          child.material = getMaterial('glass')
           child.castShadow = false
           child.receiveShadow = false
         } else {
+          if (
+            child.material instanceof THREE.Material &&
+            child.material.name.toLowerCase().includes('color_')
+          ) {
+            const material = getMaterial(child.material.name.toLowerCase().replace('color_', ''))
+            if (material) {
+              child.material = material
+            }
+          }
           child.castShadow = true
           child.receiveShadow = true
         }
@@ -172,9 +186,9 @@ const ModelItemRenderer = ({
       <Clone
         inject={
           deletePreview ? (
-            <meshStandardMaterial color="red" />
+            <primitive attach="material" object={deleteMaterial} />
           ) : isActiveFloor ? undefined : (
-            <meshStandardMaterial opacity={0.3} transparent />
+            <primitive attach="material" object={ghostMaterial} />
           )
         }
         object={scene}
