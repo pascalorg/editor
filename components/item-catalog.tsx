@@ -14,7 +14,7 @@ interface CatalogItem {
   size: [number, number]
   position?: [number, number, number] // Fine-tune position offset for GLB [x, y, z]
   rotation?: [number, number, number] // Fine-tune rotation for GLB [x, y, z] in radians
-  attachTo?: 'ceiling' | 'wall' // Where to attach the item
+  attachTo?: 'ceiling' | 'wall' | 'wall-side' // Where to attach: ceiling, wall (both sides like doors/windows), or wall-side (one side only like art/TV)
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
@@ -81,7 +81,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [1, 1, 1],
     rotation: [0, 0, 0],
     size: [2, 1],
-    attachTo: 'wall',
+    attachTo: 'wall-side',
   },
   {
     category: 'item',
@@ -92,7 +92,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [0.42, 0.42, 0.42],
     rotation: [0, Math.PI, 0],
     size: [4, 1],
-    attachTo: 'wall',
+    attachTo: 'wall-side',
   },
   {
     category: 'item',
@@ -103,7 +103,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     scale: [0.0015, 0.0015, 0.0015],
     rotation: [0, Math.PI, 0],
     size: [3, 1],
-    attachTo: 'wall',
+    attachTo: 'wall-side',
   },
   {
     category: 'item',

@@ -295,13 +295,14 @@ export type StoreState = {
   selectedCollectionId: string | null
 
   selectedItem: {
+    category?: CatalogCategory
     name?: string
     modelUrl: string
     scale: [number, number, number]
     size: [number, number]
     position?: [number, number, number]
     rotation?: [number, number, number]
-    attachTo?: 'ceiling' | 'wall'
+    attachTo?: 'ceiling' | 'wall' | 'wall-side'
   }
 
   // Processors
