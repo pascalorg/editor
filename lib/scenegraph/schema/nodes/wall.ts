@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeType, objectId } from '../base'
+import { BaseNode, Material, nodeType, objectId } from '../base'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { WindowNode } from './window'
@@ -20,6 +20,9 @@ export const WallNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
   size: z.tuple([z.number(), z.number()]), // TODO: remove in favor of start and end
   rotation: z.number(),
+  // Material properties
+  materialFront: Material,
+  materialBack: Material,
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
@@ -28,6 +31,8 @@ export const WallNode = BaseNode.extend({
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system
   - size: size of the wall in grid units
+  - materialFront: material for the front face (positive Z normal direction)
+  - materialBack: material for the back face (negative Z normal direction)
   `,
 )
 export type WallNode = z.infer<typeof WallNode>

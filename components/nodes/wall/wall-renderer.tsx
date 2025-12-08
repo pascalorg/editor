@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { getMaterialProps, useMaterial } from '@/lib/materials'
 import type { SceneGraph } from '@/lib/scenegraph/index'
 import type {
   AnyNode,
@@ -367,30 +368,41 @@ const createWallDataSelector = (levelId: string) => {
 export function WallRenderer({ nodeId }: WallRendererProps) {
   const debug = useEditor((state) => state.debug)
 
-  const { isPreview, canPlace, deletePreview, deleteRange, levelId, nodeSize, nodeChildrenIdsStr } =
-    useEditor(
-      useShallow((state) => {
-        const handle = state.graph.getNodeById(nodeId)
-        const node = handle?.data() as WallNode | undefined
+  const {
+    isPreview,
+    canPlace,
+    deletePreview,
+    deleteRange,
+    levelId,
+    nodeSize,
+    nodeChildrenIdsStr,
+    materialFront,
+    materialBack,
+  } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as WallNode | undefined
 
-        // getLevelId helper in state works with node object, but we updated it to take node
-        // But store.getLevelId(node) calls graph.getNodeById.
+      // getLevelId helper in state works with node object, but we updated it to take node
+      // But store.getLevelId(node) calls graph.getNodeById.
 
-        // Actually we can just use handle.meta.levelId directly if available via selector?
-        // Yes, SceneGraph handles have meta.
-        const levelId = state.graph.index.byId.get(nodeId)?.levelId
+      // Actually we can just use handle.meta.levelId directly if available via selector?
+      // Yes, SceneGraph handles have meta.
+      const levelId = state.graph.index.byId.get(nodeId)?.levelId
 
-        return {
-          isPreview: node?.editor?.preview === true,
-          canPlace: node?.editor?.canPlace !== false,
-          deletePreview: node?.editor?.deletePreview === true,
-          deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
-          levelId,
-          nodeSize: node?.size || [0, 0],
-          nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
-        }
-      }),
-    )
+      return {
+        isPreview: node?.editor?.preview === true,
+        canPlace: node?.editor?.canPlace !== false,
+        deletePreview: node?.editor?.deletePreview === true,
+        deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
+        levelId,
+        nodeSize: node?.size || [0, 0],
+        nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
+        materialFront: node?.materialFront || 'wood',
+        materialBack: node?.materialBack || 'purple',
+      }
+    }),
+  )
 
   // Use it with useMemo to create a stable selector
   const wallDataSelector = useMemo(
@@ -401,14 +413,16 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const nodeChildrenIds = useMemo(() => JSON.parse(nodeChildrenIdsStr), [nodeChildrenIdsStr])
 
-  // Determine preview colors based on canPlace
-  const previewColor = canPlace ? '#44ff44' : '#ff4444'
-  const previewEmissive = canPlace ? '#22aa22' : '#aa2222'
+  // Determine preview colors based on canPlace using centralized materials
+  const previewProps = getMaterialProps(canPlace ? 'preview-valid' : 'preview-invalid')
+  const previewColor = previewProps.color
+  const previewEmissive = previewProps.emissive
   const previewLineDim = canPlace ? '#336633' : '#663333'
 
-  // Delete preview colors (red/orange tint)
-  const deleteColor = '#ff4444'
-  const deleteEmissive = '#aa2222'
+  // Delete preview colors using centralized materials
+  const deleteProps = getMaterialProps('delete')
+  const deleteColor = deleteProps.color
+  const deleteEmissive = deleteProps.emissive
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
@@ -544,8 +558,92 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     const shape = new THREE.Shape(shapePoints)
 
     // Create Extrude Geometry
-    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    // Shape vertices order: [p_start_R, p_end_R, (end_center?), p_end_L, p_start_L, (start_center?)]
+    // ExtrudeGeometry face order:
+    // 1. Bottom cap (becomes back face after rotation) - triangulated from shape
+    // 2. Top cap (becomes front face after rotation) - triangulated from shape
+    // 3. Side walls in vertex order: edge 0-1 (back wall), edge 1-2 (end cap or end junction),
+    //    edge 2-3 (front wall), edge 3-0 or 3-4-0 (start cap or start junction)
+    const numShapePoints = polyPoints.length
+
+    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+      depth: wallHeight,
+      bevelEnabled: false,
+      UVGenerator: {
+        generateTopUV: (geometry, vertices, indexA, indexB, indexC) => [
+          new THREE.Vector2(vertices[indexA * 3] + 0.5, vertices[indexA * 3 + 1] + 0.5),
+          new THREE.Vector2(vertices[indexB * 3] + 0.5, vertices[indexB * 3 + 1] + 0.5),
+          new THREE.Vector2(vertices[indexC * 3] + 0.5, vertices[indexC * 3 + 1] + 0.5),
+        ],
+        generateSideWallUV: (geometry, vertices, indexA, indexB, indexC, indexD) => {
+          const ax = vertices[indexA * 3]
+          const ay = vertices[indexA * 3 + 1]
+          const bx = vertices[indexB * 3]
+          const by = vertices[indexB * 3 + 1]
+          const cx = vertices[indexC * 3]
+          const cy = vertices[indexC * 3 + 1]
+          const dx = vertices[indexD * 3]
+          const dy = vertices[indexD * 3 + 1]
+
+          // Use X for horizontal, Y for vertical (height)
+          return [
+            new THREE.Vector2(ax, ay),
+            new THREE.Vector2(bx, by),
+            new THREE.Vector2(cx, cy),
+            new THREE.Vector2(dx, dy),
+          ]
+        },
+      },
+    }
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+
+    // Assign material groups based on face type
+    // ExtrudeGeometry structure:
+    // - Bottom cap: (numShapePoints - 2) triangles = (numShapePoints - 2) * 3 indices
+    // - Top cap: same count
+    // - Side walls: numShapePoints quads = numShapePoints * 6 indices (2 triangles each)
+    const capTriangles = numShapePoints - 2
+    const bottomCapIndices = capTriangles * 3
+    const topCapIndices = capTriangles * 3
+    const sideIndicesPerEdge = 6 // 2 triangles * 3 indices
+
+    geometry.clearGroups()
+
+    // Bottom cap → back material (index 1) - after rotation this is negative Z
+    geometry.addGroup(0, bottomCapIndices, 1)
+
+    // Top cap → front material (index 0) - after rotation this is positive Z
+    geometry.addGroup(bottomCapIndices, topCapIndices, 0)
+
+    // Side walls - assign based on edge orientation
+    // For a simple 4-point wall: edges are back-wall, end-cap, front-wall, start-cap
+    // For junction walls with extra points, we need to identify which edges are front/back
+    let sideStart = bottomCapIndices + topCapIndices
+    for (let edge = 0; edge < numShapePoints; edge++) {
+      const nextEdge = (edge + 1) % numShapePoints
+      const p1 = polyPoints[edge]
+      const p2 = polyPoints[nextEdge]
+
+      // Determine if this edge is front, back, or side based on its orientation
+      // Front/back walls run along X (large dx, small dz)
+      // Side caps run along Z (small dx, large dz)
+      const dx = Math.abs(p2.x - p1.x)
+      const dz = Math.abs(p2.z - p1.z)
+
+      let materialIndex: number
+      if (dx > dz * 2) {
+        // Horizontal edge (front or back wall)
+        // Back wall has negative Z (p_start_R to p_end_R)
+        // Front wall has positive Z (p_end_L to p_start_L)
+        const avgZ = (p1.z + p2.z) / 2
+        materialIndex = avgZ < 0 ? 1 : 0 // 1 = back, 0 = front
+      } else {
+        // Vertical edge (side cap) or junction edge
+        materialIndex = 2 // sides material
+      }
+
+      geometry.addGroup(sideStart + edge * sideIndicesPerEdge, sideIndicesPerEdge, materialIndex)
+    }
 
     // Rotate to lie on XZ plane and extrude along Y
     geometry.rotateX(-Math.PI / 2)
@@ -690,6 +788,10 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     [getClosestGridPoint, nodeId],
   )
 
+  const frontMaterial = useMaterial(materialFront)
+  const backMaterial = useMaterial(materialBack)
+  const sidesMaterial = useMaterial('white')
+
   if (!wallGeometry) return null
 
   return (
@@ -765,16 +867,10 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
             )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
-                <Base geometry={wallGeometry}>
-                  <meshPhysicalMaterial
-                    color="#dcdcf7"
-                    key={`wall-material-${opacity}`}
-                    metalness={0.1}
-                    opacity={opacity}
-                    roughness={0.7}
-                    transparent={transparent}
-                  />
-                </Base>
+                <Base
+                  geometry={wallGeometry}
+                  material={[frontMaterial, backMaterial, sidesMaterial]}
+                />
                 {nodeChildrenIds.map((openingId: string) => (
                   <WallOpening key={openingId} nodeId={openingId} />
                 ))}

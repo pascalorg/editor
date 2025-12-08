@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeType, objectId } from '../base'
+import { BaseNode, Material, nodeType, objectId } from '../base'
 
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
@@ -11,9 +11,12 @@ export const SlabNode = BaseNode.extend({
   size: z.tuple([z.number(), z.number()]),
   // Specific props
   thickness: z.number().optional(),
+  // Material property
+  material: Material,
 }).describe(
   dedent`
   Slab node - used to represent a concrete slab
+  - material: material preset name (e.g., 'white', 'concrete', 'tile')
   `,
 )
 

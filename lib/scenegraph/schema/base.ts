@@ -2,6 +2,12 @@ import { customAlphabet } from 'nanoid'
 import { z } from 'zod'
 
 const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
+
+/**
+ * Material preset name reference
+ * @example 'white', 'brick', 'wood', 'glass', 'preview-valid'
+ */
+export const Material = z.string().optional()
 export const generateId = <T extends string>(prefix: T): `${T}_${string}` =>
   `${prefix}_${customId()}` as `${T}_${string}`
 export const objectId = <T extends string>(prefix: T) => {
