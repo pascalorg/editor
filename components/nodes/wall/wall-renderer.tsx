@@ -398,8 +398,8 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         levelId,
         nodeSize: node?.size || [0, 0],
         nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
-        materialFront: node?.materialFront || 'wood',
-        materialBack: node?.materialBack || 'purple',
+        materialFront: node?.materialFront || 'concrete',
+        materialBack: node?.materialBack || 'brick',
       }
     }),
   )
@@ -802,7 +802,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const frontMaterial = useMaterial(materialFront)
   const backMaterial = useMaterial(materialBack)
-  const sidesMaterial = useMaterial('yellow')
+  const sidesMaterial = useMaterial('white')
 
   if (!wallGeometry) return null
 
