@@ -65,10 +65,18 @@ export function ScanUI() {
     handleUpdate({ position: newPos })
   }
 
+  // Helper to normalize angle to -180 to 180 range
+  const normalizeAngle = (angle: number) => {
+    let normalized = angle % 360
+    if (normalized > 180) normalized -= 360
+    if (normalized <= -180) normalized += 360
+    return Math.round(normalized * 100) / 100
+  }
+
   // Helper to safely update rotation components
   const updateRotation = (index: 0 | 1 | 2, value: number) => {
     const newRot = [...node.rotation] as [number, number, number]
-    newRot[index] = value
+    newRot[index] = normalizeAngle(value)
     handleUpdate({ rotation: newRot })
   }
 
@@ -156,9 +164,9 @@ export function ScanUI() {
                       updateRotation(1, degrees)
                     }
                   }}
-                  step="1"
+                  step="0.01"
                   type="number"
-                  value={Math.round(node.rotation[1])}
+                  value={normalizeAngle(node.rotation[1])}
                 />
                 <div className="flex gap-1">
                   <button
