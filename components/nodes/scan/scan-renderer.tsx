@@ -1,13 +1,31 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { memo, useMemo, useRef, useState } from 'react'
+import { useThree } from '@react-three/fiber'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useScanManipulation } from '@/components/nodes/scan/scan-node'
 import { useEditor } from '@/hooks/use-editor'
+import { loadAssetUrl } from '@/lib/asset-storage'
 import type { ScanNode } from '@/lib/scenegraph/schema/index'
+
+const ktx2LoaderInstance = new KTX2Loader()
+ktx2LoaderInstance.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')
+
+const useGLTFKTX2 = (path: string) => {
+  const gl = useThree((state) => state.gl)
+
+  return useGLTF(path, true, true, (loader) => {
+    ktx2LoaderInstance.detectSupport(gl)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loader.setKTX2Loader(ktx2LoaderInstance as any)
+    loader.setMeshoptDecoder(MeshoptDecoder)
+  })
+}
 
 const DEBUG = false
 const HANDLE_SCALE = 1 // Manual scale for manipulation handles
@@ -34,26 +52,30 @@ interface ScanRendererProps {
   nodeId: ScanNode['id']
 }
 
+interface ScanRendererContentProps extends ScanRendererProps {
+  resolvedUrl: string
+}
+
 const EMPTY_LEVELS: any[] = []
 
-export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
+const ScanRendererContent = memo(({ nodeId, resolvedUrl }: ScanRendererContentProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
 
-  const { nodeUrl, levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation } = useEditor(
+  const { levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation, nodeVisible } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as ScanNode | undefined
       return {
-        nodeUrl: node?.url,
         levelId: state.getLevelId(nodeId),
         nodeOpacity: node?.opacity,
         nodePosition: node?.position || [0, 0],
         nodeRotation: node?.rotation || [0, 0, 0],
         nodeScale: node?.scale || 1,
+        nodeVisible: node?.visible ?? true,
       }
     }),
   )
-  const { scene } = useGLTF(nodeUrl || '')
+  const { scene } = useGLTFKTX2(resolvedUrl)
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
@@ -78,7 +100,6 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   } = useScanManipulation(nodeId, groupRef, setActiveHandle)
 
   // Get level for Y position
-  const getLevelId = useEditor((state) => state.getLevelId)
   const levels = useEditor((state) => {
     const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
@@ -89,18 +110,24 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
   // Track hover state for the scan itself
   const [isHovered, setIsHovered] = useState(false)
 
-  // Apply opacity to scan materials
+  // Apply opacity and visibility to scan materials
   const clonedScene = useMemo(() => {
     const cloned = scene.clone()
     cloned.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone()
-        child.material.transparent = (nodeOpacity ?? 100) < 100
-        child.material.opacity = (nodeOpacity ?? 100) / 100
+      if (child.isMesh) {
+        // Disable raycasting when not visible
+        if (!nodeVisible) {
+          child.raycast = () => {}
+        }
+        if (child.material) {
+          child.material = child.material.clone()
+          child.material.transparent = (nodeOpacity ?? 100) < 100
+          child.material.opacity = (nodeOpacity ?? 100) / 100
+        }
       }
     })
     return cloned
-  }, [scene, nodeOpacity])
+  }, [scene, nodeOpacity, nodeVisible])
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
@@ -186,6 +213,7 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
           onPointerLeave={() => {
             setIsHovered(false)
           }}
+          raycast={nodeVisible ? undefined : () => null}
         />
         {/* Add emissive highlight when selected or hovered */}
         {(controlMode === 'guide' || controlMode === 'select') && (isHovered || isSelected) && (
@@ -476,6 +504,34 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
       )}
     </group>
   )
+})
+
+ScanRendererContent.displayName = 'ScanRendererContent'
+
+export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
+  const nodeUrl = useEditor((state) => {
+    const handle = state.graph.getNodeById(nodeId)
+    return (handle?.data() as ScanNode | undefined)?.url
+  })
+
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    loadAssetUrl(nodeUrl || '').then((url) => {
+      if (active) setResolvedUrl(url)
+    })
+    return () => {
+      active = false
+    }
+  }, [nodeUrl])
+
+  if (!resolvedUrl) return null
+
+  // Pre-load the GLTF to avoid suspense fallback causing flickering if this is a remount
+  // (though useGLTF has its own cache, stable URL helps)
+
+  return <ScanRendererContent nodeId={nodeId} resolvedUrl={resolvedUrl} />
 })
 
 ScanRenderer.displayName = 'ScanRenderer'

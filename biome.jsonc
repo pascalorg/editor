@@ -46,6 +46,7 @@
         "noDelete": "off"
       },
       "suspicious": {
+        "noEmptyBlockStatements": "off",
         "noImplicitAnyLet": "off",
         "noGlobalIsNan": "off",
         "noExplicitAny": "off",

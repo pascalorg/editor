@@ -1,6 +1,6 @@
 'use client'
 
-import { Html, shaderMaterial } from '@react-three/drei'
+import { Html, Line, shaderMaterial } from '@react-three/drei'
 import { extend, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -179,16 +179,32 @@ export const SiteRenderer = memo(({ nodeId }: SiteRendererProps) => {
       {/* Handles - only visible in edit mode */}
       {isEditing && (
         <>
+          {/* Segments */}
+          <Line
+            color="#f59e0b"
+            depthTest={false}
+            lineWidth={2}
+            opacity={0.8}
+            points={[
+              ...points.map(([x, z]) => [x, 0.5, z] as [number, number, number]),
+              [points[0][0], 0.5, points[0][1]] as [number, number, number],
+            ]}
+            renderOrder={9}
+            transparent
+          />
+
           {points.map(([x, y], i) => (
             <mesh
-              key={i}
-              onPointerDown={(e) => onPointerDown(e, i)} // Slightly above ground
+              castShadow
+              key={i} // Slightly above ground
+              onPointerDown={(e) => onPointerDown(e, i)}
               position={[x, 0.5, y]}
+              receiveShadow
               renderOrder={10}
             >
-              <sphereGeometry args={[0.3, 16, 16]} />
+              <boxGeometry args={[0.4, 0.4, 0.4]} />
               <meshBasicMaterial
-                color={draggingIndex === i ? 'yellow' : 'white'}
+                color={draggingIndex === i ? '#fbbf24' : '#f59e0b'}
                 depthTest={false}
                 transparent
               />

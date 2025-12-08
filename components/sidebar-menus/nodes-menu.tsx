@@ -28,6 +28,7 @@ import {
   useLayersMenu,
   VisibilityToggle,
 } from './shared'
+import { saveAsset } from '@/lib/asset-storage'
 
 // Generic node item that uses useShallow to get node data
 interface NodeItemProps {
@@ -613,21 +614,20 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
   }
 
   const handleScanUpload = async (file: File, levelId: string) => {
-    const reader = new FileReader()
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
+    try {
+      const assetUrl = await saveAsset(file)
 
-    const scanNode = ScanNode.parse({
-      parentId: levelId,
-      name: file.name,
-      url: dataUrl,
-      opacity: 100,
-    } satisfies Partial<ScanNode>)
+      const scanNode = ScanNode.parse({
+        parentId: levelId,
+        name: file.name,
+        url: assetUrl,
+        opacity: 100,
+      } satisfies Partial<ScanNode>)
 
-    addNode(scanNode as any, levelId)
+      addNode(scanNode as any, levelId)
+    } catch (error) {
+      console.error('Failed to upload scan:', error)
+    }
   }
 
   const handleReorder = (newLevelIds: string[]) => {

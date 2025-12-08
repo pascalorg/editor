@@ -43,6 +43,9 @@ function SelectionManager() {
 
       const intersections = raycaster.intersectObject(currentFloor, true)
 
+      // Get the graph to check node visibility
+      const { graph } = useEditor.getState()
+
       const getNodeInfoFromIntersection = (object: Object3D) => {
         let current: Object3D | null = object
         let nodeObject: Object3D | null = null
@@ -56,6 +59,16 @@ function SelectionManager() {
         if (!current?.userData?.nodeId) return null
 
         nodeObject = current
+        const nodeId = nodeObject.userData.nodeId
+
+        // Check if the node is visible - skip invisible nodes
+        const handle = graph.getNodeById(nodeId)
+        if (handle) {
+          const nodeData = handle.data() as { visible?: boolean } | undefined
+          if (nodeData?.visible === false) {
+            return null // Node is not visible, skip it
+          }
+        }
 
         // Now count how many node parents this node has
         current = current.parent
@@ -67,7 +80,7 @@ function SelectionManager() {
         }
 
         return {
-          nodeId: nodeObject.userData.nodeId,
+          nodeId,
           depth,
         }
       }
