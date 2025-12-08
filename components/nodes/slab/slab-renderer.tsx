@@ -6,13 +6,13 @@ import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
 import { useMaterial } from '@/lib/materials'
-import type { FloorNode, SlabNode } from '@/lib/scenegraph/schema/index'
+import type { SlabNode } from '@/lib/scenegraph/schema/index'
 import { WALL_THICKNESS } from '../wall/wall-renderer'
 
 export const SLAB_THICKNESS = 0.2 // 20cm thickness
 
 interface SlabRendererProps {
-  nodeId: FloorNode['id']
+  nodeId: SlabNode['id']
 }
 
 const SLAB_SPILLOVER = WALL_THICKNESS

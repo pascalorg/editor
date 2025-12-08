@@ -2,7 +2,6 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { ColumnNode } from './column'
-import { FloorNode } from './floor'
 import { GroupNode } from './group'
 import { ImageNode } from './image'
 import { ItemNode } from './item'
@@ -17,7 +16,7 @@ export const LevelNode = BaseNode.extend({
   children: z
     .array(
       z.discriminatedUnion('type', [
-        FloorNode,
+        SlabNode,
         WallNode,
         SlabNode,
         ColumnNode,

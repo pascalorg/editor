@@ -6,13 +6,11 @@ import { AnyNode, type NodeCreateSchemas, type NodeSchemas } from './types'
 export * from '../common-types'
 export * from './base'
 export * from './environment'
-export * from './types'
 // Export all specific node types
 export * from './nodes/building'
 export * from './nodes/ceiling'
 export * from './nodes/column'
 export * from './nodes/door'
-export * from './nodes/floor'
 export * from './nodes/group'
 export * from './nodes/image'
 export * from './nodes/item'
@@ -25,6 +23,7 @@ export * from './nodes/stair'
 export * from './nodes/wall'
 export * from './nodes/window'
 export * from './root'
+export * from './types'
 
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),
