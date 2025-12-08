@@ -1,11 +1,11 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useThree } from '@react-three/fiber'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useScanManipulation } from '@/components/nodes/scan/scan-node'
@@ -14,13 +14,11 @@ import { loadAssetUrl } from '@/lib/asset-storage'
 import type { ScanNode } from '@/lib/scenegraph/schema/index'
 
 const ktx2LoaderInstance = new KTX2Loader()
-ktx2LoaderInstance.setTranscoderPath(
-  'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/',
-)
+ktx2LoaderInstance.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')
 
 const useGLTFKTX2 = (path: string) => {
   const gl = useThree((state) => state.gl)
-  
+
   return useGLTF(path, true, true, (loader) => {
     ktx2LoaderInstance.detectSupport(gl)
     loader.setKTX2Loader(ktx2LoaderInstance)
@@ -62,7 +60,7 @@ const EMPTY_LEVELS: any[] = []
 const ScanRendererContent = memo(({ nodeId, resolvedUrl }: ScanRendererContentProps) => {
   const hitAreaOpacity = DEBUG ? (0.5 as const) : 0
 
-  const { levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation } = useEditor(
+  const { levelId, nodeOpacity, nodePosition, nodeScale, nodeRotation, nodeVisible } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
       const node = handle?.data() as ScanNode | undefined
@@ -72,6 +70,7 @@ const ScanRendererContent = memo(({ nodeId, resolvedUrl }: ScanRendererContentPr
         nodePosition: node?.position || [0, 0],
         nodeRotation: node?.rotation || [0, 0, 0],
         nodeScale: node?.scale || 1,
+        nodeVisible: node?.visible ?? true,
       }
     }),
   )
@@ -110,18 +109,24 @@ const ScanRendererContent = memo(({ nodeId, resolvedUrl }: ScanRendererContentPr
   // Track hover state for the scan itself
   const [isHovered, setIsHovered] = useState(false)
 
-  // Apply opacity to scan materials
+  // Apply opacity and visibility to scan materials
   const clonedScene = useMemo(() => {
     const cloned = scene.clone()
     cloned.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone()
-        child.material.transparent = (nodeOpacity ?? 100) < 100
-        child.material.opacity = (nodeOpacity ?? 100) / 100
+      if (child.isMesh) {
+        // Disable raycasting when not visible
+        if (!nodeVisible) {
+          child.raycast = () => {}
+        }
+        if (child.material) {
+          child.material = child.material.clone()
+          child.material.transparent = (nodeOpacity ?? 100) < 100
+          child.material.opacity = (nodeOpacity ?? 100) / 100
+        }
       }
     })
     return cloned
-  }, [scene, nodeOpacity])
+  }, [scene, nodeOpacity, nodeVisible])
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
@@ -207,6 +212,7 @@ const ScanRendererContent = memo(({ nodeId, resolvedUrl }: ScanRendererContentPr
           onPointerLeave={() => {
             setIsHovered(false)
           }}
+          raycast={nodeVisible ? undefined : () => null}
         />
         {/* Add emissive highlight when selected or hovered */}
         {(controlMode === 'guide' || controlMode === 'select') && (isHovered || isSelected) && (
@@ -523,7 +529,7 @@ export const ScanRenderer = memo(({ nodeId }: ScanRendererProps) => {
 
   // Pre-load the GLTF to avoid suspense fallback causing flickering if this is a remount
   // (though useGLTF has its own cache, stable URL helps)
-  
+
   return <ScanRendererContent nodeId={nodeId} resolvedUrl={resolvedUrl} />
 })
 
