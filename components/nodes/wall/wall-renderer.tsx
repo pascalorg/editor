@@ -1,6 +1,6 @@
 'use client'
 
-import { Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
+import { Addition, Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
 import { Edges, Line, useGLTF } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo } from 'react'
@@ -373,6 +373,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     canPlace,
     deletePreview,
     deleteRange,
+    paintPreview,
+    paintRange,
+    paintFace,
     levelId,
     nodeSize,
     nodeChildrenIdsStr,
@@ -395,6 +398,9 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         canPlace: node?.editor?.canPlace !== false,
         deletePreview: node?.editor?.deletePreview === true,
         deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
+        paintPreview: node?.editor?.paintPreview === true,
+        paintRange: node?.editor?.paintRange as [number, number] | undefined,
+        paintFace: node?.editor?.paintFace as 'front' | 'back' | undefined,
         levelId,
         nodeSize: node?.size || [0, 0],
         nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
@@ -691,6 +697,34 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     return geometry
   }, [deleteRange])
 
+  // Generate geometry for the paint preview segment
+  const paintSegmentGeometry = useMemo(() => {
+    if (!paintRange) return null
+
+    const [rangeStart, rangeEnd] = paintRange
+    const wallHeight = WALL_HEIGHT + 0.05
+    const halfT = (WALL_THICKNESS + 0.05) / 2
+
+    // Calculate segment bounds in world units
+    const segmentStartX = rangeStart * TILE_SIZE
+    const segmentEndX = (rangeEnd + 1) * TILE_SIZE // +1 because range is inclusive
+
+    // Simple box geometry for the segment
+    const shapePoints = [
+      new THREE.Vector2(segmentStartX, halfT),
+      new THREE.Vector2(segmentEndX, halfT),
+      new THREE.Vector2(segmentEndX, -halfT),
+      new THREE.Vector2(segmentStartX, -halfT),
+    ]
+    const shape = new THREE.Shape(shapePoints)
+
+    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+    geometry.rotateX(-Math.PI / 2)
+
+    return geometry
+  }, [paintRange])
+
   // Determine opacity based on selected floo, [allWalls]r
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
   // When a floor is selected, show only that floor's walls fully opaque, others semi-transparent
@@ -739,6 +773,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z] as [number, number, number],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
       }
       emitter.emit('wall:click', eventData)
       emitter.emit('wall:pointerdown', eventData)
@@ -756,6 +791,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -903,6 +939,20 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                     />
                   </Subtraction>
                 )}
+                {/* Paint preview overlay - shows the segment to be painted */}
+                {paintPreview && paintSegmentGeometry && (
+                  <Addition geometry={paintSegmentGeometry} renderOrder={100} showOperation>
+                    <meshStandardMaterial
+                      color="#ff9800"
+                      depthTest={true}
+                      depthWrite={false}
+                      emissive="#ff9800"
+                      emissiveIntensity={0.6}
+                      opacity={0.6}
+                      transparent
+                    />
+                  </Addition>
+                )}
               </Geometry>
               {debug && (
                 <Edges
@@ -938,7 +988,7 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   )
 
   if (!opening.nodeSrc) {
-    return null // TODO: Handle data from node
+    return null
   }
 
   return (
