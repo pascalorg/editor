@@ -64,49 +64,26 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     [nodeSize],
   )
 
-  // Determine color based on preview state and placement validity
-  const color = useMemo(() => {
-    if (isPreview) {
-      return canPlace ? '#44ff44' : '#ff4444'
-    }
-    // Color based on category
-    switch (nodeCategory) {
-      case 'furniture':
-        return '#8B4513' // Brown
-      case 'appliance':
-        return '#C0C0C0' // Silver
-      case 'decoration':
-        return '#FFD700' // Gold
-      case 'lighting':
-        return '#FFFF00' // Yellow
-      case 'plumbing':
-        return '#4169E1' // Blue
-      case 'electric':
-        return '#FF8C00' // Orange
-      default:
-        return '#808080' // Gray
-    }
-  }, [isPreview, canPlace, nodeCategory])
+  const previewMaterial = useMaterial(canPlace ? 'preview-valid' : 'preview-invalid')
+  const ghostMaterial = useMaterial('ghost')
 
   return (
     <>
       {isPreview && (
         // Preview rendering with X-ray effect
         <group>
-          {/* Visible/in-front version - brighter, normal depth testing */}
-          <mesh geometry={boxGeometry} position-y={0} renderOrder={2}>
-            <meshStandardMaterial color={color} depthWrite={false} opacity={0.3} transparent />
-          </mesh>
+          <mesh
+            frustumCulled={false}
+            geometry={boxGeometry}
+            material={previewMaterial}
+            position-y={0}
+          />
         </group>
       )}
 
       <ErrorBoundary fallback={null}>
         <Suspense
-          fallback={
-            <mesh geometry={boxGeometry} position-y={0.4}>
-              <meshStandardMaterial color={color} opacity={opacity} transparent={transparent} />
-            </mesh>
-          }
+          fallback={<mesh geometry={boxGeometry} material={ghostMaterial} position-y={0.4} />}
         >
           {nodeSrc && (
             <ModelItemRenderer

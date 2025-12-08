@@ -169,7 +169,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
         onPointerMove={isPreview ? undefined : handlePointerMove}
         position={[xOffset, -0.005, zOffset]} // Slight offset to avoid z-fighting
         // receiveShadow={!isPreview}
-        renderOrder={isPreview ? 1 : undefined}
+        renderOrder={isPreview ? 1 : -1}
         rotation={[-Math.PI / 2, 0, 0]} // Rotate to horizontal
       >
         <meshStandardMaterial
