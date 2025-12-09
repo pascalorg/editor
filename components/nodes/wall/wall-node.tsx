@@ -4,6 +4,7 @@ import { Minus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { getAllWallsOnLevel, wallSegmentsOverlap } from '@/lib/geometry/wall-overlap'
 import { registerComponent } from '@/lib/nodes/registry'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { WallRenderer } from './wall-renderer'
@@ -16,10 +17,17 @@ import { WallRenderer } from './wall-renderer'
  * Wall node editor component
  * Uses useEditor hooks directly to manage wall creation
  */
+const EMPTY_LEVELS: any[] = []
+
 export function WallNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const levels = useEditor((state) => {
+    const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+    return building ? building.children : EMPTY_LEVELS
+  })
 
   // Use ref to persist values across renders without triggering re-renders
   const wallStateRef = useRef<{
@@ -99,12 +107,21 @@ export function WallNodeEditor() {
 
         wallStateRef.current.previewWallId = previewWallId
       } else {
-        // Second click: commit the preview wall
+        // Second click: commit or delete the preview wall based on canPlace
         const previewWallId = wallStateRef.current.previewWallId
 
         if (previewWallId) {
-          // Commit the preview by setting preview: false (useEditor handles the conversion)
-          updateNode(previewWallId, { editor: { preview: false } })
+          // Get the wall node to check if it can be placed
+          const currentLevel = levels.find((l) => l.id === selectedFloorId)
+          const wallNode = currentLevel?.children.find((child: any) => child.id === previewWallId)
+
+          if (wallNode && 'canPlace' in wallNode && wallNode.canPlace === false) {
+            // Wall is invalid (overlapping or zero length), delete it
+            deleteNode(previewWallId)
+          } else {
+            // Wall is valid, commit the preview by setting preview: false
+            updateNode(previewWallId, { editor: { preview: false } })
+          }
         }
 
         // Reset state
@@ -136,12 +153,33 @@ export function WallNodeEditor() {
           const length = Math.sqrt(dx * dx + dy * dy)
           const rotation = Math.atan2(-dy, dx) // Negate dy to match 3D z-axis direction
 
+          // Wall can only be placed if it has non-zero length
+          let canPlace = length >= 1
+
+          // Check for overlap with existing walls on the same level (including walls inside rooms)
+          if (canPlace) {
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              // Get all walls on the level, excluding walls from our preview
+              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewWallId)
+
+              // Check if new wall overlaps with any existing wall
+              for (const existingWall of existingWalls) {
+                if (wallSegmentsOverlap({ x1, y1, x2, y2 }, existingWall)) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+          }
+
           // Update preview wall
           updateNode(previewWallId, {
             size: [length, 0.2] as [number, number],
             rotation,
             start: [x1, y1],
             end: [x2, y2],
+            editor: { canPlace, preview: true },
           })
         }
       }
@@ -156,7 +194,7 @@ export function WallNodeEditor() {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
     }
-  }, [addNode, updateNode, selectedFloorId])
+  }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
   return null
 }

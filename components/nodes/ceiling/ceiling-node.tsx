@@ -116,7 +116,36 @@ export function CeilingNodeEditor() {
           const ceilingHeight = Math.abs(y2 - y1)
 
           // Ceiling can only be placed if both width and height are at least 1 grid unit
-          const canPlace = ceilingWidth >= 1 && ceilingHeight >= 1
+          let canPlace = ceilingWidth >= 1 && ceilingHeight >= 1
+
+          // Check for overlap with existing ceilings on the same level
+          if (canPlace) {
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              const existingCeilings = currentLevel.children.filter(
+                (child: any) => child.type === 'ceiling' && child.id !== previewCeilingId,
+              )
+
+              // Check if new ceiling overlaps with any existing ceiling (interior overlap, not just edges)
+              for (const existingCeiling of existingCeilings) {
+                const [ex, ey] = existingCeiling.position
+                const [ew, eh] = existingCeiling.size
+
+                // Two rectangles overlap if they share interior area
+                // They don't overlap if one is completely to the left, right, above, or below the other
+                const noOverlap =
+                  ceilingX >= ex + ew || // new ceiling is to the right
+                  ceilingX + ceilingWidth <= ex || // new ceiling is to the left
+                  ceilingY >= ey + eh || // new ceiling is below
+                  ceilingY + ceilingHeight <= ey // new ceiling is above
+
+                if (!noOverlap) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+          }
 
           // Update ceiling with position and size
           updateNode(previewCeilingId, {
