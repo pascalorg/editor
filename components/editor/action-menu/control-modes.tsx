@@ -47,20 +47,20 @@ const modes: Array<{
     activeColor: 'bg-green-500/20 text-green-400',
   },
   {
-    id: 'guide',
-    icon: Image,
-    label: 'Guide',
-    shortcut: 'G',
-    color: 'hover:bg-purple-500/20 hover:text-purple-400',
-    activeColor: 'bg-purple-500/20 text-purple-400',
-  },
-  {
     id: 'painting',
     icon: Paintbrush,
     label: 'Painting',
     shortcut: 'P',
     color: 'hover:bg-cyan-500/20 hover:text-cyan-400',
     activeColor: 'bg-cyan-500/20 text-cyan-400',
+  },
+  {
+    id: 'guide',
+    icon: Image,
+    label: 'Guide',
+    shortcut: 'G',
+    color: 'hover:bg-purple-500/20 hover:text-purple-400',
+    activeColor: 'bg-purple-500/20 text-purple-400',
   },
 ]
 
