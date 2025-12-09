@@ -415,9 +415,12 @@ export function PaintingTool() {
             position: part.start,
             size: [part.length, wall.size[1]],
             rotation: wall.rotation,
+            thickness: wall.thickness,
+            height: wall.height,
             materialFront: newMaterialFront,
             materialBack: newMaterialBack,
             children: part.children,
+            parentId,
           }),
           parentId!,
         )

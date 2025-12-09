@@ -538,7 +538,12 @@ export function SledgehammerTool() {
             position: secondPart.start,
             size: [secondPart.length, wall.size[1]],
             rotation: wall.rotation,
+            thickness: wall.thickness,
+            height: wall.height,
+            materialFront: wall.materialFront,
+            materialBack: wall.materialBack,
             children: childrenAfter,
+            parentId,
           }),
           parentId!,
         )
