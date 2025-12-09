@@ -408,6 +408,14 @@ export type StoreState = {
   startAddToCollection: () => void
   confirmAddToCollection: (collectionId: string) => void
   cancelAddToCollection: () => void
+
+  // Transaction operations (for grouping multiple operations into one undo step)
+  startTransaction: () => void
+  commitTransaction: () => void
+  cancelTransaction: () => void
+  isTransactionActive: () => boolean
+  captureSnapshot: (nodeId: string) => void
+  trackCreatedNode: (nodeId: string) => void
 }
 
 /**
@@ -1045,7 +1053,8 @@ const useStore = create<StoreState>()(
           const { graph, commandManager } = get()
           const command = new AddNodeCommand(nodeData, parentId)
 
-          if ((nodeData as any).editor?.preview) {
+          // Skip undo if preview node OR if a transaction is active (transaction handles undo via snapshots)
+          if ((nodeData as any).editor?.preview || commandManager.isTransactionActive()) {
             command.execute(graph)
           } else {
             commandManager.execute(command, graph)
@@ -1116,7 +1125,8 @@ const useStore = create<StoreState>()(
             return nodeId
           }
           const command = new UpdateNodeCommand(nodeId, updates)
-          if (skipUndo || (fromNode as any).editor?.preview) {
+          // Skip undo if explicitly requested, preview node, OR if a transaction is active
+          if (skipUndo || (fromNode as any).editor?.preview || commandManager.isTransactionActive()) {
             command.execute(graph)
           } else {
             commandManager.execute(command, graph)
@@ -1129,7 +1139,8 @@ const useStore = create<StoreState>()(
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
-          if ((handle?.data() as any)?.editor?.preview) {
+          // Skip undo if preview node OR if a transaction is active (transaction handles undo via snapshots)
+          if ((handle?.data() as any)?.editor?.preview || commandManager.isTransactionActive()) {
             command.execute(graph)
           } else {
             commandManager.execute(command, graph)
@@ -1349,6 +1360,43 @@ const useStore = create<StoreState>()(
 
         cancelAddToCollection: () => {
           set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
+
+        // Transaction operations (for grouping multiple operations into one undo step)
+        startTransaction: () => {
+          const { commandManager, graph } = get()
+          commandManager.startTransaction(graph)
+        },
+
+        commitTransaction: () => {
+          const { commandManager } = get()
+          commandManager.commitTransaction()
+        },
+
+        cancelTransaction: () => {
+          const { commandManager, graph } = get()
+          commandManager.cancelTransaction(graph)
+        },
+
+        isTransactionActive: () => {
+          const { commandManager } = get()
+          return commandManager.isTransactionActive()
+        },
+
+        captureSnapshot: (nodeId: string) => {
+          const { commandManager } = get()
+          const transaction = commandManager.getActiveTransaction()
+          if (transaction) {
+            transaction.captureSnapshot(nodeId)
+          }
+        },
+
+        trackCreatedNode: (nodeId: string) => {
+          const { commandManager } = get()
+          const transaction = commandManager.getActiveTransaction()
+          if (transaction) {
+            transaction.trackCreatedNode(nodeId)
+          }
         },
       }
     },

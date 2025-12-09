@@ -423,6 +423,169 @@ export class MoveNodeCommand implements Command {
 }
 
 // ============================================================================
+// TRANSACTION COMMAND (groups multiple operations into one undo step)
+// ============================================================================
+
+export class TransactionCommand implements Command {
+  /** Snapshot of node states before the transaction */
+  private readonly snapshotState: Map<string, { node: AnyNode; parentId: string }> = new Map()
+  /** IDs of nodes created during the transaction (need to delete on undo) */
+  private readonly createdNodeIds: Set<string> = new Set()
+  /** Reference to the graph for capturing snapshots */
+  private readonly graph: SceneGraph
+  /** Final state after transaction for redo */
+  private finalState: Map<string, { node: AnyNode; parentId: string }> | null = null
+  /** IDs of nodes that were deleted during the transaction (for redo) */
+  private deletedNodeIds: Set<string> | null = null
+
+  constructor(graph: SceneGraph) {
+    this.graph = graph
+  }
+
+  /**
+   * Capture initial state of a node before modification.
+   * Call this before any modifications to ensure proper undo.
+   * Cleans preview flags from the captured state so undo restores a clean state.
+   */
+  captureSnapshot(nodeId: string): void {
+    if (this.snapshotState.has(nodeId)) return
+
+    const handle = this.graph.getNodeById(nodeId as AnyNodeId)
+    if (handle) {
+      const parent = handle.parent()
+      const nodeData = JSON.parse(JSON.stringify(handle.data()))
+
+      // Clean preview flags from the snapshot - we want to restore to a clean state
+      if (nodeData.editor) {
+        delete nodeData.editor.deletePreview
+        delete nodeData.editor.deleteRange
+        delete nodeData.editor.paintPreview
+        delete nodeData.editor.paintRange
+        delete nodeData.editor.paintFace
+      }
+
+      this.snapshotState.set(nodeId, {
+        node: nodeData,
+        parentId: parent?.id ?? '',
+      })
+    }
+  }
+
+  /**
+   * Track a node that was created during the transaction.
+   * These will be deleted on undo.
+   */
+  trackCreatedNode(nodeId: string): void {
+    this.createdNodeIds.add(nodeId)
+  }
+
+  /**
+   * Capture final state before committing transaction (for redo support).
+   * Call this right before committing to capture the end state.
+   */
+  captureFinalState(): void {
+    this.finalState = new Map()
+    this.deletedNodeIds = new Set()
+
+    // For each node we have a snapshot of, capture its final state (or mark as deleted)
+    for (const [nodeId, { parentId }] of this.snapshotState) {
+      const handle = this.graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        // Node still exists, capture its current state
+        const nodeData = JSON.parse(JSON.stringify(handle.data()))
+        // Clean preview flags
+        if (nodeData.editor) {
+          delete nodeData.editor.deletePreview
+          delete nodeData.editor.deleteRange
+          delete nodeData.editor.paintPreview
+          delete nodeData.editor.paintRange
+          delete nodeData.editor.paintFace
+        }
+        this.finalState.set(nodeId, { node: nodeData, parentId })
+      } else {
+        // Node was deleted
+        this.deletedNodeIds.add(nodeId)
+      }
+    }
+
+    // Also capture created nodes' final state
+    for (const nodeId of this.createdNodeIds) {
+      const handle = this.graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        const parent = handle.parent()
+        const capturedParentId = parent?.id ?? ''
+        const nodeData = JSON.parse(JSON.stringify(handle.data()))
+        // Clean preview flags
+        if (nodeData.editor) {
+          delete nodeData.editor.deletePreview
+          delete nodeData.editor.deleteRange
+          delete nodeData.editor.paintPreview
+          delete nodeData.editor.paintRange
+          delete nodeData.editor.paintFace
+        }
+        this.finalState.set(nodeId, { node: nodeData, parentId: capturedParentId })
+      }
+    }
+  }
+
+  execute(graph: SceneGraph): void {
+    // Called on redo - replay the final state
+    if (!this.finalState) return
+
+    // First, delete nodes that should be deleted
+    if (this.deletedNodeIds) {
+      for (const nodeId of this.deletedNodeIds) {
+        const handle = graph.getNodeById(nodeId as AnyNodeId)
+        if (handle) {
+          graph.deleteNode(nodeId as AnyNodeId)
+        }
+      }
+    }
+
+    // Then, restore/create nodes to their final state
+    for (const [nodeId, { node, parentId }] of this.finalState) {
+      // Skip nodes that were deleted
+      if (this.deletedNodeIds?.has(nodeId)) continue
+
+      const handle = graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        // Node exists, update to final state
+        graph.updateNode(nodeId as AnyNodeId, node)
+      } else if (parentId) {
+        // Node doesn't exist, create it
+        graph.nodes.create(node, parentId as AnyNodeId)
+      }
+    }
+  }
+
+  undo(graph: SceneGraph): void {
+    // First, delete any nodes that were created during the transaction
+    for (const nodeId of this.createdNodeIds) {
+      const handle = graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        graph.deleteNode(nodeId as AnyNodeId)
+      }
+    }
+
+    // Then, restore nodes to their snapshot state
+    for (const [nodeId, { node, parentId }] of this.snapshotState) {
+      const handle = graph.getNodeById(nodeId as AnyNodeId)
+      if (handle) {
+        // Node still exists, restore its state
+        graph.updateNode(nodeId as AnyNodeId, node)
+      } else if (parentId) {
+        // Node was deleted, recreate it
+        graph.nodes.create(node, parentId as AnyNodeId)
+      }
+    }
+  }
+
+  isEmpty(): boolean {
+    return this.snapshotState.size === 0 && this.createdNodeIds.size === 0
+  }
+}
+
+// ============================================================================
 // COMMAND MANAGER
 // ============================================================================
 
@@ -430,6 +593,7 @@ export class CommandManager {
   private undoStack: Command[] = []
   private redoStack: Command[] = []
   private readonly maxStackSize = 50
+  private activeTransaction: TransactionCommand | null = null
 
   execute(command: Command, graph: SceneGraph): void {
     command.execute(graph)
@@ -442,7 +606,78 @@ export class CommandManager {
     this.redoStack = [] // Clear redo stack on new action
   }
 
+  // ============================================================================
+  // TRANSACTION METHODS
+  // ============================================================================
+
+  /**
+   * Start a new transaction. All changes during the transaction
+   * will be grouped into a single undo step.
+   */
+  startTransaction(graph: SceneGraph): void {
+    if (this.activeTransaction) {
+      console.warn('Transaction already in progress, committing previous transaction')
+      this.commitTransaction()
+    }
+    this.activeTransaction = new TransactionCommand(graph)
+  }
+
+  /**
+   * Check if a transaction is currently active
+   */
+  isTransactionActive(): boolean {
+    return this.activeTransaction !== null
+  }
+
+  /**
+   * Get the active transaction (for capturing snapshots)
+   */
+  getActiveTransaction(): TransactionCommand | null {
+    return this.activeTransaction
+  }
+
+  /**
+   * Commit the current transaction to the undo stack
+   */
+  commitTransaction(): void {
+    if (!this.activeTransaction) {
+      console.warn('No active transaction to commit')
+      return
+    }
+
+    if (!this.activeTransaction.isEmpty()) {
+      // Capture final state for redo support
+      this.activeTransaction.captureFinalState()
+      this.undoStack.push(this.activeTransaction)
+      if (this.undoStack.length > this.maxStackSize) {
+        this.undoStack.shift()
+      }
+      this.redoStack = [] // Clear redo stack on new action
+    }
+
+    this.activeTransaction = null
+  }
+
+  /**
+   * Cancel the current transaction and restore to pre-transaction state
+   */
+  cancelTransaction(graph: SceneGraph): void {
+    if (!this.activeTransaction) {
+      return
+    }
+
+    // Undo all changes made during the transaction
+    this.activeTransaction.undo(graph)
+    this.activeTransaction = null
+  }
+
   undo(graph: SceneGraph): boolean {
+    // If there's an active transaction, cancel it first
+    if (this.activeTransaction) {
+      this.cancelTransaction(graph)
+      return true
+    }
+
     const command = this.undoStack.pop()
     if (!command) return false
 
@@ -461,7 +696,7 @@ export class CommandManager {
   }
 
   canUndo(): boolean {
-    return this.undoStack.length > 0
+    return this.undoStack.length > 0 || this.activeTransaction !== null
   }
 
   canRedo(): boolean {
@@ -471,6 +706,7 @@ export class CommandManager {
   clear(): void {
     this.undoStack = []
     this.redoStack = []
+    this.activeTransaction = null
   }
 
   getUndoStack(): Command[] {
