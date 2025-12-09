@@ -2,9 +2,9 @@
 
 import { BoxSelect } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { checkWallsOverlap, getAllWallsOnLevel } from '@/lib/geometry/wall-overlap'
 import { registerComponent } from '@/lib/nodes/registry'
 import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
@@ -198,7 +198,32 @@ export function RoomNodeEditor() {
 
           // Room can only be placed if both width and height are at least 1 grid unit
           // This ensures walls don't overlap (e.g., when width=0, left and right walls would be at same position)
-          const canPlace = roomWidth >= 1 && roomHeight >= 1
+          let canPlace = roomWidth >= 1 && roomHeight >= 1
+
+          // Check for overlap with existing walls on the same level
+          if (canPlace) {
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              // Get all existing walls, excluding walls from our preview room
+              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewRoomId)
+
+              // Define the 4 walls of the room in absolute coordinates
+              const roomWalls = [
+                // Bottom wall: (roomX, roomY) -> (roomX + roomWidth, roomY)
+                { x1: roomX, y1: roomY, x2: roomX + roomWidth, y2: roomY },
+                // Right wall: (roomX + roomWidth, roomY) -> (roomX + roomWidth, roomY + roomHeight)
+                { x1: roomX + roomWidth, y1: roomY, x2: roomX + roomWidth, y2: roomY + roomHeight },
+                // Top wall: (roomX + roomWidth, roomY + roomHeight) -> (roomX, roomY + roomHeight)
+                { x1: roomX + roomWidth, y1: roomY + roomHeight, x2: roomX, y2: roomY + roomHeight },
+                // Left wall: (roomX, roomY + roomHeight) -> (roomX, roomY)
+                { x1: roomX, y1: roomY + roomHeight, x2: roomX, y2: roomY },
+              ]
+
+              if (checkWallsOverlap(roomWalls, existingWalls)) {
+                canPlace = false
+              }
+            }
+          }
 
           // Update room group with position and size
           updateNode(previewRoomId, {

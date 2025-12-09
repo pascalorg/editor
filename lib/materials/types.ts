@@ -53,6 +53,7 @@ export interface MaterialDefinition {
   ior?: number
   clearcoat?: number
   clearcoatRoughness?: number
+  depthWrite?: boolean
 }
 
 /**

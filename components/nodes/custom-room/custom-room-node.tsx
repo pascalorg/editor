@@ -2,9 +2,9 @@
 
 import { Pentagon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { z } from 'zod'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { getAllWallsOnLevel, wallSegmentsOverlap } from '@/lib/geometry/wall-overlap'
 import { registerComponent } from '@/lib/nodes/registry'
 import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
@@ -200,6 +200,39 @@ export function CustomRoomNodeEditor() {
           // Only finalize the wall if it has non-zero length
           // (prevents adding 0-length walls when double-clicking)
           if (length > 0) {
+            // Check for intersections before placing
+            let canPlace = true
+
+            // Check against existing walls on the level
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              const previewGroupId = customRoomStateRef.current.previewGroupId
+              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewGroupId ?? undefined)
+              for (const existingWall of existingWalls) {
+                if (wallSegmentsOverlap({ x1, y1, x2, y2 }, existingWall)) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+
+            // Check against our own placed walls
+            if (canPlace && points.length >= 2) {
+              for (let i = 0; i < points.length - 1; i++) {
+                const [px1, py1] = points[i]
+                const [px2, py2] = points[i + 1]
+                if (wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+
+            // Don't place the wall if it intersects
+            if (!canPlace) {
+              return
+            }
+
             const rotation = Math.atan2(-dy, dx)
 
             // Convert to group-relative coordinates
@@ -284,6 +317,40 @@ export function CustomRoomNodeEditor() {
           const relX2 = x2 - groupOrigin[0]
           const relY2 = y2 - groupOrigin[1]
 
+          // Check if this wall segment overlaps with existing walls or our own placed walls
+          let canPlace = length >= 1
+          if (canPlace) {
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              const previewGroupId = customRoomStateRef.current.previewGroupId
+              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewGroupId ?? undefined)
+
+              // Check if the new wall segment overlaps with any existing wall
+              for (const existingWall of existingWalls) {
+                if (wallSegmentsOverlap({ x1, y1, x2, y2 }, existingWall)) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+
+            // Also check against our own placed walls in the current custom room
+            if (canPlace && points.length >= 2) {
+              const groupOriginForCheck = customRoomStateRef.current.groupOrigin
+              if (groupOriginForCheck) {
+                // Build wall segments from our placed points (in absolute coordinates)
+                for (let i = 0; i < points.length - 1; i++) {
+                  const [px1, py1] = points[i]
+                  const [px2, py2] = points[i + 1]
+                  if (wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })) {
+                    canPlace = false
+                    break
+                  }
+                }
+              }
+            }
+          }
+
           // Update cursor wall with relative positions
           updateNode(cursorWallId, {
             position: [relX1, relY1] as [number, number],
@@ -292,6 +359,7 @@ export function CustomRoomNodeEditor() {
             start: [relX1, relY1] as [number, number],
             end: [relX2, relY2] as [number, number],
             visible: true,
+            editor: { canPlace, preview: true },
           })
         }
       }

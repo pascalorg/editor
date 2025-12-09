@@ -2,10 +2,10 @@
 
 import { Line } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
+import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { emitter, type WallEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
-import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 
 interface WallPaintInfo {
   rangeStart: number
@@ -61,6 +61,11 @@ export function PaintingTool() {
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedMaterial = useEditor((state) => state.selectedMaterial)
+  const startTransaction = useEditor((state) => state.startTransaction)
+  const commitTransaction = useEditor((state) => state.commitTransaction)
+  const cancelTransaction = useEditor((state) => state.cancelTransaction)
+  const captureSnapshot = useEditor((state) => state.captureSnapshot)
+  const trackCreatedNode = useEditor((state) => state.trackCreatedNode)
 
   const stateRef = useRef<PaintingState>({
     hoveredWallId: null,
@@ -79,7 +84,7 @@ export function PaintingTool() {
 
     const state = stateRef.current
 
-    // Helper to update the paint preview range on a wall
+    // Helper to update the paint preview range on a wall (preview only, skip undo)
     const setPaintRange = (
       wallId: string,
       wall: WallNode,
@@ -90,25 +95,38 @@ export function PaintingTool() {
       const rangeStart = Math.min(startIndex, endIndex)
       const rangeEnd = Math.max(startIndex, endIndex)
 
-      updateNode(wallId, {
-        editor: {
-          ...wall.editor,
-          paintPreview: true,
-          paintRange: [rangeStart, rangeEnd],
-          paintFace: face,
+      updateNode(
+        wallId,
+        {
+          editor: {
+            ...wall.editor,
+            paintPreview: true,
+            paintRange: [rangeStart, rangeEnd],
+            paintFace: face,
+          },
         },
-      })
+        true,
+      ) // skipUndo - preview changes shouldn't be in history
     }
 
-    // Helper to clear paint preview from a wall
+    // Helper to clear paint preview from a wall (preview only, skip undo)
     const clearPaintPreview = (wallId: string) => {
       const handle = graph.getNodeById(wallId as any)
       if (handle) {
         const node = handle.data() as any
         if (node?.editor?.paintPreview) {
-          updateNode(wallId, {
-            editor: { ...node.editor, paintPreview: false, paintRange: undefined, paintFace: undefined },
-          })
+          updateNode(
+            wallId,
+            {
+              editor: {
+                ...node.editor,
+                paintPreview: false,
+                paintRange: undefined,
+                paintFace: undefined,
+              },
+            },
+            true,
+          ) // skipUndo - preview changes shouldn't be in history
         }
       }
     }
@@ -140,12 +158,26 @@ export function PaintingTool() {
       state.hoveredFace = face
 
       if (state.isDragging) {
-        // When entering a new wall during drag, start fresh range on this wall
-        state.dragStartIndex = gridIndex
-        state.dragEndIndex = gridIndex
+        const existingPaintInfo = state.wallsToPaint.get(wall.id)
 
-        state.wallsToPaint.set(wall.id, { rangeStart: gridIndex, rangeEnd: gridIndex, face: state.dragFace! })
-        setPaintRange(wall.id, wall, gridIndex, gridIndex, state.dragFace!)
+        if (existingPaintInfo) {
+          // Re-entering a wall we're already painting - extend the range
+          const rangeStart = Math.min(existingPaintInfo.rangeStart, gridIndex)
+          const rangeEnd = Math.max(existingPaintInfo.rangeEnd, gridIndex)
+          state.wallsToPaint.set(wall.id, { rangeStart, rangeEnd, face: state.dragFace! })
+          setPaintRange(wall.id, wall, rangeStart, rangeEnd, state.dragFace!)
+        } else {
+          // New wall during drag - capture snapshot and start fresh range
+          captureSnapshot(wall.id)
+          state.dragStartIndex = gridIndex
+          state.dragEndIndex = gridIndex
+          state.wallsToPaint.set(wall.id, {
+            rangeStart: gridIndex,
+            rangeEnd: gridIndex,
+            face: state.dragFace!,
+          })
+          setPaintRange(wall.id, wall, gridIndex, gridIndex, state.dragFace!)
+        }
       } else {
         // Just hovering - highlight single cell
         setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
@@ -159,14 +191,9 @@ export function PaintingTool() {
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
       const face = getFaceFromNormal(e.normal)
 
-      // Check if we moved to a different wall
-      if (state.hoveredWallId && state.hoveredWallId !== wall.id) {
-        if (!state.isDragging) {
-          clearPaintPreview(state.hoveredWallId)
-        }
-        if (state.isDragging) {
-          state.dragStartIndex = gridIndex
-        }
+      // Check if we moved to a different wall - clear preview if not dragging
+      if (state.hoveredWallId && state.hoveredWallId !== wall.id && !state.isDragging) {
+        clearPaintPreview(state.hoveredWallId)
       }
 
       const indexChanged = state.hoveredGridIndex !== gridIndex
@@ -180,8 +207,15 @@ export function PaintingTool() {
       if (state.isDragging) {
         state.dragEndIndex = gridIndex
 
-        const rangeStart = Math.min(state.dragStartIndex!, gridIndex)
-        const rangeEnd = Math.max(state.dragStartIndex!, gridIndex)
+        // Get existing range and extend it (never shrink)
+        const existingPaintInfo = state.wallsToPaint.get(wall.id)
+        const rangeStart = existingPaintInfo
+          ? Math.min(existingPaintInfo.rangeStart, gridIndex)
+          : gridIndex
+        const rangeEnd = existingPaintInfo
+          ? Math.max(existingPaintInfo.rangeEnd, gridIndex)
+          : gridIndex
+
         state.wallsToPaint.set(wall.id, { rangeStart, rangeEnd, face: state.dragFace! })
         setPaintRange(wall.id, wall, rangeStart, rangeEnd, state.dragFace!)
       } else if (indexChanged || wallChanged || faceChanged) {
@@ -220,7 +254,12 @@ export function PaintingTool() {
 
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
       // Use normal from event if available, otherwise fallback to the face we saved from hover
-      const face = e.normal ? getFaceFromNormal(e.normal) : (state.hoveredFace || 'front')
+      const face = e.normal ? getFaceFromNormal(e.normal) : state.hoveredFace || 'front'
+
+      // Start a transaction for this paint operation
+      startTransaction()
+      // Capture the initial state of the wall before any modifications
+      captureSnapshot(wall.id)
 
       state.isDragging = true
       state.hoveredWallId = wall.id
@@ -252,10 +291,16 @@ export function PaintingTool() {
           }
         })
 
+        // Commit the transaction - this creates a single undo entry
+        commitTransaction()
+
         state.wallsToPaint.clear()
         state.hoveredWallId = null
         state.hoveredGridIndex = null
         state.hoveredFace = null
+      } else {
+        // No painting happened, cancel the transaction
+        cancelTransaction()
       }
 
       state.isDragging = false
@@ -283,7 +328,12 @@ export function PaintingTool() {
       if (rangeStart === 0 && rangeEnd === wallLength - 1) {
         updateNode(wall.id, {
           [materialProperty]: selectedMaterial,
-          editor: { ...wall.editor, paintPreview: false, paintRange: undefined, paintFace: undefined },
+          editor: {
+            ...wall.editor,
+            paintPreview: false,
+            paintRange: undefined,
+            paintFace: undefined,
+          },
         })
         return
       }
@@ -376,10 +426,12 @@ export function PaintingTool() {
       deleteNode(wall.id)
 
       for (const part of parts) {
-        const newMaterialFront = part.isPainted && face === 'front' ? selectedMaterial : wall.materialFront
-        const newMaterialBack = part.isPainted && face === 'back' ? selectedMaterial : wall.materialBack
+        const newMaterialFront =
+          part.isPainted && face === 'front' ? selectedMaterial : wall.materialFront
+        const newMaterialBack =
+          part.isPainted && face === 'back' ? selectedMaterial : wall.materialBack
 
-        addNode(
+        const newWallId = addNode(
           WallNode.parse({
             type: 'wall',
             start: part.start,
@@ -387,12 +439,17 @@ export function PaintingTool() {
             position: part.start,
             size: [part.length, wall.size[1]],
             rotation: wall.rotation,
+            thickness: wall.thickness,
+            height: wall.height,
             materialFront: newMaterialFront,
             materialBack: newMaterialBack,
             children: part.children,
+            parentId,
           }),
           parentId!,
         )
+        // Track the new wall so it gets deleted on undo
+        trackCreatedNode(newWallId)
       }
     }
 
@@ -405,6 +462,8 @@ export function PaintingTool() {
 
     // Cleanup
     return () => {
+      // Cancel any active transaction when tool is deactivated
+      cancelTransaction()
       clearPaintFlags()
 
       emitter.off('wall:enter', handleWallEnter)
@@ -413,7 +472,19 @@ export function PaintingTool() {
       emitter.off('wall:pointerdown', handleWallPointerDown)
       emitter.off('wall:pointerup', handleWallPointerUp)
     }
-  }, [graph, updateNode, deleteNode, addNode, selectedFloorId, selectedMaterial])
+  }, [
+    graph,
+    updateNode,
+    deleteNode,
+    addNode,
+    selectedFloorId,
+    selectedMaterial,
+    startTransaction,
+    commitTransaction,
+    cancelTransaction,
+    captureSnapshot,
+    trackCreatedNode,
+  ])
 
   return null
 }

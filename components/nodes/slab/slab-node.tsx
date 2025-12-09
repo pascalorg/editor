@@ -114,7 +114,36 @@ export function SlabNodeEditor() {
           const slabHeight = Math.abs(y2 - y1)
 
           // Slab can only be placed if both width and height are at least 1 grid unit
-          const canPlace = slabWidth >= 1 && slabHeight >= 1
+          let canPlace = slabWidth >= 1 && slabHeight >= 1
+
+          // Check for overlap with existing slabs on the same level
+          if (canPlace) {
+            const currentLevel = levels.find((l) => l.id === selectedFloorId)
+            if (currentLevel?.children) {
+              const existingSlabs = currentLevel.children.filter(
+                (child: any) => child.type === 'slab' && child.id !== previewSlabId,
+              )
+
+              // Check if new slab overlaps with any existing slab (interior overlap, not just edges)
+              for (const existingSlab of existingSlabs) {
+                const [ex, ey] = existingSlab.position
+                const [ew, eh] = existingSlab.size
+
+                // Two rectangles overlap if they share interior area
+                // They don't overlap if one is completely to the left, right, above, or below the other
+                const noOverlap =
+                  slabX >= ex + ew || // new slab is to the right
+                  slabX + slabWidth <= ex || // new slab is to the left
+                  slabY >= ey + eh || // new slab is below
+                  slabY + slabHeight <= ey // new slab is above
+
+                if (!noOverlap) {
+                  canPlace = false
+                  break
+                }
+              }
+            }
+          }
 
           // Update slab with position and size
           updateNode(previewSlabId, {
