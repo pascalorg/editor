@@ -59,6 +59,9 @@ export function useKeyboard() {
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('guide')
+      } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setControlMode('painting')
       } else if ((e.key === 'g' || e.key === 'G') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         if (e.shiftKey) {

@@ -5,7 +5,6 @@ import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
 import { DoorNode } from './nodes/door'
-import { FloorNode } from './nodes/floor'
 import { GroupNode } from './nodes/group'
 import { ImageNode } from './nodes/image'
 import { ItemNode } from './nodes/item'
@@ -25,7 +24,6 @@ export const AnyNode = z.discriminatedUnion('type', [
   WallNode,
   DoorNode,
   WindowNode,
-  FloorNode,
   CeilingNode,
   RoofNode,
   ColumnNode,
@@ -54,7 +52,6 @@ export const NodeSchemas = {
   wall: WallNode,
   door: DoorNode,
   window: WindowNode,
-  floor: FloorNode,
   ceiling: CeilingNode,
   roof: RoofNode,
   column: ColumnNode,
@@ -74,7 +71,6 @@ export const NodeCreateSchemas = {
   wall: WallNode.omit({ id: true, object: true, type: true }),
   door: DoorNode.omit({ id: true, object: true, type: true }),
   window: WindowNode.omit({ id: true, object: true, type: true }),
-  floor: FloorNode.omit({ id: true, object: true, type: true }),
   ceiling: CeilingNode.omit({ id: true, object: true, type: true }),
   roof: RoofNode.omit({ id: true, object: true, type: true }),
   column: ColumnNode.omit({ id: true, object: true, type: true }),

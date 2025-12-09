@@ -17,6 +17,7 @@ import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
+import { PaintingTool } from '../nodes/painting/painting-tool'
 import { SledgehammerTool } from '../nodes/sledgehammer/sledgehammer-tool'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
@@ -85,6 +86,9 @@ export default function Editor({ className }: { className?: string }) {
 
       {/* Sledgehammer tool for deleting walls and items */}
       {controlMode === 'delete' && <SledgehammerTool />}
+
+      {/* Painting tool for applying materials to walls */}
+      {controlMode === 'painting' && <PaintingTool />}
 
       <CustomControls />
       <EnvironmentRenderer />

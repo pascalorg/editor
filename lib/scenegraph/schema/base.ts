@@ -2,6 +2,12 @@ import { customAlphabet } from 'nanoid'
 import { z } from 'zod'
 
 const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
+
+/**
+ * Material preset name reference
+ * @example 'white', 'brick', 'wood', 'glass', 'preview-valid'
+ */
+export const Material = z.string().optional()
 export const generateId = <T extends string>(prefix: T): `${T}_${string}` =>
   `${prefix}_${customId()}` as `${T}_${string}`
 export const objectId = <T extends string>(prefix: T) => {
@@ -29,6 +35,10 @@ export const BaseNode = z.object({
       // Delete range: grid cell indices [startIndex, endIndex] (inclusive)
       // For a wall of length 5, indices are 0-4
       deleteRange: z.tuple([z.number(), z.number()]).optional(),
+      // Paint preview state for painting tool
+      paintPreview: z.boolean().optional(),
+      paintRange: z.tuple([z.number(), z.number()]).optional(),
+      paintFace: z.enum(['front', 'back']).optional(),
     })
     .optional(),
 })

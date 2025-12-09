@@ -1,6 +1,6 @@
 'use client'
 
-import { Hammer, Image, MousePointer2, Pencil, Trash2 } from 'lucide-react'
+import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
@@ -45,6 +45,14 @@ const modes: Array<{
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
+  },
+  {
+    id: 'painting',
+    icon: Paintbrush,
+    label: 'Painting',
+    shortcut: 'P',
+    color: 'hover:bg-cyan-500/20 hover:text-cyan-400',
+    activeColor: 'bg-cyan-500/20 text-cyan-400',
   },
   {
     id: 'guide',

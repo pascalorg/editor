@@ -39,12 +39,14 @@ export function ItemNodeEditor() {
     lastPreviewPosition: [number, number] | null
     currentRotation: number
     lastCalculatedRotation: number | null // Track last auto-calculated rotation from wall normal
+    currentSide: 'front' | 'back' // Track which side of the wall the item is on
     canPlace: boolean
   }>({
     previewItemId: null,
     lastPreviewPosition: null,
     currentRotation: 0,
     lastCalculatedRotation: null,
+    currentSide: 'front',
     canPlace: false,
   })
 
@@ -105,6 +107,18 @@ export function ItemNodeEditor() {
       // atan2(z, x) gives the angle the vector makes with the positive X axis
       // Add π/2 to align item's forward direction with the wall normal
       return Math.atan2(normal[2], normal[0]) + Math.PI / 2
+    }
+
+    /**
+     * Determine which side of the wall based on the normal vector
+     * In wall-local space, the wall runs along X-axis, so the normal points along Z-axis
+     * Positive Z normal = 'front', Negative Z normal = 'back'
+     */
+    const getSideFromNormal = (normal: [number, number, number] | undefined): 'front' | 'back' => {
+      if (!normal) return 'front'
+      // The Z component of the normal determines which side
+      // We use a threshold to handle floating point imprecision
+      return normal[2] >= 0 ? 'front' : 'back'
     }
 
     // ============================================================================
@@ -207,7 +221,7 @@ export function ItemNodeEditor() {
     // ============================================================================
 
     const handleWallClick = (e: WallEvent) => {
-      if (attachTo !== 'wall') return
+      if (attachTo !== 'wall' && attachTo !== 'wall-side') return
 
       const previewId = previewStateRef.current.previewItemId
       if (!previewId) return
@@ -221,7 +235,7 @@ export function ItemNodeEditor() {
     }
 
     const handleWallEnter = (e: WallEvent) => {
-      if (attachTo !== 'wall') return
+      if (attachTo !== 'wall' && attachTo !== 'wall-side') return
 
       // Delete any existing preview
       const previewId = previewStateRef.current.previewItemId
@@ -239,11 +253,20 @@ export function ItemNodeEditor() {
       previewStateRef.current.currentRotation = rotation
       previewStateRef.current.lastCalculatedRotation = rotation
 
-      // Create a temporary item to check placement
+      // Determine side based on attachTo:
+      // - 'wall': impacts both sides (doors, windows) → no side (undefined)
+      // - 'wall-side': one side only (art, TV, etc.) → use normal to determine side
+      const side = attachTo === 'wall-side' ? getSideFromNormal(e.normal) : undefined
+      if (side) {
+        previewStateRef.current.currentSide = side
+      }
+
+      // Create a temporary item to check placement (with side for collision detection)
       const tempItem = {
         position: localPos,
         rotation,
         size: selectedItem.size,
+        side,
       } as any
 
       const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
@@ -265,6 +288,7 @@ export function ItemNodeEditor() {
           modelPosition: selectedItem.position,
           modelRotation: selectedItem.rotation,
           attachTo: selectedItem.attachTo,
+          side, // Set side based on wall normal (undefined for doors/windows)
           editor: { preview: true, canPlace },
           children: [],
         }),
@@ -275,7 +299,7 @@ export function ItemNodeEditor() {
     }
 
     const handleWallMove = (e: WallEvent) => {
-      if (attachTo !== 'wall') return
+      if (attachTo !== 'wall' && attachTo !== 'wall-side') return
 
       const previewId = previewStateRef.current.previewItemId
       const lastPos = previewStateRef.current.lastPreviewPosition
@@ -293,6 +317,14 @@ export function ItemNodeEditor() {
       // Calculate rotation from wall normal
       const calculatedRotation = calculateRotationFromNormal(e.normal)
 
+      // Determine side based on attachTo:
+      // - 'wall': impacts both sides (doors, windows) → no side (undefined)
+      // - 'wall-side': one side only (art, TV, etc.) → use normal to determine side
+      const side = attachTo === 'wall-side' ? getSideFromNormal(e.normal) : undefined
+      if (side) {
+        previewStateRef.current.currentSide = side
+      }
+
       // Only update rotation if the calculated value changed
       // This preserves user's manual rotation adjustments when moving along the same wall
       let rotation = previewStateRef.current.currentRotation
@@ -302,11 +334,12 @@ export function ItemNodeEditor() {
         previewStateRef.current.lastCalculatedRotation = calculatedRotation
       }
 
-      // Create a temporary item to check placement
+      // Create a temporary item to check placement (with side for collision detection)
       const tempItem = {
         position: localPos,
         rotation,
         size: selectedItem.size,
+        side,
       } as any
 
       const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
@@ -317,6 +350,7 @@ export function ItemNodeEditor() {
         updateNode(previewId, {
           position: localPos,
           rotation,
+          side,
           editor: { preview: true, canPlace },
         })
       } else {
@@ -337,6 +371,7 @@ export function ItemNodeEditor() {
             modelPosition: selectedItem.position,
             modelRotation: selectedItem.rotation,
             attachTo: selectedItem.attachTo,
+            side, // Set side based on wall normal (undefined for doors/windows)
             editor: { preview: true, canPlace },
             children: [],
           }),
@@ -347,7 +382,7 @@ export function ItemNodeEditor() {
     }
 
     const handleWallLeave = (e: WallEvent) => {
-      if (attachTo !== 'wall') return
+      if (attachTo !== 'wall' && attachTo !== 'wall-side') return
 
       const previewId = previewStateRef.current.previewItemId
       if (previewId) {
@@ -578,7 +613,7 @@ export function ItemNodeEditor() {
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
 
-    if (attachTo === 'wall') {
+    if (attachTo === 'wall' || attachTo === 'wall-side') {
       emitter.on('wall:click', handleWallClick)
       emitter.on('wall:enter', handleWallEnter)
       emitter.on('wall:move', handleWallMove)
@@ -597,7 +632,7 @@ export function ItemNodeEditor() {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
 
-      if (attachTo === 'wall') {
+      if (attachTo === 'wall' || attachTo === 'wall-side') {
         emitter.off('wall:click', handleWallClick)
         emitter.off('wall:enter', handleWallEnter)
         emitter.off('wall:move', handleWallMove)

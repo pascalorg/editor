@@ -31,13 +31,13 @@ export function worldPositionToGrid(
 /**
  * Check if a grid item (door, window, etc.) can be placed on a wall
  * @param wall - The wall node to place the item on
- * @param item - The grid item to place (must have position and rotation)
+ * @param item - The grid item to place (must have position, rotation, and optionally side)
  * @param itemWidth - Width of the item in grid cells (e.g., 2 for doors/windows)
  * @returns true if the item can be placed, false otherwise
  */
 export function canPlaceGridItemOnWall(
   wall: WallNode,
-  item: { position: [number, number]; rotation: number; preview?: boolean },
+  item: { position: [number, number]; rotation: number; preview?: boolean; side?: 'front' | 'back' },
   itemWidth = 2,
 ): boolean {
   // Items are now positioned in wall's LOCAL coordinate system
@@ -68,10 +68,26 @@ export function canPlaceGridItemOnWall(
 
   const itemPoints = [itemEndpoint1, itemEndpoint2, itemCenter]
 
-  // Check for overlaps with existing doors/windows on the wall
+  // Check for overlaps with existing doors/windows/items on the wall
   for (const child of wall.children) {
     // Skip preview nodes
     if (child.editor?.preview) continue
+
+    // Get the side of the existing child (doors/windows have no side = affect both sides)
+    const childSide = child.type === 'item' ? (child as { side?: 'front' | 'back' }).side : undefined
+
+    // Side-aware collision logic:
+    // - If the new item has no side (undefined), it affects both sides → always check collision
+    // - If the existing child has no side (undefined), it affects both sides → always check collision
+    // - If both have a side and they're different → no collision (opposite sides)
+    // - If both have the same side → check collision
+    const itemSide = item.side
+    const bothHaveSides = itemSide !== undefined && childSide !== undefined
+    if (bothHaveSides && itemSide !== childSide) {
+      // Both items have explicit sides and they're on opposite sides of the wall
+      continue
+    }
+    // Otherwise: at least one item has no side (affects both) OR they're on the same side → check collision
 
     // Children are also in wall-local coordinates
     const childCenter = child.position

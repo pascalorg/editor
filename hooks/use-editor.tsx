@@ -240,7 +240,7 @@ export type Tool =
 // Catalog categories for the item tool
 export type CatalogCategory = 'item' | 'window' | 'door'
 
-export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide'
+export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
@@ -295,14 +295,18 @@ export type StoreState = {
   selectedCollectionId: string | null
 
   selectedItem: {
+    category?: CatalogCategory
     name?: string
     modelUrl: string
     scale: [number, number, number]
     size: [number, number]
     position?: [number, number, number]
     rotation?: [number, number, number]
-    attachTo?: 'ceiling' | 'wall'
+    attachTo?: 'ceiling' | 'wall' | 'wall-side'
   }
+
+  // Painting mode
+  selectedMaterial: string
 
   // Processors
   verticalStackingProcessor: VerticalStackingProcessor
@@ -343,6 +347,7 @@ export type StoreState = {
   setDebug: (debug: boolean) => void
   setPointerPosition: (position: [number, number] | null) => void
   setSelectedItem: (item: any) => void
+  setSelectedMaterial: (material: string) => void
 
   getSelectedElementsSet: () => Set<AnyNodeId>
   getSelectedImageIdsSet: () => Set<string>
@@ -567,6 +572,7 @@ const useStore = create<StoreState>()(
           position: [0, 0, 0],
           rotation: [0, 0, 0],
         },
+        selectedMaterial: 'brick',
 
         addLevel: (level) => {
           const { graph, commandManager } = get()
@@ -706,6 +712,7 @@ const useStore = create<StoreState>()(
         setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
         setDebug: (debug) => set({ debug }),
         setSelectedItem: (item) => set({ selectedItem: item }),
+        setSelectedMaterial: (material) => set({ selectedMaterial: material }),
         setViewerDisplayMode: (mode) => set({ viewerDisplayMode: mode }),
         toggleLevelMode: () =>
           set((state) => ({

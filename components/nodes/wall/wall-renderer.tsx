@@ -1,6 +1,6 @@
 'use client'
 
-import { Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
+import { Addition, Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
 import { Edges, Line, useGLTF } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo } from 'react'
@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
+import { getMaterialProps, useMaterial } from '@/lib/materials'
 import type { SceneGraph } from '@/lib/scenegraph/index'
 import type {
   AnyNode,
@@ -367,30 +368,47 @@ const createWallDataSelector = (levelId: string) => {
 export function WallRenderer({ nodeId }: WallRendererProps) {
   const debug = useEditor((state) => state.debug)
 
-  const { isPreview, canPlace, deletePreview, deleteRange, levelId, nodeSize, nodeChildrenIdsStr } =
-    useEditor(
-      useShallow((state) => {
-        const handle = state.graph.getNodeById(nodeId)
-        const node = handle?.data() as WallNode | undefined
+  const {
+    isPreview,
+    canPlace,
+    deletePreview,
+    deleteRange,
+    paintPreview,
+    paintRange,
+    paintFace,
+    levelId,
+    nodeSize,
+    nodeChildrenIdsStr,
+    materialFront,
+    materialBack,
+  } = useEditor(
+    useShallow((state) => {
+      const handle = state.graph.getNodeById(nodeId)
+      const node = handle?.data() as WallNode | undefined
 
-        // getLevelId helper in state works with node object, but we updated it to take node
-        // But store.getLevelId(node) calls graph.getNodeById.
+      // getLevelId helper in state works with node object, but we updated it to take node
+      // But store.getLevelId(node) calls graph.getNodeById.
 
-        // Actually we can just use handle.meta.levelId directly if available via selector?
-        // Yes, SceneGraph handles have meta.
-        const levelId = state.graph.index.byId.get(nodeId)?.levelId
+      // Actually we can just use handle.meta.levelId directly if available via selector?
+      // Yes, SceneGraph handles have meta.
+      const levelId = state.graph.index.byId.get(nodeId)?.levelId
 
-        return {
-          isPreview: node?.editor?.preview === true,
-          canPlace: node?.editor?.canPlace !== false,
-          deletePreview: node?.editor?.deletePreview === true,
-          deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
-          levelId,
-          nodeSize: node?.size || [0, 0],
-          nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
-        }
-      }),
-    )
+      return {
+        isPreview: node?.editor?.preview === true,
+        canPlace: node?.editor?.canPlace !== false,
+        deletePreview: node?.editor?.deletePreview === true,
+        deleteRange: node?.editor?.deleteRange as [number, number] | undefined,
+        paintPreview: node?.editor?.paintPreview === true,
+        paintRange: node?.editor?.paintRange as [number, number] | undefined,
+        paintFace: node?.editor?.paintFace as 'front' | 'back' | undefined,
+        levelId,
+        nodeSize: node?.size || [0, 0],
+        nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
+        materialFront: node?.materialFront || 'concrete',
+        materialBack: node?.materialBack || 'brick',
+      }
+    }),
+  )
 
   // Use it with useMemo to create a stable selector
   const wallDataSelector = useMemo(
@@ -401,14 +419,16 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const nodeChildrenIds = useMemo(() => JSON.parse(nodeChildrenIdsStr), [nodeChildrenIdsStr])
 
-  // Determine preview colors based on canPlace
-  const previewColor = canPlace ? '#44ff44' : '#ff4444'
-  const previewEmissive = canPlace ? '#22aa22' : '#aa2222'
+  // Determine preview colors based on canPlace using centralized materials
+  const previewProps = getMaterialProps(canPlace ? 'preview-valid' : 'preview-invalid')
+  const previewColor = previewProps.color
+  const previewEmissive = previewProps.emissive
   const previewLineDim = canPlace ? '#336633' : '#663333'
 
-  // Delete preview colors (red/orange tint)
-  const deleteColor = '#ff4444'
-  const deleteEmissive = '#aa2222'
+  // Delete preview colors using centralized materials
+  const deleteProps = getMaterialProps('delete')
+  const deleteColor = deleteProps.color
+  const deleteEmissive = deleteProps.emissive
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
@@ -544,11 +564,107 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     const shape = new THREE.Shape(shapePoints)
 
     // Create Extrude Geometry
-    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+      depth: wallHeight,
+      bevelEnabled: false,
+      UVGenerator: {
+        generateTopUV: (_geo, vertices, ...idx) => {
+          const [a, b, c] = idx
+          return [
+            new THREE.Vector2(vertices[a * 3] + 0.5, vertices[a * 3 + 1] + 0.5),
+            new THREE.Vector2(vertices[b * 3] + 0.5, vertices[b * 3 + 1] + 0.5),
+            new THREE.Vector2(vertices[c * 3] + 0.5, vertices[c * 3 + 1] + 0.5),
+          ]
+        },
+        generateSideWallUV: (_geo, vertices, ...idx) => {
+          const [a, b, c, d] = idx
+          return [
+            new THREE.Vector2(vertices[a * 3], vertices[a * 3 + 1]),
+            new THREE.Vector2(vertices[b * 3], vertices[b * 3 + 1]),
+            new THREE.Vector2(vertices[c * 3], vertices[c * 3 + 1]),
+            new THREE.Vector2(vertices[d * 3], vertices[d * 3 + 1]),
+          ]
+        },
+      },
+    }
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
 
     // Rotate to lie on XZ plane and extrude along Y
     geometry.rotateX(-Math.PI / 2)
+
+    // Assign material groups based on face normals (after rotation)
+    // Material indices: 0 = front (+Z), 1 = back (-Z), 2 = sides (top/bottom/ends)
+    const positions = geometry.getAttribute('position')
+    const indices = geometry.getIndex()
+
+    geometry.clearGroups()
+
+    // Helper vectors for computing face normal
+    const vA = new THREE.Vector3()
+    const vB = new THREE.Vector3()
+    const vC = new THREE.Vector3()
+    const ab = new THREE.Vector3()
+    const ac = new THREE.Vector3()
+    const faceNormal = new THREE.Vector3()
+
+    // Determine number of triangles and how to access vertex indices
+    const isIndexed = indices !== null
+    const numTriangles = isIndexed ? indices.count / 3 : positions.count / 3
+
+    // Process each triangle and assign to material group based on computed face normal
+    let currentGroup: { start: number; count: number; materialIndex: number } | null = null
+
+    for (let i = 0; i < numTriangles; i++) {
+      const triStart = i * 3
+
+      // Get vertex indices - for non-indexed geometry, vertices are sequential
+      const idxA = isIndexed ? indices.getX(triStart) : triStart
+      const idxB = isIndexed ? indices.getX(triStart + 1) : triStart + 1
+      const idxC = isIndexed ? indices.getX(triStart + 2) : triStart + 2
+
+      // Get triangle vertices
+      vA.fromBufferAttribute(positions, idxA)
+      vB.fromBufferAttribute(positions, idxB)
+      vC.fromBufferAttribute(positions, idxC)
+
+      // Compute face normal using cross product
+      ab.subVectors(vB, vA)
+      ac.subVectors(vC, vA)
+      faceNormal.crossVectors(ab, ac).normalize()
+
+      const nx = faceNormal.x
+      const ny = faceNormal.y
+      const nz = faceNormal.z
+
+      // Determine material based on dominant normal direction
+      let materialIndex: number
+      const absX = Math.abs(nx)
+      const absY = Math.abs(ny)
+      const absZ = Math.abs(nz)
+
+      if (absZ > absX && absZ > absY) {
+        // Z-facing: front or back wall surfaces
+        materialIndex = nz > 0 ? 0 : 1 // 0 = front (+Z), 1 = back (-Z)
+      } else {
+        // X or Y facing: sides (end caps, top, bottom)
+        materialIndex = 2
+      }
+
+      // Group consecutive triangles with same material
+      if (currentGroup === null || currentGroup.materialIndex !== materialIndex) {
+        if (currentGroup !== null) {
+          geometry.addGroup(currentGroup.start, currentGroup.count, currentGroup.materialIndex)
+        }
+        currentGroup = { start: triStart, count: 3, materialIndex }
+      } else {
+        currentGroup.count += 3
+      }
+    }
+
+    // Add the last group
+    if (currentGroup !== null) {
+      geometry.addGroup(currentGroup.start, currentGroup.count, currentGroup.materialIndex)
+    }
 
     return geometry
   }, [wallData, wallIds, nodeId, nodeSize])
@@ -580,6 +696,34 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
     return geometry
   }, [deleteRange])
+
+  // Generate geometry for the paint preview segment
+  const paintSegmentGeometry = useMemo(() => {
+    if (!paintRange) return null
+
+    const [rangeStart, rangeEnd] = paintRange
+    const wallHeight = WALL_HEIGHT + 0.05
+    const halfT = (WALL_THICKNESS + 0.05) / 2
+
+    // Calculate segment bounds in world units
+    const segmentStartX = rangeStart * TILE_SIZE
+    const segmentEndX = (rangeEnd + 1) * TILE_SIZE // +1 because range is inclusive
+
+    // Simple box geometry for the segment
+    const shapePoints = [
+      new THREE.Vector2(segmentStartX, halfT),
+      new THREE.Vector2(segmentEndX, halfT),
+      new THREE.Vector2(segmentEndX, -halfT),
+      new THREE.Vector2(segmentStartX, -halfT),
+    ]
+    const shape = new THREE.Shape(shapePoints)
+
+    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+    geometry.rotateX(-Math.PI / 2)
+
+    return geometry
+  }, [paintRange])
 
   // Determine opacity based on selected floo, [allWalls]r
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -629,6 +773,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z] as [number, number, number],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
       }
       emitter.emit('wall:click', eventData)
       emitter.emit('wall:pointerdown', eventData)
@@ -646,6 +791,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
+        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -688,6 +834,16 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       })
     },
     [getClosestGridPoint, nodeId],
+  )
+
+  const frontMaterial = useMaterial(materialFront)
+  const backMaterial = useMaterial(materialBack)
+  const sidesMaterial = useMaterial('white')
+  const ghostMaterial = useMaterial('ghost')
+
+  const wallMaterial = useMemo(
+    () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
+    [isActiveFloor, frontMaterial, backMaterial, sidesMaterial, ghostMaterial],
   )
 
   if (!wallGeometry) return null
@@ -765,16 +921,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
             )}
             <mesh castShadow receiveShadow>
               <Geometry useGroups>
-                <Base geometry={wallGeometry}>
-                  <meshPhysicalMaterial
-                    color="#dcdcf7"
-                    key={`wall-material-${opacity}`}
-                    metalness={0.1}
-                    opacity={opacity}
-                    roughness={0.7}
-                    transparent={transparent}
-                  />
-                </Base>
+                <Base geometry={wallGeometry} material={wallMaterial} />
                 {nodeChildrenIds.map((openingId: string) => (
                   <WallOpening key={openingId} nodeId={openingId} />
                 ))}
@@ -791,6 +938,20 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                       transparent
                     />
                   </Subtraction>
+                )}
+                {/* Paint preview overlay - shows the segment to be painted */}
+                {paintPreview && paintSegmentGeometry && (
+                  <Addition geometry={paintSegmentGeometry} renderOrder={100} showOperation>
+                    <meshStandardMaterial
+                      color="#ff9800"
+                      depthTest={true}
+                      depthWrite={false}
+                      emissive="#ff9800"
+                      emissiveIntensity={0.6}
+                      opacity={0.6}
+                      transparent
+                    />
+                  </Addition>
                 )}
               </Geometry>
               {debug && (
@@ -827,7 +988,7 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   )
 
   if (!opening.nodeSrc) {
-    return null // TODO: Handle data from node
+    return null
   }
 
   return (

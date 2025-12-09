@@ -4,8 +4,8 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { DoorNode } from './door'
-import { FloorNode } from './floor'
 import { ItemNode } from './item'
+import { SlabNode } from './slab'
 import { WallNode } from './wall'
 import { WindowNode } from './window'
 
@@ -13,7 +13,7 @@ import { WindowNode } from './window'
 const GroupChildNode: z.ZodType<any> = z.lazy(() =>
   z.discriminatedUnion('type', [
     // Building elements or items
-    FloorNode,
+    SlabNode,
     WallNode,
     DoorNode,
     WindowNode,
