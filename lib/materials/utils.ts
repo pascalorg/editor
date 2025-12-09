@@ -1,4 +1,5 @@
-import { Color, DoubleSide, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { Color, DoubleSide, FrontSide, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { depth } from 'three/src/nodes/TSL.js'
 import { getMaterialPreset } from './presets'
 import type { MaterialDefinition, MaterialName } from './types'
 
@@ -14,14 +15,17 @@ const materialCache = new Map<MaterialName, MaterialResult>()
  */
 function createMaterial(definition: MaterialDefinition): MaterialResult {
   const baseProps = {
+    name: definition.name,
     color: new Color(definition.color),
-    side: DoubleSide,
+    side: FrontSide,
     opacity: definition.opacity ?? 1,
-    transparent: definition.transparent ?? (definition.opacity !== undefined && definition.opacity < 1),
+    transparent:
+      definition.transparent ?? (definition.opacity !== undefined && definition.opacity < 1),
     metalness: definition.metalness ?? 0,
     roughness: definition.roughness ?? 0.5,
     emissive: definition.emissive ? new Color(definition.emissive) : undefined,
     emissiveIntensity: definition.emissiveIntensity,
+    depthWrite: definition.depthWrite ?? true,
   }
 
   if (definition.type === 'physical') {
@@ -78,7 +82,8 @@ export function getMaterialProps(name: MaterialName): {
   return {
     color: `#${new Color(definition.color).getHexString()}`,
     opacity: definition.opacity,
-    transparent: definition.transparent ?? (definition.opacity !== undefined && definition.opacity < 1),
+    transparent:
+      definition.transparent ?? (definition.opacity !== undefined && definition.opacity < 1),
     metalness: definition.metalness,
     roughness: definition.roughness,
     emissive: definition.emissive ? `#${new Color(definition.emissive).getHexString()}` : undefined,

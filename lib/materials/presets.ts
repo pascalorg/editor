@@ -54,11 +54,12 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
     color: COLORS.glass,
     opacity: 0.2,
     transparent: true,
-    metalness: 0,
-    roughness: 0.05,
+    metalness: 0.4,
+    roughness: 1,
     transmission: 0.95,
     thickness: 0.5,
     ior: 1.5,
+    depthWrite: false,
   },
 
   // === Solid colors ===
