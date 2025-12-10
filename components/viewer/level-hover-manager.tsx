@@ -90,6 +90,8 @@ export function LevelHoverManager() {
   const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | null>(null)
 
   const raycasterRef = useRef(new Raycaster())
+  const isDrag = useRef(false)
+  const downPos = useRef({ x: 0, y: 0 })
 
   // Get all level IDs from the scene
   const levelIds = useEditor(
@@ -223,6 +225,11 @@ export function LevelHoverManager() {
   useEffect(() => {
     const canvas = gl.domElement
 
+    const onPointerDown = (event: PointerEvent) => {
+      isDrag.current = false
+      downPos.current = { x: event.clientX, y: event.clientY }
+    }
+
     const onPointerMove = (event: PointerEvent) => {
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
@@ -352,6 +359,10 @@ export function LevelHoverManager() {
     const onClick = (event: MouseEvent) => {
       if (event.button !== 0) return // Only left click
 
+      // Check for drag
+      const dist = Math.hypot(event.clientX - downPos.current.x, event.clientY - downPos.current.y)
+      if (dist > 5) return // Ignore drags (panning)
+
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
       const currentCollectionId = state.selectedCollectionId
@@ -446,13 +457,25 @@ export function LevelHoverManager() {
       // Check if we clicked a level (either the current one background, or another one)
       if (clickedLevelId) {
         // Match Menu behavior:
-        // 1. Clear collection selection if present
+        // 1. Clear collection/node selection if present (clicking empty floor area)
+        let handled = false
         if (state.selectedCollectionId) {
           useEditor.getState().selectCollection(null)
+          handled = true
+        }
+        if (state.selectedNodeIds.length > 0) {
+          useEditor.setState({ selectedNodeIds: [] })
+          handled = true
         }
 
-        // 2. Select floor (if clicking same floor, keep selected)
-        if (state.selectedFloorId !== clickedLevelId) {
+        // If we cleared a selection, stop here (progressive unselection)
+        if (handled) return
+
+        // 2. Toggle floor selection (if clicking same floor, unselect)
+        // Note: Drag check at start of onClick ensures this doesn't trigger on pan
+        if (state.selectedFloorId === clickedLevelId) {
+          useEditor.getState().selectFloor(null)
+        } else {
           useEditor.getState().selectFloor(clickedLevelId)
         }
         return
@@ -468,10 +491,12 @@ export function LevelHoverManager() {
       }
     }
 
+    canvas.addEventListener('pointerdown', onPointerDown)
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('click', onClick)
 
     return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('click', onClick)
     }
