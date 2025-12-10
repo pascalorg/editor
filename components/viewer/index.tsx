@@ -149,14 +149,21 @@ export default function Viewer({
         <color args={['#212134']} attach="background" />
 
         {/* Large background plane to capture clicks outside of floor hit targets */}
-        <mesh onClick={onBackgroundClick} position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        {/* Note: LevelHoverManager handles all click logic via native DOM events, so we disable */}
+        {/* R3F raycasting here to prevent onBackgroundClick from interfering with level selection */}
+        <mesh
+          onClick={onBackgroundClick}
+          position={[0, -0.1, 0]}
+          raycast={disabledRaycast}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
           <planeGeometry args={[1000, 1000]} />
           <meshBasicMaterial opacity={0} transparent />
         </mesh>
 
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          {building && <NodeRenderer nodeId={building.id} />}
+          {building && <NodeRenderer isViewer nodeId={building.id} />}
         </group>
 
         {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}

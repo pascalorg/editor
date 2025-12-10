@@ -87,9 +87,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   }
 
   // Check if this room collection is currently selected
-  const isRoomSelected = (collection: Collection): boolean => {
-    return selectedCollectionId === collection.id
-  }
+  const isRoomSelected = (collection: Collection): boolean => selectedCollectionId === collection.id
 
   return (
     <div className="w-52 min-w-52">
@@ -132,9 +130,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
                   )}
                   <Layers className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                   <span className="flex-1 text-sm text-white">{level.name}</span>
-                  {hasRooms && (
-                    <span className="text-white/40 text-xs">{levelRooms.length}</span>
-                  )}
+                  {hasRooms && <span className="text-white/40 text-xs">{levelRooms.length}</span>}
                   <Button
                     className={cn(
                       'h-5 w-5 p-0 text-white transition-opacity hover:bg-white/20',
@@ -153,7 +149,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
 
                 {/* Room collections for this level */}
                 {hasRooms && isExpanded && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-white/10 border-l pl-2">
+                  <div className="mt-0.5 ml-4 space-y-0.5 border-white/10 border-l pl-2">
                     {levelRooms.map((room) => {
                       const roomSelected = isRoomSelected(room)
                       return (
@@ -169,9 +165,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
                           <Grid2x2 className="h-3 w-3 shrink-0 text-amber-400" />
                           <span className="flex-1 text-white/90 text-xs">{room.name}</span>
                           {room.nodeIds.length > 0 && (
-                            <span className="text-white/40 text-xs">
-                              {room.nodeIds.length}
-                            </span>
+                            <span className="text-white/40 text-xs">{room.nodeIds.length}</span>
                           )}
                         </div>
                       )

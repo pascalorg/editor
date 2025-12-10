@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react'
+import { animated, useSpring } from '@react-spring/three'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
@@ -21,12 +22,18 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     nodeElevation,
     nodeLevel,
     nodeChildrenIdsStr,
+    selectedFloorId,
+    activeTool,
+    movingCamera,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
+        selectedFloorId: state.selectedFloorId,
         levelMode: state.levelMode,
+        activeTool: state.activeTool,
+        movingCamera: state.movingCamera,
         nodeType: node?.type,
         nodeVisible: (node as any)?.visible, // TODO: Type correctly
         nodeChildrenIdsStr: JSON.stringify(
@@ -59,30 +66,50 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       ]
     }
     return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
-  }, [nodePosition, nodeElevation, nodeLevel, levelMode])
+  }, [nodePosition, nodeElevation, nodeLevel, levelMode, nodeType])
+
+  const { position } = useSpring({
+    position: gridItemPosition,
+    config: {
+      mass: 1,
+      tension: 170,
+      friction: 26,
+    },
+    // Disable animation when moving nodes/camera to prevent lag,
+    // but keep it active for level mode changes
+    immediate: !!activeTool || movingCamera,
+  })
 
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
   // Filter nodes based on viewer display mode (only in viewer mode)
   const shouldRenderNode = useMemo(() => {
-    // Level nodes are always rendered (they're containers)
-    if (nodeType === 'level') return true
-
-    // Only apply display mode filtering in viewer mode
+    // Viewer-specific visibility logic
     if (isViewer) {
+      // Level visibility: if a floor is selected, hide other floors
+      if (nodeType === 'level') {
+        if (selectedFloorId && selectedFloorId !== nodeId) {
+          return false
+        }
+        return true
+      }
+
       if (viewerDisplayMode === 'scans') {
         // Only render scan nodes
         return nodeType === 'scan'
       }
       if (viewerDisplayMode === 'objects') {
-        // Render everything except scans
-        return nodeType !== 'scan'
+        // Render everything except scans and reference images
+        return nodeType !== 'scan' && nodeType !== 'reference-image'
       }
     }
 
+    // Level nodes are always rendered in editor mode
+    if (nodeType === 'level') return true
+
     // Default: render everything (editor mode or when no filtering is needed)
     return true
-  }, [nodeType, viewerDisplayMode, isViewer])
+  }, [nodeType, viewerDisplayMode, isViewer, selectedFloorId, nodeId])
 
   const groupRef = useRef<THREE.Group>(null)
 
@@ -90,15 +117,15 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   const RegistryRenderer = getRenderer(nodeType || 'unknown')
 
   // Don't render if filtered out by display mode
-  if (!shouldRenderNode && nodeType !== 'level') {
+  if (!shouldRenderNode) {
     return null
   }
 
   return (
     <>
-      <group
+      <animated.group
         name={nodeId}
-        position={gridItemPosition}
+        position={position as any}
         rotation={
           Array.isArray(nodeRotation)
             ? (nodeRotation as [number, number, number])
@@ -119,7 +146,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
               <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
             ))}
         </group>
-      </group>
+      </animated.group>
     </>
   )
 }

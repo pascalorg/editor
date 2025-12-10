@@ -78,16 +78,11 @@ export function ViewerCustomControls() {
       const center = buildingBox.getCenter(new Vector3())
       const size = buildingBox.getSize(new Vector3())
 
-      // Calculate the optimal camera distance based on the building size
-      const maxDimension = Math.max(size.x, size.y, size.z)
-      const padding = 4
-      const targetDistance = (maxDimension + padding) * 0.8
-
-      // Calculate new camera position for isometric-ish view
-      const cameraImpl = controls as CameraControlsImpl
-      const newDistance = Math.max(targetDistance, VIEWER_DESELECTED_CAMERA_DISTANCE)
+      // Use fixed default distance for consistent behavior
+      const newDistance = VIEWER_INITIAL_CAMERA_DISTANCE
 
       // Position camera at 45-degree angle looking at building center
+      const cameraImpl = controls as CameraControlsImpl
       cameraImpl.setLookAt(
         center.x + newDistance,
         center.y + newDistance,
@@ -226,7 +221,7 @@ export function ViewerCustomControls() {
   return (
     <CameraControls
       makeDefault
-      maxDistance={50}
+      maxDistance={200}
       maxPolarAngle={maxPolarAngle}
       minDistance={10}
       minPolarAngle={minPolarAngle}
