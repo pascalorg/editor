@@ -31,9 +31,12 @@ function ViewerContent() {
         // overwrites the scene we just loaded
         await waitForHydration()
 
-        const response = await fetch(sceneUrl)
+        // Use proxy to avoid CORS issues with external URLs (e.g., Supabase storage)
+        const proxyUrl = `/api/proxy-scene?url=${encodeURIComponent(sceneUrl)}`
+        const response = await fetch(proxyUrl)
         if (!response.ok) {
-          throw new Error(`Failed to fetch scene: ${response.statusText}`)
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to fetch scene: ${response.statusText}`)
         }
         const json = await response.json()
 
