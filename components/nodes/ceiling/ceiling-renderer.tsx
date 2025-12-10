@@ -148,7 +148,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
         <meshStandardMaterial
           color={isPreview ? previewColor : '#f0f0f0'}
           depthTest={!isPreview}
-          emissive={isPreview ? previewEmissive : undefined}
+          emissive={isPreview ? previewEmissive : '#000000'}
           emissiveIntensity={isPreview ? 0.1 : 0}
           key={`ceiling-top-${opacity}-${isPreview}`}
           metalness={0.1}
@@ -175,7 +175,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
         <meshStandardMaterial
           color={isPreview ? previewColor : '#ffffff'}
           depthTest={!isPreview}
-          emissive={isPreview ? previewEmissive : undefined}
+          emissive={isPreview ? previewEmissive : '#000000'}
           emissiveIntensity={isPreview ? 0.4 : 0}
           key={`ceiling-bottom-${opacity}-${isPreview}`}
           metalness={0.1}

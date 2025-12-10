@@ -28,6 +28,11 @@ export function ViewerCustomControls() {
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
+  // Get building ID for camera focus when no level is selected
+  const buildingId = useEditor((state) =>
+    state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')?.id,
+  )
+
   // Get the selected collection's nodeIds for bounds calculation
   const collectionNodeIds = useEditor(
     useShallow((state: StoreState) => {
@@ -46,25 +51,118 @@ export function ViewerCustomControls() {
     ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, false)
   }, [controls])
 
+  // Focus on building when no level is selected (building overview mode)
   useEffect(() => {
-    if (!controls) return
+    if (!controls || !scene || selectedFloorId || !buildingId) return
 
-    if (selectedFloorId) {
-      const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
-      const currentTarget = new Vector3()
-      ;(controls as CameraControlsImpl).getTarget(currentTarget)
-      ;(controls as CameraControlsImpl).moveTo(currentTarget.x, floorY, currentTarget.z, true)
+    // Use a small delay to ensure Three.js scene has updated with the building object
+    const timeoutId = setTimeout(() => {
+      // Find the building object and calculate its bounds
+      const buildingObject = scene.getObjectByName(buildingId)
+      if (!buildingObject) {
+        // Fallback to default camera position
+        const d = VIEWER_DESELECTED_CAMERA_DISTANCE
+        ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
+        ;(controls as CameraControlsImpl).setBoundary()
+        return
+      }
+
+      // Calculate bounding box for the entire building
+      const buildingBox = new Box3().setFromObject(buildingObject)
+      if (buildingBox.isEmpty()) {
+        const d = VIEWER_DESELECTED_CAMERA_DISTANCE
+        ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
+        ;(controls as CameraControlsImpl).setBoundary()
+        return
+      }
+
+      // Get bounds center and size
+      const center = buildingBox.getCenter(new Vector3())
+      const size = buildingBox.getSize(new Vector3())
+
+      // Calculate the optimal camera distance based on the building size
+      const maxDimension = Math.max(size.x, size.y, size.z)
+      const padding = 4
+      const targetDistance = (maxDimension + padding) * 0.8
+
+      // Calculate new camera position for isometric-ish view
+      const cameraImpl = controls as CameraControlsImpl
+      const newDistance = Math.max(targetDistance, VIEWER_DESELECTED_CAMERA_DISTANCE)
+
+      // Position camera at 45-degree angle looking at building center
+      cameraImpl.setLookAt(
+        center.x + newDistance,
+        center.y + newDistance,
+        center.z + newDistance,
+        center.x,
+        center.y,
+        center.z,
+        true,
+      )
+      cameraImpl.setBoundary() // Remove boundaries for free viewing
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [controls, scene, selectedFloorId, buildingId])
+
+  // Focus on level when a level is selected (but no collection is selected)
+  useEffect(() => {
+    if (!controls || !scene || !selectedFloorId) return
+
+    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
+
+    // If a collection is selected, don't override its camera focus
+    if (selectedCollectionId) {
+      // Just update the boundary
       const boundaryBox = new Box3(
         new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
         new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
       )
       ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
-    } else {
-      const d = VIEWER_DESELECTED_CAMERA_DISTANCE
-      ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
-      ;(controls as CameraControlsImpl).setBoundary() // No argument to remove boundaries
+      return
     }
-  }, [currentLevel, controls, selectedFloorId, levelMode])
+
+    // Find the level object and calculate its bounds for focused view
+    const levelObject = scene.getObjectByName(selectedFloorId)
+    if (levelObject) {
+      const levelBox = new Box3().setFromObject(levelObject)
+      if (!levelBox.isEmpty()) {
+        const center = levelBox.getCenter(new Vector3())
+        const size = levelBox.getSize(new Vector3())
+
+        // Calculate optimal camera distance based on level size
+        const maxDimension = Math.max(size.x, size.z)
+        const padding = 3
+        const targetDistance = (maxDimension + padding) * 0.7
+
+        const cameraImpl = controls as CameraControlsImpl
+        const currentPosition = new Vector3()
+        cameraImpl.getPosition(currentPosition)
+
+        // Calculate new camera position maintaining viewing angle
+        const direction = currentPosition.clone().sub(center).normalize()
+        const newDistance = Math.max(targetDistance, 10)
+        const newPosition = center.clone().add(direction.multiplyScalar(newDistance))
+
+        cameraImpl.setLookAt(
+          newPosition.x,
+          Math.max(newPosition.y, floorY + 6),
+          newPosition.z,
+          center.x,
+          floorY,
+          center.z,
+          true,
+        )
+      }
+    }
+
+    // Set boundary for the floor
+    const boundaryBox = new Box3(
+      new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
+      new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
+    )
+    ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
+  }, [currentLevel, controls, selectedFloorId, selectedCollectionId, levelMode, scene])
 
   // Focus camera on collection bounds when a collection is selected
   useEffect(() => {

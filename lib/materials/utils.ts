@@ -14,7 +14,7 @@ const materialCache = new Map<MaterialName, MaterialResult>()
  * Create a Three.js material from a MaterialDefinition (internal use)
  */
 function createMaterial(definition: MaterialDefinition): MaterialResult {
-  const baseProps = {
+  const baseProps: Record<string, unknown> = {
     name: definition.name,
     color: new Color(definition.color),
     side: FrontSide,
@@ -23,20 +23,27 @@ function createMaterial(definition: MaterialDefinition): MaterialResult {
       definition.transparent ?? (definition.opacity !== undefined && definition.opacity < 1),
     metalness: definition.metalness ?? 0,
     roughness: definition.roughness ?? 0.5,
-    emissive: definition.emissive ? new Color(definition.emissive) : undefined,
-    emissiveIntensity: definition.emissiveIntensity,
     depthWrite: definition.depthWrite ?? true,
   }
 
+  // Only add emissive properties if they are defined (Three.js doesn't like undefined values)
+  if (definition.emissive !== undefined) {
+    baseProps.emissive = new Color(definition.emissive)
+  }
+  if (definition.emissiveIntensity !== undefined) {
+    baseProps.emissiveIntensity = definition.emissiveIntensity
+  }
+
   if (definition.type === 'physical') {
-    return new MeshPhysicalMaterial({
-      ...baseProps,
-      transmission: definition.transmission,
-      thickness: definition.thickness,
-      ior: definition.ior,
-      clearcoat: definition.clearcoat,
-      clearcoatRoughness: definition.clearcoatRoughness,
-    })
+    const physicalProps: Record<string, unknown> = { ...baseProps }
+    if (definition.transmission !== undefined) physicalProps.transmission = definition.transmission
+    if (definition.thickness !== undefined) physicalProps.thickness = definition.thickness
+    if (definition.ior !== undefined) physicalProps.ior = definition.ior
+    if (definition.clearcoat !== undefined) physicalProps.clearcoat = definition.clearcoat
+    if (definition.clearcoatRoughness !== undefined)
+      physicalProps.clearcoatRoughness = definition.clearcoatRoughness
+
+    return new MeshPhysicalMaterial(physicalProps)
   }
 
   return new MeshStandardMaterial(baseProps)
