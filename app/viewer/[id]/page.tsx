@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerControls } from '@/components/viewer/viewer-controls'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
-import { useEditor } from '@/hooks/use-editor'
+import { useEditor, waitForHydration } from '@/hooks/use-editor'
 import type { Scene } from '@/lib/scenegraph/schema/index'
 
 export default function DynamicViewerPage() {
@@ -14,7 +14,7 @@ export default function DynamicViewerPage() {
   const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const loadLayout = useEditor((state) => state.loadLayout)
+  const loadTransientScene = useEditor((state) => state.loadTransientScene)
 
   // Handle hydration
   useEffect(() => {
@@ -28,14 +28,19 @@ export default function DynamicViewerPage() {
         setIsLoading(true)
         setError(null)
 
-        const response = await fetch(`/demos/${id}.json`)
+        // Wait for store to hydrate first so the cache is populated
+        await waitForHydration()
+
+        const demoUrl = `/demos/${id}.json`
+        const response = await fetch(demoUrl)
 
         if (!response.ok) {
           throw new Error(`Failed to load demo: ${response.statusText}`)
         }
 
         const data: Scene = await response.json()
-        loadLayout(data)
+        // Use loadTransientScene to avoid overwriting the editor's persisted state
+        loadTransientScene(data, demoUrl)
         setIsLoading(false)
       } catch (err) {
         console.error('Error loading demo:', err)
@@ -47,7 +52,7 @@ export default function DynamicViewerPage() {
     if (id) {
       loadDemo()
     }
-  }, [id, loadLayout])
+  }, [id, loadTransientScene])
 
   if (isLoading) {
     return (

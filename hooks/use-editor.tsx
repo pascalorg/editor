@@ -129,6 +129,9 @@ function injectAssetsIntoRoot(root: RootNode, assets: AssetMap): RootNode {
   return root
 }
 
+// Cache for last persisted scene - used to prevent transient scenes from overwriting storage
+let lastPersistedSceneCache: Scene | null = null
+
 // IndexedDB storage adapter for Zustand persist middleware (split keys)
 const indexedDBStorage: StateStorage = {
   getItem: async (name: string) => {
@@ -246,6 +249,12 @@ export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 
+// Scene source tracking - determines persistence behavior
+export type SceneSource =
+  | { type: 'persisted' } // Default: saved to IndexedDB (editor mode)
+  | { type: 'url'; url: string } // Loaded from URL, not persisted (viewer mode)
+  | { type: 'slot'; name: string } // Named slot for future multi-project support
+
 // Add to collection workflow state
 export type AddToCollectionState = {
   isActive: boolean
@@ -259,6 +268,8 @@ export type StoreState = {
   scene: Scene
   graph: SceneGraph
   spatialGrid: SpatialGrid
+  /** Tracks where the current scene was loaded from - determines persistence behavior */
+  sceneSource: SceneSource
 
   // ============================================================================
   // UNDO/REDO
@@ -364,6 +375,12 @@ export type StoreState = {
 
   serializeLayout: () => any
   loadLayout: (json: any) => void
+  /** Load a scene transiently (e.g., from URL) without affecting persisted editor state */
+  loadTransientScene: (json: any, sourceUrl?: string) => void
+  /** Restore the persisted editor scene from storage */
+  restorePersistedScene: () => Promise<void>
+  /** Check if current scene is transient (not persisted) */
+  isTransientScene: () => boolean
   handleLoadLayout: (file: File) => void
   handleResetToDefault: () => void
 
@@ -547,6 +564,7 @@ const useStore = create<StoreState>()(
         scene: initialScene,
         graph,
         spatialGrid: new SpatialGrid(1),
+        sceneSource: { type: 'persisted' } as SceneSource,
         commandManager: new CommandManager(),
 
         verticalStackingProcessor: new VerticalStackingProcessor(),
@@ -840,6 +858,38 @@ const useStore = create<StoreState>()(
         },
 
         serializeLayout: () => get().scene,
+
+        loadTransientScene: (json, sourceUrl) => {
+          // Load the scene using loadLayout logic but mark it as transient
+          // This prevents it from being persisted to storage
+          get().loadLayout(json)
+          set({
+            sceneSource: sourceUrl
+              ? { type: 'url', url: sourceUrl }
+              : { type: 'url', url: 'unknown' },
+          })
+        },
+
+        restorePersistedScene: async () => {
+          // Force rehydration from storage to restore the persisted editor state
+          // This is useful when returning to editor after viewing a transient scene
+          const storage = indexedDBStorage
+          const raw = await storage.getItem('editor-storage')
+          if (raw) {
+            try {
+              const env = JSON.parse(raw) as { state: any; version: number }
+              if (env.state?.scene) {
+                get().loadLayout(env.state.scene)
+                set({ sceneSource: { type: 'persisted' } })
+              }
+            } catch (error) {
+              console.error('[Storage] Failed to restore persisted scene:', error)
+            }
+          }
+        },
+
+        isTransientScene: () => get().sceneSource.type !== 'persisted',
+
         loadLayout: (json) => {
           // Helper to ensure all nodes have the 'object: node' marker
           const ensureNodeMarkers = (node: any): void => {
@@ -925,7 +975,7 @@ const useStore = create<StoreState>()(
               onChange: (s) => handleGraphChange(s),
             })
 
-            set({ scene: newScene, graph: newGraph })
+            set({ scene: newScene, graph: newGraph, sceneSource: { type: 'persisted' } })
             rebuildSpatialGrid(get().spatialGrid, newGraph)
           } else if (json.levels) {
             const migratedRoot = RootNode.parse({
@@ -949,7 +999,7 @@ const useStore = create<StoreState>()(
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
-            set({ scene: newScene, graph: newGraph })
+            set({ scene: newScene, graph: newGraph, sceneSource: { type: 'persisted' } })
             rebuildSpatialGrid(get().spatialGrid, newGraph)
           }
         },
@@ -978,6 +1028,7 @@ const useStore = create<StoreState>()(
           set({
             scene: initialScene,
             graph: newGraph,
+            sceneSource: { type: 'persisted' },
             currentLevel: 0,
             selectedFloorId: mainBuilding?.children?.[0]?.id ?? null,
             viewMode: 'level',
@@ -1126,7 +1177,11 @@ const useStore = create<StoreState>()(
           }
           const command = new UpdateNodeCommand(nodeId, updates)
           // Skip undo if explicitly requested, preview node, OR if a transaction is active
-          if (skipUndo || (fromNode as any).editor?.preview || commandManager.isTransactionActive()) {
+          if (
+            skipUndo ||
+            (fromNode as any).editor?.preview ||
+            commandManager.isTransactionActive()
+          ) {
             command.execute(graph)
           } else {
             commandManager.execute(command, graph)
@@ -1426,20 +1481,48 @@ const useStore = create<StoreState>()(
           return n as SceneNode
         }
 
-        const processedRoot = { ...state.scene.root } as RootNode
-        if (processedRoot.children) {
-          processedRoot.children = processedRoot.children.map(
-            (site) => filterPreviewNodes(site) as SiteNode,
-          )
-        }
+        // Only persist the scene if it's from a persisted source
+        // For transient scenes (loaded via URL), keep the last persisted scene in storage
+        if (state.sceneSource?.type === 'persisted') {
+          const processedRoot = { ...state.scene.root } as RootNode
+          if (processedRoot.children) {
+            processedRoot.children = processedRoot.children.map(
+              (site) => filterPreviewNodes(site) as SiteNode,
+            )
+          }
 
-        return {
-          scene: {
+          const sceneToStore = {
             ...state.scene,
             root: processedRoot,
             collections: state.scene.collections || [],
-          },
-          selectedNodeIds: state.selectedNodeIds,
+          }
+
+          // Cache this as the last persisted scene
+          lastPersistedSceneCache = sceneToStore as Scene
+
+          return {
+            scene: sceneToStore,
+            selectedNodeIds: state.selectedNodeIds,
+            debug: state.debug,
+          }
+        }
+
+        // For transient scenes, persist the cached scene instead (or nothing if no cache)
+        // This prevents URL-loaded scenes from overwriting the editor's work-in-progress
+        if (lastPersistedSceneCache) {
+          return {
+            scene: lastPersistedSceneCache,
+            // Don't persist selection state from transient scenes
+            selectedNodeIds: [],
+            debug: state.debug,
+          }
+        }
+
+        // No cached scene yet - don't persist anything
+        // This can happen on first load before any persisted scene exists
+        return {
+          scene: state.scene,
+          selectedNodeIds: [],
           debug: state.debug,
         }
       },
@@ -1504,6 +1587,10 @@ const useStore = create<StoreState>()(
 
           state.commandManager = new CommandManager()
           state.spatialGrid = new SpatialGrid(1)
+          // Scene loaded from storage is always persisted source
+          state.sceneSource = { type: 'persisted' }
+          // Cache the rehydrated scene for transient scene handling
+          lastPersistedSceneCache = state.scene
 
           const handleGraphChange = (nextScene: Scene) => {
             useStore.setState((s) => {

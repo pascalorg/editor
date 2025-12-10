@@ -5,31 +5,33 @@ import { Suspense, useEffect, useState } from 'react'
 // Import node registrations to ensure all renderers are available
 import '@/components/nodes'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import EmbeddedViewer from '@/components/viewer/embedded-viewer'
+import Viewer from '@/components/viewer'
 import { useEditor, waitForHydration } from '@/hooks/use-editor'
 
 function ViewerContent() {
   const searchParams = useSearchParams()
   const sceneUrl = searchParams.get('sceneUrl')
+  const defaultZoom = searchParams.get('zoom')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load the scene from URL
+  // Load the scene from URL or fall back to local storage
   useEffect(() => {
     const loadScene = async () => {
-      if (!sceneUrl) {
-        setIsLoading(false)
-        return
-      }
-
       try {
         setIsLoading(true)
         setError(null)
 
-        // Wait for store to hydrate first, then load our scene
+        // Wait for store to hydrate first
         // This ensures we don't get into a race condition where hydration
-        // overwrites the scene we just loaded
+        // overwrites the scene we just loaded, and populates the persisted scene cache
         await waitForHydration()
+
+        // If no sceneUrl provided, use the scene from local storage (already hydrated)
+        if (!sceneUrl) {
+          setIsLoading(false)
+          return
+        }
 
         // Use proxy to avoid CORS issues with external URLs (e.g., Supabase storage)
         const proxyUrl = `/api/proxy-scene?url=${encodeURIComponent(sceneUrl)}`
@@ -40,12 +42,10 @@ function ViewerContent() {
         }
         const json = await response.json()
 
-        // Load the scene into the store
-        // This will overwrite any hydrated state with our scene
-        useEditor.getState().loadLayout(json)
+        // Load the scene transiently - this won't overwrite the editor's persisted state
+        useEditor.getState().loadTransientScene(json, sceneUrl)
         // For embedded viewer: ensure we start with no floor selected (building overview mode)
         // This allows users to hover and click to select levels interactively
-        // Need to use setState directly since loadLayout might leave floor selected from previous state
         useEditor.setState({
           selectedFloorId: null,
           selectedCollectionId: null,
@@ -85,15 +85,7 @@ function ViewerContent() {
     )
   }
 
-  if (!sceneUrl) {
-    return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        No scene URL provided
-      </div>
-    )
-  }
-
-  return <EmbeddedViewer />
+  return <Viewer defaultZoom={defaultZoom ? Number(defaultZoom) : undefined} isEmbedded />
 }
 
 export default function EmbedPage() {

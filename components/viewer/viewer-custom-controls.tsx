@@ -3,8 +3,8 @@
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/shallow'
 import { Box3, Vector3 } from 'three'
+import { useShallow } from 'zustand/shallow'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import {
   FLOOR_SPACING,
@@ -29,17 +29,15 @@ export function ViewerCustomControls() {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   // Get building ID for camera focus when no level is selected
-  const buildingId = useEditor((state) =>
-    state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')?.id,
+  const buildingId = useEditor(
+    (state) => state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')?.id,
   )
 
   // Get the selected collection's nodeIds for bounds calculation
   const collectionNodeIds = useEditor(
     useShallow((state: StoreState) => {
       if (!state.selectedCollectionId) return null
-      const collection = state.scene.collections?.find(
-        (c) => c.id === state.selectedCollectionId,
-      )
+      const collection = state.scene.collections?.find((c) => c.id === state.selectedCollectionId)
       return collection?.nodeIds || null
     }),
   )
@@ -53,7 +51,7 @@ export function ViewerCustomControls() {
 
   // Focus on building when no level is selected (building overview mode)
   useEffect(() => {
-    if (!controls || !scene || selectedFloorId || !buildingId) return
+    if (!(controls && scene) || selectedFloorId || !buildingId) return
 
     // Use a small delay to ensure Three.js scene has updated with the building object
     const timeoutId = setTimeout(() => {
@@ -107,7 +105,7 @@ export function ViewerCustomControls() {
 
   // Focus on level when a level is selected (but no collection is selected)
   useEffect(() => {
-    if (!controls || !scene || !selectedFloorId) return
+    if (!(controls && scene && selectedFloorId)) return
 
     const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
 
@@ -122,39 +120,27 @@ export function ViewerCustomControls() {
       return
     }
 
-    // Find the level object and calculate its bounds for focused view
+    // Find the level object to get its center, then position camera like initial setup
     const levelObject = scene.getObjectByName(selectedFloorId)
+    const cameraImpl = controls as CameraControlsImpl
+
+    // Default target is origin at floor height
+    let targetX = 0
+    let targetZ = 0
+
     if (levelObject) {
       const levelBox = new Box3().setFromObject(levelObject)
       if (!levelBox.isEmpty()) {
         const center = levelBox.getCenter(new Vector3())
-        const size = levelBox.getSize(new Vector3())
-
-        // Calculate optimal camera distance based on level size
-        const maxDimension = Math.max(size.x, size.z)
-        const padding = 3
-        const targetDistance = (maxDimension + padding) * 0.7
-
-        const cameraImpl = controls as CameraControlsImpl
-        const currentPosition = new Vector3()
-        cameraImpl.getPosition(currentPosition)
-
-        // Calculate new camera position maintaining viewing angle
-        const direction = currentPosition.clone().sub(center).normalize()
-        const newDistance = Math.max(targetDistance, 10)
-        const newPosition = center.clone().add(direction.multiplyScalar(newDistance))
-
-        cameraImpl.setLookAt(
-          newPosition.x,
-          Math.max(newPosition.y, floorY + 6),
-          newPosition.z,
-          center.x,
-          floorY,
-          center.z,
-          true,
-        )
+        targetX = center.x
+        targetZ = center.z
       }
     }
+
+    // Use same camera distance as initial setup (VIEWER_INITIAL_CAMERA_DISTANCE)
+    // Position camera at 45-degree angle, similar to building overview
+    const d = VIEWER_INITIAL_CAMERA_DISTANCE
+    cameraImpl.setLookAt(targetX + d, floorY + d, targetZ + d, targetX, floorY, targetZ, true)
 
     // Set boundary for the floor
     const boundaryBox = new Box3(
@@ -166,7 +152,7 @@ export function ViewerCustomControls() {
 
   // Focus camera on collection bounds when a collection is selected
   useEffect(() => {
-    if (!controls || !scene || !selectedCollectionId || !collectionNodeIds?.length) return
+    if (!(controls && scene && selectedCollectionId && collectionNodeIds?.length)) return
 
     // Calculate the combined bounding box of all nodes in the collection
     const combinedBox = new Box3()
