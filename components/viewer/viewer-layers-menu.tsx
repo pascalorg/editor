@@ -1,7 +1,7 @@
 'use client'
 
-import { ChevronDown, ChevronRight, Eye, EyeOff, Grid2x2, Layers } from 'lucide-react'
-import { useState } from 'react'
+import { Building, ChevronDown, ChevronRight, Eye, EyeOff, Grid2x2, Layers } from 'lucide-react'
+import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
@@ -15,6 +15,10 @@ interface ViewerLayersMenuProps {
 const EMPTY_LEVELS: any[] = []
 
 export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
+  const building = useEditor((state) =>
+    state.scene.root.children?.[0]?.children.find((c) => c.type === 'building'),
+  )
+
   const levels = useEditor((state) => {
     const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
     return building ? building.children : EMPTY_LEVELS
@@ -33,6 +37,12 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const selectFloor = useEditor((state) => state.selectFloor)
   const selectCollection = useEditor((state) => state.selectCollection)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
+  const selectNode = useEditor((state) => state.selectNode)
+  const levelMode = useEditor((state) => state.levelMode)
+
+  const isBuildingSelected = building 
+    ? (selectedNodeIds.includes(building.id) || !!selectedFloorId || levelMode === 'exploded') 
+    : false
 
   // Track expanded levels
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set())
@@ -50,14 +60,44 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     return acc
   }, {})
 
+  const handleBuildingClick = useCallback(() => {
+    if (!building) return
+
+    if (isBuildingSelected) {
+      // Deselect building
+      useEditor.setState({
+        selectedNodeIds: [],
+        levelMode: 'stacked',
+        // Also clear floor/collection selection when deselecting building
+        selectedFloorId: null,
+        selectedCollectionId: null,
+        viewMode: 'full',
+      })
+    } else {
+      // Select building
+      useEditor.setState({
+        selectedNodeIds: [building.id],
+        levelMode: 'exploded',
+        // Ensure we're in full view mode initially
+        viewMode: 'full',
+      })
+    }
+  }, [building, isBuildingSelected])
+
   const handleFloorClick = (floorId: string) => {
+    if (!isBuildingSelected) return
+
     // Clear collection selection when clicking a floor
     if (selectedCollectionId) {
       selectCollection(null)
     }
     if (selectedFloorId === floorId) {
-      // Deselect if clicking the same floor
-      selectFloor(null)
+      // Deselect if clicking the same floor - Go back to Building selection
+      useEditor.setState({
+        selectedFloorId: null,
+        selectedNodeIds: [building.id],
+        viewMode: 'full',
+      })
     } else {
       selectFloor(floorId)
     }
@@ -65,6 +105,8 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
 
   const toggleLevelExpansion = (levelId: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!isBuildingSelected) return
+    
     setExpandedLevels((prev) => {
       const next = new Set(prev)
       if (next.has(levelId)) {
@@ -78,6 +120,8 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
 
   const handleRoomClick = (collection: Collection, levelId: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!isBuildingSelected) return
+
     // Select the level if not already selected
     if (selectedFloorId !== levelId) {
       selectFloor(levelId)
@@ -89,10 +133,27 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   // Check if this room collection is currently selected
   const isRoomSelected = (collection: Collection): boolean => selectedCollectionId === collection.id
 
+  if (!mounted || !building) return <div className="p-3 text-white/50 text-xs italic">Loading...</div>
+
   return (
     <div className="w-52 min-w-52">
-      {mounted ? (
-        <div className="space-y-0.5 p-2">
+      <div className="space-y-0.5 p-2">
+        {/* Building Node */}
+        <div
+          className={cn(
+            'group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 transition-all',
+            'hover:bg-white/10',
+            isBuildingSelected && 'bg-white/15',
+          )}
+          onClick={handleBuildingClick}
+        >
+          <div className="w-4 shrink-0" />
+          <Building className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+          <span className="flex-1 text-sm text-white">Building</span>
+        </div>
+
+        {/* Levels List - Indented and Conditional */}
+        <div className={cn('pl-2 transition-opacity duration-200', !isBuildingSelected && 'opacity-30 pointer-events-none')}>
           {floorGroups.map((level) => {
             const isSelected = selectedFloorId === level.id
             const isVisible = level.visible !== false
@@ -176,9 +237,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
             )
           })}
         </div>
-      ) : (
-        <div className="p-3 text-white/50 text-xs italic">Loading...</div>
-      )}
+      </div>
     </div>
   )
 }

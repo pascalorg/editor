@@ -60,6 +60,17 @@ export default function Viewer({
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
 
+  // Reset state on mount to ensure clean start (stacked, no selection)
+  useEffect(() => {
+    useEditor.setState({
+      selectedNodeIds: [],
+      selectedFloorId: null,
+      selectedCollectionId: null,
+      levelMode: 'stacked',
+      viewMode: 'full',
+    })
+  }, [])
+
   // Notify parent window about selection changes (for embedded mode)
   useEffect(() => {
     if (!isEmbedded) return
@@ -85,13 +96,40 @@ export default function Viewer({
         toggleLevelMode()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        // Progressive unselection: node selection → collection → level → building
-        if (selectedNodeIds.length > 0) {
-          useEditor.setState({ selectedNodeIds: [] })
-        } else if (selectedCollectionId) {
+        const state = useEditor.getState()
+
+        // Progressive unselection:
+        // 1. If nodes selected (including Building) -> Deselect all, go to Stacked
+        if (state.selectedNodeIds.length > 0) {
+          useEditor.setState({
+            selectedNodeIds: [],
+            levelMode: 'stacked',
+            viewMode: 'full',
+            selectedFloorId: null,
+            selectedCollectionId: null,
+          })
+          return
+        }
+
+        // 2. If Collection selected -> Back to Floor
+        if (state.selectedCollectionId) {
           selectCollection(null)
-        } else if (selectedFloorId) {
-          selectFloor(null)
+          return
+        }
+
+        // 3. If Floor selected -> Back to Building (Exploded)
+        if (state.selectedFloorId) {
+          if (building) {
+            useEditor.setState({
+              selectedFloorId: null,
+              selectedNodeIds: [building.id],
+              viewMode: 'full',
+              // Keep levelMode as is (likely exploded)
+            })
+          } else {
+            selectFloor(null)
+          }
+          return
         }
       }
     }
@@ -106,6 +144,7 @@ export default function Viewer({
     selectedNodeIds,
     selectedCollectionId,
     selectedFloorId,
+    building,
   ])
 
   const tileSize = TILE_SIZE
@@ -120,15 +159,14 @@ export default function Viewer({
 
   // Handle background click for progressive deselection
   const onBackgroundClick = useCallback(() => {
-    const state = useEditor.getState()
-    // Progressive unselection: node selection → collection → level → building
-    if (state.selectedNodeIds.length > 0) {
-      useEditor.setState({ selectedNodeIds: [] })
-    } else if (state.selectedCollectionId) {
-      state.selectCollection(null)
-    } else if (state.selectedFloorId) {
-      state.selectFloor(null)
-    }
+    // Full reset on background click
+    useEditor.setState({
+      selectedNodeIds: [],
+      selectedCollectionId: null,
+      selectedFloorId: null,
+      levelMode: 'stacked',
+      viewMode: 'full',
+    })
   }, [])
 
   return (
