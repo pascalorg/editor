@@ -35,7 +35,7 @@ export type MaterialName = MaterialPreset | MaterialColor | MaterialTexture
  */
 export interface MaterialDefinition {
   name: MaterialName
-  type: 'standard' | 'physical'
+  type: 'standard' | 'physical' | 'matcap'
   color: string | number
   opacity?: number
   transparent?: boolean
