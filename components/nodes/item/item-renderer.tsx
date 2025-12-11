@@ -75,7 +75,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
           <mesh
             frustumCulled={false}
             geometry={boxGeometry}
-            material={previewMaterial}
+            material={previewMaterial || undefined}
             position-y={0}
           />
         </group>
@@ -83,7 +83,9 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
 
       <ErrorBoundary fallback={null}>
         <Suspense
-          fallback={<mesh geometry={boxGeometry} material={ghostMaterial} position-y={0.4} />}
+          fallback={
+            <mesh geometry={boxGeometry} material={ghostMaterial || undefined} position-y={0.4} />
+          }
         >
           {nodeSrc && (
             <ModelItemRenderer
@@ -163,10 +165,12 @@ const ModelItemRenderer = ({
       <Clone
         inject={
           deletePreview ? (
-            <primitive attach="material" object={deleteMaterial} />
-          ) : isActiveFloor ? undefined : (
+            deleteMaterial ? (
+              <primitive attach="material" object={deleteMaterial} />
+            ) : undefined
+          ) : isActiveFloor ? undefined : ghostMaterial ? (
             <primitive attach="material" object={ghostMaterial} />
-          )
+          ) : undefined
         }
         object={scene}
         position={position}
