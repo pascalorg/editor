@@ -137,11 +137,10 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   // === Textured materials ===
   brick: {
     name: 'brick',
-    type: 'matcap',
-    color: '0xaa_66_44',
+    type: 'standard',
+    color: '#c5a493',
     metalness: 0,
     roughness: 0.9,
-    textureUrl: '/textures/matcaps/7C584C_27140D_B3765C_3D2318-512px.png',
   },
   wood: {
     name: 'wood',
@@ -155,11 +154,10 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   },
   concrete: {
     name: 'concrete',
-    type: 'matcap',
+    type: 'physical',
     color: 0x99_99_99,
     metalness: 0,
     roughness: 0.95,
-    textureUrl: '/textures/matcaps/8194AB_D6DFEB_C0CEDE_B0BFD1-512px.png',
   },
   tile: {
     name: 'tile',

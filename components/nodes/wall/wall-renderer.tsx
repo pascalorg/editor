@@ -767,13 +767,16 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       // Only emit events for left-click (button 0)
       if (e.button !== 0) return
+      e.stopPropagation()
 
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       const eventData = {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z] as [number, number, number],
-        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
+        normal: e.face
+          ? ([e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number])
+          : undefined,
       }
       emitter.emit('wall:click', eventData)
       emitter.emit('wall:pointerdown', eventData)
@@ -786,12 +789,15 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       // Only emit events for left-click (button 0)
       if (e.button !== 0) return
 
+      e.stopPropagation()
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:pointerup', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
-        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
+        normal: e.face
+          ? ([e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number])
+          : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -800,6 +806,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerEnter = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:enter', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
@@ -813,6 +820,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerLeave = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:leave', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
@@ -826,6 +834,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:move', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),

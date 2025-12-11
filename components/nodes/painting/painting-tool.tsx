@@ -158,6 +158,11 @@ export function PaintingTool() {
       state.hoveredFace = face
 
       if (state.isDragging) {
+        // Ignore faces that are opposite to the face we started painting on
+        if (face !== state.dragFace) {
+          return
+        }
+
         const existingPaintInfo = state.wallsToPaint.get(wall.id)
 
         if (existingPaintInfo) {
@@ -205,6 +210,11 @@ export function PaintingTool() {
       state.hoveredFace = face
 
       if (state.isDragging) {
+        // Ignore faces that are opposite to the face we started painting on
+        if (face !== state.dragFace) {
+          return
+        }
+
         state.dragEndIndex = gridIndex
 
         // Get existing range and extend it (never shrink)
@@ -280,8 +290,11 @@ export function PaintingTool() {
       setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
     }
 
-    const handleWallPointerUp = (e: WallEvent) => {
-      if (state.isDragging && state.wallsToPaint.size > 0) {
+    // Commit painting - called when pointer is released (on wall or anywhere else)
+    const commitPainting = () => {
+      if (!state.isDragging) return
+
+      if (state.wallsToPaint.size > 0) {
         // Process all walls in the paint set
         state.wallsToPaint.forEach((paintInfo, wallId) => {
           const handle = graph.getNodeById(wallId as any)
@@ -308,6 +321,15 @@ export function PaintingTool() {
       state.dragStartIndex = null
       state.dragEndIndex = null
       state.dragFace = null
+    }
+
+    const handleWallPointerUp = (_e: WallEvent) => {
+      commitPainting()
+    }
+
+    // Global pointer up handler - commits painting when releasing anywhere (not just on walls)
+    const handleGlobalPointerUp = () => {
+      commitPainting()
     }
 
     /**
@@ -460,6 +482,9 @@ export function PaintingTool() {
     emitter.on('wall:pointerdown', handleWallPointerDown)
     emitter.on('wall:pointerup', handleWallPointerUp)
 
+    // Global pointer up to handle releasing outside of walls
+    window.addEventListener('pointerup', handleGlobalPointerUp)
+
     // Cleanup
     return () => {
       // Cancel any active transaction when tool is deactivated
@@ -471,6 +496,7 @@ export function PaintingTool() {
       emitter.off('wall:leave', handleWallLeave)
       emitter.off('wall:pointerdown', handleWallPointerDown)
       emitter.off('wall:pointerup', handleWallPointerUp)
+      window.removeEventListener('pointerup', handleGlobalPointerUp)
     }
   }, [
     graph,
