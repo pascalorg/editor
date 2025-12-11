@@ -407,6 +407,24 @@ export function LevelHoverManager() {
               const nodeId = getSelectableNodeFromIntersections(intersects)
 
               if (nodeId) {
+                // Check if we should preserve the current collection selection
+                let preserveCollection = false
+                if (currentCollectionId && !hasModifierKey) {
+                  const currentCollection = roomCollections.find(
+                    (c) => c.id === currentCollectionId,
+                  )
+                  if (currentCollection) {
+                    const bounds = calculateRoomBounds(currentCollection)
+                    // Find the exact hit point for this node
+                    const hit = intersects.find(
+                      (h) => getNodeIdFromIntersection(h.object) === nodeId,
+                    )
+                    if (bounds && hit && bounds.containsPoint(hit.point)) {
+                      preserveCollection = true
+                    }
+                  }
+                }
+
                 // Node selection logic...
                 if (hasModifierKey) {
                   const editorState = useEditor.getState()
@@ -420,7 +438,7 @@ export function LevelHoverManager() {
                   })
                 } else {
                   useEditor.setState({
-                    selectedCollectionId: null,
+                    selectedCollectionId: preserveCollection ? currentCollectionId : null,
                     selectedNodeIds: [nodeId],
                   })
                 }
