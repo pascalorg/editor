@@ -94,6 +94,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
       node,
       gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
+      stopPropagation: () => e.stopPropagation(),
     })
   }
 
@@ -105,6 +106,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
       node,
       gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
+      stopPropagation: () => e.stopPropagation(),
     })
   }
 
@@ -116,6 +118,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
       node,
       gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
+      stopPropagation: () => e.stopPropagation(),
     })
   }
 
@@ -127,6 +130,7 @@ export function CeilingRenderer({ nodeId }: CeilingRendererProps) {
       node,
       gridPosition: getClosestGridPoint(e.point, e.object, [width, depth]),
       position: [e.point.x, e.point.y, e.point.z],
+      stopPropagation: () => e.stopPropagation(),
     })
   }
 
