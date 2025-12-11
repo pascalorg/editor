@@ -63,14 +63,11 @@ function createMaterial(definition: MaterialDefinition): MaterialResult {
  * Get a material by preset name (singleton, lazily created on first use)
  * Falls back to 'white' if the name is not a valid preset
  */
-export function getMaterial(name: string): MaterialResult | null {
+export function getMaterial(name: string): MaterialResult {
   const materialName = name as MaterialName
   let material = materialCache.get(materialName)
   if (!material) {
     const definition = getMaterialPreset(materialName)
-    if (!definition) {
-      return null
-    }
     material = createMaterial(definition)
     materialCache.set(materialName, material)
   }
@@ -81,7 +78,7 @@ export function getMaterial(name: string): MaterialResult | null {
  * Hook to get a material by preset name
  * Materials are singletons - same instance returned for same name
  */
-export function useMaterial(name: string): MaterialResult | null {
+export function useMaterial(name: string): MaterialResult {
   return getMaterial(name)
 }
 

@@ -8,7 +8,7 @@ import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import { getMaterial, useMaterial } from '@/lib/materials'
+import { getMaterial, getMaterialPreset, type MaterialName, useMaterial } from '@/lib/materials'
 import type { ItemNode } from '@/lib/scenegraph/schema/index'
 
 interface ItemRendererProps {
@@ -75,7 +75,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
           <mesh
             frustumCulled={false}
             geometry={boxGeometry}
-            material={previewMaterial || undefined}
+            material={previewMaterial}
             position-y={0}
           />
         </group>
@@ -83,9 +83,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
 
       <ErrorBoundary fallback={null}>
         <Suspense
-          fallback={
-            <mesh geometry={boxGeometry} material={ghostMaterial || undefined} position-y={0.4} />
-          }
+          fallback={<mesh geometry={boxGeometry} material={ghostMaterial} position-y={0.4} />}
         >
           {nodeSrc && (
             <ModelItemRenderer
@@ -145,8 +143,12 @@ const ModelItemRenderer = ({
             child.material instanceof THREE.Material &&
             child.material.name.toLowerCase().includes('color_')
           ) {
-            const material = getMaterial(child.material.name.toLowerCase().replace('color_', ''))
-            if (material) {
+            const materialName = child.material.name
+              .toLowerCase()
+              .replace('color_', '') as MaterialName
+            const materialPreset = getMaterialPreset(materialName)
+            if (materialPreset) {
+              const material = getMaterial(materialName)
               child.material = material
             }
           }
