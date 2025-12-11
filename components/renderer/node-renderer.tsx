@@ -1,5 +1,5 @@
-import { useMemo, useRef } from 'react'
 import { animated, useSpring } from '@react-spring/three'
+import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
@@ -10,6 +10,66 @@ import { FLOOR_SPACING, TILE_SIZE } from '../editor'
 interface NodeRendererProps {
   nodeId: BaseNode['id']
   isViewer?: boolean // Set to true when rendering in viewer mode
+}
+
+interface AnimatedGroupProps {
+  children: React.ReactNode
+  position: [number, number, number]
+  rotation: [number, number, number]
+  visible?: boolean
+  name: string
+  userData: any
+  shouldAnimate: boolean
+  activeTool: any
+  movingCamera: boolean
+}
+
+const AnimatedGroup = ({
+  children,
+  position,
+  rotation,
+  visible,
+  name,
+  userData,
+  shouldAnimate,
+  activeTool,
+  movingCamera,
+}: AnimatedGroupProps) => {
+  const { springPosition } = useSpring({
+    springPosition: position,
+    config: {
+      mass: 1,
+      tension: 170,
+      friction: 26,
+    },
+    immediate: !!activeTool || movingCamera,
+  })
+
+  if (shouldAnimate) {
+    return (
+      <animated.group
+        name={name}
+        position={springPosition as any}
+        rotation={rotation}
+        userData={userData}
+        visible={visible}
+      >
+        {children}
+      </animated.group>
+    )
+  }
+
+  return (
+    <group
+      name={name}
+      position={position}
+      rotation={rotation}
+      userData={userData}
+      visible={visible}
+    >
+      {children}
+    </group>
+  )
 }
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
@@ -68,18 +128,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
   }, [nodePosition, nodeElevation, nodeLevel, levelMode, nodeType])
 
-  const { position } = useSpring({
-    position: gridItemPosition,
-    config: {
-      mass: 1,
-      tension: 170,
-      friction: 26,
-    },
-    // Disable animation when moving nodes/camera to prevent lag,
-    // but keep it active for level mode changes
-    immediate: !!activeTool || movingCamera,
-  })
-
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
   // Filter nodes based on viewer display mode (only in viewer mode)
@@ -123,14 +171,17 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
 
   return (
     <>
-      <animated.group
+      <AnimatedGroup
+        activeTool={activeTool}
+        movingCamera={movingCamera}
         name={nodeId}
-        position={position as any}
+        position={gridItemPosition}
         rotation={
           Array.isArray(nodeRotation)
             ? (nodeRotation as [number, number, number])
             : [0, nodeRotation ?? 0, 0]
         }
+        shouldAnimate={nodeType === 'level'}
         userData={{
           nodeId,
         }}
@@ -146,7 +197,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
               <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
             ))}
         </group>
-      </animated.group>
+      </AnimatedGroup>
     </>
   )
 }
