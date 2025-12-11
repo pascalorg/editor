@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +56,7 @@ export function AppSidebar() {
 
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
+  const [excludeImages, setExcludeImages] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Wait for client-side hydration to complete before rendering store-dependent content
@@ -80,7 +82,24 @@ export function AppSidebar() {
   }
 
   const handleSaveLayout = () => {
-    const layout = serializeLayout()
+    let layout = serializeLayout()
+
+    if (excludeImages) {
+      // Deep clone to avoid mutating state
+      layout = JSON.parse(JSON.stringify(layout))
+
+      const filterNodes = (node: any) => {
+        if (node.children && Array.isArray(node.children)) {
+          node.children = node.children.filter((child: any) => child.type !== 'reference-image')
+          node.children.forEach(filterNodes)
+        }
+      }
+
+      if (layout.root) {
+        filterNodes(layout.root)
+      }
+    }
+
     const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -130,6 +149,16 @@ export function AppSidebar() {
               <span>Export 3D Model</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="flex items-center justify-between"
+              onSelect={(e) => {
+                e.preventDefault()
+                setExcludeImages(!excludeImages)
+              }}
+            >
+              <span className="text-xs">Exclude Images</span>
+              <Switch checked={excludeImages} className="scale-75" />
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSaveLayout}>
               <Save className="h-4 w-4" />
               <span>Save Build</span>
