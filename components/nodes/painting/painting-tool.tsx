@@ -1,8 +1,6 @@
 'use client'
 
-import { Line } from '@react-three/drei'
-import { useEffect, useRef, useState } from 'react'
-import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
+import { useEffect, useRef } from 'react'
 import { emitter, type WallEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
@@ -61,6 +59,7 @@ export function PaintingTool() {
   const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedMaterial = useEditor((state) => state.selectedMaterial)
+  const paintMode = useEditor((state) => state.paintMode)
   const startTransaction = useEditor((state) => state.startTransaction)
   const commitTransaction = useEditor((state) => state.commitTransaction)
   const cancelTransaction = useEditor((state) => state.cancelTransaction)
@@ -83,6 +82,78 @@ export function PaintingTool() {
     if (!selectedFloorId) return
 
     const state = stateRef.current
+
+    /**
+     * Get all sibling walls in the same room (group) as the given wall.
+     * Returns the wall IDs and their node data.
+     */
+    const getRoomWalls = (wallId: string): Array<{ id: string; wall: WallNode }> => {
+      const handle = graph.getNodeById(wallId as any)
+      if (!handle) return []
+
+      const parent = handle.parent()
+      if (!parent) return []
+
+      // Check if parent is a group (room)
+      const parentData = parent.data() as any
+      if (parentData?.type !== 'group') return []
+
+      // Get all wall children of this group
+      const walls: Array<{ id: string; wall: WallNode }> = []
+      for (const child of parent.children()) {
+        const childData = child.data() as any
+        if (childData?.type === 'wall') {
+          walls.push({ id: child.id as string, wall: childData as WallNode })
+        }
+      }
+      return walls
+    }
+
+    /**
+     * Set paint preview for all walls in a room
+     */
+    const setRoomPaintPreview = (wallId: string, face: 'front' | 'back') => {
+      const roomWalls = getRoomWalls(wallId)
+      for (const { id, wall } of roomWalls) {
+        if (!wall.size) continue
+        const wallLength = wall.size[0]
+        updateNode(
+          id,
+          {
+            editor: {
+              ...wall.editor,
+              paintPreview: true,
+              paintRange: [0, wallLength - 1],
+              paintFace: face,
+            },
+          },
+          true,
+        )
+      }
+    }
+
+    /**
+     * Clear paint preview for all walls in a room
+     */
+    const clearRoomPaintPreview = (wallId: string) => {
+      const roomWalls = getRoomWalls(wallId)
+      for (const { id, wall } of roomWalls) {
+        if (wall.editor?.paintPreview) {
+          updateNode(
+            id,
+            {
+              editor: {
+                ...wall.editor,
+                paintPreview: false,
+                paintRange: undefined,
+                paintFace: undefined,
+              },
+            },
+            true,
+          )
+        }
+      }
+    }
 
     // Helper to update the paint preview range on a wall (preview only, skip undo)
     const setPaintRange = (
@@ -158,6 +229,9 @@ export function PaintingTool() {
       state.hoveredFace = face
 
       if (state.isDragging) {
+        // In room mode, dragging is not used - we paint on click
+        if (paintMode === 'room') return
+
         // Ignore faces that are opposite to the face we started painting on
         if (face !== state.dragFace) {
           return
@@ -184,8 +258,14 @@ export function PaintingTool() {
           setPaintRange(wall.id, wall, gridIndex, gridIndex, state.dragFace!)
         }
       } else {
-        // Just hovering - highlight single cell
-        setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
+        // Just hovering
+        if (paintMode === 'room') {
+          // In room mode, highlight all walls in the room
+          setRoomPaintPreview(wall.id, face)
+        } else {
+          // In wall mode, highlight single cell
+          setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
+        }
       }
     }
 
@@ -198,7 +278,11 @@ export function PaintingTool() {
 
       // Check if we moved to a different wall - clear preview if not dragging
       if (state.hoveredWallId && state.hoveredWallId !== wall.id && !state.isDragging) {
-        clearPaintPreview(state.hoveredWallId)
+        if (paintMode === 'room') {
+          clearRoomPaintPreview(state.hoveredWallId)
+        } else {
+          clearPaintPreview(state.hoveredWallId)
+        }
       }
 
       const indexChanged = state.hoveredGridIndex !== gridIndex
@@ -210,6 +294,9 @@ export function PaintingTool() {
       state.hoveredFace = face
 
       if (state.isDragging) {
+        // In room mode, dragging is not used - we paint on click
+        if (paintMode === 'room') return
+
         // Ignore faces that are opposite to the face we started painting on
         if (face !== state.dragFace) {
           return
@@ -229,7 +316,13 @@ export function PaintingTool() {
         state.wallsToPaint.set(wall.id, { rangeStart, rangeEnd, face: state.dragFace! })
         setPaintRange(wall.id, wall, rangeStart, rangeEnd, state.dragFace!)
       } else if (indexChanged || wallChanged || faceChanged) {
-        setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
+        if (paintMode === 'room') {
+          // In room mode, highlight all walls in the room
+          setRoomPaintPreview(wall.id, face)
+        } else {
+          // In wall mode, highlight single cell
+          setPaintRange(wall.id, wall, gridIndex, gridIndex, face)
+        }
       }
     }
 
@@ -237,8 +330,8 @@ export function PaintingTool() {
       const wall = e.node
       if (!wall?.id) return // Guard against undefined wall
 
-      // Don't clear preview if dragging and this wall is in the paint set
-      if (state.isDragging && state.wallsToPaint.has(wall.id)) {
+      // Don't clear preview if dragging and this wall is in the paint set (wall mode only)
+      if (state.isDragging && paintMode === 'wall' && state.wallsToPaint.has(wall.id)) {
         if (state.hoveredWallId === wall.id) {
           state.hoveredWallId = null
           state.hoveredGridIndex = null
@@ -248,7 +341,11 @@ export function PaintingTool() {
       }
 
       if (!state.isDragging) {
-        clearPaintPreview(wall.id)
+        if (paintMode === 'room') {
+          clearRoomPaintPreview(wall.id)
+        } else {
+          clearPaintPreview(wall.id)
+        }
       }
 
       if (state.hoveredWallId === wall.id) {
@@ -268,7 +365,31 @@ export function PaintingTool() {
 
       // Start a transaction for this paint operation
       startTransaction()
-      // Capture the initial state of the wall before any modifications
+
+      if (paintMode === 'room') {
+        // In room mode, paint all walls in the room immediately
+        const roomWalls = getRoomWalls(wall.id)
+        if (roomWalls.length > 0) {
+          // Capture snapshots for all walls in the room
+          for (const { id } of roomWalls) {
+            captureSnapshot(id)
+          }
+          // Paint all walls in the room (full wall, specified face)
+          for (const { wall: roomWall } of roomWalls) {
+            if (!roomWall.size) continue
+            const wallLength = roomWall.size[0]
+            paintWallSegment(roomWall, 0, wallLength - 1, face)
+          }
+          commitTransaction()
+        } else {
+          // No room found, cancel transaction
+          cancelTransaction()
+        }
+        // Don't set isDragging in room mode
+        return
+      }
+
+      // Wall mode - start dragging
       captureSnapshot(wall.id)
 
       state.isDragging = true
@@ -505,6 +626,7 @@ export function PaintingTool() {
     addNode,
     selectedFloorId,
     selectedMaterial,
+    paintMode,
     startTransaction,
     commitTransaction,
     cancelTransaction,

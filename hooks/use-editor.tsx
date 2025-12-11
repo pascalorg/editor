@@ -245,6 +245,7 @@ export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
+export type PaintMode = 'wall' | 'room'
 
 // Add to collection workflow state
 export type AddToCollectionState = {
@@ -307,6 +308,7 @@ export type StoreState = {
 
   // Painting mode
   selectedMaterial: string
+  paintMode: PaintMode
 
   // Processors
   verticalStackingProcessor: VerticalStackingProcessor
@@ -348,6 +350,7 @@ export type StoreState = {
   setPointerPosition: (position: [number, number] | null) => void
   setSelectedItem: (item: any) => void
   setSelectedMaterial: (material: string) => void
+  setPaintMode: (mode: PaintMode) => void
 
   getSelectedElementsSet: () => Set<AnyNodeId>
   getSelectedImageIdsSet: () => Set<string>
@@ -581,6 +584,7 @@ const useStore = create<StoreState>()(
           rotation: [0, 0, 0],
         },
         selectedMaterial: 'brick',
+        paintMode: 'wall',
 
         addLevel: (level) => {
           const { graph, commandManager } = get()
@@ -721,6 +725,7 @@ const useStore = create<StoreState>()(
         setDebug: (debug) => set({ debug }),
         setSelectedItem: (item) => set({ selectedItem: item }),
         setSelectedMaterial: (material) => set({ selectedMaterial: material }),
+        setPaintMode: (mode) => set({ paintMode: mode }),
         setViewerDisplayMode: (mode) => set({ viewerDisplayMode: mode }),
         toggleLevelMode: () =>
           set((state) => ({
