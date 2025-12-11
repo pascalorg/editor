@@ -110,15 +110,37 @@ export function PaintingTool() {
     }
 
     /**
-     * Set paint preview for all walls in a room
+     * Set paint preview for all walls in a room, or the single wall if not in a room
      */
     const setRoomPaintPreview = (wallId: string, face: 'front' | 'back') => {
       const roomWalls = getRoomWalls(wallId)
-      for (const { id, wall } of roomWalls) {
-        if (!wall.size) continue
+      if (roomWalls.length > 0) {
+        // Wall is in a room - preview all walls in the room
+        for (const { id, wall } of roomWalls) {
+          if (!wall.size) continue
+          const wallLength = wall.size[0]
+          updateNode(
+            id,
+            {
+              editor: {
+                ...wall.editor,
+                paintPreview: true,
+                paintRange: [0, wallLength - 1],
+                paintFace: face,
+              },
+            },
+            true,
+          )
+        }
+      } else {
+        // Single wall not in a room - preview the whole wall
+        const handle = graph.getNodeById(wallId as any)
+        if (!handle) return
+        const wall = handle.data() as WallNode
+        if (!wall?.size) return
         const wallLength = wall.size[0]
         updateNode(
-          id,
+          wallId,
           {
             editor: {
               ...wall.editor,
@@ -133,25 +155,31 @@ export function PaintingTool() {
     }
 
     /**
-     * Clear paint preview for all walls in a room
+     * Clear paint preview for all walls in a room, or the single wall if not in a room
      */
     const clearRoomPaintPreview = (wallId: string) => {
       const roomWalls = getRoomWalls(wallId)
-      for (const { id, wall } of roomWalls) {
-        if (wall.editor?.paintPreview) {
-          updateNode(
-            id,
-            {
-              editor: {
-                ...wall.editor,
-                paintPreview: false,
-                paintRange: undefined,
-                paintFace: undefined,
+      if (roomWalls.length > 0) {
+        // Wall is in a room - clear all walls in the room
+        for (const { id, wall } of roomWalls) {
+          if (wall.editor?.paintPreview) {
+            updateNode(
+              id,
+              {
+                editor: {
+                  ...wall.editor,
+                  paintPreview: false,
+                  paintRange: undefined,
+                  paintFace: undefined,
+                },
               },
-            },
-            true,
-          )
+              true,
+            )
+          }
         }
+      } else {
+        // Single wall not in a room - clear just this wall
+        clearPaintPreview(wallId)
       }
     }
 
@@ -367,7 +395,7 @@ export function PaintingTool() {
       startTransaction()
 
       if (paintMode === 'room') {
-        // In room mode, paint all walls in the room immediately
+        // In room mode, paint all walls in the room (or single wall if not in room)
         const roomWalls = getRoomWalls(wall.id)
         if (roomWalls.length > 0) {
           // Capture snapshots for all walls in the room
@@ -382,8 +410,11 @@ export function PaintingTool() {
           }
           commitTransaction()
         } else {
-          // No room found, cancel transaction
-          cancelTransaction()
+          // Single wall not in a room - paint the whole wall
+          captureSnapshot(wall.id)
+          const wallLength = wall.size[0]
+          paintWallSegment(wall, 0, wallLength - 1, face)
+          commitTransaction()
         }
         // Don't set isDragging in room mode
         return
