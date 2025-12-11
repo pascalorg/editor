@@ -433,7 +433,7 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
   }, [filteredItems, selectedItem.modelUrl, setSelectedItem])
 
   return (
-    <div className="-mx-2 -my-2 flex gap-2 overflow-x-auto p-2">
+    <div className="-mx-2 -my-2 flex max-w-xl gap-2 overflow-x-auto p-2">
       {filteredItems.map((item, index) => {
         const isSelected = selectedItem.modelUrl === item.modelUrl
         return (
