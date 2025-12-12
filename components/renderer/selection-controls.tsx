@@ -924,7 +924,7 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
               flexDirection="row"
               gap={0}
               opacity={0.9}
-              renderOrder={1}
+              renderOrder={1000}
             >
               <Button
                 backgroundColor={'transparent'}

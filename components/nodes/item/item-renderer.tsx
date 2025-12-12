@@ -8,7 +8,7 @@ import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import { getMaterial, useMaterial } from '@/lib/materials'
+import { getMaterial, getMaterialPreset, type MaterialName, useMaterial } from '@/lib/materials'
 import type { ItemNode } from '@/lib/scenegraph/schema/index'
 
 interface ItemRendererProps {
@@ -143,8 +143,12 @@ const ModelItemRenderer = ({
             child.material instanceof THREE.Material &&
             child.material.name.toLowerCase().includes('color_')
           ) {
-            const material = getMaterial(child.material.name.toLowerCase().replace('color_', ''))
-            if (material) {
+            const materialName = child.material.name
+              .toLowerCase()
+              .replace('color_', '') as MaterialName
+            const materialPreset = getMaterialPreset(materialName)
+            if (materialPreset) {
+              const material = getMaterial(materialName)
               child.material = material
             }
           }
@@ -163,10 +167,12 @@ const ModelItemRenderer = ({
       <Clone
         inject={
           deletePreview ? (
-            <primitive attach="material" object={deleteMaterial} />
-          ) : isActiveFloor ? undefined : (
+            deleteMaterial ? (
+              <primitive attach="material" object={deleteMaterial} />
+            ) : undefined
+          ) : isActiveFloor ? undefined : ghostMaterial ? (
             <primitive attach="material" object={ghostMaterial} />
-          )
+          ) : undefined
         }
         object={scene}
         position={position}

@@ -138,12 +138,9 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   brick: {
     name: 'brick',
     type: 'standard',
-    color: 0xaa_66_44,
+    color: '#c5a493',
     metalness: 0,
     roughness: 0.9,
-    textureUrl: '/textures/brick/diffuse.jpg',
-    normalMapUrl: '/textures/brick/normal.jpg',
-    roughnessMapUrl: '/textures/brick/roughness.jpg',
   },
   wood: {
     name: 'wood',
@@ -157,13 +154,10 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
   },
   concrete: {
     name: 'concrete',
-    type: 'standard',
+    type: 'physical',
     color: 0x99_99_99,
     metalness: 0,
     roughness: 0.95,
-    textureUrl: '/textures/concrete/diffuse.jpg',
-    normalMapUrl: '/textures/concrete/normal.jpg',
-    roughnessMapUrl: '/textures/concrete/roughness.jpg',
   },
   tile: {
     name: 'tile',

@@ -697,33 +697,32 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     return geometry
   }, [deleteRange])
 
-  // Generate geometry for the paint preview segment
+  // Generate geometry for the paint preview segment - only on the specified face
   const paintSegmentGeometry = useMemo(() => {
     if (!paintRange) return null
+    if (!paintFace) return null
 
     const [rangeStart, rangeEnd] = paintRange
-    const wallHeight = WALL_HEIGHT + 0.05
-    const halfT = (WALL_THICKNESS + 0.05) / 2
+    const wallHeight = WALL_HEIGHT
+    const halfT = WALL_THICKNESS / 2
 
     // Calculate segment bounds in world units
     const segmentStartX = rangeStart * TILE_SIZE
     const segmentEndX = (rangeEnd + 1) * TILE_SIZE // +1 because range is inclusive
 
-    // Simple box geometry for the segment
-    const shapePoints = [
-      new THREE.Vector2(segmentStartX, halfT),
-      new THREE.Vector2(segmentEndX, halfT),
-      new THREE.Vector2(segmentEndX, -halfT),
-      new THREE.Vector2(segmentStartX, -halfT),
-    ]
-    const shape = new THREE.Shape(shapePoints)
+    // Create a thin plane on only the specified face (front = +Z, back = -Z)
+    const planeThickness = 0.02
+    const zOffset = paintFace === 'front' ? halfT + planeThickness / 2 : -halfT - planeThickness / 2
 
-    const extrudeSettings = { depth: wallHeight, bevelEnabled: false }
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
-    geometry.rotateX(-Math.PI / 2)
+    // Create plane geometry for the face
+    const planeWidth = segmentEndX - segmentStartX
+    const geometry = new THREE.BoxGeometry(planeWidth, wallHeight, planeThickness)
+
+    // Position the plane: center it on the segment and at the correct Z offset
+    geometry.translate(segmentStartX + planeWidth / 2, wallHeight / 2, zOffset)
 
     return geometry
-  }, [paintRange])
+  }, [paintRange, paintFace])
 
   // Determine opacity based on selected floo, [allWalls]r
   // When no floor is selected (selectedFloorId === null), show all walls fully opaque (like full view mode)
@@ -767,13 +766,16 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     (e: ThreeEvent<PointerEvent>) => {
       // Only emit events for left-click (button 0)
       if (e.button !== 0) return
+      e.stopPropagation()
 
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       const eventData = {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z] as [number, number, number],
-        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
+        normal: e.face
+          ? ([e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number])
+          : undefined,
       }
       emitter.emit('wall:click', eventData)
       emitter.emit('wall:pointerdown', eventData)
@@ -786,12 +788,15 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       // Only emit events for left-click (button 0)
       if (e.button !== 0) return
 
+      e.stopPropagation()
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
       emitter.emit('wall:pointerup', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
         position: [e.point.x, e.point.y, e.point.z],
-        normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number] : undefined,
+        normal: e.face
+          ? ([e.face.normal.x, e.face.normal.y, e.face.normal.z] as [number, number, number])
+          : undefined,
       })
     },
     [getClosestGridPoint, nodeId],
@@ -800,6 +805,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerEnter = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:enter', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
@@ -813,6 +819,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerLeave = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:leave', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
@@ -826,6 +833,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const onPointerMove = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       const node = useEditor.getState().graph.getNodeById(nodeId)?.data() as WallNode
+      e.stopPropagation()
       emitter.emit('wall:move', {
         node,
         gridPosition: getClosestGridPoint(e.point, e.object),
@@ -836,10 +844,13 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     [getClosestGridPoint, nodeId],
   )
 
+  const selectedMaterial = useEditor((state) => state.selectedMaterial)
+
   const frontMaterial = useMaterial(materialFront)
   const backMaterial = useMaterial(materialBack)
   const sidesMaterial = useMaterial('white')
   const ghostMaterial = useMaterial('ghost')
+  const paintMaterial = useMaterial(selectedMaterial)
 
   const wallMaterial = useMemo(
     () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
@@ -941,17 +952,11 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 )}
                 {/* Paint preview overlay - shows the segment to be painted */}
                 {paintPreview && paintSegmentGeometry && (
-                  <Addition geometry={paintSegmentGeometry} renderOrder={100} showOperation>
-                    <meshStandardMaterial
-                      color="#ff9800"
-                      depthTest={true}
-                      depthWrite={false}
-                      emissive="#ff9800"
-                      emissiveIntensity={0.6}
-                      opacity={0.6}
-                      transparent
-                    />
-                  </Addition>
+                  <Addition
+                    geometry={paintSegmentGeometry}
+                    material={paintMaterial}
+                    showOperation
+                  />
                 )}
               </Geometry>
               {debug && (

@@ -1,9 +1,17 @@
-import { Color, DoubleSide, FrontSide, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import {
+  Color,
+  DoubleSide,
+  FrontSide,
+  MeshMatcapMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  TextureLoader,
+} from 'three'
 import { depth } from 'three/src/nodes/TSL.js'
 import { getMaterialPreset } from './presets'
 import type { MaterialDefinition, MaterialName } from './types'
 
-type MaterialResult = MeshStandardMaterial | MeshPhysicalMaterial
+type MaterialResult = MeshStandardMaterial | MeshPhysicalMaterial | MeshMatcapMaterial
 
 /**
  * Singleton cache for materials - created lazily on first use
@@ -44,6 +52,15 @@ function createMaterial(definition: MaterialDefinition): MaterialResult {
       physicalProps.clearcoatRoughness = definition.clearcoatRoughness
 
     return new MeshPhysicalMaterial(physicalProps)
+  }
+
+  if (definition.type === 'matcap') {
+    const textureLoader = new TextureLoader()
+    const matcapMaterial = new MeshMatcapMaterial({
+      ...baseProps,
+      matcap: definition.textureUrl ? textureLoader.load(definition.textureUrl) : undefined,
+    })
+    return matcapMaterial
   }
 
   return new MeshStandardMaterial(baseProps)
