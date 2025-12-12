@@ -13,21 +13,19 @@ interface WallDeleteInfo {
 }
 
 interface SledgehammerState {
-  // Wall deletion state
+  // Wall deletion state (for hover preview only)
   hoveredWallId: string | null
   hoveredGridIndex: number | null // Which grid cell (0 to length-1)
-  isDragging: boolean
-  dragStartWallId: string | null // Wall where drag started
-  dragStartIndex: number | null // Grid index where drag started
-  dragEndIndex: number | null // Grid index where drag currently is
   // Track all walls to delete during drag (wallId -> delete range)
   wallsToDelete: Map<string, WallDeleteInfo>
 
-  // Grid/item deletion state
+  // Grid/item deletion state (used for both items AND walls with rectangle selection)
   itemsToDelete: Set<string>
   isGridDragging: boolean
   gridDragStartPos: [number, number] | null // Grid coordinates where drag started
   gridDragEndPos: [number, number] | null // Grid coordinates where drag currently is
+  // Whether the drag started on a wall (determines if we delete walls or items)
+  dragStartedOnWall: boolean
 }
 
 /**
@@ -66,15 +64,12 @@ export function SledgehammerTool() {
   const stateRef = useRef<SledgehammerState>({
     hoveredWallId: null,
     hoveredGridIndex: null,
-    isDragging: false,
-    dragStartWallId: null,
-    dragStartIndex: null,
-    dragEndIndex: null,
     wallsToDelete: new Map(),
     itemsToDelete: new Set(),
     isGridDragging: false,
     gridDragStartPos: null,
     gridDragEndPos: null,
+    dragStartedOnWall: false,
   })
 
   // State for the delete rectangle visualization
@@ -155,19 +150,8 @@ export function SledgehammerTool() {
       state.hoveredWallId = wall.id
       state.hoveredGridIndex = gridIndex
 
-      if (state.isDragging) {
-        // Capture snapshot of this wall before modifying it
-        captureSnapshot(wall.id)
-
-        // When entering a new wall during drag, start fresh range on this wall
-        state.dragStartIndex = gridIndex
-        state.dragEndIndex = gridIndex
-
-        // Add/update this wall in the delete set
-        state.wallsToDelete.set(wall.id, { rangeStart: gridIndex, rangeEnd: gridIndex })
-        setDeleteRange(wall.id, wall, gridIndex, gridIndex)
-      } else {
-        // Just hovering - highlight single cell
+      // Only show hover preview if not dragging
+      if (!state.isGridDragging) {
         setDeleteRange(wall.id, wall, gridIndex, gridIndex)
       }
     }
@@ -178,15 +162,8 @@ export function SledgehammerTool() {
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
 
       // Check if we moved to a different wall
-      if (state.hoveredWallId && state.hoveredWallId !== wall.id) {
-        if (!state.isDragging) {
-          // Clear previous wall's preview only if not dragging
-          clearDeletePreview(state.hoveredWallId)
-        }
-        // When moving to a new wall during drag, start fresh on new wall
-        if (state.isDragging) {
-          state.dragStartIndex = gridIndex
-        }
+      if (state.hoveredWallId && state.hoveredWallId !== wall.id && !state.isGridDragging) {
+        clearDeletePreview(state.hoveredWallId)
       }
 
       // Check if grid index changed before updating state
@@ -196,17 +173,8 @@ export function SledgehammerTool() {
       state.hoveredWallId = wall.id
       state.hoveredGridIndex = gridIndex
 
-      if (state.isDragging) {
-        // Update drag end position
-        state.dragEndIndex = gridIndex
-
-        // Update this wall's range in the delete set
-        const rangeStart = Math.min(state.dragStartIndex!, gridIndex)
-        const rangeEnd = Math.max(state.dragStartIndex!, gridIndex)
-        state.wallsToDelete.set(wall.id, { rangeStart, rangeEnd })
-        setDeleteRange(wall.id, wall, rangeStart, rangeEnd)
-      } else if (indexChanged || wallChanged) {
-        // Just hovering - highlight single cell when index or wall changes
+      // Only show hover preview if not dragging
+      if (!state.isGridDragging && (indexChanged || wallChanged)) {
         setDeleteRange(wall.id, wall, gridIndex, gridIndex)
       }
     }
@@ -214,18 +182,8 @@ export function SledgehammerTool() {
     const handleWallLeave = (e: WallEvent) => {
       const wall = e.node
 
-      // Don't clear preview if dragging and this wall is in the delete set
-      if (state.isDragging && state.wallsToDelete.has(wall.id)) {
-        // Keep the preview, just update hover state
-        if (state.hoveredWallId === wall.id) {
-          state.hoveredWallId = null
-          state.hoveredGridIndex = null
-        }
-        return
-      }
-
-      // Clear preview if not dragging
-      if (!state.isDragging) {
+      // Don't clear preview if dragging (wall might be in delete set)
+      if (!state.isGridDragging) {
         clearDeletePreview(wall.id)
       }
 
@@ -235,9 +193,8 @@ export function SledgehammerTool() {
       }
     }
 
-    const handleWallClick = (e: WallEvent) => {
+    const handleWallClick = (_e: WallEvent) => {
       // Click is handled by pointerup for drag support
-      // This is just for the case where we click without dragging
     }
 
     // ========================================================================
@@ -265,10 +222,102 @@ export function SledgehammerTool() {
       }
     }
 
+    /**
+     * Helper to find all walls in the level and calculate which segments intersect the rectangle
+     * The rectangle coordinates are in absolute grid space
+     */
+    const findWallsInRect = (minX: number, maxX: number, minY: number, maxY: number) => {
+      const wallsInRect = new Map<string, WallDeleteInfo>()
+
+      // Find all walls in the current level
+      const levelHandle = graph.getNodeById(selectedFloorId as any)
+      if (!levelHandle) return wallsInRect
+
+      // Traverse children, accumulating parent position offsets
+      const findWalls = (handle: any, parentOffsetX: number, parentOffsetZ: number) => {
+        for (const child of handle.children()) {
+          const node = child.data()
+          if (node.type === 'wall') {
+            const wall = node as WallNode
+            // Calculate which segments of this wall intersect the rectangle
+            // Pass the accumulated parent offset to convert wall coords to absolute
+            const range = calculateWallRangeInRect(wall, { minX, maxX, minY, maxY }, parentOffsetX, parentOffsetZ)
+            if (range) {
+              wallsInRect.set(wall.id, range)
+            }
+          } else if (node.type === 'group' || node.type === 'room') {
+            // Accumulate this group's position offset
+            const groupPos = node.position as [number, number] | undefined
+            const newOffsetX = parentOffsetX + (groupPos?.[0] ?? 0)
+            const newOffsetZ = parentOffsetZ + (groupPos?.[1] ?? 0)
+            // Recurse into groups/rooms with accumulated offset
+            findWalls(child, newOffsetX, newOffsetZ)
+          }
+        }
+      }
+
+      findWalls(levelHandle, 0, 0)
+      return wallsInRect
+    }
+
+    /**
+     * Calculate which segment of a wall intersects a rectangle
+     * Returns null if no intersection, or the range [start, end] of grid cells that intersect
+     * @param wall The wall node
+     * @param rect Rectangle bounds in absolute grid coordinates
+     * @param parentOffsetX Accumulated X offset from parent groups/rooms
+     * @param parentOffsetZ Accumulated Z offset from parent groups/rooms
+     */
+    const calculateWallRangeInRect = (
+      wall: WallNode,
+      rect: { minX: number; maxX: number; minY: number; maxY: number },
+      parentOffsetX: number,
+      parentOffsetZ: number,
+    ): WallDeleteInfo | null => {
+      const { minX, maxX, minY, maxY } = rect
+      // Wall start/end are relative to parent - add offset to get absolute
+      const [relStartX, relStartZ] = wall.start
+      const [relEndX, relEndZ] = wall.end
+      const startX = relStartX + parentOffsetX
+      const startZ = relStartZ + parentOffsetZ
+      const endX = relEndX + parentOffsetX
+      const endZ = relEndZ + parentOffsetZ
+      const wallLength = wall.size[0]
+
+      if (wallLength === 0) return null
+
+      // Direction vector per grid unit
+      const dx = (endX - startX) / wallLength
+      const dz = (endZ - startZ) / wallLength
+
+      let rangeStart: number | null = null
+      let rangeEnd: number | null = null
+
+      // Check each grid cell of the wall
+      for (let i = 0; i < wallLength; i++) {
+        // Get the center point of this grid cell in absolute coords
+        const cellX = startX + dx * (i + 0.5)
+        const cellZ = startZ + dz * (i + 0.5)
+
+        // Check if this cell is inside the rectangle
+        if (cellX >= minX && cellX <= maxX && cellZ >= minY && cellZ <= maxY) {
+          if (rangeStart === null) {
+            rangeStart = i
+          }
+          rangeEnd = i
+        }
+      }
+
+      if (rangeStart !== null && rangeEnd !== null) {
+        return { rangeStart, rangeEnd }
+      }
+      return null
+    }
+
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      // If dragging on grid, update rectangle and mark items for deletion
+      // If dragging on grid, update rectangle and mark items/walls for deletion
       if (state.isGridDragging && state.gridDragStartPos) {
         const [x, y] = e.position
         state.gridDragEndPos = [x, y]
@@ -279,35 +328,59 @@ export function SledgehammerTool() {
           end: [x, y],
         })
 
-        // Query all items in the rectangle and mark for deletion
+        // Calculate rectangle bounds
         const minX = Math.min(state.gridDragStartPos[0], x)
         const maxX = Math.max(state.gridDragStartPos[0], x)
         const minY = Math.min(state.gridDragStartPos[1], y)
         const maxY = Math.max(state.gridDragStartPos[1], y)
 
-        const nodesInRect = spatialGrid.queryRect(selectedFloorId, [minX, minY], [maxX, maxY])
+        if (state.dragStartedOnWall) {
+          // Find walls in the rectangle
+          const wallsInRect = findWallsInRect(minX, maxX, minY, maxY)
 
-        // Clear previous items that are no longer in the rect
-        state.itemsToDelete.forEach((itemId) => {
-          if (!nodesInRect.includes(itemId)) {
-            const handle = graph.getNodeById(itemId as any)
-            if (handle) {
-              const node = handle.data() as any
-              updateNode(itemId, { editor: { ...node.editor, deletePreview: false } }, true) // skipUndo
+          // Clear walls that are no longer in the rect
+          state.wallsToDelete.forEach((_, wallId) => {
+            if (!wallsInRect.has(wallId)) {
+              clearDeletePreview(wallId)
+              state.wallsToDelete.delete(wallId)
             }
-            state.itemsToDelete.delete(itemId)
-          }
-        })
+          })
 
-        // Add new items in the rect
-        for (const nodeId of nodesInRect) {
-          const handle = graph.getNodeById(nodeId as any)
-          if (!handle) continue
+          // Add/update walls in the rect
+          wallsInRect.forEach((range, wallId) => {
+            const handle = graph.getNodeById(wallId as any)
+            if (handle) {
+              const wall = handle.data() as WallNode
+              state.wallsToDelete.set(wallId, range)
+              setDeleteRange(wallId, wall, range.rangeStart, range.rangeEnd)
+            }
+          })
+        } else {
+          // Handle item deletion (original behavior)
+          const nodesInRect = spatialGrid.queryRect(selectedFloorId, [minX, minY], [maxX, maxY])
 
-          const node = handle.data() as any
-          if (node.type === 'item' && !state.itemsToDelete.has(nodeId)) {
-            state.itemsToDelete.add(nodeId)
-            updateNode(nodeId, { editor: { ...node.editor, deletePreview: true } }, true) // skipUndo
+          // Clear previous items that are no longer in the rect
+          state.itemsToDelete.forEach((itemId) => {
+            if (!nodesInRect.includes(itemId)) {
+              const handle = graph.getNodeById(itemId as any)
+              if (handle) {
+                const node = handle.data() as any
+                updateNode(itemId, { editor: { ...node.editor, deletePreview: false } }, true) // skipUndo
+              }
+              state.itemsToDelete.delete(itemId)
+            }
+          })
+
+          // Add new items in the rect
+          for (const nodeId of nodesInRect) {
+            const handle = graph.getNodeById(nodeId as any)
+            if (!handle) continue
+
+            const node = handle.data() as any
+            if (node.type === 'item' && !state.itemsToDelete.has(nodeId)) {
+              state.itemsToDelete.add(nodeId)
+              updateNode(nodeId, { editor: { ...node.editor, deletePreview: true } }, true) // skipUndo
+            }
           }
         }
       }
@@ -316,7 +389,7 @@ export function SledgehammerTool() {
     const handleGridPointerDown = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      // Don't start grid drag if we're on a wall
+      // Don't start grid drag if we're on a wall (wall pointer down handles that)
       if (state.hoveredWallId) return
 
       // Start a transaction for item deletion
@@ -324,32 +397,46 @@ export function SledgehammerTool() {
 
       const [x, y] = e.position
       state.isGridDragging = true
+      state.dragStartedOnWall = false
       state.gridDragStartPos = [x, y]
       state.gridDragEndPos = [x, y]
       setDeleteRect({ start: [x, y], end: [x, y] })
     }
 
-    const handleGridPointerUp = (e: GridEvent) => {
+    const handleGridPointerUp = (_e: GridEvent) => {
       if (!selectedFloorId) return
 
-      // Handle item deletion when releasing on grid
-      if (state.isGridDragging && state.itemsToDelete.size > 0) {
-        // Capture snapshots of all items before deleting
-        state.itemsToDelete.forEach((itemId) => {
-          captureSnapshot(itemId)
-        })
-        state.itemsToDelete.forEach((itemId) => {
-          deleteNode(itemId)
-        })
-        // Commit the transaction
-        commitTransaction()
-        state.itemsToDelete.clear()
-      } else if (state.isGridDragging) {
-        // No items deleted, cancel the transaction
-        cancelTransaction()
+      if (state.isGridDragging) {
+        if (state.dragStartedOnWall && state.wallsToDelete.size > 0) {
+          // Handle wall deletion
+          // Capture snapshots and delete walls
+          state.wallsToDelete.forEach((deleteInfo, wallId) => {
+            captureSnapshot(wallId)
+            const handle = graph.getNodeById(wallId as any)
+            if (handle) {
+              const wall = handle.data() as WallNode
+              deleteWallSegment(wall, deleteInfo.rangeStart, deleteInfo.rangeEnd)
+            }
+          })
+          commitTransaction()
+          state.wallsToDelete.clear()
+        } else if (!state.dragStartedOnWall && state.itemsToDelete.size > 0) {
+          // Handle item deletion
+          state.itemsToDelete.forEach((itemId) => {
+            captureSnapshot(itemId)
+          })
+          state.itemsToDelete.forEach((itemId) => {
+            deleteNode(itemId)
+          })
+          commitTransaction()
+          state.itemsToDelete.clear()
+        } else {
+          cancelTransaction()
+        }
       }
 
       state.isGridDragging = false
+      state.dragStartedOnWall = false
       state.gridDragStartPos = null
       state.gridDragEndPos = null
       setDeleteRect(null)
@@ -360,61 +447,44 @@ export function SledgehammerTool() {
     // ========================================================================
 
     const handleWallPointerDown = (e: WallEvent) => {
+      if (!selectedFloorId) return
+
+      // Clear the hover preview
+      clearDeletePreview(e.node.id)
+
+      // Start a transaction for wall deletion
+      startTransaction()
+
       const wall = e.node
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
 
-      // Start a transaction for this delete operation
-      startTransaction()
-      // Capture the initial state of the wall before any modifications
-      captureSnapshot(wall.id)
+      // Use world position from the event to get absolute grid coordinates
+      // e.position is in world space, convert to grid coordinates
+      // Apply the same conversion as grid-tiles: add GRID_SIZE/2 offset then divide by TILE_SIZE
+      const [worldX, , worldZ] = e.position
+      const localX = worldX + GRID_SIZE / 2
+      const localZ = worldZ + GRID_SIZE / 2
+      const gridX = Math.round(localX / TILE_SIZE)
+      const gridY = Math.round(localZ / TILE_SIZE)
 
-      // Start drag on wall
-      state.isDragging = true
-      state.hoveredWallId = wall.id
-      state.hoveredGridIndex = gridIndex
-      state.dragStartWallId = wall.id
-      state.dragStartIndex = gridIndex
-      state.dragEndIndex = gridIndex
-
-      // Initialize the delete set with the current wall
+      state.isGridDragging = true
+      state.dragStartedOnWall = true
+      state.gridDragStartPos = [gridX, gridY]
+      state.gridDragEndPos = [gridX, gridY]
       state.wallsToDelete.clear()
-      state.wallsToDelete.set(wall.id, {
-        rangeStart: gridIndex,
-        rangeEnd: gridIndex,
-      })
 
-      // Set the delete preview
+      // Initialize with the starting wall
+      state.wallsToDelete.set(wall.id, { rangeStart: gridIndex, rangeEnd: gridIndex })
       setDeleteRange(wall.id, wall, gridIndex, gridIndex)
+
+      setDeleteRect({ start: [gridX, gridY], end: [gridX, gridY] })
     }
 
-    const handleWallPointerUp = (e: WallEvent) => {
-      // Handle wall deletion - delete ALL walls in the delete set
-      if (state.isDragging && state.wallsToDelete.size > 0) {
-        // Process all walls in the delete set
-        state.wallsToDelete.forEach((deleteInfo, wallId) => {
-          const handle = graph.getNodeById(wallId as any)
-          if (handle) {
-            const wall = handle.data() as WallNode
-            // Perform the wall split/deletion
-            deleteWallSegment(wall, deleteInfo.rangeStart, deleteInfo.rangeEnd)
-          }
-        })
-
-        // Commit the transaction - this creates a single undo entry
-        commitTransaction()
-
-        state.wallsToDelete.clear()
-        state.hoveredWallId = null
-        state.hoveredGridIndex = null
-      } else {
-        // No deletion happened, cancel the transaction
-        cancelTransaction()
-      }
-
-      state.isDragging = false
-      state.dragStartWallId = null
-      state.dragStartIndex = null
-      state.dragEndIndex = null
+    const handleWallPointerUp = (_e: WallEvent) => {
+      // Wall pointer up is handled by handleGridPointerUp since we use grid-based rectangle selection
+      // Just clear hover state
+      state.hoveredWallId = null
+      state.hoveredGridIndex = null
     }
 
     /**
