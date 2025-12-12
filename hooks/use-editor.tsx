@@ -10,6 +10,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 // Enable Map/Set support in Immer
 enableMapSet()
 
+import { emitter } from '@/events/bus'
 import { handleSimpleClick } from '@/lib/building-elements'
 import { GroupNodesCommand, UngroupNodesCommand } from '@/lib/commands/group-commands'
 import {
@@ -32,6 +33,7 @@ import {
   CollectionSchema,
   type CollectionType,
 } from '@/lib/scenegraph/schema/collections'
+import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -424,6 +426,12 @@ export type StoreState = {
   addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
   removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
 
+  // View operations
+  addView: (viewData: Omit<View, 'id' | 'object'>) => void
+  deleteView: (viewId: string) => void
+  updateView: (viewId: string, updates: Partial<View>) => void
+  applyView: (viewId: string) => void
+
   // Add to collection workflow
   startAddToCollection: () => void
   confirmAddToCollection: (collectionId: string) => void
@@ -545,6 +553,7 @@ const useStore = create<StoreState>()(
         const sceneWithPreservedData = {
           ...nextScene,
           collections: currentScene.collections,
+          views: currentScene.views,
           metadata: currentScene.metadata,
           root: {
             ...nextScene.root,
@@ -999,6 +1008,7 @@ const useStore = create<StoreState>()(
             const newScene = {
               root: migratedRoot,
               collections: [],
+              views: [],
               metadata: {},
             } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
@@ -1399,6 +1409,65 @@ const useStore = create<StoreState>()(
           })
         },
 
+        // View operations
+        addView: (viewData) => {
+          const view = ViewSchema.parse(viewData)
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              views: [...(state.scene.views || []), view],
+            },
+          })
+        },
+
+        deleteView: (viewId) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              views: (state.scene.views || []).filter((v) => v.id !== viewId),
+            },
+          })
+        },
+
+        updateView: (viewId, updates) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              views: (state.scene.views || []).map((v) =>
+                v.id === viewId ? { ...v, ...updates } : v,
+              ),
+            },
+          })
+        },
+
+        applyView: (viewId) => {
+          const state = get()
+          const view = state.scene.views?.find((v) => v.id === viewId)
+          if (!view) return
+
+          // Apply scene overrides
+          if (view.sceneState) {
+            if (view.sceneState.selectedLevelId !== undefined) {
+              state.selectFloor(view.sceneState.selectedLevelId)
+            }
+            if (view.sceneState.levelMode) {
+              const mode = view.sceneState.levelMode
+              if (mode === 'single-floor') {
+                set({ viewMode: 'level' })
+              } else {
+                set({ levelMode: mode as LevelMode, viewMode: 'full' })
+              }
+            }
+            // Add other overrides here (time, visibility) when supported
+          }
+
+          // Apply camera
+          emitter.emit('view:apply', { camera: view.camera })
+        },
+
         // Add to collection workflow
         startAddToCollection: () => {
           const { selectedNodeIds } = get()
@@ -1612,6 +1681,7 @@ const useStore = create<StoreState>()(
                 scene: {
                   ...nextScene,
                   collections: s.scene.collections,
+                  views: s.scene.views,
                   metadata: s.scene.metadata,
                   root: {
                     ...nextScene.root,

@@ -55,12 +55,32 @@ export interface ImageManipulationEvent {
 
 export interface ScanUpdateEvent {
   nodeId: string
-  updates: Partial<{ position: [number, number, number]; rotation: [number, number, number]; scale: number; yOffset: number }>
+  updates: Partial<{
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: number
+    yOffset: number
+  }>
   pushToUndo: boolean
 }
 
 export interface ScanManipulationEvent {
   nodeId: string
+}
+
+export interface ViewCaptureRequest {
+  name: string
+  description?: string
+}
+
+export interface ViewApplyEvent {
+  camera: {
+    position: [number, number, number]
+    target: [number, number, number]
+    mode: 'perspective' | 'orthographic'
+    fov?: number
+    zoom?: number
+  }
 }
 
 type EditorEvents = {
@@ -89,5 +109,7 @@ type EditorEvents = {
   'scan:update': ScanUpdateEvent
   'scan:manipulation-start': ScanManipulationEvent
   'scan:manipulation-end': ScanManipulationEvent
+  'view:request-capture': ViewCaptureRequest
+  'view:apply': ViewApplyEvent
 }
 export const emitter = mitt<EditorEvents>()

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
-import { CollectionsSection, LayersMenuContext, SiteItem } from '@/components/sidebar-menus'
+import { CollectionsSection, LayersMenuContext, SiteItem, ViewsSection } from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
@@ -184,6 +184,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   <SiteItem key={siteId} level={1} nodeId={siteId} />
                 ))}
                 <CollectionsSection level={1} onNodeClick={handleNodeClick} />
+                <ViewsSection level={1} onNodeClick={handleNodeClick} />
               </TreeView>
             </TreeProvider>
           ) : (

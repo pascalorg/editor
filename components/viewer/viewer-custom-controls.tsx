@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
+import { emitter, type ViewApplyEvent } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import {
   FLOOR_SPACING,
@@ -48,6 +49,36 @@ export function ViewerCustomControls() {
     const d = VIEWER_INITIAL_CAMERA_DISTANCE
     ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, false)
   }, [controls])
+
+  // Handle View Events
+  useEffect(() => {
+    const handleApply = ({ camera }: ViewApplyEvent) => {
+      if (!controlsRef.current) return
+      const { position, target, mode } = camera
+
+      // Switch mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      // Set camera
+      controlsRef.current.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true, // enable transition
+      )
+    }
+
+    emitter.on('view:apply', handleApply)
+
+    return () => {
+      emitter.off('view:apply', handleApply)
+    }
+  }, [])
 
   // Focus on building when no level is selected (building overview mode)
   useEffect(() => {
