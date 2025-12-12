@@ -8,7 +8,7 @@ import {
   type SceneNodeId,
   type SceneNodeType,
 } from '@/lib/scenegraph/schema/types'
-import { initScene, type NodeCreateTypeMap, type Scene } from './schema'
+import { type Collection, initScene, type NodeCreateTypeMap, type Scene, type View } from './schema'
 
 // Re-export from schema that are used elsewhere
 export type {
@@ -529,6 +529,68 @@ export class SceneGraph {
     }
   }
 
+  get views() {
+    return {
+      all: () => this._scene.views,
+      get: (id: string) => this._scene.views.find((v) => v.id === id),
+      add: (view: View) => {
+        const nextScene = produce(this._scene, (draft) => {
+          draft.views.push(view as any)
+        })
+        this.updateState(nextScene)
+      },
+      update: (id: string, updater: (view: View) => void) => {
+        const nextScene = produce(this._scene, (draft) => {
+          const view = draft.views.find((v) => v.id === id)
+          if (view) {
+            updater(view as any)
+          }
+        })
+        this.updateState(nextScene)
+      },
+      delete: (id: string) => {
+        const nextScene = produce(this._scene, (draft) => {
+          const index = draft.views.findIndex((v) => v.id === id)
+          if (index !== -1) {
+            draft.views.splice(index, 1)
+          }
+        })
+        this.updateState(nextScene)
+      },
+    }
+  }
+
+  get collections() {
+    return {
+      all: () => this._scene.collections,
+      get: (id: string) => this._scene.collections.find((c) => c.id === id),
+      add: (collection: Collection) => {
+        const nextScene = produce(this._scene, (draft) => {
+          draft.collections.push(collection as any)
+        })
+        this.updateState(nextScene)
+      },
+      update: (id: string, updater: (collection: Collection) => void) => {
+        const nextScene = produce(this._scene, (draft) => {
+          const collection = draft.collections.find((c) => c.id === id)
+          if (collection) {
+            updater(collection as any)
+          }
+        })
+        this.updateState(nextScene)
+      },
+      delete: (id: string) => {
+        const nextScene = produce(this._scene, (draft) => {
+          const index = draft.collections.findIndex((c) => c.id === id)
+          if (index !== -1) {
+            draft.collections.splice(index, 1)
+          }
+        })
+        this.updateState(nextScene)
+      },
+    }
+  }
+
   traverse(visitor: NodeVisitor) {
     this._index.byId.forEach((_, id) => {
       const handle = this.getNodeById(id)
@@ -541,8 +603,11 @@ export class SceneGraph {
   private updateState(nextScene: Scene) {
     if (nextScene === this._scene) return
     this._scene = nextScene
-    this._index = buildNodeTreeIndex(nextScene)
-    this.onChange?.(nextScene, this._index)
+    // Cast to any to avoid "excessively deep" error with recursive Zod types
+    this._index = buildNodeTreeIndex(nextScene as any)
+    if (this.onChange) {
+      this.onChange(nextScene as any, this._index)
+    }
   }
 
   updateNode(id: SceneNodeId, updates: Partial<AnyNode>) {

@@ -22,6 +22,8 @@ alwaysApply: true
 The project leverages a strict node-based architecture.
 - **Schema**: Zod schemas definition (`lib/scenegraph/schema`).
 - **Hierarchy**: `Root` -> `Site` -> `Building` -> `Level` -> `Nodes` (Wall, Slab, etc.).
+- **Collections**: Semantic groups of nodes (e.g., `room`, `lighting`, `furniture`, `zone`) for batched operations.
+- **Views**: Saved perspectives including camera configuration (position, target, mode) and scene state overrides (time, visibility, floor focus).
 - **SceneGraph Class**: Wraps raw JSON state, provides O(1) indexing (`byId`, `byType`, `byLevel`), and returns `SceneNodeHandle` objects for safe interaction.
 
 ### Node Registry (`@lib/nodes/registry.ts`)
