@@ -61,6 +61,7 @@ export function CustomControls() {
       state.addView({
         name,
         description,
+        metadata: {},
         camera: {
           position: [position.x, position.y, position.z],
           target: [target.x, target.y, target.z],

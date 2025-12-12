@@ -47,7 +47,6 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   const groupRef = useRef<THREE.Group>(null)
 
   // Get state from store
-  const viewMode = useEditor((state) => state.viewMode)
   const controlMode = useEditor((state) => state.controlMode)
   const movingCamera = useEditor((state) => state.movingCamera)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
@@ -94,9 +93,6 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
     }
     return [GRID_SIZE * aspectRatio, GRID_SIZE]
   }, [texture])
-
-  // Hide image nodes completely in viewer mode - they're only for editor guidance
-  if (viewMode === 'viewer') return null
 
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {

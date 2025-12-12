@@ -40,8 +40,8 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const selectNode = useEditor((state) => state.selectNode)
   const levelMode = useEditor((state) => state.levelMode)
 
-  const isBuildingSelected = building 
-    ? (selectedNodeIds.includes(building.id) || !!selectedFloorId || levelMode === 'exploded') 
+  const isBuildingSelected = building
+    ? selectedNodeIds.includes(building.id) || !!selectedFloorId || levelMode === 'exploded'
     : false
 
   // Track expanded levels
@@ -86,6 +86,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
 
   const handleFloorClick = (floorId: string) => {
     if (!isBuildingSelected) return
+    if (!building) return
 
     // Clear collection selection when clicking a floor
     if (selectedCollectionId) {
@@ -106,7 +107,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   const toggleLevelExpansion = (levelId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!isBuildingSelected) return
-    
+
     setExpandedLevels((prev) => {
       const next = new Set(prev)
       if (next.has(levelId)) {
@@ -133,7 +134,8 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   // Check if this room collection is currently selected
   const isRoomSelected = (collection: Collection): boolean => selectedCollectionId === collection.id
 
-  if (!mounted || !building) return <div className="p-3 text-white/50 text-xs italic">Loading...</div>
+  if (!(mounted && building))
+    return <div className="p-3 text-white/50 text-xs italic">Loading...</div>
 
   return (
     <div className="w-52 min-w-52">
@@ -153,7 +155,12 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
         </div>
 
         {/* Levels List - Indented and Conditional */}
-        <div className={cn('pl-2 transition-opacity duration-200', !isBuildingSelected && 'opacity-30 pointer-events-none')}>
+        <div
+          className={cn(
+            'pl-2 transition-opacity duration-200',
+            !isBuildingSelected && 'pointer-events-none opacity-30',
+          )}
+        >
           {floorGroups.map((level) => {
             const isSelected = selectedFloorId === level.id
             const isVisible = level.visible !== false
