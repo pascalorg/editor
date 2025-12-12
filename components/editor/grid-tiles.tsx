@@ -11,7 +11,10 @@ import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 
 // Map control modes to their icons and colors (matching toolbar active colors)
 // Background is color-500 at 20% opacity, icon is color-400
-const modeConfig: Record<ControlMode, { icon: typeof MousePointer2; bgColor: string; iconColor: string }> = {
+const modeConfig: Record<
+  ControlMode,
+  { icon: typeof MousePointer2; bgColor: string; iconColor: string }
+> = {
   select: { icon: MousePointer2, bgColor: 'rgba(59, 130, 246, 0.2)', iconColor: '#60a5fa' }, // blue-500/20, blue-400
   edit: { icon: Pencil, bgColor: 'rgba(249, 115, 22, 0.2)', iconColor: '#fb923c' }, // orange-500/20, orange-400
   delete: { icon: Trash2, bgColor: 'rgba(239, 68, 68, 0.2)', iconColor: '#f87171' }, // red-500/20, red-400
@@ -202,15 +205,60 @@ GridTiles.displayName = 'GridTiles'
 
 // Map building tools to their icon paths (matching building-tools.tsx)
 const buildingToolIcons: Record<Tool, Record<CatalogCategory | 'default', string>> = {
-  slab: { default: '/icons/floor.png', door: '/icons/floor.png', window: '/icons/floor.png', item: '/icons/floor.png' },
-  ceiling: { default: '/icons/ceiling.png', door: '/icons/ceiling.png', window: '/icons/ceiling.png', item: '/icons/ceiling.png' },
-  wall: { default: '/icons/wall.png', door: '/icons/wall.png', window: '/icons/wall.png', item: '/icons/wall.png' },
-  room: { default: '/icons/room.png', door: '/icons/room.png', window: '/icons/room.png', item: '/icons/room.png' },
-  'custom-room': { default: '/icons/custom-room.png', door: '/icons/custom-room.png', window: '/icons/custom-room.png', item: '/icons/custom-room.png' },
-  roof: { default: '/icons/roof.png', door: '/icons/roof.png', window: '/icons/roof.png', item: '/icons/roof.png' },
-  column: { default: '/icons/column.png', door: '/icons/column.png', window: '/icons/column.png', item: '/icons/column.png' },
-  stair: { default: '/icons/stairs.png', door: '/icons/stairs.png', window: '/icons/stairs.png', item: '/icons/stairs.png' },
-  item: { default: '/icons/couch.png', door: '/icons/door.png', window: '/icons/window.png', item: '/icons/couch.png' },
+  slab: {
+    default: '/icons/floor.png',
+    door: '/icons/floor.png',
+    window: '/icons/floor.png',
+    item: '/icons/floor.png',
+  },
+  ceiling: {
+    default: '/icons/ceiling.png',
+    door: '/icons/ceiling.png',
+    window: '/icons/ceiling.png',
+    item: '/icons/ceiling.png',
+  },
+  wall: {
+    default: '/icons/wall.png',
+    door: '/icons/wall.png',
+    window: '/icons/wall.png',
+    item: '/icons/wall.png',
+  },
+  room: {
+    default: '/icons/room.png',
+    door: '/icons/room.png',
+    window: '/icons/room.png',
+    item: '/icons/room.png',
+  },
+  'custom-room': {
+    default: '/icons/custom-room.png',
+    door: '/icons/custom-room.png',
+    window: '/icons/custom-room.png',
+    item: '/icons/custom-room.png',
+  },
+  roof: {
+    default: '/icons/roof.png',
+    door: '/icons/roof.png',
+    window: '/icons/roof.png',
+    item: '/icons/roof.png',
+  },
+  column: {
+    default: '/icons/column.png',
+    door: '/icons/column.png',
+    window: '/icons/column.png',
+    item: '/icons/column.png',
+  },
+  stair: {
+    default: '/icons/stairs.png',
+    door: '/icons/stairs.png',
+    window: '/icons/stairs.png',
+    item: '/icons/stairs.png',
+  },
+  item: {
+    default: '/icons/couch.png',
+    door: '/icons/door.png',
+    window: '/icons/window.png',
+    item: '/icons/couch.png',
+  },
 }
 
 // Down arrow component (2m height, pointing down along -Y axis)
@@ -253,11 +301,7 @@ const DownArrow = () => {
       ]}
     >
       {/* Icon circle at the top */}
-      <Html
-        center
-        position={[0, iconCircleRadius + 0.05, 0]}
-        style={{ pointerEvents: 'none' }}
-      >
+      <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             width: isBuildingWithTool ? 32 : 28,

@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils'
 import {
   getNodeIcon,
   getNodeLabel,
+  ModelPositionPopover,
   RenamePopover,
   useLayersMenu,
   VisibilityToggle,
@@ -49,7 +50,7 @@ export function NodeItem({
   onNodeSelect,
 }: NodeItemProps) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeType, nodeName, nodeVisible } = useEditor(
+  const { nodeType, nodeName, nodeVisible, modelPosition } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
@@ -57,6 +58,7 @@ export function NodeItem({
         nodeType: node?.type || 'unknown',
         nodeName: node?.name,
         nodeVisible: node?.visible ?? true,
+        modelPosition: (node as any)?.modelPosition as [number, number, number] | undefined,
       }
     }),
   )
@@ -76,10 +78,25 @@ export function NodeItem({
 
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [isEditingModelPosition, setIsEditingModelPosition] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
+  const triggerRef = useRef<HTMLDivElement>(null)
 
   const handleRename = (newName: string) => {
     updateNode(nodeId, { name: newName })
+  }
+
+  const handleModelPositionChange = (position: [number, number, number]) => {
+    updateNode(nodeId, { modelPosition: position })
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    // Only show context menu for item nodes
+    if (nodeType === 'item') {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsEditingModelPosition(true)
+    }
   }
 
   const isSelected = selectedNodeIds.includes(nodeId)
@@ -159,10 +176,12 @@ export function NodeItem({
           e.stopPropagation()
           onNodeSelect(nodeId, e as React.MouseEvent)
         }}
+        onContextMenu={handleContextMenu}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDragStart={handleDragStart as any}
         onDrop={handleDrop}
+        ref={triggerRef}
       >
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
@@ -183,6 +202,15 @@ export function NodeItem({
           onOpenChange={setIsRenaming}
           onRename={handleRename}
         />
+        {nodeType === 'item' && (
+          <ModelPositionPopover
+            anchorRef={triggerRef}
+            isOpen={isEditingModelPosition}
+            onOpenChange={setIsEditingModelPosition}
+            onPositionChange={handleModelPositionChange}
+            position={modelPosition || [0, 0, 0]}
+          />
+        )}
 
         {/* Edit Button for Roof */}
         {nodeType === 'roof' && (
