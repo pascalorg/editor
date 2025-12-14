@@ -134,6 +134,7 @@ export function ViewerCustomControls() {
     if (!(controls && scene && selectedFloorId)) return
 
     const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
+    const cameraImpl = controls as CameraControlsImpl
 
     // If a collection is selected, don't override its camera focus
     if (selectedCollectionId) {
@@ -142,38 +143,54 @@ export function ViewerCustomControls() {
         new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
         new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
       )
-      ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
+      cameraImpl.setBoundary(boundaryBox)
       return
     }
 
-    // Find the level object to get its center, then position camera like initial setup
-    const levelObject = scene.getObjectByName(selectedFloorId)
-    const cameraImpl = controls as CameraControlsImpl
+    // Check if there's a view saved for this level
+    const views = useEditor.getState().scene.views || []
+    const levelView = views.find((v) => v.sceneState?.selectedLevelId === selectedFloorId)
 
-    // Default target is origin at floor height
-    let targetX = 0
-    let targetZ = 0
+    if (levelView) {
+      // Apply the saved view's camera position
+      const { position, target, mode } = levelView.camera
 
-    if (levelObject) {
-      const levelBox = new Box3().setFromObject(levelObject)
-      if (!levelBox.isEmpty()) {
-        const center = levelBox.getCenter(new Vector3())
-        targetX = center.x
-        targetZ = center.z
+      // Switch camera mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
       }
-    }
 
-    // Use same camera distance as initial setup (VIEWER_INITIAL_CAMERA_DISTANCE)
-    // Position camera at 45-degree angle, similar to building overview
-    const d = VIEWER_INITIAL_CAMERA_DISTANCE
-    cameraImpl.setLookAt(targetX + d, floorY + d, targetZ + d, targetX, floorY, targetZ, true)
+      cameraImpl.setLookAt(position[0], position[1], position[2], target[0], target[1], target[2], true)
+    } else {
+      // No saved view - use default camera positioning
+      // Find the level object to get its center, then position camera like initial setup
+      const levelObject = scene.getObjectByName(selectedFloorId)
+
+      // Default target is origin at floor height
+      let targetX = 0
+      let targetZ = 0
+
+      if (levelObject) {
+        const levelBox = new Box3().setFromObject(levelObject)
+        if (!levelBox.isEmpty()) {
+          const center = levelBox.getCenter(new Vector3())
+          targetX = center.x
+          targetZ = center.z
+        }
+      }
+
+      // Use same camera distance as initial setup (VIEWER_INITIAL_CAMERA_DISTANCE)
+      // Position camera at 45-degree angle, similar to building overview
+      const d = VIEWER_INITIAL_CAMERA_DISTANCE
+      cameraImpl.setLookAt(targetX + d, floorY + d, targetZ + d, targetX, floorY, targetZ, true)
+    }
 
     // Set boundary for the floor
     const boundaryBox = new Box3(
       new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
       new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
     )
-    ;(controls as CameraControlsImpl).setBoundary(boundaryBox)
+    cameraImpl.setBoundary(boundaryBox)
   }, [currentLevel, controls, selectedFloorId, selectedCollectionId, levelMode, scene])
 
   // Focus camera on collection bounds when a collection is selected
