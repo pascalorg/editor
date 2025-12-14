@@ -141,6 +141,7 @@ export function InfiniteGrid({
   return (
     <mesh
       frustumCulled={false}
+      name="__infinite_grid__"
       position={[0, 0.005, 0]}
       renderOrder={1}
       rotation={[-Math.PI / 2, 0, 0]}

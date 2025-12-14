@@ -445,7 +445,7 @@ export function ProximityGrid({
   }
 
   return (
-    <mesh position={[0, 0.005, 0]} renderOrder={-1} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh name="__proximity_grid__" position={[0, 0.005, 0]} renderOrder={-1} rotation={[-Math.PI / 2, 0, 0]}>
       <planeGeometry args={[maxSize, maxSize]} />
       <proximityGridMaterial
         depthTest

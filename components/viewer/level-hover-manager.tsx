@@ -89,6 +89,8 @@ export function LevelHoverManager() {
   const [hoveredBox, setHoveredBox] = useState<Box3 | null>(null)
   const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | 'building' | null>(null)
 
+  console.log('hoverMode', hoverMode, hoveredBox)
+
   const raycasterRef = useRef(new Raycaster())
   const isDrag = useRef(false)
   const downPos = useRef({ x: 0, y: 0 })
@@ -131,6 +133,17 @@ export function LevelHoverManager() {
     }),
   )
 
+  // Clear floor selection on mount so viewer starts with building overview
+  useEffect(() => {
+    useEditor.setState({
+      selectedFloorId: null,
+      selectedCollectionId: null,
+      selectedNodeIds: [],
+      viewMode: 'full',
+      levelMode: 'stacked',
+    })
+  }, [])
+
   // Helper: find which room collection contains a hit node
   const findRoomForNode = (nodeId: string, collections: Collection[]): Collection | null => {
     for (const collection of collections) {
@@ -141,14 +154,22 @@ export function LevelHoverManager() {
     return null
   }
 
-  // Helper: calculate bounding box for an object excluding image nodes
+  // Helper: calculate bounding box for an object excluding image nodes and grids
   const calculateBoundsExcludingImages = (object: Object3D): Box3 | null => {
     const box = new Box3()
     const graph = useEditor.getState().graph
     let hasContent = false
 
+    // Ensure world matrices are up to date (important for animated/exploded views)
+    object.updateWorldMatrix(true, true)
+
     object.traverse((child) => {
       if (child instanceof Mesh && child.geometry) {
+        // Skip grid meshes (infinite grid, proximity grid)
+        if (child.name === '__infinite_grid__' || child.name === '__proximity_grid__') {
+          return
+        }
+
         // Check if this mesh belongs to an image node
         let current: Object3D | null = child
         let isImage = false
@@ -242,7 +263,9 @@ export function LevelHoverManager() {
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
       const currentCollectionId = state.selectedCollectionId
-      const isBuildingSelected = buildingId ? state.selectedNodeIds.includes(buildingId) : false
+      const isBuildingSelected = buildingId
+        ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
+        : false
 
       const rect = canvas.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -398,7 +421,9 @@ export function LevelHoverManager() {
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
       const currentCollectionId = state.selectedCollectionId
-      const isBuildingSelected = buildingId ? state.selectedNodeIds.includes(buildingId) : false
+      const isBuildingSelected = buildingId
+        ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
+        : false
 
       const rect = canvas.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
