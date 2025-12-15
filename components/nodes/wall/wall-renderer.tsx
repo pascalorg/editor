@@ -2,8 +2,8 @@
 
 import { Addition, Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
 import { Edges, Line, useGLTF } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useMemo } from 'react'
+import { type ThreeEvent, useFrame } from '@react-three/fiber'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
@@ -851,11 +851,31 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const sidesMaterial = useMaterial('white')
   const ghostMaterial = useMaterial('ghost')
   const paintMaterial = useMaterial(selectedMaterial)
+  const [hideWallBasedOnCameraPosition, setHideWallBasedOnCameraPosition] = useState(false)
 
   const wallMaterial = useMemo(
     () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
     [isActiveFloor, frontMaterial, backMaterial, sidesMaterial, ghostMaterial],
   )
+
+  const u = new THREE.Vector3()
+  const v = new THREE.Vector3()
+  const wallMesh = useRef<THREE.Mesh>(null)
+  const activeTool = useEditor((state) => state.activeTool)
+  const controlMode = useEditor((state) => state.controlMode)
+  useFrame(({ camera }) => {
+    camera.getWorldDirection(u)
+    if (wallMesh.current) {
+      wallMesh.current.getWorldDirection(v)
+      setHideWallBasedOnCameraPosition(
+        v.dot(u) > 0 &&
+          activeTool !== 'wall' &&
+          activeTool !== 'custom-room' &&
+          activeTool !== 'room' &&
+          controlMode !== 'painting',
+      )
+    }
+  })
 
   if (!wallGeometry) return null
 
@@ -930,7 +950,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 visible={false}
               />
             )}
-            <mesh castShadow receiveShadow>
+            <mesh castShadow receiveShadow ref={wallMesh}>
               <Geometry useGroups>
                 <Base geometry={wallGeometry} material={wallMaterial} />
                 {nodeChildrenIds.map((openingId: string) => (
@@ -948,6 +968,15 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                       opacity={0.6}
                       transparent
                     />
+                  </Subtraction>
+                )}
+                {hideWallBasedOnCameraPosition && (
+                  <Subtraction
+                    position-x={nodeSize[0] * TILE_SIZE * 0.5}
+                    position-y={WALL_HEIGHT / 2 + WALL_HEIGHT * 0.2}
+                    renderOrder={10}
+                  >
+                    <boxGeometry args={[nodeSize[0] * TILE_SIZE * 1.1, WALL_HEIGHT, nodeSize[1]]} />
                   </Subtraction>
                 )}
                 {/* Paint preview overlay - shows the segment to be painted */}
