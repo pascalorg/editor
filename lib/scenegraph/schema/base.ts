@@ -1,5 +1,6 @@
 import { customAlphabet } from 'nanoid'
 import { z } from 'zod'
+import { CameraSchema } from './camera'
 
 const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 
@@ -25,6 +26,7 @@ export const BaseNode = z.object({
   parentId: z.string().nullable().default(null),
   visible: z.boolean().optional().default(true),
   opacity: z.number().min(0).max(100).optional().default(100),
+  camera: CameraSchema.optional(),
   metadata: z.json().optional().default({}),
   editor: z
     .object({

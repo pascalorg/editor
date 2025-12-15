@@ -1,6 +1,6 @@
 'use client'
 
-import { GripVertical, Pencil, Plus } from 'lucide-react'
+import { Camera, GripVertical, Pencil, Plus } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import { useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
@@ -14,7 +14,9 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
+import { saveAsset } from '@/lib/asset-storage'
 import type { SceneNodeHandle } from '@/lib/scenegraph/index'
 import { ImageNode } from '@/lib/scenegraph/schema/nodes/image'
 import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
@@ -29,7 +31,6 @@ import {
   useLayersMenu,
   VisibilityToggle,
 } from './shared'
-import { saveAsset } from '@/lib/asset-storage'
 
 // Generic node item that uses useShallow to get node data
 interface NodeItemProps {
@@ -37,20 +38,24 @@ interface NodeItemProps {
   index: number
   isLast: boolean
   level: number
-  selectedNodeIds: string[]
   onNodeSelect: (nodeId: string, event: React.MouseEvent) => void
 }
 
-export function NodeItem({
-  nodeId,
-  index,
-  isLast,
-  level,
-  selectedNodeIds,
-  onNodeSelect,
-}: NodeItemProps) {
+const useNodeActions = () =>
+  useEditor(
+    useShallow((state) => ({
+      toggleNodeVisibility: state.toggleNodeVisibility,
+      moveNode: state.moveNode,
+      handleNodeSelect: state.handleNodeSelect,
+      setControlMode: state.setControlMode,
+      updateNode: state.updateNode,
+      graph: state.graph,
+    })),
+  )
+
+export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeItemProps) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeType, nodeName, nodeVisible, modelPosition } = useEditor(
+  const { nodeType, nodeName, nodeVisible, modelPosition, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
@@ -59,6 +64,7 @@ export function NodeItem({
         nodeName: node?.name,
         nodeVisible: node?.visible ?? true,
         modelPosition: (node as any)?.modelPosition as [number, number, number] | undefined,
+        hasCamera: !!node?.camera,
       }
     }),
   )
@@ -69,12 +75,9 @@ export function NodeItem({
     }),
   )
 
-  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const moveNode = useEditor((state) => state.moveNode)
-  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
-  const setControlMode = useEditor((state) => state.setControlMode)
-  const updateNode = useEditor((state) => state.updateNode)
-  const graph = useEditor((state) => state.graph)
+  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  const { toggleNodeVisibility, moveNode, handleNodeSelect, setControlMode, updateNode, graph } =
+    useNodeActions()
 
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -99,7 +102,6 @@ export function NodeItem({
     }
   }
 
-  const isSelected = selectedNodeIds.includes(nodeId)
   const hasChildren = childrenIds.length > 0
 
   const handleEditClick = (e: React.MouseEvent) => {
@@ -254,6 +256,27 @@ export function NodeItem({
             <TooltipContent>Edit Image</TooltipContent>
           </Tooltip>
         )}
+        <Button
+          className={cn(
+            'h-5 w-5 p-0 transition-opacity',
+            'opacity-0 group-hover/item:opacity-100',
+            (isSelected || hasCamera) && 'opacity-100',
+            hasCamera && 'text-blue-500 hover:text-blue-600',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (hasCamera) {
+              updateNode(nodeId, { camera: undefined })
+            } else {
+              emitter.emit('node:capture-camera', { nodeId })
+            }
+          }}
+          size="sm"
+          title={hasCamera ? 'Clear saved camera view' : 'Save current camera view to this node'}
+          variant="ghost"
+        >
+          <Camera className="h-3 w-3" />
+        </Button>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
 
@@ -267,7 +290,6 @@ export function NodeItem({
               level={level + 1}
               nodeId={childId}
               onNodeSelect={onNodeSelect}
-              selectedNodeIds={selectedNodeIds}
             />
           ))}
         </TreeNodeContent>
@@ -300,7 +322,7 @@ function DraggableLevelItem({
   const { handleNodeClick } = useLayersMenu()
   const isLastLevel = levelIndex === levelsCount - 1
 
-  const { levelVisible, levelName } = useEditor(
+  const { levelVisible, levelName, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(levelId)
       const level = handle?.data()
@@ -308,6 +330,7 @@ function DraggableLevelItem({
       return {
         levelVisible: level?.visible ?? true,
         levelName: level?.name || 'Level',
+        hasCamera: !!level?.camera,
       }
     }),
   )
@@ -345,11 +368,9 @@ function DraggableLevelItem({
     }),
   )
 
+  const { toggleNodeVisibility, moveNode, updateNode } = useNodeActions()
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
-  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
-  const moveNode = useEditor((state) => state.moveNode)
-  const updateNode = useEditor((state) => state.updateNode)
 
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -422,6 +443,27 @@ function DraggableLevelItem({
           onOpenChange={setIsRenaming}
           onRename={handleRename}
         />
+        <Button
+          className={cn(
+            'h-5 w-5 p-0 transition-opacity',
+            'opacity-0 group-hover/item:opacity-100',
+            (isSelected || hasCamera) && 'opacity-100',
+            hasCamera && 'text-blue-500 hover:text-blue-600',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (hasCamera) {
+              updateNode(levelId, { camera: undefined })
+            } else {
+              emitter.emit('node:capture-camera', { nodeId: levelId })
+            }
+          }}
+          size="sm"
+          title={hasCamera ? 'Clear saved camera view' : 'Save current camera view to this node'}
+          variant="ghost"
+        >
+          <Camera className="h-3 w-3" />
+        </Button>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(levelId)} visible={levelVisible} />
       </TreeNodeTrigger>
 
@@ -435,7 +477,6 @@ function DraggableLevelItem({
             level={level + 1}
             nodeId={childId}
             onNodeSelect={handleNodeSelect}
-            selectedNodeIds={selectedNodeIds}
           />
         ))}
 
@@ -497,7 +538,6 @@ function DraggableLevelItem({
                 level={level + 2}
                 nodeId={guideId}
                 onNodeSelect={handleNodeSelect}
-                selectedNodeIds={selectedNodeIds}
               />
             ))}
           </TreeNodeContent>
@@ -561,7 +601,6 @@ function DraggableLevelItem({
                 level={level + 2}
                 nodeId={scanId}
                 onNodeSelect={handleNodeSelect}
-                selectedNodeIds={selectedNodeIds}
               />
             ))}
           </TreeNodeContent>
@@ -585,19 +624,19 @@ export function LevelReorderItem(props: LevelReorderItemProps) {
 
 export function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeVisible, nodeName } = useEditor(
+  const { nodeVisible, nodeName, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
         nodeVisible: node?.visible ?? true,
         nodeName: node?.name || 'Building',
+        hasCamera: !!node?.camera,
       }
     }),
   )
 
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
-  const isSelected = selectedNodeIds.includes(nodeId)
+  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
 
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
@@ -606,15 +645,12 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
     }),
   )
 
-  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const selectFloor = useEditor((state) => state.selectFloor)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const reorderLevels = useEditor((state) => state.reorderLevels)
-  const addNode = useEditor((state) => state.addNode)
   const addLevel = useEditor((state) => state.addLevel)
-  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
-  const setControlMode = useEditor((state) => state.setControlMode)
-  const updateNode = useEditor((state) => state.updateNode)
+  const addNode = useEditor((state) => state.addNode)
+  const { toggleNodeVisibility, handleNodeSelect, setControlMode, updateNode } = useNodeActions()
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
@@ -747,6 +783,27 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
           </TooltipTrigger>
           <TooltipContent>Add new level</TooltipContent>
         </Tooltip>
+        <Button
+          className={cn(
+            'h-5 w-5 p-0 transition-opacity',
+            'opacity-0 group-hover/item:opacity-100',
+            (isSelected || hasCamera) && 'opacity-100',
+            hasCamera && 'text-blue-500 hover:text-blue-600',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (hasCamera) {
+              updateNode(nodeId, { camera: undefined })
+            } else {
+              emitter.emit('node:capture-camera', { nodeId })
+            }
+          }}
+          size="sm"
+          title={hasCamera ? 'Clear saved camera view' : 'Save current camera view to this node'}
+          variant="ghost"
+        >
+          <Camera className="h-3 w-3" />
+        </Button>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={levelIds.length > 0}>
@@ -771,13 +828,14 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
 
 export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   const { handleNodeClick } = useLayersMenu()
-  const { nodeVisible, nodeName } = useEditor(
+  const { nodeVisible, nodeName, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
         nodeVisible: node?.visible ?? true,
         nodeName: node?.name || 'Site',
+        hasCamera: !!node?.camera,
       }
     }),
   )
@@ -789,17 +847,14 @@ export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
     }),
   )
 
-  const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
-  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
-  const setControlMode = useEditor((state) => state.setControlMode)
   const controlMode = useEditor((state) => state.controlMode)
-  const updateNode = useEditor((state) => state.updateNode)
+  const { toggleNodeVisibility, handleNodeSelect, setControlMode, updateNode } = useNodeActions()
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
 
-  const isSelected = selectedNodeIds.includes(nodeId)
+  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
   const isEditing = isSelected && controlMode === 'edit'
 
   const handleRename = (newName: string) => {
@@ -859,6 +914,27 @@ export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
           </TooltipTrigger>
           <TooltipContent>Edit property line</TooltipContent>
         </Tooltip>
+        <Button
+          className={cn(
+            'h-5 w-5 p-0 transition-opacity',
+            'opacity-0 group-hover/item:opacity-100',
+            (isSelected || hasCamera) && 'opacity-100',
+            hasCamera && 'text-blue-500 hover:text-blue-600',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (hasCamera) {
+              updateNode(nodeId, { camera: undefined })
+            } else {
+              emitter.emit('node:capture-camera', { nodeId })
+            }
+          }}
+          size="sm"
+          title={hasCamera ? 'Clear saved camera view' : 'Save current camera view to this node'}
+          variant="ghost"
+        >
+          <Camera className="h-3 w-3" />
+        </Button>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
       <TreeNodeContent hasChildren={childrenIds.length > 0}>
@@ -876,7 +952,6 @@ export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
               level={level + 1}
               nodeId={childId}
               onNodeSelect={handleNodeSelect}
-              selectedNodeIds={selectedNodeIds}
             />
           )
         })}
@@ -884,4 +959,3 @@ export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
     </TreeNode>
   )
 }
-

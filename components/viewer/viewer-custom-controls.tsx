@@ -151,7 +151,30 @@ export function ViewerCustomControls() {
     const views = useEditor.getState().scene.views || []
     const levelView = views.find((v) => v.sceneState?.selectedLevelId === selectedFloorId)
 
-    if (levelView) {
+    // Check if the level node has specific camera settings
+    const levelNodeHandle = scene.getObjectByName(selectedFloorId)
+      ? useEditor.getState().graph.getNodeById(selectedFloorId as any)
+      : null
+    const levelCamera = levelNodeHandle?.data()?.camera
+
+    if (levelCamera) {
+      const { position, target, mode } = levelCamera
+
+      // Switch camera mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true,
+      )
+    } else if (levelView) {
       // Apply the saved view's camera position
       const { position, target, mode } = levelView.camera
 
@@ -280,6 +303,40 @@ export function ViewerCustomControls() {
       true,
     )
   }, [controls, scene, selectedCollectionId, collectionNodeIds, currentLevel, levelMode])
+
+  // Focus on node camera when selected
+  useEffect(() => {
+    if (!(controls && scene && selectedNodeIds.length === 1)) return
+
+    // Don't override if a collection is selected
+    if (selectedCollectionId) return
+
+    const nodeId = selectedNodeIds[0]
+    // Access node via graph directly
+    const handle = useEditor.getState().graph.getNodeById(nodeId as any)
+    const node = handle?.data()
+
+    if (node?.camera) {
+      const { position, target, mode } = node.camera
+
+      // Switch mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      // Apply camera
+      const cameraImpl = controls as CameraControlsImpl
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true, // enable transition
+      )
+    }
+  }, [selectedNodeIds, controls, scene, selectedCollectionId])
 
   // Configure mouse buttons for viewer mode - always allow panning with left click
   const mouseButtons = useMemo(() => {

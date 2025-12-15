@@ -33,7 +33,6 @@ import {
   CollectionSchema,
   type CollectionType,
 } from '@/lib/scenegraph/schema/collections'
-import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -44,6 +43,7 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
+import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -1203,7 +1203,6 @@ const useStore = create<StoreState>()(
           }
           return nodeId
         },
-
         deleteNode: (nodeId) => {
           const { graph, commandManager, scene } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)

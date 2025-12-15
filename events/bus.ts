@@ -84,6 +84,10 @@ export interface ViewApplyEvent {
   }
 }
 
+export interface NodeCameraCaptureRequest {
+  nodeId: string
+}
+
 type EditorEvents = {
   'grid:click': GridEvent
   'grid:rightclick': GridEvent
@@ -112,5 +116,6 @@ type EditorEvents = {
   'scan:manipulation-end': ScanManipulationEvent
   'view:request-capture': ViewCaptureRequest
   'view:apply': ViewApplyEvent
+  'node:capture-camera': NodeCameraCaptureRequest
 }
 export const emitter = mitt<EditorEvents>()

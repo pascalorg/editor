@@ -4,7 +4,12 @@ import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
-import { emitter, type ViewApplyEvent, type ViewCaptureRequest } from '@/events/bus'
+import {
+  emitter,
+  type NodeCameraCaptureRequest,
+  type ViewApplyEvent,
+  type ViewCaptureRequest,
+} from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 
@@ -79,17 +84,39 @@ export function CustomControls() {
         sceneState: {
           selectedLevelId: state.selectedFloorId,
           levelMode: state.viewMode === 'level' ? 'single-floor' : state.levelMode,
-          visibleCollectionIds: selectedCollectionIds.length > 0 ? selectedCollectionIds : undefined,
+          visibleCollectionIds:
+            selectedCollectionIds.length > 0 ? selectedCollectionIds : undefined,
+        },
+      })
+    }
+
+    const handleNodeCapture = ({ nodeId }: NodeCameraCaptureRequest) => {
+      if (!controlsRef.current) return
+
+      const position = new Vector3()
+      const target = new Vector3()
+      controlsRef.current.getPosition(position)
+      controlsRef.current.getTarget(target)
+
+      const state = useEditor.getState()
+
+      state.updateNode(nodeId, {
+        camera: {
+          position: [position.x, position.y, position.z],
+          target: [target.x, target.y, target.z],
+          mode: state.cameraMode,
         },
       })
     }
 
     emitter.on('view:apply', handleApply)
     emitter.on('view:request-capture', handleCapture)
+    emitter.on('node:capture-camera', handleNodeCapture)
 
     return () => {
       emitter.off('view:apply', handleApply)
       emitter.off('view:request-capture', handleCapture)
+      emitter.off('node:capture-camera', handleNodeCapture)
     }
   }, [])
 

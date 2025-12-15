@@ -1,16 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { objectId } from './base'
-
-const Vector3Schema = z.tuple([z.number(), z.number(), z.number()])
-
-export const CameraSchema = z.object({
-  position: Vector3Schema,
-  target: Vector3Schema,
-  mode: z.enum(['perspective', 'orthographic']).default('perspective'),
-  fov: z.number().optional(), // For perspective
-  zoom: z.number().optional(), // For orthographic
-})
+import { CameraSchema } from './camera'
 
 export const SceneStateOverrideSchema = z.object({
   selectedLevelId: z.string().nullable().optional(),
@@ -42,5 +33,5 @@ export const ViewSchema = z
   )
 
 export type View = z.infer<typeof ViewSchema>
-export type Camera = z.infer<typeof CameraSchema>
+export type { Camera } from './camera'
 export type SceneStateOverride = z.infer<typeof SceneStateOverrideSchema>
