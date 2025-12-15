@@ -12,7 +12,7 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
-import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from 'three'
+import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace, type WebGLShadowMap } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
@@ -61,7 +61,7 @@ export default function Editor({ className }: { className?: string }) {
         shadowMap: {
           type: PCFSoftShadowMap,
           enabled: true,
-        },
+        } as WebGLShadowMap,
       }}
       shadows
     >
