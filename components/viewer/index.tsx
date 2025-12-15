@@ -96,6 +96,7 @@ export default function Viewer({
         toggleLevelMode()
       } else if (e.key === 'Escape') {
         e.preventDefault()
+        e.stopPropagation()
         const state = useEditor.getState()
 
         // Progressive unselection:
@@ -103,10 +104,6 @@ export default function Viewer({
         if (state.selectedNodeIds.length > 0) {
           useEditor.setState({
             selectedNodeIds: [],
-            levelMode: 'stacked',
-            viewMode: 'full',
-            selectedFloorId: null,
-            selectedCollectionId: null,
           })
           return
         }
