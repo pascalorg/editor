@@ -284,7 +284,8 @@ const CATALOG_ITEMS: CatalogItem[] = [
     position: [0, 0.5, 0.06],
     scale: [1, 1, 1],
     rotation: [0, Math.PI, 0],
-    size: [2, 1],
+    size: [2, 2],
+    attachTo: 'wall-side',
   },
   {
     category: 'item',
