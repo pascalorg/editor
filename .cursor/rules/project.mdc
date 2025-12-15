@@ -24,6 +24,7 @@ The project leverages a strict node-based architecture.
 - **Hierarchy**: `Root` -> `Site` -> `Building` -> `Level` -> `Nodes` (Wall, Slab, etc.).
 - **Collections**: Semantic groups of nodes (e.g., `room`, `lighting`, `furniture`, `zone`) for batched operations.
 - **Views**: Saved perspectives including camera configuration (position, target, mode) and scene state overrides (time, visibility, floor focus).
+- **Node Cameras**: Optional `camera` property on nodes to define specific viewing angles.
 - **SceneGraph Class**: Wraps raw JSON state, provides O(1) indexing (`byId`, `byType`, `byLevel`), and returns `SceneNodeHandle` objects for safe interaction.
 
 ### Node Registry (`@lib/nodes/registry.ts`)
@@ -85,6 +86,10 @@ lib/
 ### View Modes
 - **Editor**: Full interactivity. Active floor is fully opaque; others are muted/transparent.
 - **Viewer**: Read-only. Support for "Exploded" view (levels separated vertically) and "Stacked" view.
+
+### Presentation Setup
+- **Capture**: Click camera icon in sidebar to save/clear current viewport settings for any node.
+- **Playback**: Selecting a node in Viewer mode smoothly transitions to its saved camera view.
 
 ### Persistence
 - **Storage**: JSON format. `use-editor.tsx` handles hydration/dehydration.

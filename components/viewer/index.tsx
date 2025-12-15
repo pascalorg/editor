@@ -44,6 +44,7 @@ export default function Viewer({
   const building = useEditor((state) =>
     state.scene.root.children?.[0]?.children.find((c) => c.type === 'building'),
   )
+  const site = useEditor((state) => state.scene.root.children?.[0])
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
@@ -102,6 +103,27 @@ export default function Viewer({
         // Progressive unselection:
         // 1. If nodes selected (including Building) -> Deselect all, go to Stacked
         if (state.selectedNodeIds.length > 0) {
+          // If Building is selected, go to Site
+          if (
+            building &&
+            state.selectedNodeIds.length === 1 &&
+            state.selectedNodeIds[0] === building.id
+          ) {
+            if (site) {
+              useEditor.setState({
+                selectedNodeIds: [site.id],
+                selectedFloorId: null,
+                viewMode: 'full',
+              })
+              return
+            }
+          }
+
+          // If Site is ALREADY selected, prevent deselection (keep as root default)
+          if (site && state.selectedNodeIds.length === 1 && state.selectedNodeIds[0] === site.id) {
+            return
+          }
+
           useEditor.setState({
             selectedNodeIds: [],
           })
@@ -142,6 +164,7 @@ export default function Viewer({
     selectedCollectionId,
     selectedFloorId,
     building,
+    site,
   ])
 
   const tileSize = TILE_SIZE

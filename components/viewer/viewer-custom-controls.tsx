@@ -7,13 +7,7 @@ import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { emitter, type ViewApplyEvent } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import {
-  FLOOR_SPACING,
-  GRID_SIZE,
-  VIEWER_DESELECTED_CAMERA_DISTANCE,
-  VIEWER_INITIAL_CAMERA_DISTANCE,
-  WALL_HEIGHT,
-} from './index'
+import { FLOOR_SPACING, GRID_SIZE, VIEWER_INITIAL_CAMERA_DISTANCE, WALL_HEIGHT } from './index'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 
@@ -33,6 +27,9 @@ export function ViewerCustomControls() {
   const buildingId = useEditor(
     (state) => state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')?.id,
   )
+
+  // Get site node to check for camera preference
+  const site = useEditor(useShallow((state) => state.scene.root.children?.[0]))
 
   // Get the selected collection's nodeIds for bounds calculation
   const collectionNodeIds = useEditor(
@@ -84,22 +81,56 @@ export function ViewerCustomControls() {
   useEffect(() => {
     if (!(controls && scene) || selectedFloorId || !buildingId) return
 
-    // Use a small delay to ensure Three.js scene has updated with the building object
-    const timeoutId = setTimeout(() => {
+    // If site has camera settings, prioritize them
+    if (site?.camera) {
+      const { position, target, mode } = site.camera
+
+      // Switch mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      const cameraImpl = controls as CameraControlsImpl
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        false, // disable transition for initial load
+      )
+      cameraImpl.setBoundary() // Remove boundaries
+      return
+    }
+
+    // Use a polling mechanism to ensure Three.js scene has updated with the building object
+    let isMounted = true
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const checkBuilding = (retries = 0) => {
+      if (!isMounted) return
+
       // Find the building object and calculate its bounds
       const buildingObject = scene.getObjectByName(buildingId)
+
       if (!buildingObject) {
-        // Fallback to default camera position
-        const d = VIEWER_DESELECTED_CAMERA_DISTANCE
-        ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
-        ;(controls as CameraControlsImpl).setBoundary()
+        if (retries < 20) {
+          // Retry for ~2 seconds (20 * 100ms)
+          timeoutId = setTimeout(() => checkBuilding(retries + 1), 100)
+        } else {
+          // Give up and use default camera position
+          const d = VIEWER_INITIAL_CAMERA_DISTANCE
+          ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
+          ;(controls as CameraControlsImpl).setBoundary()
+        }
         return
       }
 
       // Calculate bounding box for the entire building
       const buildingBox = new Box3().setFromObject(buildingObject)
       if (buildingBox.isEmpty()) {
-        const d = VIEWER_DESELECTED_CAMERA_DISTANCE
+        const d = VIEWER_INITIAL_CAMERA_DISTANCE
         ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
         ;(controls as CameraControlsImpl).setBoundary()
         return
@@ -124,10 +155,15 @@ export function ViewerCustomControls() {
         true,
       )
       cameraImpl.setBoundary() // Remove boundaries for free viewing
-    }, 100)
+    }
 
-    return () => clearTimeout(timeoutId)
-  }, [controls, scene, selectedFloorId, buildingId])
+    checkBuilding()
+
+    return () => {
+      isMounted = false
+      clearTimeout(timeoutId)
+    }
+  }, [controls, scene, selectedFloorId, buildingId, site])
 
   // Focus on level when a level is selected (but no collection is selected)
   useEffect(() => {
