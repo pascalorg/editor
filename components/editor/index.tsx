@@ -57,10 +57,15 @@ export default function Editor({ className }: { className?: string }) {
         toneMapping: ACESFilmicToneMapping,
         outputColorSpace: SRGBColorSpace,
         toneMappingExposure: 1,
+        localClippingEnabled: true,
+        shadowMap: {
+          type: PCFSoftShadowMap,
+          enabled: true,
+        },
       }}
       shadows
     >
-      <SoftShadows focus={1} samples={16} size={25} />
+      {/* <SoftShadows focus={1} samples={16} size={25} /> */}
       {cameraMode === 'perspective' ? (
         <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
       ) : (
