@@ -12,7 +12,7 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
-import { ACESFilmicToneMapping, PCFSoftShadowMap } from 'three'
+import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
@@ -51,7 +51,15 @@ export default function Editor({ className }: { className?: string }) {
   useKeyboard()
 
   return (
-    <Canvas className={cn('bg-[#303035]', className)} shadows>
+    <Canvas
+      className={cn('bg-[#303035]', className)}
+      gl={{
+        toneMapping: ACESFilmicToneMapping,
+        outputColorSpace: SRGBColorSpace,
+        toneMappingExposure: 1,
+      }}
+      shadows
+    >
       <SoftShadows focus={1} samples={16} size={25} />
       {cameraMode === 'perspective' ? (
         <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
