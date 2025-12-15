@@ -58,6 +58,15 @@ export function CustomControls() {
 
       const state = useEditor.getState()
 
+      // Find collections that have all their nodes selected
+      const selectedNodeIds = state.selectedNodeIds
+      const collections = state.scene.collections || []
+      const selectedCollectionIds = collections
+        .filter(
+          (c) => c.nodeIds.length > 0 && c.nodeIds.every((id) => selectedNodeIds.includes(id)),
+        )
+        .map((c) => c.id)
+
       state.addView({
         name,
         description,
@@ -70,6 +79,7 @@ export function CustomControls() {
         sceneState: {
           selectedLevelId: state.selectedFloorId,
           levelMode: state.viewMode === 'level' ? 'single-floor' : state.levelMode,
+          visibleCollectionIds: selectedCollectionIds.length > 0 ? selectedCollectionIds : undefined,
         },
       })
     }

@@ -89,8 +89,6 @@ export function LevelHoverManager() {
   const [hoveredBox, setHoveredBox] = useState<Box3 | null>(null)
   const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | 'building' | null>(null)
 
-  console.log('hoverMode', hoverMode, hoveredBox)
-
   const raycasterRef = useRef(new Raycaster())
   const isDrag = useRef(false)
   const downPos = useRef({ x: 0, y: 0 })

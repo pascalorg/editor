@@ -160,7 +160,15 @@ export function ViewerCustomControls() {
         useEditor.getState().setCameraMode(mode)
       }
 
-      cameraImpl.setLookAt(position[0], position[1], position[2], target[0], target[1], target[2], true)
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true,
+      )
     } else {
       // No saved view - use default camera positioning
       // Find the level object to get its center, then position camera like initial setup
@@ -197,6 +205,36 @@ export function ViewerCustomControls() {
   useEffect(() => {
     if (!(controls && scene && selectedCollectionId && collectionNodeIds?.length)) return
 
+    const cameraImpl = controls as CameraControlsImpl
+
+    // Check if there's a view saved for this collection
+    const views = useEditor.getState().scene.views || []
+    const collectionView = views.find((v) =>
+      v.sceneState?.visibleCollectionIds?.includes(selectedCollectionId),
+    )
+
+    if (collectionView) {
+      // Apply the saved view's camera position
+      const { position, target, mode } = collectionView.camera
+
+      // Switch camera mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true,
+      )
+      return
+    }
+
+    // No saved view - use default camera positioning based on collection bounds
     // Calculate the combined bounding box of all nodes in the collection
     const combinedBox = new Box3()
 
@@ -220,7 +258,6 @@ export function ViewerCustomControls() {
     const targetDistance = (maxDimension + padding) * 0.8
 
     // Move camera to look at the center of the collection
-    const cameraImpl = controls as CameraControlsImpl
     const currentPosition = new Vector3()
     cameraImpl.getPosition(currentPosition)
 
