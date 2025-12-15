@@ -121,6 +121,26 @@ export function ItemNodeEditor() {
       return normal[2] >= 0 ? 'front' : 'back'
     }
 
+    /**
+     * Adjust Z position for wall-attached items with Y size > 1
+     * This pushes the item forward so it appears in front of the wall instead of half inside
+     * The direction depends on which side of the wall the item is on (based on normal)
+     */
+    const adjustPositionForWallAttachment = (
+      localPos: [number, number],
+      size: [number, number],
+      normal: [number, number, number] | undefined,
+    ): [number, number] => {
+      if (size[1] > 1) {
+        // Offset by the full extra depth (size - 1) in the Z direction
+        const depthOffset = size[1] - 1
+        // Direction depends on which side of the wall (positive or negative Z normal)
+        const direction = normal && normal[2] >= 0 ? 1 : -1
+        return [localPos[0], localPos[1] + depthOffset * direction]
+      }
+      return localPos
+    }
+
     // ============================================================================
     // GRID PLACEMENT (default behavior when no attachTo)
     // ============================================================================
@@ -246,7 +266,9 @@ export function ItemNodeEditor() {
       ignoreGridMove = true
 
       // gridPosition is already in wall's local coordinate system
-      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+      const basePos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+      // Adjust position for items with Y size > 1 to push them in front of wall
+      const localPos = adjustPositionForWallAttachment(basePos, selectedItem.size, e.normal)
 
       // Calculate rotation from wall normal
       const rotation = calculateRotationFromNormal(e.normal)
@@ -295,7 +317,7 @@ export function ItemNodeEditor() {
         e.node.id, // Parent is the wall
       )
       previewStateRef.current.previewItemId = newPreviewId
-      previewStateRef.current.lastPreviewPosition = localPos
+      previewStateRef.current.lastPreviewPosition = basePos
     }
 
     const handleWallMove = (e: WallEvent) => {
@@ -311,8 +333,10 @@ export function ItemNodeEditor() {
 
       ignoreGridMove = true
 
-      const localPos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
-      previewStateRef.current.lastPreviewPosition = localPos
+      const basePos: [number, number] = [e.gridPosition.x, e.gridPosition.z]
+      previewStateRef.current.lastPreviewPosition = basePos
+      // Adjust position for items with Y size > 1 to push them in front of wall
+      const localPos = adjustPositionForWallAttachment(basePos, selectedItem.size, e.normal)
 
       // Calculate rotation from wall normal
       const calculatedRotation = calculateRotationFromNormal(e.normal)

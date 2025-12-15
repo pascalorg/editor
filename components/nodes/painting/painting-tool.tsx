@@ -247,6 +247,7 @@ export function PaintingTool() {
 
     const handleWallEnter = (e: WallEvent) => {
       const wall = e.node
+      e.stopPropagation()
       if (!wall?.size) return // Guard against undefined wall
 
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
@@ -299,6 +300,7 @@ export function PaintingTool() {
 
     const handleWallMove = (e: WallEvent) => {
       const wall = e.node
+      e.stopPropagation()
       if (!wall?.size) return // Guard against undefined wall
 
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
@@ -356,6 +358,7 @@ export function PaintingTool() {
 
     const handleWallLeave = (e: WallEvent) => {
       const wall = e.node
+      e.stopPropagation()
       if (!wall?.id) return // Guard against undefined wall
 
       // Don't clear preview if dragging and this wall is in the paint set (wall mode only)
@@ -385,6 +388,7 @@ export function PaintingTool() {
 
     const handleWallPointerDown = (e: WallEvent) => {
       const wall = e.node
+      e.stopPropagation()
       if (!wall?.size) return // Guard against undefined wall
 
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
@@ -475,7 +479,8 @@ export function PaintingTool() {
       state.dragFace = null
     }
 
-    const handleWallPointerUp = (_e: WallEvent) => {
+    const handleWallPointerUp = (e: WallEvent) => {
+      e.stopPropagation()
       commitPainting()
     }
 

@@ -25,6 +25,7 @@ export interface NodeEvent {
   gridPosition: GridPoint
   position: [number, number, number] // [x, y, z] world coordinates
   normal?: [number, number, number] // [x, y, z] normal vector
+  stopPropagation: () => void
 }
 
 export interface WallEvent extends NodeEvent {

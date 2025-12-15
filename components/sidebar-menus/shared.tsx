@@ -312,3 +312,87 @@ export function RenamePopover({
     </Popover>
   )
 }
+
+export interface ModelPositionPopoverProps {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  position: [number, number, number]
+  onPositionChange: (position: [number, number, number]) => void
+  anchorRef: React.RefObject<HTMLElement | null>
+}
+
+export function ModelPositionPopover({
+  isOpen,
+  onOpenChange,
+  position,
+  onPositionChange,
+  anchorRef,
+}: ModelPositionPopoverProps) {
+  const handleChange = (axis: 'x' | 'y' | 'z', value: string) => {
+    const numValue = Number.parseFloat(value) || 0
+    const newPosition: [number, number, number] = [...position]
+    if (axis === 'x') newPosition[0] = numValue
+    else if (axis === 'y') newPosition[1] = numValue
+    else newPosition[2] = numValue
+    onPositionChange(newPosition)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation()
+    if (e.key === 'Escape') {
+      onOpenChange(false)
+    }
+  }
+
+  return (
+    <Popover onOpenChange={onOpenChange} open={isOpen}>
+      <PopoverAnchor
+        virtualRef={anchorRef as React.RefObject<{ getBoundingClientRect: () => DOMRect }>}
+      />
+      <PopoverContent
+        align="start"
+        className="dark w-48 p-3"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        sideOffset={4}
+      >
+        <div className="flex flex-col gap-3">
+          <div className="font-medium text-sm">Model Position</div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 text-muted-foreground text-xs">X</span>
+              <Input
+                autoFocus
+                className="h-7 flex-1 text-sm"
+                onChange={(e) => handleChange('x', e.target.value)}
+                step="0.1"
+                type="number"
+                value={position[0]}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 text-muted-foreground text-xs">Y</span>
+              <Input
+                className="h-7 flex-1 text-sm"
+                onChange={(e) => handleChange('y', e.target.value)}
+                step="0.1"
+                type="number"
+                value={position[1]}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 text-muted-foreground text-xs">Z</span>
+              <Input
+                className="h-7 flex-1 text-sm"
+                onChange={(e) => handleChange('z', e.target.value)}
+                step="0.1"
+                type="number"
+                value={position[2]}
+              />
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
