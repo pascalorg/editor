@@ -46,8 +46,9 @@ export function useKeyboard() {
         setControlMode('delete')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        // Restore the last used building tool
-        setActiveTool(useEditor.getState().lastBuildingTool)
+        // Restore the last used building tool and catalog category
+        const state = useEditor.getState()
+        setActiveTool(state.lastBuildingTool, state.lastCatalogCategory)
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('guide')

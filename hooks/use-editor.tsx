@@ -279,6 +279,7 @@ export type StoreState = {
   wallsGroupRef: THREE.Group | null
   activeTool: Tool | null
   lastBuildingTool: Tool
+  lastCatalogCategory: CatalogCategory | null
   catalogCategory: CatalogCategory | null
   controlMode: ControlMode
   cameraMode: CameraMode
@@ -567,6 +568,7 @@ const useStore = create<StoreState>()(
         wallsGroupRef: null,
         activeTool: 'wall',
         lastBuildingTool: 'wall',
+        lastCatalogCategory: null,
         catalogCategory: null,
         controlMode: 'building',
         cameraMode: 'perspective',
@@ -717,10 +719,11 @@ const useStore = create<StoreState>()(
           }
           set({ controlMode: mode })
           if (mode !== 'building') {
-            // Save current tool before clearing so we can restore it when re-entering building mode
+            // Save current tool and catalog category before clearing so we can restore them when re-entering building mode
             const currentTool = get().activeTool
+            const currentCategory = get().catalogCategory
             if (currentTool) {
-              set({ lastBuildingTool: currentTool })
+              set({ lastBuildingTool: currentTool, lastCatalogCategory: currentCategory })
             }
             set({ activeTool: null, catalogCategory: null })
           }

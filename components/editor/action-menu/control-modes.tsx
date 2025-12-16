@@ -68,12 +68,13 @@ export function ControlModes() {
   const controlMode = useEditor((state) => state.controlMode)
   const setControlMode = useEditor((state) => state.setControlMode)
   const lastBuildingTool = useEditor((state) => state.lastBuildingTool)
+  const lastCatalogCategory = useEditor((state) => state.lastCatalogCategory)
   const setActiveTool = useEditor((state) => state.setActiveTool)
 
   const handleModeClick = (mode: ControlMode) => {
     if (mode === 'building') {
-      // Restore the last used building tool
-      setActiveTool(lastBuildingTool)
+      // Restore the last used building tool and catalog category
+      setActiveTool(lastBuildingTool, lastCatalogCategory)
     } else {
       setControlMode(mode)
     }
