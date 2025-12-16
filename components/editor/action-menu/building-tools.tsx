@@ -24,7 +24,7 @@ export const tools: ToolConfig[] = [
   { id: 'item', iconSrc: '/icons/appliance.png', label: 'Appliance', catalogCategory: 'appliance' },
   { id: 'item', iconSrc: '/icons/kitchen.png', label: 'Kitchen', catalogCategory: 'kitchen' },
   { id: 'item', iconSrc: '/icons/bathroom.png', label: 'Bathroom', catalogCategory: 'bathroom' },
-  { id: 'item', iconSrc: '/icons/outdoor.png', label: 'Outdoor', catalogCategory: 'outdoor' },
+  { id: 'item', iconSrc: '/icons/tree.png', label: 'Outdoor', catalogCategory: 'outdoor' },
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair' },
 ]
 
