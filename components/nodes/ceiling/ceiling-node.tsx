@@ -157,14 +157,26 @@ export function CeilingNodeEditor() {
       }
     }
 
+    const handleToolCancel = () => {
+      // Only cancel if we've started drawing (first click done)
+      if (ceilingStateRef.current.startPoint !== null && ceilingStateRef.current.previewCeilingId) {
+        deleteNode(ceilingStateRef.current.previewCeilingId)
+        ceilingStateRef.current.startPoint = null
+        ceilingStateRef.current.previewCeilingId = null
+        ceilingStateRef.current.lastEndPoint = null
+      }
+    }
+
     // Register event listeners
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
+    emitter.on('tool:cancel', handleToolCancel)
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
+      emitter.off('tool:cancel', handleToolCancel)
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 

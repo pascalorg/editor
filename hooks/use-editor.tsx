@@ -278,6 +278,7 @@ export type StoreState = {
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
   activeTool: Tool | null
+  lastBuildingTool: Tool
   catalogCategory: CatalogCategory | null
   controlMode: ControlMode
   cameraMode: CameraMode
@@ -565,6 +566,7 @@ const useStore = create<StoreState>()(
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
         activeTool: 'wall',
+        lastBuildingTool: 'wall',
         catalogCategory: null,
         controlMode: 'building',
         cameraMode: 'perspective',
@@ -715,6 +717,11 @@ const useStore = create<StoreState>()(
           }
           set({ controlMode: mode })
           if (mode !== 'building') {
+            // Save current tool before clearing so we can restore it when re-entering building mode
+            const currentTool = get().activeTool
+            if (currentTool) {
+              set({ lastBuildingTool: currentTool })
+            }
             set({ activeTool: null, catalogCategory: null })
           }
         },

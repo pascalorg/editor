@@ -67,12 +67,13 @@ const modes: Array<{
 export function ControlModes() {
   const controlMode = useEditor((state) => state.controlMode)
   const setControlMode = useEditor((state) => state.setControlMode)
-  const activeTool = useEditor((state) => state.activeTool)
+  const lastBuildingTool = useEditor((state) => state.lastBuildingTool)
   const setActiveTool = useEditor((state) => state.setActiveTool)
 
   const handleModeClick = (mode: ControlMode) => {
-    if (mode === 'building' && !activeTool) {
-      setActiveTool('wall')
+    if (mode === 'building') {
+      // Restore the last used building tool
+      setActiveTool(lastBuildingTool)
     } else {
       setControlMode(mode)
     }
@@ -103,7 +104,7 @@ export function ControlModes() {
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {mode.label} ({mode.shortcut}){isActive && mode.id !== 'select' && ' • Esc to exit'}
+                {mode.label} ({mode.shortcut})
               </p>
             </TooltipContent>
           </Tooltip>

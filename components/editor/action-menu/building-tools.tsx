@@ -11,11 +11,11 @@ type ToolConfig =
   | { id: 'item'; iconSrc: string; label: string; catalogCategory: CatalogCategory }
 
 const tools: ToolConfig[] = [
-  { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
-  { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
   { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
+  { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
+  { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
   { id: 'item', iconSrc: '/icons/door.png', label: 'Door', catalogCategory: 'door' },
   { id: 'item', iconSrc: '/icons/window.png', label: 'Window', catalogCategory: 'window' },

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { emitter } from '@/events/bus'
 import { useEditor } from './use-editor'
 
 export function useKeyboard() {
@@ -8,7 +9,6 @@ export function useKeyboard() {
   const handleDeleteSelected = useEditor((state) => state.handleDeleteSelected)
   const undo = useEditor((state) => state.undo)
   const redo = useEditor((state) => state.redo)
-  const activeTool = useEditor((state) => state.activeTool)
   const setControlMode = useEditor((state) => state.setControlMode)
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -28,17 +28,13 @@ export function useKeyboard() {
 
       if (e.key === 'Escape') {
         e.preventDefault()
-        if (
-          useEditor.getState().controlMode === 'building' &&
-          useEditor.getState().deletePreviewNodes()
-        ) {
-          return // Stop further processing if building was cancelled
+        // Emit tool:cancel event - each tool handles its own cancellation logic
+        if (useEditor.getState().controlMode === 'building') {
+          emitter.emit('tool:cancel', undefined)
         }
         if (selectedNodeIds.length > 0) {
           handleClear()
-          return
         }
-        setControlMode('select')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('select')
@@ -50,12 +46,8 @@ export function useKeyboard() {
         setControlMode('delete')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        // Default to 'wall' tool if no active tool when entering building mode
-        if (activeTool) {
-          setControlMode('building')
-        } else {
-          setActiveTool('wall')
-        }
+        // Restore the last used building tool
+        setActiveTool(useEditor.getState().lastBuildingTool)
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('guide')
@@ -95,7 +87,6 @@ export function useKeyboard() {
     redo,
     setControlMode,
     setActiveTool,
-    activeTool,
     cameraMode,
     setCameraMode,
     selectedNodeIds,
