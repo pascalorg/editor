@@ -17,10 +17,14 @@ const tools: ToolConfig[] = [
   { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
   { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
+  { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
   { id: 'item', iconSrc: '/icons/door.png', label: 'Door', catalogCategory: 'door' },
   { id: 'item', iconSrc: '/icons/window.png', label: 'Window', catalogCategory: 'window' },
-  { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
-  { id: 'item', iconSrc: '/icons/couch.png', label: 'Item', catalogCategory: 'item' },
+  { id: 'item', iconSrc: '/icons/couch.png', label: 'Furniture', catalogCategory: 'furniture' },
+  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Appliance', catalogCategory: 'appliance' },
+  { id: 'item', iconSrc: '/icons/kitchen.png', label: 'Kitchen', catalogCategory: 'kitchen' },
+  { id: 'item', iconSrc: '/icons/bathroom.png', label: 'Bathroom', catalogCategory: 'bathroom' },
+  { id: 'item', iconSrc: '/icons/outdoor.png', label: 'Outdoor', catalogCategory: 'outdoor' },
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair' },
 ]
 

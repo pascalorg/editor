@@ -19,7 +19,7 @@ interface CatalogItem {
 
 const CATALOG_ITEMS: CatalogItem[] = [
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Couch',
     thumbnail: '/items/couch-medium/thumbnail.webp',
     modelUrl: '/items/couch-medium/model.glb',
@@ -27,7 +27,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [4, 2],
   },
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Small Couch',
     thumbnail: '/items/couch-small/thumbnail.webp',
     modelUrl: '/items/couch-small/model.glb',
@@ -35,7 +35,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [3, 2],
   },
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Desk',
     thumbnail: '/items/desk/thumbnail.webp',
     modelUrl: '/items/desk/model.glb',
@@ -43,7 +43,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [4, 2],
   },
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Table',
     thumbnail: '/items/table/thumbnail.webp',
     modelUrl: '/items/table/model.glb',
@@ -52,7 +52,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [6, 3],
   },
   {
-    category: 'item',
+    category: 'outdoor',
     name: 'Fence',
     thumbnail: '/items/fence/thumbnail.webp',
     modelUrl: '/items/fence/model.glb',
@@ -62,7 +62,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [6, 1],
   },
   {
-    category: 'item',
+    category: 'outdoor',
     name: 'Parking Spot',
     thumbnail: '/items/parking-spot/thumbnail.webp',
     modelUrl: '/items/parking-spot/model.glb',
@@ -72,7 +72,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [12, 6],
   },
   {
-    category: 'item',
+    category: 'outdoor',
     name: 'Hedge',
     thumbnail: '/items/hedge/thumbnail.webp',
     modelUrl: '/items/hedge/model.glb',
@@ -82,7 +82,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [4, 3],
   },
   {
-    category: 'item',
+    category: 'outdoor',
     name: 'Tree',
     thumbnail: '/items/tree/thumbnail.webp',
     modelUrl: '/items/tree/model.glb',
@@ -92,7 +92,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [2, 2],
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Ceiling Light',
     thumbnail: '/items/ceiling-light/thumbnail.webp',
     modelUrl: '/items/ceiling-light/model.glb',
@@ -102,7 +102,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Ceiling Fan',
     thumbnail: '/items/ceiling-fan/thumbnail.webp',
     modelUrl: '/items/ceiling-fan/model.glb',
@@ -113,7 +113,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Rectangular Ceiling Light',
     thumbnail: '/items/rectangular-ceiling-light/thumbnail.webp',
     modelUrl: '/items/rectangular-ceiling-light/model.glb',
@@ -124,7 +124,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Circular Ceiling Light',
     thumbnail: '/items/circular-ceiling-light/thumbnail.webp',
     modelUrl: '/items/circular-ceiling-light/model.glb',
@@ -135,7 +135,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Smoke Detector',
     thumbnail: '/items/smoke-detector/thumbnail.webp',
     modelUrl: '/items/smoke-detector/model.glb',
@@ -146,7 +146,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Sprinkler',
     thumbnail: '/items/sprinkler/thumbnail.webp',
     modelUrl: '/items/sprinkler/model.glb',
@@ -157,7 +157,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Exit Sign',
     thumbnail: '/items/exit-sign/thumbnail.webp',
     modelUrl: '/items/exit-sign/model.glb',
@@ -168,7 +168,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'ceiling',
   },
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Wall Art',
     thumbnail: '/items/wall-art-06/thumbnail.webp',
     modelUrl: '/items/wall-art-06/model.glb',
@@ -179,7 +179,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'furniture',
     name: 'Flat Screen TV',
     thumbnail: '/items/flat-screen-tv/thumbnail.webp',
     modelUrl: '/items/flat-screen-tv/model.glb',
@@ -190,7 +190,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Air Conditioner',
     thumbnail: '/items/air-conditioner/thumbnail.webp',
     modelUrl: '/items/air-conditioner/model.glb',
@@ -201,7 +201,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'AC Block',
     thumbnail: '/items/ac-block/thumbnail.webp',
     modelUrl: '/items/ac-block/model.glb',
@@ -211,7 +211,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [3, 3],
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Fire extinguisher',
     thumbnail: '/items/fire-extinguisher/thumbnail.webp',
     modelUrl: '/items/fire-extinguisher/model.glb',
@@ -222,7 +222,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Fire alarm ',
     thumbnail: '/items/fire-alarm/thumbnail.webp',
     modelUrl: '/items/fire-alarm/model.glb',
@@ -233,7 +233,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Fire detector ',
     thumbnail: '/items/fire-detector/thumbnail.webp',
     modelUrl: '/items/fire-detector/model.glb',
@@ -244,7 +244,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Alarm keypad',
     thumbnail: '/items/alarm-keypad/thumbnail.webp',
     modelUrl: '/items/alarm-keypad/model.glb',
@@ -255,7 +255,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Thermostat',
     thumbnail: '/items/thermostat/thumbnail.webp',
     modelUrl: '/items/thermostat/model.glb',
@@ -266,7 +266,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Electric panel',
     thumbnail: '/items/electric-panel/thumbnail.webp',
     modelUrl: '/items/electric-panel/model.glb',
@@ -277,7 +277,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'appliance',
     name: 'Air Conditioner Block',
     thumbnail: '/items/air-conditioner-block/thumbnail.webp',
     modelUrl: '/items/air-conditioner-block/model.glb',
@@ -288,7 +288,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'kitchen',
     name: 'Kitchen Fridge',
     thumbnail: '/items/kitchen-fridge/thumbnail.webp',
     modelUrl: '/items/kitchen-fridge/model.glb',
@@ -298,7 +298,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [2, 2],
   },
   {
-    category: 'item',
+    category: 'kitchen',
     name: 'Freezer',
     thumbnail: '/items/freezer/thumbnail.webp',
     modelUrl: '/items/freezer/model.glb',
@@ -308,7 +308,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [2, 1],
   },
   {
-    category: 'item',
+    category: 'bathroom',
     name: 'Wall Sink',
     thumbnail: '/items/wall-sink/thumbnail.webp',
     modelUrl: '/items/wall-sink/model.glb',
@@ -319,7 +319,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     attachTo: 'wall-side',
   },
   {
-    category: 'item',
+    category: 'kitchen',
     name: 'Sink with cabinet',
     thumbnail: '/items/sink-cabinet/thumbnail.webp',
     modelUrl: '/items/sink-cabinet/model.glb',
@@ -329,7 +329,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     size: [4, 2],
   },
   {
-    category: 'item',
+    category: 'bathroom',
     name: 'Toilet',
     thumbnail: '/items/toilet/thumbnail.webp',
     modelUrl: '/items/toilet/model.glb',

@@ -238,7 +238,14 @@ export type Tool =
   | 'stair'
 
 // Catalog categories for the item tool
-export type CatalogCategory = 'item' | 'window' | 'door'
+export type CatalogCategory =
+  | 'furniture'
+  | 'appliance'
+  | 'bathroom'
+  | 'kitchen'
+  | 'outdoor'
+  | 'window'
+  | 'door'
 
 export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
@@ -703,7 +710,7 @@ const useStore = create<StoreState>()(
             catalogCategory !== undefined
               ? catalogCategory
               : tool === 'item'
-                ? (get().catalogCategory ?? 'item')
+                ? (get().catalogCategory ?? 'furniture')
                 : null
           set({ activeTool: tool, catalogCategory: newCatalogCategory })
           if (tool !== null) {
@@ -1141,7 +1148,11 @@ const useStore = create<StoreState>()(
           }
           const command = new UpdateNodeCommand(nodeId, updates)
           // Skip undo if explicitly requested, preview node, OR if a transaction is active
-          if (skipUndo || (fromNode as any).editor?.preview || commandManager.isTransactionActive()) {
+          if (
+            skipUndo ||
+            (fromNode as any).editor?.preview ||
+            commandManager.isTransactionActive()
+          ) {
             command.execute(graph)
           } else {
             commandManager.execute(command, graph)
