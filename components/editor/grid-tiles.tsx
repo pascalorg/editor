@@ -1,7 +1,8 @@
 'use client'
 
+import { Arrow } from '@radix-ui/react-popover'
 import { type CameraControlsImpl, Html, useCursor } from '@react-three/drei'
-import { type ThreeEvent, useThree } from '@react-three/fiber'
+import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
@@ -274,6 +275,13 @@ const DownArrow = () => {
   const activeTool = useEditor((state) => state.activeTool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
 
+  const iconRef = useRef<THREE.Group>(null)
+  useFrame(({ clock }, delta) => {
+    if (iconRef.current) {
+      iconRef.current.position.y = Math.sin(clock.getElapsedTime() * 1) * 0.05
+    }
+  })
+
   if (!cursorPosition) return null
 
   // Get icon and colors
@@ -295,32 +303,34 @@ const DownArrow = () => {
   return (
     <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
       {/* Icon circle at the top */}
-      <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
-        <div
-          style={{
-            width: isBuildingWithTool ? 32 : 28,
-            height: isBuildingWithTool ? 32 : 28,
-            borderRadius: '50%',
-            backgroundColor: isBuildingWithTool ? '#000000' : bgColor,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-        >
-          {buildingIconSrc ? (
-            <img
-              alt=""
-              height={24}
-              src={buildingIconSrc}
-              style={{ objectFit: 'contain' }}
-              width={24}
-            />
-          ) : (
-            <Icon color={iconColor} size={16} strokeWidth={2.5} />
-          )}
-        </div>
-      </Html>
+      <group ref={iconRef}>
+        <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
+          <div
+            style={{
+              width: isBuildingWithTool ? 32 : 28,
+              height: isBuildingWithTool ? 32 : 28,
+              borderRadius: '50%',
+              backgroundColor: isBuildingWithTool ? '#000000' : bgColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {buildingIconSrc ? (
+              <img
+                alt=""
+                height={24}
+                src={buildingIconSrc}
+                style={{ objectFit: 'contain' }}
+                width={24}
+              />
+            ) : (
+              <Icon color={iconColor} size={16} strokeWidth={2.5} />
+            )}
+          </div>
+        </Html>
+      </group>
       {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
       <mesh position={[0, -shaftHeight / 2, 0]} renderOrder={999}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
