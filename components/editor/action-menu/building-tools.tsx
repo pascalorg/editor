@@ -6,21 +6,25 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { type CatalogCategory, type Tool, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
-type ToolConfig =
+export type ToolConfig =
   | { id: Tool; iconSrc: string; label: string; catalogCategory?: never }
   | { id: 'item'; iconSrc: string; label: string; catalogCategory: CatalogCategory }
 
-const tools: ToolConfig[] = [
-  { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
-  { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
+export const tools: ToolConfig[] = [
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
   { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
+  { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
+  { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
+  { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
   { id: 'item', iconSrc: '/icons/door.png', label: 'Door', catalogCategory: 'door' },
   { id: 'item', iconSrc: '/icons/window.png', label: 'Window', catalogCategory: 'window' },
-  { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
-  { id: 'item', iconSrc: '/icons/couch.png', label: 'Item', catalogCategory: 'item' },
+  { id: 'item', iconSrc: '/icons/couch.png', label: 'Furniture', catalogCategory: 'furniture' },
+  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Appliance', catalogCategory: 'appliance' },
+  { id: 'item', iconSrc: '/icons/kitchen.png', label: 'Kitchen', catalogCategory: 'kitchen' },
+  { id: 'item', iconSrc: '/icons/bathroom.png', label: 'Bathroom', catalogCategory: 'bathroom' },
+  { id: 'item', iconSrc: '/icons/outdoor.png', label: 'Outdoor', catalogCategory: 'outdoor' },
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair' },
 ]
 

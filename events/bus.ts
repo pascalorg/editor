@@ -95,5 +95,6 @@ type EditorEvents = {
   'scan:update': ScanUpdateEvent
   'scan:manipulation-start': ScanManipulationEvent
   'scan:manipulation-end': ScanManipulationEvent
+  'tool:cancel': undefined
 }
 export const emitter = mitt<EditorEvents>()
