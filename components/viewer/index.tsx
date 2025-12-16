@@ -1,18 +1,19 @@
 'use client'
 
 import { animated, useSpring } from '@react-spring/three'
-import { Environment, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
+import { OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
+import { NodesDebugger } from '@/components/debug/nodes-debugger'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
+import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import SelectionManager from '../editor/selection-manager'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
+import { DebugBoundingBoxes } from './debug-bounding-boxes'
 import { LevelHoverManager } from './level-hover-manager'
-import { ViewerControls } from './viewer-controls'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
@@ -24,16 +25,31 @@ export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 // Viewer zoom configuration - adjust these to control default zoom level
 export const VIEWER_DEFAULT_ZOOM = 80 // Orthographic camera zoom level (higher = more zoomed in)
-export const VIEWER_INITIAL_CAMERA_DISTANCE = 8 // Initial camera distance from origin
-export const VIEWER_DESELECTED_CAMERA_DISTANCE = 12 // Camera distance when no floor is selected
+export const VIEWER_INITIAL_CAMERA_DISTANCE = 30 // Initial camera distance from origin (matches editor)
+export const VIEWER_DESELECTED_CAMERA_DISTANCE = 6 // Camera distance when no floor is selected
 
-export default function Viewer({ className }: { className?: string }) {
+interface ViewerProps {
+  className?: string
+  /** Initial zoom level for orthographic camera (default: 80) */
+  defaultZoom?: number
+  /** When true, posts selection changes to parent window for iframe embedding */
+  isEmbedded?: boolean
+}
+
+export default function Viewer({
+  className,
+  defaultZoom = VIEWER_DEFAULT_ZOOM,
+  isEmbedded = false,
+}: ViewerProps) {
   // Use individual selectors for better performance
   const building = useEditor((state) =>
     state.scene.root.children?.[0]?.children.find((c) => c.type === 'building'),
   )
+  const site = useEditor((state) => state.scene.root.children?.[0])
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
@@ -41,9 +57,66 @@ export default function Viewer({ className }: { className?: string }) {
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const selectFloor = useEditor((state) => state.selectFloor)
+  const selectCollection = useEditor((state) => state.selectCollection)
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
+
+  // Reset state on mount to ensure clean start (stacked, no selection)
+  useEffect(() => {
+    useEditor.setState({
+      selectedNodeIds: [],
+      selectedFloorId: null,
+      selectedCollectionId: null,
+      levelMode: 'stacked',
+      viewMode: 'full',
+    })
+  }, [])
+
+  // Notify parent window about selection changes (for embedded mode)
+  useEffect(() => {
+    if (!isEmbedded) return
+
+    const state = useEditor.getState()
+    const graph = state.graph
+
+    // Enrich selected nodes with data
+    const selectedNodes = selectedNodeIds.map((id) => {
+      const node = graph.getNodeById(id as any)?.data()
+      return node ? { id: node.id, type: node.type, name: node.name, data: node } : { id }
+    })
+
+    const message = {
+      type: 'selection',
+      selectedNodeIds,
+      selectedNodes,
+      selectedFloorId,
+      selectedCollectionId,
+    }
+    window.parent.postMessage(message, '*')
+  }, [isEmbedded, selectedNodeIds, selectedFloorId, selectedCollectionId])
+
+  // Notify parent window about interaction clicks
+  useEffect(() => {
+    if (!isEmbedded) return
+
+    const handleClick = (event: InteractionClickEvent) => {
+      window.parent.postMessage(
+        {
+          type: 'click',
+          interactionType: event.type,
+          id: event.id,
+          data: event.data,
+        },
+        '*',
+      )
+    }
+
+    emitter.on('interaction:click', handleClick)
+    return () => {
+      emitter.off('interaction:click', handleClick)
+    }
+  }, [isEmbedded])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -60,12 +133,74 @@ export default function Viewer({ className }: { className?: string }) {
         toggleLevelMode()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        selectFloor(null)
+        e.stopPropagation()
+        const state = useEditor.getState()
+
+        // Progressive unselection:
+        // 1. If nodes selected (including Building) -> Deselect all, go to Stacked
+        if (state.selectedNodeIds.length > 0) {
+          // If Building is selected, go to Site
+          if (
+            building &&
+            site &&
+            state.selectedNodeIds.length === 1 &&
+            state.selectedNodeIds[0] === building.id
+          ) {
+            useEditor.setState({
+              selectedNodeIds: [site.id],
+              selectedFloorId: null,
+              viewMode: 'full',
+            })
+            return
+          }
+
+          // If Site is ALREADY selected, prevent deselection (keep as root default)
+          if (site && state.selectedNodeIds.length === 1 && state.selectedNodeIds[0] === site.id) {
+            return
+          }
+
+          useEditor.setState({
+            selectedNodeIds: [],
+          })
+          return
+        }
+
+        // 2. If Collection selected -> Back to Floor
+        if (state.selectedCollectionId) {
+          selectCollection(null)
+          return
+        }
+
+        // 3. If Floor selected -> Back to Building (Exploded)
+        if (state.selectedFloorId) {
+          if (building) {
+            useEditor.setState({
+              selectedFloorId: null,
+              selectedNodeIds: [building.id],
+              viewMode: 'full',
+              // Keep levelMode as is (likely exploded)
+            })
+          } else {
+            selectFloor(null)
+          }
+          return
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [cameraMode, setCameraMode, toggleLevelMode, selectFloor])
+  }, [
+    cameraMode,
+    setCameraMode,
+    toggleLevelMode,
+    selectFloor,
+    selectCollection,
+    selectedNodeIds,
+    selectedCollectionId,
+    selectedFloorId,
+    building,
+    site,
+  ])
 
   const tileSize = TILE_SIZE
   const showGrid = SHOW_GRID
@@ -77,10 +212,17 @@ export default function Viewer({ className }: { className?: string }) {
 
   const disabledRaycast = useCallback(() => null, [])
 
-  const onCanvasClick = useCallback(() => {
-    // Clicking on the canvas background deselects all floors
-    // selectFloor(null)
-  }, [selectFloor])
+  // Handle background click for progressive deselection
+  const onBackgroundClick = useCallback(() => {
+    // Full reset on background click
+    useEditor.setState({
+      selectedNodeIds: [],
+      selectedCollectionId: null,
+      selectedFloorId: null,
+      levelMode: 'stacked',
+      viewMode: 'full',
+    })
+  }, [])
 
   return (
     <div className="relative h-full w-full">
@@ -94,20 +236,27 @@ export default function Viewer({ className }: { className?: string }) {
             makeDefault
             near={-1000}
             position={[10, 10, 10]}
-            zoom={VIEWER_DEFAULT_ZOOM}
+            zoom={defaultZoom}
           />
         )}
         <color args={['#212134']} attach="background" />
 
         {/* Large background plane to capture clicks outside of floor hit targets */}
-        <mesh onClick={onCanvasClick} position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        {/* Note: LevelHoverManager handles all click logic via native DOM events, so we disable */}
+        {/* R3F raycasting here to prevent onBackgroundClick from interfering with level selection */}
+        <mesh
+          onClick={onBackgroundClick}
+          position={[0, -0.1, 0]}
+          raycast={disabledRaycast}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
           <planeGeometry args={[1000, 1000]} />
           <meshBasicMaterial opacity={0} transparent />
         </mesh>
 
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          {building && <NodeRenderer nodeId={building.id} />}
+          {building && <NodeRenderer isViewer nodeId={building.id} />}
         </group>
 
         {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}
@@ -117,7 +266,12 @@ export default function Viewer({ className }: { className?: string }) {
         <EnvironmentRenderer />
         {/* Infinite floor - rendered outside export group */}
         <InfiniteFloor />
+        {/* Debug bounding boxes for selected nodes */}
+        <DebugBoundingBoxes />
       </Canvas>
+
+      {/* Debug panel - only in development */}
+      {process.env.NODE_ENV === 'development' && <NodesDebugger />}
     </div>
   )
 }

@@ -83,12 +83,12 @@ function CollectionNodeItem({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              className="h-5 w-5 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              className="size-5 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
               onClick={handleRemove}
               size="sm"
               variant="ghost"
             >
-              <X className="h-3 w-3" />
+              <X className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Remove from collection</TooltipContent>
@@ -170,9 +170,15 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           hasChildren={nodeCount > 0}
           icon={
             addToCollectionState.isActive ? (
-              <FolderInput className="h-4 w-4 text-amber-500" />
+              <FolderInput className="size-4 text-amber-500" />
             ) : (
-              <Folder className="h-4 w-4 text-amber-500" />
+              <img
+                alt="Collection"
+                className="size-4"
+                height={22}
+                src="/icons/collection.png"
+                width={22}
+              />
             )
           }
         />
@@ -181,7 +187,7 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="h-5 w-5 shrink-0 p-0 opacity-60 hover:opacity-100"
+                className="size-4 shrink-0 p-0 opacity-60 hover:opacity-100"
                 onClick={(e) => e.stopPropagation()}
                 size="sm"
                 variant="ghost"
@@ -201,22 +207,22 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
               className="min-w-24"
               onClick={(e) => e.stopPropagation()}
             >
-              {(Object.entries(COLLECTION_TYPE_CONFIG) as [CollectionType, typeof typeConfig][]).map(
-                ([type, config]) => (
-                  <DropdownMenuItem
-                    className="gap-2 text-xs"
-                    key={type}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setCollectionType(collection.id, type)
-                    }}
-                  >
-                    <span className="text-muted-foreground">{config.icon}</span>
-                    {config.label}
-                    {type === currentType && <Check className="ml-auto h-3 w-3" />}
-                  </DropdownMenuItem>
-                ),
-              )}
+              {(
+                Object.entries(COLLECTION_TYPE_CONFIG) as [CollectionType, typeof typeConfig][]
+              ).map(([type, config]) => (
+                <DropdownMenuItem
+                  className="gap-2 text-xs"
+                  key={type}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCollectionType(collection.id, type)
+                  }}
+                >
+                  <span className="text-muted-foreground">{config.icon}</span>
+                  {config.label}
+                  {type === currentType && <Check className="ml-auto h-3 w-3" />}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -246,12 +252,12 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                className="h-5 w-5 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                className="size-4 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                 onClick={handleDelete}
                 size="sm"
                 variant="ghost"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="size-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Delete collection</TooltipContent>
@@ -328,8 +334,17 @@ export function CollectionsSection({ level, onNodeClick }: CollectionsSectionPro
       >
         <TreeExpander hasChildren={hasCollections} />
         <TreeIcon
+          className="size-7"
           hasChildren={hasCollections}
-          icon={<Folder className="h-4 w-4 text-amber-500" />}
+          icon={
+            <img
+              alt="Collections"
+              className="object-contain"
+              height={24}
+              src="/icons/collection.png"
+              width={24}
+            />
+          }
         />
         <TreeLabel>Collections</TreeLabel>
         {addToCollectionState.isActive && (
@@ -389,4 +404,3 @@ export function CollectionsSection({ level, onNodeClick }: CollectionsSectionPro
     </TreeNode>
   )
 }
-

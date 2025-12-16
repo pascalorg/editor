@@ -4,6 +4,12 @@ import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
+import {
+  emitter,
+  type NodeCameraCaptureRequest,
+  type ViewApplyEvent,
+  type ViewCaptureRequest,
+} from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 
@@ -24,7 +30,95 @@ export function CustomControls() {
     ;(controls as CameraControlsImpl).setLookAt(30, 30, 30, 0, 0, 0, false)
   }, [controls])
 
-  // const scene = useThree((state) => state.scene)
+  // Handle View Events
+  useEffect(() => {
+    const handleApply = ({ camera }: ViewApplyEvent) => {
+      if (!controlsRef.current) return
+      const { position, target, mode } = camera
+
+      // Switch mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      // Set camera
+      controlsRef.current.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true, // enable transition
+      )
+    }
+
+    const handleCapture = ({ name, description }: ViewCaptureRequest) => {
+      if (!controlsRef.current) return
+
+      const position = new Vector3()
+      const target = new Vector3()
+      controlsRef.current.getPosition(position)
+      controlsRef.current.getTarget(target)
+
+      const state = useEditor.getState()
+
+      // Find collections that have all their nodes selected
+      const selectedNodeIds = state.selectedNodeIds
+      const collections = state.scene.collections || []
+      const selectedCollectionIds = collections
+        .filter(
+          (c) => c.nodeIds.length > 0 && c.nodeIds.every((id) => selectedNodeIds.includes(id)),
+        )
+        .map((c) => c.id)
+
+      state.addView({
+        name,
+        description,
+        metadata: {},
+        camera: {
+          position: [position.x, position.y, position.z],
+          target: [target.x, target.y, target.z],
+          mode: state.cameraMode,
+        },
+        sceneState: {
+          selectedLevelId: state.selectedFloorId,
+          levelMode: state.viewMode === 'level' ? 'single-floor' : state.levelMode,
+          visibleCollectionIds:
+            selectedCollectionIds.length > 0 ? selectedCollectionIds : undefined,
+        },
+      })
+    }
+
+    const handleNodeCapture = ({ nodeId }: NodeCameraCaptureRequest) => {
+      if (!controlsRef.current) return
+
+      const position = new Vector3()
+      const target = new Vector3()
+      controlsRef.current.getPosition(position)
+      controlsRef.current.getTarget(target)
+
+      const state = useEditor.getState()
+
+      state.updateNode(nodeId, {
+        camera: {
+          position: [position.x, position.y, position.z],
+          target: [target.x, target.y, target.z],
+          mode: state.cameraMode,
+        },
+      })
+    }
+
+    emitter.on('view:apply', handleApply)
+    emitter.on('view:request-capture', handleCapture)
+    emitter.on('node:capture-camera', handleNodeCapture)
+
+    return () => {
+      emitter.off('view:apply', handleApply)
+      emitter.off('view:request-capture', handleCapture)
+      emitter.off('node:capture-camera', handleNodeCapture)
+    }
+  }, [])
 
   useEffect(() => {
     if (!controls) return

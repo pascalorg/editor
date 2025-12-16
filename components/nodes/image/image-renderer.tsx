@@ -79,6 +79,21 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
   // Track hover state for the image itself
   const [isHovered, setIsHovered] = useState(false)
 
+  // Calculate aspect-ratio-preserving dimensions
+  const [planeWidth, planeHeight] = useMemo(() => {
+    if (!texture.image) return [GRID_SIZE, GRID_SIZE]
+
+    const image = texture.image as HTMLImageElement
+    const imageWidth = image.width
+    const imageHeight = image.height
+    const aspectRatio = imageWidth / imageHeight
+
+    if (aspectRatio > 1) {
+      return [GRID_SIZE, GRID_SIZE / aspectRatio]
+    }
+    return [GRID_SIZE * aspectRatio, GRID_SIZE]
+  }, [texture])
+
   // Visual states for handles
   const getHandleOpacity = (handleId: string) => {
     if (activeHandle === handleId || hoveredHandle === handleId) return 1
@@ -108,21 +123,6 @@ export const ImageRenderer = memo(({ nodeId }: ImageRendererProps) => {
       transparent
     />
   )
-
-  // Calculate aspect-ratio-preserving dimensions
-  const [planeWidth, planeHeight] = useMemo(() => {
-    if (!texture.image) return [GRID_SIZE, GRID_SIZE]
-
-    const image = texture.image as HTMLImageElement
-    const imageWidth = image.width
-    const imageHeight = image.height
-    const aspectRatio = imageWidth / imageHeight
-
-    if (aspectRatio > 1) {
-      return [GRID_SIZE, GRID_SIZE / aspectRatio]
-    }
-    return [GRID_SIZE * aspectRatio, GRID_SIZE]
-  }, [texture])
 
   // Calculate derived dimensions from base sizes and scale factors
   const originHitSize = ORIGIN_MARKER_SIZE * ORIGIN_HIT_SCALE

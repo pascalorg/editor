@@ -3,11 +3,13 @@
 import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/shallow'
 import type { Intersection, Object3D } from 'three'
-import { Box3, Raycaster, Vector2 } from 'three'
+import { Box3, Mesh, Raycaster, Vector2 } from 'three'
+import { useShallow } from 'zustand/shallow'
+import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
+import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
 
 /**
  * Generate edge line points for a box
@@ -71,7 +73,7 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
 
 /**
  * LevelHoverManager - handles hover detection and click-to-select for:
- * 1. Levels (when no floor is selected) - blue highlight, click to select level
+ * 1. Levels (when no floor is selected OR clicking on a level to switch) - blue highlight, click to select level
  * 2. Room collections (when floor selected, no room/nodes selected) - amber highlight, click to select + zoom
  * 3. Individual nodes (when room selected) - green highlight
  *    - Click without modifier: selects node, enters node selection mode
@@ -86,16 +88,24 @@ export function LevelHoverManager() {
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
 
   const [hoveredBox, setHoveredBox] = useState<Box3 | null>(null)
-  const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | null>(null)
+  const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | 'building' | null>(null)
 
   const raycasterRef = useRef(new Raycaster())
+  const isDrag = useRef(false)
+  const downPos = useRef({ x: 0, y: 0 })
+
+  // Get building ID
+  const buildingId = useEditor(
+    useShallow((state: StoreState) => {
+      const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
+      return building?.id
+    }),
+  )
 
   // Get all level IDs from the scene
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
-      const building = state.scene.root.children?.[0]?.children.find(
-        (c) => c.type === 'building',
-      )
+      const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
       if (!building) return []
       return building.children.filter((c) => c.type === 'level').map((l) => l.id)
     }),
@@ -122,6 +132,17 @@ export function LevelHoverManager() {
     }),
   )
 
+  // Clear floor selection on mount so viewer starts with building overview
+  useEffect(() => {
+    useEditor.setState({
+      selectedFloorId: null,
+      selectedCollectionId: null,
+      selectedNodeIds: [],
+      viewMode: 'full',
+      levelMode: 'stacked',
+    })
+  }, [])
+
   // Helper: find which room collection contains a hit node
   const findRoomForNode = (nodeId: string, collections: Collection[]): Collection | null => {
     for (const collection of collections) {
@@ -132,12 +153,63 @@ export function LevelHoverManager() {
     return null
   }
 
+  // Helper: calculate bounding box for an object excluding image nodes and grids
+  const calculateBoundsExcludingImages = (object: Object3D): Box3 | null => {
+    const box = new Box3()
+    const graph = useEditor.getState().graph
+    let hasContent = false
+
+    // Ensure world matrices are up to date (important for animated/exploded views)
+    object.updateWorldMatrix(true, true)
+
+    object.traverse((child) => {
+      if (child instanceof Mesh && child.geometry) {
+        // Skip grid meshes (infinite grid, proximity grid)
+        if (child.name === '__infinite_grid__' || child.name === '__proximity_grid__') {
+          return
+        }
+
+        // Check if this mesh belongs to an image node
+        let current: Object3D | null = child
+        let isImage = false
+        while (current && current !== object) {
+          if (current.userData?.nodeId) {
+            const node = graph.getNodeById(current.userData.nodeId as any)?.data()
+            if (node?.type === 'reference-image') {
+              isImage = true
+              break
+            }
+          }
+          current = current.parent
+        }
+
+        if (isImage) return
+
+        const childBox = new Box3().setFromObject(child)
+        if (!childBox.isEmpty()) {
+          box.union(childBox)
+          hasContent = true
+        }
+      }
+    })
+
+    return hasContent ? box : null
+  }
+
   // Helper: calculate bounding box for a room collection
   const calculateRoomBounds = (collection: Collection): Box3 | null => {
     const combinedBox = new Box3()
+    const graph = useEditor.getState().graph
+
     for (const nodeId of collection.nodeIds) {
+      // Skip image nodes
+      const node = graph.getNodeById(nodeId as any)?.data()
+      if (node?.type === 'reference-image') continue
+
       const object = scene.getObjectByName(nodeId)
       if (object) {
+        // Use setFromObject but we should really filter children too if room contains images
+        // Assuming room collection nodes are top-level and we checked type above.
         const objectBox = new Box3().setFromObject(object)
         combinedBox.union(objectBox)
       }
@@ -158,21 +230,19 @@ export function LevelHoverManager() {
   }
 
   // Helper: check if a nodeId is a "background" element that shouldn't block selection
-  const isBackgroundElement = (nodeId: string): boolean => {
-    return (
-      nodeId.startsWith('level_') ||
-      nodeId.startsWith('ceiling_') ||
-      nodeId.startsWith('slab_')
-    )
-  }
+  const isBackgroundElement = (nodeId: string): boolean =>
+    nodeId.startsWith('level_') || nodeId.startsWith('ceiling_') || nodeId.startsWith('slab_')
 
   // Helper: get the first selectable node from intersections (skipping background elements)
-  const getSelectableNodeFromIntersections = (
-    intersects: Intersection[],
-  ): string | null => {
+  const getSelectableNodeFromIntersections = (intersects: Intersection[]): string | null => {
     for (const hit of intersects) {
       const nodeId = getNodeIdFromIntersection(hit.object)
       if (nodeId && !isBackgroundElement(nodeId)) {
+        // Skip image nodes
+        const graph = useEditor.getState().graph
+        const node = graph.getNodeById(nodeId as any)?.data()
+        if (node?.type === 'reference-image') continue
+
         return nodeId
       }
     }
@@ -183,10 +253,18 @@ export function LevelHoverManager() {
   useEffect(() => {
     const canvas = gl.domElement
 
+    const onPointerDown = (event: PointerEvent) => {
+      isDrag.current = false
+      downPos.current = { x: event.clientX, y: event.clientY }
+    }
+
     const onPointerMove = (event: PointerEvent) => {
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
       const currentCollectionId = state.selectedCollectionId
+      const isBuildingSelected = buildingId
+        ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
+        : false
 
       const rect = canvas.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -194,7 +272,28 @@ export function LevelHoverManager() {
 
       raycasterRef.current.setFromCamera(new Vector2(x, y), camera)
 
+      // MODE 0: Building Selection (Top priority if building not selected)
+      if (buildingId && !isBuildingSelected) {
+        const buildingObject = scene.getObjectByName(buildingId)
+        if (buildingObject) {
+          const intersects = raycasterRef.current.intersectObject(buildingObject, true)
+          if (intersects.length > 0) {
+            // Hit building
+            const box = calculateBoundsExcludingImages(buildingObject)
+            if (box && !box.isEmpty()) {
+              setHoveredBox(box)
+              setHoverMode('building')
+              return
+            }
+          }
+        }
+        setHoveredBox(null)
+        setHoverMode(null)
+        return
+      }
+
       // MODE 1: No floor selected - hover over levels
+      // ALSO CHECK: If floor selected, but we hover over OTHER visible levels
       if (!currentFloorId) {
         let foundLevelId: string | null = null
         for (const levelId of levelIds) {
@@ -211,8 +310,9 @@ export function LevelHoverManager() {
         if (foundLevelId) {
           const levelObject = scene.getObjectByName(foundLevelId)
           if (levelObject) {
-            const box = new Box3().setFromObject(levelObject)
-            if (!box.isEmpty()) {
+            // Use custom bounds calculation to exclude images
+            const box = calculateBoundsExcludingImages(levelObject)
+            if (box && !box.isEmpty()) {
               setHoveredBox(box)
               setHoverMode('level')
               return
@@ -224,81 +324,82 @@ export function LevelHoverManager() {
         return
       }
 
-      // MODE 3: Room collection selected - hover over any individual node in the level
-      // MODE 4: Individual nodes selected (after clicking from room) - continue node hover mode
-      const hasNodeSelection = state.selectedNodeIds.length > 0
-      if (currentCollectionId || hasNodeSelection) {
-        // Raycast against the current level
-        const levelObject = scene.getObjectByName(currentFloorId)
-        if (!levelObject) {
-          setHoveredBox(null)
-          setHoverMode(null)
-          return
-        }
+      // Check interactions on the current floor first
+      const levelObject = scene.getObjectByName(currentFloorId)
 
-        const intersects = raycasterRef.current.intersectObject(levelObject, true)
-        if (intersects.length === 0) {
-          setHoveredBox(null)
-          setHoverMode(null)
-          return
-        }
+      // If the current floor object exists, check for node/room interactions
+      if (levelObject) {
+        // MODE 3: Room collection selected - hover over any individual node in the level
+        // MODE 4: Individual nodes selected (after clicking from room) - continue node hover mode
+        // Note: Exclude building ID from "node selection" check so we don't block room hover
+        const hasNodeSelection =
+          state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
 
-        // Find the first selectable node (skipping background elements like slabs, ceilings)
-        const nodeId = getSelectableNodeFromIntersections(intersects)
-        if (nodeId) {
-          const nodeObject = scene.getObjectByName(nodeId)
-          if (nodeObject) {
-            const box = new Box3().setFromObject(nodeObject)
-            if (!box.isEmpty()) {
-              setHoveredBox(box)
-              setHoverMode('node')
-              return
+        if (currentCollectionId || hasNodeSelection) {
+          const intersects = raycasterRef.current.intersectObject(levelObject, true)
+
+          if (intersects.length > 0) {
+            // Find the first selectable node (skipping background elements like slabs, ceilings)
+            const nodeId = getSelectableNodeFromIntersections(intersects)
+            if (nodeId) {
+              const nodeObject = scene.getObjectByName(nodeId)
+              if (nodeObject) {
+                const box = new Box3().setFromObject(nodeObject)
+                if (!box.isEmpty()) {
+                  setHoveredBox(box)
+                  setHoverMode('node')
+                  return
+                }
+              }
+            }
+          }
+          // Fall through if no node hit
+        } else {
+          // MODE 2: Floor selected - hover over room collections
+          // Get current room collections for this level
+          const currentRoomCollections = (state.scene.collections || []).filter(
+            (c) => c.type === 'room' && c.levelId === currentFloorId,
+          )
+
+          if (currentRoomCollections.length > 0) {
+            const intersects = raycasterRef.current.intersectObject(levelObject, true)
+
+            if (intersects.length > 0) {
+              // Find which room collection the hit node belongs to
+              for (const hit of intersects) {
+                const nodeId = getNodeIdFromIntersection(hit.object)
+                if (nodeId) {
+                  const room = findRoomForNode(nodeId, currentRoomCollections)
+                  if (room) {
+                    const box = calculateRoomBounds(room)
+                    if (box) {
+                      setHoveredBox(box)
+                      setHoverMode('room')
+                      return
+                    }
+                  }
+                }
+              }
             }
           }
         }
-
-        setHoveredBox(null)
-        setHoverMode(null)
-        return
       }
 
-      // MODE 2: Floor selected - hover over room collections
-      // Get current room collections for this level
-      const currentRoomCollections = (state.scene.collections || []).filter(
-        (c) => c.type === 'room' && c.levelId === currentFloorId,
-      )
+      // If we didn't hit any interactive elements on the current floor,
+      // check if we are hovering over OTHER visible levels (to allow switching)
+      for (const levelId of levelIds) {
+        // Skip current floor as we already checked logic above
+        if (currentFloorId && levelId === currentFloorId) continue
 
-      if (currentRoomCollections.length === 0) {
-        setHoveredBox(null)
-        setHoverMode(null)
-        return
-      }
-
-      // Raycast against the current level
-      const levelObject = scene.getObjectByName(currentFloorId)
-      if (!levelObject) {
-        setHoveredBox(null)
-        setHoverMode(null)
-        return
-      }
-
-      const intersects = raycasterRef.current.intersectObject(levelObject, true)
-      if (intersects.length === 0) {
-        setHoveredBox(null)
-        setHoverMode(null)
-        return
-      }
-
-      // Find which room collection the hit node belongs to
-      for (const hit of intersects) {
-        const nodeId = getNodeIdFromIntersection(hit.object)
-        if (nodeId) {
-          const room = findRoomForNode(nodeId, currentRoomCollections)
-          if (room) {
-            const box = calculateRoomBounds(room)
-            if (box) {
+        const otherLevelObject = scene.getObjectByName(levelId)
+        if (otherLevelObject) {
+          const intersects = raycasterRef.current.intersectObject(otherLevelObject, true)
+          if (intersects.length > 0) {
+            // Found another level
+            const box = calculateBoundsExcludingImages(otherLevelObject)
+            if (box && !box.isEmpty()) {
               setHoveredBox(box)
-              setHoverMode('room')
+              setHoverMode('level')
               return
             }
           }
@@ -312,9 +413,16 @@ export function LevelHoverManager() {
     const onClick = (event: MouseEvent) => {
       if (event.button !== 0) return // Only left click
 
+      // Check for drag
+      const dist = Math.hypot(event.clientX - downPos.current.x, event.clientY - downPos.current.y)
+      if (dist > 5) return // Ignore drags (panning)
+
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
       const currentCollectionId = state.selectedCollectionId
+      const isBuildingSelected = buildingId
+        ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
+        : false
 
       const rect = canvas.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -322,112 +430,183 @@ export function LevelHoverManager() {
 
       raycasterRef.current.setFromCamera(new Vector2(x, y), camera)
 
-      // MODE 1: No floor selected - click to select level
-      if (!currentFloorId) {
-        for (const levelId of levelIds) {
-          const levelObject = scene.getObjectByName(levelId)
-          if (levelObject) {
-            const intersects = raycasterRef.current.intersectObject(levelObject, true)
-            if (intersects.length > 0) {
-              useEditor.getState().selectFloor(levelId)
-              return
-            }
+      // Handle Building Click (Top priority if building not selected)
+      if (buildingId && !isBuildingSelected) {
+        const buildingObject = scene.getObjectByName(buildingId)
+        if (buildingObject) {
+          const intersects = raycasterRef.current.intersectObject(buildingObject, true)
+          if (intersects.length > 0) {
+            emitter.emit('interaction:click', { type: 'building', id: buildingId })
+            useEditor.setState({
+              selectedNodeIds: [buildingId],
+              levelMode: 'exploded',
+              viewMode: 'full',
+            })
+            return
           }
+        }
+        // Clicked outside building when building not selected
+        if (state.selectedNodeIds.length === 0 && !state.selectedFloorId) {
+             emitter.emit('interaction:click', { type: 'void', id: null })
         }
         return
       }
 
-      // MODE 3: Room collection selected - click to select any individual node in the level
-      // MODE 4: Individual nodes selected - continue node selection mode
-      const hasNodeSelection = state.selectedNodeIds.length > 0
-      const hasModifierKey = event.shiftKey || event.metaKey || event.ctrlKey
-      
-      // Check for node selection if we have a collection selected OR any nodes selected
-      if (currentCollectionId || hasNodeSelection) {
-        // Raycast against the current level
-        const levelObject = scene.getObjectByName(currentFloorId)
-        if (levelObject) {
-          const intersects = raycasterRef.current.intersectObject(levelObject, true)
-          if (intersects.length > 0) {
-            // Find the first selectable node (skipping background elements like slabs, ceilings)
-            const nodeId = getSelectableNodeFromIntersections(intersects)
-            
-            if (nodeId) {
-              if (hasModifierKey) {
-                // Shift/Ctrl/Cmd+click: use handleNodeSelect for toggle/add behavior
-                const editorState = useEditor.getState()
-                if (editorState.selectedCollectionId) {
-                  useEditor.setState({ selectedCollectionId: null })
+      // If building IS selected, allow selecting levels/nodes
+      if (isBuildingSelected) {
+        // Logic for interactions on the CURRENT selected floor
+        if (currentFloorId) {
+          const levelObject = scene.getObjectByName(currentFloorId)
+          if (levelObject) {
+            // Check if we hit the current floor (to validate node/room clicks)
+            const intersects = raycasterRef.current.intersectObject(levelObject, true)
+
+            if (intersects.length > 0) {
+              // MODE 3/4: Node selection
+              const hasNodeSelection =
+                state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
+              const hasModifierKey = event.shiftKey || event.metaKey || event.ctrlKey
+
+              if (currentCollectionId || hasNodeSelection) {
+                const nodeId = getSelectableNodeFromIntersections(intersects)
+
+                if (nodeId) {
+                  // Check if we should preserve the current collection selection
+                  let preserveCollection = false
+                  if (currentCollectionId && !hasModifierKey) {
+                    const currentCollection = roomCollections.find(
+                      (c) => c.id === currentCollectionId,
+                    )
+                    if (currentCollection) {
+                      const bounds = calculateRoomBounds(currentCollection)
+                      // Find the exact hit point for this node
+                      const hit = intersects.find(
+                        (h) => getNodeIdFromIntersection(h.object) === nodeId,
+                      )
+                      if (bounds && hit && bounds.containsPoint(hit.point)) {
+                        preserveCollection = true
+                      }
+                    }
+                  }
+
+                  // Node selection logic...
+                  if (hasModifierKey) {
+                    const editorState = useEditor.getState()
+                    if (editorState.selectedCollectionId) {
+                      useEditor.setState({ selectedCollectionId: null })
+                    }
+                    editorState.handleNodeSelect(nodeId, {
+                      shiftKey: event.shiftKey,
+                      metaKey: event.metaKey,
+                      ctrlKey: event.ctrlKey,
+                    })
+                  } else {
+                    const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
+                    emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
+                    useEditor.setState({
+                      selectedCollectionId: preserveCollection ? currentCollectionId : null,
+                      selectedNodeIds: [nodeId],
+                    })
+                  }
+                  return // Handled node click
                 }
-                editorState.handleNodeSelect(nodeId, {
-                  shiftKey: event.shiftKey,
-                  metaKey: event.metaKey,
-                  ctrlKey: event.ctrlKey,
-                })
-              } else {
-                // Click without modifier: select just this node (clear collection and any previous selection)
-                useEditor.setState({
-                  selectedCollectionId: null,
-                  selectedNodeIds: [nodeId],
-                })
+
+                if (hasModifierKey) return // Don't fall through
               }
-              return
+
+              // MODE 2: Room selection
+              const currentRoomCollections = (state.scene.collections || []).filter(
+                (c) => c.type === 'room' && c.levelId === currentFloorId,
+              )
+
+              if (currentRoomCollections.length > 0) {
+                for (const hit of intersects) {
+                  const nodeId = getNodeIdFromIntersection(hit.object)
+                  if (nodeId) {
+                    const room = findRoomForNode(nodeId, currentRoomCollections)
+                    if (room) {
+                      // Match Menu behavior: just select the collection.
+                      // Store handles clearing node selection/switching floor if needed.
+                      emitter.emit('interaction:click', { type: 'collection', id: room.id, data: room })
+                      useEditor.getState().selectCollection(room.id)
+                      return // Handled room click
+                    }
+                  }
+                }
+              }
             }
           }
         }
-        
-        // If we have a modifier key but didn't hit a node, don't fall through to room selection
-        if (hasModifierKey) return
-      }
 
-      // MODE 2: Floor selected - click to select room collection
-      // Also handles: clicking without modifier in MODE 4 → selects room (zoom + pan)
-      // Get current room collections for this level
-      const currentRoomCollections = (state.scene.collections || []).filter(
-        (c) => c.type === 'room' && c.levelId === currentFloorId,
-      )
+        // Global Level Check: Did we click ANY level?
+        let clickedLevelId: string | null = null
+        let clickedLevelDistance = Number.POSITIVE_INFINITY
 
-      if (currentRoomCollections.length === 0) return
-
-      // Raycast against the current level
-      const levelObject = scene.getObjectByName(currentFloorId)
-      if (!levelObject) return
-
-      const intersects = raycasterRef.current.intersectObject(levelObject, true)
-      if (intersects.length === 0) return
-
-      // Find which room collection the hit node belongs to
-      for (const hit of intersects) {
-        const nodeId = getNodeIdFromIntersection(hit.object)
-        if (nodeId) {
-          const room = findRoomForNode(nodeId, currentRoomCollections)
-          if (room) {
-            // Clear any node selection before selecting the room (ensures camera zoom triggers)
-            if (state.selectedNodeIds.length > 0) {
-              useEditor.setState({ selectedNodeIds: [] })
+        for (const levelId of levelIds) {
+          const levelObject = scene.getObjectByName(levelId)
+          if (levelObject) {
+            const intersects = raycasterRef.current.intersectObject(levelObject, true)
+            if (intersects.length > 0 && intersects[0].distance < clickedLevelDistance) {
+              clickedLevelDistance = intersects[0].distance
+              clickedLevelId = levelId
             }
-            useEditor.getState().selectCollection(room.id)
-            return
           }
         }
+
+        // If we haven't handled a node/room click:
+        // Check if we clicked a level (either the current one background, or another one)
+        if (clickedLevelId) {
+          // Match Menu behavior:
+          // 1. Clear collection/node selection if present (clicking empty floor area)
+          let handled = false
+          if (state.selectedCollectionId) {
+            useEditor.getState().selectCollection(null)
+            handled = true
+          }
+          if (state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)) {
+            useEditor.setState({ selectedNodeIds: [] })
+            handled = true
+          }
+
+          // If we cleared a selection, stop here (progressive unselection)
+          if (handled) return
+
+          // 2. Toggle floor selection (if clicking same floor, unselect)
+          // Note: Drag check at start of onClick ensures this doesn't trigger on pan
+          if (state.selectedFloorId === clickedLevelId) {
+            emitter.emit('interaction:click', { type: 'building', id: buildingId! })
+            useEditor.setState({ selectedFloorId: null })
+            // Restore building selection
+            useEditor.setState({ selectedNodeIds: [buildingId!] })
+          } else {
+            emitter.emit('interaction:click', { type: 'level', id: clickedLevelId })
+            useEditor.setState({ selectedFloorId: clickedLevelId })
+          }
+          return
+        }
       }
 
-      // If we reached here and have a selection, clear it (clicked empty space)
-      if (currentCollectionId || state.selectedNodeIds.length > 0) {
-        // Only clear if not holding modifier keys
-        if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-            useEditor.setState({
-                selectedCollectionId: null,
-                selectedNodeIds: [],
-            })
-        }
+      // Clicked on empty space (no level hit) - progressive unselection?
+      // User requirement: "click outside of the building ... defaults back to stacked"
+      // This implies a full reset when clicking void.
+      if (state.selectedNodeIds.length > 0 || state.selectedCollectionId || state.selectedFloorId) {
+        emitter.emit('interaction:click', { type: 'void', id: null })
+        useEditor.setState({
+          selectedNodeIds: [],
+          selectedCollectionId: null,
+          selectedFloorId: null,
+          levelMode: 'stacked',
+          viewMode: 'full',
+        })
       }
     }
 
+    canvas.addEventListener('pointerdown', onPointerDown)
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('click', onClick)
 
     return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('click', onClick)
     }
@@ -440,13 +619,14 @@ export function LevelHoverManager() {
   }, [selectedFloorId, selectedCollectionId])
 
   // Don't render anything if nothing is hovered
-  if (!hoveredBox || !hoverMode) return null
+  if (!(hoveredBox && hoverMode)) return null
 
   // Use different colors for each hover mode
   const colorMap = {
     level: '#3b82f6', // Blue for level
     room: '#f59e0b', // Amber for room
     node: '#22c55e', // Green for individual node
+    building: '#ffffff', // White for building
   }
   const color = colorMap[hoverMode]
 

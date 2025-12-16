@@ -69,6 +69,31 @@ export interface ScanManipulationEvent {
   nodeId: string
 }
 
+export interface ViewCaptureRequest {
+  name: string
+  description?: string
+}
+
+export interface ViewApplyEvent {
+  camera: {
+    position: [number, number, number]
+    target: [number, number, number]
+    mode: 'perspective' | 'orthographic'
+    fov?: number
+    zoom?: number
+  }
+}
+
+export interface NodeCameraCaptureRequest {
+  nodeId: string
+}
+
+export interface InteractionClickEvent {
+  type: 'node' | 'collection' | 'level' | 'building' | 'void'
+  id: string | null
+  data?: any
+}
+
 type EditorEvents = {
   'grid:click': GridEvent
   'grid:rightclick': GridEvent
@@ -95,6 +120,10 @@ type EditorEvents = {
   'scan:update': ScanUpdateEvent
   'scan:manipulation-start': ScanManipulationEvent
   'scan:manipulation-end': ScanManipulationEvent
+  'view:request-capture': ViewCaptureRequest
+  'view:apply': ViewApplyEvent
+  'node:capture-camera': NodeCameraCaptureRequest
+  'interaction:click': InteractionClickEvent
   'tool:cancel': undefined
 }
 export const emitter = mitt<EditorEvents>()

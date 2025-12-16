@@ -139,30 +139,29 @@ export function InfiniteGrid({
   })
 
   return (
-    <>
-      <mesh
-        frustumCulled={false}
-        position={[0, 0.005, 0]}
-        renderOrder={1}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <planeGeometry args={[1000, 1000]} />
-        <infiniteGridMaterial
-          depthTest
-          depthWrite={false}
-          polygonOffset
-          polygonOffsetFactor={-1}
-          polygonOffsetUnits={-1}
-          ref={materialRef}
-          side={DoubleSide}
-          transparent
-          uFadeDistance={fadeDistance}
-          uFadeStrength={fadeStrength}
-          uGridSize={gridSize}
-          uLineColor={new Color(lineColor)}
-          uLineWidth={lineWidth}
-        />
-      </mesh>
-    </>
+    <mesh
+      frustumCulled={false}
+      name="__infinite_grid__"
+      position={[0, 0.005, 0]}
+      renderOrder={1}
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <planeGeometry args={[1000, 1000]} />
+      <infiniteGridMaterial
+        depthTest
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-1}
+        polygonOffsetUnits={-1}
+        ref={materialRef}
+        side={DoubleSide}
+        transparent
+        uFadeDistance={fadeDistance}
+        uFadeStrength={fadeStrength}
+        uGridSize={gridSize}
+        uLineColor={new Color(lineColor)}
+        uLineWidth={lineWidth}
+      />
+    </mesh>
   )
 }

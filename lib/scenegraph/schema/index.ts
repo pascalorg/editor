@@ -2,9 +2,11 @@ import { z } from 'zod'
 import { CollectionSchema } from './collections'
 import { RootNode } from './root'
 import { AnyNode, type NodeCreateSchemas, type NodeSchemas } from './types'
+import { ViewSchema } from './views'
 
 export * from '../common-types'
 export * from './base'
+export * from './collections'
 export * from './environment'
 // Export all specific node types
 export * from './nodes/building'
@@ -24,10 +26,12 @@ export * from './nodes/wall'
 export * from './nodes/window'
 export * from './root'
 export * from './types'
+export * from './views'
 
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),
   collections: z.array(CollectionSchema).default([]),
+  views: z.array(ViewSchema).default([]),
   metadata: z.json().default({}),
 })
 
@@ -36,6 +40,9 @@ export type Scene = z.infer<typeof SceneSchema>
 export function initScene(): Scene {
   return SceneSchema.parse({
     root: RootNode.parse({}),
+    collections: [],
+    views: [],
+    metadata: {},
   })
 }
 

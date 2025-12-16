@@ -57,6 +57,22 @@ function calculateWorldBounds(group: THREE.Group): BoundingBoxData | null {
 
     // For meshes with geometry
     if (child instanceof THREE.Mesh && child.geometry) {
+      // Check if this mesh belongs to an image node - if so, exclude it from bounds
+      let current: THREE.Object3D | null = child
+      let isImage = false
+      while (current && current !== group) {
+        if (current.userData?.nodeId) {
+          const node = useEditor.getState().graph.getNodeById(current.userData.nodeId)?.data()
+          if (node?.type === 'reference-image') {
+            isImage = true
+            break
+          }
+        }
+        current = current.parent
+      }
+
+      if (isImage) return
+
       const geometry = child.geometry
 
       if (!geometry.boundingBox) {
