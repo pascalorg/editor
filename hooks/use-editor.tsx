@@ -243,7 +243,14 @@ export type Tool =
   | 'stair'
 
 // Catalog categories for the item tool
-export type CatalogCategory = 'item' | 'window' | 'door'
+export type CatalogCategory =
+  | 'furniture'
+  | 'appliance'
+  | 'bathroom'
+  | 'kitchen'
+  | 'outdoor'
+  | 'window'
+  | 'door'
 
 export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
@@ -291,6 +298,8 @@ export type StoreState = {
   isJsonInspectorOpen: boolean
   wallsGroupRef: THREE.Group | null
   activeTool: Tool | null
+  lastBuildingTool: Tool
+  lastCatalogCategory: CatalogCategory | null
   catalogCategory: CatalogCategory | null
   controlMode: ControlMode
   cameraMode: CameraMode
@@ -592,6 +601,8 @@ const useStore = create<StoreState>()(
         isJsonInspectorOpen: false,
         wallsGroupRef: null,
         activeTool: 'wall',
+        lastBuildingTool: 'wall',
+        lastCatalogCategory: null,
         catalogCategory: null,
         controlMode: 'building',
         cameraMode: 'perspective',
@@ -726,7 +737,7 @@ const useStore = create<StoreState>()(
             catalogCategory !== undefined
               ? catalogCategory
               : tool === 'item'
-                ? (get().catalogCategory ?? 'item')
+                ? (get().catalogCategory ?? 'furniture')
                 : null
           set({ activeTool: tool, catalogCategory: newCatalogCategory })
           if (tool !== null) {
@@ -742,6 +753,12 @@ const useStore = create<StoreState>()(
           }
           set({ controlMode: mode })
           if (mode !== 'building') {
+            // Save current tool and catalog category before clearing so we can restore them when re-entering building mode
+            const currentTool = get().activeTool
+            const currentCategory = get().catalogCategory
+            if (currentTool) {
+              set({ lastBuildingTool: currentTool, lastCatalogCategory: currentCategory })
+            }
             set({ activeTool: null, catalogCategory: null })
           }
         },

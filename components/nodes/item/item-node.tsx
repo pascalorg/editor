@@ -1,5 +1,6 @@
 'use client'
 
+import { useThree } from '@react-three/fiber'
 import { Package } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
@@ -33,6 +34,16 @@ export function ItemNodeEditor() {
     return building ? building.children : EMPTY_LEVELS
   })
 
+  const gl = useThree((state) => state.gl)
+
+  // Reset cursor on unmount
+  useEffect(() => {
+    gl.domElement.style.cursor = 'no-drop'
+    return () => {
+      gl.domElement.style.cursor = ''
+    }
+  }, [gl])
+
   // Use ref to persist preview state across renders without triggering re-renders
   const previewStateRef = useRef<{
     previewItemId: string | null
@@ -50,7 +61,7 @@ export function ItemNodeEditor() {
     canPlace: false,
   })
 
-  // Delete preview when selectedItem changes (user picks a different item from catalog)
+  // Delete preview and reset cursor when selectedItem changes (user picks a different item from catalog)
   // biome-ignore lint/correctness/useExhaustiveDependencies: We intentionally watch modelUrl to trigger on item change
   useEffect(() => {
     const previewId = previewStateRef.current.previewItemId
@@ -59,7 +70,8 @@ export function ItemNodeEditor() {
       previewStateRef.current.previewItemId = null
       previewStateRef.current.lastPreviewPosition = null
     }
-  }, [selectedItem.modelUrl, deleteNode])
+    gl.domElement.style.cursor = 'no-drop'
+  }, [selectedItem.modelUrl, deleteNode, gl])
 
   // Right-click handler for rotation
   useEffect(() => {
@@ -106,19 +118,19 @@ export function ItemNodeEditor() {
       // Calculate angle in X-Z plane (top-down view)
       // atan2(z, x) gives the angle the vector makes with the positive X axis
       // Add π/2 to align item's forward direction with the wall normal
-      return Math.atan2(normal[2], normal[0]) + Math.PI / 2
+      return Math.atan2(normal[2], normal[0]) - Math.PI / 2
     }
 
     /**
      * Determine which side of the wall based on the normal vector
      * In wall-local space, the wall runs along X-axis, so the normal points along Z-axis
-     * Positive Z normal = 'front', Negative Z normal = 'back'
+     * Positive Z normal = 'back', Negative Z normal = 'front' (flipped due to orientation fix)
      */
     const getSideFromNormal = (normal: [number, number, number] | undefined): 'front' | 'back' => {
       if (!normal) return 'front'
       // The Z component of the normal determines which side
-      // We use a threshold to handle floating point imprecision
-      return normal[2] >= 0 ? 'front' : 'back'
+      // Flipped: positive Z = back, negative Z = front
+      return normal[2] >= 0 ? 'back' : 'front'
     }
 
     /**
@@ -198,6 +210,7 @@ export function ItemNodeEditor() {
 
         // Check if position is occupied using spatial grid
         const canPlace = canPlaceItem(x, y, selectedFloorId)
+        gl.domElement.style.cursor = canPlace ? 'grabbing' : 'no-drop'
 
         const previewId = previewStateRef.current.previewItemId
 
@@ -293,6 +306,7 @@ export function ItemNodeEditor() {
 
       const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
       previewStateRef.current.canPlace = canPlace
+      gl.domElement.style.cursor = canPlace ? 'grabbing' : 'no-drop'
 
       const newPreviewId = addNode(
         ItemNode.parse({
@@ -368,6 +382,7 @@ export function ItemNodeEditor() {
 
       const canPlace = canPlaceGridItemOnWall(e.node, tempItem, 2)
       previewStateRef.current.canPlace = canPlace
+      gl.domElement.style.cursor = canPlace ? 'grabbing' : 'no-drop'
 
       if (previewId) {
         // Update existing preview
@@ -415,6 +430,7 @@ export function ItemNodeEditor() {
         previewStateRef.current.lastPreviewPosition = null
         previewStateRef.current.lastCalculatedRotation = null
       }
+      gl.domElement.style.cursor = 'no-drop'
       ignoreGridMove = false
     }
 
@@ -460,6 +476,7 @@ export function ItemNodeEditor() {
         localPos[1] + itemSize[1] <= ceilingSize[1]
 
       previewStateRef.current.canPlace = canPlace
+      gl.domElement.style.cursor = canPlace ? 'grabbing' : 'no-drop'
 
       const newPreviewId = addNode(
         ItemNode.parse({
@@ -512,6 +529,7 @@ export function ItemNodeEditor() {
         localPos[1] + itemSize[1] <= ceilingSize[1]
 
       previewStateRef.current.canPlace = canPlace
+      gl.domElement.style.cursor = canPlace ? 'grabbing' : 'no-drop'
 
       if (previewId) {
         // Update existing preview
@@ -556,6 +574,7 @@ export function ItemNodeEditor() {
         previewStateRef.current.previewItemId = null
         previewStateRef.current.lastPreviewPosition = null
       }
+      gl.domElement.style.cursor = 'no-drop'
       ignoreGridMove = false
     }
 

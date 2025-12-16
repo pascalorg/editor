@@ -124,5 +124,6 @@ type EditorEvents = {
   'view:apply': ViewApplyEvent
   'node:capture-camera': NodeCameraCaptureRequest
   'interaction:click': InteractionClickEvent
+  'tool:cancel': undefined
 }
 export const emitter = mitt<EditorEvents>()

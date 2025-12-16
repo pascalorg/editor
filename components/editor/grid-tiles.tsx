@@ -1,12 +1,14 @@
 'use client'
 
+import { Arrow } from '@radix-ui/react-popover'
 import { type CameraControlsImpl, Html, useCursor } from '@react-three/drei'
-import { type ThreeEvent, useThree } from '@react-three/fiber'
+import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
+import { tools } from '@/components/editor/action-menu/building-tools'
 import { emitter } from '@/events/bus'
-import { type CatalogCategory, type ControlMode, type Tool, useEditor } from '@/hooks/use-editor'
+import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 
 // Map control modes to their icons and colors (matching toolbar active colors)
@@ -203,62 +205,16 @@ export const GridTiles = memo(() => {
 
 GridTiles.displayName = 'GridTiles'
 
-// Map building tools to their icon paths (matching building-tools.tsx)
-const buildingToolIcons: Record<Tool, Record<CatalogCategory | 'default', string>> = {
-  slab: {
-    default: '/icons/floor.png',
-    door: '/icons/floor.png',
-    window: '/icons/floor.png',
-    item: '/icons/floor.png',
-  },
-  ceiling: {
-    default: '/icons/ceiling.png',
-    door: '/icons/ceiling.png',
-    window: '/icons/ceiling.png',
-    item: '/icons/ceiling.png',
-  },
-  wall: {
-    default: '/icons/wall.png',
-    door: '/icons/wall.png',
-    window: '/icons/wall.png',
-    item: '/icons/wall.png',
-  },
-  room: {
-    default: '/icons/room.png',
-    door: '/icons/room.png',
-    window: '/icons/room.png',
-    item: '/icons/room.png',
-  },
-  'custom-room': {
-    default: '/icons/custom-room.png',
-    door: '/icons/custom-room.png',
-    window: '/icons/custom-room.png',
-    item: '/icons/custom-room.png',
-  },
-  roof: {
-    default: '/icons/roof.png',
-    door: '/icons/roof.png',
-    window: '/icons/roof.png',
-    item: '/icons/roof.png',
-  },
-  column: {
-    default: '/icons/column.png',
-    door: '/icons/column.png',
-    window: '/icons/column.png',
-    item: '/icons/column.png',
-  },
-  stair: {
-    default: '/icons/stairs.png',
-    door: '/icons/stairs.png',
-    window: '/icons/stairs.png',
-    item: '/icons/stairs.png',
-  },
-  item: {
-    default: '/icons/couch.png',
-    door: '/icons/door.png',
-    window: '/icons/window.png',
-    item: '/icons/couch.png',
-  },
+// Helper function to get icon for a building tool
+function getBuildingToolIcon(toolId: string, category: string | null): string | null {
+  // For item tools, find by both tool id and catalog category
+  if (toolId === 'item' && category) {
+    const tool = tools.find((t) => t.id === 'item' && t.catalogCategory === category)
+    return tool?.iconSrc ?? null
+  }
+  // For other tools, find by tool id only
+  const tool = tools.find((t) => t.id === toolId && !t.catalogCategory)
+  return tool?.iconSrc ?? null
 }
 
 // Down arrow component (2m height, pointing down along -Y axis)
@@ -274,66 +230,70 @@ const DownArrow = () => {
   const activeTool = useEditor((state) => state.activeTool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
 
+  const iconRef = useRef<THREE.Group>(null)
+  useFrame(({ clock }, delta) => {
+    if (iconRef.current) {
+      iconRef.current.position.y = Math.sin(clock.getElapsedTime() * 1) * 0.05
+    }
+  })
+
   if (!cursorPosition) return null
 
   // Get icon and colors
   const { icon: Icon, bgColor, iconColor } = modeConfig[controlMode]
 
   // For building mode, get the PNG icon path
-  let buildingIconSrc: string | null = null
-  if (controlMode === 'building' && activeTool) {
-    const toolIcons = buildingToolIcons[activeTool]
-    if (toolIcons) {
-      buildingIconSrc = catalogCategory ? toolIcons[catalogCategory] : toolIcons.default
-    }
-  }
+  const buildingIconSrc =
+    controlMode === 'building' && activeTool
+      ? getBuildingToolIcon(activeTool, catalogCategory)
+      : null
 
   // Building mode with tool selected: black background, larger icon
   // Other modes: translucent colored background, colored icon
   const isBuildingWithTool = controlMode === 'building' && buildingIconSrc
 
   return (
-    <group
-      position={[
-        cursorPosition[0] * TILE_SIZE - GRID_SIZE / 2,
-        2,
-        cursorPosition[1] * TILE_SIZE - GRID_SIZE / 2,
-      ]}
-    >
+    <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
       {/* Icon circle at the top */}
-      <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
-        <div
-          style={{
-            width: isBuildingWithTool ? 32 : 28,
-            height: isBuildingWithTool ? 32 : 28,
-            borderRadius: '50%',
-            backgroundColor: isBuildingWithTool ? '#000000' : bgColor,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-        >
-          {buildingIconSrc ? (
-            <img
-              alt=""
-              height={24}
-              src={buildingIconSrc}
-              style={{ objectFit: 'contain' }}
-              width={24}
-            />
-          ) : (
-            <Icon color={iconColor} size={16} strokeWidth={2.5} />
-          )}
-        </div>
-      </Html>
+      <group ref={iconRef}>
+        <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
+          <div
+            style={{
+              width: isBuildingWithTool ? 32 : 28,
+              height: isBuildingWithTool ? 32 : 28,
+              borderRadius: '50%',
+              backgroundColor: isBuildingWithTool ? '#000000' : bgColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {buildingIconSrc ? (
+              <img
+                alt=""
+                height={24}
+                src={buildingIconSrc}
+                style={{ objectFit: 'contain' }}
+                width={24}
+              />
+            ) : (
+              <Icon color={iconColor} size={16} strokeWidth={2.5} />
+            )}
+          </div>
+        </Html>
+      </group>
       {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
-      <mesh position={[0, -shaftHeight / 2, 0]}>
+      <mesh position={[0, -shaftHeight / 2, 0]} renderOrder={999}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
         <meshStandardMaterial color="white" depthTest={false} opacity={0.8} transparent />
       </mesh>
       {/* Cone tip - cone points up by default along Y, rotate 180° to point down */}
-      <mesh position={[0, -(shaftHeight + coneHeight / 2), 0]} rotation={[0, 0, Math.PI]}>
+      <mesh
+        position={[0, -(shaftHeight + coneHeight / 2), 0]}
+        renderOrder={999}
+        rotation={[0, 0, Math.PI]}
+      >
         <coneGeometry args={[coneRadius, coneHeight, 8]} />
         <meshStandardMaterial color="white" depthTest={false} opacity={0.8} transparent />
       </mesh>

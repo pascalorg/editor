@@ -22,6 +22,7 @@ const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length
 export function RoofNodeEditor() {
   const addNode = useEditor((state) => state.addNode)
   const updateNode = useEditor((state) => state.updateNode)
+  const deleteNode = useEditor((state) => state.deleteNode)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
   // Use ref to persist values across renders without triggering re-renders
@@ -163,16 +164,28 @@ export function RoofNodeEditor() {
       }
     }
 
+    const handleToolCancel = () => {
+      // Only cancel if we've started drawing (first click done)
+      if (roofStateRef.current.startCorner !== null && roofStateRef.current.previewRoofId) {
+        deleteNode(roofStateRef.current.previewRoofId)
+        roofStateRef.current.startCorner = null
+        roofStateRef.current.previewRoofId = null
+        roofStateRef.current.lastEndCorner = null
+      }
+    }
+
     // Register event listeners
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
+    emitter.on('tool:cancel', handleToolCancel)
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
+      emitter.off('tool:cancel', handleToolCancel)
     }
-  }, [addNode, updateNode, selectedFloorId])
+  }, [addNode, updateNode, deleteNode, selectedFloorId])
 
   return null
 }

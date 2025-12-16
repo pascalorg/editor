@@ -976,7 +976,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                     position-y={WALL_HEIGHT / 2 + WALL_HEIGHT * 0.2}
                     renderOrder={10}
                   >
-                    <boxGeometry args={[nodeSize[0] * TILE_SIZE * 1.1, WALL_HEIGHT, nodeSize[1]]} />
+                    <boxGeometry args={[nodeSize[0] * TILE_SIZE, WALL_HEIGHT, nodeSize[1]]} />
                   </Subtraction>
                 )}
                 {/* Paint preview overlay - shows the segment to be painted */}

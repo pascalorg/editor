@@ -185,14 +185,26 @@ export function WallNodeEditor() {
       }
     }
 
+    const handleToolCancel = () => {
+      // Only cancel if we've started drawing (first click done)
+      if (wallStateRef.current.startPoint !== null && wallStateRef.current.previewWallId) {
+        deleteNode(wallStateRef.current.previewWallId)
+        wallStateRef.current.startPoint = null
+        wallStateRef.current.previewWallId = null
+        wallStateRef.current.lastEndPoint = null
+      }
+    }
+
     // Register event listeners
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
+    emitter.on('tool:cancel', handleToolCancel)
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
+      emitter.off('tool:cancel', handleToolCancel)
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 

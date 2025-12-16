@@ -79,9 +79,6 @@ export default function Editor({ className }: { className?: string }) {
 
       {SHOW_GRID && <InfiniteLines />}
 
-      {/* Grid Tiles - Handles grid interaction events */}
-      <GridTiles />
-
       {/* Infinite floor - rendered outside export group */}
       <InfiniteFloor />
 

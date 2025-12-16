@@ -393,16 +393,31 @@ export function CustomRoomNodeEditor() {
       }
     }
 
+    const handleToolCancel = () => {
+      // Only cancel if we've started drawing (at least one point placed)
+      if (customRoomStateRef.current.points.length > 0 && customRoomStateRef.current.previewGroupId) {
+        deleteNode(customRoomStateRef.current.previewGroupId)
+        customRoomStateRef.current.points = []
+        customRoomStateRef.current.groupOrigin = null
+        customRoomStateRef.current.previewWallIds = []
+        customRoomStateRef.current.cursorWallId = null
+        customRoomStateRef.current.previewGroupId = null
+        customRoomStateRef.current.lastCursorPoint = null
+      }
+    }
+
     // Register event listeners
     emitter.on('grid:click', handleGridClick)
     emitter.on('grid:move', handleGridMove)
     emitter.on('grid:double-click', handleGridDoubleClick)
+    emitter.on('tool:cancel', handleToolCancel)
 
     // Cleanup event listeners
     return () => {
       emitter.off('grid:click', handleGridClick)
       emitter.off('grid:move', handleGridMove)
       emitter.off('grid:double-click', handleGridDoubleClick)
+      emitter.off('tool:cancel', handleToolCancel)
     }
   }, [addNode, updateNode, deleteNode, selectedFloorId, levels])
 
