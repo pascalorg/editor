@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Intersection, Object3D } from 'three'
 import { Box3, Mesh, Raycaster, Vector2 } from 'three'
 import { useShallow } from 'zustand/shallow'
+import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
@@ -435,6 +436,7 @@ export function LevelHoverManager() {
         if (buildingObject) {
           const intersects = raycasterRef.current.intersectObject(buildingObject, true)
           if (intersects.length > 0) {
+            emitter.emit('interaction:click', { type: 'building', id: buildingId })
             useEditor.setState({
               selectedNodeIds: [buildingId],
               levelMode: 'exploded',
@@ -444,6 +446,9 @@ export function LevelHoverManager() {
           }
         }
         // Clicked outside building when building not selected
+        if (state.selectedNodeIds.length === 0 && !state.selectedFloorId) {
+             emitter.emit('interaction:click', { type: 'void', id: null })
+        }
         return
       }
 
@@ -496,6 +501,8 @@ export function LevelHoverManager() {
                       ctrlKey: event.ctrlKey,
                     })
                   } else {
+                    const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
+                    emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
                     useEditor.setState({
                       selectedCollectionId: preserveCollection ? currentCollectionId : null,
                       selectedNodeIds: [nodeId],
@@ -520,6 +527,7 @@ export function LevelHoverManager() {
                     if (room) {
                       // Match Menu behavior: just select the collection.
                       // Store handles clearing node selection/switching floor if needed.
+                      emitter.emit('interaction:click', { type: 'collection', id: room.id, data: room })
                       useEditor.getState().selectCollection(room.id)
                       return // Handled room click
                     }
@@ -566,11 +574,13 @@ export function LevelHoverManager() {
           // 2. Toggle floor selection (if clicking same floor, unselect)
           // Note: Drag check at start of onClick ensures this doesn't trigger on pan
           if (state.selectedFloorId === clickedLevelId) {
-            useEditor.getState().selectFloor(null)
+            emitter.emit('interaction:click', { type: 'building', id: buildingId! })
+            useEditor.setState({ selectedFloorId: null })
             // Restore building selection
             useEditor.setState({ selectedNodeIds: [buildingId!] })
           } else {
-            useEditor.getState().selectFloor(clickedLevelId)
+            emitter.emit('interaction:click', { type: 'level', id: clickedLevelId })
+            useEditor.setState({ selectedFloorId: clickedLevelId })
           }
           return
         }
@@ -580,6 +590,7 @@ export function LevelHoverManager() {
       // User requirement: "click outside of the building ... defaults back to stacked"
       // This implies a full reset when clicking void.
       if (state.selectedNodeIds.length > 0 || state.selectedCollectionId || state.selectedFloorId) {
+        emitter.emit('interaction:click', { type: 'void', id: null })
         useEditor.setState({
           selectedNodeIds: [],
           selectedCollectionId: null,

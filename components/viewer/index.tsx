@@ -6,6 +6,7 @@ import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import { NodesDebugger } from '@/components/debug/nodes-debugger'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
+import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
@@ -75,12 +76,47 @@ export default function Viewer({
   // Notify parent window about selection changes (for embedded mode)
   useEffect(() => {
     if (!isEmbedded) return
+
+    const state = useEditor.getState()
+    const graph = state.graph
+
+    // Enrich selected nodes with data
+    const selectedNodes = selectedNodeIds.map((id) => {
+      const node = graph.getNodeById(id as any)?.data()
+      return node ? { id: node.id, type: node.type, name: node.name, data: node } : { id }
+    })
+
     const message = {
       type: 'selection',
-      nodeIds: selectedNodeIds,
+      selectedNodeIds,
+      selectedNodes,
+      selectedFloorId,
+      selectedCollectionId,
     }
     window.parent.postMessage(message, '*')
-  }, [isEmbedded, selectedNodeIds])
+  }, [isEmbedded, selectedNodeIds, selectedFloorId, selectedCollectionId])
+
+  // Notify parent window about interaction clicks
+  useEffect(() => {
+    if (!isEmbedded) return
+
+    const handleClick = (event: InteractionClickEvent) => {
+      window.parent.postMessage(
+        {
+          type: 'click',
+          interactionType: event.type,
+          id: event.id,
+          data: event.data,
+        },
+        '*',
+      )
+    }
+
+    emitter.on('interaction:click', handleClick)
+    return () => {
+      emitter.off('interaction:click', handleClick)
+    }
+  }, [isEmbedded])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -106,17 +142,16 @@ export default function Viewer({
           // If Building is selected, go to Site
           if (
             building &&
+            site &&
             state.selectedNodeIds.length === 1 &&
             state.selectedNodeIds[0] === building.id
           ) {
-            if (site) {
-              useEditor.setState({
-                selectedNodeIds: [site.id],
-                selectedFloorId: null,
-                viewMode: 'full',
-              })
-              return
-            }
+            useEditor.setState({
+              selectedNodeIds: [site.id],
+              selectedFloorId: null,
+              viewMode: 'full',
+            })
+            return
           }
 
           // If Site is ALREADY selected, prevent deselection (keep as root default)
