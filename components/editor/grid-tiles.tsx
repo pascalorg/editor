@@ -293,13 +293,7 @@ const DownArrow = () => {
   const isBuildingWithTool = controlMode === 'building' && buildingIconSrc
 
   return (
-    <group
-      position={[
-        cursorPosition[0] * TILE_SIZE - GRID_SIZE / 2,
-        2,
-        cursorPosition[1] * TILE_SIZE - GRID_SIZE / 2,
-      ]}
-    >
+    <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
       {/* Icon circle at the top */}
       <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
         <div
@@ -328,12 +322,16 @@ const DownArrow = () => {
         </div>
       </Html>
       {/* Shaft - cylinder is created along Y-axis, no rotation needed */}
-      <mesh position={[0, -shaftHeight / 2, 0]}>
+      <mesh position={[0, -shaftHeight / 2, 0]} renderOrder={999}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaftHeight, 8]} />
         <meshStandardMaterial color="white" depthTest={false} opacity={0.8} transparent />
       </mesh>
       {/* Cone tip - cone points up by default along Y, rotate 180° to point down */}
-      <mesh position={[0, -(shaftHeight + coneHeight / 2), 0]} rotation={[0, 0, Math.PI]}>
+      <mesh
+        position={[0, -(shaftHeight + coneHeight / 2), 0]}
+        renderOrder={999}
+        rotation={[0, 0, Math.PI]}
+      >
         <coneGeometry args={[coneRadius, coneHeight, 8]} />
         <meshStandardMaterial color="white" depthTest={false} opacity={0.8} transparent />
       </mesh>
