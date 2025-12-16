@@ -58,7 +58,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
     () =>
       new THREE.BoxGeometry(
         (nodeSize?.[0] ?? 0) * TILE_SIZE,
-        0.1,
+        0.05,
         (nodeSize?.[1] ?? 0) * TILE_SIZE,
       ),
     [nodeSize],
@@ -66,12 +66,36 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
 
   const previewMaterial = useMaterial(canPlace ? 'preview-valid' : 'preview-invalid')
   const ghostMaterial = useMaterial('ghost')
+  const triangleGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3((-TILE_SIZE / 2) * 0.95, 0, (TILE_SIZE / 2) * 0.95),
+      new THREE.Vector3((TILE_SIZE / 2) * 0.95, 0, (TILE_SIZE / 2) * 0.95),
+      new THREE.Vector3(0, 0, (-TILE_SIZE / 2) * 0.95),
+    ])
+    geometry.setIndex([0, 1, 2])
+    geometry.computeVertexNormals()
+    return geometry
+  }, [])
 
   return (
     <>
       {isPreview && (
         // Preview rendering with X-ray effect
         <group>
+          <group position-x={(-(nodeSize?.[0] || 1) * TILE_SIZE) / 2}>
+            {[...new Array(nodeSize?.[0] || 1).keys()].map((x) => (
+              <mesh
+                frustumCulled={false}
+                geometry={triangleGeometry}
+                key={`triangle-${x}`}
+                material={previewMaterial}
+                position-x={(x + 0.5) * TILE_SIZE}
+                position-y={0.05}
+                position-z={((nodeSize?.[1] || 1) * TILE_SIZE) / 2 + TILE_SIZE}
+                rotation-y={Math.PI}
+              />
+            ))}
+          </group>
           <mesh
             frustumCulled={false}
             geometry={boxGeometry}
