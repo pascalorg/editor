@@ -1,6 +1,7 @@
 'use client'
 
 import { Clone, Gltf, useGLTF } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import * as THREE from 'three'
@@ -106,9 +107,7 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
       )}
 
       <ErrorBoundary fallback={null}>
-        <Suspense
-          fallback={<mesh geometry={boxGeometry} material={ghostMaterial} position-y={0.4} />}
-        >
+        <Suspense fallback={<LoadingItem />}>
           {nodeSrc && (
             <ModelItemRenderer
               deletePreview={deletePreview}
@@ -122,6 +121,24 @@ export function ItemRenderer({ nodeId }: ItemRendererProps) {
         </Suspense>
       </ErrorBoundary>
     </>
+  )
+}
+
+function LoadingItem() {
+  const previewMaterial = useMaterial('preview-valid')
+  const group = useRef<THREE.Group>(null)
+
+  useFrame((_, delta) => {
+    if (group.current) {
+      group.current.rotation.y += delta * 2
+    }
+  })
+  return (
+    <group ref={group}>
+      <mesh material={previewMaterial} position-y={0.5} scale-y={1.5}>
+        <octahedronGeometry args={[TILE_SIZE / 1.5, 0]} />
+      </mesh>
+    </group>
   )
 }
 

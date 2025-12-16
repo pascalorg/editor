@@ -294,7 +294,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     modelUrl: '/items/kitchen-fridge/model.glb',
     position: [0, 0, 0.0],
     scale: [0.7, 0.7, 0.7],
-    rotation: [0, Math.PI, 0],
+    rotation: [0, 0, 0],
     size: [2, 2],
   },
   {
@@ -325,7 +325,7 @@ const CATALOG_ITEMS: CatalogItem[] = [
     modelUrl: '/items/sink-cabinet/model.glb',
     position: [0, 0.5, 0],
     scale: [1.4, 1.4, 1.4],
-    rotation: [0, Math.PI, 0],
+    rotation: [0, 0, 0],
     size: [4, 2],
   },
   {
