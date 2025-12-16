@@ -106,19 +106,19 @@ export function ItemNodeEditor() {
       // Calculate angle in X-Z plane (top-down view)
       // atan2(z, x) gives the angle the vector makes with the positive X axis
       // Add π/2 to align item's forward direction with the wall normal
-      return Math.atan2(normal[2], normal[0]) + Math.PI / 2
+      return Math.atan2(normal[2], normal[0]) - Math.PI / 2
     }
 
     /**
      * Determine which side of the wall based on the normal vector
      * In wall-local space, the wall runs along X-axis, so the normal points along Z-axis
-     * Positive Z normal = 'front', Negative Z normal = 'back'
+     * Positive Z normal = 'back', Negative Z normal = 'front' (flipped due to orientation fix)
      */
     const getSideFromNormal = (normal: [number, number, number] | undefined): 'front' | 'back' => {
       if (!normal) return 'front'
       // The Z component of the normal determines which side
-      // We use a threshold to handle floating point imprecision
-      return normal[2] >= 0 ? 'front' : 'back'
+      // Flipped: positive Z = back, negative Z = front
+      return normal[2] >= 0 ? 'back' : 'front'
     }
 
     /**
