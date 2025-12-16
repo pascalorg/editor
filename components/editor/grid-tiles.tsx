@@ -6,8 +6,9 @@ import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
+import { tools } from '@/components/editor/action-menu/building-tools'
 import { emitter } from '@/events/bus'
-import { type CatalogCategory, type ControlMode, type Tool, useEditor } from '@/hooks/use-editor'
+import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 
 // Map control modes to their icons and colors (matching toolbar active colors)
@@ -204,62 +205,16 @@ export const GridTiles = memo(() => {
 
 GridTiles.displayName = 'GridTiles'
 
-// Map building tools to their icon paths (matching building-tools.tsx)
-const buildingToolIcons: Record<Tool, Record<CatalogCategory | 'default', string>> = {
-  slab: {
-    default: '/icons/floor.png',
-    door: '/icons/floor.png',
-    window: '/icons/floor.png',
-    item: '/icons/floor.png',
-  },
-  ceiling: {
-    default: '/icons/ceiling.png',
-    door: '/icons/ceiling.png',
-    window: '/icons/ceiling.png',
-    item: '/icons/ceiling.png',
-  },
-  wall: {
-    default: '/icons/wall.png',
-    door: '/icons/wall.png',
-    window: '/icons/wall.png',
-    item: '/icons/wall.png',
-  },
-  room: {
-    default: '/icons/room.png',
-    door: '/icons/room.png',
-    window: '/icons/room.png',
-    item: '/icons/room.png',
-  },
-  'custom-room': {
-    default: '/icons/custom-room.png',
-    door: '/icons/custom-room.png',
-    window: '/icons/custom-room.png',
-    item: '/icons/custom-room.png',
-  },
-  roof: {
-    default: '/icons/roof.png',
-    door: '/icons/roof.png',
-    window: '/icons/roof.png',
-    item: '/icons/roof.png',
-  },
-  column: {
-    default: '/icons/column.png',
-    door: '/icons/column.png',
-    window: '/icons/column.png',
-    item: '/icons/column.png',
-  },
-  stair: {
-    default: '/icons/stairs.png',
-    door: '/icons/stairs.png',
-    window: '/icons/stairs.png',
-    item: '/icons/stairs.png',
-  },
-  item: {
-    default: '/icons/couch.png',
-    door: '/icons/door.png',
-    window: '/icons/window.png',
-    item: '/icons/couch.png',
-  },
+// Helper function to get icon for a building tool
+function getBuildingToolIcon(toolId: string, category: string | null): string | null {
+  // For item tools, find by both tool id and catalog category
+  if (toolId === 'item' && category) {
+    const tool = tools.find((t) => t.id === 'item' && t.catalogCategory === category)
+    return tool?.iconSrc ?? null
+  }
+  // For other tools, find by tool id only
+  const tool = tools.find((t) => t.id === toolId && !t.catalogCategory)
+  return tool?.iconSrc ?? null
 }
 
 // Down arrow component (2m height, pointing down along -Y axis)
@@ -288,13 +243,10 @@ const DownArrow = () => {
   const { icon: Icon, bgColor, iconColor } = modeConfig[controlMode]
 
   // For building mode, get the PNG icon path
-  let buildingIconSrc: string | null = null
-  if (controlMode === 'building' && activeTool) {
-    const toolIcons = buildingToolIcons[activeTool]
-    if (toolIcons) {
-      buildingIconSrc = catalogCategory ? toolIcons[catalogCategory] : toolIcons.default
-    }
-  }
+  const buildingIconSrc =
+    controlMode === 'building' && activeTool
+      ? getBuildingToolIcon(activeTool, catalogCategory)
+      : null
 
   // Building mode with tool selected: black background, larger icon
   // Other modes: translucent colored background, colored icon

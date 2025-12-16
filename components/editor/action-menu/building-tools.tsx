@@ -6,11 +6,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { type CatalogCategory, type Tool, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
-type ToolConfig =
+export type ToolConfig =
   | { id: Tool; iconSrc: string; label: string; catalogCategory?: never }
   | { id: 'item'; iconSrc: string; label: string; catalogCategory: CatalogCategory }
 
-const tools: ToolConfig[] = [
+export const tools: ToolConfig[] = [
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
   { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
