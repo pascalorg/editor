@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "bun --env-file=.env next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "bun x ultracite format"
