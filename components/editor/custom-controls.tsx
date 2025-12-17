@@ -2,7 +2,7 @@
 
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import {
   emitter,
@@ -16,7 +16,6 @@ import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 export function CustomControls() {
   const controlMode = useEditor((state) => state.controlMode)
   const cameraMode = useEditor((state) => state.cameraMode)
-  const setMovingCamera = useEditor((state) => state.setMovingCamera)
   const controls = useThree((state) => state.controls)
   const controlsRef = useRef<CameraControlsImpl>(null)
   const currentLevel = useEditor((state) => state.currentLevel)
@@ -173,6 +172,14 @@ export function CustomControls() {
     }
   }, [controlMode, cameraMode])
 
+  const onControlStart = useCallback(() => {
+    useEditor.getState().setMovingCamera(true)
+  }, [])
+
+  const onControlEnd = useCallback(() => {
+    useEditor.getState().setMovingCamera(false)
+  }, [])
+
   return (
     <CameraControls
       makeDefault
@@ -181,8 +188,8 @@ export function CustomControls() {
       minDistance={debug ? 0.1 : 10}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
-      onEnd={() => setMovingCamera(false)}
-      onStart={() => setMovingCamera(true)}
+      onEnd={onControlEnd}
+      onStart={onControlStart}
       ref={controlsRef}
     />
   )
