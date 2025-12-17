@@ -32,6 +32,7 @@ function createMaterial(definition: MaterialDefinition): MaterialResult {
     metalness: definition.metalness ?? 0,
     roughness: definition.roughness ?? 0.5,
     depthWrite: definition.depthWrite ?? true,
+    colorWrite: definition.colorWrite ?? true,
   }
 
   // Only add emissive properties if they are defined (Three.js doesn't like undefined values)
