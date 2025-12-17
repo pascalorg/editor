@@ -15,6 +15,7 @@ interface LayersMenuProps {
 
 export function LayersMenu({ mounted }: LayersMenuProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectFloor = useEditor((state) => state.selectFloor)
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
@@ -56,6 +57,53 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       }
     }
   }, [selectedFloorId])
+
+  // Sync selected nodes with expanded state and scroll into view
+  useEffect(() => {
+    const lastSelectedId = selectedNodeIds[selectedNodeIds.length - 1]
+
+    if (lastSelectedId) {
+      const graph = useEditor.getState().graph
+      const handle = graph.getNodeById(lastSelectedId as AnyNodeId)
+
+      if (handle) {
+        const ancestors = new Set<string>()
+        let curr = handle.parent()
+        while (curr) {
+          ancestors.add(curr.id)
+          curr = curr.parent()
+        }
+
+        // Handle virtual parents in UI (Guides & Scans folders)
+        const data = handle.data()
+        const parent = handle.parent()
+        if (parent && parent.data().type === 'level') {
+          if (data.type === 'reference-image') {
+            ancestors.add(`${parent.id}-guides`)
+          } else if (data.type === 'scan') {
+            ancestors.add(`${parent.id}-scans`)
+          }
+        }
+
+        setExpandedIds((prev) => {
+          const next = new Set(prev)
+          ancestors.forEach((id) => {
+            next.add(id)
+          })
+          return Array.from(next)
+        })
+
+        // Scroll into view after expansion
+        // Use a timeout to allow the expansion animation/render to start
+        setTimeout(() => {
+          const element = document.querySelector(`[data-node-id="${lastSelectedId}"]`)
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 100)
+      }
+    }
+  }, [selectedNodeIds])
 
   // Handle node click for "accordion" behavior
   const handleNodeClick = (nodeId: string, hasChildren: boolean) => {
