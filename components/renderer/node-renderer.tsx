@@ -19,9 +19,9 @@ interface AnimatedGroupProps {
   visible?: boolean
   name: string
   userData: any
-  shouldAnimate: boolean
-  activeTool: any
-  movingCamera: boolean
+  // shouldAnimate: boolean
+  // activeTool: any
+  // movingCamera: boolean
 }
 
 const AnimatedGroup = ({
@@ -31,9 +31,9 @@ const AnimatedGroup = ({
   visible,
   name,
   userData,
-  shouldAnimate,
-  activeTool,
-  movingCamera,
+  // shouldAnimate,
+  // activeTool,
+  // movingCamera,
 }: AnimatedGroupProps) => {
   // const { springPosition } = useSpring({
   //   springPosition: position,
@@ -73,7 +73,6 @@ const AnimatedGroup = ({
 }
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
-  console.log('rendering node:', nodeId)
   const {
     levelMode,
     nodeType,
@@ -84,7 +83,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     nodeLevel,
     nodeChildrenIdsStr,
     selectedFloorId,
-    activeTool,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -92,7 +90,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       return {
         selectedFloorId: state.selectedFloorId,
         levelMode: state.levelMode,
-        activeTool: state.activeTool,
         nodeType: node?.type,
         nodeVisible: (node as any)?.visible, // TODO: Type correctly
         nodeChildrenIdsStr: JSON.stringify(
@@ -171,7 +168,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   return (
     <>
       <AnimatedGroup
-        activeTool={activeTool}
         movingCamera={false}
         name={nodeId}
         position={gridItemPosition}

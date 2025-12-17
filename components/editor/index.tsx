@@ -37,7 +37,6 @@ export const GRID_INTERSECTIONS = GRID_DIVISIONS + 1 // 61 intersections per axi
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
 export default function Editor({ className }: { className?: string }) {
-  const controlMode = useEditor((state) => state.controlMode)
   const cameraMode = useEditor((state) => state.cameraMode)
   const rootId = useEditor((state) => state.scene.root.children?.[0]?.id)
 
@@ -87,6 +86,23 @@ export default function Editor({ className }: { className?: string }) {
         {rootId && <NodeRenderer nodeId={rootId} />}
       </group>
 
+      <ControlModeComponents />
+
+      <CustomControls />
+      <EnvironmentRenderer />
+
+      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+        <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
+      </GizmoHelper>
+    </Canvas>
+  )
+}
+
+const ControlModeComponents = () => {
+  const controlMode = useEditor((state) => state.controlMode)
+
+  return (
+    <>
       {controlMode === 'select' && (
         <>
           <SelectionManager />
@@ -99,13 +115,6 @@ export default function Editor({ className }: { className?: string }) {
 
       {/* Painting tool for applying materials to walls */}
       {controlMode === 'painting' && <PaintingTool />}
-
-      <CustomControls />
-      <EnvironmentRenderer />
-
-      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-        <GizmoViewport axisColors={['#9d4b4b', '#2f7f4f', '#3b5b9d']} labelColor="white" />
-      </GizmoHelper>
-    </Canvas>
+    </>
   )
 }
