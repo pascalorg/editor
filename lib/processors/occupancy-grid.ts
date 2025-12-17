@@ -257,16 +257,20 @@ export class OccupancyGrid {
 
   /**
    * Get the cell state on a specific side of a wall
+   * Samples multiple points along the wall and returns the first room found,
+   * or EXTERIOR if no room is found
    * @param wallStart Start point of wall [x, z]
    * @param wallEnd End point of wall [x, z]
    * @param side 'front' or 'back'
-   * @returns The cell state (EXTERIOR, ROOM_BASE+N, or WALL)
+   * @param wallThickness thickness of the wall (default 0.2m)
+   * @returns The cell state (EXTERIOR, ROOM_BASE+N)
    */
-  getSideState(wallStart: [number, number], wallEnd: [number, number], side: 'front' | 'back'): number {
-    // Calculate midpoint
-    const midX = (wallStart[0] + wallEnd[0]) / 2
-    const midZ = (wallStart[1] + wallEnd[1]) / 2
-
+  getSideState(
+    wallStart: [number, number],
+    wallEnd: [number, number],
+    side: 'front' | 'back',
+    wallThickness = 0.2,
+  ): number {
     // Calculate wall direction
     const dx = wallEnd[0] - wallStart[0]
     const dz = wallEnd[1] - wallStart[1]
@@ -274,28 +278,55 @@ export class OccupancyGrid {
 
     if (len < 0.001) return OccupancyGrid.EXTERIOR
 
-    // Calculate normal direction
-    // Front = positive Z in local space after rotation
-    // Wall rotation = atan2(-dz, dx), so:
-    // Front normal (perpendicular, 90° clockwise when looking down): (-dz/len, dx/len)
-    // Back normal: (dz/len, -dx/len)
-    const frontNormalX = -dz / len
-    const frontNormalZ = dx / len
+    // Calculate normal direction (perpendicular to wall)
+    // Front normal points in the direction of positive local Z
+    let normalX = -dz / len
+    let normalZ = dx / len
 
-    // Sample point slightly offset in the normal direction
-    const sampleDist = 0.3 // Sample 30cm from wall center
-    let sampleX: number, sampleZ: number
-
-    if (side === 'front') {
-      sampleX = midX + frontNormalX * sampleDist
-      sampleZ = midZ + frontNormalZ * sampleDist
-    } else {
-      sampleX = midX - frontNormalX * sampleDist
-      sampleZ = midZ - frontNormalZ * sampleDist
+    if (side === 'back') {
+      normalX = -normalX
+      normalZ = -normalZ
     }
 
+    // Sample distance from wall center line (past the wall surface)
+    const sampleDist = wallThickness / 2 + this.cellSize * 2
+
+    // Sample at multiple points along the wall (start, middle, end)
+    // This handles cases where part of the wall is near other walls
+    const samplePoints = [0.2, 0.5, 0.8] // 20%, 50%, 80% along wall length
+
+    for (const t of samplePoints) {
+      const pointX = wallStart[0] + dx * t
+      const pointZ = wallStart[1] + dz * t
+
+      const sampleX = pointX + normalX * sampleDist
+      const sampleZ = pointZ + normalZ * sampleDist
+
+      const [gx, gz] = this.worldToGrid(sampleX, sampleZ)
+
+      // Skip if out of bounds
+      if (!this.isInBounds(gx, gz)) continue
+
+      const state = this.get(gx, gz)
+
+      // If we find a room, return it immediately
+      if (state >= OccupancyGrid.ROOM_BASE) {
+        return state
+      }
+    }
+
+    // No room found at any sample point - check if any point is EXTERIOR vs WALL
+    // Sample again to determine if it's exterior or just hitting walls
+    const midX = (wallStart[0] + wallEnd[0]) / 2
+    const midZ = (wallStart[1] + wallEnd[1]) / 2
+    const sampleX = midX + normalX * sampleDist
+    const sampleZ = midZ + normalZ * sampleDist
     const [gx, gz] = this.worldToGrid(sampleX, sampleZ)
-    if (!this.isInBounds(gx, gz)) return OccupancyGrid.EXTERIOR
+
+    if (!this.isInBounds(gx, gz)) {
+      return OccupancyGrid.EXTERIOR
+    }
+
     return this.get(gx, gz)
   }
 
@@ -304,5 +335,31 @@ export class OccupancyGrid {
    */
   static isRoom(state: number): boolean {
     return state >= OccupancyGrid.ROOM_BASE
+  }
+
+  /**
+   * Debug: Print a visual representation of the grid to console
+   */
+  debugPrint(): void {
+    const chars: Record<number, string> = {
+      [OccupancyGrid.EMPTY]: '.',
+      [OccupancyGrid.WALL]: '#',
+      [OccupancyGrid.EXTERIOR]: ' ',
+    }
+
+    console.log(`Grid ${this.width}x${this.height}:`)
+    for (let gz = this.height - 1; gz >= 0; gz--) {
+      let row = ''
+      for (let gx = 0; gx < this.width; gx++) {
+        const state = this.get(gx, gz)
+        if (state >= OccupancyGrid.ROOM_BASE) {
+          // Show room ID as a letter (A, B, C, ...)
+          row += String.fromCharCode(65 + (state - OccupancyGrid.ROOM_BASE))
+        } else {
+          row += chars[state] ?? '?'
+        }
+      }
+      console.log(row)
+    }
   }
 }

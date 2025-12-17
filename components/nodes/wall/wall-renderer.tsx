@@ -866,8 +866,13 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const miniwallMesh = useRef<THREE.Mesh>(null)
   const activeTool = useEditor((state) => state.activeTool)
   const controlMode = useEditor((state) => state.controlMode)
-  useFrame(({ camera }, delta) => {
+  const lastCheckedAt = useRef(0)
+  useFrame(({ camera, clock }) => {
+    if (clock.elapsedTime - lastCheckedAt.current < 0.2) {
+      return
+    }
     camera.getWorldDirection(u)
+    lastCheckedAt.current = clock.elapsedTime
     if (wallMesh.current) {
       wallMesh.current.getWorldDirection(v)
 
