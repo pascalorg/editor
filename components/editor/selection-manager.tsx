@@ -170,6 +170,10 @@ function SelectionManager() {
 
       const candidates = performRaycast(event)
 
+      // If candidates is null, it means we clicked on a UI element in the scene (like controls)
+      // so we should ignore this click entirely
+      if (candidates === null) return
+
       if (candidates && candidates.length > 0) {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
