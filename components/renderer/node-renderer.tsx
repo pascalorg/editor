@@ -168,7 +168,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   return (
     <>
       <AnimatedGroup
-        movingCamera={false}
         name={nodeId}
         position={gridItemPosition}
         rotation={
@@ -176,7 +175,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
             ? (nodeRotation as [number, number, number])
             : [0, nodeRotation ?? 0, 0]
         }
-        shouldAnimate={nodeType === 'level'}
+        // shouldAnimate={nodeType === 'level'}
         userData={{
           nodeId,
         }}
