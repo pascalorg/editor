@@ -1,5 +1,5 @@
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { type Object3D, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 
@@ -12,6 +12,7 @@ function SelectionManager() {
   const { camera, scene, gl, raycaster } = useThree()
   const currentFloorId = useEditor((state) => state.selectedFloorId)
   const rootId = useEditor((state) => state.scene.root.children?.[0]?.id)
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const targetId = rootId || currentFloorId
@@ -148,6 +149,24 @@ function SelectionManager() {
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return // Only left-click
       if (controlMode !== 'select') return
+      
+      pointerDownPos.current = { x: event.clientX, y: event.clientY }
+    }
+
+    const handleClick = (event: PointerEvent) => {
+      if (event.button !== 0) return // Only left-click
+      if (controlMode !== 'select') return
+
+      // Check for drag to prevent accidental selection/deselection after dragging
+      if (pointerDownPos.current) {
+        const dx = event.clientX - pointerDownPos.current.x
+        const dy = event.clientY - pointerDownPos.current.y
+        pointerDownPos.current = null
+        // If moved more than 5 pixels, consider it a drag and ignore click
+        if (dx * dx + dy * dy > 25) {
+          return
+        }
+      }
 
       const candidates = performRaycast(event)
 
@@ -155,20 +174,10 @@ function SelectionManager() {
         const topCandidate = candidates[0]!
         console.log('Selected nodeId:', topCandidate.nodeId, 'at depth:', topCandidate.depth)
         handleNodeSelect(topCandidate.nodeId, event)
-      }
-    }
+      } else {
+        // Don't clear selection if modifiers are held (user might be trying to multi-select and missed)
+        if (event.shiftKey || event.metaKey || event.ctrlKey) return
 
-    const handleClick = (event: PointerEvent) => {
-      if (event.button !== 0) return // Only left-click
-      if (controlMode !== 'select') return
-
-      // Don't clear selection if modifiers are held (user might be trying to multi-select and missed)
-      if (event.shiftKey || event.metaKey || event.ctrlKey) return
-
-      const candidates = performRaycast(event)
-
-      // If we didn't hit any selectable node, clear the selection and cancel add-to-collection
-      if (candidates && candidates.length === 0) {
         handleClear()
 
         // Cancel add-to-collection mode if active

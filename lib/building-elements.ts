@@ -37,28 +37,18 @@ export function toggleElementSelection(
  * Handle simple element click without range selection support
  * Used for nested elements like doors/windows or groups
  *
- * Figma-style behavior:
+ * Behavior:
  * - Regular click: Select only this element
- * - Shift+click: Add to selection
- * - Cmd/Ctrl+click: Toggle in selection
+ * - Shift/Cmd/Ctrl+click: Toggle this element in/out of selection
  */
 export function handleSimpleClick(
   selectedElements: AnyNodeId[],
   elementId: AnyNodeId,
   event: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
 ): AnyNodeId[] {
-  if (event.metaKey || event.ctrlKey) {
-    // Cmd/Ctrl+click: toggle selection
+  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+    // Cmd/Ctrl/Shift+click: toggle selection
     return toggleElementSelection(selectedElements, elementId, true)
-  }
-
-  if (event.shiftKey) {
-    // Shift+click: add to selection (don't remove if already selected)
-    const isSelected = isElementSelected(selectedElements, elementId)
-    if (!isSelected) {
-      return [...selectedElements, elementId]
-    }
-    return selectedElements
   }
 
   // Regular click: single select
