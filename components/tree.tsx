@@ -251,6 +251,7 @@ export const TreeNodeTrigger = ({
         isSelected && 'bg-accent/80',
         className,
       )}
+      data-node-id={nodeId}
       onClick={(e) => {
         handleSelection(nodeId, e.ctrlKey || e.metaKey)
         onClick?.(e)
