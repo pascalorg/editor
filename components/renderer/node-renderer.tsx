@@ -35,29 +35,29 @@ const AnimatedGroup = ({
   activeTool,
   movingCamera,
 }: AnimatedGroupProps) => {
-  const { springPosition } = useSpring({
-    springPosition: position,
-    config: {
-      mass: 1,
-      tension: 170,
-      friction: 26,
-    },
-    immediate: !!activeTool || movingCamera,
-  })
+  // const { springPosition } = useSpring({
+  //   springPosition: position,
+  //   config: {
+  //     mass: 1,
+  //     tension: 170,
+  //     friction: 26,
+  //   },
+  //   immediate: !!activeTool || movingCamera,
+  // })
 
-  if (shouldAnimate) {
-    return (
-      <animated.group
-        name={name}
-        position={springPosition as any}
-        rotation={rotation}
-        userData={userData}
-        visible={visible}
-      >
-        {children}
-      </animated.group>
-    )
-  }
+  // if (shouldAnimate) {
+  //   return (
+  //     <animated.group
+  //       name={name}
+  //       position={springPosition as any}
+  //       rotation={rotation}
+  //       userData={userData}
+  //       visible={visible}
+  //     >
+  //       {children}
+  //     </animated.group>
+  //   )
+  // }
 
   return (
     <group
@@ -73,6 +73,7 @@ const AnimatedGroup = ({
 }
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
+  console.log('rendering node:', nodeId)
   const {
     levelMode,
     nodeType,
@@ -84,7 +85,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     nodeChildrenIdsStr,
     selectedFloorId,
     activeTool,
-    movingCamera,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
@@ -93,7 +93,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
         selectedFloorId: state.selectedFloorId,
         levelMode: state.levelMode,
         activeTool: state.activeTool,
-        movingCamera: state.movingCamera,
         nodeType: node?.type,
         nodeVisible: (node as any)?.visible, // TODO: Type correctly
         nodeChildrenIdsStr: JSON.stringify(
@@ -173,7 +172,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     <>
       <AnimatedGroup
         activeTool={activeTool}
-        movingCamera={movingCamera}
+        movingCamera={false}
         name={nodeId}
         position={gridItemPosition}
         rotation={
