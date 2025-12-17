@@ -23,6 +23,7 @@ export const WallNode = BaseNode.extend({
   // Material properties
   materialFront: Material,
   materialBack: Material,
+  interiorSide: z.enum(['front', 'back', 'both', 'neither']).optional(),
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
@@ -33,6 +34,7 @@ export const WallNode = BaseNode.extend({
   - size: size of the wall in grid units
   - materialFront: material for the front face (positive Z normal direction)
   - materialBack: material for the back face (negative Z normal direction)
+  - interiorSide: which side is considered the interior side for rendering purposes
   `,
 )
 export type WallNode = z.infer<typeof WallNode>

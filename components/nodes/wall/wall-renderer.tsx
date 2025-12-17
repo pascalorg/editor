@@ -381,6 +381,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     nodeChildrenIdsStr,
     materialFront,
     materialBack,
+    interiorSide,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
@@ -406,6 +407,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         nodeChildrenIdsStr: JSON.stringify(node?.children?.map((child) => child.id) || []),
         materialFront: node?.materialFront || 'concrete',
         materialBack: node?.materialBack || 'brick',
+        interiorSide: node?.interiorSide || 'neither',
       }
     }),
   )
@@ -851,7 +853,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const sidesMaterial = useMaterial('white')
   const ghostMaterial = useMaterial('ghost')
   const paintMaterial = useMaterial(selectedMaterial)
-  const [hideWallBasedOnCameraPosition, setHideWallBasedOnCameraPosition] = useState(false)
+  // const [hideWallBasedOnCameraPosition, setHideWallBasedOnCameraPosition] = useState(false)
 
   const wallMaterial = useMemo(
     () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
@@ -861,19 +863,39 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const u = new THREE.Vector3()
   const v = new THREE.Vector3()
   const wallMesh = useRef<THREE.Mesh>(null)
+  const miniwallMesh = useRef<THREE.Mesh>(null)
   const activeTool = useEditor((state) => state.activeTool)
   const controlMode = useEditor((state) => state.controlMode)
-  useFrame(({ camera }) => {
+  const lastCheckedAt = useRef(0)
+  useFrame(({ camera, clock }) => {
+    if (clock.elapsedTime - lastCheckedAt.current < 0.2) {
+      return
+    }
     camera.getWorldDirection(u)
+    lastCheckedAt.current = clock.elapsedTime
     if (wallMesh.current) {
       wallMesh.current.getWorldDirection(v)
-      setHideWallBasedOnCameraPosition(
-        v.dot(u) > 0 &&
-          activeTool !== 'wall' &&
-          activeTool !== 'custom-room' &&
-          activeTool !== 'room' &&
-          controlMode !== 'painting',
-      )
+
+      let hideWall = false
+
+      if (
+        activeTool === 'wall' ||
+        activeTool === 'custom-room' ||
+        activeTool === 'room' ||
+        controlMode === 'painting'
+      ) {
+        hideWall = false
+      } else if (interiorSide === 'front') {
+        hideWall = v.dot(u) > 0
+      } else if (interiorSide === 'back') {
+        hideWall = v.dot(u) < 0
+      } else if (interiorSide === 'both') {
+        hideWall = true
+      }
+      wallMesh.current.visible = !hideWall
+      if (miniwallMesh.current) {
+        miniwallMesh.current.visible = hideWall
+      }
     }
   })
 
@@ -950,6 +972,13 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                 visible={false}
               />
             )}
+            <mesh
+              geometry={wallGeometry}
+              material={sidesMaterial}
+              ref={miniwallMesh}
+              scale-y={0.05}
+              visible={false}
+            />
             <mesh castShadow receiveShadow ref={wallMesh}>
               <Geometry useGroups>
                 <Base geometry={wallGeometry} material={wallMaterial} />
@@ -970,7 +999,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                     />
                   </Subtraction>
                 )}
-                {hideWallBasedOnCameraPosition && (
+                {/* {hideWallBasedOnCameraPosition && (
                   <Subtraction
                     position-x={nodeSize[0] * TILE_SIZE * 0.5}
                     position-y={WALL_HEIGHT / 2 + WALL_HEIGHT * 0.2}
@@ -978,7 +1007,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
                   >
                     <boxGeometry args={[nodeSize[0] * TILE_SIZE, WALL_HEIGHT, nodeSize[1]]} />
                   </Subtraction>
-                )}
+                )} */}
                 {/* Paint preview overlay - shows the segment to be painted */}
                 {paintPreview && paintSegmentGeometry && (
                   <Addition
@@ -1038,6 +1067,7 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   )
 }
 
+import { lerp } from 'three/src/math/MathUtils.js'
 import type { GLTF } from 'three-stdlib'
 
 type GLTFResult = GLTF & {

@@ -26,6 +26,7 @@ import {
 } from '@/lib/commands/scenegraph-commands'
 import { LevelElevationProcessor } from '@/lib/processors/level-elevation-processor'
 import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
+import { RoomDetectionProcessor } from '@/lib/processors/room-detection-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
 import {
@@ -336,6 +337,7 @@ export type StoreState = {
   verticalStackingProcessor: VerticalStackingProcessor
   levelHeightProcessor: LevelHeightProcessor
   levelElevationProcessor: LevelElevationProcessor
+  roomDetectionProcessor: RoomDetectionProcessor
 } & {
   // Operations
   addLevel: (level: Omit<SchemaLevelNode, 'children'>) => void
@@ -481,6 +483,7 @@ function processLevel(
     verticalStackingProcessor: VerticalStackingProcessor
     levelHeightProcessor: LevelHeightProcessor
     levelElevationProcessor: LevelElevationProcessor
+    roomDetectionProcessor: RoomDetectionProcessor
   },
   levelId: string | null,
 ): void {
@@ -530,6 +533,12 @@ function processLevel(
       state.graph.updateNode(nodeId as AnyNodeId, updates)
     })
   }
+
+  // Step 4: Detect rooms and assign wall interior sides
+  const roomResults = state.roomDetectionProcessor.process([levelNode], state.graph)
+  roomResults.forEach(({ nodeId, updates }) => {
+    state.graph.updateNode(nodeId as AnyNodeId, updates)
+  })
 }
 
 function recomputeAllLevels(state: {
@@ -538,6 +547,7 @@ function recomputeAllLevels(state: {
   verticalStackingProcessor: VerticalStackingProcessor
   levelHeightProcessor: LevelHeightProcessor
   levelElevationProcessor: LevelElevationProcessor
+  roomDetectionProcessor: RoomDetectionProcessor
 }): void {
   const levels = state.graph.nodes.find({ type: 'level' })
   for (const level of levels) {
@@ -591,6 +601,7 @@ const useStore = create<StoreState>()(
         verticalStackingProcessor: new VerticalStackingProcessor(),
         levelHeightProcessor: new LevelHeightProcessor(),
         levelElevationProcessor: new LevelElevationProcessor(),
+        roomDetectionProcessor: new RoomDetectionProcessor(),
 
         currentLevel: 0,
         selectedFloorId: null,
