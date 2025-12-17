@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Switch } from '@/components/ui/switch'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +38,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
+import { Switch } from '@/components/ui/switch'
 import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
@@ -188,10 +188,10 @@ export function AppSidebar() {
         </DropdownMenu>
       </SidebarHeader>
 
-      <SidebarContent className={cn('no-scrollbar flex flex-1 flex-col')}>
-        <SidebarMenu className="flex-1">
+      <SidebarContent className={cn('no-scrollbar flex flex-1 flex-col overflow-hidden')}>
+        <SidebarMenu className="flex-1 overflow-hidden">
           {/* Tree-based Hierarchical Layers View */}
-          <SidebarMenuItem className="flex flex-1 flex-col">
+          <SidebarMenuItem className="flex h-full flex-1 flex-col overflow-hidden">
             <LayersMenu mounted={mounted} />
           </SidebarMenuItem>
         </SidebarMenu>

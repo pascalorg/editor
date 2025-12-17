@@ -161,6 +161,7 @@ export function EnvironmentItem({ level = 1, onNodeClick }: EnvironmentItemProps
   return (
     <TreeNode level={level} nodeId="environment">
       <TreeNodeTrigger
+        className="sticky top-0 z-10 bg-background"
         onClick={(e) => {
           e.stopPropagation()
           onNodeClick('environment', true)

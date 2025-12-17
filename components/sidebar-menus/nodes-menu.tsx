@@ -826,7 +826,15 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
   )
 }
 
-export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
+export function SiteItem({
+  nodeId,
+  level,
+  isLast,
+}: {
+  nodeId: string
+  level: number
+  isLast?: boolean
+}) {
   const { handleNodeClick } = useLayersMenu()
   const { nodeVisible, nodeName, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
@@ -869,9 +877,9 @@ export function SiteItem({ nodeId, level }: { nodeId: string; level: number }) {
   }
 
   return (
-    <TreeNode level={level} nodeId={nodeId}>
+    <TreeNode isLast={isLast} level={level} nodeId={nodeId}>
       <TreeNodeTrigger
-        className={cn(isSelected && 'bg-accent')}
+        className={cn(isSelected && 'bg-accent', 'sticky top-0 z-10 bg-background')}
         onClick={(e) => {
           e.stopPropagation()
           handleNodeSelect(nodeId, e)

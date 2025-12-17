@@ -714,13 +714,33 @@ const useStore = create<StoreState>()(
             nodeId as AnyNodeId,
             event,
           )
-          set({
+
+          const state = get()
+          const updates: Partial<StoreState> = {
             selectedNodeIds: updatedSelection,
             selectedCollectionId: null, // Clear collection selection when individual nodes are selected
-          })
+          }
+
+          // Auto-switch level if the selected node is on a different level
+          const levelId = getLevelIdForNode(state.graph.index, nodeId as AnyNodeId)
+          if (
+            levelId &&
+            levelId !== state.selectedFloorId &&
+            updatedSelection.includes(nodeId as AnyNodeId)
+          ) {
+            const level = state.graph.nodes.find({ type: 'level' }).find((l) => l.id === levelId)
+            if (level) {
+              Object.assign(updates, {
+                selectedFloorId: levelId,
+                currentLevel: (level.data() as unknown as SchemaLevelNode).level,
+                viewMode: 'level',
+              })
+            }
+          }
+
+          set(updates)
 
           // Auto-switch control mode based on node type
-          const state = get()
           const handle = state.graph.getNodeById(nodeId as AnyNodeId)
           const node = handle?.data()
 
@@ -750,12 +770,36 @@ const useStore = create<StoreState>()(
               : tool === 'item'
                 ? (get().catalogCategory ?? 'furniture')
                 : null
-          set({ activeTool: tool, catalogCategory: newCatalogCategory })
-          if (tool !== null) {
-            set({ controlMode: 'building' })
-          } else {
-            set({ controlMode: 'select' })
+
+          const state = get()
+          const updates: Partial<StoreState> = {
+            activeTool: tool,
+            catalogCategory: newCatalogCategory,
           }
+
+          if (tool !== null) {
+            updates.controlMode = 'building'
+
+            // Auto-select floor if none selected
+            if (!state.selectedFloorId) {
+              const levels = state.graph.nodes.find({ type: 'level' })
+              if (levels.length > 0) {
+                // Try to find level 0, otherwise default to first level found
+                const level0 = levels.find((l) => (l.data() as any).level === 0)
+                const targetLevel = level0 || levels[0]
+
+                Object.assign(updates, {
+                  selectedFloorId: targetLevel.id,
+                  currentLevel: (targetLevel.data() as unknown as SchemaLevelNode).level,
+                  viewMode: 'level',
+                })
+              }
+            }
+          } else {
+            updates.controlMode = 'select'
+          }
+
+          set(updates)
         },
         setCatalogCategory: (category) => set({ catalogCategory: category }),
         setControlMode: (mode) => {
