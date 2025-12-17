@@ -49,10 +49,7 @@ export function ViewItem({ view, isLast, level, onNodeClick }: ViewItemProps) {
 
   return (
     <TreeNode isLast={isLast} level={level} nodeId={view.id}>
-      <TreeNodeTrigger
-        className="group"
-        onClick={handleClick}
-      >
+      <TreeNodeTrigger className="group" onClick={handleClick}>
         <TreeExpander hasChildren={false} />
         <TreeIcon hasChildren={false} icon={<Video className="h-4 w-4 text-blue-500" />} />
         <TreeLabel
@@ -93,9 +90,10 @@ export function ViewItem({ view, isLast, level, onNodeClick }: ViewItemProps) {
 interface ViewsSectionProps {
   level: number
   onNodeClick: (nodeId: string, hasChildren: boolean) => void
+  isLast?: boolean
 }
 
-export function ViewsSection({ level, onNodeClick }: ViewsSectionProps) {
+export function ViewsSection({ level, onNodeClick, isLast }: ViewsSectionProps) {
   const views = useEditor(useShallow((state: StoreState) => state.scene.views || []))
 
   const handleAddView = (e: React.MouseEvent) => {
@@ -115,25 +113,17 @@ export function ViewsSection({ level, onNodeClick }: ViewsSectionProps) {
   const hasViews = views.length > 0
 
   return (
-    <TreeNode level={level} nodeId="views-section">
+    <TreeNode isLast={isLast} level={level} nodeId="views-section">
       <TreeNodeTrigger
-        className="group"
+        className="group sticky top-0 z-10 bg-background"
         onClick={() => onNodeClick('views-section', hasViews)}
       >
         <TreeExpander hasChildren={hasViews} />
-        <TreeIcon
-          hasChildren={hasViews}
-          icon={<Eye className="h-4 w-4 text-blue-500" />}
-        />
+        <TreeIcon hasChildren={hasViews} icon={<Eye className="h-4 w-4 text-blue-500" />} />
         <TreeLabel>Views</TreeLabel>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              className="h-5 w-5 p-0"
-              onClick={handleAddView}
-              size="sm"
-              variant="ghost"
-            >
+            <Button className="h-5 w-5 p-0" onClick={handleAddView} size="sm" variant="ghost">
               <Plus className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
@@ -155,4 +145,3 @@ export function ViewsSection({ level, onNodeClick }: ViewsSectionProps) {
     </TreeNode>
   )
 }
-

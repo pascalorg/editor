@@ -288,9 +288,10 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
 interface CollectionsSectionProps {
   level: number
   onNodeClick: (nodeId: string, hasChildren: boolean) => void
+  isLast?: boolean
 }
 
-export function CollectionsSection({ level, onNodeClick }: CollectionsSectionProps) {
+export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSectionProps) {
   const collections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
   const addCollection = useEditor((state) => state.addCollection)
   const addToCollectionState = useEditor((state) => state.addToCollectionState)
@@ -327,9 +328,13 @@ export function CollectionsSection({ level, onNodeClick }: CollectionsSectionPro
   const hasCollections = collections.length > 0
 
   return (
-    <TreeNode level={level} nodeId="collections-section">
+    <TreeNode isLast={isLast} level={level} nodeId="collections-section">
       <TreeNodeTrigger
-        className="group"
+        className={cn(
+          'group sticky top-0 z-10 bg-background',
+          addToCollectionState.isActive &&
+            'cursor-pointer ring-1 ring-amber-500/50 hover:bg-amber-500/10',
+        )}
         onClick={() => onNodeClick('collections-section', hasCollections)}
       >
         <TreeExpander hasChildren={hasCollections} />

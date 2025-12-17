@@ -3,11 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
-import { CollectionsSection, LayersMenuContext, SiteItem, ViewsSection } from '@/components/sidebar-menus'
+import {
+  CollectionsSection,
+  LayersMenuContext,
+  SiteItem,
+  ViewsSection,
+} from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
 import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
+import { cn } from '@/lib/utils'
 
 interface LayersMenuProps {
   mounted: boolean
@@ -210,35 +216,108 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
 
   return (
     <LayersMenuContext.Provider value={{ handleNodeClick }}>
-      <div className="flex flex-1 flex-col px-2 py-2">
-        <div className="mb-2 flex items-center justify-between">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center justify-between px-2 pt-2 pb-1">
           <label className="font-medium text-muted-foreground text-sm">Layers</label>
         </div>
 
-        <div className="no-scrollbar flex-1 overflow-y-auto">
-          {mounted ? (
-            <TreeProvider
-              expandedIds={expandedIds}
-              indent={16}
-              multiSelect={false}
-              onExpandedChange={setExpandedIds}
-              onSelectionChange={handleTreeSelectionChange}
-              selectedIds={selectedFloorId ? [selectedFloorId] : []}
-              showLines={true}
+        {mounted ? (
+          <TreeProvider
+            className="flex h-full min-h-0 flex-col"
+            expandedIds={expandedIds}
+            indent={16}
+            multiSelect={false}
+            onExpandedChange={setExpandedIds}
+            onSelectionChange={handleTreeSelectionChange}
+            selectedIds={selectedFloorId ? [selectedFloorId] : []}
+            showLines={true}
+          >
+            {/* Environment Section */}
+            <div
+              className={cn(
+                'flex flex-col border-b bg-background px-2 transition-all duration-300 ease-in-out',
+                expandedIds.includes('environment') ? 'min-h-0 flex-1' : 'flex-none shrink-0',
+              )}
             >
-              <TreeView className="p-0">
-                <EnvironmentItem level={1} onNodeClick={handleNodeClick} />
-                {siteIds.map((siteId) => (
-                  <SiteItem key={siteId} level={1} nodeId={siteId} />
-                ))}
-                <CollectionsSection level={1} onNodeClick={handleNodeClick} />
-                <ViewsSection level={1} onNodeClick={handleNodeClick} />
-              </TreeView>
-            </TreeProvider>
-          ) : (
-            <div className="p-2 text-muted-foreground text-xs italic">Loading...</div>
-          )}
-        </div>
+              <div
+                className={cn(
+                  'flex-1',
+                  expandedIds.includes('environment') ? 'overflow-y-auto' : 'overflow-hidden',
+                )}
+              >
+                <TreeView className="p-0">
+                  <EnvironmentItem level={1} onNodeClick={handleNodeClick} />
+                </TreeView>
+              </div>
+            </div>
+
+            {/* Site Sections */}
+            {siteIds.map((siteId) => (
+              <div
+                className={cn(
+                  'flex flex-col border-b bg-background px-2 transition-all duration-300 ease-in-out',
+                  expandedIds.includes(siteId) ? 'min-h-0 flex-1' : 'flex-none shrink-0',
+                )}
+                key={siteId}
+              >
+                <div
+                  className={cn(
+                    'flex-1',
+                    expandedIds.includes(siteId) ? 'overflow-y-auto' : 'overflow-hidden',
+                  )}
+                >
+                  <TreeView className="p-0">
+                    <SiteItem isLast={true} key={siteId} level={1} nodeId={siteId} />
+                  </TreeView>
+                </div>
+              </div>
+            ))}
+
+            {/* Collections Section */}
+            <div
+              className={cn(
+                'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
+                expandedIds.includes('collections-section')
+                  ? 'min-h-0 flex-1'
+                  : 'flex-none shrink-0',
+              )}
+            >
+              <div
+                className={cn(
+                  'flex-1',
+                  expandedIds.includes('collections-section')
+                    ? 'overflow-y-auto'
+                    : 'overflow-hidden',
+                )}
+              >
+                <TreeView className="p-0">
+                  <CollectionsSection isLast={true} level={1} onNodeClick={handleNodeClick} />
+                </TreeView>
+              </div>
+            </div>
+
+            {/* Views Section */}
+            <div
+              className={cn(
+                'flex flex-col border-t bg-background px-2 pb-2 transition-all duration-300 ease-in-out',
+                expandedIds.includes('views-section') ? 'min-h-0 flex-1' : 'flex-none shrink-0',
+              )}
+            >
+              <div
+                className={cn(
+                  'flex-1',
+                  expandedIds.includes('views-section') ? 'overflow-y-auto' : 'overflow-hidden',
+                )}
+              >
+                <TreeView className="p-0">
+                  <ViewsSection isLast={true} level={1} onNodeClick={handleNodeClick} />
+                </TreeView>
+              </div>
+            </div>
+          </TreeProvider>
+        ) : (
+          <div className="p-2 text-muted-foreground text-xs italic">Loading...</div>
+        )}
       </div>
     </LayersMenuContext.Provider>
   )

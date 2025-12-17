@@ -11,16 +11,17 @@ function SelectionManager() {
 
   const { camera, scene, gl, raycaster } = useThree()
   const currentFloorId = useEditor((state) => state.selectedFloorId)
+  const rootId = useEditor((state) => state.scene.root.children?.[0]?.id)
 
   useEffect(() => {
-    if (!currentFloorId) return
-    const currentFloor = scene.getObjectByName(currentFloorId)
+    const targetId = rootId || currentFloorId
+    if (!targetId) return
+
+    const targetObject = scene.getObjectByName(targetId)
 
     const performRaycast = (event: PointerEvent) => {
-      if (!currentFloor) {
-        console.warn(
-          `[SelectionManager] Current floor with ID ${currentFloorId} not found in scene.`,
-        )
+      if (!targetObject) {
+        console.warn(`[SelectionManager] Target object with ID ${targetId} not found in scene.`)
         return
       }
       // Convert to NDC coordinates
@@ -41,7 +42,7 @@ function SelectionManager() {
         }
       }
 
-      const intersections = raycaster.intersectObject(currentFloor, true)
+      const intersections = raycaster.intersectObject(targetObject, true)
 
       // Get the graph to check node visibility
       const { graph } = useEditor.getState()
@@ -168,7 +169,7 @@ function SelectionManager() {
       gl.domElement.removeEventListener('pointerdown', handlePointerDown)
       gl.domElement.removeEventListener('click', handleClick)
     }
-  }, [camera, gl, raycaster, currentFloorId, handleNodeSelect, handleClear, controlMode])
+  }, [camera, gl, raycaster, currentFloorId, rootId, handleNodeSelect, handleClear, controlMode])
 
   return null
 }
