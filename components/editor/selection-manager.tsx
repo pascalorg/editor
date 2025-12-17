@@ -47,7 +47,19 @@ function SelectionManager() {
       // Get the graph to check node visibility
       const { graph } = useEditor.getState()
 
+      const isObjectVisible = (obj: Object3D | null) => {
+        let current = obj
+        while (current) {
+          if (current.visible === false) return false
+          current = current.parent
+        }
+        return true
+      }
+
       const getNodeInfoFromIntersection = (object: Object3D) => {
+        // Double-check visibility of the object hierarchy
+        if (!isObjectVisible(object)) return null
+
         let current: Object3D | null = object
         let nodeObject: Object3D | null = null
         let depth = 0
@@ -65,9 +77,13 @@ function SelectionManager() {
         // Check if the node is visible - skip invisible nodes
         const handle = graph.getNodeById(nodeId)
         if (handle) {
-          const nodeData = handle.data() as { visible?: boolean } | undefined
+          const nodeData = handle.data() as any
           if (nodeData?.visible === false) {
             return null // Node is not visible, skip it
+          }
+          // Skip preview nodes
+          if (nodeData?.editor?.preview) {
+            return null
           }
         }
 
