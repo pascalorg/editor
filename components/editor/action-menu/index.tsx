@@ -165,11 +165,11 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
+          <ModeSwitcher />
+          <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ControlModes />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ViewToggles />
-          <div className="mx-1 h-5 w-px bg-zinc-700" />
-          <ModeSwitcher />
         </div>
       </div>
     </TooltipProvider>

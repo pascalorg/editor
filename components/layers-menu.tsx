@@ -194,25 +194,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]
 
-    // Deselect if no node is selected (e.g. clicking the active level again)
-    if (!selectedId) {
-      if (selectedFloorId) selectFloor(null)
-      return
-    }
-
     const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
-    if (isLevel) {
-      if (selectedFloorId !== selectedId) selectFloor(selectedId)
-    } else {
-      // Check if the selected node is a child of a level
-      const getLevelId = useEditor.getState().getLevelId
-      const parentLevelId = getLevelId(selectedId)
-
-      // If not a child of a level (e.g. Building, Site), unselect the level
-      if (!parentLevelId && selectedFloorId) {
-        selectFloor(null)
-      }
-    }
+    if (isLevel && selectedFloorId !== selectedId) selectFloor(selectedId)
   }
 
   return (

@@ -188,7 +188,7 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
         <TreeExpander hasChildren={hasChildren} />
         <TreeIcon hasChildren={hasChildren} icon={getNodeIcon(nodeType)} />
         <TreeLabel
-          className="flex-1 cursor-text"
+          className="flex-1"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
@@ -427,7 +427,7 @@ function DraggableLevelItem({
         <TreeExpander hasChildren={hasContent} />
         <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
         <TreeLabel
-          className="flex-1 cursor-text"
+          className="flex-1"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
@@ -770,7 +770,7 @@ export function BuildingItem({
         <TreeExpander hasChildren={showChildren} />
         <TreeIcon hasChildren={showChildren} icon={getNodeIcon('building')} />
         <TreeLabel
-          className="flex-1 cursor-text"
+          className="flex-1"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)
@@ -907,7 +907,7 @@ export function SiteItem({
         <TreeExpander hasChildren={childrenIds.length > 0} />
         <TreeIcon hasChildren={childrenIds.length > 0} icon={getNodeIcon('site')} />
         <TreeLabel
-          className="flex-1 cursor-text"
+          className="flex-1"
           onDoubleClick={(e) => {
             e.stopPropagation()
             setIsRenaming(true)

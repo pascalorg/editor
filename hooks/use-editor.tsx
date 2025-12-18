@@ -865,16 +865,18 @@ const useStore = create<StoreState>()(
             if (buildingId !== undefined) {
               updates.selectedBuildingId = buildingId
             }
+            // Restore last tool for the target mode
+            const lastTool = state.lastToolByMode[mode]
+            if (lastTool) {
+              updates.activeTool = lastTool
+              updates.controlMode = 'building' // Use 'building' for compatibility
+            }
           } else if (mode === 'site') {
-            // Clear building selection when entering site mode
+            // Clear building selection and reset to select mode when entering site mode
             updates.selectedBuildingId = null
-          }
-
-          // Restore last tool for the target mode
-          const lastTool = state.lastToolByMode[mode]
-          if (lastTool) {
-            updates.activeTool = lastTool
-            updates.controlMode = 'building' // Use 'building' for compatibility
+            updates.controlMode = 'select'
+            updates.activeTool = null
+            updates.catalogCategory = null
           }
 
           set(updates)
