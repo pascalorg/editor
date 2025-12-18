@@ -900,6 +900,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     }
   })
 
+  lastCheckedAt.current = 0
   if (!wallGeometry) return null
 
   return (
