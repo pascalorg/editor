@@ -1,6 +1,6 @@
 'use client'
 
-import { Hammer, Image, MousePointer2, Paintbrush, Trash2 } from 'lucide-react'
+import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type ControlMode, type EditorMode, useEditor } from '@/hooks/use-editor'
@@ -24,6 +24,14 @@ const allModes: ModeConfig[] = [
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
+  },
+  {
+    id: 'edit',
+    icon: Pencil,
+    label: 'Edit',
+    shortcut: 'E',
+    color: 'hover:bg-orange-500/20 hover:text-orange-400',
+    activeColor: 'bg-orange-500/20 text-orange-400',
   },
   {
     id: 'delete',
@@ -61,9 +69,9 @@ const allModes: ModeConfig[] = [
 
 // Define which modes are available in each editor mode
 const modesByEditorMode: Record<EditorMode, ControlMode[]> = {
-  site: ['select'], // Site: only select (building select is default select, property line is default edit)
-  structure: ['select', 'delete', 'building', 'guide'], // Structure: select, delete, build, guide (no edit)
-  furnish: ['select', 'delete', 'building', 'painting'], // Furnish: select, delete, build, painting (no edit, no guide)
+  site: ['select', 'edit'], // Site: select (building) and edit (property line)
+  structure: ['select', 'delete', 'building', 'guide'], // Structure: select, delete, build, guide
+  furnish: ['select', 'delete', 'building', 'painting'], // Furnish: select, delete, build, painting
 }
 
 export function ControlModes() {

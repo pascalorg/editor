@@ -854,8 +854,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const ghostMaterial = useMaterial('ghost')
   const paintMaterial = useMaterial(selectedMaterial)
   const shadowCasterMaterial = useMaterial('shadow-caster')
-  // const [hideWallBasedOnCameraPosition, setHideWallBasedOnCameraPosition] = useState(false)
-  console.log('shadowCasterMaterial', shadowCasterMaterial)
+
   const wallMaterial = useMemo(
     () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
     [isActiveFloor, frontMaterial, backMaterial, sidesMaterial, ghostMaterial],

@@ -29,7 +29,7 @@ const editorModes: Array<{
     icon: Building2,
     label: 'Structure',
     shortcut: '2',
-    description: 'Walls, rooms, doors, windows, stairs',
+    description: 'Walls, rooms, doors, windows, ...',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
   },
@@ -49,7 +49,7 @@ export function ModeSwitcher() {
   const setEditorMode = useEditor((state) => state.setEditorMode)
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="-my-0.5 flex items-center gap-1 rounded-lg bg-white/5 p-0.5">
       {editorModes.map((mode) => {
         const Icon = mode.icon
         const isActive = editorMode === mode.id

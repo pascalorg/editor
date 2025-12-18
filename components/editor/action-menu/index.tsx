@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { ControlModes } from './control-modes'
 import { FurnishTools } from './furnish-tools'
 import { ModeSwitcher } from './mode-switcher'
-import { SiteTools } from './site-tools'
 import { StructureTools } from './structure-tools'
 import { ViewToggles } from './view-toggles'
 
@@ -19,15 +18,11 @@ export function ActionMenu({ className }: { className?: string }) {
   const catalogCategory = useEditor((state) => state.catalogCategory)
 
   // Show tools based on editor mode when in build/building mode
+  // Site mode has no tool row - select/edit are control modes
   const isInBuildMode = controlMode === 'building' || controlMode === 'build'
-  const showSiteTools = editorMode === 'site' && isInBuildMode
   const showStructureTools = editorMode === 'structure' && isInBuildMode
   const showFurnishTools = editorMode === 'furnish' && isInBuildMode
   const showPaintingTools = controlMode === 'painting'
-
-  // Delayed state for site tools exit animation
-  const [shouldRenderSiteTools, setShouldRenderSiteTools] = useState(showSiteTools)
-  const [isSiteToolsVisible, setIsSiteToolsVisible] = useState(showSiteTools)
 
   // Delayed state for structure tools exit animation
   const [shouldRenderStructureTools, setShouldRenderStructureTools] = useState(showStructureTools)
@@ -45,18 +40,6 @@ export function ActionMenu({ className }: { className?: string }) {
   const [shouldRenderCatalog, setShouldRenderCatalog] = useState(catalogCategory !== null)
   const [isCatalogVisible, setIsCatalogVisible] = useState(catalogCategory !== null)
   const [currentCategory, setCurrentCategory] = useState<CatalogCategory | null>(catalogCategory)
-
-  // Site tools animation
-  useEffect(() => {
-    if (showSiteTools) {
-      setShouldRenderSiteTools(true)
-      requestAnimationFrame(() => setIsSiteToolsVisible(true))
-    } else {
-      setIsSiteToolsVisible(false)
-      const timeout = setTimeout(() => setShouldRenderSiteTools(false), 200)
-      return () => clearTimeout(timeout)
-    }
-  }, [showSiteTools])
 
   // Structure tools animation
   useEffect(() => {
@@ -134,22 +117,6 @@ export function ActionMenu({ className }: { className?: string }) {
           </div>
         )}
 
-        {/* Site Tools Row - Animated */}
-        {shouldRenderSiteTools && (
-          <div
-            className={cn(
-              'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
-              isSiteToolsVisible
-                ? 'max-h-20 border-b px-2 py-2 opacity-100'
-                : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
-            )}
-          >
-            <div className="w-max">
-              <SiteTools />
-            </div>
-          </div>
-        )}
-
         {/* Structure Tools Row - Animated */}
         {shouldRenderStructureTools && (
           <div
@@ -198,11 +165,11 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-          <ModeSwitcher />
-          <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ControlModes />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ViewToggles />
+          <div className="mx-1 h-5 w-px bg-zinc-700" />
+          <ModeSwitcher />
         </div>
       </div>
     </TooltipProvider>
