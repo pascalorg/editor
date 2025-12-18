@@ -6,19 +6,31 @@ import { MaterialCatalog } from '@/components/material-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { type CatalogCategory, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { BuildingTools } from './building-tools'
 import { ControlModes } from './control-modes'
+import { FurnishTools } from './furnish-tools'
+import { ModeSwitcher } from './mode-switcher'
+import { StructureTools } from './structure-tools'
 import { ViewToggles } from './view-toggles'
 
 export function ActionMenu({ className }: { className?: string }) {
   const controlMode = useEditor((state) => state.controlMode)
+  const editorMode = useEditor((state) => state.editorMode)
   const catalogCategory = useEditor((state) => state.catalogCategory)
-  const showBuildingTools = controlMode === 'building'
+
+  // Show tools based on editor mode when in build/building mode
+  // Site mode has no tool row - select/edit are control modes
+  const isInBuildMode = controlMode === 'building' || controlMode === 'build'
+  const showStructureTools = editorMode === 'structure' && isInBuildMode
+  const showFurnishTools = editorMode === 'furnish' && isInBuildMode
   const showPaintingTools = controlMode === 'painting'
 
-  // Delayed state for building tools exit animation
-  const [shouldRenderTools, setShouldRenderTools] = useState(showBuildingTools)
-  const [isToolsVisible, setIsToolsVisible] = useState(showBuildingTools)
+  // Delayed state for structure tools exit animation
+  const [shouldRenderStructureTools, setShouldRenderStructureTools] = useState(showStructureTools)
+  const [isStructureToolsVisible, setIsStructureToolsVisible] = useState(showStructureTools)
+
+  // Delayed state for furnish tools exit animation
+  const [shouldRenderFurnishTools, setShouldRenderFurnishTools] = useState(showFurnishTools)
+  const [isFurnishToolsVisible, setIsFurnishToolsVisible] = useState(showFurnishTools)
 
   // Delayed state for material catalog exit animation
   const [shouldRenderMaterialCatalog, setShouldRenderMaterialCatalog] = useState(showPaintingTools)
@@ -29,17 +41,31 @@ export function ActionMenu({ className }: { className?: string }) {
   const [isCatalogVisible, setIsCatalogVisible] = useState(catalogCategory !== null)
   const [currentCategory, setCurrentCategory] = useState<CatalogCategory | null>(catalogCategory)
 
+  // Structure tools animation
   useEffect(() => {
-    if (showBuildingTools) {
-      setShouldRenderTools(true)
-      requestAnimationFrame(() => setIsToolsVisible(true))
+    if (showStructureTools) {
+      setShouldRenderStructureTools(true)
+      requestAnimationFrame(() => setIsStructureToolsVisible(true))
     } else {
-      setIsToolsVisible(false)
-      const timeout = setTimeout(() => setShouldRenderTools(false), 200)
+      setIsStructureToolsVisible(false)
+      const timeout = setTimeout(() => setShouldRenderStructureTools(false), 200)
       return () => clearTimeout(timeout)
     }
-  }, [showBuildingTools])
+  }, [showStructureTools])
 
+  // Furnish tools animation
+  useEffect(() => {
+    if (showFurnishTools) {
+      setShouldRenderFurnishTools(true)
+      requestAnimationFrame(() => setIsFurnishToolsVisible(true))
+    } else {
+      setIsFurnishToolsVisible(false)
+      const timeout = setTimeout(() => setShouldRenderFurnishTools(false), 200)
+      return () => clearTimeout(timeout)
+    }
+  }, [showFurnishTools])
+
+  // Item catalog animation
   useEffect(() => {
     if (catalogCategory) {
       setCurrentCategory(catalogCategory)
@@ -55,6 +81,7 @@ export function ActionMenu({ className }: { className?: string }) {
     }
   }, [catalogCategory])
 
+  // Material catalog animation
   useEffect(() => {
     if (showPaintingTools) {
       setShouldRenderMaterialCatalog(true)
@@ -72,11 +99,11 @@ export function ActionMenu({ className }: { className?: string }) {
         className={cn(
           '-translate-x-1/2 fixed bottom-6 left-1/2 z-50',
           'rounded-2xl border border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-md',
-          'transition-all duration-200 ease-out', // Smooth container resizing
+          'transition-all duration-200 ease-out',
           className,
         )}
       >
-        {/* Item Catalog Row - Animated, above Building Tools */}
+        {/* Item Catalog Row - Animated */}
         {shouldRenderCatalog && currentCategory && (
           <div
             className={cn(
@@ -90,18 +117,34 @@ export function ActionMenu({ className }: { className?: string }) {
           </div>
         )}
 
-        {/* Building Tools Row - Animated */}
-        {shouldRenderTools && (
+        {/* Structure Tools Row - Animated */}
+        {shouldRenderStructureTools && (
           <div
             className={cn(
               'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
-              isToolsVisible
+              isStructureToolsVisible
                 ? 'max-h-20 border-b px-2 py-2 opacity-100'
                 : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
             )}
           >
             <div className="w-max">
-              <BuildingTools />
+              <StructureTools />
+            </div>
+          </div>
+        )}
+
+        {/* Furnish Tools Row - Animated */}
+        {shouldRenderFurnishTools && (
+          <div
+            className={cn(
+              'overflow-hidden border-zinc-800 transition-all duration-200 ease-out',
+              isFurnishToolsVisible
+                ? 'max-h-20 border-b px-2 py-2 opacity-100'
+                : 'max-h-0 border-b-0 px-2 py-0 opacity-0',
+            )}
+          >
+            <div className="mx-auto w-max">
+              <FurnishTools />
             </div>
           </div>
         )}
@@ -122,6 +165,8 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
+          <ModeSwitcher />
+          <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ControlModes />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ViewToggles />

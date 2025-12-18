@@ -232,28 +232,37 @@ export type {
 // Using Schema types instead for internal use
 import type { LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
 
-export type Tool =
-  | 'slab'
-  | 'ceiling'
+// Editor modes - high-level workflow modes
+export type EditorMode = 'site' | 'structure' | 'furnish'
+
+// Site mode tools
+export type SiteTool = 'property-line' | 'building-select'
+
+// Structure mode tools (building elements)
+export type StructureTool =
   | 'wall'
   | 'room'
   | 'custom-room'
+  | 'slab'
+  | 'ceiling'
   | 'roof'
   | 'column'
-  | 'item'
   | 'stair'
-
-// Catalog categories for the item tool
-export type CatalogCategory =
-  | 'furniture'
-  | 'appliance'
-  | 'bathroom'
-  | 'kitchen'
-  | 'outdoor'
-  | 'window'
   | 'door'
+  | 'window'
+  | 'collection'
 
-export type ControlMode = 'select' | 'edit' | 'delete' | 'building' | 'guide' | 'painting'
+// Furnish mode tools (items and decoration)
+export type FurnishTool = 'furniture' | 'appliance' | 'kitchen' | 'bathroom' | 'outdoor' | 'painting'
+
+// Combined tool type (including 'item' for backward compatibility during transition)
+export type Tool = SiteTool | StructureTool | FurnishTool | 'item'
+
+// Catalog categories for furnish mode items
+export type CatalogCategory = 'furniture' | 'appliance' | 'bathroom' | 'kitchen' | 'outdoor' | 'window' | 'door'
+
+// Control modes - sub-modes within each editor mode (keeping legacy values for compatibility during transition)
+export type ControlMode = 'select' | 'edit' | 'delete' | 'build' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
 export type ViewMode = 'full' | 'level'
@@ -303,6 +312,11 @@ export type StoreState = {
   lastCatalogCategory: CatalogCategory | null
   catalogCategory: CatalogCategory | null
   controlMode: ControlMode
+
+  // New editor mode system
+  editorMode: EditorMode
+  selectedBuildingId: string | null
+  lastToolByMode: Record<EditorMode, Tool | null>
   cameraMode: CameraMode
   levelMode: LevelMode
   movingCamera: boolean
@@ -364,6 +378,7 @@ export type StoreState = {
   setActiveTool: (tool: Tool | null, catalogCategory?: CatalogCategory | null) => void
   setCatalogCategory: (category: CatalogCategory | null) => void
   setControlMode: (mode: ControlMode) => void
+  setEditorMode: (mode: EditorMode, buildingId?: string | null) => void
   setCameraMode: (mode: CameraMode) => void
   toggleLevelMode: () => void
   setViewerDisplayMode: (mode: ViewerDisplayMode) => void
@@ -616,6 +631,15 @@ const useStore = create<StoreState>()(
         lastCatalogCategory: null,
         catalogCategory: null,
         controlMode: 'building',
+
+        // New editor mode system - default to structure mode
+        editorMode: 'structure',
+        selectedBuildingId: null,
+        lastToolByMode: {
+          site: null,
+          structure: 'wall',
+          furnish: 'furniture',
+        },
         cameraMode: 'perspective',
         levelMode: 'stacked',
         movingCamera: false,
@@ -816,6 +840,46 @@ const useStore = create<StoreState>()(
             }
             set({ activeTool: null, catalogCategory: null })
           }
+        },
+        setEditorMode: (mode, buildingId) => {
+          const state = get()
+
+          // Save current tool for the current editor mode
+          const currentTool = state.activeTool
+          if (currentTool) {
+            set({
+              lastToolByMode: {
+                ...state.lastToolByMode,
+                [state.editorMode]: currentTool,
+              },
+            })
+          }
+
+          // Prepare updates
+          const updates: Partial<StoreState> = {
+            editorMode: mode,
+          }
+
+          // Handle building selection for structure/furnish modes
+          if (mode === 'structure' || mode === 'furnish') {
+            if (buildingId !== undefined) {
+              updates.selectedBuildingId = buildingId
+            }
+            // Restore last tool for the target mode
+            const lastTool = state.lastToolByMode[mode]
+            if (lastTool) {
+              updates.activeTool = lastTool
+              updates.controlMode = 'building' // Use 'building' for compatibility
+            }
+          } else if (mode === 'site') {
+            // Clear building selection and reset to select mode when entering site mode
+            updates.selectedBuildingId = null
+            updates.controlMode = 'select'
+            updates.activeTool = null
+            updates.catalogCategory = null
+          }
+
+          set(updates)
         },
         setCameraMode: (mode) => set({ cameraMode: mode }),
         setMovingCamera: (moving) => set({ movingCamera: moving }),

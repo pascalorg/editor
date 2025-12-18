@@ -2,10 +2,10 @@
 
 import { Line } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
-import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
+import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
+import { type EditorMode, useEditor } from '@/hooks/use-editor'
+import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
 
 interface WallDeleteInfo {
   rangeStart: number
@@ -60,6 +60,11 @@ export function SledgehammerTool() {
   const cancelTransaction = useEditor((state) => state.cancelTransaction)
   const captureSnapshot = useEditor((state) => state.captureSnapshot)
   const trackCreatedNode = useEditor((state) => state.trackCreatedNode)
+  const editorMode = useEditor((state) => state.editorMode)
+
+  // Mode-based deletion: Structure mode = walls only, Furnish mode = items only
+  const canDeleteWalls = editorMode === 'structure'
+  const canDeleteItems = editorMode === 'furnish'
 
   const stateRef = useRef<SledgehammerState>({
     hoveredWallId: null,
@@ -94,13 +99,17 @@ export function SledgehammerTool() {
       const rangeStart = Math.min(startIndex, endIndex)
       const rangeEnd = Math.max(startIndex, endIndex)
 
-      updateNode(wallId, {
-        editor: {
-          ...wall.editor,
-          deletePreview: true,
-          deleteRange: [rangeStart, rangeEnd],
+      updateNode(
+        wallId,
+        {
+          editor: {
+            ...wall.editor,
+            deletePreview: true,
+            deleteRange: [rangeStart, rangeEnd],
+          },
         },
-      }, true) // skipUndo - preview changes shouldn't be in history
+        true,
+      ) // skipUndo - preview changes shouldn't be in history
     }
 
     // Helper to clear delete preview from a wall (preview only, skip undo)
@@ -109,9 +118,13 @@ export function SledgehammerTool() {
       if (handle) {
         const node = handle.data() as any
         if (node?.editor?.deletePreview) {
-          updateNode(wallId, {
-            editor: { ...node.editor, deletePreview: false, deleteRange: undefined },
-          }, true) // skipUndo - preview changes shouldn't be in history
+          updateNode(
+            wallId,
+            {
+              editor: { ...node.editor, deletePreview: false, deleteRange: undefined },
+            },
+            true,
+          ) // skipUndo - preview changes shouldn't be in history
         }
       }
     }
@@ -143,6 +156,9 @@ export function SledgehammerTool() {
     // ========================================================================
 
     const handleWallEnter = (e: WallEvent) => {
+      // Skip wall events if we can't delete walls in this mode
+      if (!canDeleteWalls) return
+
       const wall = e.node
       // gridPosition.x is already in wall-local space (0 to wallLength)
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
@@ -157,6 +173,9 @@ export function SledgehammerTool() {
     }
 
     const handleWallMove = (e: WallEvent) => {
+      // Skip wall events if we can't delete walls in this mode
+      if (!canDeleteWalls) return
+
       const wall = e.node
       // gridPosition.x is already in wall-local space (0 to wallLength)
       const gridIndex = getWallGridIndex(wall, e.gridPosition.x)
@@ -180,6 +199,9 @@ export function SledgehammerTool() {
     }
 
     const handleWallLeave = (e: WallEvent) => {
+      // Skip wall events if we can't delete walls in this mode
+      if (!canDeleteWalls) return
+
       const wall = e.node
 
       // Don't clear preview if dragging (wall might be in delete set)
@@ -202,6 +224,8 @@ export function SledgehammerTool() {
     // ========================================================================
 
     const handleGridClick = (e: GridEvent) => {
+      // Skip item deletion if we can't delete items in this mode
+      if (!canDeleteItems) return
       if (!selectedFloorId) return
 
       const [x, y] = e.position
@@ -241,7 +265,12 @@ export function SledgehammerTool() {
             const wall = node as WallNode
             // Calculate which segments of this wall intersect the rectangle
             // Pass the accumulated parent offset to convert wall coords to absolute
-            const range = calculateWallRangeInRect(wall, { minX, maxX, minY, maxY }, parentOffsetX, parentOffsetZ)
+            const range = calculateWallRangeInRect(
+              wall,
+              { minX, maxX, minY, maxY },
+              parentOffsetX,
+              parentOffsetZ,
+            )
             if (range) {
               wallsInRect.set(wall.id, range)
             }
@@ -387,6 +416,8 @@ export function SledgehammerTool() {
     }
 
     const handleGridPointerDown = (e: GridEvent) => {
+      // Skip item deletion if we can't delete items in this mode
+      if (!canDeleteItems) return
       if (!selectedFloorId) return
 
       // Don't start grid drag if we're on a wall (wall pointer down handles that)
@@ -447,6 +478,8 @@ export function SledgehammerTool() {
     // ========================================================================
 
     const handleWallPointerDown = (e: WallEvent) => {
+      // Skip wall events if we can't delete walls in this mode
+      if (!canDeleteWalls) return
       if (!selectedFloorId) return
 
       // Clear the hover preview
@@ -481,6 +514,8 @@ export function SledgehammerTool() {
     }
 
     const handleWallPointerUp = (_e: WallEvent) => {
+      // Skip wall events if we can't delete walls in this mode
+      if (!canDeleteWalls) return
       // Wall pointer up is handled by handleGridPointerUp since we use grid-based rectangle selection
       // Just clear hover state
       state.hoveredWallId = null
@@ -652,7 +687,21 @@ export function SledgehammerTool() {
       emitter.off('grid:pointerdown', handleGridPointerDown)
       emitter.off('grid:pointerup', handleGridPointerUp)
     }
-  }, [graph, updateNode, deleteNode, addNode, selectedFloorId, spatialGrid, startTransaction, commitTransaction, cancelTransaction, captureSnapshot, trackCreatedNode])
+  }, [
+    graph,
+    updateNode,
+    deleteNode,
+    addNode,
+    selectedFloorId,
+    spatialGrid,
+    startTransaction,
+    commitTransaction,
+    cancelTransaction,
+    captureSnapshot,
+    trackCreatedNode,
+    canDeleteWalls,
+    canDeleteItems,
+  ])
 
   // Render the delete rectangle when dragging on grid
   if (!deleteRect) return null
@@ -678,8 +727,12 @@ export function SledgehammerTool() {
     <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
       <Line
         color="#ff4444"
+        depthTest={false}
+        frustumCulled={false}
         lineWidth={2}
         points={points}
+        renderOrder={999}
+        transparent
       />
     </group>
   )

@@ -3,17 +3,20 @@
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { type ControlMode, useEditor } from '@/hooks/use-editor'
+import { type ControlMode, type EditorMode, useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
-const modes: Array<{
+type ModeConfig = {
   id: ControlMode
   icon: typeof MousePointer2
   label: string
   shortcut: string
   color: string
   activeColor: string
-}> = [
+}
+
+// All available control modes
+const allModes: ModeConfig[] = [
   {
     id: 'select',
     icon: MousePointer2,
@@ -41,7 +44,7 @@ const modes: Array<{
   {
     id: 'building',
     icon: Hammer,
-    label: 'Building',
+    label: 'Build',
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -64,12 +67,24 @@ const modes: Array<{
   },
 ]
 
+// Define which modes are available in each editor mode
+const modesByEditorMode: Record<EditorMode, ControlMode[]> = {
+  site: ['select', 'edit'], // Site: select (building) and edit (property line)
+  structure: ['select', 'delete', 'building', 'guide'], // Structure: select, delete, build, guide
+  furnish: ['select', 'delete', 'building', 'painting'], // Furnish: select, delete, build, painting
+}
+
 export function ControlModes() {
   const controlMode = useEditor((state) => state.controlMode)
+  const editorMode = useEditor((state) => state.editorMode)
   const setControlMode = useEditor((state) => state.setControlMode)
   const lastBuildingTool = useEditor((state) => state.lastBuildingTool)
   const lastCatalogCategory = useEditor((state) => state.lastCatalogCategory)
   const setActiveTool = useEditor((state) => state.setActiveTool)
+
+  // Get available modes for current editor mode
+  const availableModeIds = modesByEditorMode[editorMode]
+  const availableModes = allModes.filter((m) => availableModeIds.includes(m.id))
 
   const handleModeClick = (mode: ControlMode) => {
     if (mode === 'building') {
@@ -82,7 +97,7 @@ export function ControlModes() {
 
   return (
     <div className="flex items-center gap-1">
-      {modes.map((mode) => {
+      {availableModes.map((mode) => {
         const Icon = mode.icon
         const isActive = controlMode === mode.id
 

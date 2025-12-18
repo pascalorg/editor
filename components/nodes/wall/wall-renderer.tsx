@@ -853,7 +853,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const sidesMaterial = useMaterial('white')
   const ghostMaterial = useMaterial('ghost')
   const paintMaterial = useMaterial(selectedMaterial)
-  // const [hideWallBasedOnCameraPosition, setHideWallBasedOnCameraPosition] = useState(false)
+  const shadowCasterMaterial = useMaterial('shadow-caster')
 
   const wallMaterial = useMemo(
     () => (isActiveFloor ? [frontMaterial, backMaterial, sidesMaterial] : ghostMaterial),
@@ -892,13 +892,15 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       } else if (interiorSide === 'both') {
         hideWall = true
       }
-      wallMesh.current.visible = !hideWall
+      // wallMesh.current.visible = !hideWall
+      wallMesh.current.material = hideWall ? shadowCasterMaterial : wallMaterial
       if (miniwallMesh.current) {
         miniwallMesh.current.visible = hideWall
       }
     }
   })
 
+  lastCheckedAt.current = 0
   if (!wallGeometry) return null
 
   return (

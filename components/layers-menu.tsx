@@ -10,7 +10,7 @@ import {
   ViewsSection,
 } from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
-import { type StoreState, useEditor } from '@/hooks/use-editor'
+import { type EditorMode, type StoreState, useEditor } from '@/hooks/use-editor'
 import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
 import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
 import { cn } from '@/lib/utils'
@@ -23,6 +23,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectFloor = useEditor((state) => state.selectFloor)
+  const editorMode = useEditor((state) => state.editorMode)
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
       // Helper to find level IDs for expansion logic
@@ -193,25 +194,8 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]
 
-    // Deselect if no node is selected (e.g. clicking the active level again)
-    if (!selectedId) {
-      if (selectedFloorId) selectFloor(null)
-      return
-    }
-
     const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
-    if (isLevel) {
-      if (selectedFloorId !== selectedId) selectFloor(selectedId)
-    } else {
-      // Check if the selected node is a child of a level
-      const getLevelId = useEditor.getState().getLevelId
-      const parentLevelId = getLevelId(selectedId)
-
-      // If not a child of a level (e.g. Building, Site), unselect the level
-      if (!parentLevelId && selectedFloorId) {
-        selectFloor(null)
-      }
-    }
+    if (isLevel && selectedFloorId !== selectedId) selectFloor(selectedId)
   }
 
   return (
@@ -267,34 +251,42 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                   )}
                 >
                   <TreeView className="p-0">
-                    <SiteItem isLast={true} key={siteId} level={1} nodeId={siteId} />
+                    <SiteItem
+                      editorMode={editorMode}
+                      isLast={true}
+                      key={siteId}
+                      level={1}
+                      nodeId={siteId}
+                    />
                   </TreeView>
                 </div>
               </div>
             ))}
 
-            {/* Collections Section */}
-            <div
-              className={cn(
-                'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
-                expandedIds.includes('collections-section')
-                  ? 'min-h-0 flex-1'
-                  : 'flex-none shrink-0',
-              )}
-            >
+            {/* Collections Section - Hidden in Site mode */}
+            {editorMode !== 'site' && (
               <div
                 className={cn(
-                  'flex-1',
+                  'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
                   expandedIds.includes('collections-section')
-                    ? 'overflow-y-auto'
-                    : 'overflow-hidden',
+                    ? 'min-h-0 flex-1'
+                    : 'flex-none shrink-0',
                 )}
               >
-                <TreeView className="p-0">
-                  <CollectionsSection isLast={true} level={1} onNodeClick={handleNodeClick} />
-                </TreeView>
+                <div
+                  className={cn(
+                    'flex-1',
+                    expandedIds.includes('collections-section')
+                      ? 'overflow-y-auto'
+                      : 'overflow-hidden',
+                  )}
+                >
+                  <TreeView className="p-0">
+                    <CollectionsSection isLast={true} level={1} onNodeClick={handleNodeClick} />
+                  </TreeView>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Views Section */}
             <div

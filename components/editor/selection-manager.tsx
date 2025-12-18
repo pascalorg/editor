@@ -128,7 +128,11 @@ function SelectionManager() {
       // Convert back to array and filter out level nodes
       const candidates = Array.from(candidatesByNode.values()).filter(
         (candidate) =>
-          !(candidate.nodeId.startsWith('level_') || candidate.nodeId.startsWith('ceiling_')),
+          !(
+            candidate.nodeId.startsWith('level_') ||
+            candidate.nodeId.startsWith('ceiling_') ||
+            candidate.nodeId.startsWith('site_')
+          ),
       )
 
       // Sort by distance first, then by depth if distances are very close
@@ -149,7 +153,7 @@ function SelectionManager() {
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return // Only left-click
       if (controlMode !== 'select') return
-      
+
       pointerDownPos.current = { x: event.clientX, y: event.clientY }
     }
 

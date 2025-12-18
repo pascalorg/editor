@@ -48,6 +48,13 @@ export const MATERIAL_PRESETS: Record<MaterialName, MaterialDefinition> = {
     metalness: 0,
     roughness: 1,
   },
+  'shadow-caster': {
+    name: 'shadow-caster',
+    type: 'standard',
+    color: COLORS.ghost,
+    depthWrite: false,
+    colorWrite: false,
+  },
   glass: {
     name: 'glass',
     type: 'standard',

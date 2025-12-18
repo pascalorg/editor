@@ -3,7 +3,13 @@ import type { Color, Texture } from 'three'
 /**
  * Material preset names for special rendering states
  */
-export type MaterialPreset = 'preview-valid' | 'preview-invalid' | 'delete' | 'ghost' | 'glass'
+export type MaterialPreset =
+  | 'preview-valid'
+  | 'preview-invalid'
+  | 'delete'
+  | 'ghost'
+  | 'glass'
+  | 'shadow-caster'
 
 /**
  * Solid color material names
@@ -54,6 +60,7 @@ export interface MaterialDefinition {
   clearcoat?: number
   clearcoatRoughness?: number
   depthWrite?: boolean
+  colorWrite?: boolean
 }
 
 /**
