@@ -6,7 +6,8 @@ import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
-import { tools } from '@/components/editor/action-menu/building-tools'
+import { structureTools } from '@/components/editor/action-menu/structure-tools'
+import { furnishTools } from '@/components/editor/action-menu/furnish-tools'
 import { emitter } from '@/events/bus'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
@@ -20,7 +21,8 @@ const modeConfig: Record<
   select: { icon: MousePointer2, bgColor: 'rgba(59, 130, 246, 0.2)', iconColor: '#60a5fa' }, // blue-500/20, blue-400
   edit: { icon: Pencil, bgColor: 'rgba(249, 115, 22, 0.2)', iconColor: '#fb923c' }, // orange-500/20, orange-400
   delete: { icon: Trash2, bgColor: 'rgba(239, 68, 68, 0.2)', iconColor: '#f87171' }, // red-500/20, red-400
-  building: { icon: Hammer, bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green-500/20, green-400
+  build: { icon: Hammer, bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green-500/20, green-400
+  building: { icon: Hammer, bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green-500/20, green-400 (legacy)
   painting: { icon: Paintbrush, bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan-500/20, cyan-400
   guide: { icon: Image, bgColor: 'rgba(168, 85, 247, 0.2)', iconColor: '#c084fc' }, // purple-500/20, purple-400
 }
@@ -205,15 +207,18 @@ export const GridTiles = memo(() => {
 
 GridTiles.displayName = 'GridTiles'
 
+// Combined tools from structure and furnish modes for icon lookup
+const allTools = [...structureTools, ...furnishTools]
+
 // Helper function to get icon for a building tool
 function getBuildingToolIcon(toolId: string, category: string | null): string | null {
   // For item tools, find by both tool id and catalog category
   if (toolId === 'item' && category) {
-    const tool = tools.find((t) => t.id === 'item' && t.catalogCategory === category)
+    const tool = allTools.find((t) => t.id === 'item' && 'catalogCategory' in t && t.catalogCategory === category)
     return tool?.iconSrc ?? null
   }
   // For other tools, find by tool id only
-  const tool = tools.find((t) => t.id === toolId && !t.catalogCategory)
+  const tool = allTools.find((t) => t.id === toolId && !('catalogCategory' in t && t.catalogCategory))
   return tool?.iconSrc ?? null
 }
 

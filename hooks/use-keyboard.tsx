@@ -11,6 +11,7 @@ export function useKeyboard() {
   const redo = useEditor((state) => state.redo)
   const setControlMode = useEditor((state) => state.setControlMode)
   const setActiveTool = useEditor((state) => state.setActiveTool)
+  const setEditorMode = useEditor((state) => state.setEditorMode)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
   const groupSelected = useEditor((state) => state.groupSelected)
@@ -35,6 +36,18 @@ export function useKeyboard() {
         if (selectedNodeIds.length > 0) {
           handleClear()
         }
+      } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
+        // Editor mode: Site
+        e.preventDefault()
+        setEditorMode('site')
+      } else if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
+        // Editor mode: Structure
+        e.preventDefault()
+        setEditorMode('structure')
+      } else if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
+        // Editor mode: Furnish
+        e.preventDefault()
+        setEditorMode('furnish')
       } else if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('select')
@@ -52,9 +65,6 @@ export function useKeyboard() {
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         setControlMode('guide')
-      } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        setControlMode('painting')
       } else if ((e.key === 'g' || e.key === 'G') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         if (e.shiftKey) {
@@ -88,6 +98,7 @@ export function useKeyboard() {
     redo,
     setControlMode,
     setActiveTool,
+    setEditorMode,
     cameraMode,
     setCameraMode,
     selectedNodeIds,

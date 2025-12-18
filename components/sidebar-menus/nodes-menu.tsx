@@ -622,7 +622,15 @@ export function LevelReorderItem(props: LevelReorderItemProps) {
   )
 }
 
-export function BuildingItem({ nodeId, level }: { nodeId: string; level: number }) {
+export function BuildingItem({
+  nodeId,
+  level,
+  collapsedInSiteMode,
+}: {
+  nodeId: string
+  level: number
+  collapsedInSiteMode?: boolean
+}) {
   const { handleNodeClick } = useLayersMenu()
   const { nodeVisible, nodeName, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
@@ -746,6 +754,9 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
     return (levelB?.level || 0) - (levelA?.level || 0)
   })
 
+  // In Site mode, building acts as a leaf node (no expandable children)
+  const showChildren = !collapsedInSiteMode && levelIds.length > 0
+
   return (
     <TreeNode level={level} nodeId={nodeId}>
       <TreeNodeTrigger
@@ -756,8 +767,8 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
           handleNodeSelect(nodeId, e)
         }}
       >
-        <TreeExpander hasChildren={levelIds.length > 0} />
-        <TreeIcon hasChildren={levelIds.length > 0} icon={getNodeIcon('building')} />
+        <TreeExpander hasChildren={showChildren} />
+        <TreeIcon hasChildren={showChildren} icon={getNodeIcon('building')} />
         <TreeLabel
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
@@ -775,14 +786,17 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
           onOpenChange={setIsRenaming}
           onRename={handleRename}
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button className="h-5 w-5 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Add new level</TooltipContent>
-        </Tooltip>
+        {/* Hide Add Level button in Site mode */}
+        {!collapsedInSiteMode && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button className="h-5 w-5 p-0" onClick={handleAddLevel} size="sm" variant="ghost">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add new level</TooltipContent>
+          </Tooltip>
+        )}
         <Button
           className={cn(
             'h-5 w-5 p-0 transition-opacity',
@@ -806,22 +820,25 @@ export function BuildingItem({ nodeId, level }: { nodeId: string; level: number 
         </Button>
         <VisibilityToggle onToggle={() => toggleNodeVisibility(nodeId)} visible={nodeVisible} />
       </TreeNodeTrigger>
-      <TreeNodeContent hasChildren={levelIds.length > 0}>
-        <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
-          {floorGroups.map((levelId: string, index: number) => (
-            <LevelReorderItem
-              handleScanUpload={handleScanUpload}
-              handleUpload={handleUpload}
-              isSelected={selectedFloorId === levelId}
-              key={levelId}
-              level={level + 1}
-              levelId={levelId as LevelNode['id']}
-              levelIndex={index}
-              levelsCount={floorGroups.length}
-            />
-          ))}
-        </Reorder.Group>
-      </TreeNodeContent>
+      {/* Only render children if not in collapsed Site mode */}
+      {showChildren && (
+        <TreeNodeContent hasChildren={true}>
+          <Reorder.Group as="div" axis="y" onReorder={handleReorder} values={floorGroups}>
+            {floorGroups.map((levelId: string, index: number) => (
+              <LevelReorderItem
+                handleScanUpload={handleScanUpload}
+                handleUpload={handleUpload}
+                isSelected={selectedFloorId === levelId}
+                key={levelId}
+                level={level + 1}
+                levelId={levelId as LevelNode['id']}
+                levelIndex={index}
+                levelsCount={floorGroups.length}
+              />
+            ))}
+          </Reorder.Group>
+        </TreeNodeContent>
+      )}
     </TreeNode>
   )
 }
@@ -830,10 +847,12 @@ export function SiteItem({
   nodeId,
   level,
   isLast,
+  editorMode,
 }: {
   nodeId: string
   level: number
   isLast?: boolean
+  editorMode?: 'site' | 'structure' | 'furnish'
 }) {
   const { handleNodeClick } = useLayersMenu()
   const { nodeVisible, nodeName, hasCamera } = useEditor(
@@ -950,8 +969,18 @@ export function SiteItem({
           const handle = useEditor.getState().graph.getNodeById(childId as AnyNodeId)
           const child = handle?.data()
           if (child?.type === 'building') {
-            return <BuildingItem key={childId} level={level + 1} nodeId={childId} />
+            // In Site mode, show buildings without their children (levels)
+            return (
+              <BuildingItem
+                collapsedInSiteMode={editorMode === 'site'}
+                key={childId}
+                level={level + 1}
+                nodeId={childId}
+              />
+            )
           }
+          // In Site mode, don't show non-building children
+          if (editorMode === 'site') return null
           return (
             <NodeItem
               index={index}
