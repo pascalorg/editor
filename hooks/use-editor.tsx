@@ -877,21 +877,58 @@ const useStore = create<StoreState>()(
             editorMode: mode,
           }
 
+          // Filter selected nodes based on target mode
+          if (state.selectedNodeIds.length > 0) {
+            const filteredSelection = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              if (!handle) return false
+              const nodeType = handle.type
+
+              if (mode === 'site') {
+                // Site mode: only keep site or building selections
+                return nodeType === 'site' || nodeType === 'building'
+              }
+              // Structure/Furnish mode: deselect site and building nodes
+              return nodeType !== 'site' && nodeType !== 'building'
+            })
+
+            if (filteredSelection.length !== state.selectedNodeIds.length) {
+              updates.selectedNodeIds = filteredSelection
+            }
+          }
+
+          // Define available control modes per editor mode
+          const modesByEditorMode: Record<EditorMode, ControlMode[]> = {
+            site: ['select', 'edit'],
+            structure: ['select', 'delete', 'building', 'guide'],
+            furnish: ['select', 'delete', 'building', 'painting'],
+          }
+
+          // Check if current control mode is available in target editor mode
+          const availableModes = modesByEditorMode[mode]
+          const currentControlMode = state.controlMode
+          const isCurrentModeAvailable = availableModes.includes(currentControlMode)
+
           // Handle building selection for structure/furnish modes
           if (mode === 'structure' || mode === 'furnish') {
             if (buildingId !== undefined) {
               updates.selectedBuildingId = buildingId
             }
-            // Restore last tool for the target mode
-            const lastTool = state.lastToolByMode[mode]
-            if (lastTool) {
-              updates.activeTool = lastTool
-              updates.controlMode = 'building' // Use 'building' for compatibility
+
+            // Only switch control mode if current one is not available
+            if (!isCurrentModeAvailable) {
+              updates.controlMode = 'select'
+              updates.activeTool = null
+              updates.catalogCategory = null
             }
           } else if (mode === 'site') {
-            // Clear building selection and reset to select mode when entering site mode
+            // Clear building selection when entering site mode
             updates.selectedBuildingId = null
-            updates.controlMode = 'select'
+
+            // Only switch control mode if current one is not available
+            if (!isCurrentModeAvailable) {
+              updates.controlMode = 'select'
+            }
             updates.activeTool = null
             updates.catalogCategory = null
           }
