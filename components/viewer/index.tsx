@@ -7,7 +7,7 @@ import { useCallback, useEffect } from 'react'
 import { NodesDebugger } from '@/components/debug/nodes-debugger'
 import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
 import { emitter, type InteractionClickEvent } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
+import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
@@ -34,12 +34,15 @@ interface ViewerProps {
   defaultZoom?: number
   /** When true, posts selection changes to parent window for iframe embedding */
   isEmbedded?: boolean
+  /** Initial wall mode for viewer */
+  defaultWallMode?: WallMode
 }
 
 export default function Viewer({
   className,
   defaultZoom = VIEWER_DEFAULT_ZOOM,
   isEmbedded = false,
+  defaultWallMode = 'cutaway',
 }: ViewerProps) {
   // Use individual selectors for better performance
   const building = useEditor((state) =>
@@ -70,6 +73,7 @@ export default function Viewer({
       selectedCollectionId: null,
       levelMode: 'stacked',
       viewMode: 'full',
+      wallMode: defaultWallMode,
     })
   }, [])
 

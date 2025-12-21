@@ -253,18 +253,32 @@ export type StructureTool =
   | 'collection'
 
 // Furnish mode tools (items and decoration)
-export type FurnishTool = 'furniture' | 'appliance' | 'kitchen' | 'bathroom' | 'outdoor' | 'painting'
+export type FurnishTool =
+  | 'furniture'
+  | 'appliance'
+  | 'kitchen'
+  | 'bathroom'
+  | 'outdoor'
+  | 'painting'
 
 // Combined tool type (including 'item' for backward compatibility during transition)
 export type Tool = SiteTool | StructureTool | FurnishTool | 'item'
 
 // Catalog categories for furnish mode items
-export type CatalogCategory = 'furniture' | 'appliance' | 'bathroom' | 'kitchen' | 'outdoor' | 'window' | 'door'
+export type CatalogCategory =
+  | 'furniture'
+  | 'appliance'
+  | 'bathroom'
+  | 'kitchen'
+  | 'outdoor'
+  | 'window'
+  | 'door'
 
 // Control modes - sub-modes within each editor mode (keeping legacy values for compatibility during transition)
 export type ControlMode = 'select' | 'edit' | 'delete' | 'build' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
+export type WallMode = 'up' | 'cutaway' | 'down'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 export type PaintMode = 'wall' | 'room'
@@ -319,6 +333,7 @@ export type StoreState = {
   lastToolByMode: Record<EditorMode, Tool | null>
   cameraMode: CameraMode
   levelMode: LevelMode
+  wallMode: WallMode
   movingCamera: boolean
   isManipulatingImage: boolean
   isManipulatingScan: boolean
@@ -381,6 +396,7 @@ export type StoreState = {
   setEditorMode: (mode: EditorMode, buildingId?: string | null) => void
   setCameraMode: (mode: CameraMode) => void
   toggleLevelMode: () => void
+  toggleWallMode: () => void
   setViewerDisplayMode: (mode: ViewerDisplayMode) => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
@@ -642,6 +658,7 @@ const useStore = create<StoreState>()(
         },
         cameraMode: 'perspective',
         levelMode: 'stacked',
+        wallMode: 'cutaway',
         movingCamera: false,
         isManipulatingImage: false,
         isManipulatingScan: false,
@@ -894,6 +911,13 @@ const useStore = create<StoreState>()(
           set((state) => ({
             levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
           })),
+        toggleWallMode: () =>
+          set((state) => {
+            const modes: WallMode[] = ['up', 'cutaway', 'down']
+            const currentIndex = modes.indexOf(state.wallMode)
+            const nextIndex = (currentIndex + 1) % modes.length
+            return { wallMode: modes[nextIndex] }
+          }),
 
         getSelectedElementsSet: () => {
           const state = get()
