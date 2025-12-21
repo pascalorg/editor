@@ -116,6 +116,7 @@ export function BoundedGrid({
 
   return (
     <mesh
+      name="bounded-grid"
       position={[dimensions.centerX, 0.005, dimensions.centerZ]}
       renderOrder={-1}
       rotation={[-Math.PI / 2, 0, 0]}

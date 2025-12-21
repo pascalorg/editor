@@ -22,6 +22,7 @@ export function InfiniteFloor() {
   return (
     <mesh
       castShadow
+      name="infinite-floor"
       position={[0, -0.01, 0]}
       raycast={() => null}
       receiveShadow
