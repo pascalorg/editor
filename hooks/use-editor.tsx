@@ -289,11 +289,6 @@ export type SceneSource =
   | { type: 'url'; url: string } // Loaded from URL, not persisted (viewer mode)
   | { type: 'slot'; name: string } // Named slot for future multi-project support
 
-// Add to collection workflow state
-export type AddToCollectionState = {
-  isActive: boolean
-  nodeIds: string[]
-}
 
 export type StoreState = {
   // ============================================================================
@@ -341,10 +336,7 @@ export type StoreState = {
   pointerPosition: [number, number] | null
   debug: boolean
 
-  // Add to collection workflow
-  addToCollectionState: AddToCollectionState
-
-  // Collection/Room selection (for viewer room focus)
+  // Collection selection (for editing boundaries)
   selectedCollectionId: string | null
 
   selectedItem: {
@@ -461,23 +453,18 @@ export type StoreState = {
   ) => void
 
   // Collection operations
-  addCollection: (name: string) => Collection
+  addCollection: (name: string, levelId: string, polygon: [number, number][]) => Collection
   deleteCollection: (collectionId: string) => void
   renameCollection: (collectionId: string, name: string) => void
   setCollectionType: (collectionId: string, type: CollectionType) => void
-  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
-  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+  updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => void
+  setCollectionColor: (collectionId: string, color: string) => void
 
   // View operations
   addView: (viewData: Omit<View, 'id' | 'object'>) => void
   deleteView: (viewId: string) => void
   updateView: (viewId: string, updates: Partial<View>) => void
   applyView: (viewId: string) => void
-
-  // Add to collection workflow
-  startAddToCollection: () => void
-  confirmAddToCollection: (collectionId: string) => void
-  cancelAddToCollection: () => void
 
   // Transaction operations (for grouping multiple operations into one undo step)
   startTransaction: () => void
@@ -664,7 +651,6 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
-        addToCollectionState: { isActive: false, nodeIds: [] },
         selectedCollectionId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
@@ -745,7 +731,7 @@ const useStore = create<StoreState>()(
 
           set({
             selectedCollectionId: collectionId,
-            selectedNodeIds: [...collection.nodeIds],
+            selectedNodeIds: [], // Collections are now polygon zones, not node containers
           })
         },
         handleNodeSelect: (nodeId, event) => {
@@ -1014,13 +1000,8 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          // Remove deleted nodes from any collections they belong to
-          const deletedSet = new Set(state.selectedNodeIds)
-          const updatedCollections = (state.scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
-          }))
-          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
+          set({ selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -1401,7 +1382,7 @@ const useStore = create<StoreState>()(
           return nodeId
         },
         deleteNode: (nodeId) => {
-          const { graph, commandManager, scene } = get()
+          const { graph, commandManager } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1412,16 +1393,11 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Remove the node from any collections it belongs to
-          const updatedCollections = (scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
-          }))
-          set({ scene: { ...scene, collections: updatedCollections } })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager, scene } = get()
+          const { graph, commandManager } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1448,13 +1424,8 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Remove deleted nodes from any collections they belong to
-          const deletedSet = new Set(nodeIds)
-          const updatedCollections = (scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
-          }))
-          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
+          set({ selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
@@ -1516,8 +1487,8 @@ const useStore = create<StoreState>()(
           set({ pointerPosition: position }),
 
         // Collection operations
-        addCollection: (name: string) => {
-          const collection = CollectionSchema.parse({ name })
+        addCollection: (name: string, levelId: string, polygon: [number, number][]) => {
+          const collection = CollectionSchema.parse({ name, levelId, polygon })
           const state = get()
           set({
             scene: {
@@ -1562,45 +1533,26 @@ const useStore = create<StoreState>()(
           })
         },
 
-        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
+        updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => {
           const state = get()
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) => {
-                if (c.id !== collectionId) return c
-                // Add only node IDs that aren't already in the collection
-                const existingIds = new Set(c.nodeIds || [])
-                const newIds = nodeIds.filter((id) => !existingIds.has(id))
-
-                // If this is the first node being added, set the levelId from that node
-                const isFirstNode = existingIds.size === 0 && newIds.length > 0
-                const levelId = isFirstNode
-                  ? (getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId) as
-                      | `level_${string}`
-                      | null)
-                  : c.levelId
-
-                return {
-                  ...c,
-                  nodeIds: [...(c.nodeIds || []), ...newIds],
-                  levelId,
-                }
-              }),
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, polygon } : c,
+              ),
             },
           })
         },
 
-        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
+        setCollectionColor: (collectionId: string, color: string) => {
           const state = get()
-          const idsToRemove = new Set(nodeIds)
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) => {
-                if (c.id !== collectionId) return c
-                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
-              }),
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, color } : c,
+              ),
             },
           })
         },
@@ -1662,29 +1614,6 @@ const useStore = create<StoreState>()(
 
           // Apply camera
           emitter.emit('view:apply', { camera: view.camera })
-        },
-
-        // Add to collection workflow
-        startAddToCollection: () => {
-          const { selectedNodeIds } = get()
-          if (selectedNodeIds.length === 0) return
-          set({
-            addToCollectionState: {
-              isActive: true,
-              nodeIds: [...selectedNodeIds],
-            },
-          })
-        },
-
-        confirmAddToCollection: (collectionId: string) => {
-          const { addToCollectionState, addNodesToCollection } = get()
-          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
-          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
-          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
-        },
-
-        cancelAddToCollection: () => {
-          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
         },
 
         // Transaction operations (for grouping multiple operations into one undo step)

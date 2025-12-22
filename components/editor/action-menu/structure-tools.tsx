@@ -13,7 +13,7 @@ export type StructureToolConfig = {
   catalogCategory?: 'door' | 'window'
 }
 
-// Structure mode tools: walls, rooms, structural elements, doors, windows
+// Structure mode tools: walls, rooms, structural elements, doors, windows, zones
 export const structureTools: StructureToolConfig[] = [
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
@@ -25,6 +25,7 @@ export const structureTools: StructureToolConfig[] = [
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair' },
   { id: 'item', iconSrc: '/icons/door.png', label: 'Door', catalogCategory: 'door' },
   { id: 'item', iconSrc: '/icons/window.png', label: 'Window', catalogCategory: 'window' },
+  { id: 'collection', iconSrc: '/icons/collection.png', label: 'Zone' },
 ]
 
 export function StructureTools() {

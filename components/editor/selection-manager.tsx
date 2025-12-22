@@ -191,12 +191,6 @@ function SelectionManager() {
         if (event.shiftKey || event.metaKey || event.ctrlKey) return
 
         handleClear()
-
-        // Cancel add-to-collection mode if active
-        const { addToCollectionState, cancelAddToCollection } = useEditor.getState()
-        if (addToCollectionState.isActive) {
-          cancelAddToCollection()
-        }
       }
     }
 

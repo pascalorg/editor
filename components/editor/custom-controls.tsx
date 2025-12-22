@@ -62,14 +62,8 @@ export function CustomControls() {
 
       const state = useEditor.getState()
 
-      // Find collections that have all their nodes selected
-      const selectedNodeIds = state.selectedNodeIds
-      const collections = state.scene.collections || []
-      const selectedCollectionIds = collections
-        .filter(
-          (c) => c.nodeIds.length > 0 && c.nodeIds.every((id) => selectedNodeIds.includes(id)),
-        )
-        .map((c) => c.id)
+      // Get currently selected collection if any
+      const selectedCollectionIds = state.selectedCollectionId ? [state.selectedCollectionId] : []
 
       state.addView({
         name,
