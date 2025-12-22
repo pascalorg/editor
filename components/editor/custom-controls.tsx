@@ -22,6 +22,7 @@ export function CustomControls() {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
   const debug = useEditor((state) => state.debug)
+  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
 
   useEffect(() => {
     if (!controls) return
@@ -146,8 +147,8 @@ export function CustomControls() {
         ? CameraControlsImpl.ACTION.ZOOM
         : CameraControlsImpl.ACTION.DOLLY
 
-    // In select mode, left-click can pan the camera
-    if (controlMode === 'select') {
+    // In select mode, left-click can pan the camera (unless editing a collection)
+    if (controlMode === 'select' && !selectedCollectionId) {
       return {
         left: CameraControlsImpl.ACTION.SCREEN_PAN, // Similar to the sims
         middle: CameraControlsImpl.ACTION.SCREEN_PAN,
@@ -156,15 +157,15 @@ export function CustomControls() {
       }
     }
 
-    // In edit, delete, build, and guide modes, disable left-click for camera
-    // (reserved for mode-specific actions like dragging property line handles)
+    // In edit, delete, build, and guide modes, or when editing a collection,
+    // disable left-click for camera (reserved for mode-specific actions)
     return {
       left: CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
     }
-  }, [controlMode, cameraMode])
+  }, [controlMode, cameraMode, selectedCollectionId])
 
   const onControlStart = useCallback(() => {
     useEditor.getState().setMovingCamera(true)

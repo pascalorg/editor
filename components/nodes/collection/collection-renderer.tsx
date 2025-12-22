@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
-import { emitter, type CollectionPreviewEvent } from '@/events/bus'
+import { type CollectionPreviewEvent, emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
 
@@ -165,18 +165,31 @@ function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
       {previewShape && (
         <mesh position={[0, levelYOffset + Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <shapeGeometry args={[previewShape]} />
-          <meshBasicMaterial color="#3b82f6" opacity={0.15} side={THREE.DoubleSide} transparent />
+          <meshBasicMaterial
+            color="#3b82f6"
+            depthTest={false}
+            opacity={0.15}
+            side={THREE.DoubleSide}
+            transparent
+          />
         </mesh>
       )}
 
       {/* Main line */}
       {linePoints.length >= 2 && (
-        <Line color="#3b82f6" lineWidth={2} points={linePoints} />
+        <Line color="#3b82f6" depthTest={false} lineWidth={2} points={linePoints} />
       )}
 
       {/* Closing line (dashed) */}
       {closingLinePoints.length === 2 && (
-        <Line color="#3b82f6" dashed dashScale={10} lineWidth={1} points={closingLinePoints} />
+        <Line
+          color="#3b82f6"
+          dashed
+          dashScale={10}
+          depthTest={false}
+          lineWidth={1}
+          points={closingLinePoints}
+        />
       )}
 
       {/* Point markers */}
@@ -185,7 +198,7 @@ function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
         return (
           <mesh key={index} position={[wx, levelYOffset + Y_OFFSET + 0.03, wz]}>
             <sphereGeometry args={[0.1, 16, 16]} />
-            <meshBasicMaterial color={index === 0 ? '#22c55e' : '#3b82f6'} />
+            <meshBasicMaterial color={index === 0 ? '#22c55e' : '#3b82f6'} depthTest={false} />
           </mesh>
         )
       })}
