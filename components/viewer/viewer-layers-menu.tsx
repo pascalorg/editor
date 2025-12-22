@@ -232,9 +232,6 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
                         >
                           <Grid2x2 className="h-3 w-3 shrink-0 text-amber-400" />
                           <span className="flex-1 text-white/90 text-xs">{room.name}</span>
-                          {room.nodeIds.length > 0 && (
-                            <span className="text-white/40 text-xs">{room.nodeIds.length}</span>
-                          )}
                         </div>
                       )
                     })}

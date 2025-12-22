@@ -6,12 +6,13 @@ import { Suspense, useEffect, useState } from 'react'
 import '@/components/nodes'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import Viewer from '@/components/viewer'
-import { useEditor, waitForHydration } from '@/hooks/use-editor'
+import { useEditor, type WallMode, waitForHydration } from '@/hooks/use-editor'
 
 function ViewerContent() {
   const searchParams = useSearchParams()
   const sceneUrl = searchParams.get('sceneUrl')
   const defaultZoom = searchParams.get('zoom')
+  const defaultWallMode = searchParams.get('wallMode')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -85,7 +86,13 @@ function ViewerContent() {
     )
   }
 
-  return <Viewer defaultZoom={defaultZoom ? Number(defaultZoom) : undefined} isEmbedded />
+  return (
+    <Viewer
+      defaultWallMode={defaultWallMode as WallMode}
+      defaultZoom={defaultZoom ? Number(defaultZoom) : undefined}
+      isEmbedded
+    />
+  )
 }
 
 export default function EmbedPage() {

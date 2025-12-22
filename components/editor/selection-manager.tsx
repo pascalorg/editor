@@ -125,15 +125,19 @@ function SelectionManager() {
         }
       }
 
-      // Convert back to array and filter out level nodes
-      const candidates = Array.from(candidatesByNode.values()).filter(
-        (candidate) =>
-          !(
-            candidate.nodeId.startsWith('level_') ||
-            candidate.nodeId.startsWith('ceiling_') ||
-            candidate.nodeId.startsWith('site_')
-          ),
-      )
+      const editMode = useEditor.getState().editorMode
+
+      // Convert back to array and filter out  nodes based on edit mode
+      const candidates = Array.from(candidatesByNode.values()).filter((candidate) => {
+        if (editMode === 'site') {
+          return candidate.nodeId.startsWith('site_')
+        }
+        return !(
+          candidate.nodeId.startsWith('level_') ||
+          candidate.nodeId.startsWith('ceiling_') ||
+          candidate.nodeId.startsWith('site_')
+        )
+      })
 
       // Sort by distance first, then by depth if distances are very close
       candidates.sort((a, b) => {
@@ -160,6 +164,7 @@ function SelectionManager() {
     const handleClick = (event: PointerEvent) => {
       if (event.button !== 0) return // Only left-click
       if (controlMode !== 'select') return
+      if (useEditor.getState().selectedCollectionId) return // Don't select nodes when editing a collection
 
       // Check for drag to prevent accidental selection/deselection after dragging
       if (pointerDownPos.current) {
@@ -187,12 +192,6 @@ function SelectionManager() {
         if (event.shiftKey || event.metaKey || event.ctrlKey) return
 
         handleClear()
-
-        // Cancel add-to-collection mode if active
-        const { addToCollectionState, cancelAddToCollection } = useEditor.getState()
-        if (addToCollectionState.isActive) {
-          cancelAddToCollection()
-        }
       }
     }
 

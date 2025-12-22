@@ -31,12 +31,12 @@ export function ViewerCustomControls() {
   // Get site node to check for camera preference
   const site = useEditor(useShallow((state) => state.scene.root.children?.[0]))
 
-  // Get the selected collection's nodeIds for bounds calculation
-  const collectionNodeIds = useEditor(
+  // Get the selected collection's polygon for bounds calculation
+  const collectionPolygon = useEditor(
     useShallow((state: StoreState) => {
       if (!state.selectedCollectionId) return null
       const collection = state.scene.collections?.find((c) => c.id === state.selectedCollectionId)
-      return collection?.nodeIds || null
+      return collection?.polygon || null
     }),
   )
 
@@ -262,7 +262,7 @@ export function ViewerCustomControls() {
 
   // Focus camera on collection bounds when a collection is selected
   useEffect(() => {
-    if (!(controls && scene && selectedCollectionId && collectionNodeIds?.length)) return
+    if (!(controls && scene && selectedCollectionId && collectionPolygon?.length)) return
 
     const cameraImpl = controls as CameraControlsImpl
 
@@ -293,26 +293,26 @@ export function ViewerCustomControls() {
       return
     }
 
-    // No saved view - use default camera positioning based on collection bounds
-    // Calculate the combined bounding box of all nodes in the collection
-    const combinedBox = new Box3()
+    // No saved view - use default camera positioning based on collection polygon bounds
+    // Calculate bounds from polygon points
+    let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
 
-    for (const nodeId of collectionNodeIds) {
-      const object = scene.getObjectByName(nodeId)
-      if (object) {
-        const objectBox = new Box3().setFromObject(object)
-        combinedBox.union(objectBox)
-      }
+    for (const [x, z] of collectionPolygon) {
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      minZ = Math.min(minZ, z)
+      maxZ = Math.max(maxZ, z)
     }
 
-    if (combinedBox.isEmpty()) return
-
     // Get bounds center and size
-    const center = combinedBox.getCenter(new Vector3())
-    const size = combinedBox.getSize(new Vector3())
+    const centerX = (minX + maxX) / 2
+    const centerZ = (minZ + maxZ) / 2
+    const sizeX = maxX - minX
+    const sizeZ = maxZ - minZ
 
     // Calculate the optimal camera distance based on the bounds size
-    const maxDimension = Math.max(size.x, size.z)
+    const maxDimension = Math.max(sizeX, sizeZ)
     const padding = 2 // Add some padding around the room
     const targetDistance = (maxDimension + padding) * 0.8
 
@@ -320,13 +320,14 @@ export function ViewerCustomControls() {
     const currentPosition = new Vector3()
     cameraImpl.getPosition(currentPosition)
 
+    // Set floor Y based on current level
+    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
+    const center = new Vector3(centerX, floorY, centerZ)
+
     // Calculate new camera position maintaining the same angle
     const direction = currentPosition.clone().sub(center).normalize()
     const newDistance = Math.max(targetDistance, 8) // Minimum distance of 8
     const newPosition = center.clone().add(direction.multiplyScalar(newDistance))
-
-    // Set floor Y based on current level
-    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
 
     // Smoothly transition camera to focus on collection
     cameraImpl.setLookAt(
@@ -338,7 +339,7 @@ export function ViewerCustomControls() {
       center.z,
       true,
     )
-  }, [controls, scene, selectedCollectionId, collectionNodeIds, currentLevel, levelMode])
+  }, [controls, scene, selectedCollectionId, collectionPolygon, currentLevel, levelMode])
 
   // Focus on node camera when selected
   useEffect(() => {

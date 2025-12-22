@@ -382,6 +382,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
     materialFront,
     materialBack,
     interiorSide,
+    wallMode,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId)
@@ -408,6 +409,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         materialFront: node?.materialFront || 'concrete',
         materialBack: node?.materialBack || 'brick',
         interiorSide: node?.interiorSide || 'neither',
+        wallMode: state.wallMode,
       }
     }),
   )
@@ -867,6 +869,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const activeTool = useEditor((state) => state.activeTool)
   const controlMode = useEditor((state) => state.controlMode)
   const lastCheckedAt = useRef(0)
+
   useFrame(({ camera, clock }) => {
     if (clock.elapsedTime - lastCheckedAt.current < 0.2) {
       return
@@ -882,9 +885,12 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
         activeTool === 'wall' ||
         activeTool === 'custom-room' ||
         activeTool === 'room' ||
-        controlMode === 'painting'
+        controlMode === 'painting' ||
+        wallMode === 'up'
       ) {
         hideWall = false
+      } else if (wallMode === 'down') {
+        hideWall = true
       } else if (interiorSide === 'front') {
         hideWall = v.dot(u) > 0
       } else if (interiorSide === 'back') {

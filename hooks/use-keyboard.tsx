@@ -19,6 +19,7 @@ export function useKeyboard() {
   const handleClear = useEditor((state) => state.handleClear)
 
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const toggleWallMode = useEditor((state) => state.toggleWallMode)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +79,9 @@ export function useKeyboard() {
       } else if (e.key === 'l' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         toggleLevelMode()
+      } else if (e.key === 'w' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        toggleWallMode()
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         undo()
@@ -104,6 +108,7 @@ export function useKeyboard() {
     selectedNodeIds,
     handleDeleteSelected,
     toggleLevelMode,
+    toggleWallMode,
     groupSelected,
     ungroupSelected,
     handleClear,

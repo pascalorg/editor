@@ -3,7 +3,7 @@ import { Billboard, Line } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Container } from '@react-three/uikit'
 import { Button } from '@react-three/uikit-default'
-import { FolderPlus, Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
+import { Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
@@ -289,10 +289,6 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
     useEditor.getState().deleteNodes(selectedNodeIds)
   }, [])
 
-  const handleAddToCollection = useCallback((e: ThreeMouseEvent) => {
-    e.stopPropagation?.()
-    useEditor.getState().startAddToCollection()
-  }, [])
 
   const handleMove = useCallback((e: ThreeMouseEvent) => {
     e.stopPropagation?.()
@@ -949,15 +945,6 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
                 size="icon"
               >
                 <Move color="white" height={16} width={16} />
-              </Button>
-              <Button
-                backgroundColor={'transparent'}
-                borderRadius={0}
-                hover={{ backgroundColor: '#3a3b45' }}
-                onClick={handleAddToCollection}
-                size="icon"
-              >
-                <FolderPlus color="white" height={16} width={16} />
               </Button>
               <Button
                 backgroundColor={'transparent'}

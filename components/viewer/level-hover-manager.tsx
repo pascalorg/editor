@@ -121,14 +121,14 @@ export function LevelHoverManager() {
     }),
   )
 
-  // Get the node IDs in the selected collection
-  const selectedCollectionNodeIds = useEditor(
+  // Get the selected collection's polygon for boundary display
+  const selectedCollectionPolygon = useEditor(
     useShallow((state: StoreState) => {
-      if (!state.selectedCollectionId) return []
+      if (!state.selectedCollectionId) return null
       const collection = (state.scene.collections || []).find(
         (c) => c.id === state.selectedCollectionId,
       )
-      return collection?.nodeIds || []
+      return collection?.polygon || null
     }),
   )
 
@@ -143,14 +143,28 @@ export function LevelHoverManager() {
     })
   }, [])
 
-  // Helper: find which room collection contains a hit node
-  const findRoomForNode = (nodeId: string, collections: Collection[]): Collection | null => {
+  // Helper: find which room collection contains a point (x, z coordinates)
+  const findRoomForPoint = (x: number, z: number, collections: Collection[]): Collection | null => {
     for (const collection of collections) {
-      if (collection.nodeIds.includes(nodeId)) {
+      if (isPointInPolygon(x, z, collection.polygon)) {
         return collection
       }
     }
     return null
+  }
+
+  // Helper: check if a point is inside a polygon using ray casting
+  const isPointInPolygon = (x: number, z: number, polygon: [number, number][]): boolean => {
+    if (!polygon || polygon.length < 3) return false
+    let inside = false
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0], zi = polygon[i][1]
+      const xj = polygon[j][0], zj = polygon[j][1]
+      if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+        inside = !inside
+      }
+    }
+    return inside
   }
 
   // Helper: calculate bounding box for an object excluding image nodes and grids
@@ -196,25 +210,27 @@ export function LevelHoverManager() {
     return hasContent ? box : null
   }
 
-  // Helper: calculate bounding box for a room collection
+  // Helper: calculate bounding box for a room collection from its polygon
   const calculateRoomBounds = (collection: Collection): Box3 | null => {
-    const combinedBox = new Box3()
-    const graph = useEditor.getState().graph
+    const polygon = collection.polygon
+    if (!polygon || polygon.length < 3) return null
 
-    for (const nodeId of collection.nodeIds) {
-      // Skip image nodes
-      const node = graph.getNodeById(nodeId as any)?.data()
-      if (node?.type === 'reference-image') continue
+    // Calculate bounds from polygon points
+    let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
 
-      const object = scene.getObjectByName(nodeId)
-      if (object) {
-        // Use setFromObject but we should really filter children too if room contains images
-        // Assuming room collection nodes are top-level and we checked type above.
-        const objectBox = new Box3().setFromObject(object)
-        combinedBox.union(objectBox)
-      }
+    for (const [x, z] of polygon) {
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      minZ = Math.min(minZ, z)
+      maxZ = Math.max(maxZ, z)
     }
-    return combinedBox.isEmpty() ? null : combinedBox
+
+    // Create a box with some height (collections are floor zones)
+    const box = new Box3()
+    box.min.set(minX, 0, minZ)
+    box.max.set(maxX, 3, maxZ) // Assume 3m height for visualization
+    return box
   }
 
   // Helper: get nodeId from intersection
@@ -365,19 +381,15 @@ export function LevelHoverManager() {
             const intersects = raycasterRef.current.intersectObject(levelObject, true)
 
             if (intersects.length > 0) {
-              // Find which room collection the hit node belongs to
-              for (const hit of intersects) {
-                const nodeId = getNodeIdFromIntersection(hit.object)
-                if (nodeId) {
-                  const room = findRoomForNode(nodeId, currentRoomCollections)
-                  if (room) {
-                    const box = calculateRoomBounds(room)
-                    if (box) {
-                      setHoveredBox(box)
-                      setHoverMode('room')
-                      return
-                    }
-                  }
+              // Find which room collection contains the intersection point
+              const hit = intersects[0]
+              const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomCollections)
+              if (room) {
+                const box = calculateRoomBounds(room)
+                if (box) {
+                  setHoveredBox(box)
+                  setHoverMode('room')
+                  return
                 }
               }
             }
@@ -514,24 +526,20 @@ export function LevelHoverManager() {
                 if (hasModifierKey) return // Don't fall through
               }
 
-              // MODE 2: Room selection
+              // MODE 2: Room selection - check if click point is inside a room polygon
               const currentRoomCollections = (state.scene.collections || []).filter(
                 (c) => c.type === 'room' && c.levelId === currentFloorId,
               )
 
-              if (currentRoomCollections.length > 0) {
-                for (const hit of intersects) {
-                  const nodeId = getNodeIdFromIntersection(hit.object)
-                  if (nodeId) {
-                    const room = findRoomForNode(nodeId, currentRoomCollections)
-                    if (room) {
-                      // Match Menu behavior: just select the collection.
-                      // Store handles clearing node selection/switching floor if needed.
-                      emitter.emit('interaction:click', { type: 'collection', id: room.id, data: room })
-                      useEditor.getState().selectCollection(room.id)
-                      return // Handled room click
-                    }
-                  }
+              if (currentRoomCollections.length > 0 && intersects.length > 0) {
+                const hit = intersects[0]
+                const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomCollections)
+                if (room) {
+                  // Match Menu behavior: just select the collection.
+                  // Store handles clearing node selection/switching floor if needed.
+                  emitter.emit('interaction:click', { type: 'collection', id: room.id, data: room })
+                  useEditor.getState().selectCollection(room.id)
+                  return // Handled room click
                 }
               }
             }
@@ -610,7 +618,7 @@ export function LevelHoverManager() {
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('click', onClick)
     }
-  }, [camera, gl, scene, levelIds, roomCollections, selectedCollectionNodeIds])
+  }, [camera, gl, scene, levelIds, roomCollections, selectedCollectionPolygon])
 
   // Clear hover when selection changes
   useEffect(() => {

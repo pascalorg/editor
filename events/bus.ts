@@ -94,6 +94,11 @@ export interface InteractionClickEvent {
   data?: any
 }
 
+export interface CollectionPreviewEvent {
+  points: Array<[number, number]>
+  cursorPoint?: [number, number] | null
+}
+
 type EditorEvents = {
   'grid:click': GridEvent
   'grid:rightclick': GridEvent
@@ -124,6 +129,7 @@ type EditorEvents = {
   'view:apply': ViewApplyEvent
   'node:capture-camera': NodeCameraCaptureRequest
   'interaction:click': InteractionClickEvent
+  'collection:preview': CollectionPreviewEvent
   'tool:cancel': undefined
 }
 export const emitter = mitt<EditorEvents>()

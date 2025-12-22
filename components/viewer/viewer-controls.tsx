@@ -1,12 +1,12 @@
 'use client'
 
-import { StackIcon } from '@phosphor-icons/react'
+import { ArrowLineDown, ArrowLineUp, ArrowsOutLineVertical, StackIcon } from '@phosphor-icons/react'
 import { Box, Camera, Clock, Eye, Moon, ScanLine, Sun, Sunrise, Sunset } from 'lucide-react'
 import SunCalc from 'suncalc'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useEditor } from '@/hooks/use-editor'
+import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 const TIME_PRESETS = ['now', 'dawn', 'day', 'dusk', 'night'] as const
@@ -28,11 +28,19 @@ const PRESET_LABELS: Record<TimePreset, string> = {
   night: 'Night',
 }
 
+const wallModeConfig: Record<WallMode, { icon: typeof ArrowLineUp; label: string }> = {
+  up: { icon: ArrowLineUp, label: 'Up View' },
+  cutaway: { icon: ArrowsOutLineVertical, label: 'Cutaway View' },
+  down: { icon: ArrowLineDown, label: 'Down View' },
+}
+
 export function ViewerControls({ className }: { className?: string }) {
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
   const levelMode = useEditor((state) => state.levelMode)
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const wallMode = useEditor((state) => state.wallMode)
+  const toggleWallMode = useEditor((state) => state.toggleWallMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const setViewerDisplayMode = useEditor((state) => state.setViewerDisplayMode)
 
@@ -156,6 +164,29 @@ export function ViewerControls({ className }: { className?: string }) {
           </TooltipTrigger>
           <TooltipContent>
             <p>Level mode: {levelMode === 'stacked' ? 'Stacked' : 'Exploded'} (L)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Wall mode toggle button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 w-8 transition-all',
+                'text-white hover:bg-gray-800 hover:text-white',
+              )}
+              onClick={toggleWallMode}
+              size="icon"
+              variant="ghost"
+            >
+              {(() => {
+                const WallModeIcon = wallModeConfig[wallMode].icon
+                return <WallModeIcon className="h-4 w-4" />
+              })()}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Walls: {wallModeConfig[wallMode].label} (W)</p>
           </TooltipContent>
         </Tooltip>
 

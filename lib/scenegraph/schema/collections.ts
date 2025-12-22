@@ -1,42 +1,35 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { objectId } from './base'
-import { LevelNode } from './nodes/level'
 
 const COLLECTION_TYPES = ['room', 'other'] as const
 export const CollectionType = z.enum(COLLECTION_TYPES)
 
-// Polygon boundary for collection area
-const CollectionPolygon = z.object({
-  type: z.literal('polygon'),
-  points: z.array(z.tuple([z.number(), z.number()])), // Array of [x, z] coordinates
-})
+// Polygon boundary for collection area - array of [x, z] coordinates
+export const CollectionPolygon = z.array(z.tuple([z.number(), z.number()]))
 
 export const CollectionSchema = z
   .object({
     id: objectId('collection'),
     object: z.literal('collection').default('collection'),
     type: CollectionType.default('other'),
-    levelId: LevelNode.transform((level) => level.id)
-      .nullable()
-      .default(null),
+    levelId: z.string(), // Required - must be attached to a level
     name: z.string(),
-    nodeIds: z.array(z.string()).default([]),
-    // Polygon boundary (optional - for polygon-based collections)
-    polygon: CollectionPolygon.optional(),
+    // Polygon boundary - array of [x, z] coordinates defining the zone
+    polygon: CollectionPolygon,
     // Visual styling
     color: z.string().default('#3b82f6'), // Default blue
     metadata: z.json().optional().default({}),
   })
   .describe(
     dedent`
-  Collection schema - used to represent a collection of nodes for interacting with the scene
+  Collection schema - a polygon zone attached to a level
   - object: "collection"
   - type: collection type (room, other)
   - id: collection id
+  - levelId: level this collection is attached to
   - name: collection name
-  - nodeIds: array of node ids
-  - polygon: optional polygon boundary with [x, z] points
+  - polygon: array of [x, z] points defining the zone boundary
   - color: hex color for visual styling
   - metadata: collection metadata (optional)
   `,
@@ -44,3 +37,4 @@ export const CollectionSchema = z
 
 export type Collection = z.infer<typeof CollectionSchema>
 export type CollectionType = z.infer<typeof CollectionType>
+export type CollectionPolygon = z.infer<typeof CollectionPolygon>

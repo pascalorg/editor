@@ -253,18 +253,32 @@ export type StructureTool =
   | 'collection'
 
 // Furnish mode tools (items and decoration)
-export type FurnishTool = 'furniture' | 'appliance' | 'kitchen' | 'bathroom' | 'outdoor' | 'painting'
+export type FurnishTool =
+  | 'furniture'
+  | 'appliance'
+  | 'kitchen'
+  | 'bathroom'
+  | 'outdoor'
+  | 'painting'
 
 // Combined tool type (including 'item' for backward compatibility during transition)
 export type Tool = SiteTool | StructureTool | FurnishTool | 'item'
 
 // Catalog categories for furnish mode items
-export type CatalogCategory = 'furniture' | 'appliance' | 'bathroom' | 'kitchen' | 'outdoor' | 'window' | 'door'
+export type CatalogCategory =
+  | 'furniture'
+  | 'appliance'
+  | 'bathroom'
+  | 'kitchen'
+  | 'outdoor'
+  | 'window'
+  | 'door'
 
 // Control modes - sub-modes within each editor mode (keeping legacy values for compatibility during transition)
 export type ControlMode = 'select' | 'edit' | 'delete' | 'build' | 'building' | 'guide' | 'painting'
 export type CameraMode = 'perspective' | 'orthographic'
 export type LevelMode = 'stacked' | 'exploded'
+export type WallMode = 'up' | 'cutaway' | 'down'
 export type ViewMode = 'full' | 'level'
 export type ViewerDisplayMode = 'scans' | 'objects'
 export type PaintMode = 'wall' | 'room'
@@ -275,11 +289,6 @@ export type SceneSource =
   | { type: 'url'; url: string } // Loaded from URL, not persisted (viewer mode)
   | { type: 'slot'; name: string } // Named slot for future multi-project support
 
-// Add to collection workflow state
-export type AddToCollectionState = {
-  isActive: boolean
-  nodeIds: string[]
-}
 
 export type StoreState = {
   // ============================================================================
@@ -319,6 +328,7 @@ export type StoreState = {
   lastToolByMode: Record<EditorMode, Tool | null>
   cameraMode: CameraMode
   levelMode: LevelMode
+  wallMode: WallMode
   movingCamera: boolean
   isManipulatingImage: boolean
   isManipulatingScan: boolean
@@ -326,10 +336,7 @@ export type StoreState = {
   pointerPosition: [number, number] | null
   debug: boolean
 
-  // Add to collection workflow
-  addToCollectionState: AddToCollectionState
-
-  // Collection/Room selection (for viewer room focus)
+  // Collection selection (for editing boundaries)
   selectedCollectionId: string | null
 
   selectedItem: {
@@ -381,6 +388,7 @@ export type StoreState = {
   setEditorMode: (mode: EditorMode, buildingId?: string | null) => void
   setCameraMode: (mode: CameraMode) => void
   toggleLevelMode: () => void
+  toggleWallMode: () => void
   setViewerDisplayMode: (mode: ViewerDisplayMode) => void
   setMovingCamera: (moving: boolean) => void
   setIsManipulatingImage: (manipulating: boolean) => void
@@ -445,23 +453,18 @@ export type StoreState = {
   ) => void
 
   // Collection operations
-  addCollection: (name: string) => Collection
+  addCollection: (name: string, levelId: string, polygon: [number, number][]) => Collection
   deleteCollection: (collectionId: string) => void
   renameCollection: (collectionId: string, name: string) => void
   setCollectionType: (collectionId: string, type: CollectionType) => void
-  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
-  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+  updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => void
+  setCollectionColor: (collectionId: string, color: string) => void
 
   // View operations
   addView: (viewData: Omit<View, 'id' | 'object'>) => void
   deleteView: (viewId: string) => void
   updateView: (viewId: string, updates: Partial<View>) => void
   applyView: (viewId: string) => void
-
-  // Add to collection workflow
-  startAddToCollection: () => void
-  confirmAddToCollection: (collectionId: string) => void
-  cancelAddToCollection: () => void
 
   // Transaction operations (for grouping multiple operations into one undo step)
   startTransaction: () => void
@@ -642,12 +645,12 @@ const useStore = create<StoreState>()(
         },
         cameraMode: 'perspective',
         levelMode: 'stacked',
+        wallMode: 'cutaway',
         movingCamera: false,
         isManipulatingImage: false,
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
-        addToCollectionState: { isActive: false, nodeIds: [] },
         selectedCollectionId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
@@ -728,7 +731,7 @@ const useStore = create<StoreState>()(
 
           set({
             selectedCollectionId: collectionId,
-            selectedNodeIds: [...collection.nodeIds],
+            selectedNodeIds: [], // Collections are now polygon zones, not node containers
           })
         },
         handleNodeSelect: (nodeId, event) => {
@@ -860,21 +863,58 @@ const useStore = create<StoreState>()(
             editorMode: mode,
           }
 
+          // Filter selected nodes based on target mode
+          if (state.selectedNodeIds.length > 0) {
+            const filteredSelection = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              if (!handle) return false
+              const nodeType = handle.type
+
+              if (mode === 'site') {
+                // Site mode: only keep site or building selections
+                return nodeType === 'site' || nodeType === 'building'
+              }
+              // Structure/Furnish mode: deselect site and building nodes
+              return nodeType !== 'site' && nodeType !== 'building'
+            })
+
+            if (filteredSelection.length !== state.selectedNodeIds.length) {
+              updates.selectedNodeIds = filteredSelection
+            }
+          }
+
+          // Define available control modes per editor mode
+          const modesByEditorMode: Record<EditorMode, ControlMode[]> = {
+            site: ['select', 'edit'],
+            structure: ['select', 'delete', 'building', 'guide'],
+            furnish: ['select', 'delete', 'building', 'painting'],
+          }
+
+          // Check if current control mode is available in target editor mode
+          const availableModes = modesByEditorMode[mode]
+          const currentControlMode = state.controlMode
+          const isCurrentModeAvailable = availableModes.includes(currentControlMode)
+
           // Handle building selection for structure/furnish modes
           if (mode === 'structure' || mode === 'furnish') {
             if (buildingId !== undefined) {
               updates.selectedBuildingId = buildingId
             }
-            // Restore last tool for the target mode
-            const lastTool = state.lastToolByMode[mode]
-            if (lastTool) {
-              updates.activeTool = lastTool
-              updates.controlMode = 'building' // Use 'building' for compatibility
+
+            // Only switch control mode if current one is not available
+            if (!isCurrentModeAvailable) {
+              updates.controlMode = 'select'
+              updates.activeTool = null
+              updates.catalogCategory = null
             }
           } else if (mode === 'site') {
-            // Clear building selection and reset to select mode when entering site mode
+            // Clear building selection when entering site mode
             updates.selectedBuildingId = null
-            updates.controlMode = 'select'
+
+            // Only switch control mode if current one is not available
+            if (!isCurrentModeAvailable) {
+              updates.controlMode = 'select'
+            }
             updates.activeTool = null
             updates.catalogCategory = null
           }
@@ -894,6 +934,13 @@ const useStore = create<StoreState>()(
           set((state) => ({
             levelMode: state.levelMode === 'stacked' ? 'exploded' : 'stacked',
           })),
+        toggleWallMode: () =>
+          set((state) => {
+            const modes: WallMode[] = ['up', 'cutaway', 'down']
+            const currentIndex = modes.indexOf(state.wallMode)
+            const nextIndex = (currentIndex + 1) % modes.length
+            return { wallMode: modes[nextIndex] }
+          }),
 
         getSelectedElementsSet: () => {
           const state = get()
@@ -953,13 +1000,8 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          // Remove deleted nodes from any collections they belong to
-          const deletedSet = new Set(state.selectedNodeIds)
-          const updatedCollections = (state.scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
-          }))
-          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
+          set({ selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -1340,7 +1382,7 @@ const useStore = create<StoreState>()(
           return nodeId
         },
         deleteNode: (nodeId) => {
-          const { graph, commandManager, scene } = get()
+          const { graph, commandManager } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1351,16 +1393,11 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Remove the node from any collections it belongs to
-          const updatedCollections = (scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
-          }))
-          set({ scene: { ...scene, collections: updatedCollections } })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager, scene } = get()
+          const { graph, commandManager } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1387,13 +1424,8 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Remove deleted nodes from any collections they belong to
-          const deletedSet = new Set(nodeIds)
-          const updatedCollections = (scene.collections || []).map((c) => ({
-            ...c,
-            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
-          }))
-          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
+          // Collections are now polygon zones, not node containers - no need to update them on node deletion
+          set({ selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
@@ -1455,8 +1487,8 @@ const useStore = create<StoreState>()(
           set({ pointerPosition: position }),
 
         // Collection operations
-        addCollection: (name: string) => {
-          const collection = CollectionSchema.parse({ name })
+        addCollection: (name: string, levelId: string, polygon: [number, number][]) => {
+          const collection = CollectionSchema.parse({ name, levelId, polygon })
           const state = get()
           set({
             scene: {
@@ -1501,45 +1533,26 @@ const useStore = create<StoreState>()(
           })
         },
 
-        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
+        updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => {
           const state = get()
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) => {
-                if (c.id !== collectionId) return c
-                // Add only node IDs that aren't already in the collection
-                const existingIds = new Set(c.nodeIds || [])
-                const newIds = nodeIds.filter((id) => !existingIds.has(id))
-
-                // If this is the first node being added, set the levelId from that node
-                const isFirstNode = existingIds.size === 0 && newIds.length > 0
-                const levelId = isFirstNode
-                  ? (getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId) as
-                      | `level_${string}`
-                      | null)
-                  : c.levelId
-
-                return {
-                  ...c,
-                  nodeIds: [...(c.nodeIds || []), ...newIds],
-                  levelId,
-                }
-              }),
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, polygon } : c,
+              ),
             },
           })
         },
 
-        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
+        setCollectionColor: (collectionId: string, color: string) => {
           const state = get()
-          const idsToRemove = new Set(nodeIds)
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) => {
-                if (c.id !== collectionId) return c
-                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
-              }),
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, color } : c,
+              ),
             },
           })
         },
@@ -1601,29 +1614,6 @@ const useStore = create<StoreState>()(
 
           // Apply camera
           emitter.emit('view:apply', { camera: view.camera })
-        },
-
-        // Add to collection workflow
-        startAddToCollection: () => {
-          const { selectedNodeIds } = get()
-          if (selectedNodeIds.length === 0) return
-          set({
-            addToCollectionState: {
-              isActive: true,
-              nodeIds: [...selectedNodeIds],
-            },
-          })
-        },
-
-        confirmAddToCollection: (collectionId: string) => {
-          const { addToCollectionState, addNodesToCollection } = get()
-          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
-          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
-          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
-        },
-
-        cancelAddToCollection: () => {
-          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
         },
 
         // Transaction operations (for grouping multiple operations into one undo step)
