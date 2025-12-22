@@ -869,6 +869,7 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
   const activeTool = useEditor((state) => state.activeTool)
   const controlMode = useEditor((state) => state.controlMode)
   const lastCheckedAt = useRef(0)
+  const cachedMaterial = useRef<THREE.Material | THREE.Material[] | null>(null)
 
   useFrame(({ camera, clock }) => {
     if (clock.elapsedTime - lastCheckedAt.current < 0.2) {
@@ -898,8 +899,27 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
       } else if (interiorSide === 'both') {
         hideWall = true
       }
-      // wallMesh.current.visible = !hideWall
-      wallMesh.current.material = hideWall ? shadowCasterMaterial : wallMaterial
+
+      // Handle material switching to preserve CSG materials (which may extend the material array)
+      if (hideWall) {
+        if (wallMesh.current.material !== shadowCasterMaterial) {
+          cachedMaterial.current = wallMesh.current.material
+          wallMesh.current.material = shadowCasterMaterial
+        }
+      } else {
+        // If we are showing the wall, make sure we aren't using the shadow caster
+        if (wallMesh.current.material === shadowCasterMaterial) {
+          if (cachedMaterial.current) {
+            wallMesh.current.material = cachedMaterial.current
+          } else {
+            // Fallback to base materials if cache is missing
+            wallMesh.current.material = wallMaterial
+          }
+        }
+        // If material is not shadowCasterMaterial, we assume it's the correct CSG material
+        // and leave it alone (don't overwrite with wallMaterial which might be missing CSG parts)
+      }
+
       if (miniwallMesh.current) {
         miniwallMesh.current.visible = hideWall
       }
