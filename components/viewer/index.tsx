@@ -98,7 +98,6 @@ export default function Viewer({
       selectedFloorId,
       selectedCollectionId,
     }
-    console.log('Posting selection message to parent:', message)
     window.parent.postMessage(message, '*')
   }, [isEmbedded, selectedNodeIds, selectedFloorId, selectedCollectionId])
 
