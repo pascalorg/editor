@@ -49,7 +49,7 @@ function ViewerContent() {
         // This allows users to hover and click to select levels interactively
         useEditor.setState({
           selectedFloorId: null,
-          selectedCollectionId: null,
+          selectedZoneId: null,
           selectedNodeIds: [],
           viewMode: 'full',
         })

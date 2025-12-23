@@ -25,7 +25,7 @@ export const structureTools: StructureToolConfig[] = [
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stair' },
   { id: 'item', iconSrc: '/icons/door.png', label: 'Door', catalogCategory: 'door' },
   { id: 'item', iconSrc: '/icons/window.png', label: 'Window', catalogCategory: 'window' },
-  { id: 'collection', iconSrc: '/icons/collection.png', label: 'Zone' },
+  { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
 ]
 
 export function StructureTools() {

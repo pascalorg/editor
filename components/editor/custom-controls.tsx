@@ -22,7 +22,7 @@ export function CustomControls() {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
   const debug = useEditor((state) => state.debug)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
 
   useEffect(() => {
     if (!controls) return
@@ -63,8 +63,8 @@ export function CustomControls() {
 
       const state = useEditor.getState()
 
-      // Get currently selected collection if any
-      const selectedCollectionIds = state.selectedCollectionId ? [state.selectedCollectionId] : []
+      // Get currently selected zone if any
+      const selectedZoneIds = state.selectedZoneId ? [state.selectedZoneId] : []
 
       state.addView({
         name,
@@ -78,8 +78,8 @@ export function CustomControls() {
         sceneState: {
           selectedLevelId: state.selectedFloorId,
           levelMode: state.viewMode === 'level' ? 'single-floor' : state.levelMode,
-          visibleCollectionIds:
-            selectedCollectionIds.length > 0 ? selectedCollectionIds : undefined,
+          visibleZoneIds:
+            selectedZoneIds.length > 0 ? selectedZoneIds : undefined,
         },
       })
     }
@@ -147,8 +147,8 @@ export function CustomControls() {
         ? CameraControlsImpl.ACTION.ZOOM
         : CameraControlsImpl.ACTION.DOLLY
 
-    // In select mode, left-click can pan the camera (unless editing a collection)
-    if (controlMode === 'select' && !selectedCollectionId) {
+    // In select mode, left-click can pan the camera (unless editing a zone)
+    if (controlMode === 'select' && !selectedZoneId) {
       return {
         left: CameraControlsImpl.ACTION.SCREEN_PAN, // Similar to the sims
         middle: CameraControlsImpl.ACTION.SCREEN_PAN,
@@ -157,7 +157,7 @@ export function CustomControls() {
       }
     }
 
-    // In edit, delete, build, and guide modes, or when editing a collection,
+    // In edit, delete, build, and guide modes, or when editing a zone,
     // disable left-click for camera (reserved for mode-specific actions)
     return {
       left: CameraControlsImpl.ACTION.NONE,
@@ -165,7 +165,7 @@ export function CustomControls() {
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
     }
-  }, [controlMode, cameraMode, selectedCollectionId])
+  }, [controlMode, cameraMode, selectedZoneId])
 
   const onControlStart = useCallback(() => {
     useEditor.getState().setMovingCamera(true)

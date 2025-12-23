@@ -20,7 +20,7 @@ export function ViewerCustomControls() {
   const currentLevel = useEditor((state) => state.currentLevel)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   // Get building ID for camera focus when no level is selected
@@ -31,16 +31,16 @@ export function ViewerCustomControls() {
   // Get site node to check for camera preference
   const site = useEditor(useShallow((state) => state.scene.root.children?.[0]))
 
-  // Get all collections from the store
-  const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+  // Get all zones from the store
+  const allZones = useEditor(useShallow((state: StoreState) => state.scene.zones || []))
 
-  // Get the selected collection's data for bounds calculation
-  const selectedCollectionData = useMemo(() => {
-    if (!selectedCollectionId) return null
-    const collection = allCollections.find((c) => c.id === selectedCollectionId)
-    if (!collection) return null
-    return { polygon: collection.polygon, levelId: collection.levelId }
-  }, [selectedCollectionId, allCollections])
+  // Get the selected zone's data for bounds calculation
+  const selectedZoneData = useMemo(() => {
+    if (!selectedZoneId) return null
+    const zone = allZones.find((c) => c.id === selectedZoneId)
+    if (!zone) return null
+    return { polygon: zone.polygon, levelId: zone.levelId }
+  }, [selectedZoneId, allZones])
 
   // Get building levels for Y offset calculation
   const buildingLevels = useEditor((state) => {
@@ -188,15 +188,15 @@ export function ViewerCustomControls() {
     }
   }, [controls, scene, selectedFloorId, buildingId, site])
 
-  // Focus on level when a level is selected (but no collection is selected)
+  // Focus on level when a level is selected (but no zone is selected)
   useEffect(() => {
     if (!(controls && scene && selectedFloorId)) return
 
     const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
     const cameraImpl = controls as CameraControlsImpl
 
-    // If a collection is selected, don't override its camera focus
-    if (selectedCollectionId) {
+    // If a zone is selected, don't override its camera focus
+    if (selectedZoneId) {
       // Just update the boundary
       const boundaryBox = new Box3(
         new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
@@ -281,24 +281,24 @@ export function ViewerCustomControls() {
       new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
     )
     cameraImpl.setBoundary(boundaryBox)
-  }, [currentLevel, controls, selectedFloorId, selectedCollectionId, levelMode, scene])
+  }, [currentLevel, controls, selectedFloorId, selectedZoneId, levelMode, scene])
 
-  // Focus camera on collection bounds when a collection is selected
+  // Focus camera on zone bounds when a zone is selected
   useEffect(() => {
-    if (!(controls && scene && selectedCollectionId && selectedCollectionData?.polygon?.length)) return
+    if (!(controls && scene && selectedZoneId && selectedZoneData?.polygon?.length)) return
 
     const cameraImpl = controls as CameraControlsImpl
-    const { polygon, levelId } = selectedCollectionData
+    const { polygon, levelId } = selectedZoneData
 
-    // Check if there's a view saved for this collection
+    // Check if there's a view saved for this zone
     const views = useEditor.getState().scene.views || []
-    const collectionView = views.find((v) =>
-      v.sceneState?.visibleCollectionIds?.includes(selectedCollectionId),
+    const zoneView = views.find((v) =>
+      v.sceneState?.visibleZoneIds?.includes(selectedZoneId),
     )
 
-    if (collectionView) {
+    if (zoneView) {
       // Apply the saved view's camera position
-      const { position, target, mode } = collectionView.camera
+      const { position, target, mode } = zoneView.camera
 
       // Switch camera mode if needed
       if (useEditor.getState().cameraMode !== mode) {
@@ -317,7 +317,7 @@ export function ViewerCustomControls() {
       return
     }
 
-    // No saved view - use default camera positioning based on collection polygon bounds
+    // No saved view - use default camera positioning based on zone polygon bounds
     // Calculate bounds from polygon points (convert grid coords to world coords)
     let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
     let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
@@ -343,7 +343,7 @@ export function ViewerCustomControls() {
     const padding = 2 // Add some padding around the room
     const targetDistance = (maxDimension + padding) * 0.8
 
-    // Move camera to look at the center of the collection
+    // Move camera to look at the center of the zone
     const currentPosition = new Vector3()
     cameraImpl.getPosition(currentPosition)
 
@@ -358,7 +358,7 @@ export function ViewerCustomControls() {
     const newDistance = Math.max(targetDistance, 8) // Minimum distance of 8
     const newPosition = center.clone().add(direction.multiplyScalar(newDistance))
 
-    // Smoothly transition camera to focus on collection
+    // Smoothly transition camera to focus on zone
     cameraImpl.setLookAt(
       newPosition.x,
       Math.max(newPosition.y, floorY + 5),
@@ -368,14 +368,14 @@ export function ViewerCustomControls() {
       center.z,
       true,
     )
-  }, [controls, scene, selectedCollectionId, selectedCollectionData, levelData, levelMode])
+  }, [controls, scene, selectedZoneId, selectedZoneData, levelData, levelMode])
 
   // Focus on node camera when selected
   useEffect(() => {
     if (!(controls && scene && selectedNodeIds.length === 1)) return
 
-    // Don't override if a collection is selected
-    if (selectedCollectionId) return
+    // Don't override if a zone is selected
+    if (selectedZoneId) return
 
     const nodeId = selectedNodeIds[0]
     // Access node via graph directly
@@ -402,7 +402,7 @@ export function ViewerCustomControls() {
         true, // enable transition
       )
     }
-  }, [selectedNodeIds, controls, scene, selectedCollectionId])
+  }, [selectedNodeIds, controls, scene, selectedZoneId])
 
   // Configure mouse buttons for viewer mode - always allow panning with left click
   const mouseButtons = useMemo(() => {

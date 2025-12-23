@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection } from '@/lib/scenegraph/schema/collections'
+import type { Zone } from '@/lib/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 
 interface ViewerLayersMenuProps {
@@ -24,18 +24,18 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     return building ? building.children : EMPTY_LEVELS
   })
 
-  // Get room collections grouped by levelId
-  const roomCollections = useEditor(
+  // Get room zones grouped by levelId
+  const roomZones = useEditor(
     useShallow((state: StoreState) =>
-      (state.scene.collections || []).filter((c) => c.type === 'room'),
+      (state.scene.zones || []).filter((c) => c.type === 'room'),
     ),
   )
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
   const selectFloor = useEditor((state) => state.selectFloor)
-  const selectCollection = useEditor((state) => state.selectCollection)
+  const selectZone = useEditor((state) => state.selectZone)
   const toggleNodeVisibility = useEditor((state) => state.toggleNodeVisibility)
   const selectNode = useEditor((state) => state.selectNode)
   const levelMode = useEditor((state) => state.levelMode)
@@ -52,11 +52,11 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     .filter((level) => level.type === 'level')
     .sort((a, b) => (b.level || 0) - (a.level || 0))
 
-  // Group room collections by levelId
-  const roomsByLevel = roomCollections.reduce<Record<string, Collection[]>>((acc, collection) => {
-    const levelId = collection.levelId || 'unassigned'
+  // Group room zones by levelId
+  const roomsByLevel = roomZones.reduce<Record<string, Zone[]>>((acc, zone) => {
+    const levelId = zone.levelId || 'unassigned'
     if (!acc[levelId]) acc[levelId] = []
-    acc[levelId].push(collection)
+    acc[levelId].push(zone)
     return acc
   }, {})
 
@@ -68,9 +68,9 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
       useEditor.setState({
         selectedNodeIds: [],
         levelMode: 'stacked',
-        // Also clear floor/collection selection when deselecting building
+        // Also clear floor/zone selection when deselecting building
         selectedFloorId: null,
-        selectedCollectionId: null,
+        selectedZoneId: null,
         viewMode: 'full',
       })
     } else {
@@ -88,9 +88,9 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     if (!isBuildingSelected) return
     if (!building) return
 
-    // Clear collection selection when clicking a floor
-    if (selectedCollectionId) {
-      selectCollection(null)
+    // Clear zone selection when clicking a floor
+    if (selectedZoneId) {
+      selectZone(null)
     }
     if (selectedFloorId === floorId) {
       // Deselect if clicking the same floor - Go back to Building selection
@@ -119,7 +119,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     })
   }
 
-  const handleRoomClick = (collection: Collection, levelId: string, e: React.MouseEvent) => {
+  const handleRoomClick = (zone: Zone, levelId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!isBuildingSelected) return
 
@@ -127,12 +127,12 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
     if (selectedFloorId !== levelId) {
       selectFloor(levelId)
     }
-    // Use selectCollection to focus on the room
-    selectCollection(collection.id)
+    // Use selectZone to focus on the room
+    selectZone(zone.id)
   }
 
-  // Check if this room collection is currently selected
-  const isRoomSelected = (collection: Collection): boolean => selectedCollectionId === collection.id
+  // Check if this room zone is currently selected
+  const isRoomSelected = (zone: Zone): boolean => selectedZoneId === zone.id
 
   if (!(mounted && building))
     return <div className="p-3 text-white/50 text-xs italic">Loading...</div>
@@ -215,7 +215,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
                   </Button>
                 </div>
 
-                {/* Room collections for this level */}
+                {/* Room zones for this level */}
                 {hasRooms && isExpanded && (
                   <div className="mt-0.5 ml-4 space-y-0.5 border-white/10 border-l pl-2">
                     {levelRooms.map((room) => {

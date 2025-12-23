@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
 import {
-  CollectionsSection,
+  ZonesSection,
   LayersMenuContext,
   SiteItem,
   ViewsSection,
@@ -263,12 +263,12 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
               </div>
             ))}
 
-            {/* Collections Section - Hidden in Site mode */}
+            {/* Zones Section - Hidden in Site mode */}
             {editorMode !== 'site' && (
               <div
                 className={cn(
                   'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
-                  expandedIds.includes('collections-section')
+                  expandedIds.includes('zones-section')
                     ? 'min-h-0 flex-1'
                     : 'flex-none shrink-0',
                 )}
@@ -276,13 +276,13 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                 <div
                   className={cn(
                     'flex-1',
-                    expandedIds.includes('collections-section')
+                    expandedIds.includes('zones-section')
                       ? 'overflow-y-auto'
                       : 'overflow-hidden',
                   )}
                 >
                   <TreeView className="p-0">
-                    <CollectionsSection isLast={true} level={1} onNodeClick={handleNodeClick} />
+                    <ZonesSection isLast={true} level={1} onNodeClick={handleNodeClick} />
                   </TreeView>
                 </div>
               </div>

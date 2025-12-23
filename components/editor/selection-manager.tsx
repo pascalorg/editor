@@ -164,7 +164,7 @@ function SelectionManager() {
     const handleClick = (event: PointerEvent) => {
       if (event.button !== 0) return // Only left-click
       if (controlMode !== 'select') return
-      if (useEditor.getState().selectedCollectionId) return // Don't select nodes when editing a collection
+      if (useEditor.getState().selectedZoneId) return // Don't select nodes when editing a zone
 
       // Check for drag to prevent accidental selection/deselection after dragging
       if (pointerDownPos.current) {

@@ -19,8 +19,8 @@ import { cn } from '@/lib/utils'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { PaintingTool } from '../nodes/painting/painting-tool'
 import { SledgehammerTool } from '../nodes/sledgehammer/sledgehammer-tool'
-import { CollectionBoundaryEditor } from '../nodes/collection/collection-boundary-editor'
-import { CollectionRenderer } from '../nodes/collection/collection-renderer'
+import { ZoneBoundaryEditor } from '../nodes/zone/zone-boundary-editor'
+import { ZoneRenderer } from '../nodes/zone/zone-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
@@ -88,10 +88,10 @@ export default function Editor({ className }: { className?: string }) {
         {rootId && <NodeRenderer nodeId={rootId} />}
       </group>
 
-      {/* Collection zones and boundary editor */}
+      {/* Zone polygons and boundary editor */}
       <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-        <CollectionRenderer />
-        <CollectionBoundaryEditor />
+        <ZoneRenderer />
+        <ZoneBoundaryEditor />
       </group>
 
       <ControlModeComponents />

@@ -22,7 +22,7 @@ const toGrid = (x: number, z: number): [number, number] => [
 ]
 
 /**
- * Draggable handle for editing collection polygon vertices
+ * Draggable handle for editing zone polygon vertices
  */
 function DragHandle({
   position,
@@ -240,19 +240,19 @@ function MidPointHandle({
 }
 
 /**
- * Collection boundary editor
- * Shows draggable handles at each polygon vertex when a collection is selected
+ * Zone boundary editor
+ * Shows draggable handles at each polygon vertex when a zone is selected
  */
-export function CollectionBoundaryEditor() {
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
-  const updateCollectionPolygon = useEditor((state) => state.updateCollectionPolygon)
+export function ZoneBoundaryEditor() {
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
+  const updateZonePolygon = useEditor((state) => state.updateZonePolygon)
   const levelMode = useEditor((state) => state.levelMode)
 
-  // Get the selected collection's polygon
-  const selectedCollection = useEditor(
+  // Get the selected zone's polygon
+  const selectedZone = useEditor(
     useShallow((state: StoreState) => {
-      if (!selectedCollectionId) return null
-      return (state.scene.collections || []).find((c) => c.id === selectedCollectionId) || null
+      if (!selectedZoneId) return null
+      return (state.scene.zones || []).find((c) => c.id === selectedZoneId) || null
     }),
   )
 
@@ -285,20 +285,20 @@ export function CollectionBoundaryEditor() {
   const draggedPolygonRef = useRef<[number, number][] | null>(null)
   draggedPolygonRef.current = draggedPolygon
 
-  // Reset dragged polygon when switching collections to prevent stale state
+  // Reset dragged polygon when switching zones to prevent stale state
   useEffect(() => {
     setDraggedPolygon(null)
-  }, [selectedCollectionId])
+  }, [selectedZoneId])
 
-  // Calculate Y offset for the collection's level (matches node-renderer logic)
+  // Calculate Y offset for the zone's level (matches node-renderer logic)
   const levelYOffset = useMemo(() => {
-    if (!selectedCollection) return 0
-    const data = levelData[selectedCollection.levelId]
+    if (!selectedZone) return 0
+    const data = levelData[selectedZone.levelId]
     if (!data) return 0
     // Elevation is always applied, levelOffset only in exploded mode
     const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
     return (data.elevation || 0) + levelOffset
-  }, [selectedCollection, levelData, levelMode])
+  }, [selectedZone, levelData, levelMode])
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true)
@@ -306,44 +306,44 @@ export function CollectionBoundaryEditor() {
 
   const handleDrag = useCallback(
     (index: number, newPosition: [number, number]) => {
-      if (!selectedCollection) return
+      if (!selectedZone) return
 
       // Use ref to get latest dragged polygon, avoiding stale closure issues
-      const basePolygon = draggedPolygonRef.current || selectedCollection.polygon
+      const basePolygon = draggedPolygonRef.current || selectedZone.polygon
       const newPolygon = [...basePolygon]
       newPolygon[index] = newPosition
       setDraggedPolygon(newPolygon)
     },
-    [selectedCollection],
+    [selectedZone],
   )
 
   const handleDragEnd = useCallback(() => {
     // Use ref to get latest value, avoiding stale closure issues
     const currentDraggedPolygon = draggedPolygonRef.current
-    if (currentDraggedPolygon && selectedCollectionId) {
-      updateCollectionPolygon(selectedCollectionId, currentDraggedPolygon)
+    if (currentDraggedPolygon && selectedZoneId) {
+      updateZonePolygon(selectedZoneId, currentDraggedPolygon)
       setDraggedPolygon(null)
     }
     setIsDragging(false)
-  }, [selectedCollectionId, updateCollectionPolygon])
+  }, [selectedZoneId, updateZonePolygon])
 
   const handleDeleteVertex = useCallback(
     (index: number) => {
-      if (!selectedCollectionId) return
-      const basePolygon = draggedPolygon ?? selectedCollection?.polygon
+      if (!selectedZoneId) return
+      const basePolygon = draggedPolygon ?? selectedZone?.polygon
       if (!basePolygon || basePolygon.length <= 3) return // Need at least 3 points
 
       const newPolygon = basePolygon.filter((_, i) => i !== index)
-      updateCollectionPolygon(selectedCollectionId, newPolygon)
+      updateZonePolygon(selectedZoneId, newPolygon)
       setDraggedPolygon(null)
     },
-    [selectedCollection?.polygon, selectedCollectionId, draggedPolygon, updateCollectionPolygon],
+    [selectedZone?.polygon, selectedZoneId, draggedPolygon, updateZonePolygon],
   )
 
   const handleAddVertex = useCallback(
     (afterIndex: number, initialPosition: [number, number]): number => {
-      if (!selectedCollectionId) return -1
-      const basePolygon = draggedPolygon ?? selectedCollection?.polygon
+      if (!selectedZoneId) return -1
+      const basePolygon = draggedPolygon ?? selectedZone?.polygon
       if (!basePolygon) return -1
 
       // Insert new point after afterIndex at the mid-point position
@@ -361,12 +361,12 @@ export function CollectionBoundaryEditor() {
       // Return the index of the newly created vertex
       return afterIndex + 1
     },
-    [selectedCollection?.polygon, selectedCollectionId, draggedPolygon],
+    [selectedZone?.polygon, selectedZoneId, draggedPolygon],
   )
 
-  if (!selectedCollection) return null
+  if (!selectedZone) return null
 
-  const polygon = draggedPolygon || selectedCollection.polygon
+  const polygon = draggedPolygon || selectedZone.polygon
   if (!polygon || polygon.length < 3) return null
 
   // Create line points for the editing border (convert to world coords)
@@ -399,7 +399,7 @@ export function CollectionBoundaryEditor() {
       {polygon.map(([x, z], index) => (
         <DragHandle
           canDelete={canDelete}
-          color={selectedCollection.color || '#3b82f6'}
+          color={selectedZone.color || '#3b82f6'}
           index={index}
           key={`vertex-${index}`}
           levelYOffset={levelYOffset}
@@ -415,7 +415,7 @@ export function CollectionBoundaryEditor() {
       {!isDragging &&
         midPoints.map((pos, index) => (
           <MidPointHandle
-            color={selectedCollection.color || '#3b82f6'}
+            color={selectedZone.color || '#3b82f6'}
             index={index}
             key={`midpoint-${index}`}
             levelYOffset={levelYOffset}

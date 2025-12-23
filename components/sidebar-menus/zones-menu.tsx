@@ -21,16 +21,16 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection, CollectionType } from '@/lib/scenegraph/schema/collections'
+import type { Zone, ZoneType } from '@/lib/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 import { RenamePopover } from './shared'
 
-const COLLECTION_TYPE_CONFIG: Record<CollectionType, { label: string; icon: React.ReactNode }> = {
+const ZONE_TYPE_CONFIG: Record<ZoneType, { label: string; icon: React.ReactNode }> = {
   room: { label: 'Room', icon: <Grid2x2 className="h-3 w-3" /> },
   other: { label: 'Zone', icon: <Hexagon className="h-3 w-3" /> },
 }
 
-// Preset colors for collections
+// Preset colors for zones
 const PRESET_COLORS = [
   '#3b82f6', // blue
   '#22c55e', // green
@@ -42,42 +42,42 @@ const PRESET_COLORS = [
   '#06b6d4', // cyan
 ]
 
-// Collection item component
-interface CollectionItemProps {
-  collection: Collection
+// Zone item component
+interface ZoneItemProps {
+  zone: Zone
   isLast: boolean
   level: number
   onNodeClick: (nodeId: string, hasChildren: boolean) => void
 }
 
-export function CollectionItem({ collection, isLast, level, onNodeClick }: CollectionItemProps) {
-  const renameCollection = useEditor((state) => state.renameCollection)
-  const deleteCollection = useEditor((state) => state.deleteCollection)
-  const setCollectionType = useEditor((state) => state.setCollectionType)
-  const setCollectionColor = useEditor((state) => state.setCollectionColor)
-  const selectCollection = useEditor((state) => state.selectCollection)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+export function ZoneItem({ zone, isLast, level, onNodeClick }: ZoneItemProps) {
+  const renameZone = useEditor((state) => state.renameZone)
+  const deleteZone = useEditor((state) => state.deleteZone)
+  const setZoneType = useEditor((state) => state.setZoneType)
+  const setZoneColor = useEditor((state) => state.setZoneColor)
+  const selectZone = useEditor((state) => state.selectZone)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
 
-  const currentType = collection.type || 'other'
-  const typeConfig = COLLECTION_TYPE_CONFIG[currentType]
-  const isSelected = selectedCollectionId === collection.id
+  const currentType = zone.type || 'other'
+  const typeConfig = ZONE_TYPE_CONFIG[currentType]
+  const isSelected = selectedZoneId === zone.id
 
   const handleRename = (newName: string) => {
-    renameCollection(collection.id, newName)
+    renameZone(zone.id, newName)
   }
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
-    deleteCollection(collection.id)
+    deleteZone(zone.id)
   }
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Select this collection for boundary editing
-    selectCollection(isSelected ? null : collection.id)
+    // Select this zone for boundary editing
+    selectZone(isSelected ? null : zone.id)
   }
 
   // Get level name for display
@@ -87,10 +87,10 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
       return building?.children || []
     }),
   )
-  const levelName = levels.find((l) => l.id === collection.levelId)?.name || 'Unknown Level'
+  const levelName = levels.find((l) => l.id === zone.levelId)?.name || 'Unknown Level'
 
   return (
-    <TreeNode isLast={isLast} level={level} nodeId={collection.id}>
+    <TreeNode isLast={isLast} level={level} nodeId={zone.id}>
       <TreeNodeTrigger
         className={cn('group', isSelected && 'bg-accent ring-1 ring-primary')}
         onClick={(e) => handleClick(e)}
@@ -103,7 +103,7 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
             <button
               className="mr-1 size-4 shrink-0 rounded-sm border border-border/50 transition-transform hover:scale-110"
               onClick={(e) => e.stopPropagation()}
-              style={{ backgroundColor: collection.color }}
+              style={{ backgroundColor: zone.color }}
             />
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-2" onClick={(e) => e.stopPropagation()}>
@@ -112,10 +112,10 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
                 <button
                   className={cn(
                     'size-6 rounded-sm border transition-transform hover:scale-110',
-                    color === collection.color ? 'ring-2 ring-primary ring-offset-1' : '',
+                    color === zone.color ? 'ring-2 ring-primary ring-offset-1' : '',
                   )}
                   key={color}
-                  onClick={() => setCollectionColor(collection.id, color)}
+                  onClick={() => setZoneColor(zone.id, color)}
                   style={{ backgroundColor: color }}
                 />
               ))}
@@ -127,16 +127,16 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           hasChildren={false}
           icon={
             <img
-              alt="Collection"
+              alt="Zone"
               className="size-4"
               height={22}
-              src="/icons/collection.png"
+              src="/icons/zone.png"
               width={22}
             />
           }
         />
 
-        {/* Collection type selector */}
+        {/* Zone type selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -161,14 +161,14 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
             onClick={(e) => e.stopPropagation()}
           >
             {(
-              Object.entries(COLLECTION_TYPE_CONFIG) as [CollectionType, typeof typeConfig][]
+              Object.entries(ZONE_TYPE_CONFIG) as [ZoneType, typeof typeConfig][]
             ).map(([type, config]) => (
               <DropdownMenuItem
                 className="gap-2 text-xs"
                 key={type}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setCollectionType(collection.id, type)
+                  setZoneType(zone.id, type)
                 }}
               >
                 <span className="text-muted-foreground">{config.icon}</span>
@@ -187,12 +187,12 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           }}
           ref={labelRef}
         >
-          {collection.name}
+          {zone.name}
           <span className="ml-1 text-muted-foreground text-xs">({levelName})</span>
         </TreeLabel>
         <RenamePopover
           anchorRef={labelRef}
-          currentName={collection.name}
+          currentName={zone.name}
           isOpen={isRenaming}
           onOpenChange={setIsRenaming}
           onRename={handleRename}
@@ -208,51 +208,51 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
               <Trash2 className="size-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Delete collection</TooltipContent>
+          <TooltipContent>Delete zone</TooltipContent>
         </Tooltip>
       </TreeNodeTrigger>
     </TreeNode>
   )
 }
 
-// Collections section component
-interface CollectionsSectionProps {
+// Zones section component
+interface ZonesSectionProps {
   level: number
   onNodeClick: (nodeId: string, hasChildren: boolean) => void
   isLast?: boolean
 }
 
-export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSectionProps) {
-  const collections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+export function ZonesSection({ level, onNodeClick, isLast }: ZonesSectionProps) {
+  const zones = useEditor(useShallow((state: StoreState) => state.scene.zones || []))
   const setActiveTool = useEditor((state) => state.setActiveTool)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
 
-  const handleAddCollection = (e: React.MouseEvent) => {
+  const handleAddZone = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Activate the collection tool - it will create a collection when the user finishes drawing
+    // Activate the zone tool - it will create a zone when the user finishes drawing
     if (selectedFloorId) {
-      setActiveTool('collection')
+      setActiveTool('zone')
     }
   }
 
-  const hasCollections = collections.length > 0
+  const hasZones = zones.length > 0
 
   return (
-    <TreeNode isLast={isLast} level={level} nodeId="collections-section">
+    <TreeNode isLast={isLast} level={level} nodeId="zones-section">
       <TreeNodeTrigger
         className="group sticky top-0 z-10 bg-background"
-        onClick={() => onNodeClick('collections-section', hasCollections)}
+        onClick={() => onNodeClick('zones-section', hasZones)}
       >
-        <TreeExpander hasChildren={hasCollections} />
+        <TreeExpander hasChildren={hasZones} />
         <TreeIcon
           className="size-7"
-          hasChildren={hasCollections}
+          hasChildren={hasZones}
           icon={
             <img
-              alt="Collections"
+              alt="Zones"
               className="object-contain"
               height={24}
-              src="/icons/collection.png"
+              src="/icons/zone.png"
               width={24}
             />
           }
@@ -263,7 +263,7 @@ export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSe
             <Button
               className="h-5 w-5 p-0"
               disabled={!selectedFloorId}
-              onClick={handleAddCollection}
+              onClick={handleAddZone}
               size="sm"
               variant="ghost"
             >
@@ -276,14 +276,14 @@ export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSe
         </Tooltip>
       </TreeNodeTrigger>
 
-      <TreeNodeContent hasChildren={hasCollections}>
-        {collections.map((collection, index) => (
-          <CollectionItem
-            collection={collection}
-            isLast={index === collections.length - 1}
-            key={collection.id}
+      <TreeNodeContent hasChildren={hasZones}>
+        {zones.map((zone, index) => (
+          <ZoneItem
+            isLast={index === zones.length - 1}
+            key={zone.id}
             level={level + 1}
             onNodeClick={onNodeClick}
+            zone={zone}
           />
         ))}
       </TreeNodeContent>

@@ -7,14 +7,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
-import { type CollectionPreviewEvent, emitter } from '@/events/bus'
+import { type ZonePreviewEvent, emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection } from '@/lib/scenegraph/schema/collections'
+import type { Zone } from '@/lib/scenegraph/schema/zones'
 
 // Height offset to prevent z-fighting with floor
 const Y_OFFSET = 0.02
 
-// Height of the extruded collection walls
+// Height of the extruded zone walls
 const EXTRUDE_HEIGHT = 2.5
 
 // Convert grid coordinates to world coordinates
@@ -23,7 +23,7 @@ const toWorld = (x: number, z: number): [number, number] => [x * TILE_SIZE, z * 
 const tmpVec3 = new THREE.Vector3()
 
 /**
- * Custom gradient shader material for extruded collection walls
+ * Custom gradient shader material for extruded zone walls
  * Fades from semi-transparent at bottom to fully transparent at top
  * When hovered, the gradient becomes more opaque
  */
@@ -97,9 +97,9 @@ const GradientMaterial = ({
   )
 }
 /**
- * Label displayed at the center of a collection zone
+ * Label displayed at the center of a zone
  */
-function CollectionLabel({
+function ZoneLabel({
   name,
   color,
   centerX,
@@ -162,25 +162,25 @@ function CollectionLabel({
 }
 
 /**
- * Renders a single collection as a colored polygon zone on the floor
+ * Renders a single zone as a colored polygon on the floor
  */
-function CollectionZone({
-  collection,
+function ZonePolygon({
+  zone,
   isSelected,
   levelYOffset,
   isInteractive,
   onSelect,
   showLabel,
 }: {
-  collection: Collection
+  zone: Zone
   isSelected: boolean
   levelYOffset: number
   isInteractive?: boolean
-  onSelect?: (collectionId: string) => void
+  onSelect?: (zoneId: string) => void
   showLabel?: boolean
 }) {
-  const polygon = collection.polygon
-  const color = collection.color || '#3b82f6'
+  const polygon = zone.polygon
+  const color = zone.color || '#3b82f6'
   const [isHovered, setIsHovered] = useState(false)
 
   // Create the polygon shape and extruded wall geometry (convert grid coords to world coords)
@@ -249,9 +249,9 @@ function CollectionZone({
     (e: ThreeEvent<MouseEvent>) => {
       if (!isInteractive) return
       e.stopPropagation()
-      onSelect?.(collection.id)
+      onSelect?.(zone.id)
     },
-    [isInteractive, onSelect, collection.id],
+    [isInteractive, onSelect, zone.id],
   )
 
   const handlePointerEnter = useCallback(() => {
@@ -312,12 +312,12 @@ function CollectionZone({
 
       {/* Label at center */}
       {showLabel && center && (
-        <CollectionLabel
+        <ZoneLabel
           centerX={center.x}
           centerZ={center.z}
           color={color}
           levelYOffset={levelYOffset}
-          name={collection.name}
+          name={zone.name}
         />
       )}
     </group>
@@ -325,19 +325,19 @@ function CollectionZone({
 }
 
 /**
- * Renders the collection preview while drawing
+ * Renders the zone preview while drawing
  */
-function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
-  const [previewState, setPreviewState] = useState<CollectionPreviewEvent>({ points: [] })
+function ZonePreview({ levelYOffset }: { levelYOffset: number }) {
+  const [previewState, setPreviewState] = useState<ZonePreviewEvent>({ points: [] })
 
   useEffect(() => {
-    const handlePreview = (event: CollectionPreviewEvent) => {
+    const handlePreview = (event: ZonePreviewEvent) => {
       setPreviewState(event)
     }
 
-    emitter.on('collection:preview', handlePreview)
+    emitter.on('zone:preview', handlePreview)
     return () => {
-      emitter.off('collection:preview', handlePreview)
+      emitter.off('zone:preview', handlePreview)
     }
   }, [])
 
@@ -449,29 +449,29 @@ function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
 }
 
 /**
- * Main collection renderer component
- * Renders all collections for the current level and the drawing preview
+ * Main zone renderer component
+ * Renders all zones for the current level and the drawing preview
  */
-export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean }) {
+export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
-  const selectCollection = useEditor((state) => state.selectCollection)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
+  const selectZone = useEditor((state) => state.selectZone)
   const levelMode = useEditor((state) => state.levelMode)
   const viewMode = useEditor((state) => state.viewMode)
 
-  // Determine if a collection should be interactive
-  // Only collections on the currently selected level are interactive in viewer mode
+  // Determine if a zone should be interactive
+  // Only zones on the currently selected level are interactive in viewer mode
   const getIsInteractive = useCallback(
-    (collectionLevelId: string) =>
-      isViewer && !!selectedFloorId && collectionLevelId === selectedFloorId,
+    (zoneLevelId: string) =>
+      isViewer && !!selectedFloorId && zoneLevelId === selectedFloorId,
     [isViewer, selectedFloorId],
   )
 
-  const handleSelectCollection = useCallback(
-    (collectionId: string) => {
-      selectCollection(collectionId)
+  const handleSelectZone = useCallback(
+    (zoneId: string) => {
+      selectZone(zoneId)
     },
-    [selectCollection],
+    [selectZone],
   )
 
   // Get building levels for Y offset calculation
@@ -495,22 +495,22 @@ export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean })
     return data
   }, [buildingLevels])
 
-  // Get all collections from the store
-  const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+  // Get all zones from the store
+  const allZones = useEditor(useShallow((state: StoreState) => state.scene.zones || []))
 
-  // Filter collections based on view mode and selection
-  const collections = useMemo(() => {
-    // In viewer mode with a collection selected, hide all collections
-    if (isViewer && selectedCollectionId) {
+  // Filter zones based on view mode and selection
+  const zones = useMemo(() => {
+    // In viewer mode with a zone selected, hide all zones
+    if (isViewer && selectedZoneId) {
       return []
     }
-    // In full view mode (no floor selected), show all collections
+    // In full view mode (no floor selected), show all zones
     if (viewMode === 'full' || !selectedFloorId) {
-      return allCollections
+      return allZones
     }
-    // In level view mode, show only collections for the selected floor
-    return allCollections.filter((c) => c.levelId === selectedFloorId)
-  }, [allCollections, viewMode, selectedFloorId, isViewer, selectedCollectionId])
+    // In level view mode, show only zones for the selected floor
+    return allZones.filter((c) => c.levelId === selectedFloorId)
+  }, [allZones, viewMode, selectedFloorId, isViewer, selectedZoneId])
 
   // Calculate Y offset for the current level (used for preview)
   const previewLevelYOffset = useMemo(() => {
@@ -534,34 +534,34 @@ export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean })
     [levelMode, levelData],
   )
 
-  // Determine if labels should be shown for a collection
-  // Show labels in viewer mode when on the selected floor and no collection is selected
+  // Determine if labels should be shown for a zone
+  // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
-    (collectionLevelId: string) =>
+    (zoneLevelId: string) =>
       isViewer &&
       !!selectedFloorId &&
-      collectionLevelId === selectedFloorId &&
-      !selectedCollectionId,
-    [isViewer, selectedFloorId, selectedCollectionId],
+      zoneLevelId === selectedFloorId &&
+      !selectedZoneId,
+    [isViewer, selectedFloorId, selectedZoneId],
   )
 
   return (
     <group>
-      {/* Render all collections */}
-      {collections.map((collection) => (
-        <CollectionZone
-          collection={collection}
-          isInteractive={getIsInteractive(collection.levelId)}
-          isSelected={selectedCollectionId === collection.id}
-          key={collection.id}
-          levelYOffset={getLevelYOffset(collection.levelId)}
-          onSelect={handleSelectCollection}
-          showLabel={getShowLabel(collection.levelId)}
+      {/* Render all zones */}
+      {zones.map((zone) => (
+        <ZonePolygon
+          isInteractive={getIsInteractive(zone.levelId)}
+          isSelected={selectedZoneId === zone.id}
+          key={zone.id}
+          levelYOffset={getLevelYOffset(zone.levelId)}
+          onSelect={handleSelectZone}
+          showLabel={getShowLabel(zone.levelId)}
+          zone={zone}
         />
       ))}
 
       {/* Render the drawing preview */}
-      <CollectionPreview levelYOffset={previewLevelYOffset} />
+      <ZonePreview levelYOffset={previewLevelYOffset} />
     </group>
   )
 }
