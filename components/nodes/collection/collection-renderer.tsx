@@ -1,10 +1,10 @@
 'use client'
 
 import { Line } from '@react-three/drei'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { TILE_SIZE } from '@/components/editor'
+import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { type CollectionPreviewEvent, emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
@@ -62,10 +62,16 @@ function CollectionZone({
   return (
     <group>
       {/* Filled polygon */}
-      <mesh position={[0, levelYOffset + Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        frustumCulled={false}
+        position={[0, levelYOffset + Y_OFFSET, 0]}
+        renderOrder={999}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
         <shapeGeometry args={[shape]} />
         <meshBasicMaterial
           color={color}
+          depthTest={false}
           opacity={isSelected ? 0.4 : 0.25}
           side={THREE.DoubleSide}
           transparent
@@ -214,40 +220,78 @@ export function CollectionRenderer() {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const levelMode = useEditor((state) => state.levelMode)
-  const currentLevel = useEditor((state) => state.currentLevel)
+  const viewMode = useEditor((state) => state.viewMode)
 
-  // Get all collections for the current level
-  const collections = useEditor(
-    useShallow((state: StoreState) => {
-      if (!selectedFloorId) return []
-      return (state.scene.collections || []).filter((c) => c.levelId === selectedFloorId)
-    }),
-  )
+  // Get building levels for Y offset calculation
+  const buildingLevels = useEditor((state) => {
+    const site = state.scene.root.children?.[0]
+    const building = site?.children?.find((c) => c.type === 'building')
+    return building?.children ?? []
+  })
 
-  // Calculate Y offset for the current level
-  const levelYOffset = useMemo(() => {
-    if (levelMode === 'exploded') {
-      // In exploded mode, levels are separated by FLOOR_SPACING (5 units)
-      return currentLevel * 5
+  // Memoize level data to avoid recalculating on every render
+  const levelData = useMemo(() => {
+    const data: Record<string, { level: number; elevation: number }> = {}
+    for (const lvl of buildingLevels) {
+      if (lvl.type === 'level') {
+        data[lvl.id] = {
+          level: (lvl as any).level ?? 0,
+          elevation: (lvl as any).elevation ?? 0,
+        }
+      }
     }
-    // In stacked mode, levels stack at their actual height
-    return currentLevel * 3 // WALL_HEIGHT
-  }, [levelMode, currentLevel])
+    return data
+  }, [buildingLevels])
+
+  // Get all collections from the store
+  const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+
+  // Filter collections based on view mode
+  const collections = useMemo(() => {
+    // In full view mode (no floor selected), show all collections
+    if (viewMode === 'full' || !selectedFloorId) {
+      return allCollections
+    }
+    // In level view mode, show only collections for the selected floor
+    return allCollections.filter((c) => c.levelId === selectedFloorId)
+  }, [allCollections, viewMode, selectedFloorId])
+
+  // Calculate Y offset for the current level (used for preview)
+  const previewLevelYOffset = useMemo(() => {
+    if (!selectedFloorId) return 0
+    const data = levelData[selectedFloorId]
+    if (!data) return 0
+    // Elevation is always applied, levelOffset only in exploded mode
+    const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
+    return (data.elevation || 0) + levelOffset
+  }, [levelMode, selectedFloorId, levelData])
+
+  // Calculate Y offset for a specific level (matches node-renderer logic)
+  const getLevelYOffset = useCallback(
+    (levelId: string) => {
+      const data = levelData[levelId]
+      if (!data) return 0
+      // Elevation is always applied, levelOffset only in exploded mode
+      const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
+      return (data.elevation || 0) + levelOffset
+    },
+    [levelMode, levelData],
+  )
 
   return (
     <group>
-      {/* Render all collections for the current level */}
+      {/* Render all collections */}
       {collections.map((collection) => (
         <CollectionZone
           collection={collection}
           isSelected={selectedCollectionId === collection.id}
           key={collection.id}
-          levelYOffset={levelYOffset}
+          levelYOffset={getLevelYOffset(collection.levelId)}
         />
       ))}
 
       {/* Render the drawing preview */}
-      <CollectionPreview levelYOffset={levelYOffset} />
+      <CollectionPreview levelYOffset={previewLevelYOffset} />
     </group>
   )
 }
