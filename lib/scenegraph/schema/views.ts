@@ -7,6 +7,7 @@ export const SceneStateOverrideSchema = z.object({
   selectedLevelId: z.string().nullable().optional(),
   levelMode: z.enum(['stacked', 'exploded', 'single-floor']).optional(),
   visibleZoneIds: z.array(z.string()).optional(),
+  visibleCollectionIds: z.array(z.string()).optional(),
   timePreset: z.enum(['dawn', 'day', 'dusk', 'night', 'now', 'custom']).optional(),
   staticTime: z.number().optional(),
 })

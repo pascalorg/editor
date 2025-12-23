@@ -13,6 +13,9 @@ export {
 // Zones menu components
 export { ZoneItem, ZonesSection } from './zones-menu'
 
+// Collections menu components
+export { CollectionItem, CollectionsSection } from './collections-menu'
+
 // Views menu components
 export { ViewItem, ViewsSection } from './views-menu'
 

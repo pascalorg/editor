@@ -30,10 +30,6 @@ import { RoomDetectionProcessor } from '@/lib/processors/room-detection-processo
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
 import {
-  type Zone,
-  ZoneSchema,
-} from '@/lib/scenegraph/schema/zones'
-import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
@@ -43,7 +39,13 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
+import {
+  type Collection,
+  CollectionSchema,
+  type CollectionType,
+} from '@/lib/scenegraph/schema/collections'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
+import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -288,6 +290,10 @@ export type SceneSource =
   | { type: 'url'; url: string } // Loaded from URL, not persisted (viewer mode)
   | { type: 'slot'; name: string } // Named slot for future multi-project support
 
+export type AddToCollectionState = {
+  isActive: boolean
+  nodeIds: string[]
+}
 
 export type StoreState = {
   // ============================================================================
@@ -335,6 +341,8 @@ export type StoreState = {
   pointerPosition: [number, number] | null
   debug: boolean
 
+  addToCollectionState: AddToCollectionState
+  selectedCollectionId: string | null
   // Zone selection (for editing boundaries)
   selectedZoneId: string | null
 
@@ -457,6 +465,18 @@ export type StoreState = {
   renameZone: (zoneId: string, name: string) => void
   updateZonePolygon: (zoneId: string, polygon: [number, number][]) => void
   setZoneColor: (zoneId: string, color: string) => void
+
+  // Collection operations (logical groupings of nodes)
+  selectCollection: (collectionId: string | null) => void
+  addCollection: (name: string) => Collection
+  deleteCollection: (collectionId: string) => void
+  renameCollection: (collectionId: string, name: string) => void
+  setCollectionType: (collectionId: string, type: CollectionType) => void
+  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
+  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+  startAddToCollection: () => void
+  confirmAddToCollection: (collectionId: string) => void
+  cancelAddToCollection: () => void
 
   // View operations
   addView: (viewData: Omit<View, 'id' | 'object'>) => void
@@ -583,11 +603,13 @@ const useStore = create<StoreState>()(
         // Preserve data that is managed outside the graph:
         // - environment: managed directly via setState in updateEnvironment
         // - zones: managed via zone operations in the store
+        // - collections: managed via collection operations in the store
         // - metadata: scene-level metadata not managed by the graph
         // The graph's scene copy may have stale data for these fields.
         const sceneWithPreservedData = {
           ...nextScene,
           zones: currentScene.zones,
+          collections: currentScene.collections,
           views: currentScene.views,
           metadata: currentScene.metadata,
           root: {
@@ -649,6 +671,8 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
+        addToCollectionState: { isActive: false, nodeIds: [] },
+        selectedCollectionId: null,
         selectedZoneId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
@@ -998,8 +1022,13 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          // Zones are now polygon zones, not node containers - no need to update them on node deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(state.selectedNodeIds)
+          const updatedCollections = (state.scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -1156,11 +1185,12 @@ const useStore = create<StoreState>()(
 
             ensureNodeMarkers(root)
 
-            // Parse zones if present
+            // Parse zones and collections if present
             const zones = Array.isArray(json.zones) ? json.zones : []
+            const collections = Array.isArray(json.collections) ? json.collections : []
             const metadata = json.metadata || {}
 
-            const newScene = { root, zones, metadata } as unknown as Scene
+            const newScene = { root, zones, collections, metadata } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -1184,6 +1214,7 @@ const useStore = create<StoreState>()(
             const newScene = {
               root: migratedRoot,
               zones: [],
+              collections: [],
               views: [],
               metadata: {},
             } as unknown as Scene
@@ -1380,7 +1411,7 @@ const useStore = create<StoreState>()(
           return nodeId
         },
         deleteNode: (nodeId) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1391,11 +1422,16 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Zones are now polygon zones, not node containers - no need to update them on node deletion
+          // Remove the node from any collections it belongs to
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections } })
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1422,8 +1458,13 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Zones are now polygon zones, not node containers - no need to update them on node deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(nodeIds)
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
@@ -1512,9 +1553,7 @@ const useStore = create<StoreState>()(
           set({
             scene: {
               ...state.scene,
-              zones: (state.scene.zones || []).map((c) =>
-                c.id === zoneId ? { ...c, name } : c,
-              ),
+              zones: (state.scene.zones || []).map((c) => (c.id === zoneId ? { ...c, name } : c)),
             },
           })
         },
@@ -1536,11 +1575,153 @@ const useStore = create<StoreState>()(
           set({
             scene: {
               ...state.scene,
-              zones: (state.scene.zones || []).map((c) =>
-                c.id === zoneId ? { ...c, color } : c,
+              zones: (state.scene.zones || []).map((c) => (c.id === zoneId ? { ...c, color } : c)),
+            },
+          })
+        },
+
+        // Collection operations (logical groupings of nodes)
+        selectCollection: (collectionId) => {
+          const state = get()
+          if (!collectionId) {
+            set({
+              selectedCollectionId: null,
+              selectedNodeIds: [],
+            })
+            return
+          }
+
+          // Find the collection
+          const collection = state.scene.collections?.find((c) => c.id === collectionId)
+          if (!collection) return
+
+          // If collection has a levelId, ensure that level is selected
+          if (collection.levelId && collection.levelId !== state.selectedFloorId) {
+            const level = state.graph.nodes
+              .find({ type: 'level' })
+              .find((l) => l.id === collection.levelId)
+            if (level) {
+              set({
+                selectedFloorId: collection.levelId,
+                currentLevel: (level.data() as unknown as SchemaLevelNode).level,
+                viewMode: 'level',
+              })
+            }
+          }
+
+          set({
+            selectedCollectionId: collectionId,
+            selectedNodeIds: [...collection.nodeIds],
+          })
+        },
+
+        addCollection: (name: string) => {
+          const collection = CollectionSchema.parse({ name })
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: [...(state.scene.collections || []), collection],
+            },
+          })
+          return collection
+        },
+
+        deleteCollection: (collectionId: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).filter((c) => c.id !== collectionId),
+            },
+          })
+        },
+
+        renameCollection: (collectionId: string, name: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, name } : c,
               ),
             },
           })
+        },
+
+        setCollectionType: (collectionId: string, type: CollectionType) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) =>
+                c.id === collectionId ? { ...c, type } : c,
+              ),
+            },
+          })
+        },
+
+        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                // Add only node IDs that aren't already in the collection
+                const existingIds = new Set(c.nodeIds || [])
+                const newIds = nodeIds.filter((id) => !existingIds.has(id))
+
+                // If this is the first node being added, set the levelId from that node
+                const isFirstNode = existingIds.size === 0 && newIds.length > 0
+                const levelId = isFirstNode
+                  ? getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId)
+                  : c.levelId
+
+                return {
+                  ...c,
+                  nodeIds: [...(c.nodeIds || []), ...newIds],
+                  levelId,
+                }
+              }),
+            },
+          })
+        },
+
+        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
+          const state = get()
+          const idsToRemove = new Set(nodeIds)
+          set({
+            scene: {
+              ...state.scene,
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
+              }),
+            },
+          })
+        },
+
+        startAddToCollection: () => {
+          const { selectedNodeIds } = get()
+          if (selectedNodeIds.length === 0) return
+          set({
+            addToCollectionState: {
+              isActive: true,
+              nodeIds: [...selectedNodeIds],
+            },
+          })
+        },
+
+        confirmAddToCollection: (collectionId: string) => {
+          const { addToCollectionState, addNodesToCollection } = get()
+          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
+          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
+
+        cancelAddToCollection: () => {
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
         },
 
         // View operations
@@ -1680,6 +1861,7 @@ const useStore = create<StoreState>()(
             ...state.scene,
             root: processedRoot,
             zones: state.scene.zones || [],
+            collections: state.scene.collections || [],
           }
 
           // Cache this as the last persisted scene
@@ -1786,12 +1968,14 @@ const useStore = create<StoreState>()(
               // Preserve data that is managed outside the graph:
               // - environment: managed directly via setState in updateEnvironment
               // - zones: managed via zone operations in the store
+              // - collections: managed via collection operations in the store
               // - metadata: scene-level metadata not managed by the graph
               // The graph's scene copy may have stale data for these fields.
               return {
                 scene: {
                   ...nextScene,
                   zones: s.scene.zones,
+                  collections: s.scene.collections,
                   views: s.scene.views,
                   metadata: s.scene.metadata,
                   root: {

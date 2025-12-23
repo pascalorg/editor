@@ -21,6 +21,7 @@ export function ViewerCustomControls() {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const levelMode = useEditor((state) => state.levelMode)
   const selectedZoneId = useEditor((state) => state.selectedZoneId)
+  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   // Get building ID for camera focus when no level is selected
@@ -33,6 +34,15 @@ export function ViewerCustomControls() {
 
   // Get all zones from the store
   const allZones = useEditor(useShallow((state: StoreState) => state.scene.zones || []))
+
+  // Get the selected collection's nodeIds for bounds calculation
+  const collectionNodeIds = useEditor(
+    useShallow((state: StoreState) => {
+      if (!state.selectedCollectionId) return null
+      const collection = state.scene.collections?.find((c) => c.id === state.selectedCollectionId)
+      return collection?.nodeIds || null
+    }),
+  )
 
   // Get the selected zone's data for bounds calculation
   const selectedZoneData = useMemo(() => {
@@ -369,6 +379,86 @@ export function ViewerCustomControls() {
       true,
     )
   }, [controls, scene, selectedZoneId, selectedZoneData, levelData, levelMode])
+
+  // Focus camera on collection bounds when a collection is selected
+  useEffect(() => {
+    if (!(controls && scene && selectedCollectionId && collectionNodeIds?.length)) return
+
+    const cameraImpl = controls as CameraControlsImpl
+
+    // Check if there's a view saved for this collection
+    const views = useEditor.getState().scene.views || []
+    const collectionView = views.find((v) =>
+      v.sceneState?.visibleCollectionIds?.includes(selectedCollectionId),
+    )
+
+    if (collectionView) {
+      // Apply the saved view's camera position
+      const { position, target, mode } = collectionView.camera
+
+      // Switch camera mode if needed
+      if (useEditor.getState().cameraMode !== mode) {
+        useEditor.getState().setCameraMode(mode)
+      }
+
+      cameraImpl.setLookAt(
+        position[0],
+        position[1],
+        position[2],
+        target[0],
+        target[1],
+        target[2],
+        true,
+      )
+      return
+    }
+
+    // No saved view - use default camera positioning based on collection bounds
+    // Calculate the combined bounding box of all nodes in the collection
+    const combinedBox = new Box3()
+
+    for (const nodeId of collectionNodeIds) {
+      const object = scene.getObjectByName(nodeId)
+      if (object) {
+        const objectBox = new Box3().setFromObject(object)
+        combinedBox.union(objectBox)
+      }
+    }
+
+    if (combinedBox.isEmpty()) return
+
+    // Get bounds center and size
+    const center = combinedBox.getCenter(new Vector3())
+    const size = combinedBox.getSize(new Vector3())
+
+    // Calculate the optimal camera distance based on the bounds size
+    const maxDimension = Math.max(size.x, size.z)
+    const padding = 2 // Add some padding around the room
+    const targetDistance = (maxDimension + padding) * 0.8
+
+    // Move camera to look at the center of the collection
+    const currentPosition = new Vector3()
+    cameraImpl.getPosition(currentPosition)
+
+    // Calculate new camera position maintaining the same angle
+    const direction = currentPosition.clone().sub(center).normalize()
+    const newDistance = Math.max(targetDistance, 8) // Minimum distance of 8
+    const newPosition = center.clone().add(direction.multiplyScalar(newDistance))
+
+    // Set floor Y based on current level
+    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
+
+    // Smoothly transition camera to focus on collection
+    cameraImpl.setLookAt(
+      newPosition.x,
+      Math.max(newPosition.y, floorY + 5),
+      newPosition.z,
+      center.x,
+      floorY,
+      center.z,
+      true,
+    )
+  }, [controls, scene, selectedCollectionId, collectionNodeIds, currentLevel, levelMode])
 
   // Focus on node camera when selected
   useEffect(() => {

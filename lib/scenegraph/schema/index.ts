@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CollectionSchema } from './collections'
 import { RootNode } from './root'
 import { AnyNode, type NodeCreateSchemas, type NodeSchemas } from './types'
 import { ViewSchema } from './views'
@@ -6,6 +7,7 @@ import { ZoneSchema } from './zones'
 
 export * from '../common-types'
 export * from './base'
+export * from './collections'
 export * from './zones'
 export * from './environment'
 // Export all specific node types
@@ -31,6 +33,7 @@ export * from './views'
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),
   zones: z.array(ZoneSchema).default([]),
+  collections: z.array(CollectionSchema).default([]),
   views: z.array(ViewSchema).default([]),
   metadata: z.json().default({}),
 })
@@ -41,6 +44,7 @@ export function initScene(): Scene {
   return SceneSchema.parse({
     root: RootNode.parse({}),
     zones: [],
+    collections: [],
     views: [],
     metadata: {},
   })
