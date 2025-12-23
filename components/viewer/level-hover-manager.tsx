@@ -112,17 +112,7 @@ export function LevelHoverManager() {
     }),
   )
 
-  // Get room collections for the current level
-  const roomCollections = useEditor(
-    useShallow((state: StoreState) => {
-      if (!state.selectedFloorId) return []
-      return (state.scene.collections || []).filter(
-        (c) => c.type === 'room' && c.levelId === state.selectedFloorId,
-      )
-    }),
-  )
-
-  // Get the selected collection's polygon for boundary display
+  // Get the selected collection's polygon for boundary checking
   const selectedCollectionPolygon = useEditor(
     useShallow((state: StoreState) => {
       if (!state.selectedCollectionId) return null
@@ -515,26 +505,12 @@ export function LevelHoverManager() {
                 }
 
                 if (nodeId && nodeHit) {
-                  // Check if we should preserve the current collection selection
-                  let preserveCollection = false
-                  if (currentCollectionId && !hasModifierKey) {
-                    const currentCollection = roomCollections.find(
-                      (c) => c.id === currentCollectionId,
-                    )
-                    if (currentCollection) {
-                      const bounds = calculateRoomBounds(currentCollection)
-                      if (bounds?.containsPoint(nodeHit.point)) {
-                        preserveCollection = true
-                      }
-                    }
-                  }
-
                   // Node selection logic...
+                  // Since we already verified the hit is within the collection polygon,
+                  // always preserve the collection selection when clicking nodes inside it
                   if (hasModifierKey) {
                     const editorState = useEditor.getState()
-                    if (editorState.selectedCollectionId) {
-                      useEditor.setState({ selectedCollectionId: null })
-                    }
+                    // With modifier key, keep collection but add/toggle node selection
                     editorState.handleNodeSelect(nodeId, {
                       shiftKey: event.shiftKey,
                       metaKey: event.metaKey,
@@ -544,7 +520,8 @@ export function LevelHoverManager() {
                     const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
                     emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
                     useEditor.setState({
-                      selectedCollectionId: preserveCollection ? currentCollectionId : null,
+                      // Keep collection selected when clicking nodes within it
+                      selectedCollectionId: currentCollectionId,
                       selectedNodeIds: [nodeId],
                     })
                   }
@@ -646,7 +623,7 @@ export function LevelHoverManager() {
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('click', onClick)
     }
-  }, [camera, gl, scene, levelIds, roomCollections, selectedCollectionPolygon])
+  }, [camera, gl, scene, levelIds])
 
   // Clear hover when selection changes
   useEffect(() => {
