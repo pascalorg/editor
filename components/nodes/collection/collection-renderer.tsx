@@ -1,6 +1,7 @@
 'use client'
 
 import { Line } from '@react-three/drei'
+import type { ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
@@ -22,13 +23,18 @@ function CollectionZone({
   collection,
   isSelected,
   levelYOffset,
+  isInteractive,
+  onSelect,
 }: {
   collection: Collection
   isSelected: boolean
   levelYOffset: number
+  isInteractive?: boolean
+  onSelect?: (collectionId: string) => void
 }) {
   const polygon = collection.polygon
   const color = collection.color || '#3b82f6'
+  const [isHovered, setIsHovered] = useState(false)
 
   // Create the polygon shape (convert grid coords to world coords)
   const { shape, linePoints } = useMemo(() => {
@@ -57,13 +63,37 @@ function CollectionZone({
     return { shape, linePoints }
   }, [polygon, levelYOffset])
 
+  const handleClick = useCallback(
+    (e: ThreeEvent<MouseEvent>) => {
+      if (!isInteractive) return
+      e.stopPropagation()
+      onSelect?.(collection.id)
+    },
+    [isInteractive, onSelect, collection.id],
+  )
+
+  const handlePointerEnter = useCallback(() => {
+    if (isInteractive) setIsHovered(true)
+  }, [isInteractive])
+
+  const handlePointerLeave = useCallback(() => {
+    setIsHovered(false)
+  }, [])
+
   if (!shape) return null
+
+  // Determine visual state based on selection and hover
+  const isHighlighted = isSelected || isHovered
+  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.25
 
   return (
     <group>
       {/* Filled polygon */}
       <mesh
         frustumCulled={false}
+        onClick={handleClick}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
         position={[0, levelYOffset + Y_OFFSET, 0]}
         renderOrder={999}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -72,7 +102,7 @@ function CollectionZone({
         <meshBasicMaterial
           color={color}
           depthTest={false}
-          opacity={isSelected ? 0.4 : 0.25}
+          opacity={fillOpacity}
           side={THREE.DoubleSide}
           transparent
         />
@@ -80,8 +110,8 @@ function CollectionZone({
 
       {/* Border line */}
       <Line
-        color={isSelected ? '#ffffff' : color}
-        lineWidth={isSelected ? 2 : 1}
+        color={isHighlighted ? '#ffffff' : color}
+        lineWidth={isHighlighted ? 2 : 1}
         points={linePoints}
       />
     </group>
@@ -216,11 +246,27 @@ function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
  * Main collection renderer component
  * Renders all collections for the current level and the drawing preview
  */
-export function CollectionRenderer() {
+export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean }) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectCollection = useEditor((state) => state.selectCollection)
   const levelMode = useEditor((state) => state.levelMode)
   const viewMode = useEditor((state) => state.viewMode)
+
+  // Determine if a collection should be interactive
+  // Only collections on the currently selected level are interactive in viewer mode
+  const getIsInteractive = useCallback(
+    (collectionLevelId: string) =>
+      isViewer && !!selectedFloorId && collectionLevelId === selectedFloorId,
+    [isViewer, selectedFloorId],
+  )
+
+  const handleSelectCollection = useCallback(
+    (collectionId: string) => {
+      selectCollection(collectionId)
+    },
+    [selectCollection],
+  )
 
   // Get building levels for Y offset calculation
   const buildingLevels = useEditor((state) => {
@@ -246,15 +292,19 @@ export function CollectionRenderer() {
   // Get all collections from the store
   const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
 
-  // Filter collections based on view mode
+  // Filter collections based on view mode and selection
   const collections = useMemo(() => {
+    // In viewer mode with a collection selected, only show the selected collection
+    if (isViewer && selectedCollectionId) {
+      return allCollections.filter((c) => c.id === selectedCollectionId)
+    }
     // In full view mode (no floor selected), show all collections
     if (viewMode === 'full' || !selectedFloorId) {
       return allCollections
     }
     // In level view mode, show only collections for the selected floor
     return allCollections.filter((c) => c.levelId === selectedFloorId)
-  }, [allCollections, viewMode, selectedFloorId])
+  }, [allCollections, viewMode, selectedFloorId, isViewer, selectedCollectionId])
 
   // Calculate Y offset for the current level (used for preview)
   const previewLevelYOffset = useMemo(() => {
@@ -284,9 +334,11 @@ export function CollectionRenderer() {
       {collections.map((collection) => (
         <CollectionZone
           collection={collection}
+          isInteractive={getIsInteractive(collection.levelId)}
           isSelected={selectedCollectionId === collection.id}
           key={collection.id}
           levelYOffset={getLevelYOffset(collection.levelId)}
+          onSelect={handleSelectCollection}
         />
       ))}
 

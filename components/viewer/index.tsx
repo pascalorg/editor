@@ -266,7 +266,7 @@ export default function Viewer({
 
         {/* Collection zones */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <CollectionRenderer />
+          <CollectionRenderer isViewer />
         </group>
 
         {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}

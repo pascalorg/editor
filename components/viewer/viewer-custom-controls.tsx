@@ -31,14 +31,37 @@ export function ViewerCustomControls() {
   // Get site node to check for camera preference
   const site = useEditor(useShallow((state) => state.scene.root.children?.[0]))
 
-  // Get the selected collection's polygon for bounds calculation
-  const collectionPolygon = useEditor(
-    useShallow((state: StoreState) => {
-      if (!state.selectedCollectionId) return null
-      const collection = state.scene.collections?.find((c) => c.id === state.selectedCollectionId)
-      return collection?.polygon || null
-    }),
-  )
+  // Get all collections from the store
+  const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+
+  // Get the selected collection's data for bounds calculation
+  const selectedCollectionData = useMemo(() => {
+    if (!selectedCollectionId) return null
+    const collection = allCollections.find((c) => c.id === selectedCollectionId)
+    if (!collection) return null
+    return { polygon: collection.polygon, levelId: collection.levelId }
+  }, [selectedCollectionId, allCollections])
+
+  // Get building levels for Y offset calculation
+  const buildingLevels = useEditor((state) => {
+    const site = state.scene.root.children?.[0]
+    const building = site?.children?.find((c) => c.type === 'building')
+    return building?.children ?? []
+  })
+
+  // Memoize level data to avoid recalculating on every render
+  const levelData = useMemo(() => {
+    const data: Record<string, { level: number; elevation: number }> = {}
+    for (const lvl of buildingLevels) {
+      if (lvl.type === 'level') {
+        data[lvl.id] = {
+          level: (lvl as any).level ?? 0,
+          elevation: (lvl as any).elevation ?? 0,
+        }
+      }
+    }
+    return data
+  }, [buildingLevels])
 
   useEffect(() => {
     if (!controls) return
@@ -262,9 +285,10 @@ export function ViewerCustomControls() {
 
   // Focus camera on collection bounds when a collection is selected
   useEffect(() => {
-    if (!(controls && scene && selectedCollectionId && collectionPolygon?.length)) return
+    if (!(controls && scene && selectedCollectionId && selectedCollectionData?.polygon?.length)) return
 
     const cameraImpl = controls as CameraControlsImpl
+    const { polygon, levelId } = selectedCollectionData
 
     // Check if there's a view saved for this collection
     const views = useEditor.getState().scene.views || []
@@ -294,18 +318,21 @@ export function ViewerCustomControls() {
     }
 
     // No saved view - use default camera positioning based on collection polygon bounds
-    // Calculate bounds from polygon points
+    // Calculate bounds from polygon points (convert grid coords to world coords)
     let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
     let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
 
-    for (const [x, z] of collectionPolygon) {
-      minX = Math.min(minX, x)
-      maxX = Math.max(maxX, x)
-      minZ = Math.min(minZ, z)
-      maxZ = Math.max(maxZ, z)
+    for (const [x, z] of polygon) {
+      // Convert grid coords to world coords (grid * TILE_SIZE - GRID_SIZE/2)
+      const worldX = x * TILE_SIZE - GRID_SIZE / 2
+      const worldZ = z * TILE_SIZE - GRID_SIZE / 2
+      minX = Math.min(minX, worldX)
+      maxX = Math.max(maxX, worldX)
+      minZ = Math.min(minZ, worldZ)
+      maxZ = Math.max(maxZ, worldZ)
     }
 
-    // Get bounds center and size
+    // Get bounds center and size (already in world coords)
     const centerX = (minX + maxX) / 2
     const centerZ = (minZ + maxZ) / 2
     const sizeX = maxX - minX
@@ -320,8 +347,10 @@ export function ViewerCustomControls() {
     const currentPosition = new Vector3()
     cameraImpl.getPosition(currentPosition)
 
-    // Set floor Y based on current level
-    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
+    // Calculate Y offset using level data (matches node-renderer logic)
+    const lvlData = levelData[levelId]
+    const levelOffset = levelMode === 'exploded' ? (lvlData?.level ?? 0) * FLOOR_SPACING : 0
+    const floorY = (lvlData?.elevation ?? 0) + levelOffset
     const center = new Vector3(centerX, floorY, centerZ)
 
     // Calculate new camera position maintaining the same angle
@@ -339,7 +368,7 @@ export function ViewerCustomControls() {
       center.z,
       true,
     )
-  }, [controls, scene, selectedCollectionId, collectionPolygon, currentLevel, levelMode])
+  }, [controls, scene, selectedCollectionId, selectedCollectionData, levelData, levelMode])
 
   // Focus on node camera when selected
   useEffect(() => {
