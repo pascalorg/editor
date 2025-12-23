@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Intersection, Object3D } from 'three'
 import { Box3, Mesh, Raycaster, Vector2 } from 'three'
 import { useShallow } from 'zustand/shallow'
+import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
@@ -167,6 +168,19 @@ export function LevelHoverManager() {
     return inside
   }
 
+  // Helper: check if a world position is inside the selected collection polygon
+  // Converts world coordinates to grid coordinates before checking
+  const isWorldPointInSelectedPolygon = (worldX: number, worldZ: number): boolean => {
+    if (!selectedCollectionPolygon || selectedCollectionPolygon.length < 3) return true // No polygon = allow all
+    // Convert world coords to grid coords (inverse of toWorld in collection-renderer)
+    // World coords have offset of -GRID_SIZE/2 from the group, so we add it back
+    const localX = worldX + GRID_SIZE / 2
+    const localZ = worldZ + GRID_SIZE / 2
+    const gridX = localX / TILE_SIZE
+    const gridZ = localZ / TILE_SIZE
+    return isPointInPolygon(gridX, gridZ, selectedCollectionPolygon)
+  }
+
   // Helper: calculate bounding box for an object excluding image nodes and grids
   const calculateBoundsExcludingImages = (object: Object3D): Box3 | null => {
     const box = new Box3()
@@ -248,22 +262,6 @@ export function LevelHoverManager() {
   // Helper: check if a nodeId is a "background" element that shouldn't block selection
   const isBackgroundElement = (nodeId: string): boolean =>
     nodeId.startsWith('level_') || nodeId.startsWith('ceiling_') || nodeId.startsWith('slab_')
-
-  // Helper: get the first selectable node from intersections (skipping background elements)
-  const getSelectableNodeFromIntersections = (intersects: Intersection[]): string | null => {
-    for (const hit of intersects) {
-      const nodeId = getNodeIdFromIntersection(hit.object)
-      if (nodeId && !isBackgroundElement(nodeId)) {
-        // Skip image nodes
-        const graph = useEditor.getState().graph
-        const node = graph.getNodeById(nodeId as any)?.data()
-        if (node?.type === 'reference-image') continue
-
-        return nodeId
-      }
-    }
-    return null
-  }
 
   // Set up event listeners
   useEffect(() => {
@@ -356,15 +354,28 @@ export function LevelHoverManager() {
 
           if (intersects.length > 0) {
             // Find the first selectable node (skipping background elements like slabs, ceilings)
-            const nodeId = getSelectableNodeFromIntersections(intersects)
-            if (nodeId) {
-              const nodeObject = scene.getObjectByName(nodeId)
-              if (nodeObject) {
-                const box = new Box3().setFromObject(nodeObject)
-                if (!box.isEmpty()) {
-                  setHoveredBox(box)
-                  setHoverMode('node')
-                  return
+            // Also filter to only nodes within the selected collection polygon
+            for (const hit of intersects) {
+              const nodeId = getNodeIdFromIntersection(hit.object)
+              if (nodeId && !isBackgroundElement(nodeId)) {
+                // Skip image nodes
+                const graph = useEditor.getState().graph
+                const node = graph.getNodeById(nodeId as any)?.data()
+                if (node?.type === 'reference-image') continue
+
+                // Check if hit point is within the selected collection polygon
+                if (currentCollectionId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
+                  continue // Skip nodes outside the collection boundary
+                }
+
+                const nodeObject = scene.getObjectByName(nodeId)
+                if (nodeObject) {
+                  const box = new Box3().setFromObject(nodeObject)
+                  if (!box.isEmpty()) {
+                    setHoveredBox(box)
+                    setHoverMode('node')
+                    return
+                  }
                 }
               }
             }
@@ -480,9 +491,30 @@ export function LevelHoverManager() {
               const hasModifierKey = event.shiftKey || event.metaKey || event.ctrlKey
 
               if (currentCollectionId || hasNodeSelection) {
-                const nodeId = getSelectableNodeFromIntersections(intersects)
+                // Find the first selectable node within the collection polygon
+                let nodeId: string | null = null
+                let nodeHit: Intersection | null = null
 
-                if (nodeId) {
+                for (const hit of intersects) {
+                  const id = getNodeIdFromIntersection(hit.object)
+                  if (id && !isBackgroundElement(id)) {
+                    // Skip image nodes
+                    const graph = useEditor.getState().graph
+                    const node = graph.getNodeById(id as any)?.data()
+                    if (node?.type === 'reference-image') continue
+
+                    // Check if hit point is within the selected collection polygon
+                    if (currentCollectionId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
+                      continue // Skip nodes outside the collection boundary
+                    }
+
+                    nodeId = id
+                    nodeHit = hit
+                    break
+                  }
+                }
+
+                if (nodeId && nodeHit) {
                   // Check if we should preserve the current collection selection
                   let preserveCollection = false
                   if (currentCollectionId && !hasModifierKey) {
@@ -491,11 +523,7 @@ export function LevelHoverManager() {
                     )
                     if (currentCollection) {
                       const bounds = calculateRoomBounds(currentCollection)
-                      // Find the exact hit point for this node
-                      const hit = intersects.find(
-                        (h) => getNodeIdFromIntersection(h.object) === nodeId,
-                      )
-                      if (bounds && hit && bounds.containsPoint(hit.point)) {
+                      if (bounds?.containsPoint(nodeHit.point)) {
                         preserveCollection = true
                       }
                     }
