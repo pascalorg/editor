@@ -1,8 +1,9 @@
 'use client'
 
-import { Line } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Billboard, Line } from '@react-three/drei'
+import { type ThreeEvent, useFrame } from '@react-three/fiber'
+import { Container, Text } from '@react-three/uikit'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
@@ -16,6 +17,72 @@ const Y_OFFSET = 0.02
 // Convert grid coordinates to world coordinates
 const toWorld = (x: number, z: number): [number, number] => [x * TILE_SIZE, z * TILE_SIZE]
 
+const tmpVec3 = new THREE.Vector3()
+/**
+ * Label displayed at the center of a collection zone
+ */
+function CollectionLabel({
+  name,
+  color,
+  centerX,
+  centerZ,
+  levelYOffset,
+}: {
+  name: string
+  color: string
+  centerX: number
+  centerZ: number
+  levelYOffset: number
+}) {
+  const labelRef = useRef<THREE.Group>(null)
+
+  useFrame(({ camera }) => {
+    // Scale control panel based on camera distance to maintain consistent visual size
+    if (labelRef.current && labelRef) {
+      tmpVec3.set(centerX, levelYOffset + 2, centerZ)
+      // Calculate distance from camera to the selection center
+      const distance = camera.position.distanceTo(tmpVec3)
+      // Use distance to calculate appropriate scale
+      const scale = distance * 0.12 // Adjust multiplier for desired size
+      const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
+      labelRef.current.scale.setScalar(finalScale)
+    }
+  })
+
+  return (
+    <group position={[centerX, levelYOffset + 2, centerZ]} ref={labelRef}>
+      <Billboard>
+        <Container
+          alignItems="center"
+          backgroundColor="#21222a"
+          borderRadius={6}
+          depthTest={false}
+          flexDirection="row"
+          gap={0}
+          height={40}
+          opacity={0.9}
+          paddingRight={16}
+          renderOrder={1000}
+        >
+          {/* Color circle */}
+          <Container
+            backgroundColor={color}
+            borderRadius={1000}
+            height={42}
+            opacity={1}
+            positionLeft={-12}
+            width={42}
+          />
+          {/* Label text */}
+          <Text color="white" fontSize={20} fontWeight="medium">
+            {name}
+          </Text>
+        </Container>
+      </Billboard>
+    </group>
+  )
+}
+
 /**
  * Renders a single collection as a colored polygon zone on the floor
  */
@@ -25,20 +92,22 @@ function CollectionZone({
   levelYOffset,
   isInteractive,
   onSelect,
+  showLabel,
 }: {
   collection: Collection
   isSelected: boolean
   levelYOffset: number
   isInteractive?: boolean
   onSelect?: (collectionId: string) => void
+  showLabel?: boolean
 }) {
   const polygon = collection.polygon
   const color = collection.color || '#3b82f6'
   const [isHovered, setIsHovered] = useState(false)
 
   // Create the polygon shape (convert grid coords to world coords)
-  const { shape, linePoints } = useMemo(() => {
-    if (!polygon || polygon.length < 3) return { shape: null, linePoints: [] }
+  const { shape, linePoints, center } = useMemo(() => {
+    if (!polygon || polygon.length < 3) return { shape: null, linePoints: [], center: null }
 
     // Convert to world coordinates
     const worldPts = polygon.map(([x, z]) => toWorld(x, z))
@@ -60,7 +129,16 @@ function CollectionZone({
       new THREE.Vector3(worldPts[0][0], levelYOffset + Y_OFFSET + 0.01, worldPts[0][1]),
     ]
 
-    return { shape, linePoints }
+    // Calculate centroid of polygon
+    let sumX = 0
+    let sumZ = 0
+    for (const [x, z] of worldPts) {
+      sumX += x
+      sumZ += z
+    }
+    const center = { x: sumX / worldPts.length, z: sumZ / worldPts.length }
+
+    return { shape, linePoints, center }
   }, [polygon, levelYOffset])
 
   const handleClick = useCallback(
@@ -114,6 +192,17 @@ function CollectionZone({
         lineWidth={isHighlighted ? 2 : 1}
         points={linePoints}
       />
+
+      {/* Label at center */}
+      {showLabel && center && (
+        <CollectionLabel
+          centerX={center.x}
+          centerZ={center.z}
+          color={color}
+          levelYOffset={levelYOffset}
+          name={collection.name}
+        />
+      )}
     </group>
   )
 }
@@ -328,6 +417,17 @@ export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean })
     [levelMode, levelData],
   )
 
+  // Determine if labels should be shown for a collection
+  // Show labels in viewer mode when on the selected floor and no collection is selected
+  const getShowLabel = useCallback(
+    (collectionLevelId: string) =>
+      isViewer &&
+      !!selectedFloorId &&
+      collectionLevelId === selectedFloorId &&
+      !selectedCollectionId,
+    [isViewer, selectedFloorId, selectedCollectionId],
+  )
+
   return (
     <group>
       {/* Render all collections */}
@@ -339,6 +439,7 @@ export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean })
           key={collection.id}
           levelYOffset={getLevelYOffset(collection.levelId)}
           onSelect={handleSelectCollection}
+          showLabel={getShowLabel(collection.levelId)}
         />
       ))}
 
