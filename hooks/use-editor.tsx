@@ -32,7 +32,6 @@ import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scene
 import {
   type Zone,
   ZoneSchema,
-  type ZoneType,
 } from '@/lib/scenegraph/schema/zones'
 import {
   type AnyNode,
@@ -456,7 +455,6 @@ export type StoreState = {
   addZone: (name: string, levelId: string, polygon: [number, number][]) => Zone
   deleteZone: (zoneId: string) => void
   renameZone: (zoneId: string, name: string) => void
-  setZoneType: (zoneId: string, type: ZoneType) => void
   updateZonePolygon: (zoneId: string, polygon: [number, number][]) => void
   setZoneColor: (zoneId: string, color: string) => void
 
@@ -1516,18 +1514,6 @@ const useStore = create<StoreState>()(
               ...state.scene,
               zones: (state.scene.zones || []).map((c) =>
                 c.id === zoneId ? { ...c, name } : c,
-              ),
-            },
-          })
-        },
-
-        setZoneType: (zoneId: string, type: ZoneType) => {
-          const state = get()
-          set({
-            scene: {
-              ...state.scene,
-              zones: (state.scene.zones || []).map((c) =>
-                c.id === zoneId ? { ...c, type } : c,
               ),
             },
           })

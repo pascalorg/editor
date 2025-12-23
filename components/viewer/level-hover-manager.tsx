@@ -375,7 +375,7 @@ export function LevelHoverManager() {
           // MODE 2: Floor selected - hover over room zones
           // Get current room zones for this level
           const currentRoomZones = (state.scene.zones || []).filter(
-            (c) => c.type === 'room' && c.levelId === currentFloorId,
+            (c) => c.levelId === currentFloorId,
           )
 
           if (currentRoomZones.length > 0) {
@@ -533,7 +533,7 @@ export function LevelHoverManager() {
 
               // MODE 2: Room selection - check if click point is inside a room polygon
               const currentRoomZones = (state.scene.zones || []).filter(
-                (c) => c.type === 'room' && c.levelId === currentFloorId,
+                (c) => c.levelId === currentFloorId,
               )
 
               if (currentRoomZones.length > 0 && intersects.length > 0) {

@@ -27,7 +27,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
   // Get room zones grouped by levelId
   const roomZones = useEditor(
     useShallow((state: StoreState) =>
-      (state.scene.zones || []).filter((c) => c.type === 'room'),
+      (state.scene.zones || []).filter((c) => true),
     ),
   )
 
