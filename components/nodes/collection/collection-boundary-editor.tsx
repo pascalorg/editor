@@ -5,7 +5,7 @@ import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
+import { FLOOR_SPACING, GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 
 // Height offset to prevent z-fighting and ensure spheres are fully above the floor
@@ -247,7 +247,6 @@ export function CollectionBoundaryEditor() {
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
   const updateCollectionPolygon = useEditor((state) => state.updateCollectionPolygon)
   const levelMode = useEditor((state) => state.levelMode)
-  const currentLevel = useEditor((state) => state.currentLevel)
 
   // Get the selected collection's polygon
   const selectedCollection = useEditor(
@@ -256,6 +255,27 @@ export function CollectionBoundaryEditor() {
       return (state.scene.collections || []).find((c) => c.id === selectedCollectionId) || null
     }),
   )
+
+  // Get building levels for Y offset calculation
+  const buildingLevels = useEditor((state) => {
+    const site = state.scene.root.children?.[0]
+    const building = site?.children?.find((c) => c.type === 'building')
+    return building?.children ?? []
+  })
+
+  // Memoize level data to avoid recalculating on every render
+  const levelData = useMemo(() => {
+    const data: Record<string, { level: number; elevation: number }> = {}
+    for (const lvl of buildingLevels) {
+      if (lvl.type === 'level') {
+        data[lvl.id] = {
+          level: (lvl as any).level ?? 0,
+          elevation: (lvl as any).elevation ?? 0,
+        }
+      }
+    }
+    return data
+  }, [buildingLevels])
 
   // Track dragged polygon during drag (for preview)
   const [draggedPolygon, setDraggedPolygon] = useState<[number, number][] | null>(null)
@@ -270,13 +290,15 @@ export function CollectionBoundaryEditor() {
     setDraggedPolygon(null)
   }, [selectedCollectionId])
 
-  // Calculate Y offset for the current level
+  // Calculate Y offset for the collection's level (matches node-renderer logic)
   const levelYOffset = useMemo(() => {
-    if (levelMode === 'exploded') {
-      return currentLevel * 5
-    }
-    return currentLevel * 3
-  }, [levelMode, currentLevel])
+    if (!selectedCollection) return 0
+    const data = levelData[selectedCollection.levelId]
+    if (!data) return 0
+    // Elevation is always applied, levelOffset only in exploded mode
+    const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
+    return (data.elevation || 0) + levelOffset
+  }, [selectedCollection, levelData, levelMode])
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true)

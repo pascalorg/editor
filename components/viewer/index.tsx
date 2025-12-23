@@ -9,6 +9,7 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+import { CollectionRenderer } from '../nodes/collection/collection-renderer'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
@@ -261,6 +262,11 @@ export default function Viewer({
         {/* Loop through all floors and render grid + walls for each */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
           {building && <NodeRenderer isViewer nodeId={building.id} />}
+        </group>
+
+        {/* Collection zones */}
+        <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+          <CollectionRenderer isViewer />
         </group>
 
         {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}

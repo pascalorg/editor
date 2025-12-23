@@ -1,10 +1,12 @@
 'use client'
 
-import { Line } from '@react-three/drei'
-import { useEffect, useMemo, useState } from 'react'
+import { Billboard, Line } from '@react-three/drei'
+import { type ThreeEvent, useFrame } from '@react-three/fiber'
+import { Container, Text } from '@react-three/uikit'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { TILE_SIZE } from '@/components/editor'
+import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { type CollectionPreviewEvent, emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Collection } from '@/lib/scenegraph/schema/collections'
@@ -12,8 +14,152 @@ import type { Collection } from '@/lib/scenegraph/schema/collections'
 // Height offset to prevent z-fighting with floor
 const Y_OFFSET = 0.02
 
+// Height of the extruded collection walls
+const EXTRUDE_HEIGHT = 2.5
+
 // Convert grid coordinates to world coordinates
 const toWorld = (x: number, z: number): [number, number] => [x * TILE_SIZE, z * TILE_SIZE]
+
+const tmpVec3 = new THREE.Vector3()
+
+/**
+ * Custom gradient shader material for extruded collection walls
+ * Fades from semi-transparent at bottom to fully transparent at top
+ * When hovered, the gradient becomes more opaque
+ */
+const GradientMaterial = ({
+  color,
+  opacity,
+  height,
+  hovered = false,
+}: {
+  color: string
+  opacity: number
+  height: number
+  hovered?: boolean
+}) => {
+  const uniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uHeight: { value: height },
+      uHovered: { value: hovered ? 1.0 : 0.0 },
+    }),
+    [color, opacity, height, hovered],
+  )
+
+  // Update uniforms when props change
+  useEffect(() => {
+    uniforms.uColor.value.set(color)
+    uniforms.uOpacity.value = opacity
+    uniforms.uHeight.value = height
+    uniforms.uHovered.value = hovered ? 1.0 : 0.0
+  }, [color, opacity, height, hovered, uniforms])
+
+  return (
+    <shaderMaterial
+      depthTest={false}
+      depthWrite={false}
+      fragmentShader={`
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uHeight;
+        uniform float uHovered;
+        varying float vHeight;
+
+        void main() {
+          // Calculate alpha based on height (1 at bottom, 0 at top)
+          float alpha = 1.0 - (vHeight / uHeight);
+
+          // When hovered, use a gentler falloff and higher minimum opacity
+          float falloff = mix(alpha * alpha, alpha, uHovered * 0.5);
+          float minAlpha = mix(0.0, 0.3, uHovered);
+          alpha = max(falloff, minAlpha);
+
+          // Boost opacity when hovered
+          float finalOpacity = mix(uOpacity, uOpacity * 1.5, uHovered);
+
+          gl_FragColor = vec4(uColor, alpha * finalOpacity);
+        }
+      `}
+      side={THREE.DoubleSide}
+      transparent
+      uniforms={uniforms}
+      vertexShader={`
+        varying float vHeight;
+
+        void main() {
+          vHeight = position.y;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `}
+    />
+  )
+}
+/**
+ * Label displayed at the center of a collection zone
+ */
+function CollectionLabel({
+  name,
+  color,
+  centerX,
+  centerZ,
+  levelYOffset,
+}: {
+  name: string
+  color: string
+  centerX: number
+  centerZ: number
+  levelYOffset: number
+}) {
+  const labelRef = useRef<THREE.Group>(null)
+
+  useFrame(({ camera }) => {
+    // Scale control panel based on camera distance to maintain consistent visual size
+    if (labelRef.current && labelRef) {
+      tmpVec3.set(centerX, levelYOffset + 2, centerZ)
+      // Calculate distance from camera to the selection center
+      const distance = camera.position.distanceTo(tmpVec3)
+      // Use distance to calculate appropriate scale
+      const scale = distance * 0.12 // Adjust multiplier for desired size
+      const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
+      labelRef.current.scale.setScalar(finalScale)
+    }
+  })
+
+  return (
+    <group position={[centerX, levelYOffset + 2, centerZ]} ref={labelRef}>
+      <Billboard>
+        <Container
+          alignItems="center"
+          backgroundColor="#21222a"
+          borderRadius={6}
+          depthTest={false}
+          flexDirection="row"
+          gap={0}
+          height={40}
+          opacity={0.9}
+          paddingRight={16}
+          renderOrder={1000}
+        >
+          {/* Color circle */}
+          <Container
+            backgroundColor={color}
+            borderRadius={1000}
+            height={42}
+            opacity={1}
+            positionLeft={-12}
+            width={42}
+          />
+          {/* Label text */}
+          <Text color="white" fontSize={20} fontWeight="medium">
+            {name}
+          </Text>
+        </Container>
+      </Billboard>
+    </group>
+  )
+}
 
 /**
  * Renders a single collection as a colored polygon zone on the floor
@@ -22,17 +168,25 @@ function CollectionZone({
   collection,
   isSelected,
   levelYOffset,
+  isInteractive,
+  onSelect,
+  showLabel,
 }: {
   collection: Collection
   isSelected: boolean
   levelYOffset: number
+  isInteractive?: boolean
+  onSelect?: (collectionId: string) => void
+  showLabel?: boolean
 }) {
   const polygon = collection.polygon
   const color = collection.color || '#3b82f6'
+  const [isHovered, setIsHovered] = useState(false)
 
-  // Create the polygon shape (convert grid coords to world coords)
-  const { shape, linePoints } = useMemo(() => {
-    if (!polygon || polygon.length < 3) return { shape: null, linePoints: [] }
+  // Create the polygon shape and extruded wall geometry (convert grid coords to world coords)
+  const { shape, linePoints, center, wallGeometry } = useMemo(() => {
+    if (!polygon || polygon.length < 3)
+      return { shape: null, linePoints: [], center: null, wallGeometry: null }
 
     // Convert to world coordinates
     const worldPts = polygon.map(([x, z]) => toWorld(x, z))
@@ -54,30 +208,118 @@ function CollectionZone({
       new THREE.Vector3(worldPts[0][0], levelYOffset + Y_OFFSET + 0.01, worldPts[0][1]),
     ]
 
-    return { shape, linePoints }
+    // Calculate centroid of polygon
+    let sumX = 0
+    let sumZ = 0
+    for (const [x, z] of worldPts) {
+      sumX += x
+      sumZ += z
+    }
+    const center = { x: sumX / worldPts.length, z: sumZ / worldPts.length }
+
+    // Create extruded wall geometry from polygon edges
+    // Build vertical quads for each edge of the polygon
+    const vertices: number[] = []
+    const numPoints = worldPts.length
+
+    for (let i = 0; i < numPoints; i++) {
+      const [x1, z1] = worldPts[i]
+      const [x2, z2] = worldPts[(i + 1) % numPoints]
+
+      // Create two triangles for each wall segment
+      // Bottom-left, bottom-right, top-right triangle
+      vertices.push(x1, 0, z1)
+      vertices.push(x2, 0, z2)
+      vertices.push(x2, EXTRUDE_HEIGHT, z2)
+
+      // Bottom-left, top-right, top-left triangle
+      vertices.push(x1, 0, z1)
+      vertices.push(x2, EXTRUDE_HEIGHT, z2)
+      vertices.push(x1, EXTRUDE_HEIGHT, z1)
+    }
+
+    const wallGeometry = new THREE.BufferGeometry()
+    wallGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    wallGeometry.computeVertexNormals()
+
+    return { shape, linePoints, center, wallGeometry }
   }, [polygon, levelYOffset])
+
+  const handleClick = useCallback(
+    (e: ThreeEvent<MouseEvent>) => {
+      if (!isInteractive) return
+      e.stopPropagation()
+      onSelect?.(collection.id)
+    },
+    [isInteractive, onSelect, collection.id],
+  )
+
+  const handlePointerEnter = useCallback(() => {
+    if (isInteractive) setIsHovered(true)
+  }, [isInteractive])
+
+  const handlePointerLeave = useCallback(() => {
+    setIsHovered(false)
+  }, [])
 
   if (!shape) return null
 
+  // Determine visual state based on selection and hover
+  const isHighlighted = isSelected || isHovered
+  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.25
+
   return (
     <group>
-      {/* Filled polygon */}
-      <mesh position={[0, levelYOffset + Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Filled polygon on floor */}
+      <mesh
+        frustumCulled={false}
+        onClick={handleClick}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        position={[0, levelYOffset + Y_OFFSET, 0]}
+        renderOrder={999}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
         <shapeGeometry args={[shape]} />
         <meshBasicMaterial
           color={color}
-          opacity={isSelected ? 0.4 : 0.25}
+          depthWrite={false}
+          opacity={fillOpacity}
           side={THREE.DoubleSide}
           transparent
         />
       </mesh>
 
+      {/* Extruded walls with gradient shader */}
+      {wallGeometry && (
+        <mesh
+          frustumCulled={false}
+          geometry={wallGeometry}
+          position={[0, levelYOffset + Y_OFFSET, 0]}
+          renderOrder={99_999_999_999}
+        >
+          <GradientMaterial color={color} height={EXTRUDE_HEIGHT} hovered={isHovered} opacity={fillOpacity * 0.8} />
+        </mesh>
+      )}
+
       {/* Border line */}
       <Line
-        color={isSelected ? '#ffffff' : color}
-        lineWidth={isSelected ? 2 : 1}
+        color={isHighlighted ? '#ffffff' : color}
+        lineWidth={isHighlighted ? 2 : 1}
         points={linePoints}
+        renderOrder={9_999_999_999}
       />
+
+      {/* Label at center */}
+      {showLabel && center && (
+        <CollectionLabel
+          centerX={center.x}
+          centerZ={center.z}
+          color={color}
+          levelYOffset={levelYOffset}
+          name={collection.name}
+        />
+      )}
     </group>
   )
 }
@@ -210,44 +452,116 @@ function CollectionPreview({ levelYOffset }: { levelYOffset: number }) {
  * Main collection renderer component
  * Renders all collections for the current level and the drawing preview
  */
-export function CollectionRenderer() {
+export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean }) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectCollection = useEditor((state) => state.selectCollection)
   const levelMode = useEditor((state) => state.levelMode)
-  const currentLevel = useEditor((state) => state.currentLevel)
+  const viewMode = useEditor((state) => state.viewMode)
 
-  // Get all collections for the current level
-  const collections = useEditor(
-    useShallow((state: StoreState) => {
-      if (!selectedFloorId) return []
-      return (state.scene.collections || []).filter((c) => c.levelId === selectedFloorId)
-    }),
+  // Determine if a collection should be interactive
+  // Only collections on the currently selected level are interactive in viewer mode
+  const getIsInteractive = useCallback(
+    (collectionLevelId: string) =>
+      isViewer && !!selectedFloorId && collectionLevelId === selectedFloorId,
+    [isViewer, selectedFloorId],
   )
 
-  // Calculate Y offset for the current level
-  const levelYOffset = useMemo(() => {
-    if (levelMode === 'exploded') {
-      // In exploded mode, levels are separated by FLOOR_SPACING (5 units)
-      return currentLevel * 5
+  const handleSelectCollection = useCallback(
+    (collectionId: string) => {
+      selectCollection(collectionId)
+    },
+    [selectCollection],
+  )
+
+  // Get building levels for Y offset calculation
+  const buildingLevels = useEditor((state) => {
+    const site = state.scene.root.children?.[0]
+    const building = site?.children?.find((c) => c.type === 'building')
+    return building?.children ?? []
+  })
+
+  // Memoize level data to avoid recalculating on every render
+  const levelData = useMemo(() => {
+    const data: Record<string, { level: number; elevation: number }> = {}
+    for (const lvl of buildingLevels) {
+      if (lvl.type === 'level') {
+        data[lvl.id] = {
+          level: (lvl as any).level ?? 0,
+          elevation: (lvl as any).elevation ?? 0,
+        }
+      }
     }
-    // In stacked mode, levels stack at their actual height
-    return currentLevel * 3 // WALL_HEIGHT
-  }, [levelMode, currentLevel])
+    return data
+  }, [buildingLevels])
+
+  // Get all collections from the store
+  const allCollections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
+
+  // Filter collections based on view mode and selection
+  const collections = useMemo(() => {
+    // In viewer mode with a collection selected, hide all collections
+    if (isViewer && selectedCollectionId) {
+      return []
+    }
+    // In full view mode (no floor selected), show all collections
+    if (viewMode === 'full' || !selectedFloorId) {
+      return allCollections
+    }
+    // In level view mode, show only collections for the selected floor
+    return allCollections.filter((c) => c.levelId === selectedFloorId)
+  }, [allCollections, viewMode, selectedFloorId, isViewer, selectedCollectionId])
+
+  // Calculate Y offset for the current level (used for preview)
+  const previewLevelYOffset = useMemo(() => {
+    if (!selectedFloorId) return 0
+    const data = levelData[selectedFloorId]
+    if (!data) return 0
+    // Elevation is always applied, levelOffset only in exploded mode
+    const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
+    return (data.elevation || 0) + levelOffset
+  }, [levelMode, selectedFloorId, levelData])
+
+  // Calculate Y offset for a specific level (matches node-renderer logic)
+  const getLevelYOffset = useCallback(
+    (levelId: string) => {
+      const data = levelData[levelId]
+      if (!data) return 0
+      // Elevation is always applied, levelOffset only in exploded mode
+      const levelOffset = levelMode === 'exploded' ? data.level * FLOOR_SPACING : 0
+      return (data.elevation || 0) + levelOffset
+    },
+    [levelMode, levelData],
+  )
+
+  // Determine if labels should be shown for a collection
+  // Show labels in viewer mode when on the selected floor and no collection is selected
+  const getShowLabel = useCallback(
+    (collectionLevelId: string) =>
+      isViewer &&
+      !!selectedFloorId &&
+      collectionLevelId === selectedFloorId &&
+      !selectedCollectionId,
+    [isViewer, selectedFloorId, selectedCollectionId],
+  )
 
   return (
     <group>
-      {/* Render all collections for the current level */}
+      {/* Render all collections */}
       {collections.map((collection) => (
         <CollectionZone
           collection={collection}
+          isInteractive={getIsInteractive(collection.levelId)}
           isSelected={selectedCollectionId === collection.id}
           key={collection.id}
-          levelYOffset={levelYOffset}
+          levelYOffset={getLevelYOffset(collection.levelId)}
+          onSelect={handleSelectCollection}
+          showLabel={getShowLabel(collection.levelId)}
         />
       ))}
 
       {/* Render the drawing preview */}
-      <CollectionPreview levelYOffset={levelYOffset} />
+      <CollectionPreview levelYOffset={previewLevelYOffset} />
     </group>
   )
 }
