@@ -14,10 +14,74 @@ import type { Collection } from '@/lib/scenegraph/schema/collections'
 // Height offset to prevent z-fighting with floor
 const Y_OFFSET = 0.02
 
+// Height of the extruded collection walls
+const EXTRUDE_HEIGHT = 2.5
+
 // Convert grid coordinates to world coordinates
 const toWorld = (x: number, z: number): [number, number] => [x * TILE_SIZE, z * TILE_SIZE]
 
 const tmpVec3 = new THREE.Vector3()
+
+/**
+ * Custom gradient shader material for extruded collection walls
+ * Fades from semi-transparent at bottom to fully transparent at top
+ */
+const GradientMaterial = ({
+  color,
+  opacity,
+  height,
+}: {
+  color: string
+  opacity: number
+  height: number
+}) => {
+  const uniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uHeight: { value: height },
+    }),
+    [color, opacity, height],
+  )
+
+  // Update uniforms when props change
+  useEffect(() => {
+    uniforms.uColor.value.set(color)
+    uniforms.uOpacity.value = opacity
+    uniforms.uHeight.value = height
+  }, [color, opacity, height, uniforms])
+
+  return (
+    <shaderMaterial
+      depthTest={false}
+      depthWrite={false}
+      fragmentShader={`
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uHeight;
+        varying float vHeight;
+
+        void main() {
+          // Calculate alpha based on height (1 at bottom, 0 at top)
+          float alpha = 1.0 - (vHeight / uHeight);
+          alpha = alpha * alpha; // Quadratic falloff for smoother gradient
+          gl_FragColor = vec4(uColor, alpha * uOpacity);
+        }
+      `}
+      side={THREE.DoubleSide}
+      transparent
+      uniforms={uniforms}
+      vertexShader={`
+        varying float vHeight;
+
+        void main() {
+          vHeight = position.y;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `}
+    />
+  )
+}
 /**
  * Label displayed at the center of a collection zone
  */
@@ -105,9 +169,10 @@ function CollectionZone({
   const color = collection.color || '#3b82f6'
   const [isHovered, setIsHovered] = useState(false)
 
-  // Create the polygon shape (convert grid coords to world coords)
-  const { shape, linePoints, center } = useMemo(() => {
-    if (!polygon || polygon.length < 3) return { shape: null, linePoints: [], center: null }
+  // Create the polygon shape and extruded wall geometry (convert grid coords to world coords)
+  const { shape, linePoints, center, wallGeometry } = useMemo(() => {
+    if (!polygon || polygon.length < 3)
+      return { shape: null, linePoints: [], center: null, wallGeometry: null }
 
     // Convert to world coordinates
     const worldPts = polygon.map(([x, z]) => toWorld(x, z))
@@ -138,7 +203,32 @@ function CollectionZone({
     }
     const center = { x: sumX / worldPts.length, z: sumZ / worldPts.length }
 
-    return { shape, linePoints, center }
+    // Create extruded wall geometry from polygon edges
+    // Build vertical quads for each edge of the polygon
+    const vertices: number[] = []
+    const numPoints = worldPts.length
+
+    for (let i = 0; i < numPoints; i++) {
+      const [x1, z1] = worldPts[i]
+      const [x2, z2] = worldPts[(i + 1) % numPoints]
+
+      // Create two triangles for each wall segment
+      // Bottom-left, bottom-right, top-right triangle
+      vertices.push(x1, 0, z1)
+      vertices.push(x2, 0, z2)
+      vertices.push(x2, EXTRUDE_HEIGHT, z2)
+
+      // Bottom-left, top-right, top-left triangle
+      vertices.push(x1, 0, z1)
+      vertices.push(x2, EXTRUDE_HEIGHT, z2)
+      vertices.push(x1, EXTRUDE_HEIGHT, z1)
+    }
+
+    const wallGeometry = new THREE.BufferGeometry()
+    wallGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    wallGeometry.computeVertexNormals()
+
+    return { shape, linePoints, center, wallGeometry }
   }, [polygon, levelYOffset])
 
   const handleClick = useCallback(
@@ -166,7 +256,7 @@ function CollectionZone({
 
   return (
     <group>
-      {/* Filled polygon */}
+      {/* Filled polygon on floor */}
       <mesh
         frustumCulled={false}
         onClick={handleClick}
@@ -179,18 +269,31 @@ function CollectionZone({
         <shapeGeometry args={[shape]} />
         <meshBasicMaterial
           color={color}
-          depthTest={false}
+          depthWrite={false}
           opacity={fillOpacity}
           side={THREE.DoubleSide}
           transparent
         />
       </mesh>
 
+      {/* Extruded walls with gradient shader */}
+      {wallGeometry && (
+        <mesh
+          frustumCulled={false}
+          geometry={wallGeometry}
+          position={[0, levelYOffset + Y_OFFSET, 0]}
+          renderOrder={99_999_999_999}
+        >
+          <GradientMaterial color={color} height={EXTRUDE_HEIGHT} opacity={fillOpacity * 0.8} />
+        </mesh>
+      )}
+
       {/* Border line */}
       <Line
         color={isHighlighted ? '#ffffff' : color}
         lineWidth={isHighlighted ? 2 : 1}
         points={linePoints}
+        renderOrder={9_999_999_999}
       />
 
       {/* Label at center */}
