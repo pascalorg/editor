@@ -25,23 +25,27 @@ const tmpVec3 = new THREE.Vector3()
 /**
  * Custom gradient shader material for extruded collection walls
  * Fades from semi-transparent at bottom to fully transparent at top
+ * When hovered, the gradient becomes more opaque
  */
 const GradientMaterial = ({
   color,
   opacity,
   height,
+  hovered = false,
 }: {
   color: string
   opacity: number
   height: number
+  hovered?: boolean
 }) => {
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(color) },
       uOpacity: { value: opacity },
       uHeight: { value: height },
+      uHovered: { value: hovered ? 1.0 : 0.0 },
     }),
-    [color, opacity, height],
+    [color, opacity, height, hovered],
   )
 
   // Update uniforms when props change
@@ -49,7 +53,8 @@ const GradientMaterial = ({
     uniforms.uColor.value.set(color)
     uniforms.uOpacity.value = opacity
     uniforms.uHeight.value = height
-  }, [color, opacity, height, uniforms])
+    uniforms.uHovered.value = hovered ? 1.0 : 0.0
+  }, [color, opacity, height, hovered, uniforms])
 
   return (
     <shaderMaterial
@@ -59,13 +64,22 @@ const GradientMaterial = ({
         uniform vec3 uColor;
         uniform float uOpacity;
         uniform float uHeight;
+        uniform float uHovered;
         varying float vHeight;
 
         void main() {
           // Calculate alpha based on height (1 at bottom, 0 at top)
           float alpha = 1.0 - (vHeight / uHeight);
-          alpha = alpha * alpha; // Quadratic falloff for smoother gradient
-          gl_FragColor = vec4(uColor, alpha * uOpacity);
+
+          // When hovered, use a gentler falloff and higher minimum opacity
+          float falloff = mix(alpha * alpha, alpha, uHovered * 0.5);
+          float minAlpha = mix(0.0, 0.3, uHovered);
+          alpha = max(falloff, minAlpha);
+
+          // Boost opacity when hovered
+          float finalOpacity = mix(uOpacity, uOpacity * 1.5, uHovered);
+
+          gl_FragColor = vec4(uColor, alpha * finalOpacity);
         }
       `}
       side={THREE.DoubleSide}
@@ -284,7 +298,7 @@ function CollectionZone({
           position={[0, levelYOffset + Y_OFFSET, 0]}
           renderOrder={99_999_999_999}
         >
-          <GradientMaterial color={color} height={EXTRUDE_HEIGHT} opacity={fillOpacity * 0.8} />
+          <GradientMaterial color={color} height={EXTRUDE_HEIGHT} hovered={isHovered} opacity={fillOpacity * 0.8} />
         </mesh>
       )}
 
@@ -486,9 +500,9 @@ export function CollectionRenderer({ isViewer = false }: { isViewer?: boolean })
 
   // Filter collections based on view mode and selection
   const collections = useMemo(() => {
-    // In viewer mode with a collection selected, only show the selected collection
+    // In viewer mode with a collection selected, hide all collections
     if (isViewer && selectedCollectionId) {
-      return allCollections.filter((c) => c.id === selectedCollectionId)
+      return []
     }
     // In full view mode (no floor selected), show all collections
     if (viewMode === 'full' || !selectedFloorId) {
