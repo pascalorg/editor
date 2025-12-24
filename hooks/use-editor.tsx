@@ -821,6 +821,25 @@ const useStore = create<StoreState>()(
             catalogCategory: newCatalogCategory,
           }
 
+          // Clear zone selection when changing tools (zones can be selected in any mode)
+          if (state.selectedZoneId) {
+            updates.selectedZoneId = null
+          }
+
+          // When leaving edit mode (by selecting a tool), clear site editing state
+          if (state.controlMode === 'edit' && state.selectedNodeIds.length > 0) {
+            // Clear site node selection (site nodes use edit mode for property line editing)
+            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              return handle?.type === 'site'
+            })
+            if (siteNodeIds.length > 0) {
+              updates.selectedNodeIds = state.selectedNodeIds.filter(
+                (id) => !siteNodeIds.includes(id),
+              )
+            }
+          }
+
           if (tool !== null) {
             updates.controlMode = 'building'
 
@@ -847,9 +866,34 @@ const useStore = create<StoreState>()(
         },
         setCatalogCategory: (category) => set({ catalogCategory: category }),
         setControlMode: (mode) => {
+          const state = get()
+          const wasInEditMode = state.controlMode === 'edit'
+
           if (mode !== 'building') {
             get().deletePreviewNodes()
           }
+
+          // Clear zone selection when changing control mode (zones can be selected in any mode)
+          if (state.selectedZoneId) {
+            set({ selectedZoneId: null })
+          }
+
+          // When leaving edit mode, clear site editing state
+          if (wasInEditMode && mode !== 'edit' && state.selectedNodeIds.length > 0) {
+            // Clear site node selection (site nodes use edit mode for property line editing)
+            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              return handle?.type === 'site'
+            })
+            if (siteNodeIds.length > 0) {
+              set({
+                selectedNodeIds: state.selectedNodeIds.filter(
+                  (id) => !siteNodeIds.includes(id),
+                ),
+              })
+            }
+          }
+
           set({ controlMode: mode })
           if (mode !== 'building') {
             // Save current tool and catalog category before clearing so we can restore them when re-entering building mode
