@@ -10,6 +10,9 @@ export {
   VisibilityToggle,
 } from './shared'
 
+// Zones menu components
+export { ZoneItem, ZonesSection } from './zones-menu'
+
 // Collections menu components
 export { CollectionItem, CollectionsSection } from './collections-menu'
 

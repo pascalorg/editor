@@ -8,7 +8,7 @@ import {
   type SceneNodeId,
   type SceneNodeType,
 } from '@/lib/scenegraph/schema/types'
-import { type Collection, initScene, type NodeCreateTypeMap, type Scene, type View } from './schema'
+import { type Zone, initScene, type NodeCreateTypeMap, type Scene, type View } from './schema'
 
 // Re-export from schema that are used elsewhere
 export type {
@@ -560,30 +560,30 @@ export class SceneGraph {
     }
   }
 
-  get collections() {
+  get zones() {
     return {
-      all: () => this._scene.collections,
-      get: (id: string) => this._scene.collections.find((c) => c.id === id),
-      add: (collection: Collection) => {
+      all: () => this._scene.zones,
+      get: (id: string) => this._scene.zones.find((c) => c.id === id),
+      add: (zone: Zone) => {
         const nextScene = produce(this._scene, (draft) => {
-          draft.collections.push(collection as any)
+          draft.zones.push(zone as any)
         })
         this.updateState(nextScene)
       },
-      update: (id: string, updater: (collection: Collection) => void) => {
+      update: (id: string, updater: (zone: Zone) => void) => {
         const nextScene = produce(this._scene, (draft) => {
-          const collection = draft.collections.find((c) => c.id === id)
-          if (collection) {
-            updater(collection as any)
+          const zone = draft.zones.find((c) => c.id === id)
+          if (zone) {
+            updater(zone as any)
           }
         })
         this.updateState(nextScene)
       },
       delete: (id: string) => {
         const nextScene = produce(this._scene, (draft) => {
-          const index = draft.collections.findIndex((c) => c.id === id)
+          const index = draft.zones.findIndex((c) => c.id === id)
           if (index !== -1) {
-            draft.collections.splice(index, 1)
+            draft.zones.splice(index, 1)
           }
         })
         this.updateState(nextScene)

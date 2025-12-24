@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
 import {
   CollectionsSection,
+  ZonesSection,
   LayersMenuContext,
   SiteItem,
   ViewsSection,
@@ -24,6 +25,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectFloor = useEditor((state) => state.selectFloor)
   const editorMode = useEditor((state) => state.editorMode)
+  const activeTool = useEditor((state) => state.activeTool)
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
       // Helper to find level IDs for expansion logic
@@ -191,6 +193,13 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
     }
   }, [siteIds, expandedIds, initialized])
 
+  // Auto-expand zones section when zone tool is active
+  useEffect(() => {
+    if (activeTool === 'zone' && !expandedIds.includes('zones-section')) {
+      setExpandedIds((prev) => [...prev, 'zones-section'])
+    }
+  }, [activeTool, expandedIds])
+
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]
 
@@ -262,6 +271,31 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
                 </div>
               </div>
             ))}
+
+            {/* Zones Section - Hidden in Site mode */}
+            {editorMode !== 'site' && (
+              <div
+                className={cn(
+                  'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
+                  expandedIds.includes('zones-section')
+                    ? 'min-h-0 flex-1'
+                    : 'flex-none shrink-0',
+                )}
+              >
+                <div
+                  className={cn(
+                    'flex-1',
+                    expandedIds.includes('zones-section')
+                      ? 'overflow-y-auto'
+                      : 'overflow-hidden',
+                  )}
+                >
+                  <TreeView className="p-0">
+                    <ZonesSection isLast={true} level={1} onNodeClick={handleNodeClick} />
+                  </TreeView>
+                </div>
+              </div>
+            )}
 
             {/* Collections Section - Hidden in Site mode */}
             {editorMode !== 'site' && (

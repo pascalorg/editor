@@ -9,8 +9,8 @@ import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection } from '@/lib/scenegraph/schema/collections'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import type { Zone } from '@/lib/scenegraph/schema/zones'
 
 /**
  * Generate edge line points for a box
@@ -75,7 +75,7 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
 /**
  * LevelHoverManager - handles hover detection and click-to-select for:
  * 1. Levels (when no floor is selected OR clicking on a level to switch) - blue highlight, click to select level
- * 2. Room collections (when floor selected, no room/nodes selected) - amber highlight, click to select + zoom
+ * 2. Room zones (when floor selected, no room/nodes selected) - amber highlight, click to select + zoom
  * 3. Individual nodes (when room selected) - green highlight
  *    - Click without modifier: selects node, enters node selection mode
  *    - Shift/ctrl/cmd+click: adds node to selection
@@ -86,7 +86,7 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
 export function LevelHoverManager() {
   const { scene, camera, gl } = useThree()
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
 
   const [hoveredBox, setHoveredBox] = useState<Box3 | null>(null)
   const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | 'building' | null>(null)
@@ -112,14 +112,12 @@ export function LevelHoverManager() {
     }),
   )
 
-  // Get the selected collection's polygon for boundary checking
-  const selectedCollectionPolygon = useEditor(
+  // Get the selected zone's polygon for boundary checking
+  const selectedZonePolygon = useEditor(
     useShallow((state: StoreState) => {
-      if (!state.selectedCollectionId) return null
-      const collection = (state.scene.collections || []).find(
-        (c) => c.id === state.selectedCollectionId,
-      )
-      return collection?.polygon || null
+      if (!state.selectedZoneId) return null
+      const zone = (state.scene.zones || []).find((c) => c.id === state.selectedZoneId)
+      return zone?.polygon || null
     }),
   )
 
@@ -127,18 +125,18 @@ export function LevelHoverManager() {
   useEffect(() => {
     useEditor.setState({
       selectedFloorId: null,
-      selectedCollectionId: null,
+      selectedZoneId: null,
       selectedNodeIds: [],
       viewMode: 'full',
       levelMode: 'stacked',
     })
   }, [])
 
-  // Helper: find which room collection contains a point (x, z coordinates)
-  const findRoomForPoint = (x: number, z: number, collections: Collection[]): Collection | null => {
-    for (const collection of collections) {
-      if (isPointInPolygon(x, z, collection.polygon)) {
-        return collection
+  // Helper: find which room zone contains a point (x, z coordinates)
+  const findRoomForPoint = (x: number, z: number, zones: Zone[]): Zone | null => {
+    for (const zone of zones) {
+      if (isPointInPolygon(x, z, zone.polygon)) {
+        return zone
       }
     }
     return null
@@ -149,26 +147,28 @@ export function LevelHoverManager() {
     if (!polygon || polygon.length < 3) return false
     let inside = false
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], zi = polygon[i][1]
-      const xj = polygon[j][0], zj = polygon[j][1]
-      if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+      const xi = polygon[i][0],
+        zi = polygon[i][1]
+      const xj = polygon[j][0],
+        zj = polygon[j][1]
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
         inside = !inside
       }
     }
     return inside
   }
 
-  // Helper: check if a world position is inside the selected collection polygon
+  // Helper: check if a world position is inside the selected zone polygon
   // Converts world coordinates to grid coordinates before checking
   const isWorldPointInSelectedPolygon = (worldX: number, worldZ: number): boolean => {
-    if (!selectedCollectionPolygon || selectedCollectionPolygon.length < 3) return true // No polygon = allow all
-    // Convert world coords to grid coords (inverse of toWorld in collection-renderer)
+    if (!selectedZonePolygon || selectedZonePolygon.length < 3) return true // No polygon = allow all
+    // Convert world coords to grid coords (inverse of toWorld in zone-renderer)
     // World coords have offset of -GRID_SIZE/2 from the group, so we add it back
     const localX = worldX + GRID_SIZE / 2
     const localZ = worldZ + GRID_SIZE / 2
     const gridX = localX / TILE_SIZE
     const gridZ = localZ / TILE_SIZE
-    return isPointInPolygon(gridX, gridZ, selectedCollectionPolygon)
+    return isPointInPolygon(gridX, gridZ, selectedZonePolygon)
   }
 
   // Helper: calculate bounding box for an object excluding image nodes and grids
@@ -214,14 +214,16 @@ export function LevelHoverManager() {
     return hasContent ? box : null
   }
 
-  // Helper: calculate bounding box for a room collection from its polygon
-  const calculateRoomBounds = (collection: Collection): Box3 | null => {
-    const polygon = collection.polygon
+  // Helper: calculate bounding box for a room zone from its polygon
+  const calculateRoomBounds = (zone: Zone): Box3 | null => {
+    const polygon = zone.polygon
     if (!polygon || polygon.length < 3) return null
 
     // Calculate bounds from polygon points
-    let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
-    let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY,
+      maxZ = Number.NEGATIVE_INFINITY
 
     for (const [x, z] of polygon) {
       minX = Math.min(minX, x)
@@ -230,7 +232,7 @@ export function LevelHoverManager() {
       maxZ = Math.max(maxZ, z)
     }
 
-    // Create a box with some height (collections are floor zones)
+    // Create a box with some height (zones are floor zones)
     const box = new Box3()
     box.min.set(minX, 0, minZ)
     box.max.set(maxX, 3, maxZ) // Assume 3m height for visualization
@@ -265,7 +267,7 @@ export function LevelHoverManager() {
     const onPointerMove = (event: PointerEvent) => {
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
-      const currentCollectionId = state.selectedCollectionId
+      const currentZoneId = state.selectedZoneId
       const isBuildingSelected = buildingId
         ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
         : false
@@ -333,18 +335,18 @@ export function LevelHoverManager() {
 
       // If the current floor object exists, check for node/room interactions
       if (levelObject) {
-        // MODE 3: Room collection selected - hover over any individual node in the level
+        // MODE 3: Room zone selected - hover over any individual node in the level
         // MODE 4: Individual nodes selected (after clicking from room) - continue node hover mode
         // Note: Exclude building ID from "node selection" check so we don't block room hover
         const hasNodeSelection =
           state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
 
-        if (currentCollectionId || hasNodeSelection) {
+        if (currentZoneId || hasNodeSelection) {
           const intersects = raycasterRef.current.intersectObject(levelObject, true)
 
           if (intersects.length > 0) {
             // Find the first selectable node (skipping background elements like slabs, ceilings)
-            // Also filter to only nodes within the selected collection polygon
+            // Also filter to only nodes within the selected zone polygon
             for (const hit of intersects) {
               const nodeId = getNodeIdFromIntersection(hit.object)
               if (nodeId && !isBackgroundElement(nodeId)) {
@@ -353,9 +355,9 @@ export function LevelHoverManager() {
                 const node = graph.getNodeById(nodeId as any)?.data()
                 if (node?.type === 'reference-image') continue
 
-                // Check if hit point is within the selected collection polygon
-                if (currentCollectionId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
-                  continue // Skip nodes outside the collection boundary
+                // Check if hit point is within the selected zone polygon
+                if (currentZoneId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
+                  continue // Skip nodes outside the zone boundary
                 }
 
                 const nodeObject = scene.getObjectByName(nodeId)
@@ -372,19 +374,19 @@ export function LevelHoverManager() {
           }
           // Fall through if no node hit
         } else {
-          // MODE 2: Floor selected - hover over room collections
-          // Get current room collections for this level
-          const currentRoomCollections = (state.scene.collections || []).filter(
-            (c) => c.type === 'room' && c.levelId === currentFloorId,
+          // MODE 2: Floor selected - hover over room zones
+          // Get current room zones for this level
+          const currentRoomZones = (state.scene.zones || []).filter(
+            (c) => c.levelId === currentFloorId,
           )
 
-          if (currentRoomCollections.length > 0) {
+          if (currentRoomZones.length > 0) {
             const intersects = raycasterRef.current.intersectObject(levelObject, true)
 
             if (intersects.length > 0) {
-              // Find which room collection contains the intersection point
+              // Find which room zone contains the intersection point
               const hit = intersects[0]
-              const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomCollections)
+              const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomZones)
               if (room) {
                 const box = calculateRoomBounds(room)
                 if (box) {
@@ -432,7 +434,7 @@ export function LevelHoverManager() {
 
       const state = useEditor.getState()
       const currentFloorId = state.selectedFloorId
-      const currentCollectionId = state.selectedCollectionId
+      const currentZoneId = state.selectedZoneId
       const isBuildingSelected = buildingId
         ? state.selectedNodeIds.includes(buildingId) || !!currentFloorId
         : false
@@ -460,7 +462,7 @@ export function LevelHoverManager() {
         }
         // Clicked outside building when building not selected
         if (state.selectedNodeIds.length === 0 && !state.selectedFloorId) {
-             emitter.emit('interaction:click', { type: 'void', id: null })
+          emitter.emit('interaction:click', { type: 'void', id: null })
         }
         return
       }
@@ -480,8 +482,8 @@ export function LevelHoverManager() {
                 state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
               const hasModifierKey = event.shiftKey || event.metaKey || event.ctrlKey
 
-              if (currentCollectionId || hasNodeSelection) {
-                // Find the first selectable node within the collection polygon
+              if (currentZoneId || hasNodeSelection) {
+                // Find the first selectable node within the zone polygon
                 let nodeId: string | null = null
                 let nodeHit: Intersection | null = null
 
@@ -493,9 +495,9 @@ export function LevelHoverManager() {
                     const node = graph.getNodeById(id as any)?.data()
                     if (node?.type === 'reference-image') continue
 
-                    // Check if hit point is within the selected collection polygon
-                    if (currentCollectionId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
-                      continue // Skip nodes outside the collection boundary
+                    // Check if hit point is within the selected zone polygon
+                    if (currentZoneId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
+                      continue // Skip nodes outside the zone boundary
                     }
 
                     nodeId = id
@@ -506,22 +508,25 @@ export function LevelHoverManager() {
 
                 if (nodeId && nodeHit) {
                   // Node selection logic...
-                  // Since we already verified the hit is within the collection polygon,
-                  // always preserve the collection selection when clicking nodes inside it
+                  // Since we already verified the hit is within the zone polygon,
+                  // always preserve the zone selection when clicking nodes inside it
                   if (hasModifierKey) {
                     const editorState = useEditor.getState()
-                    // With modifier key, keep collection but add/toggle node selection
+                    // With modifier key, keep zone but add/toggle node selection
                     editorState.handleNodeSelect(nodeId, {
                       shiftKey: event.shiftKey,
                       metaKey: event.metaKey,
                       ctrlKey: event.ctrlKey,
                     })
                   } else {
-                    const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
+                    const nodeData = useEditor
+                      .getState()
+                      .graph.getNodeById(nodeId as any)
+                      ?.data()
                     emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
                     useEditor.setState({
-                      // Keep collection selected when clicking nodes within it
-                      selectedCollectionId: currentCollectionId,
+                      // Keep zone selected when clicking nodes within it
+                      selectedZoneId: currentZoneId,
                       selectedNodeIds: [nodeId],
                     })
                   }
@@ -532,18 +537,18 @@ export function LevelHoverManager() {
               }
 
               // MODE 2: Room selection - check if click point is inside a room polygon
-              const currentRoomCollections = (state.scene.collections || []).filter(
-                (c) => c.type === 'room' && c.levelId === currentFloorId,
+              const currentRoomZones = (state.scene.zones || []).filter(
+                (c) => c.levelId === currentFloorId,
               )
 
-              if (currentRoomCollections.length > 0 && intersects.length > 0) {
+              if (currentRoomZones.length > 0 && intersects.length > 0) {
                 const hit = intersects[0]
-                const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomCollections)
+                const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomZones)
                 if (room) {
-                  // Match Menu behavior: just select the collection.
+                  // Match Menu behavior: just select the zone.
                   // Store handles clearing node selection/switching floor if needed.
-                  emitter.emit('interaction:click', { type: 'collection', id: room.id, data: room })
-                  useEditor.getState().selectCollection(room.id)
+                  emitter.emit('interaction:click', { type: 'zone', id: room.id, data: room })
+                  useEditor.getState().selectZone(room.id)
                   return // Handled room click
                 }
               }
@@ -570,10 +575,10 @@ export function LevelHoverManager() {
         // Check if we clicked a level (either the current one background, or another one)
         if (clickedLevelId) {
           // Match Menu behavior:
-          // 1. Clear collection/node selection if present (clicking empty floor area)
+          // 1. Clear zone/node selection if present (clicking empty floor area)
           let handled = false
-          if (state.selectedCollectionId) {
-            useEditor.getState().selectCollection(null)
+          if (state.selectedZoneId) {
+            useEditor.getState().selectZone(null)
             handled = true
           }
           if (state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)) {
@@ -602,11 +607,11 @@ export function LevelHoverManager() {
       // Clicked on empty space (no level hit) - progressive unselection?
       // User requirement: "click outside of the building ... defaults back to stacked"
       // This implies a full reset when clicking void.
-      if (state.selectedNodeIds.length > 0 || state.selectedCollectionId || state.selectedFloorId) {
+      if (state.selectedNodeIds.length > 0 || state.selectedZoneId || state.selectedFloorId) {
         emitter.emit('interaction:click', { type: 'void', id: null })
         useEditor.setState({
           selectedNodeIds: [],
-          selectedCollectionId: null,
+          selectedZoneId: null,
           selectedFloorId: null,
           levelMode: 'stacked',
           viewMode: 'full',
@@ -614,13 +619,15 @@ export function LevelHoverManager() {
       }
     }
 
+    const debouncedOnPointerMove = debounce(onPointerMove, 16)
+
     canvas.addEventListener('pointerdown', onPointerDown)
-    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointermove', debouncedOnPointerMove)
     canvas.addEventListener('click', onClick)
 
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointermove', debouncedOnPointerMove)
       canvas.removeEventListener('click', onClick)
     }
   }, [camera, gl, scene, levelIds])
@@ -629,7 +636,7 @@ export function LevelHoverManager() {
   useEffect(() => {
     setHoveredBox(null)
     setHoverMode(null)
-  }, [selectedFloorId, selectedCollectionId])
+  }, [selectedFloorId, selectedZoneId])
 
   // Don't render anything if nothing is hovered
   if (!(hoveredBox && hoverMode)) return null
@@ -644,4 +651,15 @@ export function LevelHoverManager() {
   const color = colorMap[hoverMode]
 
   return <HighlightBox box={hoveredBox} color={color} />
+}
+
+function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  ms: number,
+): (...args: Parameters<T>) => void {
+  let timeoutId: ReturnType<typeof setTimeout>
+  return (...args) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(...args), ms)
+  }
 }
