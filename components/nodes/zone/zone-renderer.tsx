@@ -308,6 +308,7 @@ function ZonePolygon({
             color={color}
             height={EXTRUDE_HEIGHT}
             hovered={isHovered}
+            key={color}
             opacity={fillOpacity * 0.8}
           />
         </mesh>
