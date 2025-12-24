@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
-import { type ZonePreviewEvent, emitter } from '@/events/bus'
+import { emitter, type ZonePreviewEvent } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import type { Zone } from '@/lib/scenegraph/schema/zones'
 
@@ -304,7 +304,12 @@ function ZonePolygon({
           position={[0, levelYOffset + Y_OFFSET, 0]}
           renderOrder={99_999_999_999}
         >
-          <GradientMaterial color={color} height={EXTRUDE_HEIGHT} hovered={isHovered} opacity={fillOpacity * 0.8} />
+          <GradientMaterial
+            color={color}
+            height={EXTRUDE_HEIGHT}
+            hovered={isHovered}
+            opacity={fillOpacity * 0.8}
+          />
         </mesh>
       )}
 
@@ -411,7 +416,11 @@ function ZonePreview({ levelYOffset }: { levelYOffset: number }) {
     <group>
       {/* Preview fill */}
       {previewShape && (
-        <mesh position={[0, levelYOffset + Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh
+          frustumCulled={false}
+          position={[0, levelYOffset + Y_OFFSET, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
             color="#3b82f6"
@@ -425,7 +434,14 @@ function ZonePreview({ levelYOffset }: { levelYOffset: number }) {
 
       {/* Main line */}
       {linePoints.length >= 2 && (
-        <Line color="#3b82f6" depthTest={false} lineWidth={2} points={linePoints} />
+        <Line
+          color="#3b82f6"
+          depthTest={false}
+          depthWrite={false}
+          lineWidth={2}
+          points={linePoints}
+          renderOrder={99_999}
+        />
       )}
 
       {/* Closing line (dashed) */}
@@ -446,7 +462,11 @@ function ZonePreview({ levelYOffset }: { levelYOffset: number }) {
         return (
           <mesh key={index} position={[wx, levelYOffset + Y_OFFSET + 0.03, wz]}>
             <sphereGeometry args={[0.1, 16, 16]} />
-            <meshBasicMaterial color={index === 0 ? '#22c55e' : '#3b82f6'} depthTest={false} />
+            <meshBasicMaterial
+              color={index === 0 ? '#22c55e' : '#3b82f6'}
+              depthTest={false}
+              depthWrite={false}
+            />
           </mesh>
         )
       })}
@@ -468,8 +488,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Determine if a zone should be interactive
   // Only zones on the currently selected level are interactive in viewer mode
   const getIsInteractive = useCallback(
-    (zoneLevelId: string) =>
-      isViewer && !!selectedFloorId && zoneLevelId === selectedFloorId,
+    (zoneLevelId: string) => isViewer && !!selectedFloorId && zoneLevelId === selectedFloorId,
     [isViewer, selectedFloorId],
   )
 
@@ -544,10 +563,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
     (zoneLevelId: string) =>
-      isViewer &&
-      !!selectedFloorId &&
-      zoneLevelId === selectedFloorId &&
-      !selectedZoneId,
+      isViewer && !!selectedFloorId && zoneLevelId === selectedFloorId && !selectedZoneId,
     [isViewer, selectedFloorId, selectedZoneId],
   )
 

@@ -21,7 +21,6 @@ const FADE_STRENGTH = 5
 export function InfiniteFloor() {
   return (
     <mesh
-      castShadow
       name="infinite-floor"
       position={[0, -0.01, 0]}
       raycast={() => null}
@@ -32,6 +31,7 @@ export function InfiniteFloor() {
       <CustomShaderMaterial
         baseMaterial={MeshPhysicalMaterial}
         color={FLOOR_COLOR}
+        depthWrite={false}
         fragmentShader={
           /* glsl */ `
           varying vec2 vUv;
@@ -44,7 +44,6 @@ export function InfiniteFloor() {
         }
         metalness={FLOOR_METALNESS}
         roughness={FLOOR_ROUGHNESS}
-        transparent // Your vertex Shader
         vertexShader={
           /* glsl */ `
           varying vec2 vUv;

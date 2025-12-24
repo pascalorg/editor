@@ -6,8 +6,8 @@ import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { Hammer, Image, MousePointer2, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
-import { structureTools } from '@/components/editor/action-menu/structure-tools'
 import { furnishTools } from '@/components/editor/action-menu/furnish-tools'
+import { structureTools } from '@/components/editor/action-menu/structure-tools'
 import { emitter } from '@/events/bus'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
@@ -214,11 +214,15 @@ const allTools = [...structureTools, ...furnishTools]
 function getBuildingToolIcon(toolId: string, category: string | null): string | null {
   // For item tools, find by both tool id and catalog category
   if (toolId === 'item' && category) {
-    const tool = allTools.find((t) => t.id === 'item' && 'catalogCategory' in t && t.catalogCategory === category)
+    const tool = allTools.find(
+      (t) => t.id === 'item' && 'catalogCategory' in t && t.catalogCategory === category,
+    )
     return tool?.iconSrc ?? null
   }
   // For other tools, find by tool id only
-  const tool = allTools.find((t) => t.id === toolId && !('catalogCategory' in t && t.catalogCategory))
+  const tool = allTools.find(
+    (t) => t.id === toolId && !('catalogCategory' in t && t.catalogCategory),
+  )
   return tool?.iconSrc ?? null
 }
 
