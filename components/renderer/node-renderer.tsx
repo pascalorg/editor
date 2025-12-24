@@ -19,7 +19,18 @@ interface AnimatedGroupProps {
   visible?: boolean
   name: string
   userData: any
-  // shouldAnimate: boolean
+  // activeTool: any
+  // movingCamera: boolean
+}
+
+interface GroupProps {
+  children: React.ReactNode
+  position: [number, number, number]
+  rotation: [number, number, number]
+  visible?: boolean
+  name: string
+  userData: any
+  shouldAnimate: boolean
   // activeTool: any
   // movingCamera: boolean
 }
@@ -31,33 +42,54 @@ const AnimatedGroup = ({
   visible,
   name,
   userData,
-  // shouldAnimate,
   // activeTool,
   // movingCamera,
 }: AnimatedGroupProps) => {
-  // const { springPosition } = useSpring({
-  //   springPosition: position,
-  //   config: {
-  //     mass: 1,
-  //     tension: 170,
-  //     friction: 26,
-  //   },
-  //   immediate: !!activeTool || movingCamera,
-  // })
+  const { springPosition } = useSpring({
+    springPosition: position,
+    config: {
+      mass: 1,
+      tension: 170,
+      friction: 26,
+    },
+    // immediate: !!activeTool || movingCamera,
+  })
 
-  // if (shouldAnimate) {
-  //   return (
-  //     <animated.group
-  //       name={name}
-  //       position={springPosition as any}
-  //       rotation={rotation}
-  //       userData={userData}
-  //       visible={visible}
-  //     >
-  //       {children}
-  //     </animated.group>
-  //   )
-  // }
+  return (
+    <animated.group
+      name={name}
+      position={springPosition as any}
+      rotation={rotation}
+      userData={userData}
+      visible={visible}
+    >
+      {children}
+    </animated.group>
+  )
+}
+
+const Group = ({
+  children,
+  position,
+  rotation,
+  visible,
+  name,
+  userData,
+  shouldAnimate,
+}: GroupProps) => {
+  if (shouldAnimate) {
+    return (
+      <AnimatedGroup
+        name={name}
+        position={position}
+        rotation={rotation}
+        userData={userData}
+        visible={visible}
+      >
+        {children}
+      </AnimatedGroup>
+    )
+  }
 
   return (
     <group
@@ -167,7 +199,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
 
   return (
     <>
-      <AnimatedGroup
+      <Group
         name={nodeId}
         position={gridItemPosition}
         rotation={
@@ -175,7 +207,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
             ? (nodeRotation as [number, number, number])
             : [0, nodeRotation ?? 0, 0]
         }
-        // shouldAnimate={nodeType === 'level'}
+        shouldAnimate={nodeType === 'level'}
         userData={{
           nodeId,
         }}
@@ -191,7 +223,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
               <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
             ))}
         </group>
-      </AnimatedGroup>
+      </Group>
     </>
   )
 }
