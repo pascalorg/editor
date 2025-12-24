@@ -385,6 +385,7 @@ export type StoreState = {
 
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
+  closeSpecialEditors: () => Partial<StoreState>
   setActiveTool: (tool: Tool | null, catalogCategory?: CatalogCategory | null) => void
   setCatalogCategory: (category: CatalogCategory | null) => void
   setControlMode: (mode: ControlMode) => void
@@ -805,6 +806,34 @@ const useStore = create<StoreState>()(
 
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
+
+        // Helper to close special editors (zones, site property lines) when changing modes/tools
+        // Returns partial state updates to be merged with other updates
+        closeSpecialEditors: () => {
+          const state = get()
+          const updates: Partial<StoreState> = {}
+
+          // Clear zone selection
+          if (state.selectedZoneId) {
+            updates.selectedZoneId = null
+          }
+
+          // Clear site node selection (site nodes use edit mode for property line editing)
+          if (state.controlMode === 'edit' && state.selectedNodeIds.length > 0) {
+            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              return handle?.type === 'site'
+            })
+            if (siteNodeIds.length > 0) {
+              updates.selectedNodeIds = state.selectedNodeIds.filter(
+                (id) => !siteNodeIds.includes(id),
+              )
+            }
+          }
+
+          return updates
+        },
+
         setActiveTool: (tool, catalogCategory) => {
           get().deletePreviewNodes()
           // If catalogCategory is explicitly passed, use it; otherwise clear it unless tool is 'item'
@@ -819,25 +848,7 @@ const useStore = create<StoreState>()(
           const updates: Partial<StoreState> = {
             activeTool: tool,
             catalogCategory: newCatalogCategory,
-          }
-
-          // Clear zone selection when changing tools (zones can be selected in any mode)
-          if (state.selectedZoneId) {
-            updates.selectedZoneId = null
-          }
-
-          // When leaving edit mode (by selecting a tool), clear site editing state
-          if (state.controlMode === 'edit' && state.selectedNodeIds.length > 0) {
-            // Clear site node selection (site nodes use edit mode for property line editing)
-            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
-              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
-              return handle?.type === 'site'
-            })
-            if (siteNodeIds.length > 0) {
-              updates.selectedNodeIds = state.selectedNodeIds.filter(
-                (id) => !siteNodeIds.includes(id),
-              )
-            }
+            ...get().closeSpecialEditors(),
           }
 
           if (tool !== null) {
@@ -866,32 +877,14 @@ const useStore = create<StoreState>()(
         },
         setCatalogCategory: (category) => set({ catalogCategory: category }),
         setControlMode: (mode) => {
-          const state = get()
-          const wasInEditMode = state.controlMode === 'edit'
-
           if (mode !== 'building') {
             get().deletePreviewNodes()
           }
 
-          // Clear zone selection when changing control mode (zones can be selected in any mode)
-          if (state.selectedZoneId) {
-            set({ selectedZoneId: null })
-          }
-
-          // When leaving edit mode, clear site editing state
-          if (wasInEditMode && mode !== 'edit' && state.selectedNodeIds.length > 0) {
-            // Clear site node selection (site nodes use edit mode for property line editing)
-            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
-              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
-              return handle?.type === 'site'
-            })
-            if (siteNodeIds.length > 0) {
-              set({
-                selectedNodeIds: state.selectedNodeIds.filter(
-                  (id) => !siteNodeIds.includes(id),
-                ),
-              })
-            }
+          // Close special editors and apply updates
+          const specialEditorUpdates = get().closeSpecialEditors()
+          if (Object.keys(specialEditorUpdates).length > 0) {
+            set(specialEditorUpdates)
           }
 
           set({ controlMode: mode })
