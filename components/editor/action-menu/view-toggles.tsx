@@ -1,16 +1,32 @@
 'use client'
 
-import { ArrowLineDown, ArrowLineUp, ArrowsOutLineVertical, StackIcon } from '@phosphor-icons/react'
+import { StackIcon } from '@phosphor-icons/react'
 import { Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
-const wallModeConfig: Record<WallMode, { icon: typeof ArrowLineUp; label: string }> = {
-  up: { icon: ArrowLineUp, label: 'Up View' },
-  cutaway: { icon: ArrowsOutLineVertical, label: 'Cutaway View' },
-  down: { icon: ArrowLineDown, label: 'Down View' },
+const wallModeConfig: Record<
+  WallMode,
+  { icon: React.FC<React.ComponentProps<'img'>>; label: string }
+> = {
+  up: {
+    icon: (props) => (
+      <img alt="Full Height" height={20} src="/icons/room.png" width={20} {...props} />
+    ),
+    label: 'Full Height',
+  },
+  cutaway: {
+    icon: (props) => (
+      <img alt="Cutaway" height={20} src="/icons/wallcut.png" width={20} {...props} />
+    ),
+    label: 'Cutaway',
+  },
+  down: {
+    icon: (props) => <img alt="Low" height={20} src="/icons/walllow.png" width={20} {...props} />,
+    label: 'Low',
+  },
 }
 
 export function ViewToggles() {
@@ -67,7 +83,7 @@ export function ViewToggles() {
             size="icon"
             variant="ghost"
           >
-            <WallModeIcon className="h-4 w-4" />
+            <WallModeIcon className="size-6" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>

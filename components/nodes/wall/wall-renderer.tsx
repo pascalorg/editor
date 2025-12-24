@@ -906,19 +906,17 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
           cachedMaterial.current = wallMesh.current.material
           wallMesh.current.material = shadowCasterMaterial
         }
-      } else {
+      } else if (wallMesh.current.material === shadowCasterMaterial) {
         // If we are showing the wall, make sure we aren't using the shadow caster
-        if (wallMesh.current.material === shadowCasterMaterial) {
-          if (cachedMaterial.current) {
-            wallMesh.current.material = cachedMaterial.current
-          } else {
-            // Fallback to base materials if cache is missing
-            wallMesh.current.material = wallMaterial
-          }
+        if (cachedMaterial.current) {
+          wallMesh.current.material = cachedMaterial.current
+        } else {
+          // Fallback to base materials if cache is missing
+          wallMesh.current.material = wallMaterial
         }
-        // If material is not shadowCasterMaterial, we assume it's the correct CSG material
-        // and leave it alone (don't overwrite with wallMaterial which might be missing CSG parts)
       }
+      // If material is not shadowCasterMaterial, we assume it's the correct CSG material
+      // and leave it alone (don't overwrite with wallMaterial which might be missing CSG parts)
 
       if (miniwallMesh.current) {
         miniwallMesh.current.visible = hideWall

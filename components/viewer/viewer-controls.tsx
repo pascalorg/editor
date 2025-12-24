@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLineDown, ArrowLineUp, ArrowsOutLineVertical, StackIcon } from '@phosphor-icons/react'
+import { StackIcon } from '@phosphor-icons/react'
 import { Box, Camera, Clock, Eye, Moon, ScanLine, Sun, Sunrise, Sunset } from 'lucide-react'
 import SunCalc from 'suncalc'
 import { useShallow } from 'zustand/shallow'
@@ -28,10 +28,26 @@ const PRESET_LABELS: Record<TimePreset, string> = {
   night: 'Night',
 }
 
-const wallModeConfig: Record<WallMode, { icon: typeof ArrowLineUp; label: string }> = {
-  up: { icon: ArrowLineUp, label: 'Up View' },
-  cutaway: { icon: ArrowsOutLineVertical, label: 'Cutaway View' },
-  down: { icon: ArrowLineDown, label: 'Down View' },
+const wallModeConfig: Record<
+  WallMode,
+  { icon: React.FC<React.ComponentProps<'img'>>; label: string }
+> = {
+  up: {
+    icon: (props) => (
+      <img alt="Full Height" height={16} src="/icons/room.png" width={16} {...props} />
+    ),
+    label: 'Full Height',
+  },
+  cutaway: {
+    icon: (props) => (
+      <img alt="Cutaway" height={16} src="/icons/wallcut.png" width={16} {...props} />
+    ),
+    label: 'Cutaway',
+  },
+  down: {
+    icon: (props) => <img alt="Low" height={16} src="/icons/walllow.png" width={16} {...props} />,
+    label: 'Low',
+  },
 }
 
 export function ViewerControls({ className }: { className?: string }) {
@@ -172,7 +188,7 @@ export function ViewerControls({ className }: { className?: string }) {
           <TooltipTrigger asChild>
             <Button
               className={cn(
-                'h-8 w-8 transition-all',
+                'size-8 transition-all',
                 'text-white hover:bg-gray-800 hover:text-white',
               )}
               onClick={toggleWallMode}
@@ -181,7 +197,7 @@ export function ViewerControls({ className }: { className?: string }) {
             >
               {(() => {
                 const WallModeIcon = wallModeConfig[wallMode].icon
-                return <WallModeIcon className="h-4 w-4" />
+                return <WallModeIcon className="size-6" />
               })()}
             </Button>
           </TooltipTrigger>
