@@ -24,7 +24,7 @@ const tmpVec3 = new THREE.Vector3()
 
 /**
  * Custom gradient shader material for extruded zone walls
- * Fades from semi-transparent at bottom to fully transparent at top
+ * Fades from fully transparent at bottom to semi-transparent at top
  * When hovered, the gradient becomes more opaque
  */
 const GradientMaterial = ({
@@ -38,6 +38,9 @@ const GradientMaterial = ({
   height: number
   hovered?: boolean
 }) => {
+  const materialRef = useRef<THREE.ShaderMaterial>(null)
+
+  // Create uniforms only once
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(color) },
@@ -45,16 +48,18 @@ const GradientMaterial = ({
       uHeight: { value: height },
       uHovered: { value: hovered ? 1.0 : 0.0 },
     }),
-    [color, opacity, height, hovered],
+    [], // Empty deps - create once
   )
 
   // Update uniforms when props change
   useEffect(() => {
-    uniforms.uColor.value.set(color)
-    uniforms.uOpacity.value = opacity
-    uniforms.uHeight.value = height
-    uniforms.uHovered.value = hovered ? 1.0 : 0.0
-  }, [color, opacity, height, hovered, uniforms])
+    if (materialRef.current) {
+      materialRef.current.uniforms.uColor.value.set(color)
+      materialRef.current.uniforms.uOpacity.value = opacity
+      materialRef.current.uniforms.uHeight.value = height
+      materialRef.current.uniforms.uHovered.value = hovered ? 1.0 : 0.0
+    }
+  }, [color, opacity, height, hovered])
 
   return (
     <shaderMaterial
@@ -68,8 +73,8 @@ const GradientMaterial = ({
         varying float vHeight;
 
         void main() {
-          // Calculate alpha based on height (1 at bottom, 0 at top)
-          float alpha = 1.0 - (vHeight / uHeight);
+          // Calculate alpha based on height (0 at bottom, 1 at top)
+          float alpha = vHeight / uHeight;
 
           // When hovered, use a gentler falloff and higher minimum opacity
           float falloff = mix(alpha * alpha, alpha, uHovered * 0.5);
@@ -82,6 +87,7 @@ const GradientMaterial = ({
           gl_FragColor = vec4(uColor, alpha * finalOpacity);
         }
       `}
+      ref={materialRef}
       side={THREE.DoubleSide}
       transparent
       uniforms={uniforms}
