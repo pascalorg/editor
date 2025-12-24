@@ -39,11 +39,7 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
-import {
-  type Collection,
-  CollectionSchema,
-  type CollectionType,
-} from '@/lib/scenegraph/schema/collections'
+import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
@@ -471,7 +467,6 @@ export type StoreState = {
   addCollection: (name: string) => Collection
   deleteCollection: (collectionId: string) => void
   renameCollection: (collectionId: string, name: string) => void
-  setCollectionType: (collectionId: string, type: CollectionType) => void
   addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
   removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
   startAddToCollection: () => void
@@ -1644,18 +1639,6 @@ const useStore = create<StoreState>()(
               ...state.scene,
               collections: (state.scene.collections || []).map((c) =>
                 c.id === collectionId ? { ...c, name } : c,
-              ),
-            },
-          })
-        },
-
-        setCollectionType: (collectionId: string, type: CollectionType) => {
-          const state = get()
-          set({
-            scene: {
-              ...state.scene,
-              collections: (state.scene.collections || []).map((c) =>
-                c.id === collectionId ? { ...c, type } : c,
               ),
             },
           })

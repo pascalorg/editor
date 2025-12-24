@@ -2,14 +2,10 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { objectId } from './base'
 
-const COLLECTION_TYPES = ['room', 'other'] as const
-export const CollectionType = z.enum(COLLECTION_TYPES)
-
 export const CollectionSchema = z
   .object({
     id: objectId('collection'),
     object: z.literal('collection').default('collection'),
-    type: CollectionType.default('other'),
     levelId: z.string().nullable().default(null), // Level this collection is associated with
     name: z.string(),
     nodeIds: z.array(z.string()).default([]),
@@ -21,7 +17,6 @@ export const CollectionSchema = z
     dedent`
   Collection schema - a logical grouping of nodes (e.g., electric appliances, furniture set)
   - object: "collection"
-  - type: collection type (room, other)
   - id: collection id
   - levelId: level this collection is associated with (optional)
   - name: collection name
@@ -32,4 +27,3 @@ export const CollectionSchema = z
   )
 
 export type Collection = z.infer<typeof CollectionSchema>
-export type CollectionType = z.infer<typeof CollectionType>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Folder, FolderInput, Grid2x2, Plus, Trash2, X } from 'lucide-react'
+import { FolderInput, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import {
@@ -12,23 +12,12 @@ import {
   TreeNodeTrigger,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection, CollectionType } from '@/lib/scenegraph/schema/collections'
+import type { Collection } from '@/lib/scenegraph/schema/collections'
 import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
 import { cn } from '@/lib/utils'
 import { getNodeIcon, getNodeLabel, RenamePopover } from './shared'
-
-const COLLECTION_TYPE_CONFIG: Record<CollectionType, { label: string; icon: React.ReactNode }> = {
-  room: { label: 'Room', icon: <Grid2x2 className="h-3 w-3" /> },
-  other: { label: 'Other', icon: <Folder className="h-3 w-3" /> },
-}
 
 // Node item inside a collection
 interface CollectionNodeItemProps {
@@ -109,16 +98,12 @@ interface CollectionItemProps {
 export function CollectionItem({ collection, isLast, level, onNodeClick }: CollectionItemProps) {
   const renameCollection = useEditor((state) => state.renameCollection)
   const deleteCollection = useEditor((state) => state.deleteCollection)
-  const setCollectionType = useEditor((state) => state.setCollectionType)
   const confirmAddToCollection = useEditor((state) => state.confirmAddToCollection)
   const addToCollectionState = useEditor((state) => state.addToCollectionState)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
-
-  const currentType = collection.type || 'other'
-  const typeConfig = COLLECTION_TYPE_CONFIG[currentType]
 
   const handleRename = (newName: string) => {
     renameCollection(collection.id, newName)
@@ -182,50 +167,6 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
             )
           }
         />
-        {/* Collection type selector */}
-        {!addToCollectionState.isActive && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                className="size-4 shrink-0 p-0 opacity-60 hover:opacity-100"
-                onClick={(e) => e.stopPropagation()}
-                size="sm"
-                variant="ghost"
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="flex items-center justify-center text-muted-foreground">
-                      {typeConfig.icon}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">{typeConfig.label}</TooltipContent>
-                </Tooltip>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="min-w-24"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {(
-                Object.entries(COLLECTION_TYPE_CONFIG) as [CollectionType, typeof typeConfig][]
-              ).map(([type, config]) => (
-                <DropdownMenuItem
-                  className="gap-2 text-xs"
-                  key={type}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setCollectionType(collection.id, type)
-                  }}
-                >
-                  <span className="text-muted-foreground">{config.icon}</span>
-                  {config.label}
-                  {type === currentType && <Check className="ml-auto h-3 w-3" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
         <TreeLabel
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
