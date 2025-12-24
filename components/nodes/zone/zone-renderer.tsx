@@ -315,7 +315,7 @@ function ZonePolygon({
 
       {/* Border line */}
       <Line
-        color={isHighlighted ? '#ffffff' : color}
+        color={color}
         lineWidth={isHighlighted ? 2 : 1}
         points={linePoints}
         renderOrder={9_999_999_999}

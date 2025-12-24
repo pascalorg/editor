@@ -180,7 +180,7 @@ export const GridTiles = memo(() => {
 
   return (
     <>
-      {controlMode !== 'select' && <DownArrow />}
+      {controlMode !== 'select' && controlMode !== 'edit' && <DownArrow />}
       {/* Invisible plane for raycasting */}
       <mesh
         onPointerDown={handlePointerDown}

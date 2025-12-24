@@ -10,7 +10,7 @@ import { type StoreState, useEditor } from '@/hooks/use-editor'
 
 // Height offset to prevent z-fighting and ensure spheres are fully above the floor
 // Needs to be at least the sphere radius (0.2 when hovered) to avoid clipping
-const Y_OFFSET = 0.25
+const Y_OFFSET = 0.01
 
 // Convert grid coordinates to world coordinates
 const toWorld = (x: number, z: number): [number, number] => [x * TILE_SIZE, z * TILE_SIZE]
@@ -393,7 +393,14 @@ export function ZoneBoundaryEditor() {
   return (
     <group>
       {/* Highlighted border when editing */}
-      <Line color="#ffffff" depthTest={false} lineWidth={2} points={linePoints} />
+      <Line
+        color={selectedZone.color}
+        depthTest={false}
+        lineWidth={2}
+        opacity={0.5}
+        points={linePoints}
+        transparent
+      />
 
       {/* Draggable handles at each vertex */}
       {polygon.map(([x, z], index) => (
