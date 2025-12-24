@@ -30,11 +30,6 @@ import { RoomDetectionProcessor } from '@/lib/processors/room-detection-processo
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
 import {
-  type Collection,
-  CollectionSchema,
-  type CollectionType,
-} from '@/lib/scenegraph/schema/collections'
-import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
@@ -44,7 +39,9 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
+import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
+import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
@@ -250,7 +247,7 @@ export type StructureTool =
   | 'stair'
   | 'door'
   | 'window'
-  | 'collection'
+  | 'zone'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool =
@@ -289,6 +286,10 @@ export type SceneSource =
   | { type: 'url'; url: string } // Loaded from URL, not persisted (viewer mode)
   | { type: 'slot'; name: string } // Named slot for future multi-project support
 
+export type AddToCollectionState = {
+  isActive: boolean
+  nodeIds: string[]
+}
 
 export type StoreState = {
   // ============================================================================
@@ -336,8 +337,10 @@ export type StoreState = {
   pointerPosition: [number, number] | null
   debug: boolean
 
-  // Collection selection (for editing boundaries)
+  addToCollectionState: AddToCollectionState
   selectedCollectionId: string | null
+  // Zone selection (for editing boundaries)
+  selectedZoneId: string | null
 
   selectedItem: {
     category?: CatalogCategory
@@ -365,7 +368,7 @@ export type StoreState = {
   deleteLevel: (levelId: string) => void
   reorderLevels: (levels: SchemaLevelNode[]) => void
   selectFloor: (floorId: string | null) => void
-  selectCollection: (collectionId: string | null) => void
+  selectZone: (zoneId: string | null) => void
 
   handleNodeSelect: (
     nodeId: string,
@@ -382,6 +385,7 @@ export type StoreState = {
 
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
+  closeSpecialEditors: () => Partial<StoreState>
   setActiveTool: (tool: Tool | null, catalogCategory?: CatalogCategory | null) => void
   setCatalogCategory: (category: CatalogCategory | null) => void
   setControlMode: (mode: ControlMode) => void
@@ -452,13 +456,23 @@ export type StoreState = {
     },
   ) => void
 
-  // Collection operations
-  addCollection: (name: string, levelId: string, polygon: [number, number][]) => Collection
+  // Zone operations
+  addZone: (name: string, levelId: string, polygon: [number, number][]) => Zone
+  deleteZone: (zoneId: string) => void
+  renameZone: (zoneId: string, name: string) => void
+  updateZonePolygon: (zoneId: string, polygon: [number, number][]) => void
+  setZoneColor: (zoneId: string, color: string) => void
+
+  // Collection operations (logical groupings of nodes)
+  selectCollection: (collectionId: string | null) => void
+  addCollection: (name: string) => Collection
   deleteCollection: (collectionId: string) => void
   renameCollection: (collectionId: string, name: string) => void
-  setCollectionType: (collectionId: string, type: CollectionType) => void
-  updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => void
-  setCollectionColor: (collectionId: string, color: string) => void
+  addNodesToCollection: (collectionId: string, nodeIds: string[]) => void
+  removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => void
+  startAddToCollection: () => void
+  confirmAddToCollection: (collectionId: string) => void
+  cancelAddToCollection: () => void
 
   // View operations
   addView: (viewData: Omit<View, 'id' | 'object'>) => void
@@ -584,11 +598,13 @@ const useStore = create<StoreState>()(
 
         // Preserve data that is managed outside the graph:
         // - environment: managed directly via setState in updateEnvironment
+        // - zones: managed via zone operations in the store
         // - collections: managed via collection operations in the store
         // - metadata: scene-level metadata not managed by the graph
         // The graph's scene copy may have stale data for these fields.
         const sceneWithPreservedData = {
           ...nextScene,
+          zones: currentScene.zones,
           collections: currentScene.collections,
           views: currentScene.views,
           metadata: currentScene.metadata,
@@ -651,7 +667,9 @@ const useStore = create<StoreState>()(
         isManipulatingScan: false,
         debug: false,
         pointerPosition: null,
+        addToCollectionState: { isActive: false, nodeIds: [] },
         selectedCollectionId: null,
+        selectedZoneId: null,
         selectedItem: {
           modelUrl: '/items/couch-medium/model.glb',
           scale: [0.4, 0.4, 0.4],
@@ -697,32 +715,32 @@ const useStore = create<StoreState>()(
               currentLevel: (level.data() as unknown as SchemaLevelNode).level,
               viewMode: 'level',
               selectedNodeIds: [],
-              selectedCollectionId: null, // Clear collection selection when floor changes
+              selectedZoneId: null, // Clear zone selection when floor changes
             })
           }
         },
-        selectCollection: (collectionId) => {
+        selectZone: (zoneId) => {
           const state = get()
-          if (!collectionId) {
+          if (!zoneId) {
             set({
-              selectedCollectionId: null,
+              selectedZoneId: null,
               selectedNodeIds: [],
             })
             return
           }
 
-          // Find the collection
-          const collection = state.scene.collections?.find((c) => c.id === collectionId)
-          if (!collection) return
+          // Find the zone
+          const zone = state.scene.zones?.find((c) => c.id === zoneId)
+          if (!zone) return
 
-          // If collection has a levelId, ensure that level is selected
-          if (collection.levelId && collection.levelId !== state.selectedFloorId) {
+          // If zone has a levelId, ensure that level is selected
+          if (zone.levelId && zone.levelId !== state.selectedFloorId) {
             const level = state.graph.nodes
               .find({ type: 'level' })
-              .find((l) => l.id === collection.levelId)
+              .find((l) => l.id === zone.levelId)
             if (level) {
               set({
-                selectedFloorId: collection.levelId,
+                selectedFloorId: zone.levelId,
                 currentLevel: (level.data() as unknown as SchemaLevelNode).level,
                 viewMode: 'level',
               })
@@ -730,8 +748,8 @@ const useStore = create<StoreState>()(
           }
 
           set({
-            selectedCollectionId: collectionId,
-            selectedNodeIds: [], // Collections are now polygon zones, not node containers
+            selectedZoneId: zoneId,
+            selectedNodeIds: [], // Zones are polygon areas, not node containers
           })
         },
         handleNodeSelect: (nodeId, event) => {
@@ -745,7 +763,7 @@ const useStore = create<StoreState>()(
           const state = get()
           const updates: Partial<StoreState> = {
             selectedNodeIds: updatedSelection,
-            selectedCollectionId: null, // Clear collection selection when individual nodes are selected
+            selectedZoneId: null, // Clear zone selection when individual nodes are selected
           }
 
           // Auto-switch level if the selected node is on a different level
@@ -788,6 +806,34 @@ const useStore = create<StoreState>()(
 
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
+
+        // Helper to close special editors (zones, site property lines) when changing modes/tools
+        // Returns partial state updates to be merged with other updates
+        closeSpecialEditors: () => {
+          const state = get()
+          const updates: Partial<StoreState> = {}
+
+          // Clear zone selection
+          if (state.selectedZoneId) {
+            updates.selectedZoneId = null
+          }
+
+          // Clear site node selection (site nodes use edit mode for property line editing)
+          if (state.controlMode === 'edit' && state.selectedNodeIds.length > 0) {
+            const siteNodeIds = state.selectedNodeIds.filter((nodeId) => {
+              const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+              return handle?.type === 'site'
+            })
+            if (siteNodeIds.length > 0) {
+              updates.selectedNodeIds = state.selectedNodeIds.filter(
+                (id) => !siteNodeIds.includes(id),
+              )
+            }
+          }
+
+          return updates
+        },
+
         setActiveTool: (tool, catalogCategory) => {
           get().deletePreviewNodes()
           // If catalogCategory is explicitly passed, use it; otherwise clear it unless tool is 'item'
@@ -802,6 +848,7 @@ const useStore = create<StoreState>()(
           const updates: Partial<StoreState> = {
             activeTool: tool,
             catalogCategory: newCatalogCategory,
+            ...get().closeSpecialEditors(),
           }
 
           if (tool !== null) {
@@ -833,6 +880,13 @@ const useStore = create<StoreState>()(
           if (mode !== 'building') {
             get().deletePreviewNodes()
           }
+
+          // Close special editors and apply updates
+          const specialEditorUpdates = get().closeSpecialEditors()
+          if (Object.keys(specialEditorUpdates).length > 0) {
+            set(specialEditorUpdates)
+          }
+
           set({ controlMode: mode })
           if (mode !== 'building') {
             // Save current tool and catalog category before clearing so we can restore them when re-entering building mode
@@ -1000,8 +1054,13 @@ const useStore = create<StoreState>()(
           const batchCommand = new BatchDeleteCommand(state.selectedNodeIds)
           state.commandManager.execute(batchCommand, state.graph)
 
-          // Collections are now polygon zones, not node containers - no need to update them on node deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(state.selectedNodeIds)
+          const updatedCollections = (state.scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...state.scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
         handleDeleteSelectedElements: () => get().handleDeleteSelected(),
         handleDeleteSelectedImages: () => get().handleDeleteSelected(),
@@ -1158,11 +1217,12 @@ const useStore = create<StoreState>()(
 
             ensureNodeMarkers(root)
 
-            // Parse collections if present
+            // Parse zones and collections if present
+            const zones = Array.isArray(json.zones) ? json.zones : []
             const collections = Array.isArray(json.collections) ? json.collections : []
             const metadata = json.metadata || {}
 
-            const newScene = { root, collections, metadata } as unknown as Scene
+            const newScene = { root, zones, collections, metadata } as unknown as Scene
             const newGraph = new SceneGraph(newScene, {
               onChange: (s) => handleGraphChange(s),
             })
@@ -1185,6 +1245,7 @@ const useStore = create<StoreState>()(
 
             const newScene = {
               root: migratedRoot,
+              zones: [],
               collections: [],
               views: [],
               metadata: {},
@@ -1382,7 +1443,7 @@ const useStore = create<StoreState>()(
           return nodeId
         },
         deleteNode: (nodeId) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
           const handle = graph.getNodeById(nodeId as AnyNodeId)
 
           const command = new DeleteNodeCommand(nodeId)
@@ -1393,11 +1454,16 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Collections are now polygon zones, not node containers - no need to update them on node deletion
+          // Remove the node from any collections it belongs to
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => id !== nodeId),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections } })
         },
 
         deleteNodes: (nodeIds) => {
-          const { graph, commandManager } = get()
+          const { graph, commandManager, scene } = get()
 
           // Filter out preview nodes and regular nodes
           const previewNodeIds: string[] = []
@@ -1424,8 +1490,13 @@ const useStore = create<StoreState>()(
             commandManager.execute(command, graph)
           }
 
-          // Collections are now polygon zones, not node containers - no need to update them on node deletion
-          set({ selectedNodeIds: [] })
+          // Remove deleted nodes from any collections they belong to
+          const deletedSet = new Set(nodeIds)
+          const updatedCollections = (scene.collections || []).map((c) => ({
+            ...c,
+            nodeIds: c.nodeIds.filter((id) => !deletedSet.has(id)),
+          }))
+          set({ scene: { ...scene, collections: updatedCollections }, selectedNodeIds: [] })
         },
 
         deletePreviewNodes: () => {
@@ -1486,9 +1557,98 @@ const useStore = create<StoreState>()(
         setPointerPosition: (position: [number, number] | null) =>
           set({ pointerPosition: position }),
 
-        // Collection operations
-        addCollection: (name: string, levelId: string, polygon: [number, number][]) => {
-          const collection = CollectionSchema.parse({ name, levelId, polygon })
+        // Zone operations
+        addZone: (name: string, levelId: string, polygon: [number, number][]) => {
+          const zone = ZoneSchema.parse({ name, levelId, polygon })
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              zones: [...(state.scene.zones || []), zone],
+            },
+          })
+          return zone
+        },
+
+        deleteZone: (zoneId: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              zones: (state.scene.zones || []).filter((c) => c.id !== zoneId),
+            },
+          })
+        },
+
+        renameZone: (zoneId: string, name: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              zones: (state.scene.zones || []).map((c) => (c.id === zoneId ? { ...c, name } : c)),
+            },
+          })
+        },
+
+        updateZonePolygon: (zoneId: string, polygon: [number, number][]) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              zones: (state.scene.zones || []).map((c) =>
+                c.id === zoneId ? { ...c, polygon } : c,
+              ),
+            },
+          })
+        },
+
+        setZoneColor: (zoneId: string, color: string) => {
+          const state = get()
+          set({
+            scene: {
+              ...state.scene,
+              zones: (state.scene.zones || []).map((c) => (c.id === zoneId ? { ...c, color } : c)),
+            },
+          })
+        },
+
+        // Collection operations (logical groupings of nodes)
+        selectCollection: (collectionId) => {
+          const state = get()
+          if (!collectionId) {
+            set({
+              selectedCollectionId: null,
+              selectedNodeIds: [],
+            })
+            return
+          }
+
+          // Find the collection
+          const collection = state.scene.collections?.find((c) => c.id === collectionId)
+          if (!collection) return
+
+          // If collection has a levelId, ensure that level is selected
+          if (collection.levelId && collection.levelId !== state.selectedFloorId) {
+            const level = state.graph.nodes
+              .find({ type: 'level' })
+              .find((l) => l.id === collection.levelId)
+            if (level) {
+              set({
+                selectedFloorId: collection.levelId,
+                currentLevel: (level.data() as unknown as SchemaLevelNode).level,
+                viewMode: 'level',
+              })
+            }
+          }
+
+          set({
+            selectedCollectionId: collectionId,
+            selectedNodeIds: [...collection.nodeIds],
+          })
+        },
+
+        addCollection: (name: string) => {
+          const collection = CollectionSchema.parse({ name })
           const state = get()
           set({
             scene: {
@@ -1521,40 +1681,67 @@ const useStore = create<StoreState>()(
           })
         },
 
-        setCollectionType: (collectionId: string, type: CollectionType) => {
+        addNodesToCollection: (collectionId: string, nodeIds: string[]) => {
           const state = get()
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) =>
-                c.id === collectionId ? { ...c, type } : c,
-              ),
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                // Add only node IDs that aren't already in the collection
+                const existingIds = new Set(c.nodeIds || [])
+                const newIds = nodeIds.filter((id) => !existingIds.has(id))
+
+                // If this is the first node being added, set the levelId from that node
+                const isFirstNode = existingIds.size === 0 && newIds.length > 0
+                const levelId = isFirstNode
+                  ? getLevelIdForNode(state.graph.index, newIds[0] as AnyNodeId)
+                  : c.levelId
+
+                return {
+                  ...c,
+                  nodeIds: [...(c.nodeIds || []), ...newIds],
+                  levelId,
+                }
+              }),
             },
           })
         },
 
-        updateCollectionPolygon: (collectionId: string, polygon: [number, number][]) => {
+        removeNodesFromCollection: (collectionId: string, nodeIds: string[]) => {
           const state = get()
+          const idsToRemove = new Set(nodeIds)
           set({
             scene: {
               ...state.scene,
-              collections: (state.scene.collections || []).map((c) =>
-                c.id === collectionId ? { ...c, polygon } : c,
-              ),
+              collections: (state.scene.collections || []).map((c) => {
+                if (c.id !== collectionId) return c
+                return { ...c, nodeIds: (c.nodeIds || []).filter((id) => !idsToRemove.has(id)) }
+              }),
             },
           })
         },
 
-        setCollectionColor: (collectionId: string, color: string) => {
-          const state = get()
+        startAddToCollection: () => {
+          const { selectedNodeIds } = get()
+          if (selectedNodeIds.length === 0) return
           set({
-            scene: {
-              ...state.scene,
-              collections: (state.scene.collections || []).map((c) =>
-                c.id === collectionId ? { ...c, color } : c,
-              ),
+            addToCollectionState: {
+              isActive: true,
+              nodeIds: [...selectedNodeIds],
             },
           })
+        },
+
+        confirmAddToCollection: (collectionId: string) => {
+          const { addToCollectionState, addNodesToCollection } = get()
+          if (!addToCollectionState.isActive || addToCollectionState.nodeIds.length === 0) return
+          addNodesToCollection(collectionId, addToCollectionState.nodeIds)
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
+        },
+
+        cancelAddToCollection: () => {
+          set({ addToCollectionState: { isActive: false, nodeIds: [] } })
         },
 
         // View operations
@@ -1693,6 +1880,7 @@ const useStore = create<StoreState>()(
           const sceneToStore = {
             ...state.scene,
             root: processedRoot,
+            zones: state.scene.zones || [],
             collections: state.scene.collections || [],
           }
 
@@ -1799,12 +1987,14 @@ const useStore = create<StoreState>()(
 
               // Preserve data that is managed outside the graph:
               // - environment: managed directly via setState in updateEnvironment
+              // - zones: managed via zone operations in the store
               // - collections: managed via collection operations in the store
               // - metadata: scene-level metadata not managed by the graph
               // The graph's scene copy may have stale data for these fields.
               return {
                 scene: {
                   ...nextScene,
+                  zones: s.scene.zones,
                   collections: s.scene.collections,
                   views: s.scene.views,
                   metadata: s.scene.metadata,

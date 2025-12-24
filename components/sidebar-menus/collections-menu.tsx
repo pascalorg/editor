@@ -1,7 +1,7 @@
 'use client'
 
-import { Check, Folder, Grid2x2, Hexagon, Plus, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { FolderInput, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import {
   TreeExpander,
@@ -12,35 +12,80 @@ import {
   TreeNodeTrigger,
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection, CollectionType } from '@/lib/scenegraph/schema/collections'
+import type { Collection } from '@/lib/scenegraph/schema/collections'
+import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
 import { cn } from '@/lib/utils'
-import { RenamePopover } from './shared'
+import { getNodeIcon, getNodeLabel, RenamePopover } from './shared'
 
-const COLLECTION_TYPE_CONFIG: Record<CollectionType, { label: string; icon: React.ReactNode }> = {
-  room: { label: 'Room', icon: <Grid2x2 className="h-3 w-3" /> },
-  other: { label: 'Zone', icon: <Hexagon className="h-3 w-3" /> },
+// Node item inside a collection
+interface CollectionNodeItemProps {
+  nodeId: string
+  collectionId: string
+  index: number
+  isLast: boolean
+  level: number
 }
 
-// Preset colors for collections
-const PRESET_COLORS = [
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#eab308', // yellow
-  '#f97316', // orange
-  '#ef4444', // red
-  '#a855f7', // purple
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-]
+function CollectionNodeItem({
+  nodeId,
+  collectionId,
+  index,
+  isLast,
+  level,
+}: CollectionNodeItemProps) {
+  const { nodeType, nodeName } = useEditor(
+    useShallow((state: StoreState) => {
+      const handle = state.graph.getNodeById(nodeId as AnyNodeId)
+      const node = handle?.data()
+      return {
+        nodeType: node?.type || 'unknown',
+        nodeName: node?.name,
+      }
+    }),
+  )
+
+  const removeNodesFromCollection = useEditor((state) => state.removeNodesFromCollection)
+  const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+
+  const isSelected = selectedNodeIds.includes(nodeId)
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    removeNodesFromCollection(collectionId, [nodeId])
+  }
+
+  return (
+    <TreeNode isLast={isLast} level={level} nodeId={`${collectionId}-${nodeId}`}>
+      <TreeNodeTrigger
+        className={cn('group', isSelected && 'bg-accent')}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleNodeSelect(nodeId, e)
+        }}
+      >
+        <TreeExpander hasChildren={false} />
+        <TreeIcon hasChildren={false} icon={getNodeIcon(nodeType)} />
+        <TreeLabel>{getNodeLabel(nodeType, index, nodeName)}</TreeLabel>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="size-5 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              onClick={handleRemove}
+              size="sm"
+              variant="ghost"
+            >
+              <X className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Remove from collection</TooltipContent>
+        </Tooltip>
+      </TreeNodeTrigger>
+    </TreeNode>
+  )
+}
 
 // Collection item component
 interface CollectionItemProps {
@@ -53,17 +98,12 @@ interface CollectionItemProps {
 export function CollectionItem({ collection, isLast, level, onNodeClick }: CollectionItemProps) {
   const renameCollection = useEditor((state) => state.renameCollection)
   const deleteCollection = useEditor((state) => state.deleteCollection)
-  const setCollectionType = useEditor((state) => state.setCollectionType)
-  const setCollectionColor = useEditor((state) => state.setCollectionColor)
-  const selectCollection = useEditor((state) => state.selectCollection)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const confirmAddToCollection = useEditor((state) => state.confirmAddToCollection)
+  const addToCollectionState = useEditor((state) => state.addToCollectionState)
+  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
-
-  const currentType = collection.type || 'other'
-  const typeConfig = COLLECTION_TYPE_CONFIG[currentType]
-  const isSelected = selectedCollectionId === collection.id
 
   const handleRename = (newName: string) => {
     renameCollection(collection.id, newName)
@@ -76,119 +116,71 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Select this collection for boundary editing
-    selectCollection(isSelected ? null : collection.id)
+
+    // If in add-to-collection mode, confirm the add
+    if (addToCollectionState.isActive) {
+      e.preventDefault()
+      confirmAddToCollection(collection.id)
+      return
+    }
+
+    // Select all nodes in the collection
+    if (nodeCount > 0) {
+      useEditor.setState({ selectedNodeIds: [...collection.nodeIds] })
+    }
+
+    // Also toggle expand/collapse
+    onNodeClick(collection.id, nodeCount > 0)
   }
 
-  // Get level name for display
-  const levels = useEditor(
-    useShallow((state: StoreState) => {
-      const building = state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')
-      return building?.children || []
-    }),
-  )
-  const levelName = levels.find((l) => l.id === collection.levelId)?.name || 'Unknown Level'
+  const nodeCount = collection.nodeIds?.length || 0
+
+  // Check if all nodes in the collection are selected
+  const allNodesSelected =
+    nodeCount > 0 && collection.nodeIds.every((id) => selectedNodeIds.includes(id))
 
   return (
     <TreeNode isLast={isLast} level={level} nodeId={collection.id}>
       <TreeNodeTrigger
-        className={cn('group', isSelected && 'bg-accent ring-1 ring-primary')}
+        className={cn(
+          'group',
+          allNodesSelected && 'bg-accent',
+          addToCollectionState.isActive &&
+            'cursor-pointer ring-1 ring-amber-500/50 hover:bg-amber-500/10',
+        )}
         onClick={(e) => handleClick(e)}
       >
-        <TreeExpander hasChildren={false} />
-
-        {/* Color indicator with color picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="mr-1 size-4 shrink-0 rounded-sm border border-border/50 transition-transform hover:scale-110"
-              onClick={(e) => e.stopPropagation()}
-              style={{ backgroundColor: collection.color }}
-            />
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-2" onClick={(e) => e.stopPropagation()}>
-            <div className="grid grid-cols-4 gap-1">
-              {PRESET_COLORS.map((color) => (
-                <button
-                  className={cn(
-                    'size-6 rounded-sm border transition-transform hover:scale-110',
-                    color === collection.color ? 'ring-2 ring-primary ring-offset-1' : '',
-                  )}
-                  key={color}
-                  onClick={() => setCollectionColor(collection.id, color)}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-
+        <TreeExpander hasChildren={nodeCount > 0} />
         <TreeIcon
-          hasChildren={false}
+          hasChildren={nodeCount > 0}
           icon={
-            <img
-              alt="Collection"
-              className="size-4"
-              height={22}
-              src="/icons/collection.png"
-              width={22}
-            />
+            addToCollectionState.isActive ? (
+              <FolderInput className="size-4 text-amber-500" />
+            ) : (
+              <img
+                alt="Collection"
+                className="size-4"
+                height={22}
+                src="/icons/collection.png"
+                width={22}
+              />
+            )
           }
         />
-
-        {/* Collection type selector */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              className="size-4 shrink-0 p-0 opacity-60 hover:opacity-100"
-              onClick={(e) => e.stopPropagation()}
-              size="sm"
-              variant="ghost"
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="flex items-center justify-center text-muted-foreground">
-                    {typeConfig.icon}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">{typeConfig.label}</TooltipContent>
-              </Tooltip>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="min-w-24"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {(
-              Object.entries(COLLECTION_TYPE_CONFIG) as [CollectionType, typeof typeConfig][]
-            ).map(([type, config]) => (
-              <DropdownMenuItem
-                className="gap-2 text-xs"
-                key={type}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCollectionType(collection.id, type)
-                }}
-              >
-                <span className="text-muted-foreground">{config.icon}</span>
-                {config.label}
-                {type === currentType && <Check className="ml-auto h-3 w-3" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <TreeLabel
           className="flex-1 cursor-text"
           onDoubleClick={(e) => {
             e.stopPropagation()
-            setIsRenaming(true)
+            if (!addToCollectionState.isActive) {
+              setIsRenaming(true)
+            }
           }}
           ref={labelRef}
         >
           {collection.name}
-          <span className="ml-1 text-muted-foreground text-xs">({levelName})</span>
+          {nodeCount > 0 && (
+            <span className="ml-1 text-muted-foreground text-xs">({nodeCount})</span>
+          )}
         </TreeLabel>
         <RenamePopover
           anchorRef={labelRef}
@@ -197,20 +189,38 @@ export function CollectionItem({ collection, isLast, level, onNodeClick }: Colle
           onOpenChange={setIsRenaming}
           onRename={handleRename}
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              className="size-4 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-              onClick={handleDelete}
-              size="sm"
-              variant="ghost"
-            >
-              <Trash2 className="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete collection</TooltipContent>
-        </Tooltip>
+        {!addToCollectionState.isActive && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="size-4 p-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                onClick={handleDelete}
+                size="sm"
+                variant="ghost"
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete collection</TooltipContent>
+          </Tooltip>
+        )}
       </TreeNodeTrigger>
+
+      {/* Show node items inside the collection */}
+      {nodeCount > 0 && (
+        <TreeNodeContent hasChildren>
+          {collection.nodeIds.map((nodeId, index) => (
+            <CollectionNodeItem
+              collectionId={collection.id}
+              index={index}
+              isLast={index === collection.nodeIds.length - 1}
+              key={nodeId}
+              level={level + 1}
+              nodeId={nodeId}
+            />
+          ))}
+        </TreeNodeContent>
+      )}
     </TreeNode>
   )
 }
@@ -224,15 +234,36 @@ interface CollectionsSectionProps {
 
 export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSectionProps) {
   const collections = useEditor(useShallow((state: StoreState) => state.scene.collections || []))
-  const setActiveTool = useEditor((state) => state.setActiveTool)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
+  const addCollection = useEditor((state) => state.addCollection)
+  const addToCollectionState = useEditor((state) => state.addToCollectionState)
+  const cancelAddToCollection = useEditor((state) => state.cancelAddToCollection)
+
+  // Handle Escape key to cancel add-to-collection mode
+  useEffect(() => {
+    if (!addToCollectionState.isActive) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        cancelAddToCollection()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [addToCollectionState.isActive, cancelAddToCollection])
 
   const handleAddCollection = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Activate the collection tool - it will create a collection when the user finishes drawing
-    if (selectedFloorId) {
-      setActiveTool('collection')
+    // Generate a default name like "Collection 1", "Collection 2", etc.
+    const existingNames = collections.map((c) => c.name)
+    let counter = 1
+    let newName = `Collection ${counter}`
+    while (existingNames.includes(newName)) {
+      counter++
+      newName = `Collection ${counter}`
     }
+    addCollection(newName)
   }
 
   const hasCollections = collections.length > 0
@@ -240,7 +271,11 @@ export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSe
   return (
     <TreeNode isLast={isLast} level={level} nodeId="collections-section">
       <TreeNodeTrigger
-        className="group sticky top-0 z-10 bg-background"
+        className={cn(
+          'group sticky top-0 z-10 bg-background',
+          addToCollectionState.isActive &&
+            'cursor-pointer ring-1 ring-amber-500/50 hover:bg-amber-500/10',
+        )}
         onClick={() => onNodeClick('collections-section', hasCollections)}
       >
         <TreeExpander hasChildren={hasCollections} />
@@ -257,24 +292,49 @@ export function CollectionsSection({ level, onNodeClick, isLast }: CollectionsSe
             />
           }
         />
-        <TreeLabel>Zones</TreeLabel>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              className="h-5 w-5 p-0"
-              disabled={!selectedFloorId}
-              onClick={handleAddCollection}
-              size="sm"
-              variant="ghost"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {selectedFloorId ? 'Add new zone' : 'Select a level first'}
-          </TooltipContent>
-        </Tooltip>
+        <TreeLabel>Collections</TreeLabel>
+        {addToCollectionState.isActive && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="h-5 w-5 p-0 text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  cancelAddToCollection()
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Cancel</TooltipContent>
+          </Tooltip>
+        )}
+        {!addToCollectionState.isActive && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="h-5 w-5 p-0"
+                onClick={handleAddCollection}
+                size="sm"
+                variant="ghost"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add new collection</TooltipContent>
+          </Tooltip>
+        )}
       </TreeNodeTrigger>
+
+      {/* Status message when in add-to-collection mode */}
+      {addToCollectionState.isActive && (
+        <div className="mx-2 mb-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-600 text-xs dark:text-amber-400">
+          Click a collection to add {addToCollectionState.nodeIds.length} node
+          {addToCollectionState.nodeIds.length > 1 ? 's' : ''}
+        </div>
+      )}
 
       <TreeNodeContent hasChildren={hasCollections}>
         {collections.map((collection, index) => (

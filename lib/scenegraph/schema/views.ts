@@ -6,6 +6,7 @@ import { CameraSchema } from './camera'
 export const SceneStateOverrideSchema = z.object({
   selectedLevelId: z.string().nullable().optional(),
   levelMode: z.enum(['stacked', 'exploded', 'single-floor']).optional(),
+  visibleZoneIds: z.array(z.string()).optional(),
   visibleCollectionIds: z.array(z.string()).optional(),
   timePreset: z.enum(['dawn', 'day', 'dusk', 'night', 'now', 'custom']).optional(),
   staticTime: z.number().optional(),
@@ -28,7 +29,7 @@ export const ViewSchema = z
   - object: "view"
   - name: view name
   - camera: camera configuration (position, target, mode)
-  - sceneState: optional overrides for scene state (level, collections, time)
+  - sceneState: optional overrides for scene state (level, zones, time)
   `,
   )
 

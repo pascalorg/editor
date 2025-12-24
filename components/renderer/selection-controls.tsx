@@ -3,13 +3,15 @@ import { Billboard, Line } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Container } from '@react-three/uikit'
 import { Button } from '@react-three/uikit-default'
-import { Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
+import { FolderPlus, Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
 import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
 import { GRID_SIZE, TILE_SIZE } from '../editor'
+
+const tmpVec3 = new THREE.Vector3()
 
 /**
  * Calculate the grid offset to account for the scene root group position.
@@ -197,13 +199,13 @@ interface SelectionControlsProps {
 
 export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls = true }) => {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
   const { scene } = useThree()
   const [isMoving, setIsMoving] = useState(false)
   const [boundsNeedUpdate, setBoundsNeedUpdate] = useState(0)
 
-  // In viewer mode (controls=false) with a collection selected, only show combined bounds
-  const isViewerCollectionMode = !controls && !!selectedCollectionId
+  // In viewer mode (controls=false) with a zone selected, only show combined bounds
+  const isViewerZoneMode = !controls && !!selectedZoneId
 
   const rotationFramesRef = useRef(0) // Track frames after rotation to update bounds
   const moveStateRef = useRef<MoveState>({
@@ -289,6 +291,10 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
     useEditor.getState().deleteNodes(selectedNodeIds)
   }, [])
 
+  const handleAddToCollection = useCallback((e: ThreeMouseEvent) => {
+    e.stopPropagation?.()
+    useEditor.getState().startAddToCollection()
+  }, [])
 
   const handleMove = useCallback((e: ThreeMouseEvent) => {
     e.stopPropagation?.()
@@ -857,14 +863,9 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
 
     // Scale control panel based on camera distance to maintain consistent visual size
     if (controlPanelRef.current && combinedBounds) {
+      tmpVec3.set(combinedBounds.center.x, combinedBounds.center.y, combinedBounds.center.z)
       // Calculate distance from camera to the selection center
-      const distance = camera.position.distanceTo(
-        new THREE.Vector3(
-          combinedBounds.center.x,
-          combinedBounds.center.y,
-          combinedBounds.center.z,
-        ),
-      )
+      const distance = camera.position.distanceTo(tmpVec3)
       // Use distance to calculate appropriate scale
       const scale = distance * 0.12 // Adjust multiplier for desired size
       const finalScale = Math.min(Math.max(scale, 0.5), 2) // Clamp between 0.5 and 2
@@ -880,8 +881,8 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
   return (
     <group>
       {/* Individual bounding boxes for each selected item - oriented */}
-      {/* In viewer collection mode, skip individual boxes and only show combined */}
-      {!isViewerCollectionMode &&
+      {/* In viewer zone mode, skip individual boxes and only show combined */}
+      {!isViewerZoneMode &&
         individualBounds.map((bounds, i) => (
           <SelectionBox
             center={bounds.center}
@@ -894,11 +895,11 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
 
       {/* Combined bounding box */}
       {/* In editor: show only when multiple items selected */}
-      {/* In viewer collection mode: always show as the room boundary */}
-      {(isViewerCollectionMode || selectedNodeIds.length > 1) && (
+      {/* In viewer zone mode: always show as the room boundary */}
+      {(isViewerZoneMode || selectedNodeIds.length > 1) && (
         <SelectionBox
           center={combinedBounds.center}
-          color={isViewerCollectionMode ? '#f59e0b' : '#ffff00'}
+          color={isViewerZoneMode ? '#f59e0b' : '#ffff00'}
           rotation={new THREE.Euler(0, 0, 0)}
           size={combinedBounds.size}
         />
@@ -945,6 +946,15 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
                 size="icon"
               >
                 <Move color="white" height={16} width={16} />
+              </Button>
+              <Button
+                backgroundColor={'transparent'}
+                borderRadius={0}
+                hover={{ backgroundColor: '#3a3b45' }}
+                onClick={handleAddToCollection}
+                size="icon"
+              >
+                <FolderPlus color="white" height={16} width={16} />
               </Button>
               <Button
                 backgroundColor={'transparent'}

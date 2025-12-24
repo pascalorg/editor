@@ -89,12 +89,12 @@ export interface NodeCameraCaptureRequest {
 }
 
 export interface InteractionClickEvent {
-  type: 'node' | 'collection' | 'level' | 'building' | 'void'
+  type: 'node' | 'zone' | 'level' | 'building' | 'void'
   id: string | null
   data?: any
 }
 
-export interface CollectionPreviewEvent {
+export interface ZonePreviewEvent {
   points: Array<[number, number]>
   cursorPoint?: [number, number] | null
 }
@@ -129,7 +129,7 @@ type EditorEvents = {
   'view:apply': ViewApplyEvent
   'node:capture-camera': NodeCameraCaptureRequest
   'interaction:click': InteractionClickEvent
-  'collection:preview': CollectionPreviewEvent
+  'zone:preview': ZonePreviewEvent
   'tool:cancel': undefined
 }
 export const emitter = mitt<EditorEvents>()

@@ -9,7 +9,7 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { CollectionRenderer } from '../nodes/collection/collection-renderer'
+import { ZoneRenderer } from '../nodes/zone/zone-renderer'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
@@ -53,7 +53,7 @@ export default function Viewer({
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
-  const selectedCollectionId = useEditor((state) => state.selectedCollectionId)
+  const selectedZoneId = useEditor((state) => state.selectedZoneId)
   const viewMode = useEditor((state) => state.viewMode)
   const cameraMode = useEditor((state) => state.cameraMode)
   const setCameraMode = useEditor((state) => state.setCameraMode)
@@ -61,7 +61,7 @@ export default function Viewer({
   const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
   const selectFloor = useEditor((state) => state.selectFloor)
-  const selectCollection = useEditor((state) => state.selectCollection)
+  const selectZone = useEditor((state) => state.selectZone)
 
   // Grid fade controls for infinite base floor
   const { fadeDistance, fadeStrength } = useGridFadeControls()
@@ -71,7 +71,7 @@ export default function Viewer({
     useEditor.setState({
       selectedNodeIds: [],
       selectedFloorId: null,
-      selectedCollectionId: null,
+      selectedZoneId: null,
       levelMode: 'stacked',
       viewMode: 'full',
       wallMode: defaultWallMode,
@@ -96,10 +96,10 @@ export default function Viewer({
       selectedNodeIds,
       selectedNodes,
       selectedFloorId,
-      selectedCollectionId,
+      selectedZoneId,
     }
     window.parent.postMessage(message, '*')
-  }, [isEmbedded, selectedNodeIds, selectedFloorId, selectedCollectionId])
+  }, [isEmbedded, selectedNodeIds, selectedFloorId, selectedZoneId])
 
   // Notify parent window about interaction clicks
   useEffect(() => {
@@ -170,9 +170,9 @@ export default function Viewer({
           return
         }
 
-        // 2. If Collection selected -> Back to Floor
-        if (state.selectedCollectionId) {
-          selectCollection(null)
+        // 2. If Zone selected -> Back to Floor
+        if (state.selectedZoneId) {
+          selectZone(null)
           return
         }
 
@@ -199,9 +199,9 @@ export default function Viewer({
     setCameraMode,
     toggleLevelMode,
     selectFloor,
-    selectCollection,
+    selectZone,
     selectedNodeIds,
-    selectedCollectionId,
+    selectedZoneId,
     selectedFloorId,
     building,
     site,
@@ -222,7 +222,7 @@ export default function Viewer({
     // Full reset on background click
     useEditor.setState({
       selectedNodeIds: [],
-      selectedCollectionId: null,
+      selectedZoneId: null,
       selectedFloorId: null,
       levelMode: 'stacked',
       viewMode: 'full',
@@ -264,9 +264,9 @@ export default function Viewer({
           {building && <NodeRenderer isViewer nodeId={building.id} />}
         </group>
 
-        {/* Collection zones */}
+        {/* Zone polygons */}
         <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <CollectionRenderer isViewer />
+          <ZoneRenderer isViewer />
         </group>
 
         {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}

@@ -7,20 +7,26 @@ import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 
 // ============================================================================
-// COLLECTION TOOL EDITOR
+// ZONE TOOL EDITOR
 // ============================================================================
 
 /**
- * Collection tool editor component
- * Uses multi-point polygon drawing to create collection zones
+ * Zone tool editor component
+ * Uses multi-point polygon drawing to create zones
  */
-export function CollectionToolEditor() {
-  const addCollection = useEditor((state) => state.addCollection)
+export function ZoneToolEditor() {
+  const addZone = useEditor((state) => state.addZone)
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const setActiveTool = useEditor((state) => state.setActiveTool)
 
+  // Helper to generate zone name based on current count
+  const getNextZoneName = () => {
+    const zones = useEditor.getState().scene.zones || []
+    return `Zone ${zones.length + 1}`
+  }
+
   // Use ref to persist state across renders
-  const collectionStateRef = useRef<{
+  const zoneStateRef = useRef<{
     points: Array<[number, number]>
     lastCursorPoint: [number, number] | null
   }>({
@@ -73,7 +79,7 @@ export function CollectionToolEditor() {
     const handleGridClick = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      const points = collectionStateRef.current.points
+      const points = zoneStateRef.current.points
       let [x, y] = e.position
 
       // Snap to grid from last point if we have points
@@ -83,34 +89,33 @@ export function CollectionToolEditor() {
 
       // Check if clicking on the first point to close the shape
       if (points.length >= 3 && x === points[0][0] && y === points[0][1]) {
-        // Create the collection with the polygon
-        const collectionName = `Zone ${Date.now().toString(36).slice(-4)}`
-        addCollection(collectionName, selectedFloorId, points)
+        // Create the zone with the polygon
+        addZone(getNextZoneName(), selectedFloorId, points)
 
         // Reset state
-        collectionStateRef.current.points = []
-        collectionStateRef.current.lastCursorPoint = null
+        zoneStateRef.current.points = []
+        zoneStateRef.current.lastCursorPoint = null
 
         // Emit event for preview cleanup
-        emitter.emit('collection:preview', { points: [] })
+        emitter.emit('zone:preview', { points: [] })
 
-        // Deactivate tool after creating collection
+        // Deactivate tool after creating zone
         setActiveTool(null)
       } else {
         // Add point to polygon
         const newPoints = [...points, [x, y] as [number, number]]
-        collectionStateRef.current.points = newPoints
-        collectionStateRef.current.lastCursorPoint = null
+        zoneStateRef.current.points = newPoints
+        zoneStateRef.current.lastCursorPoint = null
 
         // Emit event for preview
-        emitter.emit('collection:preview', { points: newPoints, cursorPoint: null })
+        emitter.emit('zone:preview', { points: newPoints, cursorPoint: null })
       }
     }
 
     const handleGridMove = (e: GridEvent) => {
       if (!selectedFloorId) return
 
-      const points = collectionStateRef.current.points
+      const points = zoneStateRef.current.points
       if (points.length === 0) return
 
       let [x, y] = e.position
@@ -119,46 +124,45 @@ export function CollectionToolEditor() {
       ;[x, y] = calculateSnapPoint(points[points.length - 1], [x, y])
 
       // Only update if cursor point changed
-      const lastCursorPoint = collectionStateRef.current.lastCursorPoint
+      const lastCursorPoint = zoneStateRef.current.lastCursorPoint
       if (!lastCursorPoint || lastCursorPoint[0] !== x || lastCursorPoint[1] !== y) {
-        collectionStateRef.current.lastCursorPoint = [x, y]
+        zoneStateRef.current.lastCursorPoint = [x, y]
 
         // Emit event for preview with cursor point
-        emitter.emit('collection:preview', { points, cursorPoint: [x, y] })
+        emitter.emit('zone:preview', { points, cursorPoint: [x, y] })
       }
     }
 
     const handleGridDoubleClick = (_e: GridEvent) => {
       if (!selectedFloorId) return
 
-      const points = collectionStateRef.current.points
+      const points = zoneStateRef.current.points
 
       // Need at least 3 points to form a polygon
       if (points.length >= 3) {
-        // Create the collection with the polygon
-        const collectionName = `Zone ${Date.now().toString(36).slice(-4)}`
-        addCollection(collectionName, selectedFloorId, points)
+        // Create the zone with the polygon
+        addZone(getNextZoneName(), selectedFloorId, points)
 
         // Reset state
-        collectionStateRef.current.points = []
-        collectionStateRef.current.lastCursorPoint = null
+        zoneStateRef.current.points = []
+        zoneStateRef.current.lastCursorPoint = null
 
         // Emit event for preview cleanup
-        emitter.emit('collection:preview', { points: [] })
+        emitter.emit('zone:preview', { points: [] })
 
-        // Deactivate tool after creating collection
+        // Deactivate tool after creating zone
         setActiveTool(null)
       }
     }
 
     const handleToolCancel = () => {
       // Cancel if we've started drawing
-      if (collectionStateRef.current.points.length > 0) {
-        collectionStateRef.current.points = []
-        collectionStateRef.current.lastCursorPoint = null
+      if (zoneStateRef.current.points.length > 0) {
+        zoneStateRef.current.points = []
+        zoneStateRef.current.lastCursorPoint = null
 
         // Emit event for preview cleanup
-        emitter.emit('collection:preview', { points: [] })
+        emitter.emit('zone:preview', { points: [] })
       }
     }
 
@@ -176,24 +180,24 @@ export function CollectionToolEditor() {
       emitter.off('tool:cancel', handleToolCancel)
 
       // Also cleanup preview on unmount
-      emitter.emit('collection:preview', { points: [] })
+      emitter.emit('zone:preview', { points: [] })
     }
-  }, [addCollection, selectedFloorId, setActiveTool])
+  }, [addZone, selectedFloorId, setActiveTool])
 
   return null
 }
 
 // ============================================================================
-// REGISTER COLLECTION COMPONENT
+// REGISTER ZONE COMPONENT
 // ============================================================================
 
 registerComponent({
-  nodeType: 'collection',
+  nodeType: 'zone',
   nodeName: 'Zone',
   editorMode: 'building',
-  toolName: 'collection',
+  toolName: 'zone',
   toolIcon: Hexagon,
-  schema: undefined, // Not a node, just a tool that creates collections
-  nodeEditor: CollectionToolEditor,
+  schema: undefined, // Not a node, just a tool that creates zones
+  nodeEditor: ZoneToolEditor,
   nodeRenderer: null,
 })
