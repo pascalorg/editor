@@ -25,6 +25,7 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectFloor = useEditor((state) => state.selectFloor)
   const editorMode = useEditor((state) => state.editorMode)
+  const activeTool = useEditor((state) => state.activeTool)
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
       // Helper to find level IDs for expansion logic
@@ -191,6 +192,13 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
       setInitialized(true)
     }
   }, [siteIds, expandedIds, initialized])
+
+  // Auto-expand zones section when zone tool is active
+  useEffect(() => {
+    if (activeTool === 'zone' && !expandedIds.includes('zones-section')) {
+      setExpandedIds((prev) => [...prev, 'zones-section'])
+    }
+  }, [activeTool, expandedIds])
 
   const handleTreeSelectionChange = (selectedIds: string[]) => {
     const selectedId = selectedIds[0]

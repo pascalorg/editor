@@ -19,6 +19,12 @@ export function ZoneToolEditor() {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const setActiveTool = useEditor((state) => state.setActiveTool)
 
+  // Helper to generate zone name based on current count
+  const getNextZoneName = () => {
+    const zones = useEditor.getState().scene.zones || []
+    return `Zone ${zones.length + 1}`
+  }
+
   // Use ref to persist state across renders
   const zoneStateRef = useRef<{
     points: Array<[number, number]>
@@ -84,8 +90,7 @@ export function ZoneToolEditor() {
       // Check if clicking on the first point to close the shape
       if (points.length >= 3 && x === points[0][0] && y === points[0][1]) {
         // Create the zone with the polygon
-        const zoneName = `Zone ${Date.now().toString(36).slice(-4)}`
-        addZone(zoneName, selectedFloorId, points)
+        addZone(getNextZoneName(), selectedFloorId, points)
 
         // Reset state
         zoneStateRef.current.points = []
@@ -136,8 +141,7 @@ export function ZoneToolEditor() {
       // Need at least 3 points to form a polygon
       if (points.length >= 3) {
         // Create the zone with the polygon
-        const zoneName = `Zone ${Date.now().toString(36).slice(-4)}`
-        addZone(zoneName, selectedFloorId, points)
+        addZone(getNextZoneName(), selectedFloorId, points)
 
         // Reset state
         zoneStateRef.current.points = []
