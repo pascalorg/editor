@@ -9,8 +9,8 @@ import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { emitter } from '@/events/bus'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@/lib/scenegraph/schema/zones'
 import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import type { Zone } from '@/lib/scenegraph/schema/zones'
 
 /**
  * Generate edge line points for a box
@@ -116,9 +116,7 @@ export function LevelHoverManager() {
   const selectedZonePolygon = useEditor(
     useShallow((state: StoreState) => {
       if (!state.selectedZoneId) return null
-      const zone = (state.scene.zones || []).find(
-        (c) => c.id === state.selectedZoneId,
-      )
+      const zone = (state.scene.zones || []).find((c) => c.id === state.selectedZoneId)
       return zone?.polygon || null
     }),
   )
@@ -149,9 +147,11 @@ export function LevelHoverManager() {
     if (!polygon || polygon.length < 3) return false
     let inside = false
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], zi = polygon[i][1]
-      const xj = polygon[j][0], zj = polygon[j][1]
-      if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+      const xi = polygon[i][0],
+        zi = polygon[i][1]
+      const xj = polygon[j][0],
+        zj = polygon[j][1]
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
         inside = !inside
       }
     }
@@ -220,8 +220,10 @@ export function LevelHoverManager() {
     if (!polygon || polygon.length < 3) return null
 
     // Calculate bounds from polygon points
-    let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
-    let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY,
+      maxZ = Number.NEGATIVE_INFINITY
 
     for (const [x, z] of polygon) {
       minX = Math.min(minX, x)
@@ -460,7 +462,7 @@ export function LevelHoverManager() {
         }
         // Clicked outside building when building not selected
         if (state.selectedNodeIds.length === 0 && !state.selectedFloorId) {
-             emitter.emit('interaction:click', { type: 'void', id: null })
+          emitter.emit('interaction:click', { type: 'void', id: null })
         }
         return
       }
@@ -517,7 +519,10 @@ export function LevelHoverManager() {
                       ctrlKey: event.ctrlKey,
                     })
                   } else {
-                    const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
+                    const nodeData = useEditor
+                      .getState()
+                      .graph.getNodeById(nodeId as any)
+                      ?.data()
                     emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
                     useEditor.setState({
                       // Keep zone selected when clicking nodes within it
@@ -614,13 +619,15 @@ export function LevelHoverManager() {
       }
     }
 
+    const debouncedOnPointerMove = debounce(onPointerMove, 16)
+
     canvas.addEventListener('pointerdown', onPointerDown)
-    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointermove', debouncedOnPointerMove)
     canvas.addEventListener('click', onClick)
 
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointermove', debouncedOnPointerMove)
       canvas.removeEventListener('click', onClick)
     }
   }, [camera, gl, scene, levelIds])
@@ -644,4 +651,15 @@ export function LevelHoverManager() {
   const color = colorMap[hoverMode]
 
   return <HighlightBox box={hoveredBox} color={color} />
+}
+
+function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  ms: number,
+): (...args: Parameters<T>) => void {
+  let timeoutId: ReturnType<typeof setTimeout>
+  return (...args) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(...args), ms)
+  }
 }
