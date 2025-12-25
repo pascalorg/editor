@@ -619,15 +619,15 @@ export function LevelHoverManager() {
       }
     }
 
-    const debouncedOnPointerMove = debounce(onPointerMove, 16)
+    const throttledOnPointerMove = throttle(onPointerMove, 16)
 
     canvas.addEventListener('pointerdown', onPointerDown)
-    canvas.addEventListener('pointermove', debouncedOnPointerMove)
+    canvas.addEventListener('pointermove', throttledOnPointerMove)
     canvas.addEventListener('click', onClick)
 
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('pointermove', debouncedOnPointerMove)
+      canvas.removeEventListener('pointermove', throttledOnPointerMove)
       canvas.removeEventListener('click', onClick)
     }
   }, [camera, gl, scene, levelIds])
@@ -652,14 +652,18 @@ export function LevelHoverManager() {
 
   return <HighlightBox box={hoveredBox} color={color} />
 }
-
-function debounce<T extends (...args: any[]) => any>(
+function throttle<T extends (...args: any[]) => any>(
   fn: T,
-  ms: number,
+  delay: number,
 ): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout>
-  return (...args) => {
-    clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => fn(...args), ms)
+  let lastCall = 0
+
+  return (...args: Parameters<T>) => {
+    const now = Date.now()
+
+    if (now - lastCall >= delay) {
+      lastCall = now
+      fn(...args)
+    }
   }
 }

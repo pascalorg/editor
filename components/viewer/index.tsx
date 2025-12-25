@@ -1,7 +1,7 @@
 'use client'
 
 import { animated, useSpring } from '@react-spring/three'
-import { OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
+import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import { NodesDebugger } from '@/components/debug/nodes-debugger'
@@ -9,8 +9,8 @@ import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite
 import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
-import { ZoneRenderer } from '../nodes/zone/zone-renderer'
 import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
+import { ZoneRenderer } from '../nodes/zone/zone-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { DebugBoundingBoxes } from './debug-bounding-boxes'
@@ -246,38 +246,40 @@ export default function Viewer({
         )}
         <color args={['#212134']} attach="background" />
 
-        {/* Large background plane to capture clicks outside of floor hit targets */}
-        {/* Note: LevelHoverManager handles all click logic via native DOM events, so we disable */}
-        {/* R3F raycasting here to prevent onBackgroundClick from interfering with level selection */}
-        <mesh
-          onClick={onBackgroundClick}
-          position={[0, -0.1, 0]}
-          raycast={disabledRaycast}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[1000, 1000]} />
-          <meshBasicMaterial opacity={0} transparent />
-        </mesh>
+        <Bvh>
+          {/* Large background plane to capture clicks outside of floor hit targets */}
+          {/* Note: LevelHoverManager handles all click logic via native DOM events, so we disable */}
+          {/* R3F raycasting here to prevent onBackgroundClick from interfering with level selection */}
+          <mesh
+            onClick={onBackgroundClick}
+            position={[0, -0.1, 0]}
+            raycast={disabledRaycast}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[1000, 1000]} />
+            <meshBasicMaterial opacity={0} transparent />
+          </mesh>
 
-        {/* Loop through all floors and render grid + walls for each */}
-        <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          {building && <NodeRenderer isViewer nodeId={building.id} />}
-        </group>
+          {/* Loop through all floors and render grid + walls for each */}
+          <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+            {building && <NodeRenderer isViewer nodeId={building.id} />}
+          </group>
 
-        {/* Zone polygons */}
-        <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-          <ZoneRenderer isViewer />
-        </group>
+          {/* Zone polygons */}
+          <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+            <ZoneRenderer isViewer />
+          </group>
 
-        {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}
-        <SelectionControls controls={false} />
-        <LevelHoverManager />
-        <ViewerCustomControls />
-        <EnvironmentRenderer />
-        {/* Infinite floor - rendered outside export group */}
-        <InfiniteFloor />
-        {/* Debug bounding boxes for selected nodes */}
-        <DebugBoundingBoxes />
+          {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}
+          <SelectionControls controls={false} />
+          <LevelHoverManager />
+          <ViewerCustomControls />
+          <EnvironmentRenderer />
+          {/* Infinite floor - rendered outside export group */}
+          <InfiniteFloor />
+          {/* Debug bounding boxes for selected nodes */}
+          <DebugBoundingBoxes />
+        </Bvh>
       </Canvas>
 
       {/* Debug panel - only in development */}

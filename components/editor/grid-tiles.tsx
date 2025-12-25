@@ -30,13 +30,13 @@ const modeConfig: Record<
 const GRID_SIZE = 30 // 30m x 30m
 
 export const GridTiles = memo(() => {
+  const arrowRef = useRef<THREE.Group>(null)
   const meshRef = useRef<THREE.Mesh>(null)
 
   const lastClickTimeRef = useRef<number>(0)
 
   const gridSize = 10_000 // Large enough to be effectively infinite
   const hoveredIntersection = useRef<{ x: number; y: number } | null>(null)
-  const setPointerPosition = useEditor((state) => state.setPointerPosition)
   const movingCamera = useEditor((state) => state.movingCamera)
   const controlMode = useEditor((state) => state.controlMode)
   const handleIntersectionClick = useCallback(
@@ -60,27 +60,18 @@ export const GridTiles = memo(() => {
     })
   }, [movingCamera])
 
-  const handleIntersectionHover = useCallback(
-    (x: number, y: number | null) => {
-      if (y === null) return
+  const handleIntersectionHover = useCallback((x: number, y: number | null) => {
+    if (y === null) return
 
-      emitter.emit('grid:move', {
-        position: [x, y],
-      })
-      // Update cursor position for proximity grid on non-base levels
-      if (y !== null) {
-        setPointerPosition([x, y])
-      } else {
-        setPointerPosition(null)
-      }
-    },
-    [setPointerPosition],
-  )
+    emitter.emit('grid:move', {
+      position: [x, y],
+    })
+    arrowRef.current?.position.set(x * TILE_SIZE, 0, y * TILE_SIZE)
+  }, [])
 
   const handlePointerLeave = useCallback(() => {
     hoveredIntersection.current = null
-    setPointerPosition(null)
-  }, [setPointerPosition])
+  }, [])
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -88,7 +79,6 @@ export const GridTiles = memo(() => {
     // Don't show hover indicators in guide mode (reserved for image manipulation)
     if (controlMode === 'guide') {
       hoveredIntersection.current = null
-      setPointerPosition(null)
       return
     }
 
@@ -180,7 +170,9 @@ export const GridTiles = memo(() => {
 
   return (
     <>
-      {controlMode !== 'select' && controlMode !== 'edit' && <DownArrow />}
+      <group ref={arrowRef}>
+        {controlMode !== 'select' && controlMode !== 'edit' && <DownArrow />}
+      </group>
       {/* Invisible plane for raycasting */}
       <mesh
         onPointerDown={handlePointerDown}
@@ -234,7 +226,6 @@ const DownArrow = () => {
   const coneRadius = 0.1
   const iconCircleRadius = 0.15
 
-  const cursorPosition = useEditor((state) => state.pointerPosition)
   const controlMode = useEditor((state) => state.controlMode)
   const activeTool = useEditor((state) => state.activeTool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
@@ -245,8 +236,6 @@ const DownArrow = () => {
       iconRef.current.position.y = Math.sin(clock.getElapsedTime() * 1) * 0.05
     }
   })
-
-  if (!cursorPosition) return null
 
   // Get icon and colors
   const { icon: Icon, bgColor, iconColor } = modeConfig[controlMode]
@@ -262,7 +251,9 @@ const DownArrow = () => {
   const isBuildingWithTool = controlMode === 'building' && buildingIconSrc
 
   return (
-    <group position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}>
+    <group
+    //position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}
+    >
       {/* Icon circle at the top */}
       <group ref={iconRef}>
         <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>

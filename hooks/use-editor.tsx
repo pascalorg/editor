@@ -29,6 +29,7 @@ import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
 import { RoomDetectionProcessor } from '@/lib/processors/room-detection-processor'
 import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
+import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -39,7 +40,6 @@ import {
   type SceneNode,
   SiteNode,
 } from '@/lib/scenegraph/schema/index'
-import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
 import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
@@ -334,7 +334,6 @@ export type StoreState = {
   isManipulatingImage: boolean
   isManipulatingScan: boolean
   handleClear: () => void
-  pointerPosition: [number, number] | null
   debug: boolean
 
   addToCollectionState: AddToCollectionState
@@ -398,7 +397,6 @@ export type StoreState = {
   setIsManipulatingImage: (manipulating: boolean) => void
   setIsManipulatingScan: (manipulating: boolean) => void
   setDebug: (debug: boolean) => void
-  setPointerPosition: (position: [number, number] | null) => void
   setSelectedItem: (item: any) => void
   setSelectedMaterial: (material: string) => void
   setPaintMode: (mode: PaintMode) => void
@@ -666,7 +664,6 @@ const useStore = create<StoreState>()(
         isManipulatingImage: false,
         isManipulatingScan: false,
         debug: false,
-        pointerPosition: null,
         addToCollectionState: { isActive: false, nodeIds: [] },
         selectedCollectionId: null,
         selectedZoneId: null,
@@ -1553,9 +1550,6 @@ const useStore = create<StoreState>()(
           // Push to undo stack (execute is a no-op since we already have current values)
           commandManager.execute(command, graph)
         },
-
-        setPointerPosition: (position: [number, number] | null) =>
-          set({ pointerPosition: position }),
 
         // Zone operations
         addZone: (name: string, levelId: string, polygon: [number, number][]) => {
