@@ -1,7 +1,7 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import { enableMapSet, produce } from 'immer'
+import { enableMapSet} from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
@@ -42,7 +42,7 @@ import {
 import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
-import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
+import { SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
 type AssetMap = Record<string, string>
