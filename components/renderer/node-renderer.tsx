@@ -1,4 +1,5 @@
-import { animated, useSpring } from '@react-spring/three'
+import { useSpring } from '@react-spring/three'
+import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -12,35 +13,38 @@ interface NodeRendererProps {
   isViewer?: boolean // Set to true when rendering in viewer mode
 }
 
-interface AnimatedGroupProps {
+interface AnimatedLevelGroupProps {
   children: React.ReactNode
-  position: [number, number, number]
+  basePosition: [number, number, number]
   rotation: [number, number, number]
   visible?: boolean
   name: string
   userData: any
+  levelIndex: number
 }
 
-interface GroupProps {
-  children: React.ReactNode
-  position: [number, number, number]
-  rotation: [number, number, number]
-  visible?: boolean
-  name: string
-  userData: any
-  shouldAnimate: boolean
-}
-
-const AnimatedGroup = ({
+/**
+ * Animated group specifically for level nodes.
+ * Subscribes to levelMode changes imperatively and animates Y position with spring.
+ */
+const AnimatedLevelGroup = ({
   children,
-  position,
+  basePosition,
   rotation,
   visible,
   name,
   userData,
-}: AnimatedGroupProps) => {
-  const { springPosition } = useSpring({
-    springPosition: position,
+  levelIndex,
+}: AnimatedLevelGroupProps) => {
+  const groupRef = useRef<THREE.Group>(null)
+
+  // Calculate initial Y based on current levelMode
+  const getTargetY = (levelMode: 'stacked' | 'exploded') =>
+    basePosition[1] + (levelMode === 'exploded' ? levelIndex * FLOOR_SPACING : 0)
+
+  // Spring for smooth Y position transitions
+  const { y } = useSpring({
+    y: getTargetY(useEditor.getState().levelMode),
     config: {
       mass: 1,
       tension: 170,
@@ -48,46 +52,35 @@ const AnimatedGroup = ({
     },
   })
 
-  return (
-    <animated.group
-      name={name}
-      position={springPosition as any}
-      rotation={rotation}
-      userData={userData}
-      visible={visible}
-    >
-      {children}
-    </animated.group>
-  )
-}
+  // Subscribe to levelMode changes and trigger spring animation
+  useEffect(() => {
+    let prevLevelMode = useEditor.getState().levelMode
+    const unsubscribe = useEditor.subscribe((state) => {
+      if (state.levelMode !== prevLevelMode) {
+        prevLevelMode = state.levelMode
+        y.start(getTargetY(state.levelMode))
+      }
+    })
+    return unsubscribe
+  }, [levelIndex, basePosition, y])
 
-const Group = ({
-  children,
-  position,
-  rotation,
-  visible,
-  name,
-  userData,
-  shouldAnimate,
-}: GroupProps) => {
-  if (shouldAnimate) {
-    return (
-      <AnimatedGroup
-        name={name}
-        position={position}
-        rotation={rotation}
-        userData={userData}
-        visible={visible}
-      >
-        {children}
-      </AnimatedGroup>
-    )
-  }
+  // Update spring target when basePosition changes
+  useEffect(() => {
+    y.start(getTargetY(useEditor.getState().levelMode))
+  }, [basePosition, y])
+
+  // Apply animated Y position to group each frame
+  useFrame(() => {
+    if (groupRef.current) {
+      groupRef.current.position.y = y.get()
+    }
+  })
 
   return (
     <group
       name={name}
-      position={position}
+      position={[basePosition[0], basePosition[1], basePosition[2]]}
+      ref={groupRef}
       rotation={rotation}
       userData={userData}
       visible={visible}
@@ -99,7 +92,6 @@ const Group = ({
 
 export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   const {
-    levelMode,
     nodeType,
     nodeVisible,
     nodePosition,
@@ -112,7 +104,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
-        levelMode: state.levelMode,
         nodeType: node?.type,
         nodeVisible: (node as any)?.visible, // TODO: Type correctly
         nodeChildrenIdsStr: JSON.stringify(
@@ -130,21 +121,14 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     [nodeChildrenIdsStr],
   )
 
-  const gridItemPosition = useMemo(() => {
-    let levelOffset = 0
-    if (nodeType === 'level' && levelMode === 'exploded') {
-      levelOffset = nodeLevel * FLOOR_SPACING
-    }
+  // Base position without level offset (level offset is handled by AnimatedLevelGroup)
+  const basePosition = useMemo(() => {
     if (nodePosition) {
       const [x, y] = nodePosition
-      return [x * TILE_SIZE, (nodeElevation || 0) + levelOffset, y * TILE_SIZE] as [
-        number,
-        number,
-        number,
-      ]
+      return [x * TILE_SIZE, nodeElevation || 0, y * TILE_SIZE] as [number, number, number]
     }
-    return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
-  }, [nodePosition, nodeElevation, nodeLevel, levelMode, nodeType])
+    return [0, nodeElevation || 0, 0] as [number, number, number]
+  }, [nodePosition, nodeElevation])
 
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
@@ -215,31 +199,53 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return null
   }
 
+  const rotation: [number, number, number] = Array.isArray(nodeRotation)
+    ? (nodeRotation as [number, number, number])
+    : [0, nodeRotation ?? 0, 0]
+
+  const children = (
+    <>
+      {/* Use registry renderer if available, otherwise fallback to direct imports */}
+      {RegistryRenderer && <RegistryRenderer nodeId={nodeId} />}
+
+      {/* Recursively render children INSIDE parent group - children use relative positions */}
+      {nodeChildrenIds.length > 0 &&
+        nodeChildrenIds.map((childNodeId: AnyNode['id']) => (
+          <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
+        ))}
+    </>
+  )
+
+  // Level nodes use AnimatedLevelGroup for smooth levelMode transitions
+  if (nodeType === 'level') {
+    return (
+      <group ref={groupRef}>
+        <AnimatedLevelGroup
+          basePosition={basePosition}
+          levelIndex={nodeLevel || 0}
+          name={nodeId}
+          rotation={rotation}
+          userData={{ nodeId }}
+          visible={nodeVisible}
+        >
+          {children}
+        </AnimatedLevelGroup>
+      </group>
+    )
+  }
+
+  // Non-level nodes use a plain group
   return (
     <group ref={groupRef}>
-      <Group
+      <group
         name={nodeId}
-        position={gridItemPosition}
-        rotation={
-          Array.isArray(nodeRotation)
-            ? (nodeRotation as [number, number, number])
-            : [0, nodeRotation ?? 0, 0]
-        }
-        shouldAnimate={nodeType === 'level'}
-        userData={{
-          nodeId,
-        }}
+        position={basePosition}
+        rotation={rotation}
+        userData={{ nodeId }}
         visible={nodeVisible}
       >
-        {/* Use registry renderer if available, otherwise fallback to direct imports */}
-        {RegistryRenderer && <RegistryRenderer nodeId={nodeId} />}
-
-        {/* Recursively render children INSIDE parent group - children use relative positions */}
-        {nodeChildrenIds.length > 0 &&
-          nodeChildrenIds.map((childNodeId: AnyNode['id']) => (
-            <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
-          ))}
-      </Group>
+        {children}
+      </group>
     </group>
   )
 }
