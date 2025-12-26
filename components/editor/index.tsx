@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  Bvh,
   Environment,
   GizmoHelper,
   GizmoViewport,
@@ -42,13 +43,6 @@ export default function Editor({ className }: { className?: string }) {
   const cameraMode = useEditor((state) => state.cameraMode)
   const rootId = useEditor((state) => state.scene.root.children?.[0]?.id)
 
-  const setPointerPosition = useEditor((state) => state.setPointerPosition)
-
-  // Clear cursor position when switching floors to prevent grid artifacts
-  useEffect(() => {
-    setPointerPosition?.(null)
-  }, [setPointerPosition])
-
   useKeyboard()
 
   return (
@@ -74,25 +68,27 @@ export default function Editor({ className }: { className?: string }) {
       )}
       <color args={['#212134']} attach="background" />
 
-      {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
-      <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
-      <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
+      <Bvh>
+        {/* TMP FUNNY TO SEE TODO: Create a true node with it's "builder" to be able to move it and save it */}
+        <Gltf position={[0, 0.02, 0]} scale={0.1} src="/models/Banana.glb" />
+        <Gltf castShadow position={[0, 0, 0]} receiveShadow scale={0.09} src="/models/Human.glb" />
 
-      {SHOW_GRID && <InfiniteLines />}
+        {SHOW_GRID && <InfiniteLines />}
 
-      {/* Infinite floor - rendered outside export group */}
-      <InfiniteFloor />
+        {/* Infinite floor - rendered outside export group */}
+        <InfiniteFloor />
 
-      {/* Loop through all floors and render grid + walls for each */}
-      <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-        {rootId && <NodeRenderer nodeId={rootId} />}
-      </group>
+        {/* Loop through all floors and render grid + walls for each */}
+        <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+          {rootId && <NodeRenderer nodeId={rootId} />}
+        </group>
 
-      {/* Zone polygons and boundary editor */}
-      <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
-        <ZoneRenderer />
-        <ZoneBoundaryEditor />
-      </group>
+        {/* Zone polygons and boundary editor */}
+        <group position={[-GRID_SIZE / 2, 0, -GRID_SIZE / 2]}>
+          <ZoneRenderer />
+          <ZoneBoundaryEditor />
+        </group>
+      </Bvh>
 
       <ControlModeComponents />
 
