@@ -4,7 +4,7 @@ import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intersection, Object3D } from 'three'
-import { Box3, Mesh, Raycaster, Vector2 } from 'three'
+import { Box3, Mesh, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
 import { emitter } from '@/events/bus'
@@ -331,6 +331,24 @@ export function LevelHoverManager() {
     return hasContent ? box : null
   }
 
+  // Ground plane for raycasting (y = 0)
+  const groundPlane = useMemo(() => new Plane(new Vector3(0, 1, 0), 0), [])
+
+  // Check if ray intersects the ground within a bounding box (XZ projection)
+  const rayIntersectsGroundInBox = (raycaster: Raycaster, box: Box3): boolean => {
+    const intersection = new Vector3()
+    const hit = raycaster.ray.intersectPlane(groundPlane, intersection)
+    if (!hit) return false
+
+    // Check if the intersection point is within the box's XZ bounds
+    return (
+      intersection.x >= box.min.x &&
+      intersection.x <= box.max.x &&
+      intersection.z >= box.min.z &&
+      intersection.z <= box.max.z
+    )
+  }
+
   const getNodeIdFromIntersection = (object: Object3D): string | null => {
     let current: Object3D | null = object
     while (current) {
@@ -368,14 +386,15 @@ export function LevelHoverManager() {
       // Hover logic based on current state
       switch (currentState) {
         case 'idle': {
-          // Can only hover building
+          // Can only hover building (including ground within building bounds)
           if (buildingId) {
             const buildingObject = scene.getObjectByName(buildingId)
             if (buildingObject) {
-              const intersects = raycasterRef.current.intersectObject(buildingObject, true)
-              if (intersects.length > 0) {
-                const box = calculateBoundsExcludingImages(buildingObject)
-                if (box && !box.isEmpty()) {
+              const box = calculateBoundsExcludingImages(buildingObject)
+              if (box && !box.isEmpty()) {
+                // Check if hovering building meshes OR ground within building footprint
+                const intersects = raycasterRef.current.intersectObject(buildingObject, true)
+                if (intersects.length > 0 || rayIntersectsGroundInBox(raycasterRef.current, box)) {
                   setHoveredBox(box)
                   setHoverMode('building')
                   return
@@ -389,14 +408,15 @@ export function LevelHoverManager() {
         }
 
         case 'building': {
-          // Can hover levels
+          // Can hover levels (including ground within level bounds)
           for (const levelId of levelIds) {
             const levelObject = scene.getObjectByName(levelId)
             if (levelObject) {
-              const intersects = raycasterRef.current.intersectObject(levelObject, true)
-              if (intersects.length > 0) {
-                const box = calculateBoundsExcludingImages(levelObject)
-                if (box && !box.isEmpty()) {
+              const box = calculateBoundsExcludingImages(levelObject)
+              if (box && !box.isEmpty()) {
+                // Check if hovering level meshes OR ground within level footprint
+                const intersects = raycasterRef.current.intersectObject(levelObject, true)
+                if (intersects.length > 0 || rayIntersectsGroundInBox(raycasterRef.current, box)) {
                   setHoveredBox(box)
                   setHoverMode('level')
                   return
@@ -496,18 +516,21 @@ export function LevelHoverManager() {
 
       switch (currentState) {
         case 'idle': {
-          // Click building -> transition to building (and maybe auto to level)
+          // Click building (including ground within building bounds) -> transition to building
           if (buildingId) {
             const buildingObject = scene.getObjectByName(buildingId)
             if (buildingObject) {
-              const intersects = raycasterRef.current.intersectObject(buildingObject, true)
-              if (intersects.length > 0) {
-                transitionToBuilding()
-                // Auto-select level if only one
-                if (shouldSkipLevelSelection) {
-                  transitionToLevel(levelIds[0])
+              const box = calculateBoundsExcludingImages(buildingObject)
+              if (box && !box.isEmpty()) {
+                const intersects = raycasterRef.current.intersectObject(buildingObject, true)
+                if (intersects.length > 0 || rayIntersectsGroundInBox(raycasterRef.current, box)) {
+                  transitionToBuilding()
+                  // Auto-select level if only one
+                  if (shouldSkipLevelSelection) {
+                    transitionToLevel(levelIds[0])
+                  }
+                  return
                 }
-                return
               }
             }
           }
@@ -515,17 +538,26 @@ export function LevelHoverManager() {
         }
 
         case 'building': {
-          // Click level -> transition to level
+          // Click level (including ground within level bounds) -> transition to level
           let clickedLevelId: string | null = null
           let clickedLevelDistance = Number.POSITIVE_INFINITY
 
           for (const levelId of levelIds) {
             const levelObject = scene.getObjectByName(levelId)
             if (levelObject) {
-              const intersects = raycasterRef.current.intersectObject(levelObject, true)
-              if (intersects.length > 0 && intersects[0].distance < clickedLevelDistance) {
-                clickedLevelDistance = intersects[0].distance
-                clickedLevelId = levelId
+              const box = calculateBoundsExcludingImages(levelObject)
+              if (box && !box.isEmpty()) {
+                const intersects = raycasterRef.current.intersectObject(levelObject, true)
+                if (intersects.length > 0 && intersects[0].distance < clickedLevelDistance) {
+                  clickedLevelDistance = intersects[0].distance
+                  clickedLevelId = levelId
+                } else if (
+                  clickedLevelDistance === Number.POSITIVE_INFINITY &&
+                  rayIntersectsGroundInBox(raycasterRef.current, box)
+                ) {
+                  // Ground click within level bounds - use a large distance so mesh clicks take priority
+                  clickedLevelId = levelId
+                }
               }
             }
           }
