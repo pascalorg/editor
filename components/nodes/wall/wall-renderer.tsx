@@ -5,6 +5,7 @@ import { Edges, Line, useGLTF } from '@react-three/drei'
 import { type ThreeEvent, useFrame } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/react/shallow'
 import { emitter } from '@/events/bus'
 import { useEditor } from '@/hooks/use-editor'
@@ -1093,9 +1094,6 @@ const WallOpening = ({ nodeId }: { nodeId: string }) => {
   )
 }
 
-import { lerp } from 'three/src/math/MathUtils.js'
-import type { GLTF } from 'three-stdlib'
-
 type GLTFResult = GLTF & {
   nodes: {
     cutout?: THREE.Mesh
@@ -1114,19 +1112,28 @@ const WallCutout = ({
   modelScale: ItemNode['modelScale']
 }) => {
   const { nodes } = useGLTF(src) as GLTFResult
-
   const { update } = useCSG()
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    if (!nodes.cutout?.geometry) {
-      return
-    }
-    update()
-  }, [update, nodes])
+    if (!nodes.cutout?.geometry) return
 
-  if (!nodes.cutout?.geometry) {
-    return null
-  }
+    // Check if BVH methods are available, if not wait a frame
+    if (typeof nodes.cutout.geometry.disposeBoundsTree !== 'function') {
+      const timeout = setTimeout(() => setIsReady(true), 0)
+      return () => clearTimeout(timeout)
+    }
+
+    setIsReady(true)
+  }, [nodes.cutout?.geometry])
+
+  useEffect(() => {
+    if (isReady && nodes.cutout?.geometry) {
+      update()
+    }
+  }, [isReady, update, nodes.cutout?.geometry])
+
+  if (!(isReady && nodes.cutout?.geometry)) return null
 
   return (
     <Subtraction
@@ -1134,6 +1141,7 @@ const WallCutout = ({
       position-x={modelPosition[0] + position[0] * TILE_SIZE}
       position-y={modelPosition[1]}
       position-z={modelPosition[2] + position[1] * TILE_SIZE}
+      raycast={() => null}
       scale={modelScale}
     >
       <meshStandardMaterial color={'skyblue'} opacity={0.5} transparent />
