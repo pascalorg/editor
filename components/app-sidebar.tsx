@@ -14,7 +14,7 @@ import {
   Upload,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayersMenu } from '@/components/layers-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,6 +58,13 @@ export function AppSidebar() {
   const [mounted, setMounted] = useState(false)
   const [excludeImages, setExcludeImages] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Sidebar resize state
+  const [sidebarWidth, setSidebarWidth] = useState(256)
+  const [isResizing, setIsResizing] = useState(false)
+
+  const MIN_WIDTH = 200
+  const MAX_WIDTH = 600
 
   // Wait for client-side hydration to complete before rendering store-dependent content
   useEffect(() => {
@@ -125,8 +132,55 @@ export function AppSidebar() {
     }
   }
 
+  // Resize functionality
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsResizing(true)
+    e.preventDefault()
+  }, [])
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return
+
+      const newWidth = e.clientX
+      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
+        setSidebarWidth(newWidth)
+      }
+    },
+    [isResizing],
+  )
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false)
+  }, [])
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'ew-resize'
+      document.body.style.userSelect = 'none'
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp])
+
   return (
-    <Sidebar className={cn('dark text-white')} variant="floating">
+    <Sidebar
+      className={cn('dark text-white')}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      variant="floating"
+    >
       <SidebarHeader className="flex-row items-center justify-between px-2 py-3">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-lg">Pascal Editor</h3>
@@ -269,6 +323,16 @@ export function AppSidebar() {
           </DialogHeader>
         </DialogContent>
       </Dialog>
+
+      {/* Resize Handle */}
+      <div
+        className={cn(
+          'absolute top-0 right-0 h-full w-1 cursor-ew-resize bg-transparent transition-colors hover:bg-sidebar-border',
+          isResizing && 'bg-sidebar-border',
+        )}
+        onMouseDown={handleMouseDown}
+        style={{ right: '8px' }}
+      />
     </Sidebar>
   )
 }
