@@ -64,7 +64,7 @@ export function AppSidebar() {
   const [isResizing, setIsResizing] = useState(false)
 
   const MIN_WIDTH = 200
-  const MAX_WIDTH = 600
+  const MAX_WIDTH = 800
 
   // Wait for client-side hydration to complete before rendering store-dependent content
   useEffect(() => {
@@ -142,9 +142,10 @@ export function AppSidebar() {
     (e: MouseEvent) => {
       if (!isResizing) return
 
+      const gapX = 10;
       const newWidth = e.clientX
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        setSidebarWidth(newWidth)
+        setSidebarWidth(newWidth + gapX)
       }
     },
     [isResizing],
