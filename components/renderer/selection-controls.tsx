@@ -897,7 +897,7 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
       // Trigger bounds update over next few frames (wait for THREE to update)
       rotationFramesRef.current = 3
     },
-    [individualBounds, scene],
+    [individualBounds],
   )
 
   const controlPanelRef = useRef<THREE.Group>(null)
