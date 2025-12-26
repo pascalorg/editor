@@ -1,5 +1,5 @@
 import { animated, useSpring } from '@react-spring/three'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
@@ -19,8 +19,6 @@ interface AnimatedGroupProps {
   visible?: boolean
   name: string
   userData: any
-  // activeTool: any
-  // movingCamera: boolean
 }
 
 interface GroupProps {
@@ -31,8 +29,6 @@ interface GroupProps {
   name: string
   userData: any
   shouldAnimate: boolean
-  // activeTool: any
-  // movingCamera: boolean
 }
 
 const AnimatedGroup = ({
@@ -42,8 +38,6 @@ const AnimatedGroup = ({
   visible,
   name,
   userData,
-  // activeTool,
-  // movingCamera,
 }: AnimatedGroupProps) => {
   const { springPosition } = useSpring({
     springPosition: position,
@@ -52,7 +46,6 @@ const AnimatedGroup = ({
       tension: 170,
       friction: 26,
     },
-    // immediate: !!activeTool || movingCamera,
   })
 
   return (
@@ -114,13 +107,11 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     nodeElevation,
     nodeLevel,
     nodeChildrenIdsStr,
-    selectedFloorId,
   } = useEditor(
     useShallow((state) => {
       const handle = state.graph.getNodeById(nodeId as AnyNodeId)
       const node = handle?.data()
       return {
-        selectedFloorId: state.selectedFloorId,
         levelMode: state.levelMode,
         nodeType: node?.type,
         nodeVisible: (node as any)?.visible, // TODO: Type correctly
@@ -134,7 +125,6 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
       }
     }),
   )
-
   const nodeChildrenIds = useMemo(
     () => JSON.parse(nodeChildrenIdsStr || '[]'),
     [nodeChildrenIdsStr],
@@ -156,18 +146,47 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
   }, [nodePosition, nodeElevation, nodeLevel, levelMode, nodeType])
 
-  console.log('rerendering node', nodeId)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
+  // Ref for the outer group to control visibility imperatively
+  const groupRef = useRef<THREE.Group>(null)
+
+  // For level nodes in viewer mode, subscribe to selectedFloorId changes
+  // and update visibility imperatively without causing re-renders
+  const isViewerLevelNode = isViewer && nodeType === 'level'
+  useEffect(() => {
+    if (!isViewerLevelNode) return
+
+    // Update visibility based on selectedFloorId
+    const updateVisibility = (selectedFloorId: string | null) => {
+      if (groupRef.current) {
+        const shouldBeVisible = !selectedFloorId || selectedFloorId === nodeId
+        groupRef.current.visible = shouldBeVisible
+      }
+    }
+
+    // Set initial state
+    updateVisibility(useEditor.getState().selectedFloorId)
+
+    // Subscribe to store changes and check if selectedFloorId changed
+    let prevSelectedFloorId = useEditor.getState().selectedFloorId
+    const unsubscribe = useEditor.subscribe((state) => {
+      if (state.selectedFloorId !== prevSelectedFloorId) {
+        prevSelectedFloorId = state.selectedFloorId
+        updateVisibility(state.selectedFloorId)
+      }
+    })
+
+    return unsubscribe
+  }, [isViewerLevelNode, nodeId])
+
   // Filter nodes based on viewer display mode (only in viewer mode)
+  // Note: Level visibility is now handled imperatively via subscription above
   const shouldRenderNode = useMemo(() => {
     // Viewer-specific visibility logic
     if (isViewer) {
-      // Level visibility: if a floor is selected, hide other floors
+      // Level nodes are always rendered (visibility controlled imperatively)
       if (nodeType === 'level') {
-        if (selectedFloorId && selectedFloorId !== nodeId) {
-          return false
-        }
         return true
       }
 
@@ -186,9 +205,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
 
     // Default: render everything (editor mode or when no filtering is needed)
     return true
-  }, [nodeType, viewerDisplayMode, isViewer, selectedFloorId, nodeId])
-
-  const groupRef = useRef<THREE.Group>(null)
+  }, [nodeType, viewerDisplayMode, isViewer])
 
   // Try to get renderer from registry first
   const RegistryRenderer = getRenderer(nodeType || 'unknown')
@@ -199,7 +216,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
   }
 
   return (
-    <>
+    <group ref={groupRef}>
       <Group
         name={nodeId}
         position={gridItemPosition}
@@ -214,17 +231,15 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
         }}
         visible={nodeVisible}
       >
-        <group ref={groupRef}>
-          {/* Use registry renderer if available, otherwise fallback to direct imports */}
-          {RegistryRenderer && <RegistryRenderer nodeId={nodeId} />}
+        {/* Use registry renderer if available, otherwise fallback to direct imports */}
+        {RegistryRenderer && <RegistryRenderer nodeId={nodeId} />}
 
-          {/* Recursively render children INSIDE parent group - children use relative positions */}
-          {nodeChildrenIds.length > 0 &&
-            nodeChildrenIds.map((childNodeId: AnyNode['id']) => (
-              <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
-            ))}
-        </group>
+        {/* Recursively render children INSIDE parent group - children use relative positions */}
+        {nodeChildrenIds.length > 0 &&
+          nodeChildrenIds.map((childNodeId: AnyNode['id']) => (
+            <NodeRenderer isViewer={isViewer} key={childNodeId} nodeId={childNodeId} />
+          ))}
       </Group>
-    </>
+    </group>
   )
 }
