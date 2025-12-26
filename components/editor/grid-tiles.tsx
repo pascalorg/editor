@@ -66,7 +66,7 @@ export const GridTiles = memo(() => {
     emitter.emit('grid:move', {
       position: [x, y],
     })
-    arrowRef.current?.position.set(x * TILE_SIZE, 0, y * TILE_SIZE)
+    arrowRef.current?.position.set(x * TILE_SIZE, 2, y * TILE_SIZE)
   }, [])
 
   const handlePointerLeave = useCallback(() => {
@@ -251,9 +251,7 @@ const DownArrow = () => {
   const isBuildingWithTool = controlMode === 'building' && buildingIconSrc
 
   return (
-    <group
-    //position={[cursorPosition[0] * TILE_SIZE, 2, cursorPosition[1] * TILE_SIZE]}
-    >
+    <group>
       {/* Icon circle at the top */}
       <group ref={iconRef}>
         <Html center position={[0, iconCircleRadius + 0.05, 0]} style={{ pointerEvents: 'none' }}>
