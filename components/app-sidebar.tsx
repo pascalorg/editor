@@ -142,7 +142,7 @@ export function AppSidebar() {
     (e: MouseEvent) => {
       if (!isResizing) return
 
-      const gapX = 10;
+      const gapX = 10
       const newWidth = e.clientX
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth + gapX)
@@ -328,8 +328,8 @@ export function AppSidebar() {
       {/* Resize Handle */}
       <div
         className={cn(
-          'absolute top-0 right-0 h-full w-1 cursor-ew-resize bg-transparent transition-colors hover:bg-sidebar-border',
-          isResizing && 'bg-sidebar-border',
+          'absolute top-2.5 right-0 bottom-2.5 w-1 cursor-ew-resize bg-transparent hover:bg-blue-500/20',
+          isResizing && 'bg-blue-500/40',
         )}
         onMouseDown={handleMouseDown}
         style={{ right: '8px' }}
