@@ -175,7 +175,7 @@ export function ProximityGrid({
 }: ProximityGridProps) {
   const materialRef = useRef<any>(null)
 
-  const pointerPosition = useEditor((state) => state.pointerPosition)
+  // const pointerPosition = useEditor((state) => state.pointerPosition)
 
   // Extract all segments and points from components
   const { segments, points } = useMemo(() => {
@@ -387,12 +387,12 @@ export function ProximityGrid({
     }
 
     // Add cursor position as a point to reveal grid around it
-    if (pointerPosition) {
-      const [x, y] = pointerPosition
-      const worldX = x * gridSize + offset[0]
-      const worldY = y * gridSize + offset[1]
-      points.push(new Vector2(worldX, worldY))
-    }
+    // if (pointerPosition) {
+    //   const [x, y] = pointerPosition
+    //   const worldX = x * gridSize + offset[0]
+    //   const worldY = y * gridSize + offset[1]
+    //   points.push(new Vector2(worldX, worldY))
+    // }
 
     return { segments, points }
   }, [
@@ -400,7 +400,7 @@ export function ProximityGrid({
     floorId,
     gridSize,
     offset,
-    pointerPosition,
+    // pointerPosition,
     previewWall,
     previewRoof,
     previewRoom,
@@ -429,7 +429,7 @@ export function ProximityGrid({
   })
 
   // Don't render if no elements and no cursor
-  if (segments.length === 0 && points.length === 0 && !pointerPosition) {
+  if (segments.length === 0 && points.length === 0) {
     return null
   }
 
@@ -445,7 +445,12 @@ export function ProximityGrid({
   }
 
   return (
-    <mesh name="__proximity_grid__" position={[0, 0.005, 0]} renderOrder={-1} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh
+      name="__proximity_grid__"
+      position={[0, 0.005, 0]}
+      renderOrder={-1}
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
       <planeGeometry args={[maxSize, maxSize]} />
       <proximityGridMaterial
         depthTest
