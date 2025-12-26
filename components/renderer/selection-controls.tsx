@@ -661,11 +661,54 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
           if (!handle) continue
 
           const node = handle.data() as any
-          if (!(node && 'rotation' in node)) continue
 
-          updateNode(nodeId, {
-            rotation: node.rotation + angle,
-          })
+          if (isWallNode(node)) {
+            if (!(node?.start && node.end)) continue
+            const angle = Math.PI / 4
+            const start = { x: node.start[0], y: node.start[1] }
+            const end = { x: node.end[0], y: node.end[1] }
+
+            // 1. Compute wall center (pivot)
+            const pivot = {
+              x: (start.x + end.x) / 2,
+              y: (start.y + end.y) / 2,
+            }
+
+            const cos = Math.cos(angle)
+            const sin = Math.sin(angle)
+
+            // 2. Rotate a point around pivot
+            const rotate = (p: { x: number; y: number }) => {
+              const dx = p.x - pivot.x
+              const dy = p.y - pivot.y
+
+              return {
+                x: pivot.x + dx * cos - dy * sin,
+                y: pivot.y + dx * sin + dy * cos,
+              }
+            }
+
+            const newStart = rotate(start)
+            const newEnd = rotate(end)
+
+            // 3. Recompute rotation from direction
+            const dirX = newEnd.x - newStart.x
+            const dirY = newEnd.y - newStart.y
+            const newRotation = Math.atan2(-dirY, dirX)
+
+            // 4. Update node (position == start)
+            updateNode(nodeId, {
+              start: [newStart.x, newStart.y],
+              end: [newEnd.x, newEnd.y],
+              position: [newStart.x, newStart.y],
+              rotation: newRotation,
+            })
+          } else {
+            if (!(node && 'rotation' in node)) continue
+            updateNode(nodeId, {
+              rotation: node.rotation + angle,
+            })
+          }
         }
       }
 
@@ -831,11 +874,54 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
           if (!handle) continue
 
           const node = handle.data() as any
-          if (!(node && 'rotation' in node)) continue
 
-          updateNode(nodeId, {
-            rotation: node.rotation + angle,
-          })
+          if (isWallNode(node)) {
+            if (!(node?.start && node.end)) continue
+            const angle = -Math.PI / 4
+            const start = { x: node.start[0], y: node.start[1] }
+            const end = { x: node.end[0], y: node.end[1] }
+
+            // 1. Compute wall center (pivot)
+            const pivot = {
+              x: (start.x + end.x) / 2,
+              y: (start.y + end.y) / 2,
+            }
+
+            const cos = Math.cos(angle)
+            const sin = Math.sin(angle)
+
+            // 2. Rotate a point around pivot
+            const rotate = (p: { x: number; y: number }) => {
+              const dx = p.x - pivot.x
+              const dy = p.y - pivot.y
+
+              return {
+                x: pivot.x + dx * cos - dy * sin,
+                y: pivot.y + dx * sin + dy * cos,
+              }
+            }
+
+            const newStart = rotate(start)
+            const newEnd = rotate(end)
+
+            // 3. Recompute rotation from direction
+            const dirX = newEnd.x - newStart.x
+            const dirY = newEnd.y - newStart.y
+            const newRotation = Math.atan2(-dirY, dirX)
+
+            // 4. Update node (position == start)
+            updateNode(nodeId, {
+              start: [newStart.x, newStart.y],
+              end: [newEnd.x, newEnd.y],
+              position: [newStart.x, newStart.y],
+              rotation: newRotation,
+            })
+          } else {
+            if (!(node && 'rotation' in node)) continue
+            updateNode(nodeId, {
+              rotation: node.rotation + angle,
+            })
+          }
         }
       }
 
