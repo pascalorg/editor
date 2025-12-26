@@ -5,7 +5,7 @@ import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import { NodesDebugger } from '@/components/debug/nodes-debugger'
-import { InfiniteFloor, useGridFadeControls } from '@/components/editor/infinite-floor'
+import { InfiniteFloor } from '@/components/editor/infinite-floor'
 import { emitter, type InteractionClickEvent } from '@/events/bus'
 import { useEditor, type WallMode } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
@@ -17,10 +17,8 @@ import { DebugBoundingBoxes } from './debug-bounding-boxes'
 import { LevelHoverManager } from './level-hover-manager'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
-const TILE_SIZE = 0.5 // 50cm grid spacing
 export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
 export const GRID_SIZE = 30 // 30m x 30m
-const SHOW_GRID = true // Show grid by default
 
 export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
 
@@ -29,54 +27,14 @@ export const VIEWER_DEFAULT_ZOOM = 80 // Orthographic camera zoom level (higher 
 export const VIEWER_INITIAL_CAMERA_DISTANCE = 30 // Initial camera distance from origin (matches editor)
 export const VIEWER_DESELECTED_CAMERA_DISTANCE = 6 // Camera distance when no floor is selected
 
-interface ViewerProps {
-  className?: string
-  /** Initial zoom level for orthographic camera (default: 80) */
-  defaultZoom?: number
-  /** When true, posts selection changes to parent window for iframe embedding */
-  isEmbedded?: boolean
-  /** Initial wall mode for viewer */
-  defaultWallMode?: WallMode
-}
-
-export default function Viewer({
-  className,
-  defaultZoom = VIEWER_DEFAULT_ZOOM,
-  isEmbedded = false,
-  defaultWallMode = 'cutaway',
-}: ViewerProps) {
-  // Use individual selectors for better performance
-  const building = useEditor((state) =>
-    state.scene.root.children?.[0]?.children.find((c) => c.type === 'building'),
-  )
-  const site = useEditor((state) => state.scene.root.children?.[0])
-
+/**
+ * Lightweight subcomponent that handles selection state and iframe messaging.
+ * Isolates re-renders caused by selection changes from the main Viewer tree.
+ */
+function SelectionMessageBridge({ isEmbedded }: { isEmbedded: boolean }) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectedZoneId = useEditor((state) => state.selectedZoneId)
-  const viewMode = useEditor((state) => state.viewMode)
-  const cameraMode = useEditor((state) => state.cameraMode)
-  const setCameraMode = useEditor((state) => state.setCameraMode)
-  const levelMode = useEditor((state) => state.levelMode)
-  const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
-  const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
-  const selectFloor = useEditor((state) => state.selectFloor)
-  const selectZone = useEditor((state) => state.selectZone)
-
-  // Grid fade controls for infinite base floor
-  const { fadeDistance, fadeStrength } = useGridFadeControls()
-
-  // Reset state on mount to ensure clean start (stacked, no selection)
-  useEffect(() => {
-    useEditor.setState({
-      selectedNodeIds: [],
-      selectedFloorId: null,
-      selectedZoneId: null,
-      levelMode: 'stacked',
-      viewMode: 'full',
-      wallMode: defaultWallMode,
-    })
-  }, [])
 
   // Notify parent window about selection changes (for embedded mode)
   useEffect(() => {
@@ -122,6 +80,50 @@ export default function Viewer({
       emitter.off('interaction:click', handleClick)
     }
   }, [isEmbedded])
+
+  // This component renders nothing - it only handles side effects
+  return null
+}
+
+interface ViewerProps {
+  className?: string
+  /** Initial zoom level for orthographic camera (default: 80) */
+  defaultZoom?: number
+  /** When true, posts selection changes to parent window for iframe embedding */
+  isEmbedded?: boolean
+  /** Initial wall mode for viewer */
+  defaultWallMode?: WallMode
+}
+
+export default function Viewer({
+  className,
+  defaultZoom = VIEWER_DEFAULT_ZOOM,
+  isEmbedded = false,
+  defaultWallMode = 'cutaway',
+}: ViewerProps) {
+  // Use individual selectors for better performance
+  const building = useEditor((state) =>
+    state.scene.root.children?.[0]?.children.find((c) => c.type === 'building'),
+  )
+  const site = useEditor((state) => state.scene.root.children?.[0])
+
+  const cameraMode = useEditor((state) => state.cameraMode)
+  const setCameraMode = useEditor((state) => state.setCameraMode)
+  const toggleLevelMode = useEditor((state) => state.toggleLevelMode)
+  const selectFloor = useEditor((state) => state.selectFloor)
+  const selectZone = useEditor((state) => state.selectZone)
+
+  // Reset state on mount to ensure clean start (stacked, no selection)
+  useEffect(() => {
+    useEditor.setState({
+      selectedNodeIds: [],
+      selectedFloorId: null,
+      selectedZoneId: null,
+      levelMode: 'stacked',
+      viewMode: 'full',
+      wallMode: defaultWallMode,
+    })
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -194,21 +196,7 @@ export default function Viewer({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    cameraMode,
-    setCameraMode,
-    toggleLevelMode,
-    selectFloor,
-    selectZone,
-    selectedNodeIds,
-    selectedZoneId,
-    selectedFloorId,
-    building,
-    site,
-  ])
-
-  const tileSize = TILE_SIZE
-  const showGrid = SHOW_GRID
+  }, [cameraMode, setCameraMode, toggleLevelMode, selectFloor, selectZone, building, site])
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     // Prevent browser context menu
@@ -231,6 +219,9 @@ export default function Viewer({
 
   return (
     <div className="relative h-full w-full">
+      {/* Lightweight bridge for selection state -> iframe messaging */}
+      <SelectionMessageBridge isEmbedded={isEmbedded} />
+
       <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
         <SoftShadows focus={1} samples={16} size={25} />
         {cameraMode === 'perspective' ? (

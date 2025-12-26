@@ -368,7 +368,6 @@ const createWallDataSelector = (levelId: string) => {
 
 export function WallRenderer({ nodeId }: WallRendererProps) {
   const debug = useEditor((state) => state.debug)
-
   const {
     isPreview,
     canPlace,

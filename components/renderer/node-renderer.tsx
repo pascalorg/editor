@@ -156,6 +156,7 @@ export function NodeRenderer({ nodeId, isViewer = false }: NodeRendererProps) {
     return [0, (nodeElevation || 0) + levelOffset, 0] as [number, number, number]
   }, [nodePosition, nodeElevation, nodeLevel, levelMode, nodeType])
 
+  console.log('rerendering node', nodeId)
   const viewerDisplayMode = useEditor((state) => state.viewerDisplayMode)
 
   // Filter nodes based on viewer display mode (only in viewer mode)
