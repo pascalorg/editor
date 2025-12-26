@@ -101,7 +101,7 @@ export function LevelHoverManager() {
   const { scene, camera, gl } = useThree()
 
   const [hoveredBox, setHoveredBox] = useState<Box3 | null>(null)
-  const [hoverMode, setHoverMode] = useState<'level' | 'room' | 'node' | 'building' | null>(null)
+  const [hoverMode, setHoverMode] = useState<'level' | 'node' | 'building' | null>(null)
 
   const raycasterRef = useRef(new Raycaster())
   const isDrag = useRef(false)
@@ -179,7 +179,6 @@ export function LevelHoverManager() {
 
   const transitionToBuilding = useCallback(() => {
     if (!buildingId) return
-    console.log('[transitionToBuilding] setting state to building')
     emitter.emit('interaction:click', { type: 'building', id: buildingId })
     useEditor.setState({
       selectedNodeIds: [buildingId],
@@ -188,7 +187,6 @@ export function LevelHoverManager() {
       levelMode: 'exploded',
       viewMode: 'full',
     })
-    console.log('[transitionToBuilding] done, state:', useEditor.getState().selectedFloorId, useEditor.getState().selectedZoneId)
   }, [buildingId])
 
   const transitionToLevel = useCallback(
@@ -224,44 +222,36 @@ export function LevelHoverManager() {
   // Go back one step in the hierarchy, respecting single-level skip
   const goBack = useCallback(() => {
     const currentState = deriveState()
-    console.log('[goBack] currentState:', currentState, 'shouldSkipLevelSelection:', shouldSkipLevelSelection)
 
     switch (currentState) {
       case 'node':
         // Node -> Zone (clear node selection, keep zone)
         // If no zone was selected and single level, go back to building
         if (useEditor.getState().selectedZoneId) {
-          console.log('[goBack] node -> clearing nodes, keeping zone')
           useEditor.setState({ selectedNodeIds: [] })
         } else if (shouldSkipLevelSelection) {
-          console.log('[goBack] node -> building (skip level)')
           transitionToBuilding()
         } else {
-          console.log('[goBack] node -> level')
           useEditor.setState({ selectedNodeIds: [] })
         }
         break
 
       case 'zone':
         // Zone -> Level (to select other zones)
-        console.log('[goBack] zone -> level')
         useEditor.setState({ selectedZoneId: null })
         break
 
       case 'level':
         // Level -> Building, or Idle if single level (skip building)
         if (shouldSkipLevelSelection) {
-          console.log('[goBack] level -> idle (skip building)')
           transitionToIdle()
         } else {
-          console.log('[goBack] level -> building')
           transitionToBuilding()
         }
         break
 
       case 'building':
         // Building -> Idle
-        console.log('[goBack] building -> idle')
         transitionToIdle()
         break
     }
@@ -339,28 +329,6 @@ export function LevelHoverManager() {
     })
 
     return hasContent ? box : null
-  }
-
-  const calculateRoomBounds = (zone: Zone): Box3 | null => {
-    const polygon = zone.polygon
-    if (!polygon || polygon.length < 3) return null
-
-    let minX = Number.POSITIVE_INFINITY,
-      maxX = Number.NEGATIVE_INFINITY
-    let minZ = Number.POSITIVE_INFINITY,
-      maxZ = Number.NEGATIVE_INFINITY
-
-    for (const [x, z] of polygon) {
-      minX = Math.min(minX, x)
-      maxX = Math.max(maxX, x)
-      minZ = Math.min(minZ, z)
-      maxZ = Math.max(maxZ, z)
-    }
-
-    const box = new Box3()
-    box.min.set(minX, 0, minZ)
-    box.max.set(maxX, 3, maxZ)
-    return box
   }
 
   const getNodeIdFromIntersection = (object: Object3D): string | null => {
@@ -442,34 +410,10 @@ export function LevelHoverManager() {
         }
 
         case 'level': {
-          // Can hover zones on current level
+          // Can hover other levels (for switching)
           const currentFloorId = state.selectedFloorId
           if (!currentFloorId) break
 
-          const levelObject = scene.getObjectByName(currentFloorId)
-          if (!levelObject) break
-
-          const intersects = raycasterRef.current.intersectObject(levelObject, true)
-          if (intersects.length > 0) {
-            const currentRoomZones = (state.scene.zones || []).filter(
-              (c) => c.levelId === currentFloorId,
-            )
-
-            if (currentRoomZones.length > 0) {
-              const hit = intersects[0]
-              const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomZones)
-              if (room) {
-                const box = calculateRoomBounds(room)
-                if (box) {
-                  setHoveredBox(box)
-                  setHoverMode('room')
-                  return
-                }
-              }
-            }
-          }
-
-          // Check if hovering other levels (for switching)
           for (const levelId of levelIds) {
             if (levelId === currentFloorId) continue
             const otherLevelObject = scene.getObjectByName(levelId)
@@ -597,7 +541,6 @@ export function LevelHoverManager() {
         }
 
         case 'level': {
-          console.log('[onClick] level case')
           const currentFloorId = state.selectedFloorId
           if (!currentFloorId) break
 
@@ -654,7 +597,6 @@ export function LevelHoverManager() {
         }
 
         case 'zone': {
-          console.log('[onClick] zone case')
           const currentFloorId = state.selectedFloorId
           const currentZoneId = state.selectedZoneId
           if (!currentFloorId) break
@@ -663,7 +605,6 @@ export function LevelHoverManager() {
           if (!levelObject) break
 
           const intersects = raycasterRef.current.intersectObject(levelObject, true)
-          console.log('[onClick] zone - intersects:', intersects.length)
 
           if (intersects.length > 0) {
             // Check if clicked on a node within zone
@@ -808,7 +749,6 @@ export function LevelHoverManager() {
 
   const colorMap = {
     level: '#3b82f6',
-    room: '#f59e0b',
     node: '#22c55e',
     building: '#ffffff',
   }
