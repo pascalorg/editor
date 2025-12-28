@@ -13,7 +13,6 @@ import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
 import { ZoneRenderer } from '../nodes/zone/zone-renderer'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
-import { DebugBoundingBoxes } from './debug-bounding-boxes'
 import { LevelHoverManager } from './level-hover-manager'
 import { ViewerCustomControls } from './viewer-custom-controls'
 
@@ -268,8 +267,6 @@ export default function Viewer({
           <EnvironmentRenderer />
           {/* Infinite floor - rendered outside export group */}
           <InfiniteFloor />
-          {/* Debug bounding boxes for selected nodes */}
-          <DebugBoundingBoxes />
         </Bvh>
       </Canvas>
 

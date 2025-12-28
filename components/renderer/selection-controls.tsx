@@ -881,8 +881,8 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
   return (
     <group>
       {/* Individual bounding boxes for each selected item - oriented */}
-      {/* In viewer zone mode, skip individual boxes and only show combined */}
-      {!isViewerZoneMode &&
+      {/* Only show in editor mode (controls=true), skip in viewer mode entirely */}
+      {controls &&
         individualBounds.map((bounds, i) => (
           <SelectionBox
             center={bounds.center}
