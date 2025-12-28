@@ -546,21 +546,39 @@ export function LevelHoverManager() {
 
         case 'building': {
           // Can hover levels (including ground within level bounds)
+          // Find the closest level by intersection distance
+          let closestLevelId: string | null = null
+          let closestLevelBox: Box3 | null = null
+          let closestDistance = Number.POSITIVE_INFINITY
+
           for (const levelId of levelIds) {
             const levelObject = scene.getObjectByName(levelId)
             if (levelObject) {
               const box = calculateBoundsExcludingImages(levelObject)
               if (box && !box.isEmpty()) {
-                // Check if hovering level meshes OR ground within level footprint
                 const intersects = raycasterRef.current.intersectObject(levelObject, true)
-                if (intersects.length > 0 || rayIntersectsGroundInBox(raycasterRef.current, box)) {
-                  setHoveredBox(box)
-                  setHoverMode('level')
-                  return
+                if (intersects.length > 0 && intersects[0].distance < closestDistance) {
+                  closestDistance = intersects[0].distance
+                  closestLevelId = levelId
+                  closestLevelBox = box
+                } else if (
+                  closestDistance === Number.POSITIVE_INFINITY &&
+                  rayIntersectsGroundInBox(raycasterRef.current, box)
+                ) {
+                  // Ground click within level bounds - only use if no mesh hit yet
+                  closestLevelId = levelId
+                  closestLevelBox = box
                 }
               }
             }
           }
+
+          if (closestLevelId && closestLevelBox) {
+            setHoveredBox(closestLevelBox)
+            setHoverMode('level')
+            return
+          }
+
           setHoveredBox(null)
           setHoverMode(null)
           break
