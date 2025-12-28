@@ -305,6 +305,8 @@ export function LevelHoverManager() {
 
   const transitionToIdle = useCallback(() => {
     emitter.emit('interaction:click', { type: 'void', id: null })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.setState({
       selectedNodeIds: [],
       selectedZoneId: null,
@@ -317,6 +319,8 @@ export function LevelHoverManager() {
   const transitionToBuilding = useCallback(() => {
     if (!buildingId) return
     emitter.emit('interaction:click', { type: 'building', id: buildingId })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.setState({
       selectedNodeIds: [buildingId],
       selectedZoneId: null,
@@ -330,6 +334,8 @@ export function LevelHoverManager() {
     (levelId: string) => {
       if (!buildingId) return
       emitter.emit('interaction:click', { type: 'level', id: levelId })
+      setHoveredBox(null)
+      setHoverMode(null)
       useEditor.setState({
         selectedNodeIds: [buildingId],
         selectedZoneId: null,
@@ -341,6 +347,8 @@ export function LevelHoverManager() {
 
   const transitionToZone = useCallback((zoneId: string, zone: Zone) => {
     emitter.emit('interaction:click', { type: 'zone', id: zoneId, data: zone })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.getState().selectZone(zoneId)
   }, [])
 
@@ -350,6 +358,8 @@ export function LevelHoverManager() {
       .graph.getNodeById(nodeId as any)
       ?.data()
     emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.setState({
       selectedZoneId: keepZone ? useEditor.getState().selectedZoneId : null,
       selectedNodeIds: [nodeId],
