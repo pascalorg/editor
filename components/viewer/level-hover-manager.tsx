@@ -567,26 +567,8 @@ export function LevelHoverManager() {
         }
 
         case 'level': {
-          // Can hover other levels (for switching)
-          const currentFloorId = state.selectedFloorId
-          if (!currentFloorId) break
-
-          for (const levelId of levelIds) {
-            if (levelId === currentFloorId) continue
-            const otherLevelObject = scene.getObjectByName(levelId)
-            if (otherLevelObject) {
-              const otherIntersects = raycasterRef.current.intersectObject(otherLevelObject, true)
-              if (otherIntersects.length > 0) {
-                const box = calculateBoundsExcludingImages(otherLevelObject)
-                if (box && !box.isEmpty()) {
-                  setHoveredBox(box)
-                  setHoverMode('level')
-                  return
-                }
-              }
-            }
-          }
-
+          // When a level is selected, don't allow hovering other levels
+          // User must go back (Escape or click void) to switch levels
           setHoveredBox(null)
           setHoverMode(null)
           break
@@ -715,7 +697,7 @@ export function LevelHoverManager() {
 
           const levelObject = scene.getObjectByName(currentFloorId)
 
-          // Check if clicked on a zone
+          // Check if clicked on a zone within the current level
           if (levelObject) {
             const intersects = raycasterRef.current.intersectObject(levelObject, true)
             if (intersects.length > 0) {
@@ -734,33 +716,7 @@ export function LevelHoverManager() {
             }
           }
 
-          // Check if clicked on another level
-          let clickedLevelId: string | null = null
-          let clickedLevelDistance = Number.POSITIVE_INFINITY
-
-          for (const levelId of levelIds) {
-            const lvlObject = scene.getObjectByName(levelId)
-            if (lvlObject) {
-              const intersects = raycasterRef.current.intersectObject(lvlObject, true)
-              if (intersects.length > 0 && intersects[0].distance < clickedLevelDistance) {
-                clickedLevelDistance = intersects[0].distance
-                clickedLevelId = levelId
-              }
-            }
-          }
-
-          if (clickedLevelId) {
-            if (clickedLevelId === currentFloorId) {
-              // Clicked same level background -> go back
-              goBack()
-            } else {
-              // Clicked different level -> switch
-              transitionToLevel(clickedLevelId)
-            }
-            return
-          }
-
-          // Click void -> go back
+          // Click anywhere else -> go back (no level switching allowed)
           goBack()
           break
         }
