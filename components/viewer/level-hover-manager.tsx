@@ -4,6 +4,7 @@ import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intersection, Object3D } from 'three'
+import * as THREE from 'three'
 import { Box3, Mesh, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
@@ -59,20 +60,157 @@ interface HighlightBoxProps {
   color: string
 }
 
+/**
+ * Gradient shader material for highlight box walls
+ * Fades from transparent at bottom to semi-transparent at top
+ */
+const HighlightGradientMaterial = ({
+  color,
+  opacity,
+  height,
+  baseY,
+}: {
+  color: string
+  opacity: number
+  height: number
+  baseY: number
+}) => {
+  const materialRef = useRef<THREE.ShaderMaterial>(null)
+
+  const uniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uHeight: { value: height },
+      uBaseY: { value: baseY },
+    }),
+    [],
+  )
+
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uColor.value.set(color)
+      materialRef.current.uniforms.uOpacity.value = opacity
+      materialRef.current.uniforms.uHeight.value = height
+      materialRef.current.uniforms.uBaseY.value = baseY
+    }
+  }, [color, opacity, height, baseY])
+
+  return (
+    <shaderMaterial
+      depthTest={false}
+      depthWrite={false}
+      fragmentShader={`
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uHeight;
+        uniform float uBaseY;
+        varying float vWorldY;
+
+        void main() {
+          // Calculate relative height from base (0 at bottom, 1 at top)
+          float relativeHeight = (vWorldY - uBaseY) / uHeight;
+          float alpha = relativeHeight * relativeHeight; // Quadratic falloff
+
+          gl_FragColor = vec4(uColor, alpha * uOpacity);
+        }
+      `}
+      ref={materialRef}
+      side={THREE.DoubleSide}
+      transparent
+      uniforms={uniforms}
+      vertexShader={`
+        varying float vWorldY;
+
+        void main() {
+          // Pass world Y position to fragment shader
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldY = worldPos.y;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `}
+    />
+  )
+}
+
 function HighlightBox({ box, color }: HighlightBoxProps) {
   const points = useMemo(() => getBoxEdgePoints(box), [box])
 
+  // Create wall geometry for the box - only walls, no top/bottom caps
+  const wallGeometry = useMemo(() => {
+    const min = box.min
+    const max = box.max
+    const height = max.y - min.y
+
+    // Create 4 wall planes manually for cleaner geometry
+    const geometry = new THREE.BufferGeometry()
+
+    // Define the 4 walls as quads (2 triangles each)
+    // Wall vertices: each wall has 4 corners
+    const vertices = new Float32Array([
+      // Front wall (min.z side)
+      min.x, min.y, min.z,
+      max.x, min.y, min.z,
+      max.x, max.y, min.z,
+      min.x, max.y, min.z,
+      // Back wall (max.z side)
+      max.x, min.y, max.z,
+      min.x, min.y, max.z,
+      min.x, max.y, max.z,
+      max.x, max.y, max.z,
+      // Left wall (min.x side)
+      min.x, min.y, max.z,
+      min.x, min.y, min.z,
+      min.x, max.y, min.z,
+      min.x, max.y, max.z,
+      // Right wall (max.x side)
+      max.x, min.y, min.z,
+      max.x, min.y, max.z,
+      max.x, max.y, max.z,
+      max.x, max.y, min.z,
+    ])
+
+    // Indices for 4 walls (2 triangles per wall)
+    const indices = new Uint16Array([
+      // Front wall
+      0, 1, 2, 0, 2, 3,
+      // Back wall
+      4, 5, 6, 4, 6, 7,
+      // Left wall
+      8, 9, 10, 8, 10, 11,
+      // Right wall
+      12, 13, 14, 12, 14, 15,
+    ])
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+    geometry.computeVertexNormals()
+
+    return geometry
+  }, [box])
+
+  const boxHeight = box.max.y - box.min.y
+  const baseY = box.min.y
+
   return (
-    <Line
-      color={color}
-      depthTest={false}
-      depthWrite={false}
-      lineWidth={2}
-      points={points}
-      renderOrder={998}
-      segments
-      transparent
-    />
+    <group>
+      {/* Gradient fill walls */}
+      <mesh geometry={wallGeometry} renderOrder={997}>
+        <HighlightGradientMaterial baseY={baseY} color={color} height={boxHeight} opacity={0.3} />
+      </mesh>
+
+      {/* Edge lines */}
+      <Line
+        color={color}
+        depthTest={false}
+        depthWrite={false}
+        lineWidth={2}
+        points={points}
+        renderOrder={998}
+        segments
+        transparent
+      />
+    </group>
   )
 }
 
@@ -132,7 +270,8 @@ export function LevelHoverManager() {
     const hasBuilding = buildingId && state.selectedNodeIds.includes(buildingId)
     const hasFloor = !!state.selectedFloorId
     const hasZone = !!state.selectedZoneId
-    const hasNodes = state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
+    const hasNodes =
+      state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
 
     if (hasNodes) return 'node'
     if (hasZone) return 'zone'
@@ -207,17 +346,17 @@ export function LevelHoverManager() {
     useEditor.getState().selectZone(zoneId)
   }, [])
 
-  const transitionToNode = useCallback(
-    (nodeId: string, keepZone: boolean) => {
-      const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
-      emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
-      useEditor.setState({
-        selectedZoneId: keepZone ? useEditor.getState().selectedZoneId : null,
-        selectedNodeIds: [nodeId],
-      })
-    },
-    [],
-  )
+  const transitionToNode = useCallback((nodeId: string, keepZone: boolean) => {
+    const nodeData = useEditor
+      .getState()
+      .graph.getNodeById(nodeId as any)
+      ?.data()
+    emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
+    useEditor.setState({
+      selectedZoneId: keepZone ? useEditor.getState().selectedZoneId : null,
+      selectedNodeIds: [nodeId],
+    })
+  }, [])
 
   // Go back one step in the hierarchy, respecting single-level skip
   const goBack = useCallback(() => {
