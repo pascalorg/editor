@@ -3,6 +3,7 @@
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { emitter, type ViewApplyEvent } from '@/events/bus'
@@ -10,6 +11,51 @@ import { type StoreState, useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, GRID_SIZE, VIEWER_INITIAL_CAMERA_DISTANCE, WALL_HEIGHT } from './index'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
+
+/**
+ * Calculate bounds for an object, computing XZ center at local origin (Y=0)
+ * This avoids issues with animated Y positions in exploded view
+ */
+function calculateLocalBoundsCenter(object: THREE.Object3D): { x: number; z: number } | null {
+  const box = new Box3()
+  let hasContent = false
+
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry) {
+      // Skip grids and other background elements
+      if (child.name === '__infinite_grid__' || child.name === '__proximity_grid__') {
+        return
+      }
+
+      // Get geometry bounds
+      if (!child.geometry.boundingBox) {
+        child.geometry.computeBoundingBox()
+      }
+
+      if (child.geometry.boundingBox) {
+        const childBox = child.geometry.boundingBox.clone()
+
+        // Transform by the mesh's world matrix, but we'll extract XZ only
+        child.updateWorldMatrix(true, false)
+        childBox.applyMatrix4(child.matrixWorld)
+
+        // Only expand XZ, ignore Y for centering
+        box.min.x = Math.min(box.min.x, childBox.min.x)
+        box.max.x = Math.max(box.max.x, childBox.max.x)
+        box.min.z = Math.min(box.min.z, childBox.min.z)
+        box.max.z = Math.max(box.max.z, childBox.max.z)
+        hasContent = true
+      }
+    }
+  })
+
+  if (!hasContent || box.isEmpty()) return null
+
+  return {
+    x: (box.min.x + box.max.x) / 2,
+    z: (box.min.z + box.max.z) / 2,
+  }
+}
 
 /**
  * Derive FSM state from editor state (matches LevelHoverManager logic)
@@ -190,28 +236,29 @@ export function ViewerCustomControls() {
         return
       }
 
-      // Calculate bounding box for the entire building
-      const buildingBox = new Box3().setFromObject(buildingObject)
-      if (buildingBox.isEmpty()) {
+      // Calculate precise XZ center using local bounds
+      const center = calculateLocalBoundsCenter(buildingObject)
+      if (!center) {
         const d = VIEWER_INITIAL_CAMERA_DISTANCE
         cameraImpl.setLookAt(d, d, d, 0, 0, 0, viewerState === 'building')
         cameraImpl.setBoundary()
         return
       }
 
-      // Get bounds center and size
-      const center = buildingBox.getCenter(new Vector3())
+      // Calculate Y center from bounding box (this is less affected by animation)
+      const buildingBox = new Box3().setFromObject(buildingObject)
+      const boxCenter = buildingBox.getCenter(new Vector3())
       const size = buildingBox.getSize(new Vector3())
 
       // For building state (exploded view), adjust center Y to account for spread floors
       const adjustedCenterY = viewerState === 'building'
-        ? center.y + (size.y * 0.3) // Shift focus slightly up to see exploded floors better
-        : center.y
+        ? boxCenter.y + (size.y * 0.3) // Shift focus slightly up to see exploded floors better
+        : boxCenter.y
 
       // Use fixed default distance for consistent behavior
       const newDistance = VIEWER_INITIAL_CAMERA_DISTANCE
 
-      // Position camera at 45-degree angle looking at building center
+      // Position camera at 45-degree angle looking at building center (using precise XZ)
       cameraImpl.setLookAt(
         center.x + newDistance,
         adjustedCenterY + newDistance,
@@ -292,7 +339,7 @@ export function ViewerCustomControls() {
       )
     } else {
       // No saved view - use default camera positioning
-      // Find the level object to get its center, then position camera like initial setup
+      // Find the level object to get its center (XZ only, Y is calculated separately)
       const levelObject = scene.getObjectByName(selectedFloorId)
 
       // Default target is origin at floor height
@@ -300,9 +347,9 @@ export function ViewerCustomControls() {
       let targetZ = 0
 
       if (levelObject) {
-        const levelBox = new Box3().setFromObject(levelObject)
-        if (!levelBox.isEmpty()) {
-          const center = levelBox.getCenter(new Vector3())
+        // Use precise XZ center calculation that ignores animated Y position
+        const center = calculateLocalBoundsCenter(levelObject)
+        if (center) {
           targetX = center.x
           targetZ = center.z
         }
