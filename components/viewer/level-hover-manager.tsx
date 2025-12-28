@@ -63,17 +63,14 @@ interface HighlightBoxProps {
 /**
  * Gradient shader material for highlight box walls
  * Fades from transparent at bottom to semi-transparent at top
+ * Uses geometry bounds attribute to compute normalized height in vertex shader
  */
 const HighlightGradientMaterial = ({
   color,
   opacity,
-  height,
-  baseY,
 }: {
   color: string
   opacity: number
-  height: number
-  baseY: number
 }) => {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
 
@@ -81,8 +78,6 @@ const HighlightGradientMaterial = ({
     () => ({
       uColor: { value: new THREE.Color(color) },
       uOpacity: { value: opacity },
-      uHeight: { value: height },
-      uBaseY: { value: baseY },
     }),
     [],
   )
@@ -91,10 +86,8 @@ const HighlightGradientMaterial = ({
     if (materialRef.current) {
       materialRef.current.uniforms.uColor.value.set(color)
       materialRef.current.uniforms.uOpacity.value = opacity
-      materialRef.current.uniforms.uHeight.value = height
-      materialRef.current.uniforms.uBaseY.value = baseY
     }
-  }, [color, opacity, height, baseY])
+  }, [color, opacity])
 
   return (
     <shaderMaterial
@@ -103,16 +96,10 @@ const HighlightGradientMaterial = ({
       fragmentShader={`
         uniform vec3 uColor;
         uniform float uOpacity;
-        uniform float uHeight;
-        uniform float uBaseY;
-        varying float vWorldY;
+        varying float vAlpha;
 
         void main() {
-          // Calculate relative height from base (0 at bottom, 1 at top)
-          float relativeHeight = (vWorldY - uBaseY) / uHeight;
-          float alpha = relativeHeight * relativeHeight; // Quadratic falloff
-
-          gl_FragColor = vec4(uColor, alpha * uOpacity);
+          gl_FragColor = vec4(uColor, vAlpha * uOpacity);
         }
       `}
       ref={materialRef}
@@ -120,13 +107,13 @@ const HighlightGradientMaterial = ({
       transparent
       uniforms={uniforms}
       vertexShader={`
-        varying float vWorldY;
+        attribute float normalizedHeight;
+        varying float vAlpha;
 
         void main() {
-          // Pass world Y position to fragment shader
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vWorldY = worldPos.y;
-          gl_Position = projectionMatrix * viewMatrix * worldPos;
+          // Use pre-computed normalized height (0 at bottom, 1 at top)
+          vAlpha = normalizedHeight * normalizedHeight; // Quadratic falloff
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `}
     />
@@ -140,13 +127,13 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
   const wallGeometry = useMemo(() => {
     const min = box.min
     const max = box.max
-    const height = max.y - min.y
 
     // Create 4 wall planes manually for cleaner geometry
     const geometry = new THREE.BufferGeometry()
 
     // Define the 4 walls as quads (2 triangles each)
     // Wall vertices: each wall has 4 corners
+    // Pattern per wall: bottom-left, bottom-right, top-right, top-left
     const vertices = new Float32Array([
       // Front wall (min.z side)
       min.x, min.y, min.z,
@@ -170,6 +157,19 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
       max.x, max.y, min.z,
     ])
 
+    // Normalized height attribute: 0 at bottom, 1 at top
+    // Pattern per wall: 0, 0, 1, 1 (bottom vertices = 0, top vertices = 1)
+    const normalizedHeight = new Float32Array([
+      // Front wall
+      0, 0, 1, 1,
+      // Back wall
+      0, 0, 1, 1,
+      // Left wall
+      0, 0, 1, 1,
+      // Right wall
+      0, 0, 1, 1,
+    ])
+
     // Indices for 4 walls (2 triangles per wall)
     const indices = new Uint16Array([
       // Front wall
@@ -183,20 +183,18 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
     ])
 
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.setAttribute('normalizedHeight', new THREE.BufferAttribute(normalizedHeight, 1))
     geometry.setIndex(new THREE.BufferAttribute(indices, 1))
     geometry.computeVertexNormals()
 
     return geometry
   }, [box])
 
-  const boxHeight = box.max.y - box.min.y
-  const baseY = box.min.y
-
   return (
     <group>
       {/* Gradient fill walls */}
       <mesh geometry={wallGeometry} renderOrder={997}>
-        <HighlightGradientMaterial baseY={baseY} color={color} height={boxHeight} opacity={0.3} />
+        <HighlightGradientMaterial color={color} opacity={0.3} />
       </mesh>
 
       {/* Edge lines */}
