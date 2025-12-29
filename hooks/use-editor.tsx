@@ -1,7 +1,7 @@
 'use client'
 
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval'
-import { enableMapSet, produce } from 'immer'
+import { enableMapSet } from 'immer'
 import type * as THREE from 'three'
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { create } from 'zustand'
@@ -42,7 +42,7 @@ import {
 } from '@/lib/scenegraph/schema/index'
 import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
 import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
-import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
+import { SpatialGrid } from '@/lib/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
 type AssetMap = Record<string, string>
@@ -872,7 +872,7 @@ const useStore = create<StoreState>()(
 
           set(updates)
         },
-        setCatalogCategory: (category) => set({ catalogCategory: category }),
+        setCatalogCategory: (catalogCategory) => set({ catalogCategory }),
         setControlMode: (mode) => {
           if (mode !== 'building') {
             get().deletePreviewNodes()
@@ -972,14 +972,14 @@ const useStore = create<StoreState>()(
 
           set(updates)
         },
-        setCameraMode: (mode) => set({ cameraMode: mode }),
-        setMovingCamera: (moving) => set({ movingCamera: moving }),
+        setCameraMode: (cameraMode) => set({ cameraMode }),
+        setMovingCamera: (movingCamera) => set({ movingCamera }),
         setIsManipulatingImage: (manipulating) => set({ isManipulatingImage: manipulating }),
         setIsManipulatingScan: (manipulating) => set({ isManipulatingScan: manipulating }),
         setDebug: (debug) => set({ debug }),
-        setSelectedItem: (item) => set({ selectedItem: item }),
-        setSelectedMaterial: (material) => set({ selectedMaterial: material }),
-        setPaintMode: (mode) => set({ paintMode: mode }),
+        setSelectedItem: (selectedItem) => set({ selectedItem }),
+        setSelectedMaterial: (selectedMaterial) => set({ selectedMaterial }),
+        setPaintMode: (paintMode) => set({ paintMode }),
         setViewerDisplayMode: (mode) => set({ viewerDisplayMode: mode }),
         toggleLevelMode: () =>
           set((state) => ({
