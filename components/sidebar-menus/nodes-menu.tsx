@@ -890,9 +890,7 @@ export function SiteItem({
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // Select the site node and switch to edit mode
     handleNodeSelect(nodeId, e)
-    setControlMode('edit')
   }
 
   return (
