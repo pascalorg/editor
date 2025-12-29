@@ -1,0 +1,912 @@
+{
+  "root": {
+    "environment": {
+      "object": "environment",
+      "latitude": 0,
+      "longitude": 0,
+      "altitude": 0,
+      "timeMode": "custom",
+      "metadata": {},
+      "timePreset": "day",
+      "staticTime": 1766404791247
+    },
+    "children": [
+      {
+        "object": "node",
+        "id": "site_4vsxsl6vv99v1257",
+        "type": "site",
+        "parentId": null,
+        "visible": true,
+        "opacity": 100,
+        "metadata": {},
+        "position": [
+          0,
+          0
+        ],
+        "rotation": 0,
+        "polygon": {
+          "type": "polygon",
+          "points": [
+            [
+              0,
+              0
+            ],
+            [
+              30,
+              0
+            ],
+            [
+              30,
+              30
+            ],
+            [
+              0,
+              30
+            ]
+          ]
+        },
+        "children": [
+          {
+            "object": "node",
+            "id": "building_arnrm3wv66lhip1g",
+            "type": "building",
+            "parentId": null,
+            "visible": true,
+            "opacity": 100,
+            "metadata": {},
+            "children": [
+              {
+                "object": "node",
+                "id": "level_qoea4wavnhsn5g1t",
+                "type": "level",
+                "name": "level 1",
+                "parentId": null,
+                "visible": true,
+                "opacity": 100,
+                "metadata": {},
+                "children": [
+                  {
+                    "object": "node",
+                    "type": "slab",
+                    "name": "Slab",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "position": [
+                      30,
+                      20
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      20,
+                      22
+                    ],
+                    "id": "slab_a13ie4y9t8kcgnrh"
+                  },
+                  {
+                    "object": "node",
+                    "type": "group",
+                    "name": "Room 1",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "children": [
+                      {
+                        "object": "node",
+                        "id": "wall_ajgwwaerakfttz81",
+                        "type": "wall",
+                        "name": "Wall Bottom",
+                        "parentId": "group_mqzpw1x6qnkmvwt3",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          0
+                        ],
+                        "end": [
+                          20,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          0
+                        ],
+                        "size": [
+                          20,
+                          0.2
+                        ],
+                        "rotation": 0,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_7jl5taywzn2lsb5b",
+                        "type": "wall",
+                        "name": "Wall Right",
+                        "parentId": "group_mqzpw1x6qnkmvwt3",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          20,
+                          0
+                        ],
+                        "end": [
+                          20,
+                          22
+                        ],
+                        "position": [
+                          20,
+                          0
+                        ],
+                        "size": [
+                          22,
+                          0.2
+                        ],
+                        "rotation": -1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_sd44o17fvrjdlc4g",
+                        "type": "wall",
+                        "name": "Wall Top",
+                        "parentId": "group_mqzpw1x6qnkmvwt3",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          20,
+                          22
+                        ],
+                        "end": [
+                          0,
+                          22
+                        ],
+                        "position": [
+                          20,
+                          22
+                        ],
+                        "size": [
+                          20,
+                          0.2
+                        ],
+                        "rotation": 3.141592653589793,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_r5ah17ed2sqgir84",
+                        "type": "wall",
+                        "name": "Wall Left",
+                        "parentId": "group_mqzpw1x6qnkmvwt3",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          22
+                        ],
+                        "end": [
+                          0,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          22
+                        ],
+                        "size": [
+                          22,
+                          0.2
+                        ],
+                        "rotation": 1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      }
+                    ],
+                    "position": [
+                      30,
+                      20
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      20,
+                      22
+                    ],
+                    "id": "group_mqzpw1x6qnkmvwt3"
+                  }
+                ],
+                "level": 1,
+                "height": 2.5,
+                "elevation": 2.5
+              },
+              {
+                "object": "node",
+                "id": "level_jz2cjuh2bs7ayzje",
+                "type": "level",
+                "parentId": null,
+                "visible": true,
+                "opacity": 100,
+                "metadata": {},
+                "children": [
+                  {
+                    "object": "node",
+                    "type": "group",
+                    "name": "Custom Room",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "children": [
+                      {
+                        "object": "node",
+                        "id": "wall_5f1mkkpklmizjp3k",
+                        "type": "wall",
+                        "name": "Wall Cursor",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false,
+                          "paintPreview": false
+                        },
+                        "children": [
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Window (Preview)",
+                            "parentId": "wall_5f1mkkpklmizjp3k",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              3,
+                              0
+                            ],
+                            "rotation": -3.141592653589793,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/window-small/model.glb",
+                            "modelScale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "modelPosition": [
+                              0,
+                              0.5,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_yskwro0if9fjziz3"
+                          },
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Window (Preview)",
+                            "parentId": "wall_5f1mkkpklmizjp3k",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              12,
+                              0
+                            ],
+                            "rotation": -3.141592653589793,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/window-small/model.glb",
+                            "modelScale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "modelPosition": [
+                              0,
+                              0.5,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_cmojcnq36uvltx9n"
+                          }
+                        ],
+                        "start": [
+                          16,
+                          0
+                        ],
+                        "end": [
+                          0,
+                          0
+                        ],
+                        "position": [
+                          16,
+                          0
+                        ],
+                        "size": [
+                          16,
+                          0.2
+                        ],
+                        "rotation": -3.141592653589793,
+                        "elevation": 0,
+                        "interiorSide": "front",
+                        "materialBack": "yellow"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_vn5jk6tnm2l0t23c",
+                        "type": "wall",
+                        "name": "Wall 5",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Door (Preview)",
+                            "parentId": "wall_vn5jk6tnm2l0t23c",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              22,
+                              0
+                            ],
+                            "rotation": -3.141592653589793,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/doorway-front/model.glb",
+                            "modelScale": [
+                              2,
+                              2,
+                              2
+                            ],
+                            "modelPosition": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_92c0vt6jv4yuj8c7"
+                          }
+                        ],
+                        "start": [
+                          16,
+                          -26
+                        ],
+                        "end": [
+                          16,
+                          0
+                        ],
+                        "position": [
+                          16,
+                          -26
+                        ],
+                        "size": [
+                          26,
+                          0.2
+                        ],
+                        "rotation": -1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_z990jy50q5bubwqm",
+                        "type": "wall",
+                        "name": "Wall 4",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          7,
+                          -26
+                        ],
+                        "end": [
+                          16,
+                          -26
+                        ],
+                        "position": [
+                          7,
+                          -26
+                        ],
+                        "size": [
+                          9,
+                          0.2
+                        ],
+                        "rotation": 0,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_cdy4pftfkik8g6m7",
+                        "type": "wall",
+                        "name": "Wall 3",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          7,
+                          -17
+                        ],
+                        "end": [
+                          7,
+                          -26
+                        ],
+                        "position": [
+                          7,
+                          -17
+                        ],
+                        "size": [
+                          9,
+                          0.2
+                        ],
+                        "rotation": 1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_xp3rubcf1gzfmps4",
+                        "type": "wall",
+                        "name": "Wall 2",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          -17
+                        ],
+                        "end": [
+                          7,
+                          -17
+                        ],
+                        "position": [
+                          0,
+                          -17
+                        ],
+                        "size": [
+                          7,
+                          0.2
+                        ],
+                        "rotation": 0,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_2rbih84mifnzeiak",
+                        "type": "wall",
+                        "name": "Wall 1",
+                        "parentId": "group_kfouj0k7rqzgvlz8",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          0
+                        ],
+                        "end": [
+                          0,
+                          -17
+                        ],
+                        "position": [
+                          0,
+                          0
+                        ],
+                        "size": [
+                          17,
+                          0.2
+                        ],
+                        "rotation": 1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      }
+                    ],
+                    "position": [
+                      36,
+                      41
+                    ],
+                    "rotation": 0,
+                    "id": "group_kfouj0k7rqzgvlz8"
+                  },
+                  {
+                    "object": "node",
+                    "type": "group",
+                    "name": "Room 1",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "children": [
+                      {
+                        "object": "node",
+                        "id": "wall_wlyv7o1hgib1oksd",
+                        "type": "wall",
+                        "name": "Wall Bottom",
+                        "parentId": "group_ce82ctgiqxktwi3c",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          0
+                        ],
+                        "end": [
+                          14,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          0
+                        ],
+                        "size": [
+                          14,
+                          0.2
+                        ],
+                        "rotation": 0,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_tcb19pjak1b95c32",
+                        "type": "wall",
+                        "name": "Wall Right",
+                        "parentId": "group_ce82ctgiqxktwi3c",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          14,
+                          0
+                        ],
+                        "end": [
+                          14,
+                          19
+                        ],
+                        "position": [
+                          14,
+                          0
+                        ],
+                        "size": [
+                          19,
+                          0.2
+                        ],
+                        "rotation": -1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_7al55m1aibkolp5a",
+                        "type": "wall",
+                        "name": "Wall Top",
+                        "parentId": "group_ce82ctgiqxktwi3c",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          14,
+                          19
+                        ],
+                        "end": [
+                          0,
+                          19
+                        ],
+                        "position": [
+                          14,
+                          19
+                        ],
+                        "size": [
+                          14,
+                          0.2
+                        ],
+                        "rotation": 3.141592653589793,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_mdt5h1n35mxf0vyb",
+                        "type": "wall",
+                        "name": "Wall Left",
+                        "parentId": "group_ce82ctgiqxktwi3c",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          19
+                        ],
+                        "end": [
+                          0,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          19
+                        ],
+                        "size": [
+                          19,
+                          0.2
+                        ],
+                        "rotation": 1.5707963267948966,
+                        "elevation": 0,
+                        "interiorSide": "front"
+                      }
+                    ],
+                    "position": [
+                      13,
+                      23
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      14,
+                      19
+                    ],
+                    "id": "group_ce82ctgiqxktwi3c"
+                  }
+                ],
+                "level": 0,
+                "height": 2.5,
+                "elevation": 0
+              }
+            ],
+            "position": [
+              0,
+              0
+            ],
+            "rotation": 0
+          }
+        ]
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "zone_4ew0c9n3lassmuzg",
+      "object": "zone",
+      "type": "other",
+      "levelId": "level_jz2cjuh2bs7ayzje",
+      "name": "Zone ci3o",
+      "polygon": [
+        [
+          27,
+          42
+        ],
+        [
+          27,
+          23
+        ],
+        [
+          13,
+          23
+        ],
+        [
+          13,
+          42
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {}
+    },
+    {
+      "id": "zone_1bpaaxy2vc7ezhjc",
+      "object": "zone",
+      "type": "other",
+      "levelId": "level_jz2cjuh2bs7ayzje",
+      "name": "Zone cs9i",
+      "polygon": [
+        [
+          36,
+          41
+        ],
+        [
+          36,
+          24
+        ],
+        [
+          43,
+          24
+        ],
+        [
+          43,
+          15
+        ],
+        [
+          52,
+          15
+        ],
+        [
+          52,
+          26
+        ],
+        [
+          52,
+          41
+        ]
+      ],
+      "color": "#ef4444",
+      "metadata": {}
+    },
+    {
+      "id": "zone_9c0awx8kic5vasqp",
+      "object": "zone",
+      "type": "other",
+      "levelId": "level_jz2cjuh2bs7ayzje",
+      "name": "Zone 05q5",
+      "polygon": [
+        [
+          22,
+          50
+        ],
+        [
+          22,
+          44
+        ],
+        [
+          5,
+          44
+        ],
+        [
+          5,
+          50
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {}
+    },
+    {
+      "id": "zone_zx9wua3pdtckx303",
+      "object": "zone",
+      "type": "other",
+      "levelId": "level_qoea4wavnhsn5g1t",
+      "name": "Living Room 2",
+      "polygon": [
+        [
+          50,
+          42
+        ],
+        [
+          30,
+          42
+        ],
+        [
+          30,
+          20
+        ],
+        [
+          50,
+          20
+        ]
+      ],
+      "color": "#ec4899",
+      "metadata": {}
+    }
+  ],
+  "views": [],
+  "metadata": {}
+}
