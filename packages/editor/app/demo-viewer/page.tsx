@@ -1,14 +1,12 @@
 'use client'
 
 import { SceneViewer } from '@pascal/viewer'
-import Viewer from '@/components/viewer'
 
 export default function DemoViewerPage() {
   return (
     <div className="h-screen w-screen">
       <SceneViewer
         sceneUrl="/demos/creative-learning-center.json"
-        ViewerComponent={Viewer}
         defaultZoom={80}
         defaultWallMode="cutaway"
         onSceneLoaded={() => console.log('Scene loaded successfully')}

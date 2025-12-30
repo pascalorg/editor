@@ -11,7 +11,13 @@
     "lint": "bun run --cwd packages/editor lint"
   },
   "overrides": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "three": "^0.181.2",
-    "@react-three/fiber": "^9.4.2"
+    "@react-three/fiber": "^9.4.2",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/csg": "^4.0.0",
+    "@react-spring/three": "^10.0.3",
+    "zustand": "^5.0.9"
   }
 }

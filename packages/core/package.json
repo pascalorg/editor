@@ -27,15 +27,13 @@
     "./components/nodes": "./src/components/nodes/index.ts",
     "./components/nodes/*": "./src/components/nodes/*",
     "./components/nodes/*/": "./src/components/nodes/*/",
-    "./components/nodes/*/*": "./src/components/nodes/*/*"
+    "./components/nodes/*/*": "./src/components/nodes/*/*",
+    "./components/renderer": "./src/components/renderer/node-renderer.tsx",
+    "./components/viewer": "./src/components/viewer/index.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@phosphor-icons/react": "^2.1.10",
-    "@react-three/csg": "^4.0.0",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.4.2",
-    "@react-three/uikit": "^1.0.60",
     "dedent": "^1.7.0",
     "gsap": "^3.14.2",
     "idb-keyval": "^6.2.2",
@@ -45,14 +43,20 @@
     "react-error-boundary": "^6.0.0",
     "nanoid": "^5.1.6",
     "suncalc": "^1.9.0",
-    "three": "^0.181.2",
+    "three-custom-shader-material": "^6.1.0",
     "three-stdlib": "^2.36.1",
-    "zod": "^4.2.1",
-    "zustand": "^5.0.9"
+    "zod": "^4.2.1"
   },
   "peerDependencies": {
+    "@react-spring/three": "^10.0.3",
+    "@react-three/csg": "^4.0.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.4.2",
+    "@react-three/uikit": "^1.0.60",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "three": "^0.181.2",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@types/react": "^19.2.7",

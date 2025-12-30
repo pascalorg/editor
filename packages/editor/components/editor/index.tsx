@@ -24,11 +24,11 @@ import {
   SledgehammerTool,
   ZoneBoundaryEditor,
 } from '@pascal/core/components/nodes'
-import { NodeRenderer } from '../renderer/node-renderer'
+import { NodeRenderer } from '@pascal/core/components/renderer'
+import { InfiniteFloor } from '@pascal/core/components/viewer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './grid-tiles'
-import { InfiniteFloor } from './infinite-floor'
 import { InfiniteLines } from './infinite-lines'
 import SelectionManager from './selection-manager'
 

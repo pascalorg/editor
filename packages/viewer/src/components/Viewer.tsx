@@ -4,26 +4,16 @@ import { animated, useSpring } from '@react-spring/three'
 import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
-import { NodesDebugger } from '@/components/debug/nodes-debugger'
-import { InfiniteFloor } from '@pascal/core/components/viewer'
 import { emitter, type InteractionClickEvent } from '@pascal/core/events'
-import { useEditor, type WallMode } from '@/hooks/use-editor'
-import { cn } from '@/lib/utils'
+import { useEditor, type WallMode } from '@pascal/core/hooks'
 import { EnvironmentRenderer, ZoneRenderer } from '@pascal/core/components/nodes'
 import { NodeRenderer } from '@pascal/core/components/renderer'
-import { SelectionControls } from '../renderer/selection-controls'
+import { InfiniteFloor } from '@pascal/core/components/viewer'
+import { GRID_SIZE } from '@pascal/core/constants'
+import { cn } from '../utils'
+import { SelectionControls } from './selection-controls'
 import { LevelHoverManager } from './level-hover-manager'
-import { ViewerCustomControls } from './viewer-custom-controls'
-
-export const WALL_HEIGHT = 2.5 // 2.5m standard wall height
-export const GRID_SIZE = 30 // 30m x 30m
-
-export const FLOOR_SPACING = 12 // 12m vertical spacing between floors
-
-// Viewer zoom configuration - adjust these to control default zoom level
-export const VIEWER_DEFAULT_ZOOM = 80 // Orthographic camera zoom level (higher = more zoomed in)
-export const VIEWER_INITIAL_CAMERA_DISTANCE = 30 // Initial camera distance from origin (matches editor)
-export const VIEWER_DESELECTED_CAMERA_DISTANCE = 6 // Camera distance when no floor is selected
+import { ViewerCustomControls, VIEWER_DEFAULT_ZOOM } from './viewer-custom-controls'
 
 /**
  * Lightweight subcomponent that handles selection state and iframe messaging.
@@ -83,7 +73,7 @@ function SelectionMessageBridge({ isEmbedded }: { isEmbedded: boolean }) {
   return null
 }
 
-interface ViewerProps {
+export interface ViewerProps {
   className?: string
   /** Initial zoom level for orthographic camera (default: 80) */
   defaultZoom?: number
@@ -259,8 +249,8 @@ export default function Viewer({
             <ZoneRenderer isViewer />
           </group>
 
-          {/* Removed SelectionManager to prevent conflict with LevelHoverManager */}
-          <SelectionControls controls={false} />
+          {/* Selection controls without manipulation UI */}
+          <SelectionControls />
           <LevelHoverManager />
           <ViewerCustomControls />
           <EnvironmentRenderer />
@@ -268,9 +258,6 @@ export default function Viewer({
           <InfiniteFloor />
         </Bvh>
       </Canvas>
-
-      {/* Debug panel - only in development */}
-      {process.env.NODE_ENV === 'development' && <NodesDebugger />}
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useEditor, waitForHydration, type WallMode } from '@pascal/core/hooks'
+import { Viewer } from './components'
 
 // Import node registrations to ensure all renderers are available
 import '@pascal/core/components/nodes'
@@ -31,35 +32,22 @@ export interface SceneViewerProps {
     selectedFloorId: string | null
     selectedZoneId: string | null
   }) => void
-  /**
-   * The internal viewer component to use.
-   * This should be the Viewer component from @pascal/editor.
-   * Required because @pascal/viewer can't directly import from @pascal/editor.
-   */
-  ViewerComponent: React.ComponentType<{
-    className?: string
-    defaultZoom?: number
-    isEmbedded?: boolean
-    defaultWallMode?: WallMode
-  }>
 }
 
 /**
  * SceneViewer - A standalone React component for viewing Pascal scenes.
  *
- * This component handles scene loading from URLs and wraps the internal
- * Viewer component with loading/error states.
+ * This component handles scene loading from URLs and provides a complete
+ * 3D viewer with loading/error states.
  *
  * @example
  * ```tsx
  * import { SceneViewer } from '@pascal/viewer'
- * import Viewer from '@pascal/editor/components/viewer'
  *
  * function App() {
  *   return (
  *     <SceneViewer
  *       sceneUrl="https://example.com/scene.json"
- *       ViewerComponent={Viewer}
  *       defaultZoom={80}
  *       onSelectionChange={(selection) => console.log(selection)}
  *     />
@@ -78,7 +66,6 @@ export function SceneViewer({
   onSceneLoaded,
   onError,
   onSelectionChange,
-  ViewerComponent,
 }: SceneViewerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -208,7 +195,7 @@ export function SceneViewer({
   }
 
   return (
-    <ViewerComponent
+    <Viewer
       className={className}
       defaultWallMode={defaultWallMode}
       defaultZoom={defaultZoom}
