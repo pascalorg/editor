@@ -2,11 +2,11 @@
 
 import { Minus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { getAllWallsOnLevel, wallSegmentsOverlap } from '@/lib/geometry/wall-overlap'
 import { registerComponent } from '@/lib/nodes/registry'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 import { WallRenderer } from './wall-renderer'
 
 // ============================================================================

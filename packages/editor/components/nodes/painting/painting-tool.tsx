@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { emitter, type WallEvent } from '@/events/bus'
+import { emitter, type WallEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 
 interface WallPaintInfo {
   rangeStart: number

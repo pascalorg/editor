@@ -13,8 +13,7 @@
 // ) => void
 
 import mitt from 'mitt'
-import type { AnyNode, ImageNode, WallNode } from '@/hooks/use-editor'
-import type { CeilingNode, GridPoint } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, CeilingNode, GridPoint, ImageNode, WallNode } from '../scenegraph/schema/index'
 
 export interface GridEvent {
   position: [number, number]

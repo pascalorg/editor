@@ -1,5 +1,5 @@
-import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
+import type { SceneGraph } from '../scenegraph'
+import type { AnyNode, NodeTypeMap } from '../scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 /**

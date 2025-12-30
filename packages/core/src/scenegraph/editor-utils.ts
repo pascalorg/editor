@@ -1,4 +1,3 @@
-import { current } from 'immer'
 import type {
   AnyNode,
   BuildingNode,
@@ -6,7 +5,7 @@ import type {
   RootNode,
   Scene,
   SceneNode,
-} from '@/lib/scenegraph/schema/index'
+} from './schema/index'
 
 /**
  * Build a mutable index of nodes for use within Immer draft state

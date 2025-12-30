@@ -1,9 +1,9 @@
-import { SceneGraph } from '@/lib/scenegraph/index'
-import { initScene, type Scene, SceneNode } from '@/lib/scenegraph/schema/index'
-import { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
-import { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
-import { SiteNode } from '@/lib/scenegraph/schema/nodes/site'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { SceneGraph } from '@pascal/core/scenegraph'
+import { initScene, type Scene, SceneNode } from '@pascal/core'
+import { BuildingNode } from '@pascal/core/scenegraph/schema/nodes/building'
+import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
+import { SiteNode } from '@pascal/core/scenegraph/schema/nodes/site'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 
 console.log('=== Initializing scene ===')
 const scene = initScene()

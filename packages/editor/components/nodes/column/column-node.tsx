@@ -3,12 +3,12 @@
 import { CylinderIcon } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 import { ColumnRenderer } from '@/components/nodes/column/column-renderer'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import type { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
-import { ColumnNode } from '@/lib/scenegraph/schema/nodes/column'
-import type { LevelNode } from '@/lib/scenegraph/schema/nodes/level'
+import type { BuildingNode } from '@pascal/core/scenegraph/schema/nodes/building'
+import { ColumnNode } from '@pascal/core/scenegraph/schema/nodes/column'
+import type { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 
 // ============================================================================
 // COLUMN BUILDER COMPONENT

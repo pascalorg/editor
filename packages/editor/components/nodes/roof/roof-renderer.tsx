@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { RoofNode } from '@/lib/scenegraph/schema/index'
+import type { RoofNode } from '@pascal/core'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders

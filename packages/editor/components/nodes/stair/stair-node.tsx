@@ -3,10 +3,10 @@
 import { StairsIcon } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 import { StairRenderer } from '@/components/nodes/stair/stair-renderer'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import { StairNode, type StairSegmentNode } from '@/lib/scenegraph/schema/nodes/stair'
+import { StairNode, type StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
 
 // ============================================================================
 // STAIR BUILDER COMPONENT

@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three'
-import type { AnyNode, SceneNodeType as NodeType, Scene } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, SceneNodeType as NodeType, Scene } from '../scenegraph/schema/index'
 import { type BaseNode, isNode } from './guards'
 
 // ============================================================================
@@ -497,13 +497,6 @@ export function calculateWallPositionUpdate(
     start: [originalStart[0] + deltaX, originalStart[1] + deltaY] as [number, number],
     end: [originalEnd[0] + deltaX, originalEnd[1] + deltaY] as [number, number],
   }
-}
-
-/**
- * Check if a node is a wall node
- */
-export function isWallNode(node: BaseNode): boolean {
-  return node.type === 'wall' && 'start' in node && 'end' in node
 }
 
 // ============================================================================

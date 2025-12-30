@@ -2,12 +2,12 @@
 
 import { BoxSelect } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { checkWallsOverlap, getAllWallsOnLevel } from '@/lib/geometry/wall-overlap'
 import { registerComponent } from '@/lib/nodes/registry'
-import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { GroupNode } from '@pascal/core/scenegraph/schema/nodes/group'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 import { createId } from '@/lib/utils'
 
 // ============================================================================

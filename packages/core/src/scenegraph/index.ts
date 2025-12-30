@@ -7,7 +7,7 @@ import {
   type SceneNode,
   type SceneNodeId,
   type SceneNodeType,
-} from '@/lib/scenegraph/schema/types'
+} from './schema/types'
 import { type Zone, initScene, type NodeCreateTypeMap, type Scene, type View } from './schema'
 
 // Re-export from schema that are used elsewhere
@@ -18,7 +18,7 @@ export type {
   SceneNode,
   SceneNodeId,
   SceneNodeType,
-} from '@/lib/scenegraph/schema/types'
+} from './schema/types'
 // ============================================================================
 // Scene Graph Index Types
 // ============================================================================

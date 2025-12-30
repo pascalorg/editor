@@ -3,10 +3,10 @@
 import { Triangle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { RoofRenderer } from '@/components/nodes/roof/roof-renderer'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
-import { RoofNode } from '@/lib/scenegraph/schema/nodes/roof'
+import { RoofNode } from '@pascal/core/scenegraph/schema/nodes/roof'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length

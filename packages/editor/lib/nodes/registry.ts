@@ -1,6 +1,6 @@
 import type React from 'react'
 import { z } from 'zod'
-import type { BaseNode } from '../scenegraph/schema'
+import type { BaseNode } from '@pascal/core/scenegraph/schema'
 
 // ============================================================================
 // COMPONENT CONFIG SCHEMA & TYPES

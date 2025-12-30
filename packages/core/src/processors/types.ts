@@ -1,5 +1,5 @@
-import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode } from '@/lib/scenegraph/schema/index'
+import type { SceneGraph } from '../scenegraph'
+import type { AnyNode } from '../scenegraph/schema/index'
 
 /**
  * Computed properties to be applied to a node

@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@/lib/scenegraph/schema/zones'
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 
 interface ViewerLayersMenuProps {

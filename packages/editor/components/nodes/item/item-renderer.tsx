@@ -9,8 +9,8 @@ import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import { getMaterial, getMaterialPreset, type MaterialName, useMaterial } from '@/lib/materials'
-import type { ItemNode } from '@/lib/scenegraph/schema/index'
+import { getMaterial, getMaterialPreset, type MaterialName, useMaterial } from '@pascal/core/materials'
+import type { ItemNode } from '@pascal/core'
 
 interface ItemRendererProps {
   nodeId: ItemNode['id']

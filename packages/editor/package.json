@@ -9,6 +9,7 @@
     "lint": "bun x ultracite format"
   },
   "dependencies": {
+    "@pascal/core": "workspace:*",
     "@biomejs/biome": "2.3.0",
     "@googlemaps/js-api-loader": "^2.0.2",
     "@gsap/react": "^2.1.2",

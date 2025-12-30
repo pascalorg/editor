@@ -2,7 +2,7 @@
 
 import { Hexagon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { registerComponent } from '@/lib/nodes/registry'
 

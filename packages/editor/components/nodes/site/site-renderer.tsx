@@ -8,7 +8,7 @@ import { DoubleSide } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { GRID_SIZE } from '@/components/editor'
 import { useEditor } from '@/hooks/use-editor'
-import type { SiteNode } from '@/lib/scenegraph/schema/index'
+import type { SiteNode } from '@pascal/core'
 
 interface SiteRendererProps {
   nodeId: SiteNode['id']

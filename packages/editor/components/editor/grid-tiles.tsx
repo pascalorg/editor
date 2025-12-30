@@ -8,7 +8,7 @@ import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
 import { furnishTools } from '@/components/editor/action-menu/furnish-tools'
 import { structureTools } from '@/components/editor/action-menu/structure-tools'
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 

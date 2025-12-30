@@ -4,7 +4,7 @@ import { Box, X } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { ScanNode } from '@/lib/scenegraph/schema/nodes/scan'
+import type { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
 
 /**
  * Scan properties editor panel

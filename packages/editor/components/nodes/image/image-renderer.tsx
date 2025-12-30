@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useImageManipulation } from '@/components/nodes/image/image-node'
 import { useEditor } from '@/hooks/use-editor'
-import type { ImageNode } from '@/lib/scenegraph/schema/index'
+import type { ImageNode } from '@pascal/core'
 
 const GRID_SIZE = 30 // 30m x 30m
 

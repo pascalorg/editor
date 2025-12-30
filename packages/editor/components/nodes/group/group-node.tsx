@@ -1,6 +1,6 @@
 import { Group } from 'lucide-react'
 import { registerComponent } from '@/lib/nodes/registry'
-import { GroupNode } from '@/lib/scenegraph/schema/nodes/group'
+import { GroupNode } from '@pascal/core/scenegraph/schema/nodes/group'
 
 // ============================================================================
 // REGISTER GROUP COMPONENT

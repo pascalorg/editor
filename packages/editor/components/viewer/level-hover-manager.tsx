@@ -8,9 +8,9 @@ import * as THREE from 'three'
 import { Box3, Mesh, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@/lib/scenegraph/schema/zones'
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 
 /**
  * FSM States for viewer navigation

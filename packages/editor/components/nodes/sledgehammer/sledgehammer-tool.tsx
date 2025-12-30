@@ -3,9 +3,9 @@
 import { Line } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
-import { emitter, type GridEvent, type WallEvent } from '@/events/bus'
+import { emitter, type GridEvent, type WallEvent } from '@pascal/core/events'
 import { type EditorMode, useEditor } from '@/hooks/use-editor'
-import { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 
 interface WallDeleteInfo {
   rangeStart: number

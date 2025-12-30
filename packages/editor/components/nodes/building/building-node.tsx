@@ -4,7 +4,7 @@
 
 import { Building2 } from 'lucide-react'
 import { registerComponent } from '@/lib/nodes/registry'
-import { BuildingNode } from '@/lib/scenegraph/schema/nodes/building'
+import { BuildingNode } from '@pascal/core/scenegraph/schema/nodes/building'
 import { BuildingRenderer } from './building-renderer'
 
 // ============================================================================

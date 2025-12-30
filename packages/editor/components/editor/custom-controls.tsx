@@ -9,7 +9,7 @@ import {
   type NodeCameraCaptureRequest,
   type ViewApplyEvent,
   type ViewCaptureRequest,
-} from '@/events/bus'
+} from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 

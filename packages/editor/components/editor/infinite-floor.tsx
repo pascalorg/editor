@@ -5,7 +5,7 @@ import { FrontSide, MeshPhysicalMaterial } from 'three'
 import CustomShaderMaterial from 'three-custom-shader-material'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
-import type { SiteNode } from '@/lib/scenegraph/schema/index'
+import type { SiteNode } from '@pascal/core'
 import { GRID_SIZE } from '.'
 
 // Floor material constants

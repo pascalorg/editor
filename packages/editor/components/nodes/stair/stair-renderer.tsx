@@ -5,8 +5,8 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
-import type { StairNode, StairSegmentNode } from '@/lib/scenegraph/schema/nodes/stair'
-import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
+import type { StairNode, StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
+import type { AnyNodeId } from '@pascal/core'
 
 // ============================================================================
 // MESH COMPONENT

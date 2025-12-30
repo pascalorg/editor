@@ -1,4 +1,4 @@
-import type { AnyNode, SceneNode } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, SceneNode } from './scenegraph/schema/index'
 
 /**
  * Bounding box in 2D space (X, Z coordinates)

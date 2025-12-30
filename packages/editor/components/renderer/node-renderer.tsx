@@ -5,7 +5,7 @@ import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditor } from '@/hooks/use-editor'
 import { getRenderer } from '@/lib/nodes/registry'
-import type { AnyNode, AnyNodeId, BaseNode } from '@/lib/scenegraph/schema/index'
+import type { AnyNode, AnyNodeId, BaseNode } from '@pascal/core'
 import { FLOOR_SPACING, TILE_SIZE } from '../editor'
 
 interface NodeRendererProps {

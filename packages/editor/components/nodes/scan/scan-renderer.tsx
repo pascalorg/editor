@@ -11,7 +11,7 @@ import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
 import { useScanManipulation } from '@/components/nodes/scan/scan-node'
 import { useEditor } from '@/hooks/use-editor'
 import { loadAssetUrl } from '@/lib/asset-storage'
-import type { ScanNode } from '@/lib/scenegraph/schema/index'
+import type { ScanNode } from '@pascal/core'
 
 const ktx2LoaderInstance = new KTX2Loader()
 ktx2LoaderInstance.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')

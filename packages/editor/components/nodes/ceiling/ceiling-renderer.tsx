@@ -5,9 +5,9 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '@/components/editor'
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
-import type { CeilingNode, GridPoint } from '@/lib/scenegraph/schema/index'
+import type { CeilingNode, GridPoint } from '@pascal/core'
 
 export const CEILING_THICKNESS = 0.15 // 15cm thickness
 export const DEFAULT_CEILING_ELEVATION = 2.5 // 2.5m default height

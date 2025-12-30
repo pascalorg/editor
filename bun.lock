@@ -4,6 +4,22 @@
     "": {
       "name": "pascal",
     },
+    "packages/core": {
+      "name": "@pascal/core",
+      "version": "0.1.0",
+      "dependencies": {
+        "dedent": "^1.7.0",
+        "immer": "^10.2.0",
+        "mitt": "^3.0.1",
+        "nanoid": "^5.1.6",
+        "three": "^0.181.2",
+        "zod": "^4.2.1",
+      },
+      "devDependencies": {
+        "@types/three": "^0.181.0",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/editor": {
       "name": "@pascal/editor",
       "version": "0.1.0",
@@ -11,6 +27,7 @@
         "@biomejs/biome": "2.3.0",
         "@googlemaps/js-api-loader": "^2.0.2",
         "@gsap/react": "^2.1.2",
+        "@pascal/core": "workspace:*",
         "@phosphor-icons/react": "^2.1.10",
         "@pmndrs/uikit": "^1.0.60",
         "@radix-ui/react-context-menu": "^2.2.16",
@@ -328,6 +345,8 @@
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
     "@nolyfill/is-core-module": ["@nolyfill/is-core-module@1.0.39", "", {}, "sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA=="],
+
+    "@pascal/core": ["@pascal/core@workspace:packages/core"],
 
     "@pascal/editor": ["@pascal/editor@workspace:packages/editor"],
 

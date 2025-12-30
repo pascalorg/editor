@@ -1,4 +1,4 @@
-import type { AnyNodeId } from '@/lib/scenegraph/schema/index'
+import type { AnyNodeId } from '@pascal/core'
 
 /**
  * Check if an element is selected

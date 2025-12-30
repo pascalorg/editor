@@ -7,9 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '@/components/editor'
-import { emitter, type ZonePreviewEvent } from '@/events/bus'
+import { emitter, type ZonePreviewEvent } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@/lib/scenegraph/schema/zones'
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 
 // Height offset to prevent z-fighting with floor
 const Y_OFFSET = 0.02

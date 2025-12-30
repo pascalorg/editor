@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@/lib/scenegraph/schema/zones'
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 import { RenamePopover } from './shared'
 

@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { SiteNode } from '@/lib/scenegraph/schema/index'
+import type { SiteNode } from '@pascal/core'
 import { cn } from '@/lib/utils'
 
 interface PointItemProps {

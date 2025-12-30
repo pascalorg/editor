@@ -5,7 +5,7 @@
  * different node types at runtime.
  */
 
-import type { GridItem } from '@/lib/scenegraph/common-types'
+import type { GridItem } from '../scenegraph/common-types'
 import type {
   AnyNode,
   ColumnNode,
@@ -18,7 +18,7 @@ import type {
   BaseNode as SchemaBaseNode,
   WallNode,
   WindowNode,
-} from '@/lib/scenegraph/schema/index'
+} from '../scenegraph/schema/index'
 
 export interface BaseNode {
   id: string

@@ -12,8 +12,8 @@ import {
 } from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
 import { type EditorMode, type StoreState, useEditor } from '@/hooks/use-editor'
-import type { SceneNode, SceneNodeHandle } from '@/lib/scenegraph/index'
-import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
+import type { SceneNode, SceneNodeHandle } from '@pascal/core/scenegraph'
+import type { AnyNodeId } from '@pascal/core'
 import { cn } from '@/lib/utils'
 
 interface LayersMenuProps {

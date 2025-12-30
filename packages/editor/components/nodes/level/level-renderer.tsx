@@ -10,7 +10,7 @@ import { useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import type { LevelNode, WindowNode } from '@/lib/scenegraph/schema/index'
+import type { LevelNode, WindowNode } from '@pascal/core'
 import { LevelNodeEditor } from './level-node'
 
 interface LevelRendererProps {

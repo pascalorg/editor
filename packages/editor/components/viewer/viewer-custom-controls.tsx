@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
-import { emitter, type ViewApplyEvent } from '@/events/bus'
+import { emitter, type ViewApplyEvent } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, GRID_SIZE, VIEWER_INITIAL_CAMERA_DISTANCE, WALL_HEIGHT } from './index'
 

@@ -3,9 +3,9 @@
  * Uses flood fill to detect enclosed rooms and assign interior sides to walls
  */
 
-import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode } from '@/lib/scenegraph/schema/index'
-import type { WallNode } from '@/lib/scenegraph/schema/nodes/wall'
+import type { SceneGraph } from '../scenegraph'
+import type { AnyNode } from '../scenegraph/schema/index'
+import type { WallNode } from '../scenegraph/schema/nodes/wall'
 import type { NodeProcessResult, NodeProcessor } from './types'
 import { type BoundingBox, OccupancyGrid } from './occupancy-grid'
 

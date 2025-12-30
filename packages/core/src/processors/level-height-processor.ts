@@ -1,7 +1,6 @@
-import { WALL_HEIGHT } from '@/components/editor'
-import { SLAB_THICKNESS } from '@/components/nodes/slab/slab-renderer'
-import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode, NodeTypeMap } from '@/lib/scenegraph/schema/index'
+import { SLAB_THICKNESS, WALL_HEIGHT } from '../constants'
+import type { SceneGraph } from '../scenegraph'
+import type { AnyNode, NodeTypeMap } from '../scenegraph/schema/index'
 import type { NodeProcessor, NodeProcessResult } from './types'
 
 // Minimum level height (in meters)

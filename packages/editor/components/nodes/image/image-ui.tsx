@@ -4,7 +4,7 @@ import { Image, X } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { ImageNode } from '@/lib/scenegraph/schema/index'
+import type { ImageNode } from '@pascal/core'
 
 /**
  * Image properties editor panel

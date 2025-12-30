@@ -1,6 +1,6 @@
-import type { SceneGraph } from '@/lib/scenegraph'
-import type { AnyNode, AnyNodeId, GroupNode } from '@/lib/scenegraph/schema'
-import { createId } from '@/lib/utils'
+import type { SceneGraph } from '../scenegraph'
+import type { AnyNode, AnyNodeId, GroupNode } from '../scenegraph/schema'
+import { createId } from '../utils'
 import type { Command } from './scenegraph-commands'
 
 // Helper to get position from any node type

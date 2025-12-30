@@ -10,9 +10,9 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 // Enable Map/Set support in Immer
 enableMapSet()
 
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { handleSimpleClick } from '@/lib/building-elements'
-import { GroupNodesCommand, UngroupNodesCommand } from '@/lib/commands/group-commands'
+import { GroupNodesCommand, UngroupNodesCommand } from '@pascal/core/commands'
 import {
   AddLevelCommand,
   AddNodeCommand,
@@ -23,13 +23,13 @@ import {
   MoveNodeCommand,
   ReorderLevelsCommand,
   UpdateNodeCommand,
-} from '@/lib/commands/scenegraph-commands'
-import { LevelElevationProcessor } from '@/lib/processors/level-elevation-processor'
-import { LevelHeightProcessor } from '@/lib/processors/level-height-processor'
-import { RoomDetectionProcessor } from '@/lib/processors/room-detection-processor'
-import { VerticalStackingProcessor } from '@/lib/processors/vertical-stacking-processor'
-import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@/lib/scenegraph/index'
-import { type Collection, CollectionSchema } from '@/lib/scenegraph/schema/collections'
+} from '@pascal/core/commands'
+import { LevelElevationProcessor } from '@pascal/core/processors'
+import { LevelHeightProcessor } from '@pascal/core/processors'
+import { RoomDetectionProcessor } from '@pascal/core/processors'
+import { VerticalStackingProcessor } from '@pascal/core/processors'
+import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '@pascal/core/scenegraph'
+import { type Collection, CollectionSchema } from '@pascal/core/scenegraph/schema/collections'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -39,10 +39,10 @@ import {
   type Scene,
   type SceneNode,
   SiteNode,
-} from '@/lib/scenegraph/schema/index'
-import { type View, ViewSchema } from '@/lib/scenegraph/schema/views'
-import { type Zone, ZoneSchema } from '@/lib/scenegraph/schema/zones'
-import { calculateNodeBounds, SpatialGrid } from '@/lib/spatial-grid'
+} from '@pascal/core'
+import { type View, ViewSchema } from '@pascal/core/scenegraph/schema/views'
+import { type Zone, ZoneSchema } from '@pascal/core/scenegraph/schema/zones'
+import { calculateNodeBounds, SpatialGrid } from '@pascal/core/spatial-grid'
 
 // Split structure and heavy assets across two IDB keys to avoid rewriting large payloads
 type AssetMap = Record<string, string>
@@ -224,10 +224,10 @@ export type {
   ScanNode,
   WallNode,
   WindowNode,
-} from '@/lib/scenegraph/schema/index'
+} from '@pascal/core'
 
 // Using Schema types instead for internal use
-import type { LevelNode as SchemaLevelNode } from '@/lib/scenegraph/schema/index'
+import type { LevelNode as SchemaLevelNode } from '@pascal/core'
 
 // Editor modes - high-level workflow modes
 export type EditorMode = 'site' | 'structure' | 'furnish'

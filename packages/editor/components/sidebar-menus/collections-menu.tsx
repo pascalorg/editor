@@ -14,8 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Collection } from '@/lib/scenegraph/schema/collections'
-import type { AnyNodeId } from '@/lib/scenegraph/schema/types'
+import type { Collection } from '@pascal/core/scenegraph/schema/collections'
+import type { AnyNodeId } from '@pascal/core'
 import { cn } from '@/lib/utils'
 import { getNodeIcon, getNodeLabel, RenamePopover } from './shared'
 

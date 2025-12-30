@@ -6,9 +6,9 @@ import { Button } from '@react-three/uikit-default'
 import { FolderPlus, Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { emitter, type GridEvent } from '@/events/bus'
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { AnyNode, useEditor, WallNode } from '@/hooks/use-editor'
-import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
+import { calculateWallPositionUpdate, isWallNode } from '@pascal/core/nodes'
 import { GRID_SIZE, TILE_SIZE } from '../editor'
 
 const tmpVec3 = new THREE.Vector3()

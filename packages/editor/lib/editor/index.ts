@@ -1,4 +1,4 @@
-import { AnyNode, type AnyNodeType } from '@/lib/scenegraph/schema/index'
+import { AnyNode, type AnyNodeType } from '@pascal/core'
 
 export const CameraModes = ['perspective', 'orthographic'] as const
 export type CameraMode = (typeof CameraModes)[number]

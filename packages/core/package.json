@@ -1,0 +1,36 @@
+{
+  "name": "@pascal/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scenegraph": "./src/scenegraph/index.ts",
+    "./scenegraph/schema": "./src/scenegraph/schema/index.ts",
+    "./scenegraph/schema/*": "./src/scenegraph/schema/*.ts",
+    "./scenegraph/schema/nodes/*": "./src/scenegraph/schema/nodes/*.ts",
+    "./scenegraph/common-types": "./src/scenegraph/common-types.ts",
+    "./processors": "./src/processors/index.ts",
+    "./commands": "./src/commands/index.ts",
+    "./materials": "./src/materials/index.ts",
+    "./nodes": "./src/nodes/index.ts",
+    "./events": "./src/events/index.ts",
+    "./constants": "./src/constants.ts",
+    "./spatial-grid": "./src/spatial-grid.ts",
+    "./utils": "./src/utils.ts"
+  },
+  "dependencies": {
+    "dedent": "^1.7.0",
+    "immer": "^10.2.0",
+    "mitt": "^3.0.1",
+    "nanoid": "^5.1.6",
+    "three": "^0.181.2",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.181.0",
+    "typescript": "^5.9.3"
+  }
+}

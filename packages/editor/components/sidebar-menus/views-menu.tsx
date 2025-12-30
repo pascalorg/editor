@@ -13,9 +13,9 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { View } from '@/lib/scenegraph/schema/views'
+import type { View } from '@pascal/core/scenegraph/schema/views'
 import { RenamePopover } from './shared'
 
 interface ViewItemProps {

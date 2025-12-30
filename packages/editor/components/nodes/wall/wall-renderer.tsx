@@ -7,10 +7,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import * as THREE from 'three'
 import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/react/shallow'
-import { emitter } from '@/events/bus'
+import { emitter } from '@pascal/core/events'
 import { useEditor } from '@/hooks/use-editor'
-import { getMaterialProps, useMaterial } from '@/lib/materials'
-import type { SceneGraph } from '@/lib/scenegraph/index'
+import { getMaterialProps, useMaterial } from '@pascal/core/materials'
+import type { SceneGraph } from '@pascal/core/scenegraph'
 import type {
   AnyNode,
   GridItem,
@@ -19,7 +19,7 @@ import type {
   SceneNode,
   SceneNodeId,
   WallNode,
-} from '@/lib/scenegraph/schema/index'
+} from '@pascal/core'
 import { TILE_SIZE, WALL_HEIGHT } from '../../editor'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness

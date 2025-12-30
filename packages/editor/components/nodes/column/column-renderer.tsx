@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
-import type { ColumnNode } from '@/lib/scenegraph/schema/index'
+import type { ColumnNode } from '@pascal/core'
 import { WALL_HEIGHT } from '../../editor'
 
 const COLUMN_RADIUS = 0.15 // 15cm radius
