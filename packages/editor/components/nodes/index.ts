@@ -1,19 +1,15 @@
 /**
  * Node Registry Initialization
+ *
+ * Import from @pascal/core to register all node components,
+ * then import editor-specific components that have UI dependencies.
  */
-import './building/building-node'
-import './wall/wall-node'
-import './column/column-node'
-import './slab/slab-node'
-import './ceiling/ceiling-node'
-import './roof/roof-node'
-import './room/room-node'
-import './custom-room/custom-room-node'
-import './zone/zone-tool'
-import './image/image-node'
-import './scan/scan-node'
+
+// Import core node components (registers them with the component registry)
+import '@pascal/core/components/nodes'
+
+// Import editor-specific components that depend on UI
 import './level/level-node'
-import './item/item-node'
-import './group/group-node'
-import './stair/stair-node'
-import './site/site-node'
+
+// Re-export all renderers from core
+export * from '@pascal/core/components/nodes'

@@ -17,11 +17,13 @@ import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace, type WebGLShad
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
-import { EnvironmentRenderer } from '../nodes/environment/environment-renderer'
-import { PaintingTool } from '../nodes/painting/painting-tool'
-import { SledgehammerTool } from '../nodes/sledgehammer/sledgehammer-tool'
-import { ZoneBoundaryEditor } from '../nodes/zone/zone-boundary-editor'
-import { ZoneRenderer } from '../nodes/zone/zone-renderer'
+import {
+  EnvironmentRenderer,
+  ZoneRenderer,
+  PaintingTool,
+  SledgehammerTool,
+  ZoneBoundaryEditor,
+} from '@pascal/core/components/nodes'
 import { NodeRenderer } from '../renderer/node-renderer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'

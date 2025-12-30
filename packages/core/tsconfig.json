@@ -13,8 +13,11 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@pascal/core": ["./src/index.ts"],
+      "@pascal/core/*": ["./src/*"]
     },
     "strictNullChecks": true
   },
