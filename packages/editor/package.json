@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@pascal/core": "workspace:*",
+    "@pascal/viewer": "workspace:*",
     "@biomejs/biome": "2.3.0",
     "@googlemaps/js-api-loader": "^2.0.2",
     "@gsap/react": "^2.1.2",
