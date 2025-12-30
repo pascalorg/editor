@@ -1,6 +1,5 @@
 'use client'
 
-import { animated, useSpring } from '@react-spring/three'
 import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
@@ -273,18 +272,4 @@ export default function Viewer({
       {process.env.NODE_ENV === 'development' && <NodesDebugger />}
     </div>
   )
-}
-
-interface AnimatedLevelProps {
-  children: React.ReactNode
-  positionY?: number
-}
-
-const AnimatedLevel: React.FC<AnimatedLevelProps> = ({ positionY, children }) => {
-  const animatedProps = useSpring({
-    positionY,
-    config: { mass: 1, tension: 170, friction: 26 },
-  })
-
-  return <animated.group position-y={animatedProps.positionY}>{children}</animated.group>
 }

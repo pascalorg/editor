@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react'
 // Import node registrations to ensure all renderers are available
 import '@/components/nodes'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import Viewer from '@/components/viewer'
+import {Viewer} from '@pascal/viewer'
 import { useEditor, type WallMode, waitForHydration } from '@/hooks/use-editor'
 
 function ViewerContent() {

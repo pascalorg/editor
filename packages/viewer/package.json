@@ -11,20 +11,15 @@
   "dependencies": {
     "@pascal/core": "workspace:*",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.4.0"
-  },
-  "peerDependencies": {
-    "@react-spring/three": "^10.0.3",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.4.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "three": "^0.181.2",
+    "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.9"
   },
-  "devDependencies": {
-    "@types/react": "^19.2.7",
-    "@types/three": "^0.181.0",
-    "typescript": "^5.9.3"
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": ">=0.156",
+    "@react-three/fiber": ">=9.0.0",
+    "@react-three/drei": ">=10.0.0",
+    "@react-spring/three": ">=10.0.0"
   }
 }
