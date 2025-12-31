@@ -1,6 +1,6 @@
 {
-  "name": "@pascal/viewer",
-  "version": "0.1.0",
+  "name": "@pascal-app/viewer",
+  "version": "0.1.1",
   "description": "React Three Fiber component for viewing Pascal 3D scenes",
   "private": false,
   "type": "module",
@@ -24,6 +24,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-spring/three": "^10.0.0",
+    "@react-three/csg": "^4.0.0",
+    "@react-three/drei": "^10.0.0",
+    "@react-three/uikit": "^1.0.0",
     "clsx": "^2.1.1",
     "immer": "^10.2.0",
     "mitt": "^3.0.1",
@@ -37,11 +41,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": ">=0.156",
-    "@react-three/fiber": ">=9.0.0",
-    "@react-three/drei": ">=10.0.0",
-    "@react-three/csg": ">=4.0.0",
-    "@react-three/uikit": ">=1.0.0",
-    "@react-spring/three": ">=10.0.0"
+    "@react-three/fiber": ">=9.0.0"
   },
   "devDependencies": {
     "@pascal/core": "workspace:*",

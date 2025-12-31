@@ -13,7 +13,7 @@
     "@googlemaps/js-api-loader": "^2.0.2",
     "@gsap/react": "^2.1.2",
     "@pascal/core": "workspace:*",
-    "@pascal/viewer": "workspace:*",
+    "@pascal-app/viewer": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "@pmndrs/uikit": "^1.0.60",
     "@radix-ui/react-context-menu": "^2.2.16",

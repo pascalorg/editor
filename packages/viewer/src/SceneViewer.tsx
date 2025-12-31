@@ -42,7 +42,7 @@ export interface SceneViewerProps {
  *
  * @example
  * ```tsx
- * import { SceneViewer } from '@pascal/viewer'
+ * import { SceneViewer } from '@pascal-app/viewer'
  *
  * function App() {
  *   return (

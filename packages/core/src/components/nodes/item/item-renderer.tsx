@@ -163,7 +163,8 @@ const ModelItemRenderer = ({
   deletePreview?: boolean
   isActiveFloor: boolean
 }) => {
-  const { scene } = useGLTF(src)
+  const baseURL = useEditor((state) => state.baseURL)
+  const { scene } = useGLTF(`${baseURL}${src}`)
   const ref = useRef<THREE.Group>(null)
 
   const deleteMaterial = useMaterial('delete')

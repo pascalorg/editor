@@ -292,6 +292,7 @@ export type AddToCollectionState = {
 }
 
 export type StoreState = {
+  baseURL: string
   // ============================================================================
   // SCENE GRAPH STATE
   // ============================================================================
@@ -623,7 +624,9 @@ const useStore = create<StoreState>()(
         onChange: (nextScene) => handleGraphChange(nextScene),
       })
 
+      
       return {
+        baseURL:'https://editor.pascal.app', // TODO: Add CONFIG / ENV VARIABLE
         scene: initialScene,
         graph,
         spatialGrid: new SpatialGrid(1),

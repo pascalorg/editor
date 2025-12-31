@@ -1110,7 +1110,8 @@ const WallCutout = ({
   modelPosition: ItemNode['modelPosition']
   modelScale: ItemNode['modelScale']
 }) => {
-  const { nodes } = useGLTF(src) as GLTFResult
+  const baseURL = useEditor((state) => state.baseURL)
+  const { nodes } = useGLTF(`${baseURL}${src}`) as GLTFResult
   const { update } = useCSG()
   const [isReady, setIsReady] = useState(false)
 

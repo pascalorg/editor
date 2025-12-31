@@ -63,12 +63,15 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  // Only externalize peer dependencies - bundle @pascal/core into the output
+  // Only externalize peer dependencies - bundle @pascal/core and other deps into the output
   external: [
     'react',
     'react-dom',
     'three',
     '@react-three/fiber',
+  ],
+  // Explicitly bundle these packages (don't auto-externalize from dependencies)
+  noExternal: [
     '@react-three/drei',
     '@react-three/csg',
     '@react-three/uikit',

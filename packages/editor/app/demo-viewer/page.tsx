@@ -1,6 +1,6 @@
 'use client'
 
-import { SceneViewer } from '@pascal/viewer'
+import { SceneViewer } from '@pascal-app/viewer'
 
 export default function DemoViewerPage() {
   return (
