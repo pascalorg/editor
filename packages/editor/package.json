@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "bun --env-file=.env next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "bun run --cwd ../viewer build && next build --turbopack",
     "start": "next start",
     "lint": "bun x ultracite format"
   },
