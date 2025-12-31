@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/viewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "React Three Fiber component for viewing Pascal 3D scenes",
   "private": false,
   "type": "module",
