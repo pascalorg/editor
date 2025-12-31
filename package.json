@@ -9,5 +9,11 @@
     "build": "bun run --cwd packages/editor build",
     "start": "bun run --cwd packages/editor start",
     "lint": "bun run --cwd packages/editor lint"
+  },
+  "overrides": {
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/csg": "^4.0.0",
+    "three": "^0.181.2"
   }
 }
