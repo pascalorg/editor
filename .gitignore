@@ -41,5 +41,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# package builds
+packages/*/dist
+
 # cursor testing
 .playwright-mcp/

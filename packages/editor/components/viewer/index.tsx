@@ -220,7 +220,7 @@ export default function Viewer({
       <SelectionMessageBridge isEmbedded={isEmbedded} />
 
       <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
-        <SoftShadows focus={1} samples={16} size={25} />
+        {/* <SoftShadows focus={1} samples={16} size={25} /> */}
         {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
         ) : (
