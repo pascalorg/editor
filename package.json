@@ -6,7 +6,9 @@
   ],
   "scripts": {
     "dev": "bun run --cwd packages/editor dev",
-    "build": "bun run --cwd packages/editor build",
+    "build": "bun run --cwd packages/viewer build && bun run --cwd packages/editor build",
+    "build:viewer": "bun run --cwd packages/viewer build",
+    "build:editor": "bun run --cwd packages/editor build",
     "start": "bun run --cwd packages/editor start",
     "lint": "bun run --cwd packages/editor lint"
   },
