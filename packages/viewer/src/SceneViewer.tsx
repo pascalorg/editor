@@ -16,8 +16,6 @@ export interface SceneViewerProps {
   isEmbedded?: boolean
   /** Initial wall mode for viewer */
   defaultWallMode?: WallMode
-  /** CSS class name for the container */
-  className?: string
   /** Custom loading component */
   loadingComponent?: React.ReactNode
   /** Custom error component */
@@ -60,7 +58,6 @@ export function SceneViewer({
   defaultZoom = 80,
   isEmbedded = false,
   defaultWallMode = 'cutaway',
-  className,
   loadingComponent,
   errorComponent,
   onSceneLoaded,
@@ -138,7 +135,6 @@ export function SceneViewer({
     return (
       loadingComponent || (
         <div
-          className={className}
           style={{
             display: 'flex',
             height: '100%',
@@ -173,7 +169,6 @@ export function SceneViewer({
     return (
       errorComponent?.(error) || (
         <div
-          className={className}
           style={{
             display: 'flex',
             height: '100%',
@@ -196,7 +191,6 @@ export function SceneViewer({
 
   return (
     <Viewer
-      className={className}
       defaultWallMode={defaultWallMode}
       defaultZoom={defaultZoom}
       isEmbedded={isEmbedded}

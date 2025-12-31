@@ -74,7 +74,6 @@ function SelectionMessageBridge({ isEmbedded }: { isEmbedded: boolean }) {
 }
 
 export interface ViewerProps {
-  className?: string
   /** Initial zoom level for orthographic camera (default: 80) */
   defaultZoom?: number
   /** When true, posts selection changes to parent window for iframe embedding */
@@ -84,7 +83,6 @@ export interface ViewerProps {
 }
 
 export default function Viewer({
-  className,
   defaultZoom = VIEWER_DEFAULT_ZOOM,
   isEmbedded = false,
   defaultWallMode = 'cutaway',
@@ -206,11 +204,14 @@ export default function Viewer({
   }, [])
 
   return (
-    <div className="relative h-full w-full">
+    <div style={{
+      position:'relative', width:'100%',
+      height:'100%',
+    }}>
       {/* Lightweight bridge for selection state -> iframe messaging */}
       <SelectionMessageBridge isEmbedded={isEmbedded} />
 
-      <Canvas className={cn('bg-[#303035]', className)} onContextMenu={onContextMenu} shadows>
+      <Canvas style={{backgroundColor: '#303035'}} onContextMenu={onContextMenu} shadows>
         {/* <SoftShadows focus={1} samples={16} size={25} /> */}
         {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />
