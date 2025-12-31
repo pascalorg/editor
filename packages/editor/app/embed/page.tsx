@@ -5,8 +5,8 @@ import { Suspense, useEffect, useState } from 'react'
 // Import node registrations to ensure all renderers are available
 import '@/components/nodes'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import {Viewer} from '@pascal-app/viewer'
-import { useEditor, type WallMode, waitForHydration } from '@/hooks/use-editor'
+import {Viewer, WallMode} from '@pascal-app/viewer'
+import { useEditor,  waitForHydration } from '@/hooks/use-editor'
 
 function ViewerContent() {
   const searchParams = useSearchParams()
