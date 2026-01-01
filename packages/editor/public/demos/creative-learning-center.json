@@ -1,0 +1,597 @@
+{
+  "version": "3.0",
+  "grid": {
+    "size": 61
+  },
+  "root": {
+    "environment": {
+      "object": "environment",
+      "latitude": 0,
+      "longitude": 0,
+      "altitude": 0,
+      "timeMode": "now",
+      "metadata": {}
+    },
+    "children": [
+      {
+        "object": "node",
+        "id": "site_tncrgrwpiw7xquj7",
+        "type": "site",
+        "parentId": null,
+        "visible": true,
+        "opacity": 100,
+        "metadata": {},
+        "children": [
+          {
+            "object": "node",
+            "id": "building_gryzflzv33e106am",
+            "type": "building",
+            "parentId": null,
+            "visible": true,
+            "opacity": 100,
+            "metadata": {},
+            "children": [
+              {
+                "object": "node",
+                "id": "level_zp2keccy6cm0dytc",
+                "type": "level",
+                "parentId": null,
+                "visible": true,
+                "opacity": 100,
+                "metadata": {},
+                "children": [
+                  {
+                    "object": "node",
+                    "id": "item_2em3fsr02q1r6o0n",
+                    "type": "item",
+                    "name": "Small Couch 1",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "category": "furniture",
+                    "position": [
+                      42,
+                      41
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      3,
+                      2
+                    ],
+                    "src": "/items/couch-small/model.glb",
+                    "modelScale": [
+                      0.4,
+                      0.4,
+                      0.4
+                    ],
+                    "modelPosition": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "modelRotation": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "elevation": 0
+                  },
+                  {
+                    "object": "node",
+                    "type": "ceiling",
+                    "name": "Ceiling",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "position": [
+                      19,
+                      20
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      20,
+                      23
+                    ],
+                    "elevation": 2.5,
+                    "id": "ceiling_lcwc0hxut1n82hsg",
+                    "children": [
+                      {
+                        "object": "node",
+                        "type": "item",
+                        "name": "Ceiling Lamp",
+                        "parentId": "ceiling_lcwc0hxut1n82hsg",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "preview": false
+                        },
+                        "category": "furniture",
+                        "position": [
+                          5,
+                          18
+                        ],
+                        "rotation": 0,
+                        "size": [
+                          1,
+                          1
+                        ],
+                        "src": "/items/ceiling-light/model.glb",
+                        "modelScale": [
+                          1,
+                          1,
+                          1
+                        ],
+                        "modelPosition": [
+                          0,
+                          0,
+                          0
+                        ],
+                        "modelRotation": [
+                          0,
+                          0,
+                          0
+                        ],
+                        "attachTo": "ceiling",
+                        "id": "item_2q8l4gwjiuybq7ov"
+                      },
+                      {
+                        "object": "node",
+                        "type": "item",
+                        "name": "Ceiling fan",
+                        "parentId": "ceiling_lcwc0hxut1n82hsg",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "preview": false
+                        },
+                        "category": "furniture",
+                        "position": [
+                          14,
+                          18
+                        ],
+                        "rotation": 0,
+                        "size": [
+                          1,
+                          1
+                        ],
+                        "src": "/items/ceiling-fan/model.glb",
+                        "modelScale": [
+                          0.003,
+                          0.003,
+                          0.003
+                        ],
+                        "modelPosition": [
+                          0,
+                          -0.62,
+                          0
+                        ],
+                        "modelRotation": [
+                          0,
+                          0,
+                          0
+                        ],
+                        "attachTo": "ceiling",
+                        "id": "item_kcsnb3xg36mcfxhp"
+                      }
+                    ]
+                  },
+                  {
+                    "object": "node",
+                    "id": "item_lu6tpkjlgca4xses",
+                    "type": "item",
+                    "name": "AirCon",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "category": "furniture",
+                    "position": [
+                      40,
+                      37
+                    ],
+                    "rotation": 4.71238898038469,
+                    "size": [
+                      2,
+                      1
+                    ],
+                    "src": "/items/air-conditioner-block/model.glb",
+                    "modelScale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "modelPosition": [
+                      0,
+                      0.5,
+                      0.06
+                    ],
+                    "modelRotation": [
+                      0,
+                      3.141592653589793,
+                      0
+                    ],
+                    "elevation": 0
+                  },
+                  {
+                    "object": "node",
+                    "type": "group",
+                    "name": "Main Classroom",
+                    "parentId": null,
+                    "visible": true,
+                    "opacity": 100,
+                    "metadata": {},
+                    "editor": {
+                      "preview": false
+                    },
+                    "children": [
+                      {
+                        "object": "node",
+                        "id": "wall_zg1laskrdusdodjf",
+                        "type": "wall",
+                        "name": "Wall Bottom",
+                        "parentId": "group_tmo62lzadfqfnwlw",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          0
+                        ],
+                        "end": [
+                          20,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          0
+                        ],
+                        "size": [
+                          20,
+                          0.2
+                        ],
+                        "rotation": 0,
+                        "elevation": 0
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_4bkhfs3ldfa68f9a",
+                        "type": "wall",
+                        "name": "Wall Right",
+                        "parentId": "group_tmo62lzadfqfnwlw",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Aircon",
+                            "parentId": "wall_4bkhfs3ldfa68f9a",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              7,
+                              0
+                            ],
+                            "rotation": 3.141592653589793,
+                            "size": [
+                              3,
+                              1
+                            ],
+                            "src": "/items/air-conditioner/model.glb",
+                            "modelScale": [
+                              0.0015,
+                              0.0015,
+                              0.0015
+                            ],
+                            "modelPosition": [
+                              0,
+                              2,
+                              -0.3
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_o7e1rihbcf8l4xro"
+                          },
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Aircon",
+                            "parentId": "wall_4bkhfs3ldfa68f9a",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              16,
+                              0
+                            ],
+                            "rotation": 3.141592653589793,
+                            "size": [
+                              3,
+                              1
+                            ],
+                            "src": "/items/air-conditioner/model.glb",
+                            "modelScale": [
+                              0.0015,
+                              0.0015,
+                              0.0015
+                            ],
+                            "modelPosition": [
+                              0,
+                              2,
+                              -0.3
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_fzwki09s5q9pdyvt"
+                          }
+                        ],
+                        "start": [
+                          20,
+                          0
+                        ],
+                        "end": [
+                          20,
+                          23
+                        ],
+                        "position": [
+                          20,
+                          0
+                        ],
+                        "size": [
+                          23,
+                          0.2
+                        ],
+                        "rotation": -1.5707963267948966,
+                        "elevation": 0
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_tg1jogum4qolzer2",
+                        "type": "wall",
+                        "name": "Wall Top",
+                        "parentId": "group_tmo62lzadfqfnwlw",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Window",
+                            "parentId": "wall_tg1jogum4qolzer2",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              4,
+                              0
+                            ],
+                            "rotation": 0,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/window1-black-open-1731/model.glb",
+                            "modelScale": [
+                              0.4,
+                              0.4,
+                              0.4
+                            ],
+                            "modelPosition": [
+                              0,
+                              0.5,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              3.141592653589793,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_rbo84mots0zw0iak"
+                          },
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Window",
+                            "parentId": "wall_tg1jogum4qolzer2",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              15,
+                              0
+                            ],
+                            "rotation": 0,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/window-small/model.glb",
+                            "modelScale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "modelPosition": [
+                              0,
+                              0.5,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_1mlreht3qmdjqqik"
+                          },
+                          {
+                            "object": "node",
+                            "type": "item",
+                            "name": "Main Door",
+                            "parentId": "wall_tg1jogum4qolzer2",
+                            "visible": true,
+                            "opacity": 100,
+                            "metadata": {},
+                            "editor": {
+                              "preview": false
+                            },
+                            "category": "furniture",
+                            "position": [
+                              9,
+                              0
+                            ],
+                            "rotation": 0,
+                            "size": [
+                              2,
+                              1
+                            ],
+                            "src": "/items/doorway-front/model.glb",
+                            "modelScale": [
+                              2,
+                              2,
+                              2
+                            ],
+                            "modelPosition": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "modelRotation": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "attachTo": "wall",
+                            "id": "item_33pq1fx5suxojwn9"
+                          }
+                        ],
+                        "start": [
+                          20,
+                          23
+                        ],
+                        "end": [
+                          0,
+                          23
+                        ],
+                        "position": [
+                          20,
+                          23
+                        ],
+                        "size": [
+                          20,
+                          0.2
+                        ],
+                        "rotation": 3.141592653589793,
+                        "elevation": 0
+                      },
+                      {
+                        "object": "node",
+                        "id": "wall_d2q5t64yt7wjajap",
+                        "type": "wall",
+                        "name": "Wall Left",
+                        "parentId": "group_tmo62lzadfqfnwlw",
+                        "visible": true,
+                        "opacity": 100,
+                        "metadata": {},
+                        "editor": {
+                          "canPlace": true,
+                          "preview": false
+                        },
+                        "children": [],
+                        "start": [
+                          0,
+                          23
+                        ],
+                        "end": [
+                          0,
+                          0
+                        ],
+                        "position": [
+                          0,
+                          23
+                        ],
+                        "size": [
+                          23,
+                          0.2
+                        ],
+                        "rotation": 1.5707963267948966,
+                        "elevation": 0
+                      }
+                    ],
+                    "position": [
+                      19,
+                      20
+                    ],
+                    "rotation": 0,
+                    "size": [
+                      20,
+                      23
+                    ],
+                    "id": "group_tmo62lzadfqfnwlw"
+                  }
+                ],
+                "level": 0,
+                "height": 2.5,
+                "elevation": 0,
+                "name": "Main Floor"
+              }
+            ],
+            "position": [
+              0,
+              0
+            ],
+            "rotation": 0
+          }
+        ]
+      }
+    ]
+  }
+}
