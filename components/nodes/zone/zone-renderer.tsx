@@ -134,7 +134,7 @@ function ZoneLabel({
   })
 
   return (
-    <group position={[centerX, levelYOffset + 2, centerZ]} ref={labelRef}>
+    <group position={[centerX, levelYOffset + 1.25, centerZ]} ref={labelRef}>
       <Billboard>
         <Container
           alignItems="center"
@@ -530,6 +530,10 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
     if (isViewer && selectedZoneId) {
       return []
     }
+    // In viewer mode with a floor selected, only show zones for that floor
+    if (isViewer && selectedFloorId) {
+      return allZones.filter((c) => c.levelId === selectedFloorId)
+    }
     // In full view mode (no floor selected), show all zones
     if (viewMode === 'full' || !selectedFloorId) {
       return allZones
@@ -563,8 +567,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Determine if labels should be shown for a zone
   // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
-    (zoneLevelId: string) =>
-      isViewer && !!selectedFloorId && zoneLevelId === selectedFloorId && !selectedZoneId,
+    (zoneLevelId: string) => isViewer && !selectedZoneId,
     [isViewer, selectedFloorId, selectedZoneId],
   )
 

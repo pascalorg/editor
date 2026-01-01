@@ -3,6 +3,7 @@
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { emitter, type ViewApplyEvent } from '@/events/bus'
@@ -10,6 +11,72 @@ import { type StoreState, useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, GRID_SIZE, VIEWER_INITIAL_CAMERA_DISTANCE, WALL_HEIGHT } from './index'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
+
+/**
+ * Calculate bounds for an object, computing XZ center at local origin (Y=0)
+ * This avoids issues with animated Y positions in exploded view
+ */
+function calculateLocalBoundsCenter(object: THREE.Object3D): { x: number; z: number } | null {
+  const box = new Box3()
+  let hasContent = false
+
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry) {
+      // Skip grids and other background elements
+      if (child.name === '__infinite_grid__' || child.name === '__proximity_grid__') {
+        return
+      }
+
+      // Get geometry bounds
+      if (!child.geometry.boundingBox) {
+        child.geometry.computeBoundingBox()
+      }
+
+      if (child.geometry.boundingBox) {
+        const childBox = child.geometry.boundingBox.clone()
+
+        // Transform by the mesh's world matrix, but we'll extract XZ only
+        child.updateWorldMatrix(true, false)
+        childBox.applyMatrix4(child.matrixWorld)
+
+        // Only expand XZ, ignore Y for centering
+        box.min.x = Math.min(box.min.x, childBox.min.x)
+        box.max.x = Math.max(box.max.x, childBox.max.x)
+        box.min.z = Math.min(box.min.z, childBox.min.z)
+        box.max.z = Math.max(box.max.z, childBox.max.z)
+        hasContent = true
+      }
+    }
+  })
+
+  if (!hasContent || box.isEmpty()) return null
+
+  return {
+    x: (box.min.x + box.max.x) / 2,
+    z: (box.min.z + box.max.z) / 2,
+  }
+}
+
+/**
+ * Derive FSM state from editor state (matches LevelHoverManager logic)
+ */
+function deriveViewerState(
+  buildingId: string | undefined,
+  selectedNodeIds: string[],
+  selectedFloorId: string | null,
+  selectedZoneId: string | null,
+): 'idle' | 'building' | 'level' | 'zone' | 'node' {
+  const hasBuilding = buildingId && selectedNodeIds.includes(buildingId)
+  const hasFloor = !!selectedFloorId
+  const hasZone = !!selectedZoneId
+  const hasNodes = selectedNodeIds.length > 0 && !selectedNodeIds.includes(buildingId!)
+
+  if (hasNodes) return 'node'
+  if (hasZone) return 'zone'
+  if (hasFloor) return 'level'
+  if (hasBuilding) return 'building'
+  return 'idle'
+}
 
 export function ViewerCustomControls() {
   const cameraMode = useEditor((state) => state.cameraMode)
@@ -27,6 +94,12 @@ export function ViewerCustomControls() {
   // Get building ID for camera focus when no level is selected
   const buildingId = useEditor(
     (state) => state.scene.root.children?.[0]?.children.find((c) => c.type === 'building')?.id,
+  )
+
+  // Derive current FSM state
+  const viewerState = useMemo(
+    () => deriveViewerState(buildingId, selectedNodeIds, selectedFloorId, selectedZoneId),
+    [buildingId, selectedNodeIds, selectedFloorId, selectedZoneId],
   )
 
   // Get site node to check for camera preference
@@ -110,12 +183,16 @@ export function ViewerCustomControls() {
     }
   }, [])
 
-  // Focus on building when no level is selected (building overview mode)
+  // Focus on building in idle state (initial load) or building state (after clicking building)
   useEffect(() => {
-    if (!(controls && scene) || selectedFloorId || !buildingId) return
+    if (!(controls && scene && buildingId)) return
+    // Only run for idle or building states
+    if (viewerState !== 'idle' && viewerState !== 'building') return
 
-    // If site has camera settings, prioritize them
-    if (site?.camera) {
+    const cameraImpl = controls as CameraControlsImpl
+
+    // If site has camera settings and we're in idle state, prioritize them for initial load
+    if (viewerState === 'idle' && site?.camera) {
       const { position, target, mode } = site.camera
 
       // Switch mode if needed
@@ -123,7 +200,6 @@ export function ViewerCustomControls() {
         useEditor.getState().setCameraMode(mode)
       }
 
-      const cameraImpl = controls as CameraControlsImpl
       cameraImpl.setLookAt(
         position[0],
         position[1],
@@ -154,38 +230,43 @@ export function ViewerCustomControls() {
         } else {
           // Give up and use default camera position
           const d = VIEWER_INITIAL_CAMERA_DISTANCE
-          ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
-          ;(controls as CameraControlsImpl).setBoundary()
+          cameraImpl.setLookAt(d, d, d, 0, 0, 0, viewerState === 'building')
+          cameraImpl.setBoundary()
         }
         return
       }
 
-      // Calculate bounding box for the entire building
-      const buildingBox = new Box3().setFromObject(buildingObject)
-      if (buildingBox.isEmpty()) {
+      // Calculate precise XZ center using local bounds
+      const center = calculateLocalBoundsCenter(buildingObject)
+      if (!center) {
         const d = VIEWER_INITIAL_CAMERA_DISTANCE
-        ;(controls as CameraControlsImpl).setLookAt(d, d, d, 0, 0, 0, true)
-        ;(controls as CameraControlsImpl).setBoundary()
+        cameraImpl.setLookAt(d, d, d, 0, 0, 0, viewerState === 'building')
+        cameraImpl.setBoundary()
         return
       }
 
-      // Get bounds center and size
-      const center = buildingBox.getCenter(new Vector3())
+      // Calculate Y center from bounding box (this is less affected by animation)
+      const buildingBox = new Box3().setFromObject(buildingObject)
+      const boxCenter = buildingBox.getCenter(new Vector3())
       const size = buildingBox.getSize(new Vector3())
+
+      // For building state (exploded view), adjust center Y to account for spread floors
+      const adjustedCenterY = viewerState === 'building'
+        ? boxCenter.y + (size.y * 0.3) // Shift focus slightly up to see exploded floors better
+        : boxCenter.y
 
       // Use fixed default distance for consistent behavior
       const newDistance = VIEWER_INITIAL_CAMERA_DISTANCE
 
-      // Position camera at 45-degree angle looking at building center
-      const cameraImpl = controls as CameraControlsImpl
+      // Position camera at 45-degree angle looking at building center (using precise XZ)
       cameraImpl.setLookAt(
         center.x + newDistance,
-        center.y + newDistance,
+        adjustedCenterY + newDistance,
         center.z + newDistance,
         center.x,
-        center.y,
+        adjustedCenterY,
         center.z,
-        true,
+        viewerState === 'building', // animate transition when entering building state
       )
       cameraImpl.setBoundary() // Remove boundaries for free viewing
     }
@@ -196,25 +277,20 @@ export function ViewerCustomControls() {
       isMounted = false
       clearTimeout(timeoutId)
     }
-  }, [controls, scene, selectedFloorId, buildingId, site])
+  }, [controls, scene, viewerState, buildingId, site])
 
-  // Focus on level when a level is selected (but no zone is selected)
+  // Focus on level when in level state
   useEffect(() => {
     if (!(controls && scene && selectedFloorId)) return
+    // Only run for level state (not zone, not node)
+    if (viewerState !== 'level') return
 
-    const floorY = (levelMode === 'exploded' ? FLOOR_SPACING : WALL_HEIGHT) * currentLevel
     const cameraImpl = controls as CameraControlsImpl
 
-    // If a zone is selected, don't override its camera focus
-    if (selectedZoneId) {
-      // Just update the boundary
-      const boundaryBox = new Box3(
-        new Vector3(-GRID_SIZE / 2, floorY - 25, -GRID_SIZE / 2),
-        new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
-      )
-      cameraImpl.setBoundary(boundaryBox)
-      return
-    }
+    // Calculate floor Y position accounting for exploded mode
+    const lvlData = levelData[selectedFloorId]
+    const levelOffset = levelMode === 'exploded' ? (lvlData?.level ?? 0) * FLOOR_SPACING : 0
+    const floorY = (lvlData?.elevation ?? 0) + levelOffset
 
     // Check if there's a view saved for this level
     const views = useEditor.getState().scene.views || []
@@ -263,7 +339,7 @@ export function ViewerCustomControls() {
       )
     } else {
       // No saved view - use default camera positioning
-      // Find the level object to get its center, then position camera like initial setup
+      // Find the level object to get its center (XZ only, Y is calculated separately)
       const levelObject = scene.getObjectByName(selectedFloorId)
 
       // Default target is origin at floor height
@@ -271,9 +347,9 @@ export function ViewerCustomControls() {
       let targetZ = 0
 
       if (levelObject) {
-        const levelBox = new Box3().setFromObject(levelObject)
-        if (!levelBox.isEmpty()) {
-          const center = levelBox.getCenter(new Vector3())
+        // Use precise XZ center calculation that ignores animated Y position
+        const center = calculateLocalBoundsCenter(levelObject)
+        if (center) {
           targetX = center.x
           targetZ = center.z
         }
@@ -291,11 +367,13 @@ export function ViewerCustomControls() {
       new Vector3(GRID_SIZE / 2, floorY + 25, GRID_SIZE / 2),
     )
     cameraImpl.setBoundary(boundaryBox)
-  }, [currentLevel, controls, selectedFloorId, selectedZoneId, levelMode, scene])
+  }, [controls, scene, viewerState, selectedFloorId, levelMode, levelData])
 
-  // Focus camera on zone bounds when a zone is selected
+  // Focus camera on zone bounds when in zone state
   useEffect(() => {
     if (!(controls && scene && selectedZoneId && selectedZoneData?.polygon?.length)) return
+    // Only run for zone state (not node state which may have a zone selected too)
+    if (viewerState !== 'zone') return
 
     const cameraImpl = controls as CameraControlsImpl
     const { polygon, levelId } = selectedZoneData
@@ -378,7 +456,7 @@ export function ViewerCustomControls() {
       center.z,
       true,
     )
-  }, [controls, scene, selectedZoneId, selectedZoneData, levelData, levelMode])
+  }, [controls, scene, viewerState, selectedZoneId, selectedZoneData, levelData, levelMode])
 
   // Focus camera on collection bounds when a collection is selected
   useEffect(() => {
@@ -460,14 +538,16 @@ export function ViewerCustomControls() {
     )
   }, [controls, scene, selectedCollectionId, collectionNodeIds, currentLevel, levelMode])
 
-  // Focus on node camera when selected
+  // Focus on node camera when in node state
   useEffect(() => {
     if (!(controls && scene && selectedNodeIds.length === 1)) return
-
-    // Don't override if a zone is selected
-    if (selectedZoneId) return
+    // Only run when in node state
+    if (viewerState !== 'node') return
 
     const nodeId = selectedNodeIds[0]
+    // Skip if the selected node is the building (that's handled by building state)
+    if (nodeId === buildingId) return
+
     // Access node via graph directly
     const handle = useEditor.getState().graph.getNodeById(nodeId as any)
     const node = handle?.data()
@@ -491,8 +571,41 @@ export function ViewerCustomControls() {
         target[2],
         true, // enable transition
       )
+    } else {
+      // No saved camera for node - focus on node bounds
+      const nodeObject = scene.getObjectByName(nodeId)
+      if (nodeObject) {
+        const cameraImpl = controls as CameraControlsImpl
+        const nodeBox = new Box3().setFromObject(nodeObject)
+
+        if (!nodeBox.isEmpty()) {
+          const center = nodeBox.getCenter(new Vector3())
+          const size = nodeBox.getSize(new Vector3())
+
+          // Calculate optimal distance based on node size
+          const maxDimension = Math.max(size.x, size.y, size.z)
+          const targetDistance = Math.max(maxDimension * 1.5, 8)
+
+          // Get current camera position to maintain angle
+          const currentPosition = new Vector3()
+          cameraImpl.getPosition(currentPosition)
+
+          const direction = currentPosition.clone().sub(center).normalize()
+          const newPosition = center.clone().add(direction.multiplyScalar(targetDistance))
+
+          cameraImpl.setLookAt(
+            newPosition.x,
+            Math.max(newPosition.y, center.y + 3),
+            newPosition.z,
+            center.x,
+            center.y,
+            center.z,
+            true,
+          )
+        }
+      }
     }
-  }, [selectedNodeIds, controls, scene, selectedZoneId])
+  }, [controls, scene, viewerState, selectedNodeIds, buildingId])
 
   // Configure mouse buttons for viewer mode - always allow panning with left click
   const mouseButtons = useMemo(() => {

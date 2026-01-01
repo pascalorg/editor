@@ -4,6 +4,7 @@ import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intersection, Object3D } from 'three'
+import * as THREE from 'three'
 import { Box3, Mesh, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
@@ -59,20 +60,155 @@ interface HighlightBoxProps {
   color: string
 }
 
+/**
+ * Gradient shader material for highlight box walls
+ * Fades from transparent at bottom to semi-transparent at top
+ * Uses geometry bounds attribute to compute normalized height in vertex shader
+ */
+const HighlightGradientMaterial = ({
+  color,
+  opacity,
+}: {
+  color: string
+  opacity: number
+}) => {
+  const materialRef = useRef<THREE.ShaderMaterial>(null)
+
+  const uniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+    }),
+    [],
+  )
+
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uColor.value.set(color)
+      materialRef.current.uniforms.uOpacity.value = opacity
+    }
+  }, [color, opacity])
+
+  return (
+    <shaderMaterial
+      depthTest={false}
+      depthWrite={false}
+      fragmentShader={`
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying float vAlpha;
+
+        void main() {
+          gl_FragColor = vec4(uColor, vAlpha * uOpacity);
+        }
+      `}
+      ref={materialRef}
+      side={THREE.DoubleSide}
+      transparent
+      uniforms={uniforms}
+      vertexShader={`
+        attribute float normalizedHeight;
+        varying float vAlpha;
+
+        void main() {
+          // Use pre-computed normalized height (0 at bottom, 1 at top)
+          vAlpha = normalizedHeight * normalizedHeight; // Quadratic falloff
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `}
+    />
+  )
+}
+
 function HighlightBox({ box, color }: HighlightBoxProps) {
   const points = useMemo(() => getBoxEdgePoints(box), [box])
 
+  // Create wall geometry for the box - only walls, no top/bottom caps
+  const wallGeometry = useMemo(() => {
+    const min = box.min
+    const max = box.max
+
+    // Create 4 wall planes manually for cleaner geometry
+    const geometry = new THREE.BufferGeometry()
+
+    // Define the 4 walls as quads (2 triangles each)
+    // Wall vertices: each wall has 4 corners
+    // Pattern per wall: bottom-left, bottom-right, top-right, top-left
+    const vertices = new Float32Array([
+      // Front wall (min.z side)
+      min.x, min.y, min.z,
+      max.x, min.y, min.z,
+      max.x, max.y, min.z,
+      min.x, max.y, min.z,
+      // Back wall (max.z side)
+      max.x, min.y, max.z,
+      min.x, min.y, max.z,
+      min.x, max.y, max.z,
+      max.x, max.y, max.z,
+      // Left wall (min.x side)
+      min.x, min.y, max.z,
+      min.x, min.y, min.z,
+      min.x, max.y, min.z,
+      min.x, max.y, max.z,
+      // Right wall (max.x side)
+      max.x, min.y, min.z,
+      max.x, min.y, max.z,
+      max.x, max.y, max.z,
+      max.x, max.y, min.z,
+    ])
+
+    // Normalized height attribute: 0 at bottom, 1 at top
+    // Pattern per wall: 0, 0, 1, 1 (bottom vertices = 0, top vertices = 1)
+    const normalizedHeight = new Float32Array([
+      // Front wall
+      0, 0, 1, 1,
+      // Back wall
+      0, 0, 1, 1,
+      // Left wall
+      0, 0, 1, 1,
+      // Right wall
+      0, 0, 1, 1,
+    ])
+
+    // Indices for 4 walls (2 triangles per wall)
+    const indices = new Uint16Array([
+      // Front wall
+      0, 1, 2, 0, 2, 3,
+      // Back wall
+      4, 5, 6, 4, 6, 7,
+      // Left wall
+      8, 9, 10, 8, 10, 11,
+      // Right wall
+      12, 13, 14, 12, 14, 15,
+    ])
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.setAttribute('normalizedHeight', new THREE.BufferAttribute(normalizedHeight, 1))
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+    geometry.computeVertexNormals()
+
+    return geometry
+  }, [box])
+
   return (
-    <Line
-      color={color}
-      depthTest={false}
-      depthWrite={false}
-      lineWidth={2}
-      points={points}
-      renderOrder={998}
-      segments
-      transparent
-    />
+    <group>
+      {/* Gradient fill walls */}
+      <mesh geometry={wallGeometry} renderOrder={997}>
+        <HighlightGradientMaterial color={color} opacity={0.3} />
+      </mesh>
+
+      {/* Edge lines */}
+      <Line
+        color={color}
+        depthTest={false}
+        depthWrite={false}
+        lineWidth={2}
+        points={points}
+        renderOrder={998}
+        segments
+        transparent
+      />
+    </group>
   )
 }
 
@@ -132,7 +268,8 @@ export function LevelHoverManager() {
     const hasBuilding = buildingId && state.selectedNodeIds.includes(buildingId)
     const hasFloor = !!state.selectedFloorId
     const hasZone = !!state.selectedZoneId
-    const hasNodes = state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
+    const hasNodes =
+      state.selectedNodeIds.length > 0 && !state.selectedNodeIds.includes(buildingId!)
 
     if (hasNodes) return 'node'
     if (hasZone) return 'zone'
@@ -168,6 +305,8 @@ export function LevelHoverManager() {
 
   const transitionToIdle = useCallback(() => {
     emitter.emit('interaction:click', { type: 'void', id: null })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.setState({
       selectedNodeIds: [],
       selectedZoneId: null,
@@ -180,6 +319,8 @@ export function LevelHoverManager() {
   const transitionToBuilding = useCallback(() => {
     if (!buildingId) return
     emitter.emit('interaction:click', { type: 'building', id: buildingId })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.setState({
       selectedNodeIds: [buildingId],
       selectedZoneId: null,
@@ -193,6 +334,8 @@ export function LevelHoverManager() {
     (levelId: string) => {
       if (!buildingId) return
       emitter.emit('interaction:click', { type: 'level', id: levelId })
+      setHoveredBox(null)
+      setHoverMode(null)
       useEditor.setState({
         selectedNodeIds: [buildingId],
         selectedZoneId: null,
@@ -204,20 +347,24 @@ export function LevelHoverManager() {
 
   const transitionToZone = useCallback((zoneId: string, zone: Zone) => {
     emitter.emit('interaction:click', { type: 'zone', id: zoneId, data: zone })
+    setHoveredBox(null)
+    setHoverMode(null)
     useEditor.getState().selectZone(zoneId)
   }, [])
 
-  const transitionToNode = useCallback(
-    (nodeId: string, keepZone: boolean) => {
-      const nodeData = useEditor.getState().graph.getNodeById(nodeId as any)?.data()
-      emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
-      useEditor.setState({
-        selectedZoneId: keepZone ? useEditor.getState().selectedZoneId : null,
-        selectedNodeIds: [nodeId],
-      })
-    },
-    [],
-  )
+  const transitionToNode = useCallback((nodeId: string, keepZone: boolean) => {
+    const nodeData = useEditor
+      .getState()
+      .graph.getNodeById(nodeId as any)
+      ?.data()
+    emitter.emit('interaction:click', { type: 'node', id: nodeId, data: nodeData })
+    setHoveredBox(null)
+    setHoverMode(null)
+    useEditor.setState({
+      selectedZoneId: keepZone ? useEditor.getState().selectedZoneId : null,
+      selectedNodeIds: [nodeId],
+    })
+  }, [])
 
   // Go back one step in the hierarchy, respecting single-level skip
   const goBack = useCallback(() => {
@@ -409,47 +556,47 @@ export function LevelHoverManager() {
 
         case 'building': {
           // Can hover levels (including ground within level bounds)
+          // Find the closest level by intersection distance
+          let closestLevelId: string | null = null
+          let closestLevelBox: Box3 | null = null
+          let closestDistance = Number.POSITIVE_INFINITY
+
           for (const levelId of levelIds) {
             const levelObject = scene.getObjectByName(levelId)
             if (levelObject) {
               const box = calculateBoundsExcludingImages(levelObject)
               if (box && !box.isEmpty()) {
-                // Check if hovering level meshes OR ground within level footprint
                 const intersects = raycasterRef.current.intersectObject(levelObject, true)
-                if (intersects.length > 0 || rayIntersectsGroundInBox(raycasterRef.current, box)) {
-                  setHoveredBox(box)
-                  setHoverMode('level')
-                  return
+                if (intersects.length > 0 && intersects[0].distance < closestDistance) {
+                  closestDistance = intersects[0].distance
+                  closestLevelId = levelId
+                  closestLevelBox = box
+                } else if (
+                  closestDistance === Number.POSITIVE_INFINITY &&
+                  rayIntersectsGroundInBox(raycasterRef.current, box)
+                ) {
+                  // Ground click within level bounds - only use if no mesh hit yet
+                  closestLevelId = levelId
+                  closestLevelBox = box
                 }
               }
             }
           }
+
+          if (closestLevelId && closestLevelBox) {
+            setHoveredBox(closestLevelBox)
+            setHoverMode('level')
+            return
+          }
+
           setHoveredBox(null)
           setHoverMode(null)
           break
         }
 
         case 'level': {
-          // Can hover other levels (for switching)
-          const currentFloorId = state.selectedFloorId
-          if (!currentFloorId) break
-
-          for (const levelId of levelIds) {
-            if (levelId === currentFloorId) continue
-            const otherLevelObject = scene.getObjectByName(levelId)
-            if (otherLevelObject) {
-              const otherIntersects = raycasterRef.current.intersectObject(otherLevelObject, true)
-              if (otherIntersects.length > 0) {
-                const box = calculateBoundsExcludingImages(otherLevelObject)
-                if (box && !box.isEmpty()) {
-                  setHoveredBox(box)
-                  setHoverMode('level')
-                  return
-                }
-              }
-            }
-          }
-
+          // When a level is selected, don't allow hovering other levels
+          // User must go back (Escape or click void) to switch levels
           setHoveredBox(null)
           setHoverMode(null)
           break
@@ -578,7 +725,7 @@ export function LevelHoverManager() {
 
           const levelObject = scene.getObjectByName(currentFloorId)
 
-          // Check if clicked on a zone
+          // Check if clicked on a zone within the current level
           if (levelObject) {
             const intersects = raycasterRef.current.intersectObject(levelObject, true)
             if (intersects.length > 0) {
@@ -597,33 +744,7 @@ export function LevelHoverManager() {
             }
           }
 
-          // Check if clicked on another level
-          let clickedLevelId: string | null = null
-          let clickedLevelDistance = Number.POSITIVE_INFINITY
-
-          for (const levelId of levelIds) {
-            const lvlObject = scene.getObjectByName(levelId)
-            if (lvlObject) {
-              const intersects = raycasterRef.current.intersectObject(lvlObject, true)
-              if (intersects.length > 0 && intersects[0].distance < clickedLevelDistance) {
-                clickedLevelDistance = intersects[0].distance
-                clickedLevelId = levelId
-              }
-            }
-          }
-
-          if (clickedLevelId) {
-            if (clickedLevelId === currentFloorId) {
-              // Clicked same level background -> go back
-              goBack()
-            } else {
-              // Clicked different level -> switch
-              transitionToLevel(clickedLevelId)
-            }
-            return
-          }
-
-          // Click void -> go back
+          // Click anywhere else -> go back (no level switching allowed)
           goBack()
           break
         }

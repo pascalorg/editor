@@ -7,7 +7,7 @@ import { FolderPlus, Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uiki
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { emitter, type GridEvent } from '@/events/bus'
-import { useEditor } from '@/hooks/use-editor'
+import { AnyNode, useEditor, WallNode } from '@/hooks/use-editor'
 import { calculateWallPositionUpdate, isWallNode } from '@/lib/nodes/utils'
 import { GRID_SIZE, TILE_SIZE } from '../editor'
 
@@ -19,6 +19,51 @@ const tmpVec3 = new THREE.Vector3()
  * This offset needs to be accounted for when converting world coords to grid coords.
  */
 const getGridOffset = () => GRID_SIZE / TILE_SIZE / 2
+
+/**
+ * Calculate the new position, rotation, start, and end for a wall node rotated by the given angle.
+ */
+const calculateWallRotation = (node: WallNode, angle: number) => {
+  if (!(node?.start && node.end)) return null
+
+  const start = { x: node.start[0], y: node.start[1] }
+  const end = { x: node.end[0], y: node.end[1] }
+
+  // 1. Compute wall center (pivot)
+  const pivot = {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  }
+
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+
+  // 2. Rotate a point around pivot
+  const rotate = (p: { x: number; y: number }) => {
+    const dx = p.x - pivot.x
+    const dy = p.y - pivot.y
+
+    return {
+      x: pivot.x + dx * cos - dy * sin,
+      y: pivot.y + dx * sin + dy * cos,
+    }
+  }
+
+  const newStart = rotate(start)
+  const newEnd = rotate(end)
+
+  // 3. Recompute rotation from direction
+  const dirX = newEnd.x - newStart.x
+  const dirY = newEnd.y - newStart.y
+  const newRotation = Math.atan2(-dirY, dirX)
+
+  return {
+    start: [newStart.x, newStart.y] as [number, number],
+    end: [newEnd.x, newEnd.y] as [number, number],
+    position: [newStart.x, newStart.y] as [number, number],
+    rotation: newRotation,
+  } 
+}
 
 interface MoveState {
   isMoving: boolean
@@ -661,11 +706,16 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
           if (!handle) continue
 
           const node = handle.data() as any
-          if (!(node && 'rotation' in node)) continue
 
-          updateNode(nodeId, {
-            rotation: node.rotation + angle,
-          })
+          if (isWallNode(node)) {
+            const wallUpdates = calculateWallRotation(node, Math.PI / 4) as Partial<AnyNode>
+            updateNode(nodeId, wallUpdates)
+          } else {
+            if (!(node && 'rotation' in node)) continue
+            updateNode(nodeId, {
+              rotation: node.rotation + angle,
+            })
+          }
         }
       }
 
@@ -831,11 +881,16 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
           if (!handle) continue
 
           const node = handle.data() as any
-          if (!(node && 'rotation' in node)) continue
 
-          updateNode(nodeId, {
-            rotation: node.rotation + angle,
-          })
+          if (isWallNode(node)) {
+            const wallUpdates = calculateWallRotation(node, -Math.PI / 4) as Partial<AnyNode>
+            updateNode(nodeId, wallUpdates)
+          } else {
+            if (!(node && 'rotation' in node)) continue
+            updateNode(nodeId, {
+              rotation: node.rotation + angle,
+            })
+          }
         }
       }
 
@@ -881,8 +936,8 @@ export const SelectionControls: React.FC<SelectionControlsProps> = ({ controls =
   return (
     <group>
       {/* Individual bounding boxes for each selected item - oriented */}
-      {/* In viewer zone mode, skip individual boxes and only show combined */}
-      {!isViewerZoneMode &&
+      {/* Only show in editor mode (controls=true), skip in viewer mode entirely */}
+      {controls &&
         individualBounds.map((bounds, i) => (
           <SelectionBox
             center={bounds.center}
