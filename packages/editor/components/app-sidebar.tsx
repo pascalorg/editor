@@ -132,49 +132,32 @@ export function AppSidebar() {
     }
   }
 
-  // Resize functionality
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Resize functionality - handle all mouse events on the resize handle
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     setIsResizing(true)
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
     e.preventDefault()
-  }, [])
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing) return
-
+    const handleMouseMove = (e: MouseEvent) => {
       const gapX = 10
       const newWidth = e.clientX
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth + gapX)
       }
-    },
-    [isResizing],
-  )
+    }
 
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false)
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }, [])
-
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = 'ew-resize'
-      document.body.style.userSelect = 'none'
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizing, handleMouseMove, handleMouseUp])
 
   return (
     <Sidebar
@@ -331,7 +314,7 @@ export function AppSidebar() {
           'absolute top-2.5 right-0 bottom-2.5 w-1 cursor-ew-resize bg-transparent hover:bg-blue-500/20',
           isResizing && 'bg-blue-500/40',
         )}
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleResizeMouseDown}
         style={{ right: '8px' }}
       />
     </Sidebar>
