@@ -178,7 +178,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      className={cn('dark text-white')}
+      className={cn('dark text-white', isResizing && 'transition-none')}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       variant="floating"
     >
