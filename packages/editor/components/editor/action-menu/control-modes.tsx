@@ -34,20 +34,20 @@ const allModes: ModeConfig[] = [
     activeColor: 'bg-orange-500/20 text-orange-400',
   },
   {
-    id: 'delete',
-    icon: Trash2,
-    label: 'Delete',
-    shortcut: 'D',
-    color: 'hover:bg-red-500/20 hover:text-red-400',
-    activeColor: 'bg-red-500/20 text-red-400',
-  },
-  {
     id: 'building',
     icon: Hammer,
     label: 'Build',
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
+  },
+  {
+    id: 'delete',
+    icon: Trash2,
+    label: 'Delete',
+    shortcut: 'D',
+    color: 'hover:bg-red-500/20 hover:text-red-400',
+    activeColor: 'bg-red-500/20 text-red-400',
   },
   {
     id: 'painting',
