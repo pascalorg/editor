@@ -130,6 +130,14 @@
   scrollbar-width: none; /* Firefox */
 }
 
-.transition-none * {
-  transition: none !important;
+/* Nuclear option: disable ALL transitions and animations with maximum specificity */
+.transition-none,
+.transition-none *,
+.transition-none *::before,
+.transition-none *::after {
+  /* Force immediate rendering and prevent GPU acceleration */
+  transform: translateZ(0) !important;
+  will-change: auto !important;
+  backface-visibility: visible !important;
 }
+
