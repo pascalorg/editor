@@ -131,10 +131,11 @@
 }
 
 /* Nuclear option: disable ALL transitions and animations with maximum specificity */
+/* Elements with .preserve-transform are excluded to maintain their rotation/transforms */
 .transition-none,
-.transition-none *,
-.transition-none *::before,
-.transition-none *::after {
+.transition-none *:not(.preserve-transform),
+.transition-none *:not(.preserve-transform)::before,
+.transition-none *:not(.preserve-transform)::after {
   /* Force immediate rendering and prevent GPU acceleration */
   transform: translateZ(0) !important;
   will-change: auto !important;

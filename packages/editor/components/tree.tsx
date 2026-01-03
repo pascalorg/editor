@@ -386,7 +386,7 @@ export const TreeExpander = ({
   return (
     <motion.div
       animate={{ rotate: isExpanded ? 90 : 0 }}
-      className={cn('mr-1 flex h-4 w-4 cursor-pointer items-center justify-center', className)}
+      className={cn('preserve-transform mr-1 flex h-4 w-4 cursor-pointer items-center justify-center', className)}
       onClick={(e) => {
         e.stopPropagation()
         toggleExpanded(nodeId)
