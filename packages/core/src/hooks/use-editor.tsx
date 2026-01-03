@@ -317,6 +317,8 @@ export type StoreState = {
   selectedNodeIds: string[]
   isHelpOpen: boolean
   isJsonInspectorOpen: boolean
+  sidebarWidth: number
+  isResizingSidebar: boolean
   wallsGroupRef: THREE.Group | null
   activeTool: Tool | null
   lastBuildingTool: Tool
@@ -385,6 +387,8 @@ export type StoreState = {
 
   setIsHelpOpen: (open: boolean) => void
   setIsJsonInspectorOpen: (open: boolean) => void
+  setSidebarWidth: (width: number) => void
+  setIsResizingSidebar: (resizing: boolean) => void
   closeSpecialEditors: () => Partial<StoreState>
   setActiveTool: (tool: Tool | null, catalogCategory?: CatalogCategory | null) => void
   setCatalogCategory: (category: CatalogCategory | null) => void
@@ -645,6 +649,8 @@ const useStore = create<StoreState>()(
         selectedNodeIds: [],
         isHelpOpen: false,
         isJsonInspectorOpen: false,
+        sidebarWidth: 256,
+        isResizingSidebar: false,
         wallsGroupRef: null,
         activeTool: 'wall',
         lastBuildingTool: 'wall',
@@ -806,6 +812,8 @@ const useStore = create<StoreState>()(
 
         setIsHelpOpen: (open) => set({ isHelpOpen: open }),
         setIsJsonInspectorOpen: (open) => set({ isJsonInspectorOpen: open }),
+        setSidebarWidth: (width) => set({ sidebarWidth: width }),
+        setIsResizingSidebar: (resizing) => set({ isResizingSidebar: resizing }),
 
         // Helper to close special editors (zones, site property lines) when changing modes/tools
         // Returns partial state updates to be merged with other updates
@@ -1884,11 +1892,12 @@ const useStore = create<StoreState>()(
           // Cache this as the last persisted scene
           lastPersistedSceneCache = sceneToStore as Scene
 
-          return {
-            scene: sceneToStore,
-            selectedNodeIds: state.selectedNodeIds,
-            debug: state.debug,
-          }
+           return {
+             scene: sceneToStore,
+             selectedNodeIds: state.selectedNodeIds,
+             debug: state.debug,
+             sidebarWidth: state.sidebarWidth,
+           }
         }
 
         // For transient scenes, persist the cached scene instead (or nothing if no cache)
@@ -1899,6 +1908,7 @@ const useStore = create<StoreState>()(
             // Don't persist selection state from transient scenes
             selectedNodeIds: [],
             debug: state.debug,
+            sidebarWidth: state.sidebarWidth,
           }
         }
 
