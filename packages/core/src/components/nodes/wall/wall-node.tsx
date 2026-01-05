@@ -1,12 +1,12 @@
 'use client'
 
+import { emitter, type GridEvent } from '@pascal/core/events'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 import { Minus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { emitter, type GridEvent } from '@pascal/core/events'
-import { useEditor } from '../../../hooks'
 import { getAllWallsOnLevel, wallSegmentsOverlap } from '../../../geometry/wall-overlap'
+import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 import { WallRenderer } from './wall-renderer'
 
 // ============================================================================

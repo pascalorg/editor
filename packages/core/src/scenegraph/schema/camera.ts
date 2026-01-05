@@ -11,4 +11,3 @@ export const CameraSchema = z.object({
 })
 
 export type Camera = z.infer<typeof CameraSchema>
-

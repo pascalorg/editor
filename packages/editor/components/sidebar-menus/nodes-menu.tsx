@@ -1,5 +1,11 @@
 'use client'
 
+import type { AnyNodeId } from '@pascal/core'
+import { emitter } from '@pascal/core/events'
+import type { SceneNodeHandle } from '@pascal/core/scenegraph'
+import { ImageNode } from '@pascal/core/scenegraph/schema/nodes/image'
+import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
+import { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
 import { Camera, GripVertical, Pencil, Plus } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import { useRef, useState } from 'react'
@@ -14,14 +20,8 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { emitter } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import { saveAsset } from '@/lib/asset-storage'
-import type { SceneNodeHandle } from '@pascal/core/scenegraph'
-import { ImageNode } from '@pascal/core/scenegraph/schema/nodes/image'
-import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
-import { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
-import type { AnyNodeId } from '@pascal/core'
 import { cn } from '@/lib/utils'
 import {
   getNodeIcon,

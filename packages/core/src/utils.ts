@@ -32,7 +32,12 @@ export function worldPositionToGrid(
  */
 export function canPlaceGridItemOnWall(
   wall: WallNode,
-  item: { position: [number, number]; rotation: number; preview?: boolean; side?: 'front' | 'back' },
+  item: {
+    position: [number, number]
+    rotation: number
+    preview?: boolean
+    side?: 'front' | 'back'
+  },
   itemWidth = 2,
 ): boolean {
   // Items are now positioned in wall's LOCAL coordinate system
@@ -69,7 +74,8 @@ export function canPlaceGridItemOnWall(
     if (child.editor?.preview) continue
 
     // Get the side of the existing child (doors/windows have no side = affect both sides)
-    const childSide = child.type === 'item' ? (child as { side?: 'front' | 'back' }).side : undefined
+    const childSide =
+      child.type === 'item' ? (child as { side?: 'front' | 'back' }).side : undefined
 
     // Side-aware collision logic:
     // - If the new item has no side (undefined), it affects both sides → always check collision

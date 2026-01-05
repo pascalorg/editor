@@ -5,10 +5,10 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { FLOOR_SPACING, TILE_SIZE } from '../../constants'
 import { useEditor } from '../../hooks'
 import { getRenderer } from '../../registry'
 import type { AnyNode, AnyNodeId, BaseNode } from '../../scenegraph/schema'
-import { FLOOR_SPACING, TILE_SIZE } from '../../constants'
 
 interface NodeRendererProps {
   nodeId: BaseNode['id']

@@ -19,10 +19,10 @@ export function ViewerViewsMenu({ mounted }: ViewerViewsMenuProps) {
   return (
     <div className="mt-2 w-52 min-w-52">
       <div className="space-y-0.5 p-2">
-        <div className="mb-2 px-2 text-xs font-medium text-white/50 uppercase tracking-wider">
+        <div className="mb-2 px-2 font-medium text-white/50 text-xs uppercase tracking-wider">
           Views
         </div>
-        
+
         {views.map((view) => (
           <div
             className={cn(
@@ -40,4 +40,3 @@ export function ViewerViewsMenu({ mounted }: ViewerViewsMenuProps) {
     </div>
   )
 }
-

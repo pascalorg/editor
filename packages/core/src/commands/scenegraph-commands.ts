@@ -1,12 +1,6 @@
 import { getLevels } from '../scenegraph/editor-utils'
 import type { SceneGraph, SceneNodeHandle } from '../scenegraph/index'
-import type {
-  AnyNode,
-  AnyNodeId,
-  LevelNode,
-  RootNode,
-  SceneNode,
-} from '../scenegraph/schema/index'
+import type { AnyNode, AnyNodeId, LevelNode, RootNode, SceneNode } from '../scenegraph/schema/index'
 import { createId } from '../utils'
 
 // Helper type for nodes that can have children

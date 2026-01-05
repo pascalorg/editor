@@ -1,19 +1,19 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
-import { animated, useSpring } from '@react-spring/three'
-import { emitter, type InteractionClickEvent } from '@pascal/core/events'
-import { useEditor, type WallMode } from '@pascal/core/hooks'
 import { EnvironmentRenderer, ZoneRenderer } from '@pascal/core/components/nodes'
 import { NodeRenderer } from '@pascal/core/components/renderer'
 import { InfiniteFloor } from '@pascal/core/components/viewer'
 import { GRID_SIZE } from '@pascal/core/constants'
+import { emitter, type InteractionClickEvent } from '@pascal/core/events'
+import { useEditor, type WallMode } from '@pascal/core/hooks'
+import { animated, useSpring } from '@react-spring/three'
+import { Bvh, OrthographicCamera, PerspectiveCamera, SoftShadows } from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { useCallback, useEffect } from 'react'
 import { cn } from '../utils'
-import { SelectionControls } from './selection-controls'
 import { LevelHoverManager } from './level-hover-manager'
-import { ViewerCustomControls, VIEWER_DEFAULT_ZOOM } from './viewer-custom-controls'
+import { SelectionControls } from './selection-controls'
+import { VIEWER_DEFAULT_ZOOM, ViewerCustomControls } from './viewer-custom-controls'
 
 /**
  * Lightweight subcomponent that handles selection state and iframe messaging.
@@ -204,14 +204,17 @@ export default function Viewer({
   }, [])
 
   return (
-    <div style={{
-      position:'relative', width:'100%',
-      height:'100%',
-    }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+      }}
+    >
       {/* Lightweight bridge for selection state -> iframe messaging */}
       <SelectionMessageBridge isEmbedded={isEmbedded} />
 
-      <Canvas style={{backgroundColor: '#303035'}} onContextMenu={onContextMenu} shadows>
+      <Canvas onContextMenu={onContextMenu} shadows style={{ backgroundColor: '#303035' }}>
         {/* <SoftShadows focus={1} samples={16} size={25} /> */}
         {cameraMode === 'perspective' ? (
           <PerspectiveCamera far={1000} fov={50} makeDefault near={0.1} position={[10, 10, 10]} />

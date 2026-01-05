@@ -1,5 +1,8 @@
 'use client'
 
+import type { ScanNode } from '@pascal/core'
+import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@pascal/core/events'
+import { ScanNode as ScanNodeSchema } from '@pascal/core/scenegraph/schema/nodes/scan'
 import { useThree } from '@react-three/fiber'
 import { Box } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
@@ -7,11 +10,8 @@ import * as THREE from 'three'
 import { z } from 'zod'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
-import { emitter, type ScanManipulationEvent, type ScanUpdateEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import type { ScanNode } from '@pascal/core'
-import { ScanNode as ScanNodeSchema } from '@pascal/core/scenegraph/schema/nodes/scan'
 import { ScanRenderer } from './scan-renderer'
 
 // ============================================================================

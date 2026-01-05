@@ -8,7 +8,6 @@ import { ZoneSchema } from './zones'
 export * from '../common-types'
 export * from './base'
 export * from './collections'
-export * from './zones'
 export * from './environment'
 // Export all specific node types
 export * from './nodes/building'
@@ -29,6 +28,7 @@ export * from './nodes/window'
 export * from './root'
 export * from './types'
 export * from './views'
+export * from './zones'
 
 export const SceneSchema = z.object({
   root: RootNode.default(RootNode.parse({})),

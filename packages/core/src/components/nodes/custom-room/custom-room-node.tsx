@@ -1,13 +1,13 @@
 'use client'
 
-import { Pentagon } from 'lucide-react'
-import { useEffect, useRef } from 'react'
 import { emitter, type GridEvent } from '@pascal/core/events'
-import { useEditor } from '../../../hooks'
-import { getAllWallsOnLevel, wallSegmentsOverlap } from '../../../geometry/wall-overlap'
-import { registerComponent } from '../../../registry'
 import { GroupNode } from '@pascal/core/scenegraph/schema/nodes/group'
 import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
+import { Pentagon } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { getAllWallsOnLevel, wallSegmentsOverlap } from '../../../geometry/wall-overlap'
+import { useEditor } from '../../../hooks'
+import { registerComponent } from '../../../registry'
 import { createId } from '../../../utils'
 
 // ============================================================================
@@ -207,7 +207,10 @@ export function CustomRoomNodeEditor() {
             const currentLevel = levels.find((l) => l.id === selectedFloorId)
             if (currentLevel?.children) {
               const previewGroupId = customRoomStateRef.current.previewGroupId
-              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewGroupId ?? undefined)
+              const existingWalls = getAllWallsOnLevel(
+                currentLevel.children,
+                previewGroupId ?? undefined,
+              )
               for (const existingWall of existingWalls) {
                 if (wallSegmentsOverlap({ x1, y1, x2, y2 }, existingWall)) {
                   canPlace = false
@@ -221,7 +224,9 @@ export function CustomRoomNodeEditor() {
               for (let i = 0; i < points.length - 1; i++) {
                 const [px1, py1] = points[i]
                 const [px2, py2] = points[i + 1]
-                if (wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })) {
+                if (
+                  wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })
+                ) {
                   canPlace = false
                   break
                 }
@@ -323,7 +328,10 @@ export function CustomRoomNodeEditor() {
             const currentLevel = levels.find((l) => l.id === selectedFloorId)
             if (currentLevel?.children) {
               const previewGroupId = customRoomStateRef.current.previewGroupId
-              const existingWalls = getAllWallsOnLevel(currentLevel.children, previewGroupId ?? undefined)
+              const existingWalls = getAllWallsOnLevel(
+                currentLevel.children,
+                previewGroupId ?? undefined,
+              )
 
               // Check if the new wall segment overlaps with any existing wall
               for (const existingWall of existingWalls) {
@@ -342,7 +350,9 @@ export function CustomRoomNodeEditor() {
                 for (let i = 0; i < points.length - 1; i++) {
                   const [px1, py1] = points[i]
                   const [px2, py2] = points[i + 1]
-                  if (wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })) {
+                  if (
+                    wallSegmentsOverlap({ x1, y1, x2, y2 }, { x1: px1, y1: py1, x2: px2, y2: py2 })
+                  ) {
                     canPlace = false
                     break
                   }
@@ -395,7 +405,10 @@ export function CustomRoomNodeEditor() {
 
     const handleToolCancel = () => {
       // Only cancel if we've started drawing (at least one point placed)
-      if (customRoomStateRef.current.points.length > 0 && customRoomStateRef.current.previewGroupId) {
+      if (
+        customRoomStateRef.current.points.length > 0 &&
+        customRoomStateRef.current.previewGroupId
+      ) {
         deleteNode(customRoomStateRef.current.previewGroupId)
         customRoomStateRef.current.points = []
         customRoomStateRef.current.groupOrigin = null

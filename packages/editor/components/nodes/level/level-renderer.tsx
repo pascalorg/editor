@@ -1,5 +1,6 @@
 'use client'
 
+import type { LevelNode, WindowNode } from '@pascal/core'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
@@ -9,7 +10,6 @@ import { useGridFadeControls } from '@/components/editor/infinite-floor'
 import { InfiniteGrid } from '@/components/editor/infinite-grid'
 import { ProximityGrid } from '@/components/editor/proximity-grid'
 import { useEditor } from '@/hooks/use-editor'
-import type { LevelNode, WindowNode } from '@pascal/core'
 import { LevelNodeEditor } from './level-node'
 
 interface LevelRendererProps {

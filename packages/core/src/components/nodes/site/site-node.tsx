@@ -2,9 +2,9 @@
 // REGISTER BUILDING COMPONENT
 // ============================================================================
 
+import { SiteNode } from '@pascal/core/scenegraph/schema/nodes/site'
 import { Building2 } from 'lucide-react'
 import { registerComponent } from '../../../registry'
-import { SiteNode } from '@pascal/core/scenegraph/schema/nodes/site'
 import { SiteRenderer } from './site-renderer'
 
 // ============================================================================

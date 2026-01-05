@@ -1,13 +1,13 @@
 'use client'
 
+import type { ImageNode } from '@pascal/core'
 import { useTexture } from '@react-three/drei'
 import { memo, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { FLOOR_SPACING, TILE_SIZE } from '../../../constants'
-import { useImageManipulation } from '../image/image-node'
 import { useEditor } from '../../../hooks'
-import type { ImageNode } from '@pascal/core'
+import { useImageManipulation } from '../image/image-node'
 
 const GRID_SIZE = 30 // 30m x 30m
 

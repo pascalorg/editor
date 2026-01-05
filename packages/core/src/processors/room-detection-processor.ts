@@ -6,8 +6,8 @@
 import type { SceneGraph } from '../scenegraph'
 import type { AnyNode } from '../scenegraph/schema/index'
 import type { WallNode } from '../scenegraph/schema/nodes/wall'
-import type { NodeProcessResult, NodeProcessor } from './types'
 import { type BoundingBox, OccupancyGrid } from './occupancy-grid'
+import type { NodeProcessor, NodeProcessResult } from './types'
 
 const WALL_THICKNESS = 0.2 // 20cm default wall thickness
 
@@ -173,10 +173,10 @@ export class RoomDetectionProcessor implements NodeProcessor {
    * Calculate the bounding box of all walls
    */
   private calculateLevelBounds(walls: WallNode[]): BoundingBox | null {
-    let minX = Infinity,
-      maxX = -Infinity
-    let minZ = Infinity,
-      maxZ = -Infinity
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY,
+      maxZ = Number.NEGATIVE_INFINITY
 
     for (const wall of walls) {
       const [x1, z1] = wall.start
@@ -187,7 +187,7 @@ export class RoomDetectionProcessor implements NodeProcessor {
       maxZ = Math.max(maxZ, z1, z2)
     }
 
-    if (minX === Infinity) return null
+    if (minX === Number.POSITIVE_INFINITY) return null
 
     return { minX, maxX, minZ, maxZ }
   }
@@ -209,13 +209,14 @@ export class RoomDetectionProcessor implements NodeProcessor {
     if (frontIsRoom && backIsRoom) {
       // Wall between two rooms (or same room if it's an internal partition)
       return 'both'
-    } else if (frontIsRoom) {
-      return 'front'
-    } else if (backIsRoom) {
-      return 'back'
-    } else {
-      // Neither side is a room (both exterior or both wall)
-      return 'neither'
     }
+    if (frontIsRoom) {
+      return 'front'
+    }
+    if (backIsRoom) {
+      return 'back'
+    }
+    // Neither side is a room (both exterior or both wall)
+    return 'neither'
   }
 }

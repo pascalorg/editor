@@ -1,5 +1,6 @@
 'use client'
 
+import type { ScanNode } from '@pascal/core'
 import { useGLTF } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
@@ -7,11 +8,10 @@ import * as THREE from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { useShallow } from 'zustand/shallow'
-import { FLOOR_SPACING, TILE_SIZE } from '../../../constants'
-import { useScanManipulation } from '../scan/scan-node'
-import { useEditor } from '../../../hooks'
 import { loadAssetUrl } from '../../../asset-storage'
-import type { ScanNode } from '@pascal/core'
+import { FLOOR_SPACING, TILE_SIZE } from '../../../constants'
+import { useEditor } from '../../../hooks'
+import { useScanManipulation } from '../scan/scan-node'
 
 const ktx2LoaderInstance = new KTX2Loader()
 ktx2LoaderInstance.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')

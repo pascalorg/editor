@@ -1,11 +1,11 @@
 'use client'
 
+import type { SceneNode } from '@pascal/core'
 import { shaderMaterial } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, DoubleSide, Vector2 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
-import type { SceneNode } from '@pascal/core'
 
 // Create empty arrays for uniforms with proper initialization
 const createEmptyVector2Array = (size: number): Vector2[] => {

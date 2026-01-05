@@ -3,10 +3,8 @@
  * Import from here to ensure a single instance across all packages.
  */
 
-// @react-three/fiber
-export { Canvas, useFrame, useThree } from '@react-three/fiber'
-export type { ThreeElements } from '@react-three/fiber'
-
+// @react-spring/three
+export { animated, useSpring } from '@react-spring/three'
 // @react-three/drei
 export {
   Bvh,
@@ -17,9 +15,9 @@ export {
   PerspectiveCamera,
   SoftShadows,
 } from '@react-three/drei'
-
-// @react-spring/three
-export { animated, useSpring } from '@react-spring/three'
+export type { ThreeElements } from '@react-three/fiber'
+// @react-three/fiber
+export { Canvas, useFrame, useThree } from '@react-three/fiber'
 
 // Re-export zustand shallow for convenience
 export { useShallow } from 'zustand/react/shallow'

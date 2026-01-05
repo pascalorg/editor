@@ -1,12 +1,12 @@
 'use client'
 
+import { emitter, type GridEvent } from '@pascal/core/events'
+import { StairNode, type StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
 import { StairsIcon } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
-import { StairRenderer } from '../stair/stair-renderer'
-import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import { StairNode, type StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
+import { StairRenderer } from '../stair/stair-renderer'
 
 // ============================================================================
 // STAIR BUILDER COMPONENT

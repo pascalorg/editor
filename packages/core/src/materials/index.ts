@@ -1,5 +1,5 @@
-export { COLORS } from './colors'
 export type { ColorName } from './colors'
+export { COLORS } from './colors'
 
 export { getMaterialPreset, MATERIAL_PRESETS } from './presets'
 

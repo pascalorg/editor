@@ -1,10 +1,10 @@
 'use client'
 
+import type { ImageNode } from '@pascal/core'
 import { Image, X } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { type StoreState, useEditor } from '../../../hooks'
-import type { ImageNode } from '@pascal/core'
 
 /**
  * Image properties editor panel

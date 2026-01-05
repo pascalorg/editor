@@ -90,26 +90,25 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "**",
-      "!node_modules",
-      "!.next",
-      "!dist",
-      "!build",
-      "!components/ui/",
-      "!public",
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx",
-      "**/*.json",
-      "**/*.css",
-      "**/*.md",
-      "**/*.mdx"
+      "packages/**/*.ts",
+      "packages/**/*.tsx",
+      "packages/**/*.js",
+      "packages/**/*.jsx",
+      "packages/**/*.json",
+      "packages/**/*.css",
+      "packages/**/*.md",
+      "packages/**/*.mdx",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/dist",
+      "!**/build",
+      "!**/public",
+      "!**/components/ui"
     ]
   },
   "overrides": [
     {
-      "includes": ["components/debug/react-scan.tsx"],
+      "includes": ["packages/editor/components/debug/react-scan.tsx"],
       "assist": {
         "actions": {
           "source": {

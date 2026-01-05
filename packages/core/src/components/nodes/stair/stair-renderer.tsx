@@ -1,12 +1,12 @@
 'use client'
 
+import type { AnyNodeId } from '@pascal/core'
+import type { StairNode, StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
 import { Edges } from '@react-three/drei'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '../../../hooks'
-import type { StairNode, StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
-import type { AnyNodeId } from '@pascal/core'
 
 // ============================================================================
 // MESH COMPONENT

@@ -1,16 +1,5 @@
 'use client'
 
-import { Addition, Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
-import { Edges, Line, useGLTF } from '@react-three/drei'
-import { type ThreeEvent, useFrame } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import * as THREE from 'three'
-import type { GLTF } from 'three-stdlib'
-import { useShallow } from 'zustand/react/shallow'
-import { emitter } from '@pascal/core/events'
-import { useEditor } from '../../../hooks'
-import { getMaterialProps, useMaterial } from '@pascal/core/materials'
-import type { SceneGraph } from '@pascal/core/scenegraph'
 import type {
   AnyNode,
   GridItem,
@@ -20,7 +9,18 @@ import type {
   SceneNodeId,
   WallNode,
 } from '@pascal/core'
+import { emitter } from '@pascal/core/events'
+import { getMaterialProps, useMaterial } from '@pascal/core/materials'
+import type { SceneGraph } from '@pascal/core/scenegraph'
+import { Addition, Base, Geometry, Subtraction, useCSG } from '@react-three/csg'
+import { Edges, Line, useGLTF } from '@react-three/drei'
+import { type ThreeEvent, useFrame } from '@react-three/fiber'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import type { GLTF } from 'three-stdlib'
+import { useShallow } from 'zustand/react/shallow'
 import { TILE_SIZE, WALL_HEIGHT } from '../../../constants'
+import { useEditor } from '../../../hooks'
 
 export const WALL_THICKNESS = 0.2 // 20cm wall thickness
 // --- Junction Helper Types and Functions (from wall.tsx) ---

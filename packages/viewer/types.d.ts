@@ -1,38 +1,38 @@
-import * as React from 'react';
+import * as React from 'react'
 
 /**
  * Wall display mode for the viewer
  */
-export type WallMode = 'full' | 'cutaway' | 'hidden';
+export type WallMode = 'full' | 'cutaway' | 'hidden'
 
 /**
  * Props for the SceneViewer component
  */
 export interface SceneViewerProps {
   /** URL to load the scene JSON from */
-  sceneUrl?: string;
+  sceneUrl?: string
   /** Initial zoom level for orthographic camera (default: 80) */
-  defaultZoom?: number;
+  defaultZoom?: number
   /** When true, posts selection changes to parent window for iframe embedding */
-  isEmbedded?: boolean;
+  isEmbedded?: boolean
   /** Initial wall mode for viewer */
-  defaultWallMode?: WallMode;
+  defaultWallMode?: WallMode
   /** CSS class name for the container */
-  className?: string;
+  className?: string
   /** Custom loading component */
-  loadingComponent?: React.ReactNode;
+  loadingComponent?: React.ReactNode
   /** Custom error component */
-  errorComponent?: (error: string) => React.ReactNode;
+  errorComponent?: (error: string) => React.ReactNode
   /** Callback when scene is loaded */
-  onSceneLoaded?: () => void;
+  onSceneLoaded?: () => void
   /** Callback when an error occurs */
-  onError?: (error: string) => void;
+  onError?: (error: string) => void
   /** Callback when selection changes */
   onSelectionChange?: (selection: {
-    selectedNodeIds: string[];
-    selectedFloorId: string | null;
-    selectedZoneId: string | null;
-  }) => void;
+    selectedNodeIds: string[]
+    selectedFloorId: string | null
+    selectedZoneId: string | null
+  }) => void
 }
 
 /**
@@ -56,20 +56,20 @@ export interface SceneViewerProps {
  * }
  * ```
  */
-export declare function SceneViewer(props: SceneViewerProps): React.JSX.Element;
+export declare function SceneViewer(props: SceneViewerProps): React.JSX.Element
 
 /**
  * Props for the Viewer component
  */
 export interface ViewerProps {
   /** CSS class name for the canvas container */
-  className?: string;
+  className?: string
   /** Initial zoom level for orthographic camera (default: 80) */
-  defaultZoom?: number;
+  defaultZoom?: number
   /** When true, posts selection changes to parent window for iframe embedding */
-  isEmbedded?: boolean;
+  isEmbedded?: boolean
   /** Initial wall mode for viewer */
-  defaultWallMode?: WallMode;
+  defaultWallMode?: WallMode
 }
 
 /**
@@ -78,4 +78,4 @@ export interface ViewerProps {
  * Use this when you need full control over the scene store initialization.
  * For most use cases, prefer SceneViewer which handles scene loading automatically.
  */
-export declare function Viewer(props: ViewerProps): React.JSX.Element;
+export declare function Viewer(props: ViewerProps): React.JSX.Element

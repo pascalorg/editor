@@ -10,9 +10,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 // Enable Map/Set support in Immer
 enableMapSet()
 
-import { emitter } from '../events'
 import { handleSimpleClick } from '../building-elements'
-import { GroupNodesCommand, UngroupNodesCommand } from '../commands'
 import {
   AddLevelCommand,
   AddNodeCommand,
@@ -20,16 +18,20 @@ import {
   CommandManager,
   DeleteLevelCommand,
   DeleteNodeCommand,
+  GroupNodesCommand,
   MoveNodeCommand,
   ReorderLevelsCommand,
+  UngroupNodesCommand,
   UpdateNodeCommand,
 } from '../commands'
-import { LevelElevationProcessor } from '../processors'
-import { LevelHeightProcessor } from '../processors'
-import { RoomDetectionProcessor } from '../processors'
-import { VerticalStackingProcessor } from '../processors'
+import { emitter } from '../events'
+import {
+  LevelElevationProcessor,
+  LevelHeightProcessor,
+  RoomDetectionProcessor,
+  VerticalStackingProcessor,
+} from '../processors'
 import { getLevelIdForNode, SceneGraph, type SceneNodeHandle } from '../scenegraph'
-import { type Collection, CollectionSchema } from '../scenegraph/schema/collections'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -40,6 +42,7 @@ import {
   type SceneNode,
   SiteNode,
 } from '../scenegraph/schema'
+import { type Collection, CollectionSchema } from '../scenegraph/schema/collections'
 import { type View, ViewSchema } from '../scenegraph/schema/views'
 import { type Zone, ZoneSchema } from '../scenegraph/schema/zones'
 import { calculateNodeBounds, SpatialGrid } from '../spatial-grid'
@@ -624,9 +627,8 @@ const useStore = create<StoreState>()(
         onChange: (nextScene) => handleGraphChange(nextScene),
       })
 
-      
       return {
-        baseURL:'https://editor.pascal.app', // TODO: Add CONFIG / ENV VARIABLE
+        baseURL: 'https://editor.pascal.app', // TODO: Add CONFIG / ENV VARIABLE
         scene: initialScene,
         graph,
         spatialGrid: new SpatialGrid(1),

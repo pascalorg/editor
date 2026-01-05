@@ -1,5 +1,6 @@
 'use client'
 
+import type { RoofNode } from '@pascal/core'
 import { Edges, Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -7,7 +8,6 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
 import { useEditor } from '../../../hooks'
-import type { RoofNode } from '@pascal/core'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
 const OUTLINE_RADIUS = 0.02 // 2cm radius for selection outline cylinders

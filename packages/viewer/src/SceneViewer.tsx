@@ -1,7 +1,7 @@
 'use client'
 
+import { useEditor, type WallMode, waitForHydration } from '@pascal/core/hooks'
 import { useEffect, useState } from 'react'
-import { useEditor, waitForHydration, type WallMode } from '@pascal/core/hooks'
 import { Viewer } from './components'
 
 // Import node registrations to ensure all renderers are available
@@ -158,7 +158,7 @@ export function SceneViewer({
               }}
             />
             <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading scene...</p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+            <style>{'@keyframes spin { to { transform: rotate(360deg) } }'}</style>
           </div>
         </div>
       )
@@ -190,10 +190,6 @@ export function SceneViewer({
   }
 
   return (
-    <Viewer
-      defaultWallMode={defaultWallMode}
-      defaultZoom={defaultZoom}
-      isEmbedded={isEmbedded}
-    />
+    <Viewer defaultWallMode={defaultWallMode} defaultZoom={defaultZoom} isEmbedded={isEmbedded} />
   )
 }

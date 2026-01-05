@@ -1,16 +1,16 @@
 'use client'
 
+import { type CeilingEvent, emitter, type GridEvent, type WallEvent } from '@pascal/core/events'
+import { ItemNode } from '@pascal/core/scenegraph/schema/nodes/item'
+import type { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 import { useThree } from '@react-three/fiber'
 import { Package } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
-import { ItemRenderer } from '../item/item-renderer'
-import { type CeilingEvent, emitter, type GridEvent, type WallEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import { ItemNode } from '@pascal/core/scenegraph/schema/nodes/item'
-import type { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 import { canPlaceGridItemOnWall } from '../../../utils'
+import { ItemRenderer } from '../item/item-renderer'
 
 // ============================================================================
 // ITEM BUILDER COMPONENT

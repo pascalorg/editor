@@ -1,8 +1,8 @@
 import { useGSAP } from '@gsap/react'
+import { ImageUI, RoofUI, ScanUI } from '@pascal/core/components/nodes'
 import gsap from 'gsap'
 import Editor from '@/components/editor'
 import { ActionMenu } from '@/components/editor/action-menu/index'
-import { ImageUI, RoofUI, ScanUI } from '@pascal/core/components/nodes'
 import { SiteUI } from '@/components/nodes/site/site-ui'
 import { StairUI } from '@/components/nodes/stair/stair-ui'
 

@@ -1,11 +1,11 @@
 'use client'
 
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { Building, ChevronDown, ChevronRight, Eye, EyeOff, Grid2x2, Layers } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 
 interface ViewerLayersMenuProps {
@@ -26,9 +26,7 @@ export function ViewerLayersMenu({ mounted }: ViewerLayersMenuProps) {
 
   // Get room zones grouped by levelId
   const roomZones = useEditor(
-    useShallow((state: StoreState) =>
-      (state.scene.zones || []).filter((c) => true),
-    ),
+    useShallow((state: StoreState) => (state.scene.zones || []).filter((c) => true)),
   )
 
   const selectedFloorId = useEditor((state) => state.selectedFloorId)

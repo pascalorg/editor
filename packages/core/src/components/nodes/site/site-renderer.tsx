@@ -1,5 +1,6 @@
 'use client'
 
+import type { SiteNode } from '@pascal/core'
 import { Html, Line, shaderMaterial } from '@react-three/drei'
 import { extend, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
@@ -8,7 +9,6 @@ import { DoubleSide } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { GRID_SIZE } from '../../../constants'
 import { useEditor } from '../../../hooks'
-import type { SiteNode } from '@pascal/core'
 
 interface SiteRendererProps {
   nodeId: SiteNode['id']

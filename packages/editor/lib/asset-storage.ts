@@ -1,4 +1,3 @@
-
 import { get, set } from 'idb-keyval'
 
 export const ASSET_PREFIX = 'asset_data:'
@@ -21,7 +20,7 @@ export async function saveAsset(file: File): Promise<string> {
  */
 export async function loadAssetUrl(url: string): Promise<string | null> {
   if (!url) return null
-  
+
   // If it's already a blob or http URL, return as is
   if (url.startsWith('blob:') || url.startsWith('http')) {
     return url
@@ -30,7 +29,7 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
   // Handle our custom asset protocol
   if (url.startsWith('asset://')) {
     const id = url.replace('asset://', '')
-    
+
     // Check cache first
     if (urlCache.has(id)) {
       return urlCache.get(id)!

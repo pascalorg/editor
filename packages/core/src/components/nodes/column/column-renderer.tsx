@@ -1,11 +1,11 @@
 'use client'
 
+import type { ColumnNode } from '@pascal/core'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { useEditor } from '../../../hooks'
-import type { ColumnNode } from '@pascal/core'
 import { WALL_HEIGHT } from '../../../constants'
+import { useEditor } from '../../../hooks'
 
 const COLUMN_RADIUS = 0.15 // 15cm radius
 

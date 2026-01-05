@@ -1,5 +1,5 @@
-import type { Bounds } from '@/components/editor/bounded-grid'
 import type { AnyNode } from '@pascal/core'
+import type { Bounds } from '@/components/editor/bounded-grid'
 
 // /**
 //  * Calculate the bounding box for all elements on a specific floor

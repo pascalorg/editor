@@ -1,3 +1,5 @@
+import { emitter, type GridEvent } from '@pascal/core/events'
+import { calculateWallPositionUpdate, isWallNode } from '@pascal/core/nodes'
 import type { ThreeMouseEvent } from '@pmndrs/uikit/dist/events'
 import { Billboard, Line } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -6,9 +8,7 @@ import { Button } from '@react-three/uikit-default'
 import { FolderPlus, Move, RotateCcw, RotateCw, Trash2 } from '@react-three/uikit-lucide'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { emitter, type GridEvent } from '@pascal/core/events'
-import { AnyNode, useEditor, WallNode } from '@/hooks/use-editor'
-import { calculateWallPositionUpdate, isWallNode } from '@pascal/core/nodes'
+import { type AnyNode, useEditor, type WallNode } from '@/hooks/use-editor'
 import { GRID_SIZE, TILE_SIZE } from '../editor'
 
 const tmpVec3 = new THREE.Vector3()
@@ -62,7 +62,7 @@ const calculateWallRotation = (node: WallNode, angle: number) => {
     end: [newEnd.x, newEnd.y] as [number, number],
     position: [newStart.x, newStart.y] as [number, number],
     rotation: newRotation,
-  } 
+  }
 }
 
 interface MoveState {

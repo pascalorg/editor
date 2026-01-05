@@ -1,12 +1,12 @@
 'use client'
 
+import type { Scene } from '@pascal/core/scenegraph/schema'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { RequestPanel } from '@/components/viewer/request-panel'
 import { UserMenu } from '@/components/viewer/user-menu'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
 import { useEditor, waitForHydration } from '@/hooks/use-editor'
-import type { Scene } from '@pascal/core/scenegraph/schema'
 
 export default function ViewerPage() {
   const [mounted, setMounted] = useState(false)

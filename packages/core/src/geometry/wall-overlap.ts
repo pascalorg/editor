@@ -92,7 +92,8 @@ export function getAllWallsOnLevel(
   const walls: Array<{ x1: number; y1: number; x2: number; y2: number; id: string }> = []
 
   // Convert single string to Set for consistent handling
-  const excludeSet = typeof excludeIds === 'string' ? new Set([excludeIds]) : (excludeIds ?? new Set())
+  const excludeSet =
+    typeof excludeIds === 'string' ? new Set([excludeIds]) : (excludeIds ?? new Set())
 
   function collectWalls(children: any[], parentPosition: [number, number] = [0, 0]) {
     for (const child of children) {

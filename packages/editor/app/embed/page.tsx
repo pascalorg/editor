@@ -1,23 +1,25 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 // Import node registrations to ensure all renderers are available
 import '@/components/nodes'
+import { SceneViewer, type WallMode } from '@pascal-app/viewer'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import {SceneViewer, Viewer, WallMode} from '@pascal-app/viewer'
-import { useEditor,  waitForHydration } from '@/hooks/use-editor'
+
+const VALID_WALL_MODES = ['up', 'cutaway', 'down'] as const
 
 function ViewerContent() {
   const searchParams = useSearchParams()
   const sceneUrl = searchParams.get('sceneUrl')
-  
+  const wallModeParam = searchParams.get('wallMode')
 
-  return (
-    <SceneViewer
-      sceneUrl={sceneUrl || undefined}
-    />
-  )
+  // Validate wallMode parameter
+  const wallMode: WallMode = (VALID_WALL_MODES as readonly string[]).includes(wallModeParam ?? '')
+    ? (wallModeParam as WallMode)
+    : 'cutaway'
+
+  return <SceneViewer defaultWallMode={wallMode} sceneUrl={sceneUrl || undefined} />
 }
 
 export default function EmbedPage() {

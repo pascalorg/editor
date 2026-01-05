@@ -1,8 +1,8 @@
 'use client'
 
+import { emitter, type GridEvent } from '@pascal/core/events'
 import { Hexagon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
 import { emitter } from '@pascal/core/events'
+import { useEffect } from 'react'
 import { useEditor } from './use-editor'
 
 export function useKeyboard() {

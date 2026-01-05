@@ -1,11 +1,11 @@
 'use client'
 
+import { emitter, type GridEvent, type WallEvent } from '@pascal/core/events'
+import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 import { Line } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { GRID_SIZE, TILE_SIZE } from '../../../constants'
-import { emitter, type GridEvent, type WallEvent } from '@pascal/core/events'
 import { type EditorMode, useEditor } from '../../../hooks'
-import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
 
 interface WallDeleteInfo {
   rangeStart: number

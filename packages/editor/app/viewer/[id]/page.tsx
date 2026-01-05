@@ -1,12 +1,12 @@
 'use client'
 
+import type { Scene } from '@pascal/core'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Viewer from '@/components/viewer'
 import { ViewerControls } from '@/components/viewer/viewer-controls'
 import { ViewerLayersMenu } from '@/components/viewer/viewer-layers-menu'
 import { useEditor, waitForHydration } from '@/hooks/use-editor'
-import type { Scene } from '@pascal/core'
 
 export default function DynamicViewerPage() {
   const params = useParams()

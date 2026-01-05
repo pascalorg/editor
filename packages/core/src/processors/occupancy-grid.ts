@@ -24,7 +24,7 @@ export class OccupancyGrid {
   private originZ: number
   private cellSize: number
 
-  constructor(bounds: BoundingBox, cellSize: number = 0.1) {
+  constructor(bounds: BoundingBox, cellSize = 0.1) {
     // Add padding for exterior flood fill
     const padding = 1.0 // 1 meter padding
     this.originX = bounds.minX - padding
@@ -112,10 +112,10 @@ export class OccupancyGrid {
     const gridCorners = corners.map(([x, z]) => this.worldToGrid(x, z))
 
     // Find bounding box in grid space
-    let minGx = Infinity,
-      maxGx = -Infinity
-    let minGz = Infinity,
-      maxGz = -Infinity
+    let minGx = Number.POSITIVE_INFINITY,
+      maxGx = Number.NEGATIVE_INFINITY
+    let minGz = Number.POSITIVE_INFINITY,
+      maxGz = Number.NEGATIVE_INFINITY
 
     for (const [gx, gz] of gridCorners) {
       minGx = Math.min(minGx, gx)

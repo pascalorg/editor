@@ -44,7 +44,7 @@ function PaintModeSwitch() {
       {modes.map((mode) => (
         <button
           className={cn(
-            'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+            'rounded-md px-3 py-1 font-medium text-xs transition-colors',
             paintMode === mode.value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -68,7 +68,7 @@ export function MaterialCatalog() {
     <div className="flex flex-col gap-3">
       {/* Paint mode switch */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Paint Mode</span>
+        <span className="text-muted-foreground text-xs">Paint Mode</span>
         <PaintModeSwitch />
       </div>
 
@@ -89,7 +89,8 @@ export function MaterialCatalog() {
               type="button"
             >
               {material.isTexture && (
-                <div className="absolute inset-0 rounded-lg opacity-30"
+                <div
+                  className="absolute inset-0 rounded-lg opacity-30"
                   style={{
                     backgroundImage: `repeating-linear-gradient(
                       45deg,
@@ -97,14 +98,18 @@ export function MaterialCatalog() {
                       transparent 4px,
                       rgba(0,0,0,0.1) 4px,
                       rgba(0,0,0,0.1) 8px
-                    )`
+                    )`,
                   }}
                 />
               )}
-              <span className={cn(
-                'text-[10px] font-medium drop-shadow-sm',
-                ['white', 'yellow', 'tile', 'marble'].includes(material.id) ? 'text-gray-800' : 'text-white'
-              )}>
+              <span
+                className={cn(
+                  'font-medium text-[10px] drop-shadow-sm',
+                  ['white', 'yellow', 'tile', 'marble'].includes(material.id)
+                    ? 'text-gray-800'
+                    : 'text-white',
+                )}
+              >
                 {material.name}
               </span>
             </button>

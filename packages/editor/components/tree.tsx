@@ -444,7 +444,7 @@ export type TreeLabelProps = HTMLAttributes<HTMLSpanElement>
 
 export const TreeLabel = forwardRef<HTMLSpanElement, TreeLabelProps>(
   ({ className, ...props }, ref) => (
-    <span ref={ref} className={cn('font flex-1 truncate text-sm', className)} {...props} />
+    <span className={cn('font flex-1 truncate text-sm', className)} ref={ref} {...props} />
   ),
 )
 TreeLabel.displayName = 'TreeLabel'

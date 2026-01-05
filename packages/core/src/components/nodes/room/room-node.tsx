@@ -1,13 +1,13 @@
 'use client'
 
-import { BoxSelect } from 'lucide-react'
-import { useEffect, useRef } from 'react'
 import { emitter, type GridEvent } from '@pascal/core/events'
-import { useEditor } from '../../../hooks'
-import { checkWallsOverlap, getAllWallsOnLevel } from '../../../geometry/wall-overlap'
-import { registerComponent } from '../../../registry'
 import { GroupNode } from '@pascal/core/scenegraph/schema/nodes/group'
 import { WallNode } from '@pascal/core/scenegraph/schema/nodes/wall'
+import { BoxSelect } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { checkWallsOverlap, getAllWallsOnLevel } from '../../../geometry/wall-overlap'
+import { useEditor } from '../../../hooks'
+import { registerComponent } from '../../../registry'
 import { createId } from '../../../utils'
 
 // ============================================================================
@@ -214,7 +214,12 @@ export function RoomNodeEditor() {
                 // Right wall: (roomX + roomWidth, roomY) -> (roomX + roomWidth, roomY + roomHeight)
                 { x1: roomX + roomWidth, y1: roomY, x2: roomX + roomWidth, y2: roomY + roomHeight },
                 // Top wall: (roomX + roomWidth, roomY + roomHeight) -> (roomX, roomY + roomHeight)
-                { x1: roomX + roomWidth, y1: roomY + roomHeight, x2: roomX, y2: roomY + roomHeight },
+                {
+                  x1: roomX + roomWidth,
+                  y1: roomY + roomHeight,
+                  x2: roomX,
+                  y2: roomY + roomHeight,
+                },
                 // Left wall: (roomX, roomY + roomHeight) -> (roomX, roomY)
                 { x1: roomX, y1: roomY + roomHeight, x2: roomX, y2: roomY },
               ]

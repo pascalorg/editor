@@ -1,12 +1,12 @@
 'use client'
 
+import type { SlabNode } from '@pascal/core'
+import { useMaterial } from '@pascal/core/materials'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
 import { useEditor } from '../../../hooks'
-import { useMaterial } from '@pascal/core/materials'
-import type { SlabNode } from '@pascal/core'
 import { WALL_THICKNESS } from '../wall/wall-renderer'
 
 export const SLAB_THICKNESS = 0.2 // 20cm thickness

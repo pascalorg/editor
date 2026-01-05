@@ -4,9 +4,9 @@ import { useMemo } from 'react'
 import { FrontSide, MeshPhysicalMaterial } from 'three'
 import CustomShaderMaterial from 'three-custom-shader-material'
 import { useShallow } from 'zustand/react/shallow'
+import { GRID_SIZE } from '../../constants'
 import { useEditor } from '../../hooks'
 import type { SiteNode } from '../../scenegraph/schema'
-import { GRID_SIZE } from '../../constants'
 
 // Floor material constants
 const FLOOR_COLOR = 'white'

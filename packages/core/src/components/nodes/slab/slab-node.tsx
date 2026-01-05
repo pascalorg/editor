@@ -1,12 +1,12 @@
 'use client'
 
+import { emitter, type GridEvent } from '@pascal/core/events'
+import { SlabNode } from '@pascal/core/scenegraph/schema/nodes/slab'
 import { Square } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { z } from 'zod'
-import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import { SlabNode } from '@pascal/core/scenegraph/schema/nodes/slab'
 import { SlabRenderer } from './slab-renderer'
 
 // ============================================================================

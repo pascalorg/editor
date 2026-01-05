@@ -1,5 +1,12 @@
 'use client'
 
+import type { ItemNode } from '@pascal/core'
+import {
+  getMaterial,
+  getMaterialPreset,
+  type MaterialName,
+  useMaterial,
+} from '@pascal/core/materials'
 import { Clone, Gltf, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
@@ -9,8 +16,6 @@ import type { GLTF } from 'three-stdlib'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
 import { useEditor } from '../../../hooks'
-import { getMaterial, getMaterialPreset, type MaterialName, useMaterial } from '@pascal/core/materials'
-import type { ItemNode } from '@pascal/core'
 
 interface ItemRendererProps {
   nodeId: ItemNode['id']

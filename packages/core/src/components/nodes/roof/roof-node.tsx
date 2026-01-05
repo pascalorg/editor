@@ -1,12 +1,12 @@
 'use client'
 
+import { emitter, type GridEvent } from '@pascal/core/events'
+import { RoofNode } from '@pascal/core/scenegraph/schema/nodes/roof'
 import { Triangle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { RoofRenderer } from '../roof/roof-renderer'
-import { emitter, type GridEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import { RoofNode } from '@pascal/core/scenegraph/schema/nodes/roof'
+import { RoofRenderer } from '../roof/roof-renderer'
 
 const TILE_SIZE = 0.5 // 50cm grid spacing
 const MIN_WALL_LENGTH = 0.5 // 50cm minimum wall length

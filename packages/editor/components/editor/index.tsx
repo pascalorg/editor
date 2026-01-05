@@ -13,19 +13,19 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import '@/components/nodes'
+import {
+  EnvironmentRenderer,
+  PaintingTool,
+  SledgehammerTool,
+  ZoneBoundaryEditor,
+  ZoneRenderer,
+} from '@pascal/core/components/nodes'
+import { NodeRenderer } from '@pascal/core/components/renderer'
+import { InfiniteFloor } from '@pascal/core/components/viewer'
 import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace, type WebGLShadowMap } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { cn } from '@/lib/utils'
-import {
-  EnvironmentRenderer,
-  ZoneRenderer,
-  PaintingTool,
-  SledgehammerTool,
-  ZoneBoundaryEditor,
-} from '@pascal/core/components/nodes'
-import { NodeRenderer } from '@pascal/core/components/renderer'
-import { InfiniteFloor } from '@pascal/core/components/viewer'
 import { SelectionControls } from '../renderer/selection-controls'
 import { CustomControls } from './custom-controls'
 import { GridTiles } from './grid-tiles'

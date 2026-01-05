@@ -1,9 +1,9 @@
 'use client'
 
+import type { RoofNode } from '@pascal/core/scenegraph/schema/nodes/roof'
 import { X } from 'lucide-react'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '../../../hooks'
-import type { RoofNode } from '@pascal/core/scenegraph/schema/nodes/roof'
 
 export function RoofUI() {
   const { updateNode, controlMode, setControlMode } = useEditor(
@@ -108,4 +108,3 @@ export function RoofUI() {
     </div>
   )
 }
-

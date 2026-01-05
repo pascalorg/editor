@@ -1,5 +1,7 @@
 'use client'
 
+import { emitter } from '@pascal/core/events'
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -8,9 +10,7 @@ import * as THREE from 'three'
 import { Box3, Mesh, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
 import { GRID_SIZE, TILE_SIZE } from '@/components/editor'
-import { emitter } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 
 /**
  * FSM States for viewer navigation
@@ -65,13 +65,7 @@ interface HighlightBoxProps {
  * Fades from transparent at bottom to semi-transparent at top
  * Uses geometry bounds attribute to compute normalized height in vertex shader
  */
-const HighlightGradientMaterial = ({
-  color,
-  opacity,
-}: {
-  color: string
-  opacity: number
-}) => {
+const HighlightGradientMaterial = ({ color, opacity }: { color: string; opacity: number }) => {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
 
   const uniforms = useMemo(
@@ -136,25 +130,57 @@ function HighlightBox({ box, color }: HighlightBoxProps) {
     // Pattern per wall: bottom-left, bottom-right, top-right, top-left
     const vertices = new Float32Array([
       // Front wall (min.z side)
-      min.x, min.y, min.z,
-      max.x, min.y, min.z,
-      max.x, max.y, min.z,
-      min.x, max.y, min.z,
+      min.x,
+      min.y,
+      min.z,
+      max.x,
+      min.y,
+      min.z,
+      max.x,
+      max.y,
+      min.z,
+      min.x,
+      max.y,
+      min.z,
       // Back wall (max.z side)
-      max.x, min.y, max.z,
-      min.x, min.y, max.z,
-      min.x, max.y, max.z,
-      max.x, max.y, max.z,
+      max.x,
+      min.y,
+      max.z,
+      min.x,
+      min.y,
+      max.z,
+      min.x,
+      max.y,
+      max.z,
+      max.x,
+      max.y,
+      max.z,
       // Left wall (min.x side)
-      min.x, min.y, max.z,
-      min.x, min.y, min.z,
-      min.x, max.y, min.z,
-      min.x, max.y, max.z,
+      min.x,
+      min.y,
+      max.z,
+      min.x,
+      min.y,
+      min.z,
+      min.x,
+      max.y,
+      min.z,
+      min.x,
+      max.y,
+      max.z,
       // Right wall (max.x side)
-      max.x, min.y, min.z,
-      max.x, min.y, max.z,
-      max.x, max.y, max.z,
-      max.x, max.y, min.z,
+      max.x,
+      min.y,
+      min.z,
+      max.x,
+      min.y,
+      max.z,
+      max.x,
+      max.y,
+      max.z,
+      max.x,
+      max.y,
+      min.z,
     ])
 
     // Normalized height attribute: 0 at bottom, 1 at top

@@ -1,5 +1,6 @@
 'use client'
 
+import { emitter } from '@pascal/core/events'
 import { Arrow } from '@radix-ui/react-popover'
 import { type CameraControlsImpl, Html, useCursor } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
@@ -8,7 +9,6 @@ import { memo, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
 import { furnishTools } from '@/components/editor/action-menu/furnish-tools'
 import { structureTools } from '@/components/editor/action-menu/structure-tools'
-import { emitter } from '@pascal/core/events'
 import { type ControlMode, useEditor } from '@/hooks/use-editor'
 import { GRID_INTERSECTIONS, TILE_SIZE } from '.'
 

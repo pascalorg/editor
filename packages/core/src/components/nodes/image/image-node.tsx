@@ -1,5 +1,8 @@
 'use client'
 
+import type { ImageNode } from '@pascal/core'
+import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@pascal/core/events'
+import { ImageNode as ImageNodeSchema } from '@pascal/core/scenegraph/schema/nodes/image'
 import { useThree } from '@react-three/fiber'
 import { Image } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
@@ -7,11 +10,8 @@ import * as THREE from 'three'
 import { z } from 'zod'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
-import { emitter, type ImageManipulationEvent, type ImageUpdateEvent } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
 import { registerComponent } from '../../../registry'
-import type { ImageNode } from '@pascal/core'
-import { ImageNode as ImageNodeSchema } from '@pascal/core/scenegraph/schema/nodes/image'
 import { ImageRenderer } from './image-renderer'
 
 // ============================================================================

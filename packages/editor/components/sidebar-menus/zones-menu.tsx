@@ -1,5 +1,6 @@
 'use client'
 
+import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { Hexagon, Plus, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
@@ -15,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { Zone } from '@pascal/core/scenegraph/schema/zones'
 import { cn } from '@/lib/utils'
 import { RenamePopover } from './shared'
 
@@ -111,15 +111,7 @@ export function ZoneItem({ zone, isLast, level, onNodeClick }: ZoneItemProps) {
 
         <TreeIcon
           hasChildren={false}
-          icon={
-            <img
-              alt="Zone"
-              className="size-4"
-              height={22}
-              src="/icons/zone.png"
-              width={22}
-            />
-          }
+          icon={<img alt="Zone" className="size-4" height={22} src="/icons/zone.png" width={22} />}
         />
 
         <TreeLabel

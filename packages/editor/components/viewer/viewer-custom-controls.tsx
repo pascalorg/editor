@@ -1,12 +1,12 @@
 'use client'
 
+import { emitter, type ViewApplyEvent } from '@pascal/core/events'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Box3, Vector3 } from 'three'
 import { useShallow } from 'zustand/shallow'
-import { emitter, type ViewApplyEvent } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, GRID_SIZE, VIEWER_INITIAL_CAMERA_DISTANCE, WALL_HEIGHT } from './index'
 
@@ -251,9 +251,10 @@ export function ViewerCustomControls() {
       const size = buildingBox.getSize(new Vector3())
 
       // For building state (exploded view), adjust center Y to account for spread floors
-      const adjustedCenterY = viewerState === 'building'
-        ? boxCenter.y + (size.y * 0.3) // Shift focus slightly up to see exploded floors better
-        : boxCenter.y
+      const adjustedCenterY =
+        viewerState === 'building'
+          ? boxCenter.y + size.y * 0.3 // Shift focus slightly up to see exploded floors better
+          : boxCenter.y
 
       // Use fixed default distance for consistent behavior
       const newDistance = VIEWER_INITIAL_CAMERA_DISTANCE
@@ -380,9 +381,7 @@ export function ViewerCustomControls() {
 
     // Check if there's a view saved for this zone
     const views = useEditor.getState().scene.views || []
-    const zoneView = views.find((v) =>
-      v.sceneState?.visibleZoneIds?.includes(selectedZoneId),
-    )
+    const zoneView = views.find((v) => v.sceneState?.visibleZoneIds?.includes(selectedZoneId))
 
     if (zoneView) {
       // Apply the saved view's camera position
@@ -407,8 +406,10 @@ export function ViewerCustomControls() {
 
     // No saved view - use default camera positioning based on zone polygon bounds
     // Calculate bounds from polygon points (convert grid coords to world coords)
-    let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
-    let minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY,
+      maxZ = Number.NEGATIVE_INFINITY
 
     for (const [x, z] of polygon) {
       // Convert grid coords to world coords (grid * TILE_SIZE - GRID_SIZE/2)

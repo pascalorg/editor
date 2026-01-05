@@ -1,19 +1,19 @@
 'use client'
 
+import type { AnyNodeId } from '@pascal/core'
+import type { SceneNode, SceneNodeHandle } from '@pascal/core/scenegraph'
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { EnvironmentItem } from '@/components/nodes/environment/environment-item'
 import {
   CollectionsSection,
-  ZonesSection,
   LayersMenuContext,
   SiteItem,
   ViewsSection,
+  ZonesSection,
 } from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
 import { type EditorMode, type StoreState, useEditor } from '@/hooks/use-editor'
-import type { SceneNode, SceneNodeHandle } from '@pascal/core/scenegraph'
-import type { AnyNodeId } from '@pascal/core'
 import { cn } from '@/lib/utils'
 
 interface LayersMenuProps {
@@ -277,17 +277,13 @@ export function LayersMenu({ mounted }: LayersMenuProps) {
               <div
                 className={cn(
                   'flex flex-col border-t bg-background px-2 transition-all duration-300 ease-in-out',
-                  expandedIds.includes('zones-section')
-                    ? 'min-h-0 flex-1'
-                    : 'flex-none shrink-0',
+                  expandedIds.includes('zones-section') ? 'min-h-0 flex-1' : 'flex-none shrink-0',
                 )}
               >
                 <div
                   className={cn(
                     'flex-1',
-                    expandedIds.includes('zones-section')
-                      ? 'overflow-y-auto'
-                      : 'overflow-hidden',
+                    expandedIds.includes('zones-section') ? 'overflow-y-auto' : 'overflow-hidden',
                   )}
                 >
                   <TreeView className="p-0">

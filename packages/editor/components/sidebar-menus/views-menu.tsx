@@ -1,5 +1,7 @@
 'use client'
 
+import { emitter } from '@pascal/core/events'
+import type { View } from '@pascal/core/scenegraph/schema/views'
 import { Eye, Plus, Trash2, Video } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
@@ -13,9 +15,7 @@ import {
 } from '@/components/tree'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { emitter } from '@pascal/core/events'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { View } from '@pascal/core/scenegraph/schema/views'
 import { RenamePopover } from './shared'
 
 interface ViewItemProps {

@@ -1,5 +1,5 @@
-import { SceneGraph } from '@pascal/core/scenegraph'
 import { initScene, type Scene, SceneNode } from '@pascal/core'
+import { SceneGraph } from '@pascal/core/scenegraph'
 import { BuildingNode } from '@pascal/core/scenegraph/schema/nodes/building'
 import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 import { SiteNode } from '@pascal/core/scenegraph/schema/nodes/site'

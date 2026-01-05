@@ -10,7 +10,12 @@
     "build:viewer": "bun run --cwd packages/viewer build",
     "build:editor": "bun run --cwd packages/editor build",
     "start": "bun run --cwd packages/editor start",
-    "lint": "bun run --cwd packages/editor lint"
+    "lint": "bun x ultracite format",
+    "lint:check": "bun x ultracite check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.0",
+    "ultracite": "6.0.1"
   },
   "overrides": {
     "@react-three/fiber": "^9.5.0",

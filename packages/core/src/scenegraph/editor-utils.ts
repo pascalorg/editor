@@ -1,11 +1,4 @@
-import type {
-  AnyNode,
-  BuildingNode,
-  LevelNode,
-  RootNode,
-  Scene,
-  SceneNode,
-} from './schema/index'
+import type { AnyNode, BuildingNode, LevelNode, RootNode, Scene, SceneNode } from './schema/index'
 
 /**
  * Build a mutable index of nodes for use within Immer draft state

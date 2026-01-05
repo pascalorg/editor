@@ -1,4 +1,5 @@
 import { produce } from 'immer'
+import { initScene, type NodeCreateTypeMap, type Scene, type View, type Zone } from './schema'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -8,7 +9,6 @@ import {
   type SceneNodeId,
   type SceneNodeType,
 } from './schema/types'
-import { type Zone, initScene, type NodeCreateTypeMap, type Scene, type View } from './schema'
 
 // Re-export from schema that are used elsewhere
 export type {

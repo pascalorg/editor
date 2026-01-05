@@ -1,10 +1,10 @@
 'use client'
 
+import type { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
 import { Box, X } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { type StoreState, useEditor } from '../../../hooks'
-import type { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
 
 /**
  * Scan properties editor panel
@@ -135,7 +135,7 @@ export function ScanUI() {
                   value={Math.round(node.position[1] * 100) / 100}
                 />
               </div>
-              <div className="space-y-1 col-span-2">
+              <div className="col-span-2 space-y-1">
                 <label className="font-medium text-muted-foreground text-xs">Y Offset (m)</label>
                 <input
                   className="w-full rounded border border-input bg-background p-2 text-foreground text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
@@ -233,4 +233,3 @@ export function ScanUI() {
     </div>
   )
 }
-

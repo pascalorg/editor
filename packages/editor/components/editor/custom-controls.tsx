@@ -1,15 +1,15 @@
 'use client'
 
-import { CameraControls, CameraControlsImpl } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Box3, Vector3 } from 'three'
 import {
   emitter,
   type NodeCameraCaptureRequest,
   type ViewApplyEvent,
   type ViewCaptureRequest,
 } from '@pascal/core/events'
+import { CameraControls, CameraControlsImpl } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Box3, Vector3 } from 'three'
 import { useEditor } from '@/hooks/use-editor'
 import { FLOOR_SPACING, WALL_HEIGHT } from './index'
 
@@ -78,8 +78,7 @@ export function CustomControls() {
         sceneState: {
           selectedLevelId: state.selectedFloorId,
           levelMode: state.viewMode === 'level' ? 'single-floor' : state.levelMode,
-          visibleZoneIds:
-            selectedZoneIds.length > 0 ? selectedZoneIds : undefined,
+          visibleZoneIds: selectedZoneIds.length > 0 ? selectedZoneIds : undefined,
         },
       })
     }

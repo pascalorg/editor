@@ -1,11 +1,11 @@
 'use client'
 
+import { generateId } from '@pascal/core/scenegraph/schema/base'
+import type { StairNode, StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
 import { ArrowLeft, ArrowRight, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { useEditor } from '@/hooks/use-editor'
-import { generateId } from '@pascal/core/scenegraph/schema/base'
-import type { StairNode, StairSegmentNode } from '@pascal/core/scenegraph/schema/nodes/stair'
 import { cn } from '@/lib/utils'
 
 type AttachmentSide = 'front' | 'left' | 'right'

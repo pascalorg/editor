@@ -1,7 +1,7 @@
-import { defineConfig } from 'tsup'
-import path from 'path'
-import fs from 'fs'
 import type { Plugin } from 'esbuild'
+import fs from 'fs'
+import path from 'path'
+import { defineConfig } from 'tsup'
 
 // Read core package.json exports to get the mapping
 const corePackagePath = path.resolve(__dirname, '../core/package.json')
@@ -64,12 +64,7 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   // Only externalize peer dependencies - bundle @pascal/core and other deps into the output
-  external: [
-    'react',
-    'react-dom',
-    'three',
-    '@react-three/fiber',
-  ],
+  external: ['react', 'react-dom', 'three', '@react-three/fiber'],
   // Explicitly bundle these packages (don't auto-externalize from dependencies)
   noExternal: [
     '@react-three/drei',

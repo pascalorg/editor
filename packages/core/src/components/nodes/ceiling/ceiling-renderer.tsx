@@ -1,13 +1,13 @@
 'use client'
 
+import type { CeilingNode, GridPoint } from '@pascal/core'
+import { emitter } from '@pascal/core/events'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
 import { TILE_SIZE } from '../../../constants'
-import { emitter } from '@pascal/core/events'
 import { useEditor } from '../../../hooks'
-import type { CeilingNode, GridPoint } from '@pascal/core'
 
 export const CEILING_THICKNESS = 0.15 // 15cm thickness
 export const DEFAULT_CEILING_ELEVATION = 2.5 // 2.5m default height

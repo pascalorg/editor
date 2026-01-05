@@ -1,5 +1,6 @@
 'use client'
 
+import type { SiteNode } from '@pascal/core'
 import { GripVertical, MapPin, Plus, Trash2, X } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
 import { useCallback, useMemo } from 'react'
@@ -7,7 +8,6 @@ import { useShallow } from 'zustand/shallow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { type StoreState, useEditor } from '@/hooks/use-editor'
-import type { SiteNode } from '@pascal/core'
 import { cn } from '@/lib/utils'
 
 interface PointItemProps {

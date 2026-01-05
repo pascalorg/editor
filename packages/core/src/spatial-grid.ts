@@ -407,11 +407,7 @@ export class SpatialGrid {
   /**
    * Query all nodes that intersect with the given rectangle
    */
-  queryRect(
-    levelId: string,
-    min: [number, number],
-    max: [number, number],
-  ): string[] {
+  queryRect(levelId: string, min: [number, number], max: [number, number]): string[] {
     const grid = this.grids.get(levelId)
     if (!grid) return []
 
