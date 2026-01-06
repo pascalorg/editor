@@ -5,7 +5,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --cwd packages/editor dev",
+    "dev": "bun --cwd packages/editor --env-file=packages/editor/.env next dev --turbopack",
     "build": "bun run --cwd packages/viewer build && bun run --cwd packages/editor build",
     "build:viewer": "bun run --cwd packages/viewer build",
     "build:editor": "bun run --cwd packages/editor build",

@@ -134,7 +134,8 @@ function ZoneLabel({
   })
 
   return (
-    <group position={[centerX, levelYOffset + 1.25, centerZ]} ref={labelRef}>
+    <group position={[centerX, levelYOffset + 1.45, centerZ]} ref={labelRef}>
+      
       <Billboard>
         <Container
           alignItems="center"
@@ -146,7 +147,10 @@ function ZoneLabel({
           height={40}
           opacity={0.9}
           paddingRight={16}
-          renderOrder={1000}
+          renderOrder={99_999_999_999}
+          alignContent={"center"}
+          transformOriginX={"center"}
+          transformOriginY={"center"}
         >
           {/* Color circle */}
           <Container
@@ -158,7 +162,7 @@ function ZoneLabel({
             width={42}
           />
           {/* Label text */}
-          <Text color="white" fontSize={20} fontWeight="medium">
+          <Text fontSize={20} fontWeight="medium" color="white">
             {name}
           </Text>
         </Container>
@@ -214,14 +218,25 @@ function ZonePolygon({
       new THREE.Vector3(worldPts[0][0], levelYOffset + Y_OFFSET + 0.01, worldPts[0][1]),
     ]
 
-    // Calculate centroid of polygon
-    let sumX = 0
-    let sumZ = 0
-    for (const [x, z] of worldPts) {
-      sumX += x
-      sumZ += z
+    // Calculate centroid (barycenter) of polygon using the signed area formula
+    // This gives the true center of mass, not just the average of vertices
+    let signedArea = 0
+    let centroidX = 0
+    let centroidZ = 0
+    const n = worldPts.length
+
+    for (let i = 0; i < n; i++) {
+      const [x0, z0] = worldPts[i]
+      const [x1, z1] = worldPts[(i + 1) % n]
+      const cross = x0 * z1 - x1 * z0
+      signedArea += cross
+      centroidX += (x0 + x1) * cross
+      centroidZ += (z0 + z1) * cross
     }
-    const center = { x: sumX / worldPts.length, z: sumZ / worldPts.length }
+
+    signedArea *= 0.5
+    const factor = 1 / (6 * signedArea)
+    const center = { x: centroidX * factor, z: centroidZ * factor }
 
     // Create extruded wall geometry from polygon edges
     // Build vertical quads for each edge of the polygon
@@ -302,7 +317,7 @@ function ZonePolygon({
           frustumCulled={false}
           geometry={wallGeometry}
           position={[0, levelYOffset + Y_OFFSET, 0]}
-          renderOrder={99_999_999_999}
+          renderOrder={99_999_999_998}
         >
           <GradientMaterial
             color={color}
@@ -567,7 +582,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Determine if labels should be shown for a zone
   // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
-    (zoneLevelId: string) => isViewer && !selectedZoneId,
+    (zoneLevelId: string) => isViewer && !!selectedFloorId && !selectedZoneId,
     [isViewer, selectedFloorId, selectedZoneId],
   )
 

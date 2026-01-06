@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { useEditor } from './use-editor'
 
 export function useKeyboard() {
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
+  
   const handleDeleteSelected = useEditor((state) => state.handleDeleteSelected)
   const undo = useEditor((state) => state.undo)
   const redo = useEditor((state) => state.redo)
@@ -27,6 +27,7 @@ export function useKeyboard() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
+        const selectedNodeIds = useEditor.getState().selectedNodeIds;
 
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -90,6 +91,7 @@ export function useKeyboard() {
         redo()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
+
         if (selectedNodeIds.length > 0) {
           handleDeleteSelected()
         }
@@ -105,7 +107,6 @@ export function useKeyboard() {
     setEditorMode,
     cameraMode,
     setCameraMode,
-    selectedNodeIds,
     handleDeleteSelected,
     toggleLevelMode,
     toggleWallMode,
