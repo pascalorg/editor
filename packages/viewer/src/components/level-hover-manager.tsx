@@ -432,15 +432,6 @@ export function LevelHoverManager() {
 
   // --- Helper Functions ---
 
-  const findRoomForPoint = (x: number, z: number, zones: Zone[]): Zone | null => {
-    for (const zone of zones) {
-      if (isPointInPolygon(x, z, zone.polygon)) {
-        return zone
-      }
-    }
-    return null
-  }
-
   const isPointInPolygon = (x: number, z: number, polygon: [number, number][]): boolean => {
     if (!polygon || polygon.length < 3) return false
     let inside = false
@@ -456,14 +447,66 @@ export function LevelHoverManager() {
     return inside
   }
 
-  const isWorldPointInSelectedPolygon = (worldX: number, worldZ: number): boolean => {
-    if (!selectedZonePolygon || selectedZonePolygon.length < 3) return true
-    const localX = worldX + GRID_SIZE / 2
-    const localZ = worldZ + GRID_SIZE / 2
-    const gridX = localX / TILE_SIZE
-    const gridZ = localZ / TILE_SIZE
-    return isPointInPolygon(gridX, gridZ, selectedZonePolygon)
+  const findRoomForPoint = (x: number, z: number, zones: Zone[]): Zone | null => {
+    for (const zone of zones) {
+      if (isPointInPolygon(x, z, zone.polygon)) {
+        return zone
+      }
+    }
+    return null
   }
+
+  const isWorldPointInSelectedPolygon = useCallback(
+    (worldX: number, worldZ: number): boolean => {
+      if (!selectedZonePolygon || selectedZonePolygon.length < 3) return true
+      const localX = worldX + GRID_SIZE / 2
+      const localZ = worldZ + GRID_SIZE / 2
+      const gridX = localX / TILE_SIZE
+      const gridZ = localZ / TILE_SIZE
+
+      // Point-in-polygon test
+      const polygon = selectedZonePolygon
+      let inside = false
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0],
+          zi = polygon[i][1]
+        const xj = polygon[j][0],
+          zj = polygon[j][1]
+        if (zi > gridZ !== zj > gridZ && gridX < ((xj - xi) * (gridZ - zi)) / (zj - zi) + xi) {
+          inside = !inside
+        }
+      }
+      return inside
+    },
+    [selectedZonePolygon],
+  )
+
+  // Check if any part of a bounding box is inside the selected zone
+  // This is more lenient than center-only check, useful for items on zone boundaries (like doors)
+  const isBoxInSelectedZone = useCallback(
+    (box: Box3): boolean => {
+      if (!selectedZonePolygon || selectedZonePolygon.length < 3) return true
+
+      // Check center
+      const center = new Vector3()
+      box.getCenter(center)
+      if (isWorldPointInSelectedPolygon(center.x, center.z)) return true
+
+      // Check all 4 corners of the bounding box (in XZ plane)
+      const minX = box.min.x
+      const maxX = box.max.x
+      const minZ = box.min.z
+      const maxZ = box.max.z
+
+      if (isWorldPointInSelectedPolygon(minX, minZ)) return true
+      if (isWorldPointInSelectedPolygon(maxX, minZ)) return true
+      if (isWorldPointInSelectedPolygon(minX, maxZ)) return true
+      if (isWorldPointInSelectedPolygon(maxX, maxZ)) return true
+
+      return false
+    },
+    [selectedZonePolygon, isWorldPointInSelectedPolygon],
+  )
 
   const calculateBoundsExcludingImages = (object: Object3D): Box3 | null => {
     const box = new Box3()
@@ -647,14 +690,15 @@ export function LevelHoverManager() {
                 const node = graph.getNodeById(nodeId as any)?.data()
                 if (node?.type === 'reference-image') continue
 
-                if (currentZoneId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
-                  continue
-                }
-
                 const nodeObject = scene.getObjectByName(nodeId)
                 if (nodeObject) {
                   const box = new Box3().setFromObject(nodeObject)
                   if (!box.isEmpty()) {
+                    // Check if any part of node is within the selected zone
+                    if (currentZoneId && !isBoxInSelectedZone(box)) {
+                      continue
+                    }
+
                     setHoveredBox(box)
                     setHoverMode('node')
                     return
@@ -794,8 +838,14 @@ export function LevelHoverManager() {
                 const node = graph.getNodeById(nodeId as any)?.data()
                 if (node?.type === 'reference-image') continue
 
-                if (currentZoneId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
-                  continue
+                // Check if any part of node is within the selected zone
+                if (currentZoneId) {
+                  const nodeObject = scene.getObjectByName(nodeId)
+                  if (nodeObject) {
+                    const box = new Box3().setFromObject(nodeObject)
+                    if (box.isEmpty()) continue
+                    if (!isBoxInSelectedZone(box)) continue
+                  }
                 }
 
                 if (hasModifierKey) {
@@ -811,24 +861,9 @@ export function LevelHoverManager() {
               }
             }
 
-            // Check if clicked on a different zone
-            const currentRoomZones = (state.scene.zones || []).filter(
-              (c) => c.levelId === currentFloorId,
-            )
-            const hit = intersects[0]
-            const room = findRoomForPoint(hit.point.x, hit.point.z, currentRoomZones)
-
-            if (room) {
-              if (room.id !== currentZoneId) {
-                // Clicked different zone -> switch
-                transitionToZone(room.id, room)
-              }
-              // Clicked same zone background -> stay
-              return
-            }
           }
 
-          // Clicked outside all zones -> go back
+          // Clicked outside current zone (on another zone or empty space) -> go back to level
           goBack()
           break
         }
@@ -852,8 +887,14 @@ export function LevelHoverManager() {
                 const node = graph.getNodeById(nodeId as any)?.data()
                 if (node?.type === 'reference-image') continue
 
-                if (currentZoneId && !isWorldPointInSelectedPolygon(hit.point.x, hit.point.z)) {
-                  continue
+                // Check if any part of node is within the selected zone
+                if (currentZoneId) {
+                  const nodeObject = scene.getObjectByName(nodeId)
+                  if (nodeObject) {
+                    const box = new Box3().setFromObject(nodeObject)
+                    if (box.isEmpty()) continue
+                    if (!isBoxInSelectedZone(box)) continue
+                  }
                 }
 
                 if (hasModifierKey) {
@@ -912,6 +953,8 @@ export function LevelHoverManager() {
     transitionToLevel,
     transitionToNode,
     transitionToZone,
+    isWorldPointInSelectedPolygon,
+    isBoxInSelectedZone,
   ])
 
   // Clear hover when relevant state changes
