@@ -1,6 +1,7 @@
 'use client'
 
 import type { RoofNode } from '@pascal/core'
+import { useMaterial } from '@pascal/core/materials'
 import { Edges, Line } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -912,6 +913,11 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
     }
   }, [localSegment, tileSize])
 
+  const materialA = useMaterial('white')
+  const materialB = useMaterial('white')
+  const materialC = useMaterial('white')
+  const materialSide = useMaterial('white')
+
   if (!roofGeometry) return null
 
   // Determine opacity based on selected floor
@@ -932,46 +938,46 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   if (isHidden) return null
 
   // Materials
-  const materialA = (
-    <meshStandardMaterial
-      color="#93c5fd"
-      metalness={0.1}
-      opacity={opacity}
-      roughness={0.8}
-      side={THREE.DoubleSide}
-      transparent={transparent}
-    />
-  )
-  const materialB = (
-    <meshStandardMaterial
-      color="#6ee7b7"
-      metalness={0.1}
-      opacity={opacity}
-      roughness={0.8}
-      side={THREE.DoubleSide}
-      transparent={transparent}
-    />
-  )
-  const materialC = (
-    <meshPhysicalMaterial
-      color="#dcdcf7"
-      metalness={0.1}
-      opacity={opacity}
-      roughness={0.7}
-      side={THREE.DoubleSide}
-      transparent={transparent}
-    />
-  )
-  const materialSide = (
-    <meshPhysicalMaterial
-      color="#dcdcf7"
-      metalness={0.1}
-      opacity={opacity}
-      roughness={0.7}
-      side={THREE.DoubleSide}
-      transparent={transparent}
-    />
-  )
+  // const materialA = (
+  //   <meshStandardMaterial
+  //     color="#93c5fd"
+  //     metalness={0.1}
+  //     opacity={opacity}
+  //     roughness={0.8}
+  //     side={THREE.DoubleSide}
+  //     transparent={transparent}
+  //   />
+  // )
+  // const materialB = (
+  //   <meshStandardMaterial
+  //     color="#6ee7b7"
+  //     metalness={0.1}
+  //     opacity={opacity}
+  //     roughness={0.8}
+  //     side={THREE.DoubleSide}
+  //     transparent={transparent}
+  //   />
+  // )
+  // const materialC = (
+  //   <meshPhysicalMaterial
+  //     color="#dcdcf7"
+  //     metalness={0.1}
+  //     opacity={opacity}
+  //     roughness={0.7}
+  //     side={THREE.DoubleSide}
+  //     transparent={transparent}
+  //   />
+  // )
+  // const materialSide = (
+  //   <meshPhysicalMaterial
+  //     color="#dcdcf7"
+  //     metalness={0.1}
+  //     opacity={opacity}
+  //     roughness={0.7}
+  //     side={THREE.DoubleSide}
+  //     transparent={transparent}
+  //   />
+  // )
 
   // Calculate derived dimensions for handles
   const arrowHitRadius = ARROW_SHAFT_RADIUS * ARROW_HIT_RADIUS_SCALE
@@ -1037,9 +1043,14 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
 
   // Helper to render a mesh part
   const RenderPart = ({ shape, depth, material, position }: any) => (
-    <mesh castShadow position={position} receiveShadow rotation={[0, Math.PI / 2, 0]}>
+    <mesh
+      castShadow
+      material={material}
+      position={position}
+      receiveShadow
+      rotation={[0, Math.PI / 2, 0]}
+    >
       <extrudeGeometry args={[shape, { depth, bevelEnabled: false }]} />
-      {material}
       {debug && (
         <Edges color="#000000" linewidth={1} opacity={0.1} renderOrder={1000} threshold={15} />
       )}
