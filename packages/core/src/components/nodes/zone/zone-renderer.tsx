@@ -582,7 +582,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Determine if labels should be shown for a zone
   // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
-    (zoneLevelId: string) => isViewer && !selectedZoneId,
+    (zoneLevelId: string) => isViewer && selectedFloorId && !selectedZoneId,
     [isViewer, selectedFloorId, selectedZoneId],
   )
 
