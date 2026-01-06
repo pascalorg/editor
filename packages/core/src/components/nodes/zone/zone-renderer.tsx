@@ -162,7 +162,7 @@ function ZoneLabel({
             width={42}
           />
           {/* Label text */}
-          <Text fontSize={20} fontWeight="medium" color="white" f>
+          <Text fontSize={20} fontWeight="medium" color="white">
             {name}
           </Text>
         </Container>
