@@ -28,6 +28,7 @@ import {
   getNodeLabel,
   ModelPositionPopover,
   RenamePopover,
+  useIsFloorSelected,
   useIsNodeSelected,
   useLayersMenu,
   VisibilityToggle,
@@ -302,7 +303,6 @@ interface DraggableLevelItemProps {
   levelId: LevelNode['id']
   levelIndex: number
   levelsCount: number
-  isSelected: boolean
   handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, levelId: string) => Promise<void>
   controls: ReturnType<typeof useDragControls>
@@ -313,12 +313,13 @@ const DraggableLevelItem = memo(function DraggableLevelItem({
   levelId,
   levelIndex,
   levelsCount,
-  isSelected,
   handleUpload,
   handleScanUpload,
   controls,
   level,
 }: DraggableLevelItemProps) {
+  // Use fine-grained floor selection hook - only re-renders when THIS floor's selection changes
+  const isSelected = useIsFloorSelected(levelId)
   const { handleNodeClick } = useLayersMenu()
   const isLastLevel = levelIndex === levelsCount - 1
 
@@ -707,7 +708,6 @@ export const BuildingItem = memo(function BuildingItem({
   )
 
   const selectFloor = useEditor((state) => state.selectFloor)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const reorderLevels = useEditor((state) => state.reorderLevels)
   const addLevel = useEditor((state) => state.addLevel)
   const addNode = useEditor((state) => state.addNode)
@@ -770,8 +770,9 @@ export const BuildingItem = memo(function BuildingItem({
       .filter(Boolean) as any[]
 
     reorderLevels(updatedLevels)
-    if (selectedFloorId) {
-      useEditor.getState().selectFloor(selectedFloorId)
+    const currentSelectedFloorId = useEditor.getState().selectedFloorId
+    if (currentSelectedFloorId) {
+      useEditor.getState().selectFloor(currentSelectedFloorId)
     }
   }
 
@@ -881,7 +882,6 @@ export const BuildingItem = memo(function BuildingItem({
               <LevelReorderItem
                 handleScanUpload={handleScanUpload}
                 handleUpload={handleUpload}
-                isSelected={selectedFloorId === levelId}
                 key={levelId}
                 level={level + 1}
                 levelId={levelId as LevelNode['id']}

@@ -19,6 +19,15 @@ export function useIsNodeSelected(nodeId: string): boolean {
   )
 }
 
+// Fine-grained floor selection hook - only re-renders when THIS floor's selection state changes
+export function useIsFloorSelected(floorId: string): boolean {
+  return useSyncExternalStore(
+    useEditor.subscribe,
+    () => useEditor.getState().selectedFloorId === floorId,
+    () => useEditor.getState().selectedFloorId === floorId,
+  )
+}
+
 // Context for layers menu interaction
 export interface LayersMenuContextType {
   handleNodeClick: (nodeId: string, hasChildren: boolean) => void

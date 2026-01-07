@@ -36,6 +36,13 @@ type ExpansionStoreType = {
   toggleExpanded: (nodeId: string) => void
 }
 
+// Selection store for fine-grained subscriptions
+type SelectionStoreType = {
+  subscribe: (listener: () => void) => () => void
+  getIsSelected: (nodeId: string) => boolean
+  getSelectedIds: () => string[]
+}
+
 // Functions context - only stable references
 type TreeActionsContextType = {
   toggleExpanded: (nodeId: string) => void
@@ -43,7 +50,7 @@ type TreeActionsContextType = {
 }
 
 type TreeSelectionContextType = {
-  selectedIds: string[]
+  selectionStore: SelectionStoreType
   handleSelection: (nodeId: string, ctrlKey: boolean) => void
   multiSelect?: boolean
 }
@@ -84,6 +91,17 @@ export const useIsExpanded = (nodeId: string) => {
     expansionStore.subscribe,
     () => expansionStore.getIsExpanded(nodeId),
     () => expansionStore.getIsExpanded(nodeId),
+  )
+}
+
+// Fine-grained hook for subscribing to a specific node's selected state
+// Only re-renders when THIS node's selected state changes
+export const useIsTreeSelected = (nodeId: string) => {
+  const { selectionStore } = useTreeSelection()
+  return useSyncExternalStore(
+    selectionStore.subscribe,
+    () => selectionStore.getIsSelected(nodeId),
+    () => selectionStore.getIsSelected(nodeId),
   )
 }
 
@@ -153,17 +171,18 @@ export const TreeProvider = ({
   const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(
     new Set(defaultExpandedIds),
   )
-  const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>(selectedIds ?? [])
 
   const isExpandedControlled = controlledExpandedIds !== undefined && onExpandedChange !== undefined
-
-  const isControlled = selectedIds !== undefined && onSelectionChange !== undefined
-  const currentSelectedIds = isControlled ? selectedIds : internalSelectedIds
+  const isSelectionControlled = selectedIds !== undefined && onSelectionChange !== undefined
 
   // Fine-grained expansion subscription store
   // This allows individual TreeNodes to subscribe only to their own expanded state
-  const listenersRef = useRef(new Set<() => void>())
+  const expansionListenersRef = useRef(new Set<() => void>())
   const expandedIdsRef = useRef<Set<string>>(new Set(defaultExpandedIds))
+
+  // Fine-grained selection subscription store
+  const selectionListenersRef = useRef(new Set<() => void>())
+  const selectedIdsRef = useRef<string[]>(selectedIds ?? [])
 
   // Update ref when controlled prop changes
   if (isExpandedControlled && controlledExpandedIds) {
@@ -171,14 +190,27 @@ export const TreeProvider = ({
   }
 
   const subscribeToExpansion = useCallback((listener: () => void) => {
-    listenersRef.current.add(listener)
+    expansionListenersRef.current.add(listener)
     return () => {
-      listenersRef.current.delete(listener)
+      expansionListenersRef.current.delete(listener)
     }
   }, [])
 
-  const notifyListeners = useCallback(() => {
-    for (const listener of listenersRef.current) {
+  const notifyExpansionListeners = useCallback(() => {
+    for (const listener of expansionListenersRef.current) {
+      listener()
+    }
+  }, [])
+
+  const subscribeToSelection = useCallback((listener: () => void) => {
+    selectionListenersRef.current.add(listener)
+    return () => {
+      selectionListenersRef.current.delete(listener)
+    }
+  }, [])
+
+  const notifySelectionListeners = useCallback(() => {
+    for (const listener of selectionListenersRef.current) {
       listener()
     }
   }, [])
@@ -202,21 +234,30 @@ export const TreeProvider = ({
             newSet.add(nodeId)
           }
           expandedIdsRef.current = newSet
-          notifyListeners()
+          notifyExpansionListeners()
           return newSet
         })
       }
     },
-    [isExpandedControlled, onExpandedChange, notifyListeners],
+    [isExpandedControlled, onExpandedChange, notifyExpansionListeners],
   )
 
   // Sync controlled expandedIds to ref and notify
-  const prevControlledRef = useRef(controlledExpandedIds)
-  if (isExpandedControlled && controlledExpandedIds !== prevControlledRef.current) {
-    prevControlledRef.current = controlledExpandedIds
+  const prevControlledExpandedRef = useRef(controlledExpandedIds)
+  if (isExpandedControlled && controlledExpandedIds !== prevControlledExpandedRef.current) {
+    prevControlledExpandedRef.current = controlledExpandedIds
     expandedIdsRef.current = new Set(controlledExpandedIds)
     // Schedule notification for next tick to avoid render-during-render
-    Promise.resolve().then(notifyListeners)
+    Promise.resolve().then(notifyExpansionListeners)
+  }
+
+  // Sync controlled selectedIds to ref and notify
+  const prevControlledSelectedRef = useRef(selectedIds)
+  if (isSelectionControlled && selectedIds !== prevControlledSelectedRef.current) {
+    prevControlledSelectedRef.current = selectedIds
+    selectedIdsRef.current = selectedIds
+    // Schedule notification for next tick to avoid render-during-render
+    Promise.resolve().then(notifySelectionListeners)
   }
 
   // Expansion store - stable object for fine-grained subscriptions
@@ -229,12 +270,23 @@ export const TreeProvider = ({
     [subscribeToExpansion, toggleExpanded],
   )
 
+  // Selection store - stable object for fine-grained subscriptions
+  const selectionStore = useMemo<SelectionStoreType>(
+    () => ({
+      subscribe: subscribeToSelection,
+      getIsSelected: (nodeId: string) => selectedIdsRef.current.includes(nodeId),
+      getSelectedIds: () => selectedIdsRef.current,
+    }),
+    [subscribeToSelection],
+  )
+
   const handleSelection = useCallback(
     (nodeId: string, ctrlKey = false) => {
       if (!selectable) {
         return
       }
 
+      const currentSelectedIds = selectedIdsRef.current
       let newSelection: string[]
 
       if (multiSelect && ctrlKey) {
@@ -245,13 +297,14 @@ export const TreeProvider = ({
         newSelection = currentSelectedIds.includes(nodeId) ? [] : [nodeId]
       }
 
-      if (isControlled) {
+      if (isSelectionControlled) {
         onSelectionChange?.(newSelection)
       } else {
-        setInternalSelectedIds(newSelection)
+        selectedIdsRef.current = newSelection
+        notifySelectionListeners()
       }
     },
-    [selectable, multiSelect, currentSelectedIds, isControlled, onSelectionChange],
+    [selectable, multiSelect, isSelectionControlled, onSelectionChange, notifySelectionListeners],
   )
 
   // Static config - rarely changes
@@ -277,11 +330,11 @@ export const TreeProvider = ({
 
   const selectionContextValue = useMemo(
     () => ({
-      selectedIds: currentSelectedIds,
+      selectionStore,
       handleSelection,
       multiSelect,
     }),
-    [currentSelectedIds, handleSelection, multiSelect],
+    [selectionStore, handleSelection, multiSelect],
   )
 
   return (
@@ -386,8 +439,9 @@ const TreeNodeTriggerWithSelection = memo(function TreeNodeTriggerWithSelection(
   indent,
   ...props
 }: TreeNodeTriggerProps & { nodeId: string; level: number; indent?: number }) {
-  const { selectedIds, handleSelection } = useTreeSelection()
-  const isSelected = selectedIds.includes(nodeId)
+  const { handleSelection } = useTreeSelection()
+  // Use fine-grained subscription - only re-renders when THIS node's selection changes
+  const isSelected = useIsTreeSelected(nodeId)
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

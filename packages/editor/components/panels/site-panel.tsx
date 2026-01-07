@@ -13,8 +13,6 @@ interface SitePanelProps {
 }
 
 export function SitePanel({ mounted }: SitePanelProps) {
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const selectFloor = useEditor((state) => state.selectFloor)
   const levelIds = useEditor(
     useShallow((state: StoreState) =>
       state.graph.nodes.find({ type: 'level' }).map((h: SceneNodeHandle) => h.id),
@@ -42,28 +40,40 @@ export function SitePanel({ mounted }: SitePanelProps) {
 
   const [expandedIds, setExpandedIds] = useState<string[]>([])
 
-  // Sync selection with expanded state
+  // Sync floor selection with expanded state
+  // Use subscribe to avoid re-rendering SitePanel on every floor selection change
+  const prevSelectedFloorIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (selectedFloorId) {
-      const graph = useEditor.getState().graph
-      const handle = graph.getNodeById(selectedFloorId as AnyNodeId)
-      if (handle) {
-        const ancestors = new Set<string>()
-        let curr = handle.parent()
-        while (curr) {
-          ancestors.add(curr.id)
-          curr = curr.parent()
-        }
-
-        setExpandedIds((prev) => {
-          const next = new Set(prev)
-          ancestors.forEach((id) => next.add(id))
-          next.add(selectedFloorId)
-          return Array.from(next)
-        })
+    const unsubscribe = useEditor.subscribe((state) => {
+      const selectedFloorId = state.selectedFloorId
+      // Only process if selection actually changed
+      if (selectedFloorId === prevSelectedFloorIdRef.current) {
+        return
       }
-    }
-  }, [selectedFloorId])
+      prevSelectedFloorIdRef.current = selectedFloorId
+
+      if (selectedFloorId) {
+        const graph = state.graph
+        const handle = graph.getNodeById(selectedFloorId as AnyNodeId)
+        if (handle) {
+          const ancestors = new Set<string>()
+          let curr = handle.parent()
+          while (curr) {
+            ancestors.add(curr.id)
+            curr = curr.parent()
+          }
+
+          setExpandedIds((prev) => {
+            const next = new Set(prev)
+            ancestors.forEach((id) => next.add(id))
+            next.add(selectedFloorId)
+            return Array.from(next)
+          })
+        }
+      }
+    })
+    return unsubscribe
+  }, [])
 
   // Sync selected nodes with expanded state and scroll into view
   // Use subscribe to avoid re-rendering SitePanel on every selection change
@@ -192,9 +202,12 @@ export function SitePanel({ mounted }: SitePanelProps) {
     (selectedIds: string[]) => {
       const selectedId = selectedIds[0]
       const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
-      if (isLevel && selectedFloorId !== selectedId) selectFloor(selectedId)
+      const state = useEditor.getState()
+      if (isLevel && state.selectedFloorId !== selectedId) {
+        state.selectFloor(selectedId)
+      }
     },
-    [levelIds, selectedFloorId, selectFloor],
+    [levelIds],
   )
 
   // Memoize context value to prevent re-renders of all children
@@ -213,7 +226,6 @@ export function SitePanel({ mounted }: SitePanelProps) {
         multiSelect={false}
         onExpandedChange={setExpandedIds}
         onSelectionChange={handleTreeSelectionChange}
-        selectedIds={selectedFloorId ? [selectedFloorId] : []}
         selectable={false}
         showLines={true}
       >
