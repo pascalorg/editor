@@ -850,8 +850,10 @@ export function WallRenderer({ nodeId }: WallRendererProps) {
 
   const selectedMaterial = useEditor((state) => state.selectedMaterial)
 
-  const frontMaterial = useMaterial(materialFront)
-  const backMaterial = useMaterial(materialBack)
+  // const frontMaterial = useMaterial(materialFront)
+  // const backMaterial = useMaterial(materialBack)
+  const frontMaterial = useMaterial('white')
+  const backMaterial = useMaterial('white')
   const sidesMaterial = useMaterial('white')
   const ghostMaterial = useMaterial('ghost')
   const paintMaterial = useMaterial(selectedMaterial)

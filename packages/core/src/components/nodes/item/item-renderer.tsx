@@ -186,18 +186,23 @@ const ModelItemRenderer = ({
           child.castShadow = false
           child.receiveShadow = false
         } else {
-          if (
-            child.material instanceof THREE.Material &&
-            child.material.name.toLowerCase().includes('color_')
-          ) {
-            const materialName = child.material.name
-              .toLowerCase()
-              .replace('color_', '') as MaterialName
-            const materialPreset = getMaterialPreset(materialName)
-            if (materialPreset) {
-              const material = getMaterial(materialName)
-              child.material = material
-            }
+          // Old handling all colors, switch to all white
+          // if (
+          //   child.material instanceof THREE.Material &&
+          //   child.material.name.toLowerCase().includes('color_')
+          // ) {
+          //   const materialName = child.material.name
+          //     .toLowerCase()
+          //     .replace('color_', '') as MaterialName
+          //   const materialPreset = getMaterialPreset(materialName)
+          //   if (materialPreset) {
+          //     const material = getMaterial(materialName)
+          //     child.material = material
+          //   }
+          // }
+          if (child.material instanceof THREE.Material) {
+            const material = getMaterial('white')
+            child.material = material
           }
           child.castShadow = true
           child.receiveShadow = true

@@ -6,9 +6,9 @@ import type { SceneNodeHandle } from '@pascal/core/scenegraph'
 import { ImageNode } from '@pascal/core/scenegraph/schema/nodes/image'
 import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 import { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
-import { Camera, GripVertical, Pencil, Plus } from 'lucide-react'
+import { Camera, Pencil, Plus } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
-import { useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import {
   TreeExpander,
@@ -28,6 +28,8 @@ import {
   getNodeLabel,
   ModelPositionPopover,
   RenamePopover,
+  useIsFloorSelected,
+  useIsNodeSelected,
   useLayersMenu,
   VisibilityToggle,
 } from './shared'
@@ -38,7 +40,6 @@ interface NodeItemProps {
   index: number
   isLast: boolean
   level: number
-  onNodeSelect: (nodeId: string, event: React.MouseEvent) => void
 }
 
 const useNodeActions = () =>
@@ -53,7 +54,7 @@ const useNodeActions = () =>
     })),
   )
 
-export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeItemProps) {
+export const NodeItem = memo(function NodeItem({ nodeId, index, isLast, level }: NodeItemProps) {
   const { handleNodeClick } = useLayersMenu()
   const { nodeType, nodeName, nodeVisible, modelPosition, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
@@ -75,7 +76,8 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
     }),
   )
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
   const { toggleNodeVisibility, moveNode, handleNodeSelect, setControlMode, updateNode, graph } =
     useNodeActions()
 
@@ -176,7 +178,7 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
         draggable
         onClick={(e) => {
           e.stopPropagation()
-          onNodeSelect(nodeId, e as React.MouseEvent)
+          handleNodeSelect(nodeId, e as React.MouseEvent)
         }}
         onContextMenu={handleContextMenu}
         onDragLeave={handleDragLeave}
@@ -289,36 +291,35 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
               key={childId}
               level={level + 1}
               nodeId={childId}
-              onNodeSelect={onNodeSelect}
             />
           ))}
         </TreeNodeContent>
       )}
     </TreeNode>
   )
-}
+})
 
 interface DraggableLevelItemProps {
   levelId: LevelNode['id']
   levelIndex: number
   levelsCount: number
-  isSelected: boolean
   handleUpload: (file: File, levelId: string) => Promise<void>
   handleScanUpload: (file: File, levelId: string) => Promise<void>
   controls: ReturnType<typeof useDragControls>
   level: number
 }
 
-function DraggableLevelItem({
+const DraggableLevelItem = memo(function DraggableLevelItem({
   levelId,
   levelIndex,
   levelsCount,
-  isSelected,
   handleUpload,
   handleScanUpload,
   controls,
   level,
 }: DraggableLevelItemProps) {
+  // Use fine-grained floor selection hook - only re-renders when THIS floor's selection changes
+  const isSelected = useIsFloorSelected(levelId)
   const { handleNodeClick } = useLayersMenu()
   const isLastLevel = levelIndex === levelsCount - 1
 
@@ -369,12 +370,14 @@ function DraggableLevelItem({
   )
 
   const { toggleNodeVisibility, moveNode, updateNode } = useNodeActions()
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const startPosRef = useRef<{ x: number; y: number } | null>(null)
 
   const handleRename = (newName: string) => {
     updateNode(levelId, { name: newName })
@@ -393,14 +396,68 @@ function DraggableLevelItem({
     }
   }
 
+  // Long-press drag handling (like Figma)
+  const LONG_PRESS_DELAY = 150 // ms before drag starts
+  const DRAG_THRESHOLD = 5 // pixels of movement to start drag immediately
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    startPosRef.current = null
+  }, [])
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      // Don't start drag if clicking on interactive elements
+      const target = e.target as HTMLElement
+      if (target.closest('button') || target.closest('[data-no-drag]')) {
+        return
+      }
+
+      startPosRef.current = { x: e.clientX, y: e.clientY }
+
+      // Start long-press timer
+      longPressTimerRef.current = setTimeout(() => {
+        setIsDragging(true)
+        controls.start(e)
+      }, LONG_PRESS_DELAY)
+    },
+    [controls],
+  )
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!startPosRef.current) return
+
+      const dx = Math.abs(e.clientX - startPosRef.current.x)
+      const dy = Math.abs(e.clientY - startPosRef.current.y)
+
+      // If moved beyond threshold, start drag immediately
+      if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+        clearLongPress()
+        setIsDragging(true)
+        controls.start(e)
+      }
+    },
+    [controls, clearLongPress],
+  )
+
+  const handlePointerUp = useCallback(() => {
+    clearLongPress()
+    setIsDragging(false)
+  }, [clearLongPress])
+
   return (
     <TreeNode isLast={isLastLevel} level={level} nodeId={levelId}>
       <TreeNodeTrigger
         className={cn(
-          'group/drag-item',
+          'group/drag-item touch-none',
           isSelected && 'sticky top-0 z-10 bg-background',
           levelVisible === false && 'opacity-50',
           isDragOver && 'bg-accent ring-1 ring-primary',
+          isDragging && 'cursor-grabbing opacity-70',
         )}
         onClick={(e) => {
           e.stopPropagation()
@@ -417,14 +474,13 @@ function DraggableLevelItem({
           setIsDragOver(true)
         }}
         onDrop={handleLevelDrop}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerLeave={handlePointerUp}
       >
-        <div
-          className="cursor-grab touch-none p-1 hover:bg-accent active:cursor-grabbing"
-          onPointerDown={(e) => controls.start(e)}
-        >
-          <GripVertical className="h-3 w-3 text-muted-foreground" />
-        </div>
-        <TreeExpander hasChildren={hasContent} />
+        <TreeExpander hasChildren={hasContent} data-no-drag />
         <TreeIcon hasChildren={hasContent} icon={getNodeIcon('level')} />
         <TreeLabel
           className="flex-1"
@@ -476,8 +532,7 @@ function DraggableLevelItem({
             key={childId}
             level={level + 1}
             nodeId={childId}
-            onNodeSelect={handleNodeSelect}
-          />
+                      />
         ))}
 
         {/* Guides Section */}
@@ -537,8 +592,7 @@ function DraggableLevelItem({
                 key={guideId}
                 level={level + 2}
                 nodeId={guideId}
-                onNodeSelect={handleNodeSelect}
-              />
+                              />
             ))}
           </TreeNodeContent>
         </TreeNode>
@@ -600,19 +654,18 @@ function DraggableLevelItem({
                 key={scanId}
                 level={level + 2}
                 nodeId={scanId}
-                onNodeSelect={handleNodeSelect}
-              />
+                              />
             ))}
           </TreeNodeContent>
         </TreeNode>
       </TreeNodeContent>
     </TreeNode>
   )
-}
+})
 
 interface LevelReorderItemProps extends Omit<DraggableLevelItemProps, 'controls'> {}
 
-export function LevelReorderItem(props: LevelReorderItemProps) {
+export const LevelReorderItem = memo(function LevelReorderItem(props: LevelReorderItemProps) {
   const controls = useDragControls()
 
   return (
@@ -620,9 +673,9 @@ export function LevelReorderItem(props: LevelReorderItemProps) {
       <DraggableLevelItem {...props} controls={controls} />
     </Reorder.Item>
   )
-}
+})
 
-export function BuildingItem({
+export const BuildingItem = memo(function BuildingItem({
   nodeId,
   level,
   collapsedInSiteMode,
@@ -644,7 +697,8 @@ export function BuildingItem({
     }),
   )
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
 
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
@@ -654,7 +708,6 @@ export function BuildingItem({
   )
 
   const selectFloor = useEditor((state) => state.selectFloor)
-  const selectedFloorId = useEditor((state) => state.selectedFloorId)
   const reorderLevels = useEditor((state) => state.reorderLevels)
   const addLevel = useEditor((state) => state.addLevel)
   const addNode = useEditor((state) => state.addNode)
@@ -717,8 +770,9 @@ export function BuildingItem({
       .filter(Boolean) as any[]
 
     reorderLevels(updatedLevels)
-    if (selectedFloorId) {
-      useEditor.getState().selectFloor(selectedFloorId)
+    const currentSelectedFloorId = useEditor.getState().selectedFloorId
+    if (currentSelectedFloorId) {
+      useEditor.getState().selectFloor(currentSelectedFloorId)
     }
   }
 
@@ -828,7 +882,6 @@ export function BuildingItem({
               <LevelReorderItem
                 handleScanUpload={handleScanUpload}
                 handleUpload={handleUpload}
-                isSelected={selectedFloorId === levelId}
                 key={levelId}
                 level={level + 1}
                 levelId={levelId as LevelNode['id']}
@@ -841,9 +894,9 @@ export function BuildingItem({
       )}
     </TreeNode>
   )
-}
+})
 
-export function SiteItem({
+export const SiteItem = memo(function SiteItem({
   nodeId,
   level,
   isLast,
@@ -874,14 +927,14 @@ export function SiteItem({
     }),
   )
 
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const controlMode = useEditor((state) => state.controlMode)
   const { toggleNodeVisibility, handleNodeSelect, setControlMode, updateNode } = useNodeActions()
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
   const isEditing = isSelected && controlMode === 'edit'
 
   const handleRename = (newName: string) => {
@@ -988,11 +1041,10 @@ export function SiteItem({
               key={childId}
               level={level + 1}
               nodeId={childId}
-              onNodeSelect={handleNodeSelect}
-            />
+                          />
           )
         })}
       </TreeNodeContent>
     </TreeNode>
   )
-}
+})

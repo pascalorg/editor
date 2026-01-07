@@ -25,7 +25,7 @@ const tmpVec3 = new THREE.Vector3()
 /**
  * Custom gradient shader material for extruded zone walls
  * Fades from fully transparent at bottom to semi-transparent at top
- * When hovered, the gradient becomes more opaque
+ * When hovered, the gradient becomes more opaque with smooth fade animation
  */
 const GradientMaterial = ({
   color,
@@ -39,6 +39,7 @@ const GradientMaterial = ({
   hovered?: boolean
 }) => {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
+  const targetHovered = hovered ? 1.0 : 0.0
 
   // Create uniforms only once
   const uniforms = useMemo(
@@ -46,20 +47,33 @@ const GradientMaterial = ({
       uColor: { value: new THREE.Color(color) },
       uOpacity: { value: opacity },
       uHeight: { value: height },
-      uHovered: { value: hovered ? 1.0 : 0.0 },
+      uHovered: { value: 0.0 },
     }),
     [], // Empty deps - create once
   )
 
-  // Update uniforms when props change
+  // Update non-animated uniforms when props change
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uColor.value.set(color)
       materialRef.current.uniforms.uOpacity.value = opacity
       materialRef.current.uniforms.uHeight.value = height
-      materialRef.current.uniforms.uHovered.value = hovered ? 1.0 : 0.0
     }
-  }, [color, opacity, height, hovered])
+  }, [color, opacity, height])
+
+  // Animate uHovered uniform for smooth fade in/out
+  useFrame((_, delta) => {
+    if (materialRef.current) {
+      const current = materialRef.current.uniforms.uHovered.value
+      const speed = 8 // Animation speed (higher = faster)
+      const diff = targetHovered - current
+      if (Math.abs(diff) > 0.001) {
+        materialRef.current.uniforms.uHovered.value += diff * Math.min(delta * speed, 1)
+      } else {
+        materialRef.current.uniforms.uHovered.value = targetHovered
+      }
+    }
+  })
 
   return (
     <shaderMaterial
@@ -134,12 +148,11 @@ function ZoneLabel({
   })
 
   return (
-    <group position={[centerX, levelYOffset + 1.45, centerZ]} ref={labelRef}>
-      
+    <group position={[centerX, levelYOffset + 1.25, centerZ]} ref={labelRef}>
       <Billboard>
         <Container
           alignItems="center"
-          backgroundColor="#21222a"
+          // backgroundColor="#21222a"
           borderRadius={6}
           depthTest={false}
           flexDirection="row"
@@ -148,23 +161,33 @@ function ZoneLabel({
           opacity={0.9}
           paddingRight={16}
           renderOrder={99_999_999_999}
-          alignContent={"center"}
-          transformOriginX={"center"}
-          transformOriginY={"center"}
         >
           {/* Color circle */}
           <Container
             backgroundColor={color}
             borderRadius={1000}
-            height={42}
+            height={16}
             opacity={1}
-            positionLeft={-12}
-            width={42}
+            positionLeft={-8}
+            width={16}
           />
-          {/* Label text */}
-          <Text fontSize={20} fontWeight="medium" color="white">
-            {name}
-          </Text>
+          <Container>
+            {/* Label text */}
+            <Text color="white" fontSize={20} fontWeight="medium" zIndex={1}>
+              {name}
+            </Text>
+            <Text color={color} fontSize={20} fontWeight="medium" positionType={'absolute'}>
+              {name}
+            </Text>
+          </Container>
+          {/* <Container
+            backgroundColor={color}
+            borderRadius={12}
+            height={'100%'}
+            opacity={0.3}
+            positionType={'absolute'}
+            width={'100%'}
+          /> */}
         </Container>
       </Billboard>
     </group>
@@ -218,25 +241,14 @@ function ZonePolygon({
       new THREE.Vector3(worldPts[0][0], levelYOffset + Y_OFFSET + 0.01, worldPts[0][1]),
     ]
 
-    // Calculate centroid (barycenter) of polygon using the signed area formula
-    // This gives the true center of mass, not just the average of vertices
-    let signedArea = 0
-    let centroidX = 0
-    let centroidZ = 0
-    const n = worldPts.length
-
-    for (let i = 0; i < n; i++) {
-      const [x0, z0] = worldPts[i]
-      const [x1, z1] = worldPts[(i + 1) % n]
-      const cross = x0 * z1 - x1 * z0
-      signedArea += cross
-      centroidX += (x0 + x1) * cross
-      centroidZ += (z0 + z1) * cross
+    // Calculate centroid of polygon
+    let sumX = 0
+    let sumZ = 0
+    for (const [x, z] of worldPts) {
+      sumX += x
+      sumZ += z
     }
-
-    signedArea *= 0.5
-    const factor = 1 / (6 * signedArea)
-    const center = { x: centroidX * factor, z: centroidZ * factor }
+    const center = { x: sumX / worldPts.length, z: sumZ / worldPts.length }
 
     // Create extruded wall geometry from polygon edges
     // Build vertical quads for each edge of the polygon
@@ -287,7 +299,7 @@ function ZonePolygon({
 
   // Determine visual state based on selection and hover
   const isHighlighted = isSelected || isHovered
-  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.25
+  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.05
 
   return (
     <group>
@@ -582,7 +594,7 @@ export function ZoneRenderer({ isViewer = false }: { isViewer?: boolean }) {
   // Determine if labels should be shown for a zone
   // Show labels in viewer mode when on the selected floor and no zone is selected
   const getShowLabel = useCallback(
-    (zoneLevelId: string) => isViewer && !!selectedFloorId && !selectedZoneId,
+    (zoneLevelId: string) => isViewer && !selectedZoneId,
     [isViewer, selectedFloorId, selectedZoneId],
   )
 

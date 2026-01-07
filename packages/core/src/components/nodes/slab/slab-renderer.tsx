@@ -30,7 +30,7 @@ export function SlabRenderer({ nodeId }: SlabRendererProps) {
         isPreview: node?.editor?.preview === true,
         levelId: state.getLevelId(nodeId),
         canPlace: node?.editor?.canPlace !== false,
-        material: node?.material || 'tile',
+        material: node?.material || 'white',
       }
     }),
   )
