@@ -23,7 +23,7 @@ export function IconRail({ activePanel, onPanelChange, className }: IconRailProp
   return (
     <div
       className={cn(
-        'flex w-11 flex-col items-center gap-1 border-border border-r bg-background py-2',
+        'flex w-11 flex-col items-center gap-1 border-border/50 border-r py-2',
         className,
       )}
     >

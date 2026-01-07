@@ -246,7 +246,7 @@ export const TreeNodeTrigger = ({
   return (
     <motion.div
       className={cn(
-        'group/item relative mx-1 flex cursor-pointer items-center rounded-md px-3 py-2 transition-all duration-200',
+        'group/item relative flex cursor-pointer items-center rounded-md py-1.5 pr-2 transition-all duration-200',
         'hover:bg-accent/50',
         isSelected && 'bg-accent/80',
         className,
@@ -256,7 +256,7 @@ export const TreeNodeTrigger = ({
         handleSelection(nodeId, e.ctrlKey || e.metaKey)
         onClick?.(e)
       }}
-      style={{ paddingLeft: level * (indent ?? 0) + 8 }}
+      style={{ paddingLeft: level * (indent ?? 0) }}
       whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
       {...props}
     >
@@ -288,7 +288,7 @@ export const TreeLines = () => {
             className="absolute top-0 bottom-0 border-border/40 border-l"
             key={index.toString()}
             style={{
-              left: index * (indent ?? 0) + 12,
+              left: index * (indent ?? 0) + 8,
               display: shouldHideLine ? 'none' : 'block',
             }}
           />
@@ -299,7 +299,7 @@ export const TreeLines = () => {
       <div
         className="absolute top-1/2 border-border/40 border-t"
         style={{
-          left: (level - 1) * (indent ?? 0) + 12,
+          left: (level - 1) * (indent ?? 0) + 8,
           width: (indent ?? 0) - 4,
           transform: 'translateY(-1px)',
         }}
@@ -310,7 +310,7 @@ export const TreeLines = () => {
         <div
           className="absolute top-0 border-border/40 border-l"
           style={{
-            left: (level - 1) * (indent ?? 0) + 12,
+            left: (level - 1) * (indent ?? 0) + 8,
             height: '50%',
           }}
         />

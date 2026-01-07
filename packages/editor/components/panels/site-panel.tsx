@@ -182,7 +182,7 @@ export function SitePanel({ mounted }: SitePanelProps) {
   return (
     <LayersMenuContext.Provider value={{ handleNodeClick }}>
       <TreeProvider
-        className="flex h-full min-h-0 flex-col overflow-y-auto px-2"
+        className="flex h-full min-h-0 flex-col overflow-y-auto"
         expandedIds={expandedIds}
         indent={16}
         multiSelect={false}
@@ -191,7 +191,7 @@ export function SitePanel({ mounted }: SitePanelProps) {
         selectedIds={selectedFloorId ? [selectedFloorId] : []}
         showLines={true}
       >
-        <TreeView className="p-0">
+        <TreeView className="px-3 py-1">
           {/* Render buildings directly at level 0 (left edge) */}
           {buildingIds.map((buildingId, index) => (
             <BuildingItem
