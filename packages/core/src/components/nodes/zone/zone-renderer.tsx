@@ -25,7 +25,7 @@ const tmpVec3 = new THREE.Vector3()
 /**
  * Custom gradient shader material for extruded zone walls
  * Fades from fully transparent at bottom to semi-transparent at top
- * When hovered, the gradient becomes more opaque
+ * When hovered, the gradient becomes more opaque with smooth fade animation
  */
 const GradientMaterial = ({
   color,
@@ -39,6 +39,7 @@ const GradientMaterial = ({
   hovered?: boolean
 }) => {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
+  const targetHovered = hovered ? 1.0 : 0.0
 
   // Create uniforms only once
   const uniforms = useMemo(
@@ -46,20 +47,33 @@ const GradientMaterial = ({
       uColor: { value: new THREE.Color(color) },
       uOpacity: { value: opacity },
       uHeight: { value: height },
-      uHovered: { value: hovered ? 1.0 : 0.0 },
+      uHovered: { value: 0.0 },
     }),
     [], // Empty deps - create once
   )
 
-  // Update uniforms when props change
+  // Update non-animated uniforms when props change
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uColor.value.set(color)
       materialRef.current.uniforms.uOpacity.value = opacity
       materialRef.current.uniforms.uHeight.value = height
-      materialRef.current.uniforms.uHovered.value = hovered ? 1.0 : 0.0
     }
-  }, [color, opacity, height, hovered])
+  }, [color, opacity, height])
+
+  // Animate uHovered uniform for smooth fade in/out
+  useFrame((_, delta) => {
+    if (materialRef.current) {
+      const current = materialRef.current.uniforms.uHovered.value
+      const speed = 8 // Animation speed (higher = faster)
+      const diff = targetHovered - current
+      if (Math.abs(diff) > 0.001) {
+        materialRef.current.uniforms.uHovered.value += diff * Math.min(delta * speed, 1)
+      } else {
+        materialRef.current.uniforms.uHovered.value = targetHovered
+      }
+    }
+  })
 
   return (
     <shaderMaterial
@@ -285,7 +299,7 @@ function ZonePolygon({
 
   // Determine visual state based on selection and hover
   const isHighlighted = isSelected || isHovered
-  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.25
+  const fillOpacity = isSelected ? 0.4 : isHovered ? 0.35 : 0.05
 
   return (
     <group>
