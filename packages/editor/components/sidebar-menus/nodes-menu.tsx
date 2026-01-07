@@ -8,7 +8,7 @@ import { LevelNode } from '@pascal/core/scenegraph/schema/nodes/level'
 import { ScanNode } from '@pascal/core/scenegraph/schema/nodes/scan'
 import { Camera, Pencil, Plus } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
-import { useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import {
   TreeExpander,
@@ -28,6 +28,7 @@ import {
   getNodeLabel,
   ModelPositionPopover,
   RenamePopover,
+  useIsNodeSelected,
   useLayersMenu,
   VisibilityToggle,
 } from './shared'
@@ -38,7 +39,6 @@ interface NodeItemProps {
   index: number
   isLast: boolean
   level: number
-  onNodeSelect: (nodeId: string, event: React.MouseEvent) => void
 }
 
 const useNodeActions = () =>
@@ -53,7 +53,7 @@ const useNodeActions = () =>
     })),
   )
 
-export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeItemProps) {
+export const NodeItem = memo(function NodeItem({ nodeId, index, isLast, level }: NodeItemProps) {
   const { handleNodeClick } = useLayersMenu()
   const { nodeType, nodeName, nodeVisible, modelPosition, hasCamera } = useEditor(
     useShallow((state: StoreState) => {
@@ -75,7 +75,8 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
     }),
   )
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
   const { toggleNodeVisibility, moveNode, handleNodeSelect, setControlMode, updateNode, graph } =
     useNodeActions()
 
@@ -176,7 +177,7 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
         draggable
         onClick={(e) => {
           e.stopPropagation()
-          onNodeSelect(nodeId, e as React.MouseEvent)
+          handleNodeSelect(nodeId, e as React.MouseEvent)
         }}
         onContextMenu={handleContextMenu}
         onDragLeave={handleDragLeave}
@@ -289,14 +290,13 @@ export function NodeItem({ nodeId, index, isLast, level, onNodeSelect }: NodeIte
               key={childId}
               level={level + 1}
               nodeId={childId}
-              onNodeSelect={onNodeSelect}
             />
           ))}
         </TreeNodeContent>
       )}
     </TreeNode>
   )
-}
+})
 
 interface DraggableLevelItemProps {
   levelId: LevelNode['id']
@@ -309,7 +309,7 @@ interface DraggableLevelItemProps {
   level: number
 }
 
-function DraggableLevelItem({
+const DraggableLevelItem = memo(function DraggableLevelItem({
   levelId,
   levelIndex,
   levelsCount,
@@ -369,7 +369,6 @@ function DraggableLevelItem({
   )
 
   const { toggleNodeVisibility, moveNode, updateNode } = useNodeActions()
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const handleNodeSelect = useEditor((state) => state.handleNodeSelect)
 
   const [isDragOver, setIsDragOver] = useState(false)
@@ -532,8 +531,7 @@ function DraggableLevelItem({
             key={childId}
             level={level + 1}
             nodeId={childId}
-            onNodeSelect={handleNodeSelect}
-          />
+                      />
         ))}
 
         {/* Guides Section */}
@@ -593,8 +591,7 @@ function DraggableLevelItem({
                 key={guideId}
                 level={level + 2}
                 nodeId={guideId}
-                onNodeSelect={handleNodeSelect}
-              />
+                              />
             ))}
           </TreeNodeContent>
         </TreeNode>
@@ -656,19 +653,18 @@ function DraggableLevelItem({
                 key={scanId}
                 level={level + 2}
                 nodeId={scanId}
-                onNodeSelect={handleNodeSelect}
-              />
+                              />
             ))}
           </TreeNodeContent>
         </TreeNode>
       </TreeNodeContent>
     </TreeNode>
   )
-}
+})
 
 interface LevelReorderItemProps extends Omit<DraggableLevelItemProps, 'controls'> {}
 
-export function LevelReorderItem(props: LevelReorderItemProps) {
+export const LevelReorderItem = memo(function LevelReorderItem(props: LevelReorderItemProps) {
   const controls = useDragControls()
 
   return (
@@ -676,9 +672,9 @@ export function LevelReorderItem(props: LevelReorderItemProps) {
       <DraggableLevelItem {...props} controls={controls} />
     </Reorder.Item>
   )
-}
+})
 
-export function BuildingItem({
+export const BuildingItem = memo(function BuildingItem({
   nodeId,
   level,
   collapsedInSiteMode,
@@ -700,7 +696,8 @@ export function BuildingItem({
     }),
   )
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
 
   const levelIds = useEditor(
     useShallow((state: StoreState) => {
@@ -897,9 +894,9 @@ export function BuildingItem({
       )}
     </TreeNode>
   )
-}
+})
 
-export function SiteItem({
+export const SiteItem = memo(function SiteItem({
   nodeId,
   level,
   isLast,
@@ -930,14 +927,14 @@ export function SiteItem({
     }),
   )
 
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const controlMode = useEditor((state) => state.controlMode)
   const { toggleNodeVisibility, handleNodeSelect, setControlMode, updateNode } = useNodeActions()
 
   const [isRenaming, setIsRenaming] = useState(false)
   const labelRef = useRef<HTMLSpanElement>(null)
 
-  const isSelected = useEditor((state) => state.selectedNodeIds.includes(nodeId))
+  // Use fine-grained selection hook - only re-renders when THIS node's selection changes
+  const isSelected = useIsNodeSelected(nodeId)
   const isEditing = isSelected && controlMode === 'edit'
 
   const handleRename = (newName: string) => {
@@ -1044,11 +1041,10 @@ export function SiteItem({
               key={childId}
               level={level + 1}
               nodeId={childId}
-              onNodeSelect={handleNodeSelect}
-            />
+                          />
           )
         })}
       </TreeNodeContent>
     </TreeNode>
   )
-}
+})

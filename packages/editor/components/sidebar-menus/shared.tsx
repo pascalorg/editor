@@ -2,11 +2,22 @@
 
 import { Box, Check, Eye, EyeOff, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
+
+// Fine-grained selection hook - only re-renders when THIS node's selection state changes
+// Uses useSyncExternalStore to subscribe to zustand store efficiently
+export function useIsNodeSelected(nodeId: string): boolean {
+  return useSyncExternalStore(
+    useEditor.subscribe,
+    () => useEditor.getState().selectedNodeIds.includes(nodeId),
+    () => useEditor.getState().selectedNodeIds.includes(nodeId),
+  )
+}
 
 // Context for layers menu interaction
 export interface LayersMenuContextType {
@@ -263,6 +274,9 @@ export function RenamePopover({
     }
   }
 
+  // Don't render anything when closed to avoid thousands of Popover instances
+  if (!isOpen) return null
+
   return (
     <Popover onOpenChange={onOpenChange} open={isOpen}>
       <PopoverAnchor
@@ -343,6 +357,9 @@ export function ModelPositionPopover({
       onOpenChange(false)
     }
   }
+
+  // Don't render anything when closed to avoid unnecessary Popover instances
+  if (!isOpen) return null
 
   return (
     <Popover onOpenChange={onOpenChange} open={isOpen}>

@@ -2,7 +2,7 @@
 
 import type { AnyNodeId } from '@pascal/core'
 import type { SceneNode, SceneNodeHandle } from '@pascal/core/scenegraph'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { BuildingItem, LayersMenuContext } from '@/components/sidebar-menus'
 import { TreeProvider, TreeView } from '@/components/tree'
@@ -14,7 +14,6 @@ interface SitePanelProps {
 
 export function SitePanel({ mounted }: SitePanelProps) {
   const selectedFloorId = useEditor((state) => state.selectedFloorId)
-  const selectedNodeIds = useEditor((state) => state.selectedNodeIds)
   const selectFloor = useEditor((state) => state.selectFloor)
   const levelIds = useEditor(
     useShallow((state: StoreState) =>
@@ -67,96 +66,116 @@ export function SitePanel({ mounted }: SitePanelProps) {
   }, [selectedFloorId])
 
   // Sync selected nodes with expanded state and scroll into view
+  // Use subscribe to avoid re-rendering SitePanel on every selection change
+  const prevSelectedNodeIdsRef = useRef<string[]>([])
   useEffect(() => {
-    const lastSelectedId = selectedNodeIds[selectedNodeIds.length - 1]
+    const unsubscribe = useEditor.subscribe((state) => {
+      const selectedNodeIds = state.selectedNodeIds
+      // Only process if selection actually changed
+      if (
+        selectedNodeIds.length === prevSelectedNodeIdsRef.current.length &&
+        selectedNodeIds.every((id, i) => id === prevSelectedNodeIdsRef.current[i])
+      ) {
+        return
+      }
+      prevSelectedNodeIdsRef.current = selectedNodeIds
 
-    if (lastSelectedId) {
-      const graph = useEditor.getState().graph
-      const handle = graph.getNodeById(lastSelectedId as AnyNodeId)
+      const lastSelectedId = selectedNodeIds[selectedNodeIds.length - 1]
 
-      if (handle) {
-        const ancestors = new Set<string>()
-        let curr = handle.parent()
-        while (curr) {
-          ancestors.add(curr.id)
-          curr = curr.parent()
-        }
+      if (lastSelectedId) {
+        const graph = state.graph
+        const handle = graph.getNodeById(lastSelectedId as AnyNodeId)
 
-        const data = handle.data()
-        const parent = handle.parent()
-        if (parent && parent.data().type === 'level') {
-          if (data.type === 'reference-image') {
-            ancestors.add(`${parent.id}-guides`)
-          } else if (data.type === 'scan') {
-            ancestors.add(`${parent.id}-scans`)
+        if (handle) {
+          const ancestors = new Set<string>()
+          let curr = handle.parent()
+          while (curr) {
+            ancestors.add(curr.id)
+            curr = curr.parent()
           }
-        }
 
-        setExpandedIds((prev) => {
-          const next = new Set(prev)
-          ancestors.forEach((id) => next.add(id))
-          return Array.from(next)
-        })
-
-        setTimeout(() => {
-          const element = document.querySelector(`[data-node-id="${lastSelectedId}"]`)
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          const data = handle.data()
+          const parent = handle.parent()
+          if (parent && parent.data().type === 'level') {
+            if (data.type === 'reference-image') {
+              ancestors.add(`${parent.id}-guides`)
+            } else if (data.type === 'scan') {
+              ancestors.add(`${parent.id}-scans`)
+            }
           }
-        }, 100)
-      }
-    }
-  }, [selectedNodeIds])
 
-  const handleNodeClick = (nodeId: string, hasChildren: boolean) => {
-    if (!hasChildren) return
+          setExpandedIds((prev) => {
+            const next = new Set(prev)
+            for (const id of ancestors) {
+              next.add(id)
+            }
+            return Array.from(next)
+          })
 
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-
-      if (next.has(nodeId)) {
-        next.delete(nodeId)
-        return Array.from(next)
-      }
-
-      next.add(nodeId)
-
-      // Handle virtual nodes in Level
-      if (nodeId.endsWith('-guides') || nodeId.endsWith('-scans')) {
-        let levelId = ''
-        if (nodeId.endsWith('-guides')) levelId = nodeId.slice(0, -7)
-        else if (nodeId.endsWith('-scans')) levelId = nodeId.slice(0, -6)
-
-        const siblings = [`${levelId}-guides`, `${levelId}-scans`]
-        for (const siblingId of siblings) {
-          if (siblingId !== nodeId) next.delete(siblingId)
-        }
-        return Array.from(next)
-      }
-
-      // Handle Buildings (Root level in UI) - close other buildings when opening one
-      if (buildingIds.includes(nodeId)) {
-        for (const id of buildingIds) {
-          if (id !== nodeId) next.delete(id)
+          setTimeout(() => {
+            const element = document.querySelector(`[data-node-id="${lastSelectedId}"]`)
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+          }, 100)
         }
       }
-
-      // Handle Graph Nodes
-      const graph = useEditor.getState().graph
-      const handle = graph.getNodeById(nodeId as AnyNodeId)
-      if (handle) {
-        const parent = handle.parent()
-        if (parent) {
-          const siblings = parent.children()
-          for (const sibling of siblings) {
-            if (sibling.id !== nodeId) next.delete(sibling.id)
-          }
-        }
-      }
-
-      return Array.from(next)
     })
-  }
+    return unsubscribe
+  }, [])
+
+  const handleNodeClick = useCallback(
+    (nodeId: string, hasChildren: boolean) => {
+      if (!hasChildren) return
+
+      setExpandedIds((prev) => {
+        const next = new Set(prev)
+
+        if (next.has(nodeId)) {
+          next.delete(nodeId)
+          return Array.from(next)
+        }
+
+        next.add(nodeId)
+
+        // Handle virtual nodes in Level
+        if (nodeId.endsWith('-guides') || nodeId.endsWith('-scans')) {
+          let levelId = ''
+          if (nodeId.endsWith('-guides')) levelId = nodeId.slice(0, -7)
+          else if (nodeId.endsWith('-scans')) levelId = nodeId.slice(0, -6)
+
+          const siblings = [`${levelId}-guides`, `${levelId}-scans`]
+          for (const siblingId of siblings) {
+            if (siblingId !== nodeId) next.delete(siblingId)
+          }
+          return Array.from(next)
+        }
+
+        // Handle Buildings (Root level in UI) - close other buildings when opening one
+        if (buildingIds.includes(nodeId)) {
+          for (const id of buildingIds) {
+            if (id !== nodeId) next.delete(id)
+          }
+        }
+
+        // Handle Graph Nodes
+        const graph = useEditor.getState().graph
+        const handle = graph.getNodeById(nodeId as AnyNodeId)
+        if (handle) {
+          const parent = handle.parent()
+          if (parent) {
+            const siblings = parent.children()
+            for (const sibling of siblings) {
+              if (sibling.id !== nodeId) next.delete(sibling.id)
+            }
+          }
+        }
+
+        return Array.from(next)
+      })
+    },
+    [buildingIds],
+  )
 
   // Initialize expanded state - auto-expand first building
   const [initialized, setInitialized] = useState(false)
@@ -169,18 +188,24 @@ export function SitePanel({ mounted }: SitePanelProps) {
     }
   }, [buildingIds, expandedIds, initialized])
 
-  const handleTreeSelectionChange = (selectedIds: string[]) => {
-    const selectedId = selectedIds[0]
-    const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
-    if (isLevel && selectedFloorId !== selectedId) selectFloor(selectedId)
-  }
+  const handleTreeSelectionChange = useCallback(
+    (selectedIds: string[]) => {
+      const selectedId = selectedIds[0]
+      const isLevel = levelIds.some((levelId: string) => levelId === selectedId)
+      if (isLevel && selectedFloorId !== selectedId) selectFloor(selectedId)
+    },
+    [levelIds, selectedFloorId, selectFloor],
+  )
+
+  // Memoize context value to prevent re-renders of all children
+  const layersMenuContextValue = useMemo(() => ({ handleNodeClick }), [handleNodeClick])
 
   if (!mounted) {
     return <div className="p-2 text-muted-foreground text-xs italic">Loading...</div>
   }
 
   return (
-    <LayersMenuContext.Provider value={{ handleNodeClick }}>
+    <LayersMenuContext.Provider value={layersMenuContextValue}>
       <TreeProvider
         className="flex h-full min-h-0 flex-col overflow-y-auto"
         expandedIds={expandedIds}
@@ -189,6 +214,7 @@ export function SitePanel({ mounted }: SitePanelProps) {
         onExpandedChange={setExpandedIds}
         onSelectionChange={handleTreeSelectionChange}
         selectedIds={selectedFloorId ? [selectedFloorId] : []}
+        selectable={false}
         showLines={true}
       >
         <TreeView className="px-3 py-1">
