@@ -72,7 +72,7 @@ export function AppSidebar() {
   useEffect(() => {
     if (!isResizing) return
 
-    const sidebarLeftGap = 10;
+    const sidebarLeftGap = 13
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = Math.max(200, Math.min(600, e.clientX + sidebarLeftGap))
@@ -235,7 +235,7 @@ export function AppSidebar() {
 
         {/* Resize Handle */}
         <div
-          className="absolute top-0 bottom-0 right-0 w-1 bg-border cursor-col-resize hover:bg-accent z-50 opacity-0 hover:opacity-100 transition-opacity"
+          className="absolute top-0 bottom-0 right-0 w-2 bg-border cursor-col-resize hover:bg-accent z-50 opacity-0 hover:opacity-100 transition-opacity"
           onMouseDown={(e) => {
             e.preventDefault()
             setIsResizing(true)
