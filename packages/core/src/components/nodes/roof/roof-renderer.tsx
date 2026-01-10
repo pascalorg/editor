@@ -7,7 +7,7 @@ import { useThree } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/shallow'
-import { TILE_SIZE } from '../../../constants'
+import { TILE_SIZE, WALL_HEIGHT } from '../../../constants'
 import { useEditor } from '../../../hooks'
 
 const ROOF_WIDTH = 6 // 6m total width (3m on each side of ridge)
@@ -1058,7 +1058,7 @@ export function RoofRenderer({ nodeId }: RoofRendererProps) {
   )
 
   return (
-    <group>
+    <group position={new THREE.Vector3(0,WALL_HEIGHT,0)}>
       {isPreview ? (
         // Simplified preview
         <group>
