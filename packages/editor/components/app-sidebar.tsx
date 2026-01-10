@@ -72,8 +72,10 @@ export function AppSidebar() {
   useEffect(() => {
     if (!isResizing) return
 
+    const sidebarLeftGap = 10;
+
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(200, Math.min(600, e.clientX))
+      const newWidth = Math.max(200, Math.min(600, e.clientX + sidebarLeftGap))
       setSidebarWidth(newWidth)
     }
 
