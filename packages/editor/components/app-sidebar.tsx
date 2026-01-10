@@ -2,7 +2,7 @@
 
 import JsonView from '@uiw/react-json-view'
 import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { IconRail, type PanelId } from '@/components/icon-rail'
 import { CollectionsPanel, SettingsPanel, SitePanel, ZonesPanel } from '@/components/panels'
@@ -20,6 +20,8 @@ import { useEditor } from '@/hooks/use-editor'
 import { cn } from '@/lib/utils'
 
 export function AppSidebar() {
+  const sidebarWidth = useEditor((state) => state.sidebarWidth)
+  const setSidebarWidth = useEditor((state) => state.setSidebarWidth)
   const isHelpOpen = useEditor((state) => state.isHelpOpen)
   const setIsHelpOpen = useEditor((state) => state.setIsHelpOpen)
   const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
@@ -38,6 +40,8 @@ export function AppSidebar() {
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelId>('site')
+  const [isResizing, setIsResizing] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Wait for client-side hydration to complete before rendering store-dependent content
   useEffect(() => {
@@ -63,6 +67,28 @@ export function AppSidebar() {
       setActivePanel('zones')
     }
   }, [activeTool])
+
+  // Handle mouse move during resize
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.max(200, Math.min(600, e.clientX))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing, setSidebarWidth])
 
   const renderPanelContent = () => {
     switch (activePanel) {
@@ -176,8 +202,20 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar className={cn('dark text-white')} variant="floating">
-      <div className="flex h-full">
+    <Sidebar
+      ref={sidebarRef}
+      className={cn('dark text-white')}
+      variant="floating"
+      style={{
+        width: `${sidebarWidth}px`,
+        // Disable animations only when resizing for better performance
+        ...(isResizing && {
+          animationDuration: '0s',
+          transitionDuration: '0s',
+        }),
+      }}
+    >
+      <div className="flex h-full relative">
         {/* Icon Rail */}
         <IconRail activePanel={activePanel} onPanelChange={setActivePanel} />
 
@@ -192,6 +230,15 @@ export function AppSidebar() {
             {renderPanelContent()}
           </SidebarContent>
         </div>
+
+        {/* Resize Handle */}
+        <div
+          className="absolute top-0 bottom-0 right-0 w-1 bg-border cursor-col-resize hover:bg-accent z-50 opacity-0 hover:opacity-100 transition-opacity"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            setIsResizing(true)
+          }}
+        />
       </div>
 
         {/* Dialogs */}
