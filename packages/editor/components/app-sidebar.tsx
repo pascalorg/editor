@@ -17,9 +17,12 @@ import {
 } from '@/components/ui/dialog'
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar'
 import { useEditor } from '@/hooks/use-editor'
+import { useResize } from './use-resize'
 import { cn } from '@/lib/utils'
 
 export function AppSidebar() {
+  const sidebarWidth = useEditor((state) => state.sidebarWidth)
+  const setSidebarWidth = useEditor((state) => state.setSidebarWidth)
   const isHelpOpen = useEditor((state) => state.isHelpOpen)
   const setIsHelpOpen = useEditor((state) => state.setIsHelpOpen)
   const isJsonInspectorOpen = useEditor((state) => state.isJsonInspectorOpen)
@@ -38,6 +41,10 @@ export function AppSidebar() {
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1)
   const [mounted, setMounted] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelId>('site')
+
+  const { isResizing, sidebarRef, startResizing } = useResize({
+    onWidthChange: setSidebarWidth,
+  })
 
   // Wait for client-side hydration to complete before rendering store-dependent content
   useEffect(() => {
@@ -176,8 +183,20 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar className={cn('dark text-white')} variant="floating">
-      <div className="flex h-full">
+    <Sidebar
+      ref={sidebarRef}
+      className={cn('dark text-white')}
+      variant="floating"
+      style={{
+        width: `${sidebarWidth}px`,
+        // Disable animations only when resizing for better performance
+        ...(isResizing && {
+          animationDuration: '0s',
+          transitionDuration: '0s',
+        }),
+      }}
+    >
+      <div className="flex h-full relative">
         {/* Icon Rail */}
         <IconRail activePanel={activePanel} onPanelChange={setActivePanel} />
 
@@ -192,6 +211,15 @@ export function AppSidebar() {
             {renderPanelContent()}
           </SidebarContent>
         </div>
+
+        {/* Resize Handle */}
+        <div
+          className="absolute top-0 bottom-0 right-0 w-2 bg-border cursor-col-resize hover:bg-accent z-50 opacity-0 hover:opacity-100 transition-opacity"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            startResizing()
+          }}
+        />
       </div>
 
         {/* Dialogs */}
