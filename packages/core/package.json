@@ -22,5 +22,11 @@
     "@repo/typescript-config": "*",
     "three": "^0.176",
     "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "dedent": "^1.7.1",
+    "nanoid": "^5.1.6",
+    "zod": "^4.3.5",
+    "zustand": "^5.0.10"
   }
 }
