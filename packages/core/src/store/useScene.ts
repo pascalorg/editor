@@ -1,5 +1,6 @@
+"use client";
+
 import { create } from "zustand";
-import { ItemNode } from "../schema/nodes/item";
 import { LevelNode } from "../schema/nodes/level";
 import { WallNode } from "../schema/nodes/wall";
 import { AnyNode, AnyNodeId } from "../schema/types";
@@ -75,79 +76,30 @@ const useScene = create<SceneState>()((set, get) => ({
 
     // Define all nodes flat
     const nodes: Record<AnyNodeId, AnyNode> = {
-      // Level 0
-
-      wall_0_0: WallNode.parse({
-        id: "wall_0_0",
-        start: [0, 0],
-        end: [5, 0],
-        children: ["item_1_1", "item_1_2", "item_1_3"],
-      }),
-      wall_0_1: WallNode.parse({
-        id: "wall_0_1",
-        start: [0, 0],
-        end: [0, 5],
-      }),
-      wall_0_2: WallNode.parse({
-        id: "wall_0_2",
-        start: [5, 5],
-        end: [0, 5],
-      }),
-      wall_0_3: WallNode.parse({
-        id: "wall_0_3",
-        start: [5, 5],
-        end: [5, 0],
-      }),
-
-      // Level 1
-      level_1: LevelNode.parse({
-        id: "level_1",
-        level: 1,
-        children: ["item_1_0"],
-      }),
-      item_1_0: ItemNode.parse({
-        id: "item_1_0",
-        position: [-1, 0, 0],
-      }),
-      item_1_1: ItemNode.parse({
-        id: "item_1_1",
-        parentId: "wall_0_0",
-        position: [2.5, 0.8, 0],
-      }),
-      item_1_2: ItemNode.parse({
-        id: "item_1_2",
-        parentId: "wall_0_0",
-        position: [1, 0.8, 0],
-      }),
-      item_1_3: ItemNode.parse({
-        id: "item_1_3",
-        parentId: "wall_0_0",
-        position: [4, 0.8, 0],
-      }),
-
-      // Level 2
-      level_2: LevelNode.parse({
-        id: "level_2",
-        level: 2,
-        children: [],
-      }),
+      [level0.id]: level0,
+      [level1.id]: level1,
+      [level2.id]: level2,
+      [wall0.id]: wall0,
+      [wall1.id]: wall1,
+      [wall2.id]: wall2,
+      [wall3.id]: wall3,
     };
 
     // Root nodes are the levels
-    const rootNodeIds = ["level_0", "level_1", "level_2"];
+    const rootNodeIds = [level0.id, level1.id, level2.id];
 
-    get().dirtyNodes.add("wall_0_0");
-    get().dirtyNodes.add("wall_0_1");
-    get().dirtyNodes.add("wall_0_2");
-    get().dirtyNodes.add("wall_0_3");
+    get().dirtyNodes.add(wall0.id);
+    get().dirtyNodes.add(wall1.id);
+    get().dirtyNodes.add(wall2.id);
+    get().dirtyNodes.add(wall3.id);
     set({ nodes, rootNodeIds });
   },
 
-  markDirty: (id: string) => {
+  markDirty: (id) => {
     get().dirtyNodes.add(id);
   },
 
-  clearDirty: (id: string) => {
+  clearDirty: (id) => {
     get().dirtyNodes.delete(id);
   },
 

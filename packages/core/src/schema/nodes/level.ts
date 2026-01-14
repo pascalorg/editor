@@ -6,7 +6,7 @@ import { WallNode } from "./wall";
 export const LevelNode = BaseNode.extend({
   id: objectId("level"),
   type: nodeType("level"),
-  children: z.array(z.discriminatedUnion("type", [WallNode])).default([]),
+  children: z.array(WallNode.shape.id).default([]),
   // Specific props
   level: z.number().default(0),
 }).describe(
