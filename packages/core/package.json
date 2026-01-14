@@ -1,0 +1,26 @@
+{
+  "name": "@pascal-app/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "three": "^0.176"
+  },
+  "devDependencies": {
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "@repo/typescript-config": "*",
+    "three": "^0.176",
+    "typescript": "5.9.2"
+  }
+}
