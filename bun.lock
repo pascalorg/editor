@@ -15,6 +15,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@pascal-app/core": "*",
+        "@pascal-app/viewer": "*",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "@react-three/uikit-lucide": "^1.0.60",
@@ -103,14 +104,16 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "@repo/typescript-config": "*",
-        "three": "^0.176",
+        "@types/react": "^19.2.2",
+        "@types/three": "^0.182.0",
+        "three": "^0.182",
         "typescript": "5.9.2",
       },
       "peerDependencies": {
         "@pascal-app/core": "*",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
-        "three": "^0.176",
+        "three": "^0.182",
       },
     },
   },
@@ -994,6 +997,8 @@
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
 
     "@eslint/eslintrc/globals": ["globals@14.0.0", "", {}, "sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ=="],
+
+    "@pascal-app/viewer/three": ["three@0.182.0", "", {}, "sha512-GbHabT+Irv+ihI1/f5kIIsZ+Ef9Sl5A1Y7imvS5RQjWgtTPfPnZ43JmlYI7NtCRDK9zir20lQpfg8/9Yd02OvQ=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.8.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.1.0", "tslib": "^2.4.0" }, "bundled": true }, "sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg=="],
 

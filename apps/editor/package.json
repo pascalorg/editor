@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@pascal-app/core": "*",
+    "@pascal-app/viewer": "*",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "@react-three/uikit-lucide": "^1.0.60",

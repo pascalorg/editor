@@ -1,32 +1,7 @@
 "use client";
 
-import { Environment, OrbitControls } from "@react-three/drei";
-import { Canvas, ThreeToJSXElements } from "@react-three/fiber";
-
-import { extend } from "@react-three/fiber";
-import * as THREE from "three/webgpu";
-import { SceneRenderer } from "./renderers/scene-renderer";
-
-declare module "@react-three/fiber" {
-  interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
-}
-
-extend(THREE as any);
+import { Viewer } from "@pascal-app/viewer";
 
 export default function Editor() {
-  return (
-    <Canvas
-      className={"bg-[#303035]"}
-      gl={async (props) => {
-        const renderer = new THREE.WebGPURenderer(props as any);
-        await renderer.init();
-        return renderer;
-      }}
-      shadows
-    >
-      <OrbitControls />
-      <Environment preset="sunset" />
-      <SceneRenderer />
-    </Canvas>
-  );
+  return <Viewer />;
 }
