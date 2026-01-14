@@ -4,8 +4,8 @@ import { Environment, OrbitControls } from "@react-three/drei";
 import { Canvas, ThreeToJSXElements } from "@react-three/fiber";
 
 import { extend } from "@react-three/fiber";
-import { color, sin, time } from "three/tsl";
 import * as THREE from "three/webgpu";
+import { SceneRenderer } from "./renderers/scene-renderer";
 
 declare module "@react-three/fiber" {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -26,10 +26,7 @@ export default function Editor() {
     >
       <OrbitControls />
       <Environment preset="sunset" />
-      <mesh>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardNodeMaterial colorNode={color("pink").mul(sin(time))} />
-      </mesh>
+      <SceneRenderer />
     </Canvas>
   );
 }
