@@ -1,6 +1,6 @@
 "use client";
 
-import { Environment, OrbitControls } from "@react-three/drei";
+import { Bvh, Environment, OrbitControls } from "@react-three/drei";
 import { Canvas, ThreeToJSXElements } from "@react-three/fiber";
 
 import { LevelSystem, WallSystem } from "@pascal-app/core";
@@ -14,9 +14,11 @@ declare module "@react-three/fiber" {
 
 extend(THREE as any);
 
-interface ViewerProps {}
+interface ViewerProps {
+  children?: React.ReactNode;
+}
 
-const Viewer: React.FC<ViewerProps> = () => {
+const Viewer: React.FC<ViewerProps> = ({ children }) => {
   return (
     <Canvas
       className={"bg-[#303035]"}
@@ -30,11 +32,15 @@ const Viewer: React.FC<ViewerProps> = () => {
     >
       <OrbitControls />
       <Environment preset="sunset" />
-      <SceneRenderer />
+      <Bvh>
+        <SceneRenderer />
+      </Bvh>
 
       {/* Default Systems */}
       <LevelSystem />
       <WallSystem />
+
+      {children}
     </Canvas>
   );
 };

@@ -43,9 +43,9 @@ function updateWallGeometry(wallId: string) {
   if (!mesh) return;
 
   const childrenIds = node.children || [];
-  const childrenNodes = childrenIds.map(
-    (childId) => useScene.getState().nodes[childId]
-  );
+  const childrenNodes = childrenIds
+    .map((childId) => useScene.getState().nodes[childId])
+    .filter((n): n is AnyNode => n !== undefined);
 
   // Perform the Extrusion with Holes logic we discussed
   const newGeo = generateExtrudedWall(node, childrenNodes);

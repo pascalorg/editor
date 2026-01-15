@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "dedent": "^1.7.1",
+    "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
     "zod": "^4.3.5",
     "zustand": "^5.0.10"
