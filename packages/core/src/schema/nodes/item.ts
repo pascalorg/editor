@@ -13,7 +13,9 @@ export const ItemNode = BaseNode.extend({
     .object({
       category: z.string(),
       src: z.string(),
-      dimensions: z.tuple([z.number(), z.number(), z.number()]), // [w, h, d]
+      dimensions: z
+        .tuple([z.number(), z.number(), z.number()])
+        .default([1, 1, 1]), // [w, h, d]
       attachTo: z.enum(["wall", "wall-side", "ceiling"]).optional(),
       // These are "Corrective" transforms to normalize the GLB
       offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

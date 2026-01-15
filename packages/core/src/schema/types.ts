@@ -1,5 +1,6 @@
 import z from "zod";
 import { BuildingNode } from "./nodes/building";
+import { ItemNode } from "./nodes/item";
 import { LevelNode } from "./nodes/level";
 import { SiteNode } from "./nodes/site";
 import { WallNode } from "./nodes/wall";
@@ -9,6 +10,7 @@ export const AnyNode = z.discriminatedUnion("type", [
   BuildingNode,
   LevelNode,
   WallNode,
+  ItemNode,
 ]);
 
 export type AnyNode = z.infer<typeof AnyNode>;

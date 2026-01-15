@@ -1,6 +1,7 @@
 import dedent from "dedent";
 import { z } from "zod";
 import { BaseNode, nodeType, objectId } from "../base";
+import { ItemNode } from "./item";
 // import { DoorNode } from "./door";
 // import { ItemNode } from "./item";
 // import { WindowNode } from "./window";
@@ -8,11 +9,7 @@ import { BaseNode, nodeType, objectId } from "../base";
 export const WallNode = BaseNode.extend({
   id: objectId("wall"),
   type: nodeType("wall"),
-  // get children() {
-  //   return z
-  //     .array(z.discriminatedUnion("type", [DoorNode, WindowNode, ItemNode]))
-  //     .default([]);
-  // },
+  children: z.array(ItemNode.shape.id).default([]),
   // Specific props
   thickness: z.number().optional(),
   height: z.number().optional(),

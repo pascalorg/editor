@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { ItemNode } from "../schema";
 import { LevelNode } from "../schema/nodes/level";
 import { WallNode } from "../schema/nodes/wall";
 import { AnyNode, AnyNodeId } from "../schema/types";
@@ -72,6 +73,19 @@ const useScene = create<SceneState>()((set, get) => ({
       children: [],
     });
 
+    const window1 = ItemNode.parse({
+      type: "item",
+      name: "Window",
+      position: [2.5, 0.5, 0],
+      asset: {
+        category: "windows",
+        attachTo: "wall",
+        src: "/items/window-round/model.glb",
+      },
+    });
+
+    wall0.children.push(window1.id);
+
     level0.children.push(wall0.id, wall1.id, wall2.id, wall3.id);
 
     // Define all nodes flat
@@ -83,6 +97,7 @@ const useScene = create<SceneState>()((set, get) => ({
       [wall1.id]: wall1,
       [wall2.id]: wall2,
       [wall3.id]: wall3,
+      [window1.id]: window1,
     };
 
     // Root nodes are the levels

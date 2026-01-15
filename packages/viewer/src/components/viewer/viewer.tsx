@@ -3,6 +3,7 @@
 import { Environment, OrbitControls } from "@react-three/drei";
 import { Canvas, ThreeToJSXElements } from "@react-three/fiber";
 
+import { LevelSystem, WallSystem } from "@pascal-app/core";
 import { extend } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { SceneRenderer } from "../renderers/scene-renderer";
@@ -25,10 +26,15 @@ const Viewer: React.FC<ViewerProps> = () => {
         return renderer;
       }}
       shadows
+      camera={{ position: [3, 3, 3], fov: 50 }}
     >
       <OrbitControls />
       <Environment preset="sunset" />
       <SceneRenderer />
+
+      {/* Default Systems */}
+      <LevelSystem />
+      <WallSystem />
     </Canvas>
   );
 };

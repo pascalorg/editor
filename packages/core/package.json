@@ -14,14 +14,16 @@
   "peerDependencies": {
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
-    "three": "^0.176"
+    "three": "^0.182"
   },
   "devDependencies": {
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "@repo/typescript-config": "*",
-    "three": "^0.176",
-    "typescript": "5.9.2"
+    "@types/react": "^19.2.2",
+    "three": "^0.182",
+    "typescript": "5.9.2",
+    "@types/three": "^0.182.0"
   },
   "dependencies": {
     "dedent": "^1.7.1",
