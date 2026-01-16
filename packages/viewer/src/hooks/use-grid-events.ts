@@ -1,34 +1,12 @@
-import {
-  BuildingNode,
-  emitter,
-  EventSuffix,
-  ItemEvent,
-  ItemNode,
-  WallEvent,
-  WallNode,
-} from "@pascal-app/core";
+import { emitter, EventSuffix, GridEvent } from "@pascal-app/core";
 import { ThreeEvent } from "@react-three/fiber";
-import { BuildingEvent } from "../../../core/src/events/bus";
 
-type NodeConfig = {
-  item: { node: ItemNode; event: ItemEvent };
-  wall: { node: WallNode; event: WallEvent };
-  building: { node: BuildingNode; event: BuildingEvent };
-};
-
-type NodeType = keyof NodeConfig;
-
-export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]["node"], type: T) {
+export function useGridEvents() {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
-    const eventKey = `${type}:${suffix}` as `${T}:${EventSuffix}`;
-    const payload = {
-      node,
-      position: [e.point.x, e.point.y, e.point.z],
-      normal: e.face
-        ? [e.face.normal.x, e.face.normal.y, e.face.normal.z]
-        : undefined,
-      stopPropagation: () => e.stopPropagation(),
-    } as NodeConfig[T]["event"];
+    const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`;
+    const payload: GridEvent = {
+      position: [e.point.x, e.point.z],
+    };
 
     emitter.emit(eventKey, payload);
   };

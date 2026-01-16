@@ -20,6 +20,8 @@ type SceneState = {
   loadScene: () => void;
   markDirty: (id: AnyNodeId) => void;
   clearDirty: (id: AnyNodeId) => void;
+
+  createNode: (node: AnyNode, parentId?: AnyNodeId) => void;
 };
 
 const useScene = create<SceneState>()((set, get) => ({
@@ -123,6 +125,27 @@ const useScene = create<SceneState>()((set, get) => ({
   clearDirty: (id) => {
     get().dirtyNodes.delete(id);
   },
+
+  createNode: (node, parentId) => {
+      set((state) => {
+    const newNodes = { ...state.nodes, [node.id]: node };
+
+    if (parentId) {
+      const parent = state.nodes[parentId];
+      if (parent) {
+        newNodes[parentId] = {
+          ...parent,
+          children: [...parent.children, node.id], 
+        };
+      }
+    }
+
+    return { nodes: newNodes };
+  });
+
+  get().markDirty(node.id);
+  if (parentId) get().markDirty(parentId);
+  }
 }));
 
 useScene.getState().loadScene();

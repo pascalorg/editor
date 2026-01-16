@@ -7,6 +7,8 @@ export const LevelRenderer = ({ node }: { node: LevelNode }) => {
   const ref = useRef<Group>(null!);
 
   useRegistry(node.id, node.type, ref);
+
+  console.log('rendering level:', node.id, node.children);
   return (
     <group ref={ref}>
       {/* <mesh receiveShadow>

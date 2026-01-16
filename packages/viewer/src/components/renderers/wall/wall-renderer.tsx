@@ -1,6 +1,5 @@
-import { emitter, useRegistry, WallNode } from "@pascal-app/core";
-import { ThreeEvent } from "@react-three/fiber";
-import { useCallback, useRef } from "react";
+import { useRegistry, WallNode } from "@pascal-app/core";
+import { useRef } from "react";
 import { Mesh } from "three";
 import { NodeRenderer } from "../node-renderer";
 import { useNodeEvents } from "../../../hooks/use-node-events";

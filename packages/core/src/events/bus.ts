@@ -1,5 +1,5 @@
 import mitt from "mitt";
-import { ItemNode, WallNode } from "../schema";
+import { BuildingNode, ItemNode, WallNode } from "../schema";
 import { AnyNode } from "../schema/types";
 
 // Base event interfaces
@@ -16,6 +16,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type WallEvent = NodeEvent<WallNode>;
 export type ItemEvent = NodeEvent<ItemNode>;
+export type BuildingEvent = NodeEvent<BuildingNode>;
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -41,6 +42,7 @@ type GridEvents = {
 
 type EditorEvents = GridEvents &
   NodeEvents<"wall", WallEvent> &
-  NodeEvents<"item", ItemEvent>;
+  NodeEvents<"item", ItemEvent> &
+  NodeEvents<"building", BuildingEvent>;
 
 export const emitter = mitt<EditorEvents>();

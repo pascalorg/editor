@@ -7,7 +7,7 @@ import {
   useScene,
   WallNode,
 } from "@pascal-app/core";
-import { useViewer, Viewer } from "@pascal-app/viewer";
+import { useGridEvents, useNodeEvents, useViewer, Viewer } from "@pascal-app/viewer";
 import { Stats } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
@@ -27,6 +27,7 @@ import {
 } from "three/tsl";
 import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
 import { ActionMenu } from "./ui/action-menu";
+import { WallEditor } from "./editors/wall/wall-editor";
 
 const selectedObjects: Object3D[] = [];
 
@@ -37,10 +38,11 @@ export default function Editor() {
 
       <ActionMenu />
       <Viewer>
-        <Selector />
+        <DraftSelector />
         <Stats />
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
+        <WallEditor />
       </Viewer>
     </div>
   );
@@ -187,17 +189,31 @@ const Grid = ({
     fadeStrength,
   ]);
 
+  const handlers = useGridEvents();
+
   return (
-    <mesh rotation-x={-Math.PI / 2} material={material}>
+    <mesh rotation-x={-Math.PI / 2} material={material} {...handlers}>
       <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
     </mesh>
   );
 };
 
-const Selector = () => {
+const DraftSelector = () => {
   const selectedItemId = useRef<ItemNode["id"] | WallNode["id"]>(null);
   const itemSelectedAt = useRef<number>(0);
   useEffect(() => {
+    emitter.on('building:enter', (event) => {
+      console.log('Entered building:', event.node.id);
+      const itemMesh = sceneRegistry.nodes.get(event.node.id);
+      selectedObjects.length = 0;
+      selectedObjects.push(itemMesh);
+    });
+    emitter.on('building:leave', (event) => {
+      console.log('Leaving building:', event.node.id);
+      selectedObjects.length = 0;
+    });
+
+
     emitter.on("item:click", (event) => {
       event.stopPropagation();
       if (Date.now() - itemSelectedAt.current < 50) {
