@@ -9,6 +9,7 @@ export const sceneRegistry = {
   // Categorized lookups: Type -> Set of IDs
   // Using a Set is faster for adding/deleting than an Array
   byType: {
+    building: new Set<string>(),
     level: new Set<string>(),
     wall: new Set<string>(),
     item: new Set<string>(),

@@ -4,6 +4,7 @@ import { AnyNode, useScene } from "@pascal-app/core";
 import { ItemRenderer } from "./item/item-renderer";
 import { LevelRenderer } from "./level/level-renderer";
 import { WallRenderer } from "./wall/wall-renderer";
+import { BuildingRenderer } from "./building/building-renderer";
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode["id"] }) => {
   const node = useScene((state) => state.nodes[nodeId]);
@@ -12,6 +13,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode["id"] }) => {
 
   return (
     <>
+      {node.type === "building" && <BuildingRenderer node={node} />}
       {node.type === "level" && <LevelRenderer node={node} />}
       {node.type === "item" && <ItemRenderer node={node} />}
       {node.type === "wall" && <WallRenderer node={node} />}

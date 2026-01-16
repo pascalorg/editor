@@ -6,7 +6,7 @@ import { LevelNode } from "./level";
 export const BuildingNode = BaseNode.extend({
   id: objectId("building"),
   type: nodeType("building"),
-  children: z.array(LevelNode).default([LevelNode.parse({})]),
+  children: z.array(LevelNode.shape.id).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
 }).describe(

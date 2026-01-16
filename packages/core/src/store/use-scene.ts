@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { ItemNode } from "../schema";
+import { BuildingNode, ItemNode } from "../schema";
 import { LevelNode } from "../schema/nodes/level";
 import { WallNode } from "../schema/nodes/wall";
 import { AnyNode, AnyNodeId } from "../schema/types";
@@ -33,6 +33,12 @@ const useScene = create<SceneState>()((set, get) => ({
   dirtyNodes: new Set<AnyNodeId>(),
 
   loadScene: () => {
+
+    const building = BuildingNode.parse({
+        children: [],
+    });
+
+
     const level0 = LevelNode.parse({
       level: 0,
       children: [],
@@ -85,8 +91,11 @@ const useScene = create<SceneState>()((set, get) => ({
 
     level0.children.push(wall0.id, wall1.id, wall2.id, wall3.id);
 
+    building.children.push(level0.id, level1.id, level2.id);
+
     // Define all nodes flat
     const nodes: Record<AnyNodeId, AnyNode> = {
+      [building.id]: building,
       [level0.id]: level0,
       [level1.id]: level1,
       [level2.id]: level2,
@@ -98,7 +107,7 @@ const useScene = create<SceneState>()((set, get) => ({
     };
 
     // Root nodes are the levels
-    const rootNodeIds = [level0.id, level1.id, level2.id];
+    const rootNodeIds = [building.id];
 
     get().dirtyNodes.add(wall0.id);
     get().dirtyNodes.add(wall1.id);

@@ -1,45 +1,46 @@
 import mitt from "mitt";
 import { ItemNode, WallNode } from "../schema";
 import { AnyNode } from "../schema/types";
+
+// Base event interfaces
 export interface GridEvent {
   position: [number, number];
 }
 
-export interface NodeEvent {
-  node: AnyNode;
-  position: [number, number, number]; // [x, y, z] world coordinates
-  normal?: [number, number, number]; // [x, y, z] normal vector
+export interface NodeEvent<T extends AnyNode = AnyNode> {
+  node: T;
+  position: [number, number, number];
+  normal?: [number, number, number];
   stopPropagation: () => void;
 }
 
-export interface WallEvent extends NodeEvent {
-  node: WallNode;
-}
+export type WallEvent = NodeEvent<WallNode>;
+export type ItemEvent = NodeEvent<ItemNode>;
 
-export interface ItemEvent extends NodeEvent {
-  node: ItemNode;
-}
+// Event suffixes - exported for use in hooks
+export const eventSuffixes = [
+  "click",
+  "move",
+  "enter",
+  "leave",
+  "pointerdown",
+  "pointerup",
+  "context-menu",
+  "double-click",
+] as const;
 
-type EditorEvents = {
-  "grid:click": GridEvent;
-  "grid:rightclick": GridEvent;
-  "grid:move": GridEvent;
-  "grid:double-click": GridEvent;
-  "grid:enter": GridEvent;
-  "grid:leave": GridEvent;
-  "grid:pointerdown": GridEvent;
-  "grid:pointerup": GridEvent;
-  "wall:click": WallEvent;
-  "wall:move": WallEvent;
-  "wall:enter": WallEvent;
-  "wall:leave": WallEvent;
-  "wall:pointerdown": WallEvent;
-  "wall:pointerup": WallEvent;
-  "item:click": ItemEvent;
-  "item:move": ItemEvent;
-  "item:enter": ItemEvent;
-  "item:leave": ItemEvent;
-  "item:pointerdown": ItemEvent;
-  "item:pointerup": ItemEvent;
+export type EventSuffix = (typeof eventSuffixes)[number];
+
+type NodeEvents<T extends string, E> = {
+  [K in `${T}:${EventSuffix}`]: E;
 };
+
+type GridEvents = {
+  [K in `grid:${EventSuffix}`]: GridEvent;
+};
+
+type EditorEvents = GridEvents &
+  NodeEvents<"wall", WallEvent> &
+  NodeEvents<"item", ItemEvent>;
+
 export const emitter = mitt<EditorEvents>();

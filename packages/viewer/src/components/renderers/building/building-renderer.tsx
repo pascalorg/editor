@@ -1,9 +1,9 @@
-import { LevelNode, useRegistry } from "@pascal-app/core";
+import { BuildingNode, LevelNode, useRegistry } from "@pascal-app/core";
 import { useRef } from "react";
 import { Group } from "three";
 import { NodeRenderer } from "../node-renderer";
 
-export const LevelRenderer = ({ node }: { node: LevelNode }) => {
+export const BuildingRenderer = ({ node }: { node: BuildingNode }) => {
   const ref = useRef<Group>(null!);
 
   useRegistry(node.id, node.type, ref);

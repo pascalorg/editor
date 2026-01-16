@@ -12,7 +12,8 @@ export { LevelSystem } from "../../viewer/src/systems/level/level-system";
 export { WallSystem } from "./systems/wall/wall-system";
 
 // Events
-export { emitter } from "./events/bus";
+export { emitter, eventSuffixes } from "./events/bus";
+export type { ItemEvent, WallEvent, NodeEvent, GridEvent, EventSuffix } from "./events/bus";
 
 // Schema
 export * from "./schema";
