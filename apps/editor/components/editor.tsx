@@ -7,7 +7,7 @@ import {
   useScene,
   WallNode,
 } from "@pascal-app/core";
-import { Viewer } from "@pascal-app/viewer";
+import { useViewer, Viewer } from "@pascal-app/viewer";
 import { Stats } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
@@ -264,8 +264,8 @@ const Selector = () => {
 };
 
 const LevelModeSwitcher = () => {
-  const setLevelMode = useScene((state) => state.setLevelMode);
-  const levelMode = useScene((state) => state.levelMode);
+  const setLevelMode = useViewer((state) => state.setLevelMode);
+  const levelMode = useViewer((state) => state.levelMode);
 
   return (
     <div className="absolute top-4 left-4 z-10 flex gap-2">

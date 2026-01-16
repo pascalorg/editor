@@ -4,6 +4,6 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"],
+  "include": ["src", "../viewer/src/systems/level"],
   "exclude": ["node_modules", "dist"]
 }

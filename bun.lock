@@ -7,6 +7,7 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "three": "^0.182.0",
+        "zustand": "^5.0.10",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.3.11",
@@ -47,7 +48,6 @@
         "mitt": "^3.0.1",
         "nanoid": "^5.1.6",
         "zod": "^4.3.5",
-        "zustand": "^5.0.10",
       },
       "devDependencies": {
         "@repo/typescript-config": "*",

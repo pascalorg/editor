@@ -1,15 +1,14 @@
+import { LevelNode, sceneRegistry, useScene } from "@pascal-app/core";
 import { useFrame } from "@react-three/fiber";
 import { lerp } from "three/src/math/MathUtils.js";
-import { sceneRegistry } from "../../hooks/scene-registry/scene-registry";
-import { LevelNode } from "../../schema";
-import useScene from "../../store/useScene";
+import useViewer from "../../store/use-viewer";
 
 const LEVEL_HEIGHT = 2.5;
 const EXPLODED_GAP = 5;
 
 export const LevelSystem = () => {
   useFrame((_, delta) => {
-    const levelMode = useScene.getState().levelMode;
+    const levelMode = useViewer.getState().levelMode;
     sceneRegistry.byType.level.forEach((levelId) => {
       const obj = sceneRegistry.nodes.get(levelId);
       if (obj) {

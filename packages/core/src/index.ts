@@ -1,5 +1,5 @@
 // Store
-export { default as useScene } from "./store/useScene";
+export { default as useScene } from "./store/use-scene";
 
 // Hooks
 export {
@@ -8,7 +8,7 @@ export {
 } from "./hooks/scene-registry/scene-registry";
 
 // Systems
-export { LevelSystem } from "./systems/level/level-system";
+export { LevelSystem } from "../../viewer/src/systems/level/level-system";
 export { WallSystem } from "./systems/wall/wall-system";
 
 // Events

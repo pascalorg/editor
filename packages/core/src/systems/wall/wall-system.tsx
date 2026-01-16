@@ -2,7 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { sceneRegistry } from "../../hooks/scene-registry/scene-registry";
 import { AnyNode, WallNode } from "../../schema";
-import useScene from "../../store/useScene";
+import useScene from "../../store/use-scene";
 
 export const WallSystem = () => {
   const { nodes, dirtyNodes, clearDirty } = useScene();

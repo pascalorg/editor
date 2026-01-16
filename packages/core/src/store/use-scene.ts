@@ -20,9 +20,6 @@ type SceneState = {
   loadScene: () => void;
   markDirty: (id: AnyNodeId) => void;
   clearDirty: (id: AnyNodeId) => void;
-
-  levelMode: "stacked" | "exploded" | "solo" | "manual";
-  setLevelMode: (mode: "stacked" | "exploded" | "solo" | "manual") => void;
 };
 
 const useScene = create<SceneState>()((set, get) => ({
@@ -117,9 +114,6 @@ const useScene = create<SceneState>()((set, get) => ({
   clearDirty: (id) => {
     get().dirtyNodes.delete(id);
   },
-
-  levelMode: "exploded",
-  setLevelMode: (mode) => set({ levelMode: mode }),
 }));
 
 useScene.getState().loadScene();
