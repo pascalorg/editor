@@ -9,10 +9,25 @@ import {
 } from "@pascal-app/core";
 import { Viewer } from "@pascal-app/viewer";
 import { Stats } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { Mesh } from "three";
-import { color, float, fract, fwidth, mix, positionLocal } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
+import { Color, Object3D } from "three";
+import { outline } from "three/addons/tsl/display/OutlineNode.js";
+import {
+  color,
+  float,
+  fract,
+  fwidth,
+  mix,
+  oscSine,
+  pass,
+  positionLocal,
+  time,
+  uniform,
+} from "three/tsl";
+import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
+
+const selectedObjects: Object3D[] = [];
 
 export default function Editor() {
   return (
@@ -22,10 +37,70 @@ export default function Editor() {
         <Selector />
         <Stats />
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
+        <Passes />
       </Viewer>
     </div>
   );
 }
+
+export const Passes = ({}) => {
+  const { gl: renderer, scene, camera } = useThree();
+  const postProcessingRef = useRef(null);
+
+  useEffect(() => {
+    if (!renderer || !scene || !camera) {
+      return;
+    }
+
+    const scenePass = pass(scene, camera);
+
+    // Get texture nodes
+    const outputPass = scenePass.getTextureNode("output");
+
+    const edgeStrength = uniform(3.0);
+    const edgeGlow = uniform(0.0);
+    const edgeThickness = uniform(1.0);
+    const pulsePeriod = uniform(0);
+    const visibleEdgeColor = uniform(new Color(0xffffff));
+    const hiddenEdgeColor = uniform(new Color(0x4e3636));
+
+    const outlinePass = outline(scene, camera, {
+      selectedObjects,
+      edgeGlow,
+      edgeThickness,
+    });
+    const { visibleEdge, hiddenEdge } = outlinePass;
+
+    const period = time.div(pulsePeriod).mul(2);
+    const osc = oscSine(period).mul(0.5).add(0.5); // osc [ 0.5, 1.0 ]
+
+    const outlineColor = visibleEdge
+      .mul(visibleEdgeColor)
+      .add(hiddenEdge.mul(hiddenEdgeColor))
+      .mul(edgeStrength);
+    const outlinePulse = pulsePeriod
+      .greaterThan(0)
+      .select(outlineColor.mul(osc), outlineColor);
+
+    // Setup post-processing
+    const postProcessing = new PostProcessing(renderer);
+
+    postProcessing.outputNode = outlinePulse.add(scenePass);
+    postProcessingRef.current = postProcessing;
+
+    return () => {
+      postProcessingRef.current = null;
+    };
+  }, [renderer, scene, camera]);
+
+  useFrame(() => {
+    if (postProcessingRef.current) {
+      postProcessingRef.current.render();
+    }
+  }, 1);
+
+  return null;
+};
 
 const Grid = ({
   cellSize = 0.5,
@@ -117,10 +192,11 @@ const Grid = ({
 };
 
 const Selector = () => {
-  const selectedItemId = useRef<ItemNode["id"]>(null);
+  const selectedItemId = useRef<ItemNode["id"] | WallNode["id"]>(null);
   const itemSelectedAt = useRef<number>(0);
   useEffect(() => {
     emitter.on("item:click", (event) => {
+      event.stopPropagation();
       if (Date.now() - itemSelectedAt.current < 50) {
         return;
       }
@@ -128,18 +204,32 @@ const Selector = () => {
       if (selectedItemId.current === event.node.id) {
         selectedItemId.current = null;
         console.log("Deselected item:", event.node.id);
+        selectedObjects.length = 0;
         return;
       }
       selectedItemId.current = event.node.id;
       const itemMesh = sceneRegistry.nodes.get(event.node.id);
       if (!itemMesh) return;
-      itemMesh.traverse((child) => {
-        if ((child as Mesh).isMesh) {
-          (child as Mesh).material = new MeshBasicNodeMaterial({
-            color: "yellow",
-          });
-        }
-      });
+      selectedObjects.push(itemMesh);
+
+      console.log("Selected item:", event.node.id);
+    });
+
+    emitter.on("wall:click", (event) => {
+      if (Date.now() - itemSelectedAt.current < 50) {
+        return;
+      }
+      itemSelectedAt.current = Date.now();
+      if (selectedItemId.current === event.node.id) {
+        selectedItemId.current = null;
+        console.log("Deselected item:", event.node.id);
+        selectedObjects.length = 0;
+        return;
+      }
+      selectedItemId.current = event.node.id;
+      const itemMesh = sceneRegistry.nodes.get(event.node.id);
+      if (!itemMesh) return;
+      selectedObjects.push(itemMesh);
 
       console.log("Selected item:", event.node.id);
     });

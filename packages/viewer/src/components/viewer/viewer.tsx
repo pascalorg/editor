@@ -30,6 +30,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
       shadows
       camera={{ position: [3, 3, 3], fov: 50 }}
     >
+      <color attach="background" args={["#ececec"]} />
       <OrbitControls />
       <Environment preset="sunset" />
       <Bvh>
