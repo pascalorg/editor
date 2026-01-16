@@ -5,6 +5,8 @@ import { useViewer } from "@pascal-app/viewer";
 import { create } from "zustand";
 
 export type Phase = "site" | "structure" | "furnish";
+
+
 export type Mode = "select" | "edit" | "delete" | "build";
 
 // Structure mode tools (building elements)
@@ -17,21 +19,27 @@ export type StructureTool =
   | "roof"
   | "column"
   | "stair"
-  | "door"
-  | "window"
+  | "item"
   | "zone";
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool =
-  | "furniture"
-  | "appliance"
-  | "kitchen"
-  | "bathroom"
-  | "outdoor"
-  | "painting";
+  | "item"
 
 // Site mode tools
 export type SiteTool = "property-line";
+
+
+// Catalog categories for furnish mode items
+export type CatalogCategory =
+  | 'furniture'
+  | 'appliance'
+  | 'bathroom'
+  | 'kitchen'
+  | 'outdoor'
+  | 'window'
+  | 'door'
+
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool;
@@ -43,6 +51,8 @@ type EditorState = {
   setMode: (mode: Mode) => void;
   tool: Tool | null;
   setTool: (tool: Tool | null) => void;
+  catalogCategory: CatalogCategory | null;
+  setCatalogCategory: (category: CatalogCategory | null) => void;
 };
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -94,6 +104,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setMode: (mode) => set({ mode }),
   tool: null,
   setTool: (tool) => set({ tool }),
+  catalogCategory: null,
+  setCatalogCategory: (category) => set({ catalogCategory: category }),
 }));
 
 export default useEditor;

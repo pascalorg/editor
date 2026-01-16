@@ -3,7 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useRef } from "react"
 import { Line, Mesh, Vector3 } from "three";
 
-export const WallEditor: React.FC = () => {
+export const WallTool: React.FC = () => {
 
   const cursorRef = useRef<Mesh>(null);
   const drawingLineRef = useRef<Line>(null!);

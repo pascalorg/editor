@@ -7,7 +7,7 @@ import {
   useScene,
   WallNode,
 } from "@pascal-app/core";
-import { useGridEvents, useNodeEvents, useViewer, Viewer } from "@pascal-app/viewer";
+import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
 import { Stats } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
@@ -27,7 +27,8 @@ import {
 } from "three/tsl";
 import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
 import { ActionMenu } from "./ui/action-menu";
-import { WallEditor } from "./editors/wall/wall-editor";
+import { WallTool } from "./tools/wall/wall-tool";
+import { ToolManager } from "./tools/tool-manager";
 
 const selectedObjects: Object3D[] = [];
 
@@ -42,7 +43,7 @@ export default function Editor() {
         <Stats />
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
-        <WallEditor />
+        <ToolManager />
       </Viewer>
     </div>
   );

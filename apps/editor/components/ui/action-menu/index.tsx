@@ -5,9 +5,16 @@ import { cn } from "@/lib/utils";
 
 import { ControlModes } from "./control-modes";
 import { PhaseSwitcher } from "./phase-switcher";
+import { StructureTools } from "./structure-tools";
+import useEditor from "@/store/use-editor";
+import { AnimatePresence, motion } from "motion/react";
 // import { ViewToggles } from "./view-toggles";
 
 export function ActionMenu({ className }: { className?: string }) {
+
+  const phase = useEditor((state) => state.phase);
+  const mode = useEditor((state) => state.mode);
+
   return (
     <TooltipProvider>
       <div
@@ -18,6 +25,24 @@ export function ActionMenu({ className }: { className?: string }) {
           className
         )}
       >
+
+        {/* Structure Tools Row - Animated */}
+        <AnimatePresence>
+        {phase === "structure" && mode === "build" && (
+          <motion.div
+            className={cn(
+              'overflow-hidden border-zinc-800 max-h-20 border-b px-2 py-2'
+            )}
+            initial={{ opacity: 0, maxHeight: 0, paddingTop: 0, paddingBottom: 0,borderBottomWidth: 0, }} 
+            animate={{ opacity: 1, maxHeight: 80, paddingTop: 8, paddingBottom: 8, borderBottomWidth: 1, }}
+            exit={{ opacity: 0, maxHeight: 0, paddingTop: 0, paddingBottom: 0, borderBottomWidth: 0, }} 
+          >
+            <div className="w-max">
+              <StructureTools />
+            </div>
+          </motion.div>
+        )}
+        </AnimatePresence>
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
           <PhaseSwitcher />
