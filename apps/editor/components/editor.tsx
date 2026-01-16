@@ -26,13 +26,16 @@ import {
   uniform,
 } from "three/tsl";
 import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
+import { ActionMenu } from "./ui/action-menu";
 
 const selectedObjects: Object3D[] = [];
 
 export default function Editor() {
   return (
     <div className="w-full h-full bg-pink-50">
-      <LevelModeSwitcher />
+      {/* <LevelModeSwitcher /> */}
+
+      <ActionMenu />
       <Viewer>
         <Selector />
         <Stats />
