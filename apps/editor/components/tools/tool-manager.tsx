@@ -1,13 +1,16 @@
 import useEditor, { Phase, Tool } from "@/store/use-editor";
 import { WallTool } from "./wall/wall-tool";
+import { ItemTool } from "./item/item-tool";
 
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   site: {
   },
   structure: {
     wall: WallTool,
+    item: ItemTool,
   },
   furnish: {
+    item: ItemTool
   },
 };
 

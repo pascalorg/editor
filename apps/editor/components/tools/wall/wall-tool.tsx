@@ -3,6 +3,18 @@ import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useRef } from "react"
 import { Line, Mesh, Vector3 } from "three";
 
+
+const commitWallDrawing = (start: [number, number], end: [number, number]) => {
+  const { currentLevelId } = useViewer.getState();
+  const { createNode } = useScene.getState();
+  
+  if (!currentLevelId) return;
+
+  const wall = WallNode.parse({ start, end });
+  
+  createNode(wall, currentLevelId);
+};
+
 export const WallTool: React.FC = () => {
 
   const cursorRef = useRef<Mesh>(null);
@@ -42,15 +54,7 @@ export const WallTool: React.FC = () => {
         drawingLineRef.current.visible = true;
 
       } else if (buildingState === 1) {
-        const currentLevelId = useViewer.getState().currentLevelId;
-        console.log('currentLevelId:', currentLevelId);
-        if (currentLevelId) {
-          const wallNode = WallNode.parse({
-            start: [startingPoint.x, startingPoint.z],
-            end: [gridPosition[0], gridPosition[1]],
-          })
-          useScene.getState().createNode(wallNode, currentLevelId);
-        }
+        commitWallDrawing([startingPoint.x, startingPoint.z], [gridPosition[0], gridPosition[1]]);
         drawingLineRef.current.visible = false;
         buildingState = 0;
       }

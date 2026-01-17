@@ -51,10 +51,10 @@ export default function Editor() {
 }
 
 const TestUndo = () => {
-  const {undo, redo, futureStates, pastStates} = useScene.temporal.getState();
+  const { undo, redo, futureStates, pastStates } = useScene.temporal.getState();
 
-
-  return (    <div className="absolute top-4 right-4 z-10 flex gap-2">
+  return (
+    <div className="absolute top-4 right-4 z-10 flex gap-2">
       <button
         className="px-4 py-2 rounded bg-white"
         onClick={() => {
@@ -73,7 +73,7 @@ const TestUndo = () => {
       </button>
     </div>
   );
-}
+};
 
 export const Passes = ({}) => {
   const { gl: renderer, scene, camera } = useThree();
@@ -169,13 +169,13 @@ const Grid = ({
         grid.x
           .div(fw.x)
           .add(1 - thickness)
-          .min(1)
+          .min(1),
       );
       const lineY = float(1).sub(
         grid.y
           .div(fw.y)
           .add(1 - thickness)
-          .min(1)
+          .min(1),
       );
       // Combine both axes - max gives us lines in both directions
       return lineX.max(lineY);
@@ -192,7 +192,7 @@ const Grid = ({
     const gridColor = mix(
       color(cellColor),
       color(sectionColor),
-      float(sectionThickness).mul(g2).min(1)
+      float(sectionThickness).mul(g2).min(1),
     );
 
     // Combined alpha
@@ -229,37 +229,36 @@ const DraftSelector = () => {
   const selectedItemId = useRef<ItemNode["id"] | WallNode["id"]>(null);
   const itemSelectedAt = useRef<number>(0);
   useEffect(() => {
-    emitter.on('building:enter', (event) => {
-      console.log('Entered building:', event.node.id);
+    emitter.on("building:enter", (event) => {
+      console.log("Entered building:", event.node.id);
       const itemMesh = sceneRegistry.nodes.get(event.node.id);
       selectedObjects.length = 0;
       selectedObjects.push(itemMesh);
     });
-    emitter.on('building:leave', (event) => {
-      console.log('Leaving building:', event.node.id);
+    emitter.on("building:leave", (event) => {
+      console.log("Leaving building:", event.node.id);
       selectedObjects.length = 0;
     });
 
+    // emitter.on("item:click", (event) => {
+    //   event.stopPropagation();
+    //   if (Date.now() - itemSelectedAt.current < 50) {
+    //     return;
+    //   }
+    //   itemSelectedAt.current = Date.now();
+    //   if (selectedItemId.current === event.node.id) {
+    //     selectedItemId.current = null;
+    //     console.log("Deselected item:", event.node.id);
+    //     selectedObjects.length = 0;
+    //     return;
+    //   }
+    //   selectedItemId.current = event.node.id;
+    //   const itemMesh = sceneRegistry.nodes.get(event.node.id);
+    //   if (!itemMesh) return;
+    //   selectedObjects.push(itemMesh);
 
-    emitter.on("item:click", (event) => {
-      event.stopPropagation();
-      if (Date.now() - itemSelectedAt.current < 50) {
-        return;
-      }
-      itemSelectedAt.current = Date.now();
-      if (selectedItemId.current === event.node.id) {
-        selectedItemId.current = null;
-        console.log("Deselected item:", event.node.id);
-        selectedObjects.length = 0;
-        return;
-      }
-      selectedItemId.current = event.node.id;
-      const itemMesh = sceneRegistry.nodes.get(event.node.id);
-      if (!itemMesh) return;
-      selectedObjects.push(itemMesh);
-
-      console.log("Selected item:", event.node.id);
-    });
+    //   console.log("Selected item:", event.node.id);
+    // });
 
     emitter.on("wall:click", (event) => {
       if (Date.now() - itemSelectedAt.current < 50) {
@@ -294,14 +293,14 @@ const DraftSelector = () => {
       itemMesh.position.set(
         event.position[0],
         event.position[1],
-        event.position[2]
+        event.position[2],
       );
       useScene.getState().dirtyNodes.add(wallNode.id);
       console.log(
         "Wall move event:",
         wallNode.id,
         "Point  position:",
-        event.position
+        event.position,
       );
     });
   }, []);
