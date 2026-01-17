@@ -6,8 +6,9 @@ import { LevelNode } from "../schema/nodes/level";
 import { WallNode } from "../schema/nodes/wall";
 import { AnyNode, AnyNodeId } from "../schema/types";
 import { temporal } from "zundo";
+import * as nodeActions from "./actions/node-actions";
 
-type SceneState = {
+export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>;
 
@@ -93,6 +94,8 @@ const useScene = create<SceneState>()(
           name: "Window",
           position: [2.5, 0.5, 0],
           asset: {
+            name: "Round Window",
+            thumbnail: "/items/window-round/thumbnail.png",
             category: "windows",
             attachTo: "wall",
             src: "/items/window-round/model.glb",
@@ -136,152 +139,20 @@ const useScene = create<SceneState>()(
         get().dirtyNodes.delete(id);
       },
 
-      createNodes: (ops) => {
-        set((state) => {
-          const nextNodes = { ...state.nodes };
-          const nextRootIds = [...state.rootNodeIds];
+      createNodes: (ops) => nodeActions.createNodesAction(set, get, ops),
+      createNode: (node, parentId) =>
+        nodeActions.createNodesAction(set, get, [{ node, parentId }]),
 
-          for (const { node, parentId } of ops) {
-            // 1. Assign parentId to the child (Safe because BaseNode has parentId)
-            const newNode = {
-              ...node,
-              parentId: parentId ?? null,
-            };
-
-            nextNodes[newNode.id] = newNode;
-
-            // 2. Update the Parent's children list
-            if (parentId && nextNodes[parentId]) {
-              const parent = nextNodes[parentId];
-
-              // Type Guard: Check if the parent node is a container that supports children
-              if ("children" in parent && Array.isArray(parent.children)) {
-                nextNodes[parentId] = {
-                  ...parent,
-                  // Use Set to prevent duplicate IDs if createNode is called twice
-                  children: Array.from(
-                    new Set([...parent.children, newNode.id]),
-                  ) as any, // We don't verify child types here
-                };
-              }
-            } else if (!parentId) {
-              // 3. Handle Root nodes
-              if (!nextRootIds.includes(newNode.id)) {
-                nextRootIds.push(newNode.id);
-              }
-            }
-          }
-
-          return { nodes: nextNodes, rootNodeIds: nextRootIds };
-        });
-
-        // 4. System Sync
-        ops.forEach(({ node, parentId }) => {
-          get().markDirty(node.id);
-          if (parentId) get().markDirty(parentId);
-        });
-      },
-
-      // 3. The CONVENIENCE (Singular)
-      createNode: (node, parentId) => get().createNodes([{ node, parentId }]),
-
-      updateNodes: (updates) => {
-        const parentsToUpdate = new Set<string>();
-
-        set((state) => {
-          const nextNodes = { ...state.nodes };
-
-          for (const { id, data } of updates) {
-            const currentNode = nextNodes[id];
-            if (!currentNode) continue;
-
-            // Handle Reparenting Logic
-            if (
-              data.parentId !== undefined &&
-              data.parentId !== currentNode.parentId
-            ) {
-              // 1. Remove from old parent
-              if (currentNode.parentId && nextNodes[currentNode.parentId]) {
-                const oldParent = nextNodes[
-                  currentNode.parentId
-                ] as AnyContainerNode;
-                nextNodes[oldParent.id] = {
-                  ...oldParent,
-                  children: oldParent.children.filter(
-                    (childId) => childId !== id,
-                  ),
-                };
-                parentsToUpdate.add(oldParent.id);
-              }
-
-              // 2. Add to new parent
-              if (data.parentId && nextNodes[data.parentId]) {
-                const newParent = nextNodes[data.parentId] as AnyContainerNode;
-                nextNodes[newParent.id] = {
-                  ...newParent,
-                  children: Array.from(new Set([...newParent.children, id])),
-                };
-                parentsToUpdate.add(newParent.id);
-              }
-            }
-
-            // Apply the update
-            nextNodes[id] = { ...nextNodes[id], ...data };
-          }
-
-          return { nodes: nextNodes };
-        });
-
-        // Mark dirty
-        updates.forEach((u) => get().markDirty(u.id));
-        parentsToUpdate.forEach((pId) => get().markDirty(pId));
-      },
-
-      updateNode: (id, data) => get().updateNodes([{ id, data }]),
+      updateNodes: (updates) =>
+        nodeActions.updateNodesAction(set, get, updates),
+      updateNode: (id, data) =>
+        nodeActions.updateNodesAction(set, get, [{ id, data }]),
 
       // --- DELETE ---
 
-      deleteNodes: (ids) => {
-        const parentsToMarkDirty = new Set<string>();
+      deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
 
-        set((state) => {
-          const nextNodes = { ...state.nodes };
-          let nextRootIds = [...state.rootNodeIds];
-
-          for (const id of ids) {
-            const node = nextNodes[id];
-            if (!node) continue;
-
-            // 1. Remove reference from Parent
-            if (node.parentId && nextNodes[node.parentId]) {
-              const parent = nextNodes[node.parentId] as AnyContainerNode;
-              if (parent.children) {
-                nextNodes[parent.id] = {
-                  ...parent,
-                  children: parent.children.filter((cid) => cid !== id),
-                };
-                parentsToMarkDirty.add(parent.id);
-              }
-            }
-
-            // 2. Remove from Root list
-            nextRootIds = nextRootIds.filter((rid) => rid !== id);
-
-            // 3. Delete the node itself
-            delete nextNodes[id];
-
-            // Note: If you want "Recursive Delete" (deleting a level deletes its walls),
-            // you would call deleteNodes recursively here for node.children.
-          }
-
-          return { nodes: nextNodes, rootNodeIds: nextRootIds };
-        });
-
-        // Notify systems that the parent has changed (e.g. Wall needs to fill a window hole)
-        parentsToMarkDirty.forEach((pId) => get().markDirty(pId));
-      },
-
-      deleteNode: (id) => get().deleteNodes([id]),
+      deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
     }),
     {
       partialize: (state) => {

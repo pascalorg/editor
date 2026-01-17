@@ -1,11 +1,15 @@
 "use client";
 
-import { BuildingNode, LevelNode, useScene } from "@pascal-app/core";
+import {
+  AssetInput,
+  BuildingNode,
+  LevelNode,
+  useScene,
+} from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { create } from "zustand";
 
 export type Phase = "site" | "structure" | "furnish";
-
 
 export type Mode = "select" | "edit" | "delete" | "build";
 
@@ -23,23 +27,20 @@ export type StructureTool =
   | "zone";
 
 // Furnish mode tools (items and decoration)
-export type FurnishTool =
-  | "item"
+export type FurnishTool = "item";
 
 // Site mode tools
 export type SiteTool = "property-line";
 
-
 // Catalog categories for furnish mode items
 export type CatalogCategory =
-  | 'furniture'
-  | 'appliance'
-  | 'bathroom'
-  | 'kitchen'
-  | 'outdoor'
-  | 'window'
-  | 'door'
-
+  | "furniture"
+  | "appliance"
+  | "bathroom"
+  | "kitchen"
+  | "outdoor"
+  | "window"
+  | "door";
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool;
@@ -53,6 +54,8 @@ type EditorState = {
   setTool: (tool: Tool | null) => void;
   catalogCategory: CatalogCategory | null;
   setCatalogCategory: (category: CatalogCategory | null) => void;
+  selectedItem: AssetInput | null;
+  setSelectedItem: (item: AssetInput) => void;
 };
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -98,7 +101,7 @@ const useEditor = create<EditorState>()((set, get) => ({
         // Maybe in furnish mode we force "solo" level view to see inside rooms
         viewer.setLevelMode("solo");
         break;
-      }
+    }
   },
   mode: "select",
   setMode: (mode) => set({ mode }),
@@ -106,6 +109,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setTool: (tool) => set({ tool }),
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),
+  selectedItem: null,
+  setSelectedItem: (item) => set({ selectedItem: item }),
 }));
 
 export default useEditor;

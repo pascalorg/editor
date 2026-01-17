@@ -58,14 +58,14 @@ function updateWallGeometry(wallId: string) {
   // Rotate mesh to look at 'end' point
   const angle = Math.atan2(
     node.end[1] - node.start[1],
-    node.end[0] - node.start[0]
+    node.end[0] - node.start[0],
   );
   mesh.rotation.y = -angle;
 }
 
 export function generateExtrudedWall(
   wallNode: WallNode,
-  childrenNodes: AnyNode[]
+  childrenNodes: AnyNode[],
 ) {
   // 1. Calculate Wall Dimensions
   const start = new THREE.Vector2(wallNode.start[0], wallNode.start[1]);
@@ -88,7 +88,7 @@ export function generateExtrudedWall(
   const wallStart: [number, number] = [wallNode.start[0], wallNode.start[1]];
   const wallAngle = Math.atan2(
     wallNode.end[1] - wallNode.start[1],
-    wallNode.end[0] - wallNode.start[0]
+    wallNode.end[0] - wallNode.start[0],
   );
 
   childrenNodes.forEach((child) => {
@@ -96,7 +96,10 @@ export function generateExtrudedWall(
     if (child.type !== "item") return;
 
     const childMesh = sceneRegistry.nodes.get(child.id);
-    if (!childMesh) return;
+
+    if (!childMesh) {
+      return;
+    }
 
     const cutoutMesh = childMesh.getObjectByName("cutout") as THREE.Mesh;
     if (!cutoutMesh) return;
@@ -132,7 +135,7 @@ export function generateExtrudedWall(
 function createPathFromCutout(
   cutoutMesh: THREE.Mesh,
   wallStart: [number, number],
-  wallAngle: number
+  wallAngle: number,
 ): THREE.Path | null {
   const geometry = cutoutMesh.geometry;
   if (!geometry) return null;

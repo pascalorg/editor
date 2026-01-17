@@ -1,3 +1,4 @@
+import useEditor from "@/store/use-editor";
 import {
   emitter,
   GridEvent,
@@ -17,8 +18,12 @@ export const ItemTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null);
   const draftItem = useRef<ItemNode | null>(null);
   const gridPosition = useRef(new Vector3(0, 0, 0));
+  const selectedItem = useEditor((state) => state.selectedItem);
 
   useEffect(() => {
+    if (!selectedItem) {
+      return;
+    }
     const createDraftItem = () => {
       const { currentLevelId } = useViewer.getState();
       if (!currentLevelId) {
@@ -26,13 +31,13 @@ export const ItemTool: React.FC = () => {
       }
       useScene.temporal.getState().pause();
       draftItem.current = ItemNode.parse({
-        position: [randInt(-10, 10), 0, randInt(-10, 10)],
+        position: [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ],
         name: "Draft Item",
-        asset: {
-          category: "furniture",
-          src: "/items/couch-small/model.glb",
-          dimensions: [2, 1, 3],
-        },
+        asset: selectedItem,
       });
       useScene.getState().createNode(draftItem.current, currentLevelId);
     };
@@ -68,7 +73,11 @@ export const ItemTool: React.FC = () => {
       console.log("oh");
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, 0, gridPosition.current.z],
+        position: [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ],
       });
       draftItem.current = null;
 
@@ -86,13 +95,13 @@ export const ItemTool: React.FC = () => {
       emitter.off("grid:move", onGridMove);
       emitter.off("grid:click", onGridClick);
     };
-  }, []);
+  }, [selectedItem]);
 
   useFrame((_, delta) => {
     if (draftItem.current) {
       const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id);
       if (draftItemMesh) {
-        draftItemMesh.position.lerp(gridPosition.current, delta * 10);
+        draftItemMesh.position.lerp(gridPosition.current, delta * 20);
       }
     }
   });
