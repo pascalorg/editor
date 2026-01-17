@@ -37,6 +37,7 @@ export default function Editor() {
     <div className="w-full h-full bg-pink-50">
       {/* <LevelModeSwitcher /> */}
 
+      <TestUndo />
       <ActionMenu />
       <Viewer>
         <DraftSelector />
@@ -45,6 +46,31 @@ export default function Editor() {
         <Passes />
         <ToolManager />
       </Viewer>
+    </div>
+  );
+}
+
+const TestUndo = () => {
+  const {undo, redo, futureStates, pastStates} = useScene.temporal.getState();
+
+
+  return (    <div className="absolute top-4 right-4 z-10 flex gap-2">
+      <button
+        className="px-4 py-2 rounded bg-white"
+        onClick={() => {
+          undo();
+        }}
+      >
+        Undo
+      </button>
+      <button
+        className="px-4 py-2 rounded bg-white"
+        onClick={() => {
+          redo();
+        }}
+      >
+        Redo
+      </button>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { BuildingNode, ItemNode } from "../schema";
 import { LevelNode } from "../schema/nodes/level";
 import { WallNode } from "../schema/nodes/wall";
 import { AnyNode, AnyNodeId } from "../schema/types";
+import { temporal } from "zundo";
 
 type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
@@ -22,9 +23,13 @@ type SceneState = {
   clearDirty: (id: AnyNodeId) => void;
 
   createNode: (node: AnyNode, parentId?: AnyNodeId) => void;
+  createNodes: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void;
 };
 
-const useScene = create<SceneState>()((set, get) => ({
+type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
+
+const useScene = create<SceneState>()(temporal((set, get) => ({
+  
   // 1. Flat dictionary of all nodes
   nodes: {},
 
@@ -126,27 +131,76 @@ const useScene = create<SceneState>()((set, get) => ({
     get().dirtyNodes.delete(id);
   },
 
-  createNode: (node, parentId) => {
-      set((state) => {
-    const newNodes = { ...state.nodes, [node.id]: node };
+  createNodes: (ops) => {
+  set((state) => {
+    const nextNodes = { ...state.nodes };
+    const nextRootIds = [...state.rootNodeIds];
 
-    if (parentId) {
-      const parent = state.nodes[parentId];
-      if (parent) {
-        newNodes[parentId] = {
-          ...parent,
-          children: [...parent.children, node.id], 
-        };
+    for (const { node, parentId } of ops) {
+      // 1. Assign parentId to the child (Safe because BaseNode has parentId)
+      const newNode = { 
+        ...node, 
+        parentId: parentId ?? null 
+      };
+      
+      nextNodes[newNode.id] = newNode;
+
+      // 2. Update the Parent's children list
+      if (parentId && nextNodes[parentId]) {
+        const parent = nextNodes[parentId];
+
+        // Type Guard: Check if the parent node is a container that supports children
+        if ("children" in parent && Array.isArray(parent.children)) {
+          nextNodes[parentId] = {
+            ...parent,
+            // Use Set to prevent duplicate IDs if createNode is called twice
+            children: Array.from(new Set([...parent.children, newNode.id])) as any, // We don't verify child types here
+          };
+        }
+      } else if (!parentId) {
+        // 3. Handle Root nodes
+        if (!nextRootIds.includes(newNode.id)) {
+          nextRootIds.push(newNode.id);
+        }
       }
     }
 
-    return { nodes: newNodes };
+    return { nodes: nextNodes, rootNodeIds: nextRootIds };
   });
 
-  get().markDirty(node.id);
-  if (parentId) get().markDirty(parentId);
-  }
+  // 4. System Sync
+  ops.forEach(({ node, parentId }) => {
+    get().markDirty(node.id);
+    if (parentId) get().markDirty(parentId);
+  });
+},
+
+  // 3. The CONVENIENCE (Singular)
+  createNode: (node, parentId) => get().createNodes([{ node, parentId }]),
+
+  
+}), {
+  partialize: (state) => {
+    const { nodes, rootNodeIds } = state; // Only track nodes and rootNodeIds in history
+    return { nodes, rootNodeIds}
+  },
+  limit: 50, // Limit to last 50 actions
 }));
 
 useScene.getState().loadScene();
 export default useScene;
+
+
+// Subscribe to the temporal store (Undo/Redo events)
+useScene.temporal.subscribe((state, prevState) => {
+  // Check if we just jumped in time (Undo/Redo)
+  // If the 'nodes' object changed but it wasn't a normal 'set'
+  const currentNodes = useScene.getState().nodes;
+  
+  // Trigger a full scene re-validation
+  Object.values(currentNodes).forEach(node => {
+    if (node.type === 'wall') {
+       useScene.getState().markDirty(node.id);
+    }
+  });
+});
