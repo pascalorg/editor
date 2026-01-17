@@ -9,6 +9,7 @@ import { StructureTools } from "./structure-tools";
 import useEditor from "@/store/use-editor";
 import { AnimatePresence, motion } from "motion/react";
 import { ItemCatalog } from "../item-catalog/item-catalog";
+import { FurnishTools } from "./furnish-tools";
 // import { ViewToggles } from "./view-toggles";
 
 export function ActionMenu({ className }: { className?: string }) {
@@ -57,6 +58,42 @@ export function ActionMenu({ className }: { className?: string }) {
               }}
             >
               <ItemCatalog category={catalogCategory} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {phase === "furnish" && mode === "build" && (
+            <motion.div
+              className={cn(
+                "overflow-hidden border-zinc-800",
+                "max-h-20 border-b px-2 py-2 opacity-100",
+              )}
+              initial={{
+                opacity: 0,
+                maxHeight: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                borderBottomWidth: 0,
+              }}
+              animate={{
+                opacity: 1,
+                maxHeight: 80,
+                paddingTop: 8,
+                paddingBottom: 8,
+                borderBottomWidth: 1,
+              }}
+              exit={{
+                opacity: 0,
+                maxHeight: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                borderBottomWidth: 0,
+              }}
+            >
+              <div className="mx-auto w-max">
+                <FurnishTools />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
