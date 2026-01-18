@@ -93,6 +93,7 @@ const useScene = create<SceneState>()(
           type: "item",
           name: "Window",
           position: [2.5, 0.5, 0],
+          parentId: wall0.id,
           asset: {
             name: "Round Window",
             thumbnail: "/items/window-round/thumbnail.png",

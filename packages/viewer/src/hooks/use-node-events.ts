@@ -18,12 +18,17 @@ type NodeConfig = {
 
 type NodeType = keyof NodeConfig;
 
-export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]["node"], type: T) {
+export function useNodeEvents<T extends NodeType>(
+  node: NodeConfig[T]["node"],
+  type: T,
+) {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `${type}:${suffix}` as `${T}:${EventSuffix}`;
+    const localPoint = e.object.worldToLocal(e.point.clone());
     const payload = {
       node,
       position: [e.point.x, e.point.y, e.point.z],
+      localPosition: [localPoint.x, localPoint.y, localPoint.z],
       normal: e.face
         ? [e.face.normal.x, e.face.normal.y, e.face.normal.z]
         : undefined,

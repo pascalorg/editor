@@ -10,6 +10,7 @@ export interface GridEvent {
 export interface NodeEvent<T extends AnyNode = AnyNode> {
   node: T;
   position: [number, number, number];
+  localPosition: [number, number, number];
   normal?: [number, number, number];
   stopPropagation: () => void;
 }

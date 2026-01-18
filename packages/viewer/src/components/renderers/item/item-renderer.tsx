@@ -1,8 +1,14 @@
-import { emitter, ItemNode, useRegistry } from "@pascal-app/core";
+import {
+  AnyNodeId,
+  emitter,
+  ItemNode,
+  useRegistry,
+  useScene,
+} from "@pascal-app/core";
 import { Clone } from "@react-three/drei/core/Clone";
 import { useGLTF } from "@react-three/drei/core/Gltf";
 import { ThreeEvent } from "@react-three/fiber/dist/declarations/src/core/events";
-import { Suspense, useCallback, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef } from "react";
 import { Group } from "three";
 import { useNodeEvents } from "../../../hooks/use-node-events";
 
@@ -28,6 +34,11 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   }
 
   const handlers = useNodeEvents(node, "item");
+
+  useEffect(() => {
+    if (!node.parentId) return;
+    useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId);
+  }, []);
 
   return (
     <Clone

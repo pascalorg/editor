@@ -47,11 +47,19 @@ function updateWallGeometry(wallId: string) {
     .map((childId) => useScene.getState().nodes[childId])
     .filter((n): n is AnyNode => n !== undefined);
 
-  // Perform the Extrusion with Holes logic we discussed
+  // Generate visual geometry with holes
   const newGeo = generateExtrudedWall(node, childrenNodes);
 
   mesh.geometry.dispose();
   mesh.geometry = newGeo;
+
+  // Update collision mesh with solid geometry (no holes)
+  const collisionMesh = mesh.getObjectByName("collision-mesh") as THREE.Mesh;
+  if (collisionMesh) {
+    const collisionGeo = generateExtrudedWall(node, []); // No children = no holes
+    collisionMesh.geometry.dispose();
+    collisionMesh.geometry = collisionGeo;
+  }
 
   mesh.position.set(node.start[0], 0, node.start[1]);
 

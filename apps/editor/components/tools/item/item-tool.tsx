@@ -7,6 +7,7 @@ import {
   useRegistry,
   useScene,
   useSpatialQuery,
+  WallEvent,
   WallNode,
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
@@ -23,9 +24,33 @@ export const ItemTool: React.FC = () => {
   const { canPlace } = useSpatialQuery();
 
   useEffect(() => {
+    console.log("item-tool-reloaded");
     if (!selectedItem) {
       return;
     }
+
+    let isOnWall = false;
+    let wallLocked = false;
+
+    const checkCanPlace = () => {
+      const currentLevelId = useViewer.getState().currentLevelId;
+      if (currentLevelId && draftItem.current) {
+        const placeable = canPlace(
+          currentLevelId,
+          [gridPosition.current.x, 0, gridPosition.current.z],
+          selectedItem.dimensions,
+          [0, 0, 0],
+          [draftItem.current.id],
+        );
+        if (placeable.valid) {
+          cursorRef.current.material.color.set("green");
+          return true;
+        } else {
+          cursorRef.current.material.color.set("red");
+          return false;
+        }
+      }
+    };
     const createDraftItem = () => {
       const { currentLevelId } = useViewer.getState();
       if (!currentLevelId) {
@@ -42,11 +67,13 @@ export const ItemTool: React.FC = () => {
         asset: selectedItem,
       });
       useScene.getState().createNode(draftItem.current, currentLevelId);
+      checkCanPlace();
     };
     createDraftItem();
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return;
+      if (isOnWall) return;
 
       gridPosition.current.set(
         Math.round(event.position[0] * 2) / 2,
@@ -64,36 +91,19 @@ export const ItemTool: React.FC = () => {
           0,
           gridPosition.current.z,
         ];
-
-        const currentLevelId = useViewer.getState().currentLevelId;
-        if (currentLevelId) {
-          const placeable = canPlace(
-            currentLevelId,
-            [gridPosition.current.x, 0, gridPosition.current.z],
-            selectedItem.dimensions,
-            [0, 0, 0],
-            [draftItem.current.id],
-          );
-          if (placeable.valid) {
-            cursorRef.current.material.color.set("green");
-          } else {
-            cursorRef.current.material.color.set("red");
-          }
-        }
+        checkCanPlace();
       }
     };
     const onGridClick = (event: GridEvent) => {
       const { currentLevelId } = useViewer.getState();
+      if (isOnWall) return;
 
-      if (!currentLevelId || !draftItem.current) return;
+      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
+      console.log("ongridclick action");
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
-        position: [
-          gridPosition.current.x,
-          gridPosition.current.y,
-          gridPosition.current.z,
-        ],
+        position: [gridPosition.current.x, 0, gridPosition.current.z],
       });
       draftItem.current = null;
 
@@ -101,8 +111,95 @@ export const ItemTool: React.FC = () => {
       createDraftItem();
     };
 
+    const onWallEnter = (event: WallEvent) => {
+      console.log("Wall enter", event);
+      event.stopPropagation();
+      if (
+        draftItem.current?.asset.attachTo === "wall" ||
+        draftItem.current?.asset.attachTo === "wall-side"
+      ) {
+        isOnWall = true;
+        gridPosition.current.set(
+          Math.round(event.localPosition[0] * 2) / 2,
+          Math.round(event.localPosition[1] * 2) / 2,
+          Math.round(event.localPosition[2] * 2) / 2,
+        );
+        draftItem.current.parentId = event.node.id;
+        useScene.getState().updateNode(draftItem.current.id, {
+          position: [
+            gridPosition.current.x,
+            gridPosition.current.y,
+            gridPosition.current.z,
+          ],
+          parentId: event.node.id,
+        });
+      }
+    };
+
+    const onWallLeave = (event: WallEvent) => {
+      console.log("Wall leave", event);
+      isOnWall = false;
+      event.stopPropagation();
+    };
+
+    const onWallClick = (event: WallEvent) => {
+      event.stopPropagation();
+      if (wallLocked) {
+        return;
+      }
+      const { currentLevelId } = useViewer.getState();
+      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
+
+      wallLocked = true;
+      console.log("onwallclick action");
+      useScene.temporal.getState().resume();
+      useScene.getState().updateNode(draftItem.current.id, {
+        position: [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ],
+        parentId: event.node.id,
+      });
+      useScene.getState().dirtyNodes.add(event.node.id);
+      draftItem.current = null;
+
+      useScene.temporal.getState().pause();
+      createDraftItem();
+    };
+
+    const onWallMove = (event: WallEvent) => {
+      event.stopPropagation();
+      console.log("Wall move", event);
+      wallLocked = false;
+      if (!draftItem.current) return;
+      gridPosition.current.set(
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[1] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
+      );
+      cursorRef.current.position.set(
+        event.position[0],
+        event.position[1],
+        event.position[2],
+      );
+      if (draftItem.current) {
+        draftItem.current.position = [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ];
+        useScene.getState().dirtyNodes.add(event.node.id);
+        checkCanPlace();
+      }
+    };
+
     emitter.on("grid:move", onGridMove);
     emitter.on("grid:click", onGridClick);
+    emitter.on("wall:enter", onWallEnter);
+    emitter.on("wall:move", onWallMove);
+    emitter.on("wall:click", onWallClick);
+    emitter.on("wall:leave", onWallLeave);
 
     const setupBoundingBox = () => {
       const boxGeometry = new BoxGeometry(
@@ -119,8 +216,13 @@ export const ItemTool: React.FC = () => {
       if (draftItem.current) {
         useScene.getState().deleteNode(draftItem.current.id);
       }
+      useScene.temporal.getState().resume();
       emitter.off("grid:move", onGridMove);
       emitter.off("grid:click", onGridClick);
+      emitter.off("wall:enter", onWallEnter);
+      emitter.off("wall:leave", onWallLeave);
+      emitter.off("wall:click", onWallClick);
+      emitter.off("wall:move", onWallMove);
     };
   }, [selectedItem]);
 
