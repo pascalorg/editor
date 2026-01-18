@@ -117,7 +117,6 @@ export class SpatialGrid {
     const cellKeys = this.getItemCells(position, dimensions, rotation);
     const ignoreSet = new Set(ignoreIds);
     const conflicts = new Set<string>();
-    console.log("checking cells", cellKeys);
 
     for (const key of cellKeys) {
       const cell = this.cells.get(key);

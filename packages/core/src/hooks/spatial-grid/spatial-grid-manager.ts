@@ -70,12 +70,6 @@ export class SpatialGridManager {
           item.asset.dimensions,
           item.rotation,
         );
-        console.log(
-          "inserting floor item",
-          item.id,
-          item.position,
-          item.asset.dimensions,
-        );
       }
     }
   }
@@ -141,13 +135,7 @@ export class SpatialGridManager {
     ignoreIds?: string[],
   ) {
     const grid = this.getFloorGrid(levelId);
-    console.log("canPlaceOnFloor - grid item count:", grid.getItemCount());
-    return grid.canPlace(
-      position,
-      dimensions,
-      rotation,
-      ignoreIds,
-    );
+    return grid.canPlace(position, dimensions, rotation, ignoreIds);
   }
 
   canPlaceOnWall(

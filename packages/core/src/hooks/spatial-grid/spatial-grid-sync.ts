@@ -10,10 +10,14 @@ function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // This assumes you track parentId or can derive it
   let current: AnyNode | undefined = node;
 
-  while (current && current.parentId) {
+  while (current) {
     if (current.type === "level") return current.id;
     // Find parent (you might need to add parentId to your schema or derive it)
-    current = nodes[current.parentId];
+    if (!current.parentId) {
+      current = undefined;
+    } else {
+      current = nodes[current.parentId];
+    }
   }
 
   return "default"; // fallback for orphaned items

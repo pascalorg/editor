@@ -72,6 +72,7 @@ export const ItemTool: React.FC = () => {
             [gridPosition.current.x, 0, gridPosition.current.z],
             selectedItem.dimensions,
             [0, 0, 0],
+            [draftItem.current.id],
           );
           console.log(
             "placeable",
