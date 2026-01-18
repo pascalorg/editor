@@ -138,25 +138,36 @@ export class SpatialGridManager {
     return grid.canPlace(position, dimensions, rotation, ignoreIds);
   }
 
+  /**
+   * Check if an item can be placed on a wall
+   * @param levelId - the level containing the wall
+   * @param wallId - the wall to check
+   * @param localX - X position in wall-local space (distance from wall start)
+   * @param localY - Y position (height from floor)
+   * @param dimensions - item dimensions [width, height, depth]
+   * @param ignoreIds - item IDs to ignore in collision check
+   */
   canPlaceOnWall(
     levelId: string,
     wallId: string,
-    tCenter: number,
-    itemWidth: number,
-    yCenter: number,
-    itemHeight: number,
+    localX: number,
+    localY: number,
+    dimensions: [number, number, number],
     ignoreIds?: string[],
   ) {
     const wallLength = this.getWallLength(wallId);
     if (wallLength === 0) {
       return { valid: false, conflictIds: [] };
     }
+    // Convert local X position to parametric t (0-1)
+    const tCenter = localX / wallLength;
+    const [itemWidth, itemHeight] = dimensions;
     return this.getWallGrid(levelId).canPlaceOnWall(
       wallId,
       wallLength,
       tCenter,
       itemWidth,
-      yCenter,
+      localY,
       itemHeight,
       ignoreIds,
     );

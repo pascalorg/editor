@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { spatialGridManager } from "./spatial-grid-manager";
-import { LevelNode } from "../../schema";
+import { LevelNode, WallNode } from "../../schema";
 
 export function useSpatialQuery() {
-  const canPlace = useCallback(
+  const canPlaceOnFloor = useCallback(
     (
       levelId: LevelNode["id"],
       position: [number, number, number],
@@ -22,5 +22,26 @@ export function useSpatialQuery() {
     [],
   );
 
-  return { canPlace };
+  const canPlaceOnWall = useCallback(
+    (
+      levelId: LevelNode["id"],
+      wallId: WallNode["id"],
+      localX: number,
+      localY: number,
+      dimensions: [number, number, number],
+      ignoreIds?: string[],
+    ) => {
+      return spatialGridManager.canPlaceOnWall(
+        levelId,
+        wallId,
+        localX,
+        localY,
+        dimensions,
+        ignoreIds,
+      );
+    },
+    [],
+  );
+
+  return { canPlaceOnFloor, canPlaceOnWall };
 }

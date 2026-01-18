@@ -21,7 +21,7 @@ export const ItemTool: React.FC = () => {
   const draftItem = useRef<ItemNode | null>(null);
   const gridPosition = useRef(new Vector3(0, 0, 0));
   const selectedItem = useEditor((state) => state.selectedItem);
-  const { canPlace } = useSpatialQuery();
+  const { canPlaceOnFloor, canPlaceOnWall } = useSpatialQuery();
 
   useEffect(() => {
     console.log("item-tool-reloaded");
@@ -35,14 +35,30 @@ export const ItemTool: React.FC = () => {
     const checkCanPlace = () => {
       const currentLevelId = useViewer.getState().currentLevelId;
       if (currentLevelId && draftItem.current) {
-        const placeable = canPlace(
-          currentLevelId,
-          [gridPosition.current.x, 0, gridPosition.current.z],
-          selectedItem.dimensions,
-          [0, 0, 0],
-          [draftItem.current.id],
-        );
-        if (placeable.valid) {
+        let placeable = true;
+        if (draftItem.current.asset.attachTo) {
+          if (!isOnWall) {
+            placeable = false;
+          } else {
+            placeable = canPlaceOnWall(
+              currentLevelId,
+              draftItem.current.parentId as WallNode["id"],
+              gridPosition.current.x,
+              gridPosition.current.y,
+              draftItem.current.asset.dimensions,
+              [draftItem.current.id],
+            ).valid;
+          }
+        } else {
+          placeable = canPlaceOnFloor(
+            currentLevelId,
+            [gridPosition.current.x, 0, gridPosition.current.z],
+            draftItem.current.asset.dimensions,
+            [0, 0, 0],
+            [draftItem.current.id],
+          ).valid;
+        }
+        if (placeable) {
           cursorRef.current.material.color.set("green");
           return true;
         } else {
@@ -133,6 +149,7 @@ export const ItemTool: React.FC = () => {
           ],
           parentId: event.node.id,
         });
+        checkCanPlace();
       }
     };
 
@@ -140,6 +157,18 @@ export const ItemTool: React.FC = () => {
       console.log("Wall leave", event);
       isOnWall = false;
       event.stopPropagation();
+      if (!draftItem.current) return;
+      const currentLevelId = useViewer.getState().currentLevelId;
+      draftItem.current.parentId = currentLevelId;
+      useScene.getState().updateNode(draftItem.current.id, {
+        position: [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ],
+        parentId: currentLevelId,
+      });
+      checkCanPlace();
     };
 
     const onWallClick = (event: WallEvent) => {
@@ -147,7 +176,7 @@ export const ItemTool: React.FC = () => {
       if (wallLocked) {
         return;
       }
-      const { currentLevelId } = useViewer.getState();
+      const currentLevelId = useViewer.getState().currentLevelId;
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
       wallLocked = true;
@@ -166,6 +195,7 @@ export const ItemTool: React.FC = () => {
 
       useScene.temporal.getState().pause();
       createDraftItem();
+      checkCanPlace();
     };
 
     const onWallMove = (event: WallEvent) => {
