@@ -11,7 +11,6 @@ export function useSpatialQuery() {
       rotation: [number, number, number],
       ignoreIds?: string[],
     ) => {
-      console.log("spatialGridManager in useSpatialQuery:", spatialGridManager);
       return spatialGridManager.canPlaceOnFloor(
         levelId,
         position,

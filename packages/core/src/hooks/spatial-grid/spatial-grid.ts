@@ -49,7 +49,10 @@ export class SpatialGrid {
     const maxZ = z + rotatedD / 2;
 
     const [minCx, minCz] = this.posToCell(minX, minZ);
-    const [maxCx, maxCz] = this.posToCell(maxX, maxZ);
+    // Use exclusive upper bound: subtract epsilon so exact boundaries don't overlap
+    // This allows adjacent items (touching but not overlapping) to not conflict
+    const epsilon = 1e-6;
+    const [maxCx, maxCz] = this.posToCell(maxX - epsilon, maxZ - epsilon);
 
     const keys: CellKey[] = [];
     for (let cx = minCx; cx <= maxCx; cx++) {

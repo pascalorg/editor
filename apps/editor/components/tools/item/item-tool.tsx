@@ -74,12 +74,11 @@ export const ItemTool: React.FC = () => {
             [0, 0, 0],
             [draftItem.current.id],
           );
-          console.log(
-            "placeable",
-            placeable,
-            [gridPosition.current.x, 0, gridPosition.current.z],
-            selectedItem.dimensions,
-          );
+          if (placeable.valid) {
+            cursorRef.current.material.color.set("green");
+          } else {
+            cursorRef.current.material.color.set("red");
+          }
         }
       }
     };
