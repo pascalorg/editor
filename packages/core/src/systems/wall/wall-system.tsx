@@ -72,7 +72,7 @@ export function generateExtrudedWall(
   const end = new THREE.Vector2(wallNode.end[0], wallNode.end[1]);
   const length = start.distanceTo(end);
   const height = wallNode.height || 2.5;
-  const thickness = wallNode.thickness || 0.2;
+  const thickness = wallNode.thickness || 0.1;
 
   // 2. Create the Main Wall Shape (a rectangle in 2D)
   // We draw this on the XY plane, where X is "along the wall" and Y is "height"

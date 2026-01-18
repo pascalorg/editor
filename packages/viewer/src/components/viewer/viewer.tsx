@@ -3,10 +3,11 @@
 import { Bvh, Environment, OrbitControls } from "@react-three/drei";
 import { Canvas, ThreeToJSXElements } from "@react-three/fiber";
 
-import { LevelSystem, WallSystem } from "@pascal-app/core";
+import { WallSystem } from "@pascal-app/core";
 import { extend } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { SceneRenderer } from "../renderers/scene-renderer";
+import { LevelSystem } from "../../systems/level/level-system";
 
 declare module "@react-three/fiber" {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}

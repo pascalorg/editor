@@ -6,19 +6,21 @@ import {
   sceneRegistry,
   useRegistry,
   useScene,
+  useSpatialQuery,
   WallNode,
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useFrame } from "@react-three/fiber";
 import { use, useEffect, useRef } from "react";
-import { Line, Mesh, Vector3 } from "three";
+import { BoxGeometry, Line, Mesh, Vector3 } from "three";
 import { randInt } from "three/src/math/MathUtils.js";
 
 export const ItemTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null);
+  const cursorRef = useRef<Mesh>(null!);
   const draftItem = useRef<ItemNode | null>(null);
   const gridPosition = useRef(new Vector3(0, 0, 0));
   const selectedItem = useEditor((state) => state.selectedItem);
+  const { canPlace } = useSpatialQuery();
 
   useEffect(() => {
     if (!selectedItem) {
@@ -53,7 +55,7 @@ export const ItemTool: React.FC = () => {
       );
       cursorRef.current.position.set(
         gridPosition.current.x,
-        0.1,
+        0,
         gridPosition.current.z,
       );
       if (draftItem.current) {
@@ -62,15 +64,29 @@ export const ItemTool: React.FC = () => {
           0,
           gridPosition.current.z,
         ];
+
+        const currentLevelId = useViewer.getState().currentLevelId;
+        if (currentLevelId) {
+          const placeable = canPlace(
+            currentLevelId,
+            [gridPosition.current.x, 0, gridPosition.current.z],
+            selectedItem.dimensions,
+            [0, 0, 0],
+          );
+          console.log(
+            "placeable",
+            placeable,
+            [gridPosition.current.x, 0, gridPosition.current.z],
+            selectedItem.dimensions,
+          );
+        }
       }
     };
     const onGridClick = (event: GridEvent) => {
       const { currentLevelId } = useViewer.getState();
 
-      console.log("oh", currentLevelId, draftItem.current);
       if (!currentLevelId || !draftItem.current) return;
 
-      console.log("oh");
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
         position: [
@@ -87,6 +103,17 @@ export const ItemTool: React.FC = () => {
 
     emitter.on("grid:move", onGridMove);
     emitter.on("grid:click", onGridClick);
+
+    const setupBoundingBox = () => {
+      const boxGeometry = new BoxGeometry(
+        selectedItem.dimensions[0],
+        selectedItem.dimensions[1],
+        selectedItem.dimensions[2],
+      );
+      boxGeometry.translate(0, selectedItem.dimensions[1] / 2, 0);
+      cursorRef.current.geometry = boxGeometry;
+    };
+    setupBoundingBox();
 
     return () => {
       if (draftItem.current) {
@@ -109,8 +136,8 @@ export const ItemTool: React.FC = () => {
   return (
     <group>
       <mesh ref={cursorRef}>
-        <boxGeometry args={[0.2, 0.2, 0.2]} />
-        <meshStandardMaterial color="red" />
+        <boxGeometry args={[0.1, 0.1, 0.1]} />
+        <meshStandardMaterial color="red" wireframe />
       </mesh>
     </group>
   );

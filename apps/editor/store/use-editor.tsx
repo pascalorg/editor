@@ -8,6 +8,7 @@ import {
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { create } from "zustand";
+import { Asset } from "../../../packages/core/src/schema/nodes/item";
 
 export type Phase = "site" | "structure" | "furnish";
 
@@ -54,8 +55,8 @@ type EditorState = {
   setTool: (tool: Tool | null) => void;
   catalogCategory: CatalogCategory | null;
   setCatalogCategory: (category: CatalogCategory | null) => void;
-  selectedItem: AssetInput | null;
-  setSelectedItem: (item: AssetInput) => void;
+  selectedItem: Asset | null;
+  setSelectedItem: (item: Asset) => void;
 };
 
 const useEditor = create<EditorState>()((set, get) => ({

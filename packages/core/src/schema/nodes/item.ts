@@ -16,6 +16,7 @@ const assetSchema = z.object({
 });
 
 export type AssetInput = z.input<typeof assetSchema>;
+export type Asset = z.infer<typeof assetSchema>;
 
 export const ItemNode = BaseNode.extend({
   id: objectId("item"),
@@ -23,6 +24,10 @@ export const ItemNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(["front", "back"]).optional(),
+
+  // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
+  wallId: z.string().optional(),
+  wallT: z.number().optional(), // 0-1 parametric position along wall
 
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building

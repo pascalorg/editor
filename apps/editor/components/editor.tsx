@@ -2,6 +2,7 @@
 
 import {
   emitter,
+  initSpatialGridSync,
   ItemNode,
   sceneRegistry,
   useScene,
@@ -31,6 +32,8 @@ import { WallTool } from "./tools/wall/wall-tool";
 import { ToolManager } from "./tools/tool-manager";
 
 const selectedObjects: Object3D[] = [];
+
+initSpatialGridSync();
 
 export default function Editor() {
   return (
