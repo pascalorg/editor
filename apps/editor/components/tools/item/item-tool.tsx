@@ -16,6 +16,7 @@ import { is } from "@react-three/fiber/dist/declarations/src/core/utils";
 import { use, useEffect, useRef } from "react";
 import { BoxGeometry, Line, Mesh, MeshStandardMaterial, Vector3 } from "three";
 import { randInt } from "three/src/math/MathUtils.js";
+import { resolveLevelId } from "../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync";
 
 export const ItemTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null!);
@@ -132,6 +133,12 @@ export const ItemTool: React.FC = () => {
 
     const onWallEnter = (event: WallEvent) => {
       if (
+        useViewer.getState().currentLevelId !==
+        resolveLevelId(event.node, useScene.getState().nodes)
+      ) {
+        return;
+      }
+      if (
         draftItem.current?.asset.attachTo === "wall" ||
         draftItem.current?.asset.attachTo === "wall-side"
       ) {
@@ -157,6 +164,7 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallLeave = (event: WallEvent) => {
+      if (!isOnWall.current) return;
       isOnWall.current = false;
       currentWallId = null;
       event.stopPropagation();

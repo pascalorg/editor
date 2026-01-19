@@ -95,7 +95,7 @@ const useEditor = create<EditorState>()((set, get) => ({
             }
           }
         }
-        viewer.setLevelMode("exploded"); // Better for structure editing
+        viewer.setLevelMode("stacked"); // Better for structure editing
         break;
 
       case "furnish":

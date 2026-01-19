@@ -14,7 +14,7 @@ type ViewerState = {
 };
 
 const useViewer = create<ViewerState>()((set, get) => ({
-  levelMode: "exploded",
+  levelMode: "stacked",
   setLevelMode: (mode) => set({ levelMode: mode }),
   currentLevelId: null,
   setCurrentLevelId: (id) => set({ currentLevelId: id }),

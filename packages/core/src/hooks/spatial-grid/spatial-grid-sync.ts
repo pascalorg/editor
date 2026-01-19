@@ -2,7 +2,10 @@ import { AnyNode } from "../../schema";
 import useScene from "../../store/use-scene";
 import { spatialGridManager } from "./spatial-grid-manager";
 
-function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
+export function resolveLevelId(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+): string {
   // If the node itself is a level
   if (node.type === "level") return node.id;
 
