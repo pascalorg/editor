@@ -14,18 +14,24 @@ export class WallSpatialGrid {
   canPlaceOnWall(
     wallId: string,
     wallLength: number,
+    wallHeight: number,
     tCenter: number,
     itemWidth: number,
-    yCenter: number,
+    yBottom: number,
     itemHeight: number,
     ignoreIds: string[] = [],
   ): { valid: boolean; conflictIds: string[] } {
     const halfW = itemWidth / wallLength / 2;
-    const halfH = itemHeight / 2;
     const tStart = tCenter - halfW;
     const tEnd = tCenter + halfW;
-    const yStart = yCenter - halfH;
-    const yEnd = yCenter + halfH;
+    // yBottom is the bottom of the item, so yEnd = yBottom + itemHeight
+    const yStart = yBottom;
+    const yEnd = yBottom + itemHeight;
+
+    // Check wall boundaries
+    if (tStart < 0 || tEnd > 1 || yStart < 0 || yEnd > wallHeight) {
+      return { valid: false, conflictIds: [] };
+    }
 
     const existing = this.wallItems.get(wallId) ?? [];
     const ignoreSet = new Set(ignoreIds);

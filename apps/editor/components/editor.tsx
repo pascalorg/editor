@@ -267,13 +267,13 @@ const DraftSelector = () => {
   const itemSelectedAt = useRef<number>(0);
   useEffect(() => {
     emitter.on("building:enter", (event) => {
-      console.log("Entered building:", event.node.id);
+      // console.log("Entered building:", event.node.id);
       const itemMesh = sceneRegistry.nodes.get(event.node.id);
       selectedObjects.length = 0;
       selectedObjects.push(itemMesh);
     });
     emitter.on("building:leave", (event) => {
-      console.log("Leaving building:", event.node.id);
+      // console.log("Leaving building:", event.node.id);
       selectedObjects.length = 0;
     });
 

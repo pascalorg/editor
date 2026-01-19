@@ -14,7 +14,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { useFrame } from "@react-three/fiber";
 import { is } from "@react-three/fiber/dist/declarations/src/core/utils";
 import { use, useEffect, useRef } from "react";
-import { BoxGeometry, Line, Mesh, Vector3 } from "three";
+import { BoxGeometry, Line, Mesh, MeshStandardMaterial, Vector3 } from "three";
 import { randInt } from "three/src/math/MathUtils.js";
 
 export const ItemTool: React.FC = () => {
@@ -23,13 +23,13 @@ export const ItemTool: React.FC = () => {
   const gridPosition = useRef(new Vector3(0, 0, 0));
   const selectedItem = useEditor((state) => state.selectedItem);
   const { canPlaceOnFloor, canPlaceOnWall } = useSpatialQuery();
+  const isOnWall = useRef(false);
 
   useEffect(() => {
     if (!selectedItem) {
       return;
     }
 
-    let isOnWall = false;
     let currentWallId: string | null = null;
 
     const checkCanPlace = () => {
@@ -37,7 +37,7 @@ export const ItemTool: React.FC = () => {
       if (currentLevelId && draftItem.current) {
         let placeable = true;
         if (draftItem.current.asset.attachTo) {
-          if (!isOnWall || !currentWallId) {
+          if (!isOnWall.current || !currentWallId) {
             placeable = false;
           } else {
             const result = canPlaceOnWall(
@@ -60,10 +60,12 @@ export const ItemTool: React.FC = () => {
           ).valid;
         }
         if (placeable) {
-          cursorRef.current.material.color.set("green");
+          (cursorRef.current.material as MeshStandardMaterial).color.set(
+            "green",
+          );
           return true;
         } else {
-          cursorRef.current.material.color.set("red");
+          (cursorRef.current.material as MeshStandardMaterial).color.set("red");
           return false;
         }
       }
@@ -91,7 +93,7 @@ export const ItemTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return;
 
-      if (isOnWall) return;
+      if (isOnWall.current) return;
 
       gridPosition.current.set(
         Math.round(event.position[0] * 2) / 2,
@@ -103,18 +105,18 @@ export const ItemTool: React.FC = () => {
         0,
         gridPosition.current.z,
       );
+      checkCanPlace();
       if (draftItem.current) {
         draftItem.current.position = [
           gridPosition.current.x,
           0,
           gridPosition.current.z,
         ];
-        checkCanPlace();
       }
     };
     const onGridClick = (event: GridEvent) => {
       const { currentLevelId } = useViewer.getState();
-      if (isOnWall) return;
+      if (isOnWall.current) return;
 
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
@@ -134,7 +136,7 @@ export const ItemTool: React.FC = () => {
         draftItem.current?.asset.attachTo === "wall-side"
       ) {
         event.stopPropagation();
-        isOnWall = true;
+        isOnWall.current = true;
         currentWallId = event.node.id;
         gridPosition.current.set(
           Math.round(event.localPosition[0] * 2) / 2,
@@ -155,7 +157,7 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallLeave = (event: WallEvent) => {
-      isOnWall = false;
+      isOnWall.current = false;
       currentWallId = null;
       event.stopPropagation();
       if (!draftItem.current) return;
@@ -174,7 +176,7 @@ export const ItemTool: React.FC = () => {
 
     const onWallClick = (event: WallEvent) => {
       event.stopPropagation();
-      if (!isOnWall) return;
+      if (!isOnWall.current) return;
 
       const currentLevelId = useViewer.getState().currentLevelId;
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
@@ -197,7 +199,7 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallMove = (event: WallEvent) => {
-      if (isOnWall === false) return;
+      if (isOnWall.current === false) return;
       event.stopPropagation();
       if (!draftItem.current) return;
       gridPosition.current.set(
@@ -206,18 +208,32 @@ export const ItemTool: React.FC = () => {
         Math.round(event.localPosition[2] * 2) / 2,
       );
       cursorRef.current.position.set(
-        event.position[0],
-        event.position[1],
-        event.position[2],
+        Math.round(event.position[0] * 2) / 2,
+        Math.round(event.position[1] * 2) / 2,
+        Math.round(event.position[2] * 2) / 2,
       );
-      if (draftItem.current) {
+      const {
+        node: { start, end },
+      } = event;
+      const dx = end[0] - start[0];
+      const dz = end[1] - start[1];
+      const { normal } = event;
+      const wallAngle = Math.atan2(dx, dz);
+
+      cursorRef.current.rotation.y = wallAngle + Math.PI / 2;
+      const canPlace = checkCanPlace();
+      if (draftItem.current && canPlace) {
         draftItem.current.position = [
           gridPosition.current.x,
           gridPosition.current.y,
           gridPosition.current.z,
         ];
+        const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id);
+        if (draftItemMesh) {
+          draftItemMesh.position.copy(gridPosition.current);
+        }
+
         useScene.getState().dirtyNodes.add(event.node.id);
-        checkCanPlace();
       }
     };
 
@@ -254,7 +270,7 @@ export const ItemTool: React.FC = () => {
   }, [selectedItem]);
 
   useFrame((_, delta) => {
-    if (draftItem.current) {
+    if (draftItem.current && !isOnWall.current) {
       const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id);
       if (draftItemMesh) {
         draftItemMesh.position.lerp(gridPosition.current, delta * 20);

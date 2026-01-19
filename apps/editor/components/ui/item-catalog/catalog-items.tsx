@@ -325,7 +325,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     name: "Window",
     thumbnail: "/items/window-small/thumbnail.webp",
     src: "/items/window-small/model.glb",
-    offset: [0, 0, 0],
+    offset: [0, 0.15, 0],
     scale: [1, 1, 1],
     rotation: [0, Math.PI, 0],
     dimensions: [1, 1.5, 0.1],

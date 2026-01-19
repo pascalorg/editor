@@ -34,6 +34,11 @@ export class SpatialGridManager {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  private getWallHeight(wallId: string): number {
+    const wall = this.walls.get(wallId);
+    return wall?.height ?? 2.5; // Default wall height
+  }
+
   // Called when nodes change
   handleNodeCreated(node: AnyNode, levelId: string) {
     if (node.type === "wall") {
@@ -52,16 +57,16 @@ export class SpatialGridManager {
           if (wallLength > 0) {
             const [width, height] = item.asset.dimensions;
             const halfW = width / wallLength / 2;
-            const halfH = height / 2;
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength;
+            // position[1] is the bottom of the item
             this.getWallGrid(levelId).insert({
               itemId: item.id,
               wallId: wallId,
               tStart: t - halfW,
               tEnd: t + halfW,
-              yStart: item.position[1] - halfH,
-              yEnd: item.position[1] + halfH,
+              yStart: item.position[1],
+              yEnd: item.position[1] + height,
             });
           }
         }
@@ -95,16 +100,16 @@ export class SpatialGridManager {
           if (wallLength > 0) {
             const [width, height] = item.asset.dimensions;
             const halfW = width / wallLength / 2;
-            const halfH = height / 2;
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength;
+            // position[1] is the bottom of the item
             this.getWallGrid(levelId).insert({
               itemId: item.id,
               wallId: wallId,
               tStart: t - halfW,
               tEnd: t + halfW,
-              yStart: item.position[1] - halfH,
-              yEnd: item.position[1] + halfH,
+              yStart: item.position[1],
+              yEnd: item.position[1] + height,
             });
           }
         }
@@ -165,12 +170,14 @@ export class SpatialGridManager {
     if (wallLength === 0) {
       return { valid: false, conflictIds: [] };
     }
+    const wallHeight = this.getWallHeight(wallId);
     // Convert local X position to parametric t (0-1)
     const tCenter = localX / wallLength;
     const [itemWidth, itemHeight] = dimensions;
     return this.getWallGrid(levelId).canPlaceOnWall(
       wallId,
       wallLength,
+      wallHeight,
       tCenter,
       itemWidth,
       localY,
