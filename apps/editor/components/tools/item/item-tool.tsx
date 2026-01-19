@@ -12,6 +12,7 @@ import {
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useFrame } from "@react-three/fiber";
+import { is } from "@react-three/fiber/dist/declarations/src/core/utils";
 import { use, useEffect, useRef } from "react";
 import { BoxGeometry, Line, Mesh, Vector3 } from "three";
 import { randInt } from "three/src/math/MathUtils.js";
@@ -29,7 +30,6 @@ export const ItemTool: React.FC = () => {
     }
 
     let isOnWall = false;
-    let wallLocked = false;
     let currentWallId: string | null = null;
 
     const checkCanPlace = () => {
@@ -90,6 +90,7 @@ export const ItemTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return;
+
       if (isOnWall) return;
 
       gridPosition.current.set(
@@ -128,11 +129,11 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallEnter = (event: WallEvent) => {
-      event.stopPropagation();
       if (
         draftItem.current?.asset.attachTo === "wall" ||
         draftItem.current?.asset.attachTo === "wall-side"
       ) {
+        event.stopPropagation();
         isOnWall = true;
         currentWallId = event.node.id;
         gridPosition.current.set(
@@ -173,13 +174,11 @@ export const ItemTool: React.FC = () => {
 
     const onWallClick = (event: WallEvent) => {
       event.stopPropagation();
-      if (wallLocked) {
-        return;
-      }
+      if (!isOnWall) return;
+
       const currentLevelId = useViewer.getState().currentLevelId;
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
-      wallLocked = true;
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
         position: [
@@ -198,8 +197,8 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallMove = (event: WallEvent) => {
+      if (isOnWall === false) return;
       event.stopPropagation();
-      wallLocked = false;
       if (!draftItem.current) return;
       gridPosition.current.set(
         Math.round(event.localPosition[0] * 2) / 2,
