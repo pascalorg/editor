@@ -5,11 +5,12 @@ import {
   initSpatialGridSync,
   ItemNode,
   sceneRegistry,
+  useRegistry,
   useScene,
   WallNode,
 } from "@pascal-app/core";
 import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
-import { Stats } from "@react-three/drei";
+import { CameraControls, CameraControlsImpl, Stats } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import { Color, Object3D } from "three";
@@ -54,10 +55,37 @@ export default function Editor() {
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
         <ToolManager />
+        <EditorCameraManager />
       </Viewer>
     </div>
   );
 }
+const EditorCameraManager = () => {
+  const controls = useRef<CameraControlsImpl>(null!);
+  const currentLevelId = useViewer((state) => state.currentLevelId);
+
+  useEffect(() => {
+    let targetY = 0;
+    if (currentLevelId) {
+      const levelMesh = sceneRegistry.nodes.get(currentLevelId);
+      if (levelMesh) {
+        targetY = levelMesh.position.y;
+      }
+    }
+    const { position } = controls.current.camera;
+    controls.current.setLookAt(
+      position.x,
+      targetY + 5,
+      position.z,
+      0,
+      targetY,
+      0,
+      true,
+    );
+  }, [currentLevelId]);
+
+  return <CameraControls ref={controls} />;
+};
 
 const TestUndo = () => {
   const { undo, redo, futureStates, pastStates } = useScene.temporal.getState();
