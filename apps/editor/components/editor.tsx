@@ -28,8 +28,9 @@ import {
 } from "three/tsl";
 import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
 import { ActionMenu } from "./ui/action-menu";
-import { WallTool } from "./tools/wall/wall-tool";
 import { ToolManager } from "./tools/tool-manager";
+import { AppSidebar } from "./ui/sidebar/app-sidebar";
+import { SidebarProvider } from "./ui/primitives/sidebar";
 
 const selectedObjects: Object3D[] = [];
 
@@ -43,9 +44,13 @@ export default function Editor() {
 
       <TestUndo />
       <ActionMenu />
+
+      <SidebarProvider className="fixed z-10">
+        <AppSidebar />
+      </SidebarProvider>
       <Viewer>
         <DraftSelector />
-        <Stats />
+        {/* <Stats /> */}
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
         <ToolManager />

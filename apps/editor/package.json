@@ -13,6 +13,8 @@
   "dependencies": {
     "@pascal-app/core": "*",
     "@pascal-app/viewer": "*",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/uikit-lucide": "^1.0.60",
