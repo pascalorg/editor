@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { spatialGridManager } from "./spatial-grid-manager";
 import { LevelNode, WallNode } from "../../schema";
+import { spatialGridManager } from "./spatial-grid-manager";
 
 export function useSpatialQuery() {
   const canPlaceOnFloor = useCallback(

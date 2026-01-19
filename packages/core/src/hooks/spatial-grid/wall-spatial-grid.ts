@@ -64,7 +64,6 @@ export class WallSpatialGrid {
     this.itemToWall.delete(itemId);
   }
 
-  // The missing method!
   removeByItemId(itemId: string) {
     const wallId = this.itemToWall.get(itemId);
     if (wallId) {

@@ -45,13 +45,14 @@ export function initSpatialGridSync() {
       }
     }
 
-    // Detect updated nodes (only items with position/rotation changes)
+    // Detect updated nodes (items with position/rotation/parentId changes)
     for (const [id, node] of Object.entries(state.nodes)) {
       const prev = prevState.nodes[id as AnyNode["id"]];
       if (prev && node.type === "item" && prev.type === "item") {
         if (
           !arraysEqual(node.position, prev.position) ||
-          !arraysEqual(node.rotation, prev.rotation)
+          !arraysEqual(node.rotation, prev.rotation) ||
+          node.parentId !== prev.parentId
         ) {
           const levelId = resolveLevelId(node, state.nodes);
           spatialGridManager.handleNodeUpdated(node, levelId);

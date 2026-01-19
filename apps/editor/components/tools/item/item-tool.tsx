@@ -24,30 +24,31 @@ export const ItemTool: React.FC = () => {
   const { canPlaceOnFloor, canPlaceOnWall } = useSpatialQuery();
 
   useEffect(() => {
-    console.log("item-tool-reloaded");
     if (!selectedItem) {
       return;
     }
 
     let isOnWall = false;
     let wallLocked = false;
+    let currentWallId: string | null = null;
 
     const checkCanPlace = () => {
       const currentLevelId = useViewer.getState().currentLevelId;
       if (currentLevelId && draftItem.current) {
         let placeable = true;
         if (draftItem.current.asset.attachTo) {
-          if (!isOnWall) {
+          if (!isOnWall || !currentWallId) {
             placeable = false;
           } else {
-            placeable = canPlaceOnWall(
+            const result = canPlaceOnWall(
               currentLevelId,
-              draftItem.current.parentId as WallNode["id"],
+              currentWallId as WallNode["id"],
               gridPosition.current.x,
               gridPosition.current.y,
               draftItem.current.asset.dimensions,
               [draftItem.current.id],
-            ).valid;
+            );
+            placeable = result.valid;
           }
         } else {
           placeable = canPlaceOnFloor(
@@ -116,7 +117,6 @@ export const ItemTool: React.FC = () => {
 
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
-      console.log("ongridclick action");
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
         position: [gridPosition.current.x, 0, gridPosition.current.z],
@@ -128,13 +128,13 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallEnter = (event: WallEvent) => {
-      console.log("Wall enter", event);
       event.stopPropagation();
       if (
         draftItem.current?.asset.attachTo === "wall" ||
         draftItem.current?.asset.attachTo === "wall-side"
       ) {
         isOnWall = true;
+        currentWallId = event.node.id;
         gridPosition.current.set(
           Math.round(event.localPosition[0] * 2) / 2,
           Math.round(event.localPosition[1] * 2) / 2,
@@ -154,8 +154,8 @@ export const ItemTool: React.FC = () => {
     };
 
     const onWallLeave = (event: WallEvent) => {
-      console.log("Wall leave", event);
       isOnWall = false;
+      currentWallId = null;
       event.stopPropagation();
       if (!draftItem.current) return;
       const currentLevelId = useViewer.getState().currentLevelId;
@@ -180,7 +180,6 @@ export const ItemTool: React.FC = () => {
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
       wallLocked = true;
-      console.log("onwallclick action");
       useScene.temporal.getState().resume();
       useScene.getState().updateNode(draftItem.current.id, {
         position: [
@@ -200,7 +199,6 @@ export const ItemTool: React.FC = () => {
 
     const onWallMove = (event: WallEvent) => {
       event.stopPropagation();
-      console.log("Wall move", event);
       wallLocked = false;
       if (!draftItem.current) return;
       gridPosition.current.set(

@@ -69,24 +69,28 @@ const useScene = create<SceneState>()(
           start: [0, 0],
           end: [5, 0],
           children: [],
+          parentId: level0.id,
         });
 
         const wall1 = WallNode.parse({
           start: [0, 0],
           end: [0, 5],
           children: [],
+          parentId: level0.id,
         });
 
         const wall2 = WallNode.parse({
           start: [5, 5],
           end: [0, 5],
           children: [],
+          parentId: level0.id,
         });
 
         const wall3 = WallNode.parse({
           start: [5, 5],
           end: [5, 0],
           children: [],
+          parentId: level0.id,
         });
 
         const window1 = ItemNode.parse({
@@ -165,7 +169,6 @@ const useScene = create<SceneState>()(
   ),
 );
 
-useScene.getState().loadScene();
 export default useScene;
 
 // Subscribe to the temporal store (Undo/Redo events)

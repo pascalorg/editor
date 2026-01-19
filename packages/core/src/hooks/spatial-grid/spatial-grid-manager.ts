@@ -45,18 +45,21 @@ export class SpatialGridManager {
         item.asset.attachTo === "wall" ||
         item.asset.attachTo === "wall-side"
       ) {
-        // Wall-attached item
-        if (item.wallId && item.wallT !== undefined) {
-          const wallLength = this.getWallLength(item.wallId);
+        // Wall-attached item - use parentId as the wall ID
+        const wallId = item.parentId;
+        if (wallId && this.walls.has(wallId)) {
+          const wallLength = this.getWallLength(wallId);
           if (wallLength > 0) {
             const [width, height] = item.asset.dimensions;
             const halfW = width / wallLength / 2;
             const halfH = height / 2;
+            // Calculate t from local X position (position[0] is distance along wall)
+            const t = item.position[0] / wallLength;
             this.getWallGrid(levelId).insert({
               itemId: item.id,
-              wallId: item.wallId,
-              tStart: item.wallT - halfW,
-              tEnd: item.wallT + halfW,
+              wallId: wallId,
+              tStart: t - halfW,
+              tEnd: t + halfW,
               yStart: item.position[1] - halfH,
               yEnd: item.position[1] + halfH,
             });
@@ -86,17 +89,20 @@ export class SpatialGridManager {
       ) {
         // Remove old placement and re-insert
         this.getWallGrid(levelId).removeByItemId(item.id);
-        if (item.wallId && item.wallT !== undefined) {
-          const wallLength = this.getWallLength(item.wallId);
+        const wallId = item.parentId;
+        if (wallId && this.walls.has(wallId)) {
+          const wallLength = this.getWallLength(wallId);
           if (wallLength > 0) {
             const [width, height] = item.asset.dimensions;
             const halfW = width / wallLength / 2;
             const halfH = height / 2;
+            // Calculate t from local X position (position[0] is distance along wall)
+            const t = item.position[0] / wallLength;
             this.getWallGrid(levelId).insert({
               itemId: item.id,
-              wallId: item.wallId,
-              tStart: item.wallT - halfW,
-              tEnd: item.wallT + halfW,
+              wallId: wallId,
+              tStart: t - halfW,
+              tEnd: t + halfW,
               yStart: item.position[1] - halfH,
               yEnd: item.position[1] + halfH,
             });

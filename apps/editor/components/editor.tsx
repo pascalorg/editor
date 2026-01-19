@@ -34,6 +34,7 @@ import { ToolManager } from "./tools/tool-manager";
 const selectedObjects: Object3D[] = [];
 
 initSpatialGridSync();
+useScene.getState().loadScene();
 
 export default function Editor() {
   return (
