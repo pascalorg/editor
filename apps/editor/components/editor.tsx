@@ -13,7 +13,7 @@ import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
 import { CameraControls, CameraControlsImpl, Stats } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { Color, Object3D } from "three";
+import { Color, MathUtils, Mesh, Object3D } from "three";
 import { outline } from "three/addons/tsl/display/OutlineNode.js";
 import {
   color,
@@ -254,9 +254,31 @@ const Grid = ({
   ]);
 
   const handlers = useGridEvents();
+  const gridRef = useRef<Mesh>(null!);
+
+  useFrame((_, delta) => {
+    const currentLevelId = useViewer.getState().currentLevelId;
+    let targetY = 0;
+    if (currentLevelId) {
+      const levelMesh = sceneRegistry.nodes.get(currentLevelId);
+      if (levelMesh) {
+        targetY = levelMesh.position.y;
+      }
+    }
+    gridRef.current.position.y = MathUtils.lerp(
+      gridRef.current.position.y,
+      targetY,
+      12 * delta,
+    );
+  });
 
   return (
-    <mesh rotation-x={-Math.PI / 2} material={material} {...handlers}>
+    <mesh
+      rotation-x={-Math.PI / 2}
+      material={material}
+      {...handlers}
+      ref={gridRef}
+    >
       <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
     </mesh>
   );

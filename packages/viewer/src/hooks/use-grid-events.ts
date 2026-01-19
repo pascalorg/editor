@@ -5,7 +5,7 @@ export function useGridEvents() {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`;
     const payload: GridEvent = {
-      position: [e.point.x, e.point.z],
+      position: [e.point.x, e.point.y, e.point.z],
     };
 
     emitter.emit(eventKey, payload);

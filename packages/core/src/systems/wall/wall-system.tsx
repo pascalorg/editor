@@ -99,6 +99,10 @@ export function generateExtrudedWall(
     wallNode.end[0] - wallNode.start[0],
   );
 
+  // Get the wall mesh's world Y position (from level offset)
+  const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh;
+  const wallWorldY = wallMesh?.getWorldPosition(new THREE.Vector3()).y ?? 0;
+
   childrenNodes.forEach((child) => {
     // Only process items that are intended to be wall cutouts
     if (child.type !== "item") return;
@@ -112,7 +116,7 @@ export function generateExtrudedWall(
     const cutoutMesh = childMesh.getObjectByName("cutout") as THREE.Mesh;
     if (!cutoutMesh) return;
 
-    const holePath = createPathFromCutout(cutoutMesh, wallStart, wallAngle);
+    const holePath = createPathFromCutout(cutoutMesh, wallStart, wallAngle, wallWorldY);
     if (holePath) {
       shape.holes.push(holePath);
     }
@@ -138,12 +142,13 @@ export function generateExtrudedWall(
  * Wall-local space:
  * - Origin at wall start point
  * - X axis runs along the wall (toward end point)
- * - Y axis is height (world Y)
+ * - Y axis is height (relative to wall's world Y position)
  */
 function createPathFromCutout(
   cutoutMesh: THREE.Mesh,
   wallStart: [number, number],
   wallAngle: number,
+  wallWorldY: number,
 ): THREE.Path | null {
   const geometry = cutoutMesh.geometry;
   if (!geometry) return null;
@@ -177,9 +182,9 @@ function createPathFromCutout(
     // 2. Rotate around Y axis to align wall with local X axis
     // The wall shape is drawn on XY plane, so we need:
     // - localX = distance along wall
-    // - localY = height (world Y)
+    // - localY = height relative to wall's Y position
     const localX = worldX * cosAngle - worldZ * sinAngle;
-    const localY = v3.y; // Height stays the same
+    const localY = v3.y - wallWorldY; // Subtract wall's world Y to get local height
 
     // Create a key for deduplication (with small tolerance)
     const key = `${localX.toFixed(4)},${localY.toFixed(4)}`;

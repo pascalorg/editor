@@ -4,7 +4,7 @@ import { AnyNode } from "../schema/types";
 
 // Base event interfaces
 export interface GridEvent {
-  position: [number, number];
+  position: [number, number, number];
 }
 
 export interface NodeEvent<T extends AnyNode = AnyNode> {

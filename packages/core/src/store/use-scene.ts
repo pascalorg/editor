@@ -90,26 +90,27 @@ const useScene = create<SceneState>()(
           start: [5, 5],
           end: [5, 0],
           children: [],
-          parentId: level0.id,
+          parentId: level1.id,
         });
 
         const window1 = ItemNode.parse({
           type: "item",
           name: "Window",
           position: [2.5, 0.5, 0],
-          parentId: wall0.id,
+          parentId: wall3.id,
           asset: {
             name: "Round Window",
-            thumbnail: "/items/window-round/thumbnail.png",
+            thumbnail: "/items/window-small/thumbnail.png",
             category: "windows",
             attachTo: "wall",
-            src: "/items/window-round/model.glb",
+            src: "/items/window-small/model.glb",
           },
         });
 
-        wall0.children.push(window1.id);
+        wall3.children.push(window1.id);
 
-        level0.children.push(wall0.id, wall1.id, wall2.id, wall3.id);
+        level0.children.push(wall0.id, wall1.id, wall2.id);
+        level1.children.push(wall3.id);
 
         building.children.push(level0.id, level1.id, level2.id);
 

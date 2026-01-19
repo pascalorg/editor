@@ -82,7 +82,7 @@ export const ItemTool: React.FC = () => {
           gridPosition.current.y,
           gridPosition.current.z,
         ],
-        name: "Draft Item",
+        name: selectedItem.name,
         asset: selectedItem,
       });
       useScene.getState().createNode(draftItem.current, currentLevelId);
@@ -98,11 +98,11 @@ export const ItemTool: React.FC = () => {
       gridPosition.current.set(
         Math.round(event.position[0] * 2) / 2,
         0,
-        Math.round(event.position[1] * 2) / 2,
+        Math.round(event.position[2] * 2) / 2,
       );
       cursorRef.current.position.set(
         gridPosition.current.x,
-        0,
+        event.position[1],
         gridPosition.current.z,
       );
       checkCanPlace();
@@ -212,6 +212,7 @@ export const ItemTool: React.FC = () => {
         Math.round(event.position[1] * 2) / 2,
         Math.round(event.position[2] * 2) / 2,
       );
+
       const {
         node: { start, end },
       } = event;

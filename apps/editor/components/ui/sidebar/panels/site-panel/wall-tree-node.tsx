@@ -18,13 +18,13 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
 
   const wallLength = Math.sqrt(
     Math.pow(node.end[0] - node.start[0], 2) +
-      Math.pow(node.end[1] - node.start[1], 2)
+      Math.pow(node.end[1] - node.start[1], 2),
   ).toFixed(1);
 
   return (
     <TreeNodeWrapper
       icon={<Square className="w-3.5 h-3.5" />}
-      label={node.name || `Wall (${wallLength}m)`}
+      label={node.name || `Wall (${wallLength}m/${node.height || 2.5}m)`}
       depth={depth}
       hasChildren={node.children.length > 0}
       expanded={expanded}
