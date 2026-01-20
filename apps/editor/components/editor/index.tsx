@@ -56,7 +56,7 @@ export default function Editor() {
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
         <ToolManager />
-        <CustomControls />
+        <CustomCameraControls />
       </Viewer>
     </div>
   );
@@ -232,7 +232,7 @@ const Grid = ({
   const gridRef = useRef<Mesh>(null!);
 
   useFrame((_, delta) => {
-    const currentLevelId = useViewer.getState().currentLevelId;
+    const currentLevelId = useViewer.getState().selection.levelId;
     let targetY = 0;
     if (currentLevelId) {
       const levelMesh = sceneRegistry.nodes.get(currentLevelId);

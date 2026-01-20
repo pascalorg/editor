@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Line, Mesh, Vector3 } from "three";
 
 const commitWallDrawing = (start: [number, number], end: [number, number]) => {
-  const { currentLevelId } = useViewer.getState();
+  const currentLevelId = useViewer.getState().selection.levelId;
   const { createNode } = useScene.getState();
 
   if (!currentLevelId) return;

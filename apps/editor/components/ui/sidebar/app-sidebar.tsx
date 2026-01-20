@@ -40,7 +40,7 @@ export function AppSidebar() {
   // const handleDeleteSelected = useEditor((state) => state.handleDeleteSelected);
   // const serializeLayout = useEditor((state) => state.serializeLayout);
   const activeTool = useEditor((state) => state.tool);
-  const currentLevelId = useViewer((state) => state.currentLevelId);
+  const currentLevelId = useViewer((state) => state.selection.levelId);
   const setActiveTool = useEditor((state) => state.setTool);
 
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1);

@@ -11,11 +11,11 @@ interface LevelTreeNodeProps {
 
 export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
-  const currentLevelId = useViewer((state) => state.currentLevelId);
-  const setCurrentLevel = useViewer((state) => state.setCurrentLevelId);
+  const currentLevelId = useViewer((state) => state.selection.levelId);
+  const setSelection = useViewer((state) => state.setSelection);
 
   const handleClick = () => {
-    setCurrentLevel(node.id);
+    setSelection({ levelId: node.id });
   };
 
   const isSelected = currentLevelId === node.id;

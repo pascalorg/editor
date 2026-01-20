@@ -15,3 +15,6 @@ export type { AnyNodeType, AnyNodeId } from "./types";
 
 // Camera
 export { CameraSchema } from "./camera";
+
+// Zones
+export type { Zone, ZonePolygon } from "./zone";

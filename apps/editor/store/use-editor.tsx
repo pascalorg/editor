@@ -73,25 +73,26 @@ const useEditor = create<EditorState>()((set, get) => ({
     switch (phase) {
       case "site":
         // In Site mode, we zoom out and deselect specific levels/buildings
-        viewer.setCurrentBuildingId(null);
-        viewer.setCurrentLevelId(null);
+        viewer.resetSelection();
         viewer.setLevelMode("stacked");
         break;
 
       case "structure":
         // In Structure mode, we often want to focus on a specific building/level
         // Auto-select the first building if none is selected
-        if (!viewer.currentBuildingId) {
+        if (!viewer.selection.buildingId) {
           const firstBuildingId = scene.rootNodeIds.find((id) => {
             const node = scene.nodes[id];
             return node?.type === "building" || null;
           });
           if (firstBuildingId) {
-            viewer.setCurrentBuildingId(firstBuildingId as BuildingNode["id"]);
+            viewer.setSelection({
+              buildingId: firstBuildingId as BuildingNode["id"],
+            });
             const buildingNode = scene.nodes[firstBuildingId] as BuildingNode;
             const firstLevelId = buildingNode.children[0];
             if (firstLevelId) {
-              viewer.setCurrentLevelId(firstLevelId as LevelNode["id"]);
+              viewer.setSelection({ levelId: firstLevelId as LevelNode["id"] });
             }
           }
         }

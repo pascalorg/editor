@@ -6,9 +6,12 @@ import { CameraControls, CameraControlsImpl } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import { Vector3 } from "three";
 
+const currentTarget = new Vector3();
+
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!);
-  const currentLevelId = useViewer((state) => state.currentLevelId);
+  const currentLevelId = useViewer((state) => state.selection.levelId);
+  const firstLoad = useRef(true);
 
   useEffect(() => {
     let targetY = 0;
@@ -18,7 +21,18 @@ export const CustomCameraControls = () => {
         targetY = levelMesh.position.y;
       }
     }
-    const currentTarget = new Vector3();
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      (controls.current as CameraControlsImpl).setLookAt(
+        20,
+        20,
+        20,
+        0,
+        0,
+        0,
+        true,
+      );
+    }
     (controls.current as CameraControlsImpl).getTarget(currentTarget);
     (controls.current as CameraControlsImpl).moveTo(
       currentTarget.x,

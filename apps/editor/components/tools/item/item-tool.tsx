@@ -34,7 +34,7 @@ export const ItemTool: React.FC = () => {
     let currentWallId: string | null = null;
 
     const checkCanPlace = () => {
-      const currentLevelId = useViewer.getState().currentLevelId;
+      const currentLevelId = useViewer.getState().selection.levelId;
       if (currentLevelId && draftItem.current) {
         let placeable = true;
         if (draftItem.current.asset.attachTo) {
@@ -72,7 +72,7 @@ export const ItemTool: React.FC = () => {
       }
     };
     const createDraftItem = () => {
-      const { currentLevelId } = useViewer.getState();
+      const currentLevelId = useViewer.getState().selection.levelId;
       if (!currentLevelId) {
         return null;
       }
@@ -116,7 +116,7 @@ export const ItemTool: React.FC = () => {
       }
     };
     const onGridClick = (event: GridEvent) => {
-      const { currentLevelId } = useViewer.getState();
+      const currentLevelId = useViewer.getState().selection.levelId;
       if (isOnWall.current) return;
 
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
@@ -133,7 +133,7 @@ export const ItemTool: React.FC = () => {
 
     const onWallEnter = (event: WallEvent) => {
       if (
-        useViewer.getState().currentLevelId !==
+        useViewer.getState().selection.levelId !==
         resolveLevelId(event.node, useScene.getState().nodes)
       ) {
         return;
@@ -169,7 +169,7 @@ export const ItemTool: React.FC = () => {
       currentWallId = null;
       event.stopPropagation();
       if (!draftItem.current) return;
-      const currentLevelId = useViewer.getState().currentLevelId;
+      const currentLevelId = useViewer.getState().selection.levelId;
       draftItem.current.parentId = currentLevelId;
       useScene.getState().updateNode(draftItem.current.id, {
         position: [
@@ -186,7 +186,7 @@ export const ItemTool: React.FC = () => {
       event.stopPropagation();
       if (!isOnWall.current) return;
 
-      const currentLevelId = useViewer.getState().currentLevelId;
+      const currentLevelId = useViewer.getState().selection.levelId;
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return;
 
       useScene.temporal.getState().resume();
