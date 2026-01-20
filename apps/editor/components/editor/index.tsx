@@ -10,10 +10,10 @@ import {
   WallNode,
 } from "@pascal-app/core";
 import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
-import { CameraControls, CameraControlsImpl, Stats } from "@react-three/drei";
+
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { Color, MathUtils, Mesh, Object3D } from "three";
+import { Color, MathUtils, Mesh, Object3D, Vector3 } from "three";
 import { outline } from "three/addons/tsl/display/OutlineNode.js";
 import {
   color,
@@ -28,10 +28,11 @@ import {
   uniform,
 } from "three/tsl";
 import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
-import { ActionMenu } from "./ui/action-menu";
-import { ToolManager } from "./tools/tool-manager";
-import { AppSidebar } from "./ui/sidebar/app-sidebar";
-import { SidebarProvider } from "./ui/primitives/sidebar";
+import { ActionMenu } from "../ui/action-menu";
+import { ToolManager } from "../tools/tool-manager";
+import { AppSidebar } from "../ui/sidebar/app-sidebar";
+import { SidebarProvider } from "../ui/primitives/sidebar";
+import { CustomCameraControls } from "./custom-camera-controls";
 
 const selectedObjects: Object3D[] = [];
 
@@ -40,7 +41,7 @@ useScene.getState().loadScene();
 
 export default function Editor() {
   return (
-    <div className="w-full h-full bg-pink-50">
+    <div className="w-full h-full">
       {/* <LevelModeSwitcher /> */}
 
       <TestUndo />
@@ -55,37 +56,11 @@ export default function Editor() {
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <Passes />
         <ToolManager />
-        <EditorCameraManager />
+        <CustomControls />
       </Viewer>
     </div>
   );
 }
-const EditorCameraManager = () => {
-  const controls = useRef<CameraControlsImpl>(null!);
-  const currentLevelId = useViewer((state) => state.currentLevelId);
-
-  useEffect(() => {
-    let targetY = 0;
-    if (currentLevelId) {
-      const levelMesh = sceneRegistry.nodes.get(currentLevelId);
-      if (levelMesh) {
-        targetY = levelMesh.position.y;
-      }
-    }
-    const { position } = controls.current.camera;
-    controls.current.setLookAt(
-      position.x,
-      targetY + 5,
-      position.z,
-      0,
-      targetY,
-      0,
-      true,
-    );
-  }, [currentLevelId]);
-
-  return <CameraControls ref={controls} />;
-};
 
 const TestUndo = () => {
   const { undo, redo, futureStates, pastStates } = useScene.temporal.getState();
