@@ -1,6 +1,174 @@
 import { AssetInput, ItemNode } from "@pascal-app/core";
 export const CATALOG_ITEMS: AssetInput[] = [
   {
+    id: "tub",
+    category: "furniture",
+    name: "tub",
+    thumbnail: "/items/tubt/thumbnail.webp",
+    src: "/items/tub/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, 0.01],
+    rotation: [0, 0, 0],
+    dimensions: [2.5, 1, 1.5],
+  },
+
+  {
+    id: "toilet",
+    category: "furniture",
+    name: "toilet",
+    thumbnail: "/items/toilet/thumbnail.webp",
+    src: "/items/toilet/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, -0.23],
+    rotation: [0, 0, 0],
+    dimensions: [1, 1, 1],
+  },
+
+  {
+    id: "sofa",
+    category: "furniture",
+    name: "sofa",
+    thumbnail: "/items/sofa/thumbnail.webp",
+    src: "/items/sofa/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, 0.04],
+    rotation: [0, 0, 0],
+    dimensions: [2.5, 1, 1.5],
+  },
+
+  {
+    id: "shower",
+    category: "furniture",
+    name: "shower",
+    thumbnail: "/items/shower/thumbnail.webp",
+    src: "/items/shower/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.41, 0, -0.42],
+    rotation: [0, 0, 0],
+    dimensions: [1, 2.5, 1],
+  },
+
+  {
+    id: "bathroom-sink",
+    category: "furniture",
+    name: "bathroom-sink",
+    thumbnail: "/items/bathroom-sink/thumbnail.webp",
+    src: "/items/bathroom-sink/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.11, 0, 0.02],
+    rotation: [0, 0, 0],
+    dimensions: [2, 1, 1.5],
+  },
+
+  {
+    id: "coffee-table",
+    category: "furniture",
+    name: "Coffee-table",
+    thumbnail: "/items/coffee-table/thumbnail.webp",
+    src: "/items/coffee-table/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [2.0, 0.5, 1.5],
+  },
+
+  {
+    id: "computer",
+    category: "furniture",
+    name: "Computer",
+    thumbnail: "/items/computer/thumbnail.webp",
+    src: "/items/computer/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.01, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [1, 0.5, 0.5],
+  },
+
+  {
+    id: "computer",
+    category: "furniture",
+    name: "Computer",
+    thumbnail: "/items/computer/thumbnail.webp",
+    src: "/items/computer/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.01, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [1, 0.5, 0.5],
+  },
+
+  {
+    id: "livingroom-chair",
+    category: "furniture",
+    name: "Livingroom-chair",
+    thumbnail: "/items/livingroom-chair/thumbnail.webp",
+    src: "/items/livingroom-chair/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.01, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [1.5, 1, 1.5],
+  },
+
+  {
+    id: "office-chair",
+    category: "furniture",
+    name: "Office-chair",
+    thumbnail: "/items/office-chair/thumbnail.webp",
+    src: "/items/office-chair/model.glb",
+    scale: [1, 1, 1],
+    offset: [0.01, 0, 0.03],
+    rotation: [0, 0, 0],
+    dimensions: [1, 1.5, 1],
+  },
+
+  {
+    id: "office-table",
+    category: "furniture",
+    name: "Office-table",
+    thumbnail: "/items/office-table/thumbnail.webp",
+    src: "/items/office-table/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    dimensions: [2, 1, 1],
+  },
+
+  {
+    id: "dining-table",
+    category: "furniture",
+    name: "Dining-table",
+    thumbnail: "/items/dining-table/thumbnail.webp",
+    src: "/items/dining-table/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, -0.01],
+    rotation: [0, 0, 0],
+    dimensions: [2.5, 1, 1],
+  },
+
+  {
+    id: "piano",
+    category: "furniture",
+    name: "Piano",
+    thumbnail: "/items/piano/thumbnail.webp",
+    src: "/items/piano/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, -0],
+    rotation: [0, 0, 0],
+    dimensions: [2, 1.5, 1],
+  },
+
+  {
+    id: "dining-chair",
+    category: "furniture",
+    name: "Dining-chair",
+    thumbnail: "/items/dining-chair/thumbnail.webp",
+    src: "/items/dining-chair/model.glb",
+    scale: [1, 1, 1],
+    offset: [0, 0, 3.469446951953614e-18],
+    rotation: [0, 0, 0],
+    dimensions: [0.5, 1, 0.5000000000000001],
+  },
+  {
+    id: "couch-medium",
     category: "furniture",
     name: "Couch",
     thumbnail: "/items/couch-medium/thumbnail.webp",
@@ -9,6 +177,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [2, 0.8, 1],
   },
   {
+    id: "couch-small",
     category: "furniture",
     name: "Small Couch",
     thumbnail: "/items/couch-small/thumbnail.webp",
@@ -17,6 +186,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [1, 0.8, 1],
   },
   {
+    id: "desk",
     category: "furniture",
     name: "Desk",
     thumbnail: "/items/desk/thumbnail.webp",
@@ -25,6 +195,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [4, 2, 2],
   },
   {
+    id: "table",
     category: "furniture",
     name: "Table",
     thumbnail: "/items/table/thumbnail.webp",
@@ -34,6 +205,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [6, 2, 3],
   },
   {
+    id: "fence",
     category: "outdoor",
     name: "Fence",
     thumbnail: "/items/fence/thumbnail.webp",
@@ -44,6 +216,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [6, 2, 1],
   },
   {
+    id: "parking-spot",
     category: "outdoor",
     name: "Parking Spot",
     thumbnail: "/items/parking-spot/thumbnail.webp",
@@ -54,6 +227,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [12, 2, 6],
   },
   {
+    id: "hedge",
     category: "outdoor",
     name: "Hedge",
     thumbnail: "/items/hedge/thumbnail.webp",
@@ -64,6 +238,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [4, 2, 3],
   },
   {
+    id: "tree",
     category: "outdoor",
     name: "Tree",
     thumbnail: "/items/tree/thumbnail.webp",
@@ -74,6 +249,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [2, 2, 2],
   },
   {
+    id: "ceiling-light",
     category: "appliance",
     name: "Ceiling Light",
     thumbnail: "/items/ceiling-light/thumbnail.webp",
@@ -84,6 +260,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "ceiling-fan",
     category: "appliance",
     name: "Ceiling Fan",
     thumbnail: "/items/ceiling-fan/thumbnail.webp",
@@ -95,6 +272,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "rectangular-ceiling-light",
     category: "appliance",
     name: "Rectangular Ceiling Light",
     thumbnail: "/items/rectangular-ceiling-light/thumbnail.webp",
@@ -106,6 +284,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "circular-ceiling-light",
     category: "appliance",
     name: "Circular Ceiling Light",
     thumbnail: "/items/circular-ceiling-light/thumbnail.webp",
@@ -117,6 +296,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "smoke-detector",
     category: "appliance",
     name: "Smoke Detector",
     thumbnail: "/items/smoke-detector/thumbnail.webp",
@@ -128,6 +308,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "sprinkler",
     category: "appliance",
     name: "Sprinkler",
     thumbnail: "/items/sprinkler/thumbnail.webp",
@@ -139,6 +320,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "exit-sign",
     category: "appliance",
     name: "Exit Sign",
     thumbnail: "/items/exit-sign/thumbnail.webp",
@@ -150,6 +332,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "ceiling",
   },
   {
+    id: "wall-art-06",
     category: "furniture",
     name: "Wall Art",
     thumbnail: "/items/wall-art-06/thumbnail.webp",
@@ -161,6 +344,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "flat-screen-tv",
     category: "furniture",
     name: "Flat Screen TV",
     thumbnail: "/items/flat-screen-tv/thumbnail.webp",
@@ -172,6 +356,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "air-conditioner",
     category: "appliance",
     name: "Air Conditioner",
     thumbnail: "/items/air-conditioner/thumbnail.webp",
@@ -183,6 +368,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "ac-block",
     category: "appliance",
     name: "AC Block",
     thumbnail: "/items/ac-block/thumbnail.webp",
@@ -193,6 +379,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [3, 2, 3],
   },
   {
+    id: "fire-extinguisher",
     category: "appliance",
     name: "Fire extinguisher",
     thumbnail: "/items/fire-extinguisher/thumbnail.webp",
@@ -204,6 +391,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "fire-alarm",
     category: "appliance",
     name: "Fire alarm ",
     thumbnail: "/items/fire-alarm/thumbnail.webp",
@@ -215,6 +403,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "fire-detector",
     category: "appliance",
     name: "Fire detector ",
     thumbnail: "/items/fire-detector/thumbnail.webp",
@@ -226,6 +415,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "alarm-keypad",
     category: "appliance",
     name: "Alarm keypad",
     thumbnail: "/items/alarm-keypad/thumbnail.webp",
@@ -237,6 +427,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "thermostat",
     category: "appliance",
     name: "Thermostat",
     thumbnail: "/items/thermostat/thumbnail.webp",
@@ -248,6 +439,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "electric-panel",
     category: "appliance",
     name: "Electric panel",
     thumbnail: "/items/electric-panel/thumbnail.webp",
@@ -259,6 +451,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "air-conditioner-block",
     category: "appliance",
     name: "Air Conditioner Block",
     thumbnail: "/items/air-conditioner-block/thumbnail.webp",
@@ -270,6 +463,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "kitchen-fridge",
     category: "kitchen",
     name: "Kitchen Fridge",
     thumbnail: "/items/kitchen-fridge/thumbnail.webp",
@@ -280,6 +474,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [2, 2, 2],
   },
   {
+    id: "freezer",
     category: "kitchen",
     name: "Freezer",
     thumbnail: "/items/freezer/thumbnail.webp",
@@ -290,6 +485,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [2, 1, 1],
   },
   {
+    id: "wall-sink",
     category: "bathroom",
     name: "Wall Sink",
     thumbnail: "/items/wall-sink/thumbnail.webp",
@@ -301,6 +497,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall-side",
   },
   {
+    id: "sink-cabinet",
     category: "kitchen",
     name: "Sink with cabinet",
     thumbnail: "/items/sink-cabinet/thumbnail.webp",
@@ -311,6 +508,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [4, 2, 1],
   },
   {
+    id: "toilet",
     category: "bathroom",
     name: "Toilet",
     thumbnail: "/items/toilet/thumbnail.webp",
@@ -321,6 +519,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [1, 2, 1],
   },
   {
+    id: "window-small",
     category: "window",
     name: "Window",
     thumbnail: "/items/window-small/thumbnail.webp",
@@ -332,6 +531,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "window-small-2",
     category: "window",
     name: "Window",
     thumbnail: "/items/window-small-2/thumbnail.webp",
@@ -343,6 +543,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "window-round",
     category: "window",
     name: "Window",
     thumbnail: "/items/window-round/thumbnail.webp",
@@ -354,6 +555,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "window1-black-open-1731",
     category: "window",
     name: "Window",
     thumbnail: "/items/window1-black-open-1731/thumbnail.webp",
@@ -365,6 +567,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "doorway-front",
     category: "door",
     name: "Door",
     thumbnail: "/items/doorway-front/thumbnail.webp",
@@ -376,6 +579,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "door",
     category: "door",
     name: "Door",
     thumbnail: "/items/door/thumbnail.webp",
@@ -387,6 +591,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     attachTo: "wall",
   },
   {
+    id: "door-with-bar",
     category: "door",
     name: "Door with bar",
     thumbnail: "/items/door-with-bar/thumbnail.webp",

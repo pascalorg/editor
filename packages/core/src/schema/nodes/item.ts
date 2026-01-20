@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BaseNode, nodeType, objectId } from "../base";
 
 const assetSchema = z.object({
+  id: z.string(),
   category: z.string(),
   name: z.string(),
   thumbnail: z.string(),
