@@ -4,71 +4,110 @@ import { useViewer } from "@pascal-app/viewer";
 import { useEffect } from "react";
 import useEditor from "@/store/use-editor";
 
-const PHASE_CONFIG = {
-  site: ["building"],
-  structure: ["wall", "slab", "door", "window", "column", "stair"],
-  furnish: ["item"], // furniture, decor, etc.
-} as const;
+const SELECTION_STRATEGIES = {
+  site: {
+    types: ["building"],
+    handleSelect: (node: any, isShift: boolean) => {
+      useViewer.getState().setSelection({ buildingId: node.id });
+    },
+    handleDeselect: () => {
+      useViewer.getState().setSelection({ buildingId: null });
+    },
+    isValid: (node: any) => node.type === "building",
+  },
 
-type PhaseType = keyof typeof PHASE_CONFIG;
+  structure: {
+    types: ["wall", "item"],
+    handleSelect: (node: any, isShift: boolean) => {
+      const { selection, setSelection } = useViewer.getState();
+      const nextIds = isShift
+        ? selection.selectedIds.includes(node.id)
+          ? selection.selectedIds.filter((id) => id !== node.id)
+          : [...selection.selectedIds, node.id]
+        : [node.id];
+      setSelection({ selectedIds: nextIds });
+    },
+    handleDeselect: () => {
+      useViewer.getState().setSelection({ selectedIds: [] });
+    },
+    isValid: (node: any) => {
+      if (node.type === "wall") return true;
+      if (node.type === "item") {
+        return node.category === "door" || node.category === "window";
+      }
+      return false;
+    },
+  },
+
+  furnish: {
+    types: ["item"],
+    handleSelect: (node: any, isShift: boolean) => {
+      const { selection, setSelection } = useViewer.getState();
+      const nextIds = isShift
+        ? selection.selectedIds.includes(node.id)
+          ? selection.selectedIds.filter((id) => id !== node.id)
+          : [...selection.selectedIds, node.id]
+        : [node.id];
+      setSelection({ selectedIds: nextIds });
+    },
+    handleDeselect: () => {
+      useViewer.getState().setSelection({ selectedIds: [] });
+    },
+    isValid: (node: any) => {
+      return (
+        node.type === "item" &&
+        node.category !== "door" &&
+        node.category !== "window"
+      );
+    },
+  },
+};
 
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase);
   const mode = useEditor((s) => s.mode);
-  const { setSelection, selection } = useViewer();
 
   useEffect(() => {
     if (mode !== "select") return;
 
-    const allowedTypes = PHASE_CONFIG[phase] || [];
+    const strategy = SELECTION_STRATEGIES[phase];
+    if (!strategy) return;
 
     const onEnter = (event: any) => {
-      // Only hover if the node type is allowed in this phase
-      if (allowedTypes.includes(event.node.type)) {
-        useViewer.getState().setHoveredId(event.node.id);
+      if (strategy.isValid(event.node)) {
+        useViewer.setState({ hoveredId: event.node.id });
       }
     };
 
-    const onLeave = () => useViewer.getState().setHoveredId(null);
+    const onLeave = () => useViewer.setState({ hoveredId: null });
 
     const onClick = (event: any) => {
+      if (!strategy.isValid(event.node)) return;
+
       event.stopPropagation();
-      const { id, type } = event.node;
-
-      if (!allowedTypes.includes(type)) return;
-
       const isShift = event.nativeEvent?.shiftKey;
-
-      if (isShift) {
-        const isSelected = selection.selectedIds.includes(id);
-        const nextIds = isSelected
-          ? selection.selectedIds.filter((i) => i !== id)
-          : [...selection.selectedIds, id];
-        setSelection({ selectedIds: nextIds });
-      } else {
-        setSelection({ selectedIds: [id] });
-      }
+      strategy.handleSelect(event.node, isShift);
     };
 
-    // BINDING: Loop through all allowed types for this phase
-    allowedTypes.forEach((type) => {
+    // Bind listeners for all potential types this strategy might care about
+    strategy.types.forEach((type) => {
       emitter.on(`${type}:enter`, onEnter);
       emitter.on(`${type}:leave`, onLeave);
       emitter.on(`${type}:click`, onClick);
     });
 
-    const onGridClick = () => setSelection({ selectedIds: [] });
+    const onGridClick = () => strategy.handleDeselect();
     emitter.on("grid:click", onGridClick);
 
     return () => {
-      allowedTypes.forEach((type) => {
+      strategy.types.forEach((type) => {
         emitter.off(`${type}:enter`, onEnter);
         emitter.off(`${type}:leave`, onLeave);
         emitter.off(`${type}:click`, onClick);
       });
       emitter.off("grid:click", onGridClick);
     };
-  }, [phase, mode, selection.selectedIds, setSelection]);
+  }, [phase, mode]);
 
   return <EditorOutlinerSync />;
 };
