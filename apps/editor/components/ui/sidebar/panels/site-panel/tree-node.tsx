@@ -61,13 +61,12 @@ export function TreeNodeWrapper({
     <div>
       <div
         className={cn(
-          "flex items-center h-7 hover:bg-accent/50 cursor-pointer group",
-          "text-sm",
+          "flex items-center h-7 cursor-pointer group text-sm",
           isSelected
-            ? "text-primary-foreground bg-primary/80"
+            ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
             : isHovered
               ? "bg-accent/70 text-foreground"
-              : "text-muted-foreground"
+              : "text-muted-foreground hover:bg-accent/50"
         )}
         style={{ paddingLeft: depth * 12 + 4 }}
       >
