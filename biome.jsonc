@@ -65,7 +65,10 @@
       "correctness": {
         "noUnusedVariables": "off",
         "noUnusedFunctionParameters": "off",
-        "noUnusedImports": "error",
+        "noUnusedImports": {
+          "level": "warn",
+          "fix": "safe"
+        },
         "useExhaustiveDependencies": "info",
         "noPrecisionLoss": "off"
       },
