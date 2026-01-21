@@ -1,4 +1,5 @@
 import { BuildingNode, LevelNode, useScene } from "@pascal-app/core";
+import { useViewer } from "@pascal-app/viewer";
 import { Building2, Plus } from "lucide-react";
 import { useState } from "react";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
@@ -16,9 +17,12 @@ interface BuildingTreeNodeProps {
 export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const createNode = useScene((state) => state.createNode);
+  const isSelected = useViewer((state) => state.selection.buildingId === node.id);
+  const isHovered = useViewer((state) => state.hoveredId === node.id);
+  const setSelection = useViewer((state) => state.setSelection);
 
   const handleClick = () => {
-    // Handle building selection
+    setSelection({ buildingId: node.id });
   };
 
   const handleAddLevel = (e: React.MouseEvent) => {
@@ -40,6 +44,8 @@ export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       onClick={handleClick}
+      isSelected={isSelected}
+      isHovered={isHovered}
       actions={
         <Tooltip>
           <TooltipTrigger asChild>

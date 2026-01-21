@@ -41,6 +41,7 @@ interface TreeNodeWrapperProps {
   actions?: React.ReactNode;
   children?: React.ReactNode;
   isSelected?: boolean;
+  isHovered?: boolean;
 }
 
 export function TreeNodeWrapper({
@@ -54,6 +55,7 @@ export function TreeNodeWrapper({
   actions,
   children,
   isSelected,
+  isHovered,
 }: TreeNodeWrapperProps) {
   return (
     <div>
@@ -61,7 +63,11 @@ export function TreeNodeWrapper({
         className={cn(
           "flex items-center h-7 hover:bg-accent/50 cursor-pointer group",
           "text-sm",
-          isSelected ? "text-primary-foreground bg-primary/80" : "text-muted-foreground"
+          isSelected
+            ? "text-primary-foreground bg-primary/80"
+            : isHovered
+              ? "bg-accent/70 text-foreground"
+              : "text-muted-foreground"
         )}
         style={{ paddingLeft: depth * 12 + 4 }}
       >

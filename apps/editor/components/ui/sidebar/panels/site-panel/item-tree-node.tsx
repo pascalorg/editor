@@ -1,4 +1,5 @@
 import { ItemNode } from "@pascal-app/core";
+import { useViewer } from "@pascal-app/viewer";
 import { Box } from "lucide-react";
 import { TreeNodeWrapper } from "./tree-node";
 
@@ -8,8 +9,12 @@ interface ItemTreeNodeProps {
 }
 
 export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
+  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const isHovered = useViewer((state) => state.hoveredId === node.id);
+  const setSelection = useViewer((state) => state.setSelection);
+
   const handleClick = () => {
-    // Handle item selection
+    setSelection({ selectedIds: [node.id] });
   };
 
   return (
@@ -21,6 +26,8 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
       expanded={false}
       onToggle={() => {}}
       onClick={handleClick}
+      isSelected={isSelected}
+      isHovered={isHovered}
     />
   );
 }

@@ -11,14 +11,13 @@ interface LevelTreeNodeProps {
 
 export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
-  const currentLevelId = useViewer((state) => state.selection.levelId);
+  const isSelected = useViewer((state) => state.selection.levelId === node.id);
+  const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
 
   const handleClick = () => {
     setSelection({ levelId: node.id });
   };
-
-  const isSelected = currentLevelId === node.id;
 
   return (
     <TreeNodeWrapper
@@ -30,6 +29,7 @@ export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
       onToggle={() => setExpanded(!expanded)}
       onClick={handleClick}
       isSelected={isSelected}
+      isHovered={isHovered}
     >
       {node.children.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={depth + 1} />

@@ -1,4 +1,5 @@
-import { WallNode, useScene } from "@pascal-app/core";
+import { WallNode } from "@pascal-app/core";
+import { useViewer } from "@pascal-app/viewer";
 import { Square } from "lucide-react";
 import { useState } from "react";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
@@ -10,10 +11,12 @@ interface WallTreeNodeProps {
 
 export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
+  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const isHovered = useViewer((state) => state.hoveredId === node.id);
+  const setSelection = useViewer((state) => state.setSelection);
 
   const handleClick = () => {
-    // Handle wall selection
-    useScene.getState().markDirty(node.id);
+    setSelection({ selectedIds: [node.id] });
   };
 
   const wallLength = Math.sqrt(
@@ -30,6 +33,8 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       onClick={handleClick}
+      isSelected={isSelected}
+      isHovered={isHovered}
     >
       {node.children.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
