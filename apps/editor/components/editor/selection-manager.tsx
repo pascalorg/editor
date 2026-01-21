@@ -3,180 +3,199 @@ import {
   type BuildingNode,
   emitter,
   type ItemNode,
+  type NodeEvent,
+  resolveLevelId,
   sceneRegistry,
-} from '@pascal-app/core'
+  useScene,
+} from "@pascal-app/core";
 
-import { useViewer } from '@pascal-app/viewer'
-import { useEffect } from 'react'
-import useEditor from '@/store/use-editor'
+import { useViewer } from "@pascal-app/viewer";
+import { useEffect } from "react";
+import useEditor from "@/store/use-editor";
 
-type SelectableNodeType = 'wall' | 'item' | 'building'
+const isNodeInCurrentLevel = (node: AnyNode): boolean => {
+  const currentLevelId = useViewer.getState().selection.levelId;
+  if (!currentLevelId) return true; // No level selected, allow all
+  const nodeLevelId = resolveLevelId(node, useScene.getState().nodes);
+  return nodeLevelId === currentLevelId;
+};
+
+type SelectableNodeType = "wall" | "item" | "building";
 
 interface SelectionStrategy {
-  types: SelectableNodeType[]
-  handleSelect: (node: AnyNode, isShift: boolean) => void
-  handleDeselect: () => void
-  isValid: (node: AnyNode) => boolean
+  types: SelectableNodeType[];
+  handleSelect: (node: AnyNode, isShift: boolean) => void;
+  handleDeselect: () => void;
+  isValid: (node: AnyNode) => boolean;
 }
 
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   site: {
-    types: ['building'],
+    types: ["building"],
     handleSelect: (node) => {
       useViewer
         .getState()
-        .setSelection({ buildingId: (node as BuildingNode).id })
+        .setSelection({ buildingId: (node as BuildingNode).id });
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ buildingId: null })
+      useViewer.getState().setSelection({ buildingId: null });
     },
-    isValid: (node) => node.type === 'building',
+    isValid: (node) => node.type === "building",
   },
 
   structure: {
-    types: ['wall', 'item'],
+    types: ["wall", "item"],
     handleSelect: (node, isShift) => {
-      const { selection, setSelection } = useViewer.getState()
+      const { selection, setSelection } = useViewer.getState();
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)
           ? selection.selectedIds.filter((id) => id !== node.id)
           : [...selection.selectedIds, node.id]
-        : [node.id]
-      setSelection({ selectedIds: nextIds })
+        : [node.id];
+      setSelection({ selectedIds: nextIds });
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ selectedIds: [] })
+      useViewer.getState().setSelection({ selectedIds: [] });
     },
     isValid: (node) => {
-      if (node.type === 'wall') return true
-      if (node.type === 'item') {
+      if (!isNodeInCurrentLevel(node)) return false;
+      if (node.type === "wall") return true;
+      if (node.type === "item") {
         return (
-          (node as ItemNode).asset.category === 'door' ||
-          (node as ItemNode).asset.category === 'window'
-        )
+          (node as ItemNode).asset.category === "door" ||
+          (node as ItemNode).asset.category === "window"
+        );
       }
-      return false
+      return false;
     },
   },
 
   furnish: {
-    types: ['item'],
+    types: ["item"],
     handleSelect: (node, isShift) => {
-      const { selection, setSelection } = useViewer.getState()
+      const { selection, setSelection } = useViewer.getState();
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)
           ? selection.selectedIds.filter((id) => id !== node.id)
           : [...selection.selectedIds, node.id]
-        : [node.id]
-      setSelection({ selectedIds: nextIds })
+        : [node.id];
+      setSelection({ selectedIds: nextIds });
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ selectedIds: [] })
+      useViewer.getState().setSelection({ selectedIds: [] });
     },
     isValid: (node) => {
-      if (node.type !== 'item') return false
-      const item = node as ItemNode
-      return item.asset.category !== 'door' && item.asset.category !== 'window'
+      if (!isNodeInCurrentLevel(node)) return false;
+      if (node.type !== "item") return false;
+      const item = node as ItemNode;
+      return item.asset.category !== "door" && item.asset.category !== "window";
     },
   },
-}
+};
 
 export const SelectionManager = () => {
-  const phase = useEditor((s) => s.phase)
-  const mode = useEditor((s) => s.mode)
+  const phase = useEditor((s) => s.phase);
+  const mode = useEditor((s) => s.mode);
 
   useEffect(() => {
-    if (mode !== 'select') return
+    if (mode !== "select") return;
 
-    const strategy = SELECTION_STRATEGIES[phase]
-    if (!strategy) return
+    const strategy = SELECTION_STRATEGIES[phase];
+    if (!strategy) return;
 
-    const onEnter = (event: any) => {
+    const onEnter = (event: NodeEvent) => {
       if (strategy.isValid(event.node)) {
-        useViewer.setState({ hoveredId: event.node.id })
+        event.stopPropagation();
+        useViewer.setState({ hoveredId: event.node.id });
       }
-    }
+    };
 
-    const onLeave = () => useViewer.setState({ hoveredId: null })
+    const onLeave = (event: NodeEvent) => {
+      if (strategy.isValid(event.node)) {
+        event.stopPropagation();
+        useViewer.setState({ hoveredId: null });
+      }
+    };
 
-    const onClick = (event: any) => {
-      if (!strategy.isValid(event.node)) return
+    const onClick = (event: NodeEvent) => {
+      if (!strategy.isValid(event.node)) return;
 
-      event.stopPropagation()
-      const isShift = event.nativeEvent?.shiftKey
-      strategy.handleSelect(event.node, isShift)
-    }
+      event.stopPropagation();
+      const isShift = event.nativeEvent?.shiftKey;
+      strategy.handleSelect(event.node, isShift);
+    };
 
     // Bind listeners for all potential types this strategy might care about
     strategy.types.forEach((type) => {
-      emitter.on(`${type}:enter`, onEnter)
-      emitter.on(`${type}:leave`, onLeave)
-      emitter.on(`${type}:click`, onClick)
-    })
+      emitter.on(`${type}:enter`, onEnter);
+      emitter.on(`${type}:leave`, onLeave);
+      emitter.on(`${type}:click`, onClick);
+    });
 
-    const onGridClick = () => strategy.handleDeselect()
-    emitter.on('grid:click', onGridClick)
+    const onGridClick = () => strategy.handleDeselect();
+    emitter.on("grid:click", onGridClick);
 
     return () => {
       strategy.types.forEach((type) => {
-        emitter.off(`${type}:enter`, onEnter)
-        emitter.off(`${type}:leave`, onLeave)
-        emitter.off(`${type}:click`, onClick)
-      })
-      emitter.off('grid:click', onGridClick)
-    }
-  }, [phase, mode])
+        emitter.off(`${type}:enter`, onEnter);
+        emitter.off(`${type}:leave`, onLeave);
+        emitter.off(`${type}:click`, onClick);
+      });
+      emitter.off("grid:click", onGridClick);
+    };
+  }, [phase, mode]);
 
-  return <EditorOutlinerSync />
-}
+  return <EditorOutlinerSync />;
+};
 
 const EditorOutlinerSync = () => {
-  const phase = useEditor((s) => s.phase)
-  const selection = useViewer((s) => s.selection)
-  const hoveredId = useViewer((s) => s.hoveredId)
-  const outliner = useViewer((s) => s.outliner)
+  const phase = useEditor((s) => s.phase);
+  const selection = useViewer((s) => s.selection);
+  const hoveredId = useViewer((s) => s.hoveredId);
+  const outliner = useViewer((s) => s.outliner);
 
   useEffect(() => {
-    let idsToHighlight: string[] = []
+    let idsToHighlight: string[] = [];
 
     // 1. Determine what should be highlighted based on Phase
     switch (phase) {
-      case 'site':
+      case "site":
         // Only highlight the building if one is selected
-        if (selection.buildingId) idsToHighlight = [selection.buildingId]
-        break
+        if (selection.buildingId) idsToHighlight = [selection.buildingId];
+        break;
 
-      case 'structure':
+      case "structure":
         // Highlight selected items (walls/slabs)
         // We IGNORE buildingId even if it's set in the store
-        idsToHighlight = selection.selectedIds
-        break
+        idsToHighlight = selection.selectedIds;
+        break;
 
-      case 'furnish':
+      case "furnish":
         // Highlight selected furniture/items
-        idsToHighlight = selection.selectedIds
-        break
+        idsToHighlight = selection.selectedIds;
+        break;
 
       default:
         // Pure Viewer mode: Highlight based on the "deepest" selection
-        if (selection.selectedIds.length > 0) idsToHighlight = selection.selectedIds
-        else if (selection.levelId) idsToHighlight = [selection.levelId]
-        else if (selection.buildingId) idsToHighlight = [selection.buildingId]
+        if (selection.selectedIds.length > 0)
+          idsToHighlight = selection.selectedIds;
+        else if (selection.levelId) idsToHighlight = [selection.levelId];
+        else if (selection.buildingId) idsToHighlight = [selection.buildingId];
     }
 
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
-    outliner.selectedObjects.length = 0
+    outliner.selectedObjects.length = 0;
     for (const id of idsToHighlight) {
-      const obj = sceneRegistry.nodes.get(id)
-      if (obj) outliner.selectedObjects.push(obj)
+      const obj = sceneRegistry.nodes.get(id);
+      if (obj) outliner.selectedObjects.push(obj);
     }
 
-    outliner.hoveredObjects.length = 0
+    outliner.hoveredObjects.length = 0;
     if (hoveredId) {
-      const obj = sceneRegistry.nodes.get(hoveredId)
-      if (obj) outliner.hoveredObjects.push(obj)
+      const obj = sceneRegistry.nodes.get(hoveredId);
+      if (obj) outliner.hoveredObjects.push(obj);
     }
-  }, [phase, selection, hoveredId, outliner])
+  }, [phase, selection, hoveredId, outliner]);
 
-  return null
-}
+  return null;
+};
