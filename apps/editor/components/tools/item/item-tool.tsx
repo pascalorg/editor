@@ -12,11 +12,23 @@ import {
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useFrame } from "@react-three/fiber";
-import { is } from "@react-three/fiber/dist/declarations/src/core/utils";
-import { use, useEffect, useRef } from "react";
-import { BoxGeometry, Line, Mesh, MeshStandardMaterial, Vector3 } from "three";
-import { randInt } from "three/src/math/MathUtils.js";
+import { useEffect, useRef } from "react";
+import { BoxGeometry, Mesh, MeshStandardMaterial, Vector3 } from "three";
 import { resolveLevelId } from "../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync";
+
+/**
+ * Snaps a position to 0.5 grid, with an offset to align item edges to grid lines.
+ * For items with dimensions like 2.5, the center would be at 1.25 from the edge,
+ * which doesn't align with 0.5 grid. This adds an offset so edges align instead.
+ */
+function snapToGrid(position: number, dimension: number): number {
+  // Check if half the dimension has a 0.25 remainder (odd multiple of 0.5)
+  const halfDim = dimension / 2;
+  const needsOffset = Math.abs((halfDim * 2) % 1 - 0.5) < 0.01;
+  const offset = needsOffset ? 0.25 : 0;
+  // Snap to 0.5 grid with offset
+  return Math.round((position - offset) * 2) / 2 + offset;
+}
 
 export const ItemTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null!);
@@ -96,10 +108,11 @@ export const ItemTool: React.FC = () => {
 
       if (isOnWall.current) return;
 
+      const [dimX, , dimZ] = selectedItem.dimensions;
       gridPosition.current.set(
-        Math.round(event.position[0] * 2) / 2,
+        snapToGrid(event.position[0], dimX),
         0,
-        Math.round(event.position[2] * 2) / 2,
+        snapToGrid(event.position[2], dimZ),
       );
       cursorRef.current.position.set(
         gridPosition.current.x,
