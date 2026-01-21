@@ -1,6 +1,6 @@
-import dedent from "dedent";
-import { z } from "zod";
-import { BaseNode, nodeType, objectId } from "../base";
+import dedent from 'dedent'
+import { z } from 'zod'
+import { BaseNode, nodeType, objectId } from '../base'
 
 const assetSchema = z.object({
   id: z.string(),
@@ -9,22 +9,22 @@ const assetSchema = z.object({
   thumbnail: z.string(),
   src: z.string(),
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
-  attachTo: z.enum(["wall", "wall-side", "ceiling"]).optional(),
+  attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
   // These are "Corrective" transforms to normalize the GLB
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
-});
+})
 
-export type AssetInput = z.input<typeof assetSchema>;
-export type Asset = z.infer<typeof assetSchema>;
+export type AssetInput = z.input<typeof assetSchema>
+export type Asset = z.infer<typeof assetSchema>
 
 export const ItemNode = BaseNode.extend({
-  id: objectId("item"),
-  type: nodeType("item"),
+  id: objectId('item'),
+  type: nodeType('item'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  side: z.enum(["front", "back"]).optional(),
+  side: z.enum(['front', 'back']).optional(),
 
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),
@@ -42,6 +42,6 @@ export const ItemNode = BaseNode.extend({
     - offset: corrective position offset for the model
     - rotation: corrective rotation for the model
     - scale: corrective scale for the model
-`);
+`)
 
-export type ItemNode = z.infer<typeof ItemNode>;
+export type ItemNode = z.infer<typeof ItemNode>

@@ -1,22 +1,22 @@
-"use client";
+'use client'
 
-import { AnyNode, useScene } from "@pascal-app/core";
-import { ItemRenderer } from "./item/item-renderer";
-import { LevelRenderer } from "./level/level-renderer";
-import { WallRenderer } from "./wall/wall-renderer";
-import { BuildingRenderer } from "./building/building-renderer";
+import { type AnyNode, useScene } from '@pascal-app/core'
+import { BuildingRenderer } from './building/building-renderer'
+import { ItemRenderer } from './item/item-renderer'
+import { LevelRenderer } from './level/level-renderer'
+import { WallRenderer } from './wall/wall-renderer'
 
-export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode["id"] }) => {
-  const node = useScene((state) => state.nodes[nodeId]);
+export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
+  const node = useScene((state) => state.nodes[nodeId])
 
-  if (!node) return null;
+  if (!node) return null
 
   return (
     <>
-      {node.type === "building" && <BuildingRenderer node={node} />}
-      {node.type === "level" && <LevelRenderer node={node} />}
-      {node.type === "item" && <ItemRenderer node={node} />}
-      {node.type === "wall" && <WallRenderer node={node} />}
+      {node.type === 'building' && <BuildingRenderer node={node} />}
+      {node.type === 'level' && <LevelRenderer node={node} />}
+      {node.type === 'item' && <ItemRenderer node={node} />}
+      {node.type === 'wall' && <WallRenderer node={node} />}
     </>
-  );
-};
+  )
+}

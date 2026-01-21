@@ -1,42 +1,23 @@
-"use client";
+'use client'
 
-import {
-  emitter,
-  initSpatialGridSync,
-  ItemNode,
-  sceneRegistry,
-  useRegistry,
-  useScene,
-  WallNode,
-} from "@pascal-app/core";
-import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
+import { initSpatialGridSync, sceneRegistry, useScene } from '@pascal-app/core'
+import { useGridEvents, useViewer, Viewer } from '@pascal-app/viewer'
 
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
-import { Color, MathUtils, Mesh, Object3D, Vector3 } from "three";
+import { useFrame } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { MathUtils, type Mesh } from 'three'
 
-import {
-  color,
-  float,
-  fract,
-  fwidth,
-  mix,
-  oscSine,
-  pass,
-  positionLocal,
-  time,
-  uniform,
-} from "three/tsl";
-import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
-import { ActionMenu } from "../ui/action-menu";
-import { ToolManager } from "../tools/tool-manager";
-import { AppSidebar } from "../ui/sidebar/app-sidebar";
-import { SidebarProvider } from "../ui/primitives/sidebar";
-import { CustomCameraControls } from "./custom-camera-controls";
-import { SelectionManager } from "./selection-manager";
+import { color, float, fract, fwidth, mix, positionLocal } from 'three/tsl'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { ToolManager } from '../tools/tool-manager'
+import { ActionMenu } from '../ui/action-menu'
+import { SidebarProvider } from '../ui/primitives/sidebar'
+import { AppSidebar } from '../ui/sidebar/app-sidebar'
+import { CustomCameraControls } from './custom-camera-controls'
+import { SelectionManager } from './selection-manager'
 
-initSpatialGridSync();
-useScene.getState().loadScene();
+initSpatialGridSync()
+useScene.getState().loadScene()
 
 export default function Editor() {
   return (
@@ -57,18 +38,18 @@ export default function Editor() {
         <CustomCameraControls />
       </Viewer>
     </div>
-  );
+  )
 }
 
 const TestUndo = () => {
-  const { undo, redo, futureStates, pastStates } = useScene.temporal.getState();
+  const { undo, redo, futureStates, pastStates } = useScene.temporal.getState()
 
   return (
     <div className="absolute top-4 right-4 z-10 flex gap-2">
       <button
         className="px-4 py-2 rounded bg-white"
         onClick={() => {
-          undo();
+          undo()
         }}
       >
         Undo
@@ -76,86 +57,86 @@ const TestUndo = () => {
       <button
         className="px-4 py-2 rounded bg-white"
         onClick={() => {
-          redo();
+          redo()
         }}
       >
         Redo
       </button>
     </div>
-  );
-};
+  )
+}
 
 const Grid = ({
   cellSize = 0.5,
   cellThickness = 0.5,
-  cellColor = "#888888",
+  cellColor = '#888888',
   sectionSize = 1,
   sectionThickness = 1,
-  sectionColor = "#000000",
+  sectionColor = '#000000',
   fadeDistance = 100,
   fadeStrength = 1,
 }: {
-  cellSize?: number;
-  cellThickness?: number;
-  cellColor?: string;
-  sectionSize?: number;
-  sectionThickness?: number;
-  sectionColor?: string;
-  fadeDistance?: number;
-  fadeStrength?: number;
+  cellSize?: number
+  cellThickness?: number
+  cellColor?: string
+  sectionSize?: number
+  sectionThickness?: number
+  sectionColor?: string
+  fadeDistance?: number
+  fadeStrength?: number
 }) => {
   const material = useMemo(() => {
     // Use xy since plane geometry is in XY space (before rotation)
-    const pos = positionLocal.xy;
+    const pos = positionLocal.xy
 
     // Grid line function using fwidth for anti-aliasing
     // Returns 1 on grid lines, 0 elsewhere
     const getGrid = (size: number, thickness: number) => {
-      const r = pos.div(size);
-      const fw = fwidth(r);
+      const r = pos.div(size)
+      const fw = fwidth(r)
       // Distance to nearest grid line for each axis
-      const grid = fract(r.sub(0.5)).sub(0.5).abs();
+      const grid = fract(r.sub(0.5)).sub(0.5).abs()
       // Anti-aliased step: divide by fwidth and clamp
       const lineX = float(1).sub(
         grid.x
           .div(fw.x)
           .add(1 - thickness)
           .min(1),
-      );
+      )
       const lineY = float(1).sub(
         grid.y
           .div(fw.y)
           .add(1 - thickness)
           .min(1),
-      );
+      )
       // Combine both axes - max gives us lines in both directions
-      return lineX.max(lineY);
-    };
+      return lineX.max(lineY)
+    }
 
-    const g1 = getGrid(cellSize, cellThickness);
-    const g2 = getGrid(sectionSize, sectionThickness);
+    const g1 = getGrid(cellSize, cellThickness)
+    const g2 = getGrid(sectionSize, sectionThickness)
 
     // Distance fade from center
-    const dist = pos.length();
-    const fade = float(1).sub(dist.div(fadeDistance).min(1)).pow(fadeStrength);
+    const dist = pos.length()
+    const fade = float(1).sub(dist.div(fadeDistance).min(1)).pow(fadeStrength)
 
     // Mix colors based on section grid
     const gridColor = mix(
       color(cellColor),
       color(sectionColor),
       float(sectionThickness).mul(g2).min(1),
-    );
+    )
 
     // Combined alpha
-    const alpha = g1.add(g2).mul(fade);
-    const finalAlpha = mix(alpha.mul(0.75), alpha, g2);
+    const alpha = g1.add(g2).mul(fade)
+    const finalAlpha = mix(alpha.mul(0.75), alpha, g2)
 
     return new MeshBasicNodeMaterial({
       transparent: true,
       colorNode: gridColor,
       opacityNode: finalAlpha,
       depthWrite: false,
-    });
+    })
   }, [
     cellSize,
     cellThickness,
@@ -165,61 +146,52 @@ const Grid = ({
     sectionColor,
     fadeDistance,
     fadeStrength,
-  ]);
+  ])
 
-  const handlers = useGridEvents();
-  const gridRef = useRef<Mesh>(null!);
+  const handlers = useGridEvents()
+  const gridRef = useRef<Mesh>(null!)
 
   useFrame((_, delta) => {
-    const currentLevelId = useViewer.getState().selection.levelId;
-    let targetY = 0;
+    const currentLevelId = useViewer.getState().selection.levelId
+    let targetY = 0
     if (currentLevelId) {
-      const levelMesh = sceneRegistry.nodes.get(currentLevelId);
+      const levelMesh = sceneRegistry.nodes.get(currentLevelId)
       if (levelMesh) {
-        targetY = levelMesh.position.y;
+        targetY = levelMesh.position.y
       }
     }
-    gridRef.current.position.y = MathUtils.lerp(
-      gridRef.current.position.y,
-      targetY,
-      12 * delta,
-    );
-  });
+    gridRef.current.position.y = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
+  })
 
   return (
-    <mesh
-      rotation-x={-Math.PI / 2}
-      material={material}
-      {...handlers}
-      ref={gridRef}
-    >
+    <mesh rotation-x={-Math.PI / 2} material={material} {...handlers} ref={gridRef}>
       <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
     </mesh>
-  );
-};
+  )
+}
 
 const LevelModeSwitcher = () => {
-  const setLevelMode = useViewer((state) => state.setLevelMode);
-  const levelMode = useViewer((state) => state.levelMode);
+  const setLevelMode = useViewer((state) => state.setLevelMode)
+  const levelMode = useViewer((state) => state.levelMode)
 
   return (
     <div className="absolute top-4 left-4 z-10 flex gap-2">
       <button
         className={`px-4 py-2 rounded ${
-          levelMode === "exploded" ? "bg-blue-500 text-white" : "bg-white"
+          levelMode === 'exploded' ? 'bg-blue-500 text-white' : 'bg-white'
         }`}
-        onClick={() => setLevelMode("exploded")}
+        onClick={() => setLevelMode('exploded')}
       >
         Exploded
       </button>
       <button
         className={`px-4 py-2 rounded ${
-          levelMode === "stacked" ? "bg-blue-500 text-white" : "bg-white"
+          levelMode === 'stacked' ? 'bg-blue-500 text-white' : 'bg-white'
         }`}
-        onClick={() => setLevelMode("stacked")}
+        onClick={() => setLevelMode('stacked')}
       >
         Stacked
       </button>
     </div>
-  );
-};
+  )
+}

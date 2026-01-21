@@ -1,15 +1,15 @@
-import { useRegistry, WallNode } from "@pascal-app/core";
-import { useRef } from "react";
-import { Mesh } from "three";
-import { NodeRenderer } from "../node-renderer";
-import { useNodeEvents } from "../../../hooks/use-node-events";
+import { useRegistry, type WallNode } from '@pascal-app/core'
+import { useRef } from 'react'
+import type { Mesh } from 'three'
+import { useNodeEvents } from '../../../hooks/use-node-events'
+import { NodeRenderer } from '../node-renderer'
 
 export const WallRenderer = ({ node }: { node: WallNode }) => {
-  const ref = useRef<Mesh>(null!);
+  const ref = useRef<Mesh>(null!)
 
-  useRegistry(node.id, "wall", ref);
+  useRegistry(node.id, 'wall', ref)
 
-  const handlers = useNodeEvents(node, "wall");
+  const handlers = useNodeEvents(node, 'wall')
 
   return (
     <mesh ref={ref} castShadow receiveShadow>
@@ -24,5 +24,5 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
     </mesh>
-  );
-};
+  )
+}

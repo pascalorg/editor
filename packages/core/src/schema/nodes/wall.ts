@@ -1,14 +1,14 @@
-import dedent from "dedent";
-import { z } from "zod";
-import { BaseNode, nodeType, objectId } from "../base";
-import { ItemNode } from "./item";
+import dedent from 'dedent'
+import { z } from 'zod'
+import { BaseNode, nodeType, objectId } from '../base'
+import { ItemNode } from './item'
 // import { DoorNode } from "./door";
 // import { ItemNode } from "./item";
 // import { WindowNode } from "./window";
 
 export const WallNode = BaseNode.extend({
-  id: objectId("wall"),
-  type: nodeType("wall"),
+  id: objectId('wall'),
+  type: nodeType('wall'),
   children: z.array(ItemNode.shape.id).default([]),
   // Specific props
   thickness: z.number().optional(),
@@ -24,6 +24,6 @@ export const WallNode = BaseNode.extend({
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system
   - size: size of the wall in grid units
-  `
-);
-export type WallNode = z.infer<typeof WallNode>;
+  `,
+)
+export type WallNode = z.infer<typeof WallNode>

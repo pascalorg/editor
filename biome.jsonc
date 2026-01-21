@@ -1,6 +1,5 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite", "ultracite/core", "ultracite/next"],
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -66,7 +65,7 @@
       "correctness": {
         "noUnusedVariables": "off",
         "noUnusedFunctionParameters": "off",
-        "noUnusedImports": "off",
+        "noUnusedImports": "error",
         "useExhaustiveDependencies": "info",
         "noPrecisionLoss": "off"
       },
@@ -98,6 +97,10 @@
       "packages/**/*.css",
       "packages/**/*.md",
       "packages/**/*.mdx",
+      "apps/**/*.ts",
+      "apps/**/*.tsx",
+      "apps/**/*.js",
+      "apps/**/*.jsx",
       "!**/node_modules",
       "!**/.next",
       "!**/dist",

@@ -1,21 +1,14 @@
-import {
-  AnyNodeId,
-  emitter,
-  ItemNode,
-  useRegistry,
-  useScene,
-} from "@pascal-app/core";
-import { Clone } from "@react-three/drei/core/Clone";
-import { useGLTF } from "@react-three/drei/core/Gltf";
-import { ThreeEvent } from "@react-three/fiber/dist/declarations/src/core/events";
-import { Suspense, useCallback, useEffect, useRef } from "react";
-import { Group } from "three";
-import { useNodeEvents } from "../../../hooks/use-node-events";
+import { type AnyNodeId, type ItemNode, useRegistry, useScene } from '@pascal-app/core'
+import { Clone } from '@react-three/drei/core/Clone'
+import { useGLTF } from '@react-three/drei/core/Gltf'
+import { Suspense, useEffect, useRef } from 'react'
+import type { Group } from 'three'
+import { useNodeEvents } from '../../../hooks/use-node-events'
 
 export const ItemRenderer = ({ node }: { node: ItemNode }) => {
-  const ref = useRef<Group>(null!);
+  const ref = useRef<Group>(null!)
 
-  useRegistry(node.id, node.type, ref);
+  useRegistry(node.id, node.type, ref)
 
   return (
     <group position={node.position} rotation={node.rotation} ref={ref}>
@@ -23,22 +16,22 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
         <ModelRenderer node={node} />
       </Suspense>
     </group>
-  );
-};
+  )
+}
 
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
-  const { scene, nodes } = useGLTF(node.asset.src);
+  const { scene, nodes } = useGLTF(node.asset.src)
 
   if (nodes.cutout) {
-    nodes.cutout.visible = false;
+    nodes.cutout.visible = false
   }
 
-  const handlers = useNodeEvents(node, "item");
+  const handlers = useNodeEvents(node, 'item')
 
   useEffect(() => {
-    if (!node.parentId) return;
-    useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId);
-  }, []);
+    if (!node.parentId) return
+    useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+  }, [node.parentId])
 
   return (
     <Clone
@@ -48,5 +41,5 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       rotation={node.asset.rotation}
       {...handlers}
     />
-  );
-};
+  )
+}

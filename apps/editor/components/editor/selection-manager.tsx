@@ -1,36 +1,13 @@
 import {
   emitter,
-  initSpatialGridSync,
-  ItemNode,
+  type ItemNode,
   sceneRegistry,
-  useRegistry,
   useScene,
-  WallNode,
+  type WallNode,
 } from "@pascal-app/core";
-import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
+import { useViewer } from "@pascal-app/viewer";
 
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
-import { Color, MathUtils, Mesh, Object3D, Vector3 } from "three";
-
-import {
-  color,
-  float,
-  fract,
-  fwidth,
-  mix,
-  oscSine,
-  pass,
-  positionLocal,
-  time,
-  uniform,
-} from "three/tsl";
-import { MeshBasicNodeMaterial, PostProcessing } from "three/webgpu";
-import { ActionMenu } from "../ui/action-menu";
-import { ToolManager } from "../tools/tool-manager";
-import { AppSidebar } from "../ui/sidebar/app-sidebar";
-import { SidebarProvider } from "../ui/primitives/sidebar";
-import { CustomCameraControls } from "./custom-camera-controls";
+import { useEffect, useRef } from "react";
 
 export const SelectionManager = () => {
   const selectedItemId = useRef<ItemNode["id"] | WallNode["id"]>(null);
