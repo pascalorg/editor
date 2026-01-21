@@ -3,6 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { Building2, Plus } from "lucide-react";
 import { useState } from "react";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNodeActions } from "./tree-node-actions";
 import {
   Tooltip,
   TooltipContent,
@@ -47,17 +48,20 @@ export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       actions={
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent"
-              onClick={handleAddLevel}
-            >
-              <Plus className="w-3 h-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Add new level</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <TreeNodeActions node={node} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-primary-foreground/20"
+                onClick={handleAddLevel}
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Add new level</TooltipContent>
+          </Tooltip>
+        </div>
       }
     >
       {node.children.map((childId) => (

@@ -61,7 +61,7 @@ export function TreeNodeWrapper({
     <div>
       <div
         className={cn(
-          "flex items-center h-7 cursor-pointer group text-sm",
+          "flex items-center h-7 cursor-pointer group/row text-sm",
           isSelected
             ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
             : isHovered
@@ -95,7 +95,7 @@ export function TreeNodeWrapper({
           <span className="truncate">{label}</span>
         </div>
         {actions && (
-          <div className="opacity-0 group-hover:opacity-100 pr-1">
+          <div className="opacity-0 group-hover/row:opacity-100 pr-1">
             {actions}
           </div>
         )}

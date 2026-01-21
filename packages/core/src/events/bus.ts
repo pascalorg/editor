@@ -44,9 +44,18 @@ type GridEvents = {
   [K in `grid:${EventSuffix}`]: GridEvent;
 };
 
+export interface CameraControlEvent {
+  nodeId: AnyNode["id"];
+}
+
+type CameraControlEvents = {
+  "camera-controls:view": CameraControlEvent;
+  "camera-controls:capture": CameraControlEvent;
+};
 type EditorEvents = GridEvents &
   NodeEvents<"wall", WallEvent> &
   NodeEvents<"item", ItemEvent> &
-  NodeEvents<"building", BuildingEvent>;
+  NodeEvents<"building", BuildingEvent> &
+  CameraControlEvents;
 
 export const emitter = mitt<EditorEvents>();

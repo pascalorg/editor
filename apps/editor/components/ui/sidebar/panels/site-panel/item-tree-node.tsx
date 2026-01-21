@@ -2,6 +2,7 @@ import { ItemNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { Box } from "lucide-react";
 import { TreeNodeWrapper } from "./tree-node";
+import { TreeNodeActions } from "./tree-node-actions";
 
 interface ItemTreeNodeProps {
   node: ItemNode;
@@ -28,6 +29,7 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
       onClick={handleClick}
       isSelected={isSelected}
       isHovered={isHovered}
+      actions={<TreeNodeActions node={node} />}
     />
   );
 }

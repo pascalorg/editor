@@ -28,6 +28,9 @@ type ViewerState = {
   hoveredId: AnyNode["id"] | null;
   setHoveredId: (id: AnyNode["id"] | null) => void;
 
+  cameraMode: "perspective" | "orthographic";
+  setCameraMode: (mode: "perspective" | "orthographic") => void;
+
   levelMode: "stacked" | "exploded" | "solo" | "manual";
   setLevelMode: (mode: "stacked" | "exploded" | "solo" | "manual") => void;
 
@@ -42,6 +45,9 @@ const useViewer = create<ViewerState>()((set, get) => ({
   selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
   hoveredId: null,
   setHoveredId: (id) => set({ hoveredId: id }),
+
+  cameraMode: "perspective",
+  setCameraMode: (mode) => set({ cameraMode: mode }),
 
   levelMode: "stacked",
   setLevelMode: (mode) => set({ levelMode: mode }),

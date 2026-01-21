@@ -3,6 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { Square } from "lucide-react";
 import { useState } from "react";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNodeActions } from "./tree-node-actions";
 
 interface WallTreeNodeProps {
   node: WallNode;
@@ -35,6 +36,7 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
       onClick={handleClick}
       isSelected={isSelected}
       isHovered={isHovered}
+      actions={<TreeNodeActions node={node} />}
     >
       {node.children.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={depth + 1} />

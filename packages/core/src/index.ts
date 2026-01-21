@@ -1,6 +1,7 @@
 // Store
 
 export type {
+  CameraControlEvent,
   EventSuffix,
   GridEvent,
   ItemEvent,
@@ -14,7 +15,10 @@ export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'
-export { initSpatialGridSync, resolveLevelId } from './hooks/spatial-grid/spatial-grid-sync'
+export {
+  initSpatialGridSync,
+  resolveLevelId,
+} from './hooks/spatial-grid/spatial-grid-sync'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 // Schema
 export * from './schema'

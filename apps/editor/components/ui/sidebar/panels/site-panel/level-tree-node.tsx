@@ -3,6 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { Layers } from "lucide-react";
 import { useState } from "react";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNodeActions } from "./tree-node-actions";
 
 interface LevelTreeNodeProps {
   node: LevelNode;
@@ -30,6 +31,7 @@ export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
       onClick={handleClick}
       isSelected={isSelected}
       isHovered={isHovered}
+      actions={<TreeNodeActions node={node} />}
     >
       {node.children.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
