@@ -14,7 +14,7 @@ import { useGridEvents, useViewer, Viewer } from "@pascal-app/viewer";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import { Color, MathUtils, Mesh, Object3D, Vector3 } from "three";
-import { outline } from "three/addons/tsl/display/OutlineNode.js";
+
 import {
   color,
   float,
@@ -34,8 +34,6 @@ import { AppSidebar } from "../ui/sidebar/app-sidebar";
 import { SidebarProvider } from "../ui/primitives/sidebar";
 import { CustomCameraControls } from "./custom-camera-controls";
 
-const selectedObjects: Object3D[] = [];
-
 initSpatialGridSync();
 useScene.getState().loadScene();
 
@@ -54,7 +52,6 @@ export default function Editor() {
         <DraftSelector />
         {/* <Stats /> */}
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
-        <Passes />
         <ToolManager />
         <CustomCameraControls />
       </Viewer>
@@ -85,65 +82,6 @@ const TestUndo = () => {
       </button>
     </div>
   );
-};
-
-export const Passes = ({}) => {
-  const { gl: renderer, scene, camera } = useThree();
-  const postProcessingRef = useRef(null);
-
-  useEffect(() => {
-    if (!renderer || !scene || !camera) {
-      return;
-    }
-
-    const scenePass = pass(scene, camera);
-
-    // Get texture nodes
-    const outputPass = scenePass.getTextureNode("output");
-
-    const edgeStrength = uniform(3.0);
-    const edgeGlow = uniform(0.0);
-    const edgeThickness = uniform(1.0);
-    const pulsePeriod = uniform(0);
-    const visibleEdgeColor = uniform(new Color(0xffffff));
-    const hiddenEdgeColor = uniform(new Color(0x4e3636));
-
-    const outlinePass = outline(scene, camera, {
-      selectedObjects,
-      edgeGlow,
-      edgeThickness,
-    });
-    const { visibleEdge, hiddenEdge } = outlinePass;
-
-    const period = time.div(pulsePeriod).mul(2);
-    const osc = oscSine(period).mul(0.5).add(0.5); // osc [ 0.5, 1.0 ]
-
-    const outlineColor = visibleEdge
-      .mul(visibleEdgeColor)
-      .add(hiddenEdge.mul(hiddenEdgeColor))
-      .mul(edgeStrength);
-    const outlinePulse = pulsePeriod
-      .greaterThan(0)
-      .select(outlineColor.mul(osc), outlineColor);
-
-    // Setup post-processing
-    const postProcessing = new PostProcessing(renderer);
-
-    postProcessing.outputNode = outlinePulse.add(scenePass);
-    postProcessingRef.current = postProcessing;
-
-    return () => {
-      postProcessingRef.current = null;
-    };
-  }, [renderer, scene, camera]);
-
-  useFrame(() => {
-    if (postProcessingRef.current) {
-      postProcessingRef.current.render();
-    }
-  }, 1);
-
-  return null;
 };
 
 const Grid = ({
@@ -266,12 +204,12 @@ const DraftSelector = () => {
     emitter.on("building:enter", (event) => {
       // console.log("Entered building:", event.node.id);
       const itemMesh = sceneRegistry.nodes.get(event.node.id);
-      selectedObjects.length = 0;
-      selectedObjects.push(itemMesh);
+      useViewer.getState().outliner.hoveredObjects.length = 0;
+      useViewer.getState().outliner.hoveredObjects.push(itemMesh);
     });
     emitter.on("building:leave", (event) => {
       // console.log("Leaving building:", event.node.id);
-      selectedObjects.length = 0;
+      useViewer.getState().outliner.hoveredObjects.length = 0;
     });
 
     // emitter.on("item:click", (event) => {
@@ -302,13 +240,13 @@ const DraftSelector = () => {
       if (selectedItemId.current === event.node.id) {
         selectedItemId.current = null;
         console.log("Deselected item:", event.node.id);
-        selectedObjects.length = 0;
+        useViewer.getState().outliner.selectedObjects.length = 0;
         return;
       }
       selectedItemId.current = event.node.id;
       const itemMesh = sceneRegistry.nodes.get(event.node.id);
       if (!itemMesh) return;
-      selectedObjects.push(itemMesh);
+      useViewer.getState().outliner.selectedObjects.push(itemMesh);
 
       console.log("Selected item:", event.node.id);
     });

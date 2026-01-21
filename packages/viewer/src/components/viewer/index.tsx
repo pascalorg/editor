@@ -8,6 +8,7 @@ import { extend } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { SceneRenderer } from "../renderers/scene-renderer";
 import { LevelSystem } from "../../systems/level/level-system";
+import PostProcessing from "./post-processing";
 
 declare module "@react-three/fiber" {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -41,6 +42,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
       {/* Default Systems */}
       <LevelSystem />
       <WallSystem />
+      <PostProcessing />
 
       {children}
     </Canvas>

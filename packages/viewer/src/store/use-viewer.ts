@@ -1,6 +1,8 @@
 "use client";
 
 import { BuildingNode, ItemNode, LevelNode, Zone } from "@pascal-app/core";
+import { Object3D } from "three";
+
 import { create } from "zustand";
 
 type SelectionPath = {
@@ -8,6 +10,11 @@ type SelectionPath = {
   levelId: LevelNode["id"] | null;
   zoneId: Zone["id"] | null;
   selectedIds: ItemNode["id"][]; // For items/assets (multi-select)
+};
+
+type Outliner = {
+  selectedObjects: Object3D[];
+  hoveredObjects: Object3D[];
 };
 
 type ViewerState = {
@@ -20,6 +27,8 @@ type ViewerState = {
   // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void;
   resetSelection: () => void;
+
+  outliner: Outliner; // No setter as we will manipulate directly the arrays
 };
 
 const useViewer = create<ViewerState>()((set, get) => ({
@@ -55,6 +64,8 @@ const useViewer = create<ViewerState>()((set, get) => ({
         selectedIds: [],
       },
     }),
+
+  outliner: { selectedObjects: [], hoveredObjects: [] },
 }));
 
 export default useViewer;
