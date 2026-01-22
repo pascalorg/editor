@@ -25,8 +25,8 @@ type Outliner = {
 
 type ViewerState = {
   selection: SelectionPath;
-  hoveredId: AnyNode["id"] | null;
-  setHoveredId: (id: AnyNode["id"] | null) => void;
+  hoveredId: AnyNode["id"] | Zone["id"] | null;
+  setHoveredId: (id: AnyNode["id"] | Zone["id"] | null) => void;
 
   cameraMode: "perspective" | "orthographic";
   setCameraMode: (mode: "perspective" | "orthographic") => void;

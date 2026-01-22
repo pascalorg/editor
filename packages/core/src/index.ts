@@ -7,6 +7,7 @@ export type {
   ItemEvent,
   NodeEvent,
   WallEvent,
+  ZoneEvent,
 } from './events/bus'
 // Events
 export { emitter, eventSuffixes } from './events/bus'

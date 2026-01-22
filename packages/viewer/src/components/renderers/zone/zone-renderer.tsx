@@ -1,6 +1,7 @@
-import { useRegistry, useScene, type Zone } from "@pascal-app/core";
+import { emitter, useRegistry, useScene, type Zone } from "@pascal-app/core";
 
-import { useMemo, useRef } from "react";
+import type { ThreeEvent } from "@react-three/fiber";
+import { useCallback, useMemo, useRef } from "react";
 import {
   BufferGeometry,
   Color,
@@ -162,8 +163,26 @@ export const ZoneRenderer = ({ zoneId }: { zoneId: Zone["id"] }) => {
     return null;
   }
 
+  const emitZoneEvent = useCallback(
+    (suffix: string, e: ThreeEvent<PointerEvent>) => {
+      const eventKey = `zone:${suffix}` as `zone:${typeof suffix}`;
+      emitter.emit(eventKey, {
+        zone,
+        position: [e.point.x, e.point.y, e.point.z],
+        stopPropagation: () => e.stopPropagation(),
+        nativeEvent: e,
+      });
+    },
+    [zone]
+  );
+
   return (
-    <group ref={ref}>
+    <group
+      ref={ref}
+      onClick={(e) => emitZoneEvent("click", e)}
+      onPointerEnter={(e) => emitZoneEvent("enter", e)}
+      onPointerLeave={(e) => emitZoneEvent("leave", e)}
+    >
       {/* Floor fill */}
       <mesh
         position={[0, Y_OFFSET, 0]}

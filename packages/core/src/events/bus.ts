@@ -2,6 +2,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import mitt from "mitt";
 import type { BuildingNode, ItemNode, WallNode } from "../schema";
 import type { AnyNode } from "../schema/types";
+import type { Zone } from "../schema/zone";
 
 // Base event interfaces
 export interface GridEvent {
@@ -14,6 +15,13 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   position: [number, number, number];
   localPosition: [number, number, number];
   normal?: [number, number, number];
+  stopPropagation: () => void;
+  nativeEvent: ThreeEvent<PointerEvent>;
+}
+
+export interface ZoneEvent {
+  zone: Zone;
+  position: [number, number, number];
   stopPropagation: () => void;
   nativeEvent: ThreeEvent<PointerEvent>;
 }
@@ -52,10 +60,15 @@ type CameraControlEvents = {
   "camera-controls:view": CameraControlEvent;
   "camera-controls:capture": CameraControlEvent;
 };
+type ZoneEvents = {
+  [K in `zone:${EventSuffix}`]: ZoneEvent;
+};
+
 type EditorEvents = GridEvents &
   NodeEvents<"wall", WallEvent> &
   NodeEvents<"item", ItemEvent> &
   NodeEvents<"building", BuildingEvent> &
+  ZoneEvents &
   CameraControlEvents;
 
 export const emitter = mitt<EditorEvents>();
