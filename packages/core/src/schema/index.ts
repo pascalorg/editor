@@ -15,3 +15,4 @@ export { AnyNode } from './types'
 
 // Zones
 export type { Zone, ZonePolygon } from './zone'
+export { ZoneSchema } from './zone'

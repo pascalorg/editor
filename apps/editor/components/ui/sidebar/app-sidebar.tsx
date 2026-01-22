@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import { useViewer } from "@pascal-app/viewer";
 import { SitePanel } from "./panels/site-panel";
+import { ZonePanel } from "./panels/zone-panel";
 
 export function AppSidebar() {
   // const isHelpOpen = useEditor((state) => state.isHelpOpen);
@@ -41,6 +42,8 @@ export function AppSidebar() {
   // const serializeLayout = useEditor((state) => state.serializeLayout);
   const activeTool = useEditor((state) => state.tool);
   const currentLevelId = useViewer((state) => state.selection.levelId);
+  const setPhase = useEditor((state) => state.setPhase);
+  const setMode = useEditor((state) => state.setMode);
   const setActiveTool = useEditor((state) => state.setTool);
 
   const [jsonCollapsed, setJsonCollapsed] = useState<boolean | number>(1);
@@ -76,8 +79,8 @@ export function AppSidebar() {
     switch (activePanel) {
       case "site":
         return <SitePanel />;
-      // case "zones":
-      //   return <ZonesPanel />;
+      case "zones":
+        return <ZonePanel />;
       // case "collections":
       //   return <CollectionsPanel />;
       // case "settings":
@@ -109,6 +112,8 @@ export function AppSidebar() {
 
   const handleAddZone = () => {
     if (currentLevelId) {
+      setPhase("structure");
+      setMode("build");
       setActiveTool("zone");
     }
   };
