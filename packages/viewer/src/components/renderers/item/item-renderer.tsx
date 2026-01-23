@@ -2,7 +2,8 @@ import { type AnyNodeId, type ItemNode, useRegistry, useScene } from '@pascal-ap
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useRef } from 'react'
-import type { Group } from 'three'
+import type { Group, Mesh } from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
 export const ItemRenderer = ({ node }: { node: ItemNode }) => {
@@ -32,6 +33,20 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     if (!node.parentId) return
     useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
   }, [node.parentId])
+
+  useEffect(() => {
+    scene.traverse((child) => {
+      if ((child as Mesh).isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        child.material = new MeshStandardNodeMaterial({
+          color: 0xffffff,
+          roughness: 0.8,
+          metalness: 0,
+        })
+      }
+    })
+  }, [scene])
 
   return (
     <Clone

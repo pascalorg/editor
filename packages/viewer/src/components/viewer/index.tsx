@@ -32,6 +32,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
     >
       <color attach="background" args={['#ececec']} />
 
+      <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow />
       <Environment preset="sunset" />
       <Bvh>
         <SceneRenderer />
