@@ -243,6 +243,36 @@ export const ItemTool: React.FC = () => {
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
 
+    // Keyboard rotation handlers
+    const ROTATION_STEP = Math.PI / 2 // 90 degrees
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!draftItem.current) return
+
+      let rotationDelta = 0
+      if (event.key === 'r' || event.key === 'R') {
+        rotationDelta = ROTATION_STEP // Counter-clockwise
+      } else if (event.key === 't' || event.key === 'T') {
+        rotationDelta = -ROTATION_STEP // Clockwise
+      }
+
+      if (rotationDelta !== 0) {
+        event.preventDefault()
+        const currentRotation = draftItem.current.rotation
+        const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
+        draftItem.current.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
+
+        useScene.getState().updateNode(draftItem.current.id, {
+          rotation: draftItem.current.rotation,
+        })
+
+        // Update cursor rotation to match
+        cursorRef.current.rotation.y = newRotationY
+
+        checkCanPlace()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+
     const setupBoundingBox = () => {
       const boxGeometry = new BoxGeometry(
         selectedItem.dimensions[0],
@@ -265,6 +295,7 @@ export const ItemTool: React.FC = () => {
       emitter.off('wall:leave', onWallLeave)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:move', onWallMove)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [selectedItem, canPlaceOnFloor, canPlaceOnWall])
 

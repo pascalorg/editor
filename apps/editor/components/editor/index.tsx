@@ -9,6 +9,7 @@ import { MathUtils, type Mesh } from 'three'
 
 import { color, float, fract, fwidth, mix, positionLocal } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useKeyboard } from '@/hooks/use-keyboard'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { SidebarProvider } from '../ui/primitives/sidebar'
@@ -20,6 +21,8 @@ initSpatialGridSync()
 useScene.getState().loadScene()
 
 export default function Editor() {
+  useKeyboard()
+
   return (
     <div className="w-full h-full">
       {/* <LevelModeSwitcher /> */}
