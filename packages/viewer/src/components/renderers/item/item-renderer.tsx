@@ -39,6 +39,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       if ((child as Mesh).isMesh) {
         child.castShadow = true
         child.receiveShadow = true
+        // TODO: do it with a shared material 
         child.material = new MeshStandardNodeMaterial({
           color: 0xffffff,
           roughness: 0.8,

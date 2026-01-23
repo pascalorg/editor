@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import { useViewer } from "@pascal-app/viewer";
+import { SettingsPanel } from "./panels/settings-panel";
 import { SitePanel } from "./panels/site-panel";
 import { ZonePanel } from "./panels/zone-panel";
 
@@ -83,13 +84,8 @@ export function AppSidebar() {
         return <ZonePanel />;
       // case "collections":
       //   return <CollectionsPanel />;
-      // case "settings":
-      //   return (
-      //     <SettingsPanel
-      //       onOpenHelp={() => setIsHelpOpen(true)}
-      //       onOpenJsonInspector={() => setIsJsonInspectorOpen(true)}
-      //     />
-      //   );
+      case "settings":
+        return <SettingsPanel />;
       default:
         return null;
     }
