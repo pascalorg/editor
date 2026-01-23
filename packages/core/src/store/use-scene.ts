@@ -6,6 +6,7 @@ import { persist } from 'zustand/middleware'
 import { BuildingNode, type Zone } from '../schema'
 import { LevelNode } from '../schema/nodes/level'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { isObject } from '../utils/types'
 import * as nodeActions from './actions/node-actions'
 import * as zoneActions from './actions/zone-actions'
 
@@ -76,10 +77,10 @@ const useScene = create<SceneState>()(
 
         loadScene: () => {
           if (get().rootNodeIds.length > 0) {
-           // Assign all nodes as dirty to force re-validation
+            // Assign all nodes as dirty to force re-validation
             Object.values(get().nodes).forEach((node) => {
               get().markDirty(node.id)
-            }) 
+            })
             return // Scene already loaded
           }
 
@@ -149,7 +150,14 @@ const useScene = create<SceneState>()(
     {
       name: 'editor-storage',
       partialize: (state) => ({
-        nodes: state.nodes,
+        nodes: Object.fromEntries(
+          Object.entries(state.nodes).filter(([_, node]) => {
+            const meta = node.metadata
+            const isTransient = isObject(meta) && 'isTransient' in meta && meta.isTransient === true
+
+            return !isTransient
+          }),
+        ),
         rootNodeIds: state.rootNodeIds,
         zones: state.zones,
         zoneIds: state.zoneIds,

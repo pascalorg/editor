@@ -26,3 +26,5 @@ export * from './schema'
 export { default as useScene } from './store/use-scene'
 // Systems
 export { WallSystem } from './systems/wall/wall-system'
+
+export { isObject } from './utils/types'

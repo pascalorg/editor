@@ -17,8 +17,8 @@ import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { SelectionManager } from './selection-manager'
 
-initSpatialGridSync()
 useScene.getState().loadScene()
+initSpatialGridSync()
 
 export default function Editor() {
   useKeyboard()

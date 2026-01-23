@@ -2,6 +2,7 @@ import {
   emitter,
   type GridEvent,
   ItemNode,
+  isObject,
   sceneRegistry,
   useScene,
   useSpatialQuery,
@@ -27,6 +28,12 @@ function snapToGrid(position: number, dimension: number): number {
   const offset = needsOffset ? 0.25 : 0
   // Snap to 0.5 grid with offset
   return Math.round((position - offset) * 2) / 2 + offset
+}
+
+const stripTransient = (meta: any) => {
+  if (!isObject(meta)) return meta
+  const { isTransient, ...rest } = meta as Record<string, any>
+  return rest
 }
 
 export const ItemTool: React.FC = () => {
@@ -90,6 +97,9 @@ export const ItemTool: React.FC = () => {
         position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         name: selectedItem.name,
         asset: selectedItem,
+        metadata: {
+          isTransient: true,
+        },
       })
       useScene.getState().createNode(draftItem.current, currentLevelId)
       checkCanPlace()
@@ -124,8 +134,10 @@ export const ItemTool: React.FC = () => {
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
 
       useScene.temporal.getState().resume()
+
       useScene.getState().updateNode(draftItem.current.id, {
         position: [gridPosition.current.x, 0, gridPosition.current.z],
+        metadata: stripTransient(draftItem.current.metadata),
       })
       draftItem.current = null
 
@@ -187,6 +199,7 @@ export const ItemTool: React.FC = () => {
       useScene.getState().updateNode(draftItem.current.id, {
         position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         parentId: event.node.id,
+        metadata: stripTransient(draftItem.current.metadata),
       })
       useScene.getState().dirtyNodes.add(event.node.id)
       draftItem.current = null
