@@ -1,3 +1,9 @@
+type WallSide = 'front' | 'back'
+type AttachType = 'wall' | 'wall-side'
+
+// Small tolerance for floating point comparison to allow adjacent items
+const EPSILON = 0.001
+
 interface WallItemPlacement {
   itemId: string
   wallId: string
@@ -5,12 +11,27 @@ interface WallItemPlacement {
   tEnd: number
   yStart: number // height range
   yEnd: number
+  attachType?: AttachType // 'wall' blocks both sides, 'wall-side' blocks one side (undefined = 'wall' for legacy)
+  side?: WallSide // Which side for 'wall-side' items (undefined means both for 'wall')
 }
 
 export class WallSpatialGrid {
   private wallItems = new Map<string, WallItemPlacement[]>() // wallId -> placements
   private itemToWall = new Map<string, string>() // itemId -> wallId (reverse lookup)
 
+  /**
+   * Check if an item can be placed on a wall
+   * @param wallId - The wall to place on
+   * @param wallLength - Length of the wall
+   * @param wallHeight - Height of the wall
+   * @param tCenter - Parametric center position (0-1) along wall
+   * @param itemWidth - Width of the item
+   * @param yBottom - Bottom Y position of the item
+   * @param itemHeight - Height of the item
+   * @param attachType - 'wall' (blocks both sides) or 'wall-side' (blocks one side)
+   * @param side - Which side for 'wall-side' items
+   * @param ignoreIds - Item IDs to ignore in conflict check
+   */
   canPlaceOnWall(
     wallId: string,
     wallLength: number,
@@ -19,6 +40,8 @@ export class WallSpatialGrid {
     itemWidth: number,
     yBottom: number,
     itemHeight: number,
+    attachType: AttachType = 'wall',
+    side?: WallSide,
     ignoreIds: string[] = [],
   ): { valid: boolean; conflictIds: string[] } {
     const halfW = itemWidth / wallLength / 2
@@ -40,15 +63,51 @@ export class WallSpatialGrid {
     for (const placement of existing) {
       if (ignoreSet.has(placement.itemId)) continue
 
-      const tOverlap = tStart < placement.tEnd && tEnd > placement.tStart
-      const yOverlap = yStart < placement.yEnd && yEnd > placement.yStart
+      // Use EPSILON tolerance to allow items to be exactly adjacent
+      const tOverlap = tStart < placement.tEnd - EPSILON && tEnd > placement.tStart + EPSILON
+      const yOverlap = yStart < placement.yEnd - EPSILON && yEnd > placement.yStart + EPSILON
 
       if (tOverlap && yOverlap) {
-        conflicts.push(placement.itemId)
+        // Check side conflicts based on attach types
+        const hasConflict = this.checkSideConflict(attachType, side, placement)
+        if (hasConflict) {
+          conflicts.push(placement.itemId)
+        }
       }
     }
 
     return { valid: conflicts.length === 0, conflictIds: conflicts }
+  }
+
+  /**
+   * Check if two items conflict based on their attach types and sides
+   * - 'wall' items block both sides, so they conflict with everything
+   * - 'wall-side' items only conflict if they're on the same side or if the other is a 'wall' item
+   */
+  private checkSideConflict(
+    newAttachType: AttachType,
+    newSide: WallSide | undefined,
+    existing: WallItemPlacement,
+  ): boolean {
+    // Treat undefined/legacy attachType as 'wall' (blocks both sides)
+    const existingAttachType = existing.attachType ?? 'wall'
+
+    // If new item is 'wall' type, it conflicts with everything (needs both sides)
+    if (newAttachType === 'wall') {
+      return true
+    }
+
+    // If existing item is 'wall' type, it blocks both sides
+    if (existingAttachType === 'wall') {
+      return true
+    }
+
+    // Both are 'wall-side' - only conflict if they're on the same side
+    // If either side is undefined, be conservative and assume conflict
+    if (!newSide || !existing.side) {
+      return true
+    }
+    return newSide === existing.side
   }
 
   insert(placement: WallItemPlacement) {

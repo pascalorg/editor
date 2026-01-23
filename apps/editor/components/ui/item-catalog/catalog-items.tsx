@@ -306,7 +306,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       1.1000000000000003
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -335,7 +335,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       1.1000000000000003
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -420,7 +420,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0.5,
       0.5000000000000003
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -757,7 +757,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       0.8999999999999999
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -1209,7 +1209,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       0.1
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -1378,7 +1378,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       0.2
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {

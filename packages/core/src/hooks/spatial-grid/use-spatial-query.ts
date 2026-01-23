@@ -23,6 +23,8 @@ export function useSpatialQuery() {
       localX: number,
       localY: number,
       dimensions: [number, number, number],
+      attachType: 'wall' | 'wall-side' = 'wall',
+      side?: 'front' | 'back',
       ignoreIds?: string[],
     ) => {
       return spatialGridManager.canPlaceOnWall(
@@ -31,6 +33,8 @@ export function useSpatialQuery() {
         localX,
         localY,
         dimensions,
+        attachType,
+        side,
         ignoreIds,
       )
     },

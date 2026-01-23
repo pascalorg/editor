@@ -61,6 +61,8 @@ export class SpatialGridManager {
               tEnd: t + halfW,
               yStart: item.position[1],
               yEnd: item.position[1] + height,
+              attachType: item.asset.attachTo as 'wall' | 'wall-side',
+              side: item.side,
             })
           }
         }
@@ -101,6 +103,8 @@ export class SpatialGridManager {
               tEnd: t + halfW,
               yStart: item.position[1],
               yEnd: item.position[1] + height,
+              attachType: item.asset.attachTo as 'wall' | 'wall-side',
+              side: item.side,
             })
           }
         }
@@ -147,6 +151,8 @@ export class SpatialGridManager {
    * @param localX - X position in wall-local space (distance from wall start)
    * @param localY - Y position (height from floor)
    * @param dimensions - item dimensions [width, height, depth]
+   * @param attachType - 'wall' (needs both sides) or 'wall-side' (needs one side)
+   * @param side - which side for 'wall-side' items
    * @param ignoreIds - item IDs to ignore in collision check
    */
   canPlaceOnWall(
@@ -155,6 +161,8 @@ export class SpatialGridManager {
     localX: number,
     localY: number,
     dimensions: [number, number, number],
+    attachType: 'wall' | 'wall-side' = 'wall',
+    side?: 'front' | 'back',
     ignoreIds?: string[],
   ) {
     const wallLength = this.getWallLength(wallId)
@@ -173,6 +181,8 @@ export class SpatialGridManager {
       itemWidth,
       localY,
       itemHeight,
+      attachType,
+      side,
       ignoreIds,
     )
   }

@@ -36,6 +36,71 @@ const stripTransient = (meta: any) => {
   return rest
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Calculate rotation angle from wall normal vector
+ * The normal points outward from the wall surface
+ */
+const calculateRotationFromNormal = (normal: [number, number, number] | undefined): number => {
+  if (!normal) return 0
+  // Calculate angle in X-Z plane (top-down view)
+  // atan2(z, x) gives the angle the vector makes with the positive X axis
+  // Add π/2 to align item's forward direction with the wall normal
+  return Math.atan2(normal[2], normal[0]) - Math.PI / 2
+}
+
+/**
+ * Determine which side of the wall based on the normal vector
+ * In wall-local space, the wall runs along X-axis, so the normal points along Z-axis
+ * Positive Z normal = 'back', Negative Z normal = 'front' (flipped due to orientation fix)
+ */
+const getSideFromNormal = (normal: [number, number, number] | undefined): 'front' | 'back' => {
+  if (!normal) return 'front'
+  // The Z component of the normal determines which side
+  // Flipped: positive Z = back, negative Z = front
+  return normal[2] >= 0 ? 'back' : 'front'
+}
+
+/**
+ * Check if the normal indicates a valid wall side face (front or back)
+ * Filters out top face and thickness edges
+ * @param normal - The face normal vector
+ * @param wallStart - Wall start point [x, z]
+ * @param wallEnd - Wall end point [x, z]
+ */
+const isValidWallSideFace = (
+  normal: [number, number, number] | undefined,
+  wallStart: [number, number],
+  wallEnd: [number, number],
+): boolean => {
+  if (!normal) return false
+
+  // Filter out top/bottom faces (normal pointing up or down)
+  if (Math.abs(normal[1]) > 0.3) return false
+
+  // Calculate wall direction in X-Z plane
+  const wallDirX = wallEnd[0] - wallStart[0]
+  const wallDirZ = wallEnd[1] - wallStart[1]
+  const wallLength = Math.sqrt(wallDirX * wallDirX + wallDirZ * wallDirZ)
+  if (wallLength === 0) return false
+
+  // Normalize wall direction
+  const normWallDirX = wallDirX / wallLength
+  const normWallDirZ = wallDirZ / wallLength
+
+  // Dot product of normal (X-Z components) with wall direction
+  // Front/back faces: normal perpendicular to wall → dot ≈ 0
+  // Thickness edges: normal parallel to wall → dot ≈ ±1
+  const dotProduct = normal[0] * normWallDirX + normal[2] * normWallDirZ
+
+  // If dot product is high, it's a thickness edge (normal parallel to wall)
+  // Allow only faces where normal is mostly perpendicular to wall direction
+  return Math.abs(dotProduct) < 0.5
+}
+
 export const ItemTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null!)
   const draftItem = useRef<ItemNode | null>(null)
@@ -65,6 +130,8 @@ export const ItemTool: React.FC = () => {
               gridPosition.current.x,
               gridPosition.current.y,
               draftItem.current.asset.dimensions,
+              draftItem.current.asset.attachTo as 'wall' | 'wall-side',
+              draftItem.current.side,
               [draftItem.current.id],
             )
             placeable = result.valid
@@ -156,19 +223,33 @@ export const ItemTool: React.FC = () => {
         draftItem.current?.asset.attachTo === 'wall' ||
         draftItem.current?.asset.attachTo === 'wall-side'
       ) {
+        // Ignore top face and thickness edges
+        if (!isValidWallSideFace(event.normal, event.node.start, event.node.end)) return
+
         event.stopPropagation()
         isOnWall.current = true
         currentWallId = event.node.id
+
+        // Determine side and rotation from normal
+        const side = getSideFromNormal(event.normal)
+        const rotation = calculateRotationFromNormal(event.normal)
+
         gridPosition.current.set(
           Math.round(event.localPosition[0] * 2) / 2,
           Math.round(event.localPosition[1] * 2) / 2,
           Math.round(event.localPosition[2] * 2) / 2,
         )
         draftItem.current.parentId = event.node.id
+        draftItem.current.side = side
+        draftItem.current.rotation = [0, rotation, 0]
+
         useScene.getState().updateNode(draftItem.current.id, {
           position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
           parentId: event.node.id,
+          side,
+          rotation: [0, rotation, 0],
         })
+        cursorRef.current.rotation.y = rotation
         checkCanPlace()
       }
     }
@@ -189,16 +270,26 @@ export const ItemTool: React.FC = () => {
     }
 
     const onWallClick = (event: WallEvent) => {
-      event.stopPropagation()
       if (!isOnWall.current) return
+
+      // Ignore top face and thickness edges
+      if (!isValidWallSideFace(event.normal, event.node.start, event.node.end)) return
+
+      event.stopPropagation()
 
       const currentLevelId = useViewer.getState().selection.levelId
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
+
+      // Get side and rotation from current draft item (already set by onWallMove)
+      const side = draftItem.current.side
+      const rotation = draftItem.current.rotation
 
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(draftItem.current.id, {
         position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         parentId: event.node.id,
+        side,
+        rotation,
         metadata: stripTransient(draftItem.current.metadata),
       })
       useScene.getState().dirtyNodes.add(event.node.id)
@@ -211,8 +302,17 @@ export const ItemTool: React.FC = () => {
 
     const onWallMove = (event: WallEvent) => {
       if (isOnWall.current === false) return
-      event.stopPropagation()
       if (!draftItem.current) return
+
+      // Ignore top face and thickness edges
+      if (!isValidWallSideFace(event.normal, event.node.start, event.node.end)) return
+
+      event.stopPropagation()
+
+      // Determine side and rotation from normal
+      const side = getSideFromNormal(event.normal)
+      const rotation = calculateRotationFromNormal(event.normal)
+
       gridPosition.current.set(
         Math.round(event.localPosition[0] * 2) / 2,
         Math.round(event.localPosition[1] * 2) / 2,
@@ -223,16 +323,12 @@ export const ItemTool: React.FC = () => {
         Math.round(event.position[1] * 2) / 2,
         Math.round(event.position[2] * 2) / 2,
       )
+      cursorRef.current.rotation.y = rotation
 
-      const {
-        node: { start, end },
-      } = event
-      const dx = end[0] - start[0]
-      const dz = end[1] - start[1]
-      const { normal } = event
-      const wallAngle = Math.atan2(dx, dz)
+      // Update draft item side and rotation
+      draftItem.current.side = side
+      draftItem.current.rotation = [0, rotation, 0]
 
-      cursorRef.current.rotation.y = wallAngle + Math.PI / 2
       const canPlace = checkCanPlace()
       if (draftItem.current && canPlace) {
         draftItem.current.position = [
@@ -243,8 +339,13 @@ export const ItemTool: React.FC = () => {
         const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
         if (draftItemMesh) {
           draftItemMesh.position.copy(gridPosition.current)
+          draftItemMesh.rotation.y = rotation
         }
 
+        useScene.getState().updateNode(draftItem.current.id, {
+          side,
+          rotation: [0, rotation, 0],
+        })
         useScene.getState().dirtyNodes.add(event.node.id)
       }
     }
