@@ -26,6 +26,14 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
 // Call this once at app initialization
 export function initSpatialGridSync() {
   const store = useScene
+  // 1. Initial sync - process all existing nodes
+  const state = store.getState()
+  for (const node of Object.values(state.nodes)) {
+    const levelId = resolveLevelId(node, state.nodes)
+    spatialGridManager.handleNodeCreated(node, levelId)
+  }
+
+  // 2. Then subscribe to future changes
 
   // Subscribe to all changes
   store.subscribe((state, prevState) => {

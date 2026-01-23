@@ -18,6 +18,7 @@ import { CustomCameraControls } from './custom-camera-controls'
 import { SelectionManager } from './selection-manager'
 
 useScene.getState().loadScene()
+console.log('Loaded scene in editor')
 initSpatialGridSync()
 
 export default function Editor() {

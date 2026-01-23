@@ -163,7 +163,8 @@ const useScene = create<SceneState>()(
         zoneIds: state.zoneIds,
       }),
       onRehydrateStorage: (state) => {
-        console.log('hydration starts')
+        
+        console.log('hydrating...')
 
         // optional
         return (state, error) => {
