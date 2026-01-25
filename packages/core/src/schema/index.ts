@@ -10,7 +10,8 @@ export { LevelNode } from './nodes/level'
 export { SiteNode } from './nodes/site'
 export { WallNode } from './nodes/wall'
 // Zones
-export type { ZoneNode, ZonePolygon } from './nodes/zone'
+export { ZoneNode } from './nodes/zone'
+export type { ZonePolygon } from './nodes/zone'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types
 export { AnyNode } from './types'

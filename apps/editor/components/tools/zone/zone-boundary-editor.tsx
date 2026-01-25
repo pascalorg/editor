@@ -1,4 +1,4 @@
-import { emitter, type GridEvent, useScene } from "@pascal-app/core";
+import { useScene, type ZoneNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -27,10 +27,11 @@ type DragState = {
 export const ZoneBoundaryEditor: React.FC = () => {
   const { gl, camera } = useThree();
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
-  const zone = useScene((state) =>
-    selectedZoneId ? state.zones[selectedZoneId] : null
+  const zoneNode = useScene((state) =>
+    selectedZoneId ? state.nodes[selectedZoneId] : null
   );
-  const updateZone = useScene((state) => state.updateZone);
+  const zone = zoneNode?.type === "zone" ? (zoneNode as ZoneNode) : null;
+  const updateNode = useScene((state) => state.updateNode);
 
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -89,11 +90,11 @@ export const ZoneBoundaryEditor: React.FC = () => {
   // Commit polygon changes
   const commitPolygonChange = useCallback(() => {
     if (previewPolygon && selectedZoneId) {
-      updateZone(selectedZoneId, { polygon: previewPolygon });
+      updateNode(selectedZoneId, { polygon: previewPolygon });
     }
     setPreviewPolygon(null);
     setDragState(null);
-  }, [previewPolygon, selectedZoneId, updateZone]);
+  }, [previewPolygon, selectedZoneId, updateNode]);
 
   // Handle adding a new vertex at midpoint
   const handleAddVertex = useCallback(
@@ -122,10 +123,10 @@ export const ZoneBoundaryEditor: React.FC = () => {
       if (basePolygon.length <= 3) return; // Need at least 3 points
 
       const newPolygon = basePolygon.filter((_, i) => i !== index);
-      updateZone(selectedZoneId, { polygon: newPolygon });
+      updateNode(selectedZoneId, { polygon: newPolygon });
       setPreviewPolygon(null);
     },
-    [zone, selectedZoneId, previewPolygon, updateZone]
+    [zone, selectedZoneId, previewPolygon, updateNode]
   );
 
   // Set up pointer move/up listeners for dragging

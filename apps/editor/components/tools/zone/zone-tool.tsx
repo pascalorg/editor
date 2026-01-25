@@ -1,4 +1,4 @@
-import { emitter, type GridEvent, useScene, ZoneSchema } from "@pascal-app/core";
+import { emitter, type GridEvent, useScene, ZoneNode, type LevelNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from "three";
@@ -61,26 +61,25 @@ const calculateSnapPoint = (
  * Creates a zone with the given polygon points
  */
 const commitZoneDrawing = (
-  levelId: string,
+  levelId: LevelNode["id"],
   points: Array<[number, number]>
 ) => {
-  const { createZone, zoneIds } = useScene.getState();
+  const { createNode, nodes } = useScene.getState();
 
-  // Get next zone number
-  const zoneCount = zoneIds.length;
+  // Count existing zones for naming and color cycling
+  const zoneCount = Object.values(nodes).filter((n) => n.type === "zone").length;
   const name = `Zone ${zoneCount + 1}`;
 
   // Cycle through colors
   const color = ZONE_COLORS[zoneCount % ZONE_COLORS.length];
 
-  const zone = ZoneSchema.parse({
-    levelId,
+  const zone = ZoneNode.parse({
     name,
     polygon: points,
     color,
   });
 
-  createZone(zone);
+  createNode(zone, levelId);
 
   // Select the newly created zone
   useViewer.getState().setSelection({ zoneId: zone.id });

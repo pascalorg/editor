@@ -1,4 +1,4 @@
-import { useScene, type Zone } from "@pascal-app/core";
+import { useScene, type ZoneNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { Hexagon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,9 +21,9 @@ const PRESET_COLORS = [
   "#06b6d4", // cyan
 ];
 
-function ZoneItem({ zone }: { zone: Zone }) {
-  const deleteZone = useScene((state) => state.deleteZone);
-  const updateZone = useScene((state) => state.updateZone);
+function ZoneItem({ zone }: { zone: ZoneNode }) {
+  const deleteNode = useScene((state) => state.deleteNode);
+  const updateNode = useScene((state) => state.updateNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
   const setSelection = useViewer((state) => state.setSelection);
 
@@ -35,14 +35,14 @@ function ZoneItem({ zone }: { zone: Zone }) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteZone(zone.id);
+    deleteNode(zone.id);
     if (isSelected) {
       setSelection({ zoneId: null });
     }
   };
 
   const handleColorChange = (color: string) => {
-    updateZone(zone.id, { color });
+    updateNode(zone.id, { color });
   };
 
   return (
@@ -96,20 +96,17 @@ function ZoneItem({ zone }: { zone: Zone }) {
 }
 
 export function ZonePanel() {
-  const zones = useScene((state) => state.zones);
-  const zoneIds = useScene((state) => state.zoneIds);
+  const nodes = useScene((state) => state.nodes);
   const currentLevelId = useViewer((state) => state.selection.levelId);
   const setPhase = useEditor((state) => state.setPhase);
   const setMode = useEditor((state) => state.setMode);
   const setTool = useEditor((state) => state.setTool);
 
-  // Filter zones to only show those for the current level
-  const levelZones = zoneIds
-    .map((id) => zones[id])
-    .filter(
-      (zone): zone is Zone =>
-        zone !== undefined && zone.levelId === currentLevelId
-    );
+  // Filter nodes to get zones for the current level
+  const levelZones = Object.values(nodes).filter(
+    (node): node is ZoneNode =>
+      node.type === "zone" && node.parentId === currentLevelId
+  );
 
   const handleAddZone = () => {
     if (currentLevelId) {
