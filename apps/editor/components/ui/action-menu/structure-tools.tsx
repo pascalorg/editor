@@ -26,12 +26,18 @@ export const tools: ToolConfig[] = [
 export function StructureTools() {
   const activeTool = useEditor((state) => state.tool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
+  const structureLayer = useEditor((state) => state.structureLayer)
   const setTool   = useEditor((state) => state.setTool)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
 
+  // Filter tools based on structureLayer
+  const visibleTools = structureLayer === 'zones'
+    ? tools.filter((t) => t.id === 'zone')
+    : tools.filter((t) => t.id !== 'zone')
+
   return (
     <div className="flex items-center gap-1.5">
-      {tools.map((tool, index) => {
+      {visibleTools.map((tool, index) => {
         // For item tools with catalog category, check both tool and category match
         const isActive =
           activeTool === tool.id &&

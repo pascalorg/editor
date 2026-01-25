@@ -28,9 +28,9 @@ export function ActionMenu({ className }: { className?: string }) {
           className,
         )}
       >
-        {/* Structure Tools Row - Animated */}
+        {/* Item Catalog Row - Only show when in build mode with item tool */}
         <AnimatePresence>
-          {tool === "item" && catalogCategory && (
+          {mode === "build" && tool === "item" && catalogCategory && (
             <motion.div
               className={cn(
                 "overflow-hidden border-zinc-800 max-h-96 border-b px-2 py-2",

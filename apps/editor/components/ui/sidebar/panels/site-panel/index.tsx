@@ -401,11 +401,14 @@ function ContentSection() {
 }
 
 function StructurePhaseView() {
+  const phase = useEditor((state) => state.phase);
+
   return (
     <div className="flex flex-col h-full">
       <BuildingSelector />
       <LevelsSection />
-      <LayerToggle />
+      {/* Only show layer toggle in structure phase, furnish is always elements */}
+      {phase === "structure" && <LayerToggle />}
       <div className="flex-1 overflow-auto">
         <ContentSection />
       </div>

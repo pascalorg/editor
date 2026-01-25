@@ -66,6 +66,9 @@ const useEditor = create<EditorState>()((set, get) => ({
 
     set({ phase })
 
+    // Clear tool and catalog when switching phases
+    set({ tool: null, catalogCategory: null })
+
     const viewer = useViewer.getState()
     const scene = useScene.getState()
 
@@ -116,21 +119,51 @@ const useEditor = create<EditorState>()((set, get) => ({
       case 'furnish':
         selectBuildingAndLevel0()
         viewer.setLevelMode('solo')
+        // Furnish mode only supports elements layer, not zones
+        set({ structureLayer: 'elements' })
         break
     }
   },
   mode: 'select',
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => {
+    set({ mode })
+
+    const { phase, structureLayer, tool } = get()
+
+    // When entering build mode in structure phase with zones layer, activate zone tool
+    if (mode === 'build' && phase === 'structure' && structureLayer === 'zones') {
+      set({ tool: 'zone' })
+    }
+    // When leaving build mode, clear tool
+    else if (mode !== 'build' && tool) {
+      set({ tool: null })
+    }
+  },
   tool: null,
   setTool: (tool) => set({ tool }),
   structureLayer: 'elements',
   setStructureLayer: (layer) => {
+    const { mode, tool } = get()
     set({ structureLayer: layer })
+
     const viewer = useViewer.getState()
     viewer.setSelection({
       selectedIds: [],
       zoneId: null,
     })
+
+    // Handle tool changes based on layer
+    if (layer === 'zones') {
+      // In zones layer with build mode, activate zone tool
+      if (mode === 'build') {
+        set({ tool: 'zone' })
+      }
+    } else {
+      // In elements layer, clear zone tool if it was active
+      if (tool === 'zone') {
+        set({ tool: null })
+      }
+    }
   },
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),
