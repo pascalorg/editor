@@ -20,7 +20,7 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   return nodeLevelId === currentLevelId;
 };
 
-type SelectableNodeType = "wall" | "item" | "building";
+type SelectableNodeType = "wall" | "item" | "building" | "zone";
 
 interface SelectionStrategy {
   types: SelectableNodeType[];
@@ -44,29 +44,44 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ["wall", "item"],
+    types: ["wall", "item", "zone"],
     handleSelect: (node, isShift) => {
       const { selection, setSelection } = useViewer.getState();
+      if (node.type === 'zone') {
+        setSelection({ zoneId: node.id });
+      } else {
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)
           ? selection.selectedIds.filter((id) => id !== node.id)
           : [...selection.selectedIds, node.id]
         : [node.id];
       setSelection({ selectedIds: nextIds });
+      }
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ selectedIds: [] });
+      const structureLayer = useEditor.getState().structureLayer;
+      if (structureLayer === "zones") {
+        useViewer.getState().setSelection({ zoneId: null });
+      } else {
+        useViewer.getState().setSelection({ selectedIds: [] });
+      }
     },
     isValid: (node) => {
       if (!isNodeInCurrentLevel(node)) return false;
-      if (node.type === "wall") return true;
-      if (node.type === "item") {
-        return (
-          (node as ItemNode).asset.category === "door" ||
-          (node as ItemNode).asset.category === "window"
-        );
+      const structureLayer = useEditor.getState().structureLayer;
+      if (structureLayer === "zones") {
+        if (node.type === "zone") return true;
+        return false;
+      } else {
+        if (node.type === "wall") return true;
+        if (node.type === "item") {
+          return (
+            (node as ItemNode).asset.category === "door" ||
+            (node as ItemNode).asset.category === "window"
+          );
+        }
+        return false;
       }
-      return false;
     },
   },
 
