@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Layers, Map as MapIcon, Settings } from "lucide-react";
+import { Building2, Layers, Settings } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/primitives/tooltip";
 import { cn } from "@/lib/utils";
 
-export type PanelId = "site" | "zones" | "collections" | "settings";
+export type PanelId = "site" | "collections" | "settings";
 
 interface IconRailProps {
   activePanel: PanelId;
@@ -18,7 +18,6 @@ interface IconRailProps {
 
 const panels: { id: PanelId; icon: typeof Building2; label: string }[] = [
   { id: "site", icon: Building2, label: "Site" },
-  { id: "zones", icon: MapIcon, label: "Zones" },
   { id: "collections", icon: Layers, label: "Collections" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];

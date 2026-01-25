@@ -38,6 +38,8 @@ export type CatalogCategory =
   | 'window'
   | 'door'
 
+export type StructureLayer = 'zones' | 'elements'
+
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
@@ -48,6 +50,8 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
+    structureLayer: StructureLayer
+  setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: Asset | null
@@ -104,6 +108,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setMode: (mode) => set({ mode }),
   tool: null,
   setTool: (tool) => set({ tool }),
+  structureLayer: 'elements',
+  setStructureLayer: (layer) => set({ structureLayer: layer }),
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),
   selectedItem: null,
