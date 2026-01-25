@@ -69,6 +69,38 @@ const useEditor = create<EditorState>()((set, get) => ({
     const viewer = useViewer.getState()
     const scene = useScene.getState()
 
+    // Helper to find building and level 0
+    const selectBuildingAndLevel0 = () => {
+      let buildingId = viewer.selection.buildingId
+
+      // If no building selected, find the first one
+      if (!buildingId) {
+        const firstBuildingId = scene.rootNodeIds.find((id) => {
+          const node = scene.nodes[id]
+          return node?.type === 'building'
+        })
+        if (firstBuildingId) {
+          buildingId = firstBuildingId as BuildingNode['id']
+          viewer.setSelection({ buildingId })
+        }
+      }
+
+      // If no level selected, find level 0 in the building
+      if (buildingId && !viewer.selection.levelId) {
+        const buildingNode = scene.nodes[buildingId] as BuildingNode
+        const level0Id = buildingNode.children.find((childId) => {
+          const levelNode = scene.nodes[childId] as LevelNode
+          return levelNode?.type === 'level' && levelNode.level === 0
+        })
+        if (level0Id) {
+          viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
+        } else if (buildingNode.children[0]) {
+          // Fallback to first level if level 0 doesn't exist
+          viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
+        }
+      }
+    }
+
     switch (phase) {
       case 'site':
         // In Site mode, we zoom out and deselect specific levels/buildings
@@ -77,29 +109,12 @@ const useEditor = create<EditorState>()((set, get) => ({
         break
 
       case 'structure':
-        // In Structure mode, we often want to focus on a specific building/level
-        // Auto-select the first building if none is selected
-        if (!viewer.selection.buildingId) {
-          const firstBuildingId = scene.rootNodeIds.find((id) => {
-            const node = scene.nodes[id]
-            return node?.type === 'building' || null
-          })
-          if (firstBuildingId) {
-            viewer.setSelection({
-              buildingId: firstBuildingId as BuildingNode['id'],
-            })
-            const buildingNode = scene.nodes[firstBuildingId] as BuildingNode
-            const firstLevelId = buildingNode.children[0]
-            if (firstLevelId) {
-              viewer.setSelection({ levelId: firstLevelId as LevelNode['id'] })
-            }
-          }
-        }
-        viewer.setLevelMode('stacked') // Better for structure editing
+        selectBuildingAndLevel0()
+        viewer.setLevelMode('stacked')
         break
 
       case 'furnish':
-        // Maybe in furnish mode we force "solo" level view to see inside rooms
+        selectBuildingAndLevel0()
         viewer.setLevelMode('solo')
         break
     }
@@ -109,7 +124,14 @@ const useEditor = create<EditorState>()((set, get) => ({
   tool: null,
   setTool: (tool) => set({ tool }),
   structureLayer: 'elements',
-  setStructureLayer: (layer) => set({ structureLayer: layer }),
+  setStructureLayer: (layer) => {
+    set({ structureLayer: layer })
+    const viewer = useViewer.getState()
+    viewer.setSelection({
+      selectedIds: [],
+      zoneId: null,
+    })
+  },
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),
   selectedItem: null,
