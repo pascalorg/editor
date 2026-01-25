@@ -1,6 +1,7 @@
 // Store
 
 export type {
+  BuildingEvent,
   CameraControlEvent,
   EventSuffix,
   GridEvent,

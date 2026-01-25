@@ -5,6 +5,7 @@ import { BuildingRenderer } from './building/building-renderer'
 import { ItemRenderer } from './item/item-renderer'
 import { LevelRenderer } from './level/level-renderer'
 import { WallRenderer } from './wall/wall-renderer'
+import { ZoneRenderer } from './zone/zone-renderer'
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
@@ -17,6 +18,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'level' && <LevelRenderer node={node} />}
       {node.type === 'item' && <ItemRenderer node={node} />}
       {node.type === 'wall' && <WallRenderer node={node} />}
+      {node.type === 'zone' && <ZoneRenderer node={node} />}
     </>
   )
 }

@@ -3,21 +3,18 @@
 import { temporal } from 'zundo'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { BuildingNode, type Zone } from '../schema'
+import { BuildingNode } from '../schema'
 import { LevelNode } from '../schema/nodes/level'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { isObject } from '../utils/types'
 import * as nodeActions from './actions/node-actions'
-import * as zoneActions from './actions/zone-actions'
 
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
-  zones: Record<Zone['id'], Zone>
 
   // 2. The Root: Which nodes are at the top level?
   rootNodeIds: AnyNodeId[]
-  zoneIds: Zone['id'][]
 
   // 3. The "Dirty" Set: For the Wall/Physics systems
   dirtyNodes: Set<AnyNodeId>
@@ -37,14 +34,6 @@ export type SceneState = {
 
   deleteNode: (id: AnyNodeId) => void
   deleteNodes: (ids: AnyNodeId[]) => void
-
-  // Zone actions
-  createZone: (zone: Zone) => void
-  createZones: (zones: Zone[]) => void
-  updateZone: (id: Zone['id'], data: Partial<Zone>) => void
-  updateZones: (updates: { id: Zone['id']; data: Partial<Zone> }[]) => void
-  deleteZone: (id: Zone['id']) => void
-  deleteZones: (ids: Zone['id'][]) => void
 }
 
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
@@ -55,11 +44,9 @@ const useScene = create<SceneState>()(
       (set, get) => ({
         // 1. Flat dictionary of all nodes
         nodes: {},
-        zones: {},
 
         // 2. Root node IDs
         rootNodeIds: [],
-        zoneIds: [],
 
         // 3. Dirty set
         dirtyNodes: new Set<AnyNodeId>(),
@@ -68,8 +55,6 @@ const useScene = create<SceneState>()(
           set({
             nodes: {},
             rootNodeIds: [],
-            zones: {},
-            zoneIds: [],
             dirtyNodes: new Set<AnyNodeId>(),
           })
           get().loadScene() // Default scene
@@ -127,17 +112,6 @@ const useScene = create<SceneState>()(
         deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
 
         deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
-
-        // --- ZONES ---
-
-        createZones: (zones) => zoneActions.createZonesAction(set, get, zones),
-        createZone: (zone) => zoneActions.createZonesAction(set, get, [zone]),
-
-        updateZones: (updates) => zoneActions.updateZonesAction(set, get, updates),
-        updateZone: (id, data) => zoneActions.updateZonesAction(set, get, [{ id, data }]),
-
-        deleteZones: (ids) => zoneActions.deleteZonesAction(set, get, ids),
-        deleteZone: (id) => zoneActions.deleteZonesAction(set, get, [id]),
       }),
       {
         partialize: (state) => {
@@ -159,11 +133,8 @@ const useScene = create<SceneState>()(
           }),
         ),
         rootNodeIds: state.rootNodeIds,
-        zones: state.zones,
-        zoneIds: state.zoneIds,
       }),
       onRehydrateStorage: (state) => {
-        
         console.log('hydrating...')
 
         // optional
