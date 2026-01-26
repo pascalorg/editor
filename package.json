@@ -16,6 +16,8 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "three": "^0.182.0",
+    "three-bvh-csg": "^0.0.17",
+    "three-mesh-bvh": "^0.9.7",
     "zustand": "^5.0.10"
   },
   "devDependencies": {

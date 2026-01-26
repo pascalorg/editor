@@ -1,15 +1,19 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
-  pointToKey,
   type Point2D,
+  pointToKey,
   type WallMiterData,
 } from './wall-mitering'
+
+// Reusable CSG evaluator for better performance
+const csgEvaluator = new Evaluator()
 
 // ============================================================================
 // WALL SYSTEM
@@ -121,14 +125,14 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
 }
 
 /**
- * Generates extruded wall geometry with mitering (exactly like demo)
+ * Generates extruded wall geometry with mitering and cutouts
  *
  * Key insight from demo: polygon is built in WORLD coordinates first,
  * then we transform to wall-local for the 3D mesh.
  */
 export function generateExtrudedWall(
   wallNode: WallNode,
-  _childrenNodes: AnyNode[], // TODO: Use for hole cutting (doors/windows)
+  childrenNodes: AnyNode[],
   miterData: WallMiterData,
 ) {
   const { junctionData } = miterData
@@ -230,72 +234,106 @@ export function generateExtrudedWall(
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
 
-  return geometry
+  // Apply CSG subtraction for cutouts (doors/windows)
+  const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
+  if (cutoutBrushes.length === 0) {
+    return geometry
+  }
+
+  // Create wall brush from geometry
+  const wallBrush = new Brush(geometry)
+  wallBrush.updateMatrixWorld()
+
+  // Subtract each cutout from the wall
+  let resultBrush = wallBrush
+  for (const cutoutBrush of cutoutBrushes) {
+    cutoutBrush.updateMatrixWorld()
+    const newResult = csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION)
+    if (resultBrush !== wallBrush) {
+      resultBrush.geometry.dispose()
+    }
+    resultBrush = newResult
+  }
+
+  // Clean up
+  wallBrush.geometry.dispose()
+  for (const brush of cutoutBrushes) {
+    brush.geometry.dispose()
+  }
+
+  const resultGeometry = resultBrush.geometry
+  resultGeometry.computeVertexNormals()
+
+  return resultGeometry
 }
 
 /**
- * Creates a Path from a cutout mesh for door/window holes
- * TODO: Integrate with mitered wall geometry
+ * Collects cutout brushes from child items for CSG subtraction
+ * The cutout mesh is a plane, so we extrude it into a box that goes through the wall
  */
-function _createPathFromCutout(
-  cutoutMesh: THREE.Mesh,
-  wallStart: [number, number],
-  wallAngle: number,
-  wallWorldY: number,
-): THREE.Path | null {
-  const geometry = cutoutMesh.geometry
-  if (!geometry) return null
+function collectCutoutBrushes(
+  wallNode: WallNode,
+  childrenNodes: AnyNode[],
+  wallThickness: number,
+): Brush[] {
+  const brushes: Brush[] = []
+  const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh
+  if (!wallMesh) return brushes
 
-  const positions = geometry.attributes.position
-  if (!positions) return null
+  // Get wall's world matrix inverse to transform cutouts to wall-local space
+  wallMesh.updateMatrixWorld()
+  const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
 
-  cutoutMesh.updateWorldMatrix(true, false)
+  for (const child of childrenNodes) {
+    if (child.type !== 'item') continue
 
-  const uniquePoints: THREE.Vector2[] = []
-  const seen = new Set<string>()
-  const v3 = new THREE.Vector3()
+    const childMesh = sceneRegistry.nodes.get(child.id)
+    if (!childMesh) continue
 
-  const cosAngle = Math.cos(-wallAngle)
-  const sinAngle = Math.sin(-wallAngle)
+    const cutoutMesh = childMesh.getObjectByName('cutout') as THREE.Mesh
+    if (!cutoutMesh) continue
 
-  for (let i = 0; i < positions.count; i++) {
-    v3.fromBufferAttribute(positions, i)
-    v3.applyMatrix4(cutoutMesh.matrixWorld)
+    // Get the cutout's bounding box in world space
+    cutoutMesh.updateMatrixWorld()
+    const positions = cutoutMesh.geometry?.attributes?.position
+    if (!positions) continue
 
-    const worldX = v3.x - wallStart[0]
-    const worldZ = v3.z - wallStart[1]
+    // Calculate bounds in wall-local space
+    const v3 = new THREE.Vector3()
+    let minX = Infinity,
+      maxX = -Infinity
+    let minY = Infinity,
+      maxY = -Infinity
 
-    const localX = worldX * cosAngle - worldZ * sinAngle
-    const localY = v3.y - wallWorldY
+    for (let i = 0; i < positions.count; i++) {
+      v3.fromBufferAttribute(positions, i)
+      v3.applyMatrix4(cutoutMesh.matrixWorld)
+      v3.applyMatrix4(wallMatrixInverse)
 
-    const key = `${localX.toFixed(4)},${localY.toFixed(4)}`
-    if (!seen.has(key)) {
-      seen.add(key)
-      uniquePoints.push(new THREE.Vector2(localX, localY))
+      minX = Math.min(minX, v3.x)
+      maxX = Math.max(maxX, v3.x)
+      minY = Math.min(minY, v3.y)
+      maxY = Math.max(maxY, v3.y)
     }
+
+    if (!Number.isFinite(minX)) continue
+
+    // Create a box geometry that extends through the wall thickness
+    const width = maxX - minX
+    const height = maxY - minY
+    const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
+
+    const boxGeo = new THREE.BoxGeometry(width, height, depth)
+    // Position box at the center of the cutout
+    boxGeo.translate(
+      minX + width / 2,
+      minY + height / 2,
+      0, // Center on Z axis (wall thickness direction)
+    )
+
+    const brush = new Brush(boxGeo)
+    brushes.push(brush)
   }
 
-  if (uniquePoints.length < 3) return null
-
-  // Sort in counter-clockwise order
-  const centroid = new THREE.Vector2(0, 0)
-  for (const p of uniquePoints) {
-    centroid.add(p)
-  }
-  centroid.divideScalar(uniquePoints.length)
-
-  uniquePoints.sort((a, b) => {
-    const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x)
-    const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x)
-    return angleA - angleB
-  })
-
-  const path = new THREE.Path()
-  path.moveTo(uniquePoints[0]?.x ?? 0, uniquePoints[0]?.y ?? 0)
-  for (let i = 1; i < uniquePoints.length; i++) {
-    path.lineTo(uniquePoints[i]?.x ?? 0, uniquePoints[i]?.y ?? 0)
-  }
-  path.closePath()
-
-  return path
+  return brushes
 }
