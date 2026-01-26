@@ -1,6 +1,7 @@
 import useEditor, { type Phase, type Tool } from "@/store/use-editor";
 import { useViewer } from "@pascal-app/viewer";
 import { ItemTool } from "./item/item-tool";
+import { SlabTool } from "./slab/slab-tool";
 import { WallTool } from "./wall/wall-tool";
 import { ZoneBoundaryEditor } from "./zone/zone-boundary-editor";
 import { ZoneTool } from "./zone/zone-tool";
@@ -9,6 +10,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   site: {},
   structure: {
     wall: WallTool,
+    slab: SlabTool,
     item: ItemTool,
     zone: ZoneTool,
   },

@@ -1,6 +1,6 @@
 'use client'
 
-import { WallSystem } from '@pascal-app/core'
+import { SlabSystem, WallSystem } from '@pascal-app/core'
 import { Bvh, Environment } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
@@ -40,6 +40,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
 
       {/* Default Systems */}
       <LevelSystem />
+      <SlabSystem />
       <WallSystem />
       <PostProcessing />
 
