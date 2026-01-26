@@ -15,7 +15,7 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
     <mesh ref={ref} castShadow receiveShadow>
       {/* WallSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
-      <meshStandardMaterial color="lightgray" />
+      <meshStandardMaterial color="lightgray"  />
       <mesh name="collision-mesh" {...handlers} visible={false}>
         <boxGeometry args={[0, 0, 0]} />
       </mesh>

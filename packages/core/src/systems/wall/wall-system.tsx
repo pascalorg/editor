@@ -132,7 +132,7 @@ function updateWallGeometry(wallId: string, miterMap: WallMiterMap) {
  */
 export function generateExtrudedWall(
   wallNode: WallNode,
-  childrenNodes: AnyNode[],
+  _childrenNodes: AnyNode[], // TODO: Use for hole cutting (doors/windows)
   miters?: { start?: MiterData; end?: MiterData },
 ) {
   const start = new THREE.Vector2(wallNode.start[0], wallNode.start[1])
@@ -141,6 +141,10 @@ export function generateExtrudedWall(
   const height = wallNode.height ?? 2.5
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
+
+  console.log(`\n=== generateExtrudedWall: ${wallNode.id} ===`)
+  console.log('Wall:', { start: wallNode.start, end: wallNode.end, length, thickness })
+  console.log('Miters received:', miters)
 
   // Wall angle for coordinate transforms
   const wallAngle = Math.atan2(end.y - start.y, end.x - start.x)
@@ -157,155 +161,103 @@ export function generateExtrudedWall(
     }
   }
 
-  // Calculate miter offsets at start and end
-  // These determine how far the wall extends/retracts at each end for proper joints
-  let startLeftZ = halfT
-  let startRightZ = -halfT
-  let endLeftZ = halfT
-  let endRightZ = -halfT
+  // Default miter points (no junction - simple rectangle)
+  const defaultStart = {
+    left: { x: 0, z: halfT },
+    right: { x: 0, z: -halfT },
+    center: { x: 0, z: 0 },
+    hasJunction: false,
+  }
+  const defaultEnd = {
+    left: { x: length, z: halfT },
+    right: { x: length, z: -halfT },
+    center: { x: length, z: 0 },
+    hasJunction: false,
+  }
 
-  // Miter offset along the wall's X axis (for angled cuts)
-  let startLeftX = 0
-  let startRightX = 0
-  let endLeftX = length
-  let endRightX = length
+  // Apply miter data if available
+  let startMiter = defaultStart
+  let endMiter = defaultEnd
 
   if (miters?.start) {
     const left = worldToLocal(miters.start.left)
     const right = worldToLocal(miters.start.right)
-    startLeftZ = left.z
-    startRightZ = right.z
-    startLeftX = left.x
-    startRightX = right.x
+    const center = worldToLocal(miters.start.center)
+    startMiter = { left, right, center, hasJunction: true }
   }
 
   if (miters?.end) {
-    // At end, left/right are relative to outgoing direction (reversed)
+    // At end, left/right are swapped because outgoing direction is reversed
     const left = worldToLocal(miters.end.right)
     const right = worldToLocal(miters.end.left)
-    endLeftZ = left.z
-    endRightZ = right.z
-    endLeftX = left.x
-    endRightX = right.x
+    const center = worldToLocal(miters.end.center)
+    endMiter = { left, right, center, hasJunction: true }
   }
 
-  // Create the main wall shape (XY plane: X = along wall, Y = height)
-  const shape = new THREE.Shape()
-  shape.moveTo(0, 0)
-  shape.lineTo(length, 0)
-  shape.lineTo(length, height)
-  shape.lineTo(0, height)
-  shape.closePath()
-
-  // Process holes (doors/windows)
-  const wallStart: [number, number] = [wallNode.start[0], wallNode.start[1]]
-  const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh
-  const wallWorldY = wallMesh?.getWorldPosition(new THREE.Vector3()).y ?? 0
-
-  childrenNodes.forEach((child) => {
-    if (child.type !== 'item') return
-
-    const childMesh = sceneRegistry.nodes.get(child.id)
-    if (!childMesh) return
-
-    const cutoutMesh = childMesh.getObjectByName('cutout') as THREE.Mesh
-    if (!cutoutMesh) return
-
-    const holePath = createPathFromCutout(cutoutMesh, wallStart, wallAngle, wallWorldY)
-    if (holePath) {
-      shape.holes.push(holePath)
-    }
-  })
-
-  // Create custom extrude geometry with mitered ends
-  const geometry = createMiteredExtrudeGeometry(
-    shape,
-    height,
-    {
-      leftZ: startLeftZ,
-      rightZ: startRightZ,
-      leftX: startLeftX,
-      rightX: startRightX,
-    },
-    {
-      leftZ: endLeftZ,
-      rightZ: endRightZ,
-      leftX: endLeftX,
-      rightX: endRightX,
-    },
-  )
+  // Create geometry
+  const geometry = createMiteredExtrudeGeometry(height, startMiter, endMiter)
 
   return geometry
 }
 
+interface MiterPoint {
+  x: number
+  z: number
+}
+
+interface MiterEnd {
+  left: MiterPoint
+  right: MiterPoint
+  center: MiterPoint
+  hasJunction: boolean
+}
+
 /**
- * Creates an extruded geometry with mitered (angled) ends
+ * Creates wall geometry using footprint polygon approach
+ *
+ * Footprint has 6 vertices - 3 on each thickness edge (start/end):
+ * - start-right, start-center (if junction), start-left
+ * - end-left, end-center (if junction), end-right
+ *
+ * Based on the prototype: center vertices are only added when there's a junction
  */
 function createMiteredExtrudeGeometry(
-  shape: THREE.Shape,
   height: number,
-  startMiter: { leftZ: number; rightZ: number; leftX: number; rightX: number },
-  endMiter: { leftZ: number; rightZ: number; leftX: number; rightX: number },
+  startMiter: MiterEnd,
+  endMiter: MiterEnd,
 ): THREE.BufferGeometry {
-  // First, create standard extrude geometry
-  const thickness = Math.max(
-    Math.abs(startMiter.leftZ - startMiter.rightZ),
-    Math.abs(endMiter.leftZ - endMiter.rightZ),
-    0.1,
-  )
+  // Build footprint polygon (CCW winding, viewed from above)
+  // Following prototype: start-right -> end-right -> [end-center] -> end-left -> start-left -> [start-center]
+  const footprint = new THREE.Shape()
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: thickness,
+  // Start from start-right, go to end-right
+  footprint.moveTo(startMiter.right.x, -startMiter.right.z)
+  footprint.lineTo(endMiter.right.x, -endMiter.right.z)
+
+  // Add end-center if there's a junction at end
+  if (endMiter.hasJunction) {
+    footprint.lineTo(endMiter.center.x, -endMiter.center.z)
+  }
+
+  // Continue to end-left, then start-left
+  footprint.lineTo(endMiter.left.x, -endMiter.left.z)
+  footprint.lineTo(startMiter.left.x, -startMiter.left.z)
+
+  // Add start-center if there's a junction at start
+  if (startMiter.hasJunction) {
+    footprint.lineTo(startMiter.center.x, -startMiter.center.z)
+  }
+
+  footprint.closePath()
+
+  // Extrude along Z by height
+  const geometry = new THREE.ExtrudeGeometry(footprint, {
+    depth: height,
     bevelEnabled: false,
   })
 
-  // Translate so center is at Z=0
-  geometry.translate(0, 0, -thickness / 2)
-
-  // Get position attribute for modification
-  const positions = geometry.attributes.position
-  const vertices = positions.array as Float32Array
-
-  // Modify vertex positions for mitering
-  for (let i = 0; i < positions.count; i++) {
-    const x = vertices[i * 3]!
-    const y = vertices[i * 3 + 1]!
-    const z = vertices[i * 3 + 2]!
-
-    // Get shape bounds to determine which end we're at
-    const shapePoints = shape.getPoints()
-    const minX = Math.min(...shapePoints.map((p: THREE.Vector2) => p.x))
-    const maxX = Math.max(...shapePoints.map((p: THREE.Vector2) => p.x))
-    const wallLength = maxX - minX
-
-    // Determine position along wall (0 to 1)
-    const t = wallLength > 0 ? (x - minX) / wallLength : 0
-
-    // Interpolate Z offset based on position along wall and which side (left/right)
-    const isLeftSide = z > 0
-    const startZ = isLeftSide ? startMiter.leftZ : startMiter.rightZ
-    const endZ = isLeftSide ? endMiter.leftZ : endMiter.rightZ
-
-    // Linear interpolation of Z offset
-    const newZ = startZ + t * (endZ - startZ)
-
-    // Also adjust X for angled cuts at ends
-    let newX = x
-    if (t < 0.01) {
-      // Near start
-      const startX = isLeftSide ? startMiter.leftX : startMiter.rightX
-      newX = startX
-    } else if (t > 0.99) {
-      // Near end
-      const endX = isLeftSide ? endMiter.leftX : endMiter.rightX
-      newX = endX
-    }
-
-    vertices[i * 3] = newX
-    vertices[i * 3 + 2] = newZ
-  }
-
-  positions.needsUpdate = true
+  // Rotate so extrusion direction (Z) becomes height direction (Y)
+  geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
 
   return geometry
@@ -313,8 +265,9 @@ function createMiteredExtrudeGeometry(
 
 /**
  * Creates a Path from a cutout mesh for door/window holes
+ * TODO: Integrate with mitered wall geometry
  */
-function createPathFromCutout(
+function _createPathFromCutout(
   cutoutMesh: THREE.Mesh,
   wallStart: [number, number],
   wallAngle: number,
