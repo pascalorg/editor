@@ -2,9 +2,10 @@ import { AnyNodeId, useScene } from "@pascal-app/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BuildingTreeNode } from "./building-tree-node";
-import { LevelTreeNode } from "./level-tree-node";
-import { WallTreeNode } from "./wall-tree-node";
 import { ItemTreeNode } from "./item-tree-node";
+import { LevelTreeNode } from "./level-tree-node";
+import { SlabTreeNode } from "./slab-tree-node";
+import { WallTreeNode } from "./wall-tree-node";
 
 interface TreeNodeProps {
   nodeId: AnyNodeId;
@@ -21,6 +22,8 @@ export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
       return <BuildingTreeNode node={node} depth={depth} />;
     case "level":
       return <LevelTreeNode node={node} depth={depth} />;
+    case "slab":
+      return <SlabTreeNode node={node} depth={depth} />;
     case "wall":
       return <WallTreeNode node={node} depth={depth} />;
     case "item":

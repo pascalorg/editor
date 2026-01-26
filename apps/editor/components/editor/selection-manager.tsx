@@ -20,7 +20,7 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   return nodeLevelId === currentLevelId;
 };
 
-type SelectableNodeType = "wall" | "item" | "building" | "zone";
+type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab';
 
 interface SelectionStrategy {
   types: SelectableNodeType[];
@@ -44,7 +44,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ["wall", "item", "zone"],
+    types: ["wall", "item", "zone", "slab"],
     handleSelect: (node, isShift) => {
       const { selection, setSelection } = useViewer.getState();
       if (node.type === 'zone') {
@@ -73,7 +73,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         if (node.type === "zone") return true;
         return false;
       } else {
-        if (node.type === "wall") return true;
+        if (node.type === "wall" || node.type === "slab") return true;
         if (node.type === "item") {
           return (
             (node as ItemNode).asset.category === "door" ||

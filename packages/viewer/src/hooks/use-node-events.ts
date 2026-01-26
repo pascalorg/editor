@@ -5,6 +5,8 @@ import {
   emitter,
   type ItemEvent,
   type ItemNode,
+  type SlabEvent,
+  type SlabNode,
   type WallEvent,
   type WallNode,
   type ZoneEvent,
@@ -17,6 +19,7 @@ type NodeConfig = {
   wall: { node: WallNode; event: WallEvent }
   building: { node: BuildingNode; event: BuildingEvent }
   zone: { node: ZoneNode; event: ZoneEvent }
+  slab: { node: SlabNode; event: SlabEvent }
 }
 
 type NodeType = keyof NodeConfig

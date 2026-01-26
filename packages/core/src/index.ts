@@ -7,6 +7,7 @@ export type {
   GridEvent,
   ItemEvent,
   NodeEvent,
+  SlabEvent,
   WallEvent,
   ZoneEvent,
 } from './events/bus'
