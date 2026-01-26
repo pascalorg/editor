@@ -194,12 +194,6 @@ function calculateJunctionIntersections(
   // Sort by outgoing angle
   processedWalls.sort((a, b) => a.angle - b.angle)
 
-  console.log(`\n=== Junction at (${meetingPoint.x.toFixed(2)}, ${meetingPoint.y.toFixed(2)}) ===`)
-  console.log('Walls sorted by angle:')
-  for (const w of processedWalls) {
-    console.log(`  ${w.wallId}: angle=${((w.angle * 180) / Math.PI).toFixed(1)}°${w.isPassthrough ? ' (passthrough)' : ''}`)
-  }
-
   const wallIntersections = new Map<string, { left?: Point2D; right?: Point2D }>()
   const n = processedWalls.length
 
@@ -215,7 +209,6 @@ function calculateJunctionIntersections(
 
     // If lines are parallel (det ≈ 0), skip this intersection - walls will use defaults
     if (Math.abs(det) < 1e-9) {
-      console.log(`Intersection ${i}: wall1=${wall1.wallId}.edgeA ∩ wall2=${wall2.wallId}.edgeB = PARALLEL (skipped)`)
       continue
     }
 
@@ -224,12 +217,9 @@ function calculateJunctionIntersections(
       y: (wall2.edgeB.a * wall1.edgeA.c - wall1.edgeA.a * wall2.edgeB.c) / det,
     }
 
-    console.log(`Intersection ${i}: wall1=${wall1.wallId}.edgeA ∩ wall2=${wall2.wallId}.edgeB = (${p.x.toFixed(3)}, ${p.y.toFixed(3)})`)
-
     // Only assign intersection to non-passthrough walls
     // Passthrough walls don't receive junction data (their geometry doesn't change)
     if (!wall1.isPassthrough) {
-      console.log(`  -> ${wall1.wallId}.left = p`)
       if (!wallIntersections.has(wall1.wallId)) {
         wallIntersections.set(wall1.wallId, {})
       }
@@ -237,17 +227,11 @@ function calculateJunctionIntersections(
     }
 
     if (!wall2.isPassthrough) {
-      console.log(`  -> ${wall2.wallId}.right = p`)
       if (!wallIntersections.has(wall2.wallId)) {
         wallIntersections.set(wall2.wallId, {})
       }
       wallIntersections.get(wall2.wallId)!.right = p
     }
-  }
-
-  console.log('Final wall intersections:')
-  for (const [id, data] of wallIntersections) {
-    console.log(`  ${id}: left=(${data.left?.x.toFixed(3)}, ${data.left?.y.toFixed(3)}), right=(${data.right?.x.toFixed(3)}, ${data.right?.y.toFixed(3)})`)
   }
 
   return wallIntersections

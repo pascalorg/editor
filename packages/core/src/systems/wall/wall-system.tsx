@@ -154,12 +154,6 @@ export function generateExtrudedWall(
   const startJunction = junctionData.get(keyStart)?.get(wallNode.id)
   const endJunction = junctionData.get(keyEnd)?.get(wallNode.id)
 
-  console.log(`\n=== Wall ${wallNode.id} ===`)
-  console.log('Start:', wallStart, 'End:', wallEnd, 'Thickness:', thickness)
-  console.log('Key start:', keyStart, 'Key end:', keyEnd)
-  console.log('Start junction data:', startJunction)
-  console.log('End junction data:', endJunction)
-
   // Calculate polygon corners in world coordinates (exactly like demo)
   // p_start_L = left side at start
   // p_start_R = right side at start
@@ -187,12 +181,6 @@ export function generateExtrudedWall(
     y: wallEnd.y - nUnit.y * halfT,
   }
 
-  console.log('Polygon corners (world coords):')
-  console.log('  p_start_L:', p_start_L, startJunction ? '(from junction)' : '(default)')
-  console.log('  p_start_R:', p_start_R, startJunction ? '(from junction)' : '(default)')
-  console.log('  p_end_L:', p_end_L, endJunction ? '(from junction, swapped)' : '(default)')
-  console.log('  p_end_R:', p_end_R, endJunction ? '(from junction, swapped)' : '(default)')
-
   // Build polygon points (exactly like demo)
   // Order: start-right -> end-right -> [end center] -> end-left -> start-left -> [start center]
   const polyPoints: Point2D[] = [p_start_R, p_end_R]
@@ -203,9 +191,6 @@ export function generateExtrudedWall(
   if (startJunction) {
     polyPoints.push(wallStart) // Add center vertex at junction
   }
-
-  console.log('Polygon order:', polyPoints.length, 'points')
-  console.log('  Has end junction:', !!endJunction, '| Has start junction:', !!startJunction)
 
   // Transform world coordinates to wall-local coordinates
   // Wall-local: x along wall, z perpendicular (thickness direction)
