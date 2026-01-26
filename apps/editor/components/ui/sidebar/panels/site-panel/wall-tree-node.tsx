@@ -15,9 +15,18 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
+  const setHoveredId = useViewer((state) => state.setHoveredId);
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
+  };
+
+  const handleMouseEnter = () => {
+    setHoveredId(node.id);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredId(null);
   };
 
   const wallLength = Math.sqrt(
@@ -34,6 +43,8 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       isSelected={isSelected}
       isHovered={isHovered}
       actions={<TreeNodeActions node={node} />}

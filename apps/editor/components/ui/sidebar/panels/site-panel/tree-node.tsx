@@ -38,6 +38,8 @@ interface TreeNodeWrapperProps {
   expanded: boolean;
   onToggle: () => void;
   onClick: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   actions?: React.ReactNode;
   children?: React.ReactNode;
   isSelected?: boolean;
@@ -52,6 +54,8 @@ export function TreeNodeWrapper({
   expanded,
   onToggle,
   onClick,
+  onMouseEnter,
+  onMouseLeave,
   actions,
   children,
   isSelected,
@@ -69,6 +73,8 @@ export function TreeNodeWrapper({
               : "text-muted-foreground hover:bg-accent/50"
         )}
         style={{ paddingLeft: depth * 12 + 4 }}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
         <button
           className="w-4 h-4 flex items-center justify-center shrink-0"

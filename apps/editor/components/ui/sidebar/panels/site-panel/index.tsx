@@ -254,11 +254,14 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   const deleteNode = useScene((state) => state.deleteNode);
   const updateNode = useScene((state) => state.updateNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
+  const hoveredId = useViewer((state) => state.hoveredId);
   const setSelection = useViewer((state) => state.setSelection);
+  const setHoveredId = useViewer((state) => state.setHoveredId);
   const setPhase = useEditor((state) => state.setPhase);
   const setMode = useEditor((state) => state.setMode);
 
   const isSelected = selectedZoneId === zone.id;
+  const isHovered = hoveredId === zone.id;
 
   const handleClick = () => {
     setSelection({ zoneId: zone.id });
@@ -284,9 +287,13 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
         "flex items-center h-7 cursor-pointer group/row text-sm px-3",
         isSelected
           ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
-          : "text-muted-foreground hover:bg-accent/50"
+          : isHovered
+            ? "bg-accent/70 text-foreground"
+            : "text-muted-foreground hover:bg-accent/50"
       )}
       onClick={handleClick}
+      onMouseEnter={() => setHoveredId(zone.id)}
+      onMouseLeave={() => setHoveredId(null)}
     >
       <Popover>
         <PopoverTrigger asChild>

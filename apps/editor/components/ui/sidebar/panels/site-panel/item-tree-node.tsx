@@ -13,9 +13,18 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
+  const setHoveredId = useViewer((state) => state.setHoveredId);
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
+  };
+
+  const handleMouseEnter = () => {
+    setHoveredId(node.id);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredId(null);
   };
 
   return (
@@ -27,6 +36,8 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
       expanded={false}
       onToggle={() => {}}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       isSelected={isSelected}
       isHovered={isHovered}
       actions={<TreeNodeActions node={node} />}
