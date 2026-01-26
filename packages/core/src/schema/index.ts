@@ -8,10 +8,10 @@ export { ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
 // Nodes
 export { SiteNode } from './nodes/site'
+export { SlabNode, SlabPolygon } from './nodes/slab'
 export { WallNode } from './nodes/wall'
-// Zones
-export { ZoneNode } from './nodes/zone'
 export type { ZonePolygon } from './nodes/zone'
+export { ZoneNode } from './nodes/zone'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types
 export { AnyNode } from './types'

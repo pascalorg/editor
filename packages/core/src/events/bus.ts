@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
-import type { BuildingNode, ItemNode, WallNode, ZoneNode } from '../schema'
+import type { BuildingNode, ItemNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
@@ -22,6 +22,7 @@ export type WallEvent = NodeEvent<WallNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
+export type SlabEvent = NodeEvent<SlabNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
