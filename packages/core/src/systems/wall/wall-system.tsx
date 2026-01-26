@@ -6,9 +6,9 @@ import useScene from '../../store/use-scene'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
-  type MiterData,
+  pointToKey,
   type Point2D,
-  type WallMiterMap,
+  type WallMiterData,
 } from './wall-mitering'
 
 // ============================================================================
@@ -40,13 +40,13 @@ export const WallSystem = () => {
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
       const levelWalls = getLevelWalls(levelId)
-      const miterMap = calculateLevelMiters(levelWalls)
+      const miterData = calculateLevelMiters(levelWalls)
 
       // Update dirty walls
       for (const wallId of dirtyWallIds) {
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
-          updateWallGeometry(wallId, miterMap)
+          updateWallGeometry(wallId, miterData)
         }
         clearDirty(wallId as AnyNodeId)
       }
@@ -57,7 +57,7 @@ export const WallSystem = () => {
         if (!dirtyWallIds.has(wallId)) {
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
           if (mesh) {
-            updateWallGeometry(wallId, miterMap)
+            updateWallGeometry(wallId, miterData)
           }
         }
       }
@@ -90,7 +90,7 @@ function getLevelWalls(levelId: string): WallNode[] {
 /**
  * Updates the geometry for a single wall
  */
-function updateWallGeometry(wallId: string, miterMap: WallMiterMap) {
+function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const node = useScene.getState().nodes[wallId as WallNode['id']]
   if (!node || node.type !== 'wall') return
 
@@ -102,8 +102,7 @@ function updateWallGeometry(wallId: string, miterMap: WallMiterMap) {
     .map((childId) => useScene.getState().nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
 
-  const miters = miterMap.get(wallId)
-  const newGeo = generateExtrudedWall(node, childrenNodes, miters)
+  const newGeo = generateExtrudedWall(node, childrenNodes, miterData)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -111,7 +110,7 @@ function updateWallGeometry(wallId: string, miterMap: WallMiterMap) {
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
-    const collisionGeo = generateExtrudedWall(node, [], miters)
+    const collisionGeo = generateExtrudedWall(node, [], miterData)
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
   }
@@ -122,132 +121,118 @@ function updateWallGeometry(wallId: string, miterMap: WallMiterMap) {
 }
 
 /**
- * Generates extruded wall geometry with mitering and holes
+ * Generates extruded wall geometry with mitering (exactly like demo)
  *
- * Geometry approach:
- * - Shape is drawn on XY plane (X = along wall, Y = height)
- * - Extruded by wall thickness along Z
- * - This allows holes (doors/windows) to work correctly on the wall face
- * - Mitering adjusts the extrusion offset at start/end
+ * Key insight from demo: polygon is built in WORLD coordinates first,
+ * then we transform to wall-local for the 3D mesh.
  */
 export function generateExtrudedWall(
   wallNode: WallNode,
   _childrenNodes: AnyNode[], // TODO: Use for hole cutting (doors/windows)
-  miters?: { start?: MiterData; end?: MiterData },
+  miterData: WallMiterData,
 ) {
-  const start = new THREE.Vector2(wallNode.start[0], wallNode.start[1])
-  const end = new THREE.Vector2(wallNode.end[0], wallNode.end[1])
-  const length = start.distanceTo(end)
+  const { junctionData } = miterData
+
+  const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
+  const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   const height = wallNode.height ?? 2.5
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
 
-  console.log(`\n=== generateExtrudedWall: ${wallNode.id} ===`)
-  console.log('Wall:', { start: wallNode.start, end: wallNode.end, length, thickness })
-  console.log('Miters received:', miters)
+  // Wall direction and normal (exactly like demo)
+  const v = { x: wallEnd.x - wallStart.x, y: wallEnd.y - wallStart.y }
+  const L = Math.sqrt(v.x * v.x + v.y * v.y)
+  if (L < 1e-9) {
+    return new THREE.BufferGeometry()
+  }
+  const nUnit = { x: -v.y / L, y: v.x / L }
 
-  // Wall angle for coordinate transforms
-  const wallAngle = Math.atan2(end.y - start.y, end.x - start.x)
+  // Get junction data for start and end (exactly like demo)
+  const keyStart = pointToKey(wallStart)
+  const keyEnd = pointToKey(wallEnd)
+
+  const startJunction = junctionData.get(keyStart)?.get(wallNode.id)
+  const endJunction = junctionData.get(keyEnd)?.get(wallNode.id)
+
+  console.log(`\n=== Wall ${wallNode.id} ===`)
+  console.log('Start:', wallStart, 'End:', wallEnd, 'Thickness:', thickness)
+  console.log('Key start:', keyStart, 'Key end:', keyEnd)
+  console.log('Start junction data:', startJunction)
+  console.log('End junction data:', endJunction)
+
+  // Calculate polygon corners in world coordinates (exactly like demo)
+  // p_start_L = left side at start
+  // p_start_R = right side at start
+  // p_end_L = left side at end
+  // p_end_R = right side at end
+
+  const p_start_L: Point2D = startJunction?.left || {
+    x: wallStart.x + nUnit.x * halfT,
+    y: wallStart.y + nUnit.y * halfT,
+  }
+  const p_start_R: Point2D = startJunction?.right || {
+    x: wallStart.x - nUnit.x * halfT,
+    y: wallStart.y - nUnit.y * halfT,
+  }
+
+  // At end, SWAP left/right from junction data (exactly like demo)
+  // This is because junction stores left/right relative to OUTGOING direction,
+  // which is reversed at the end of the wall
+  const p_end_L: Point2D = endJunction?.right || {
+    x: wallEnd.x + nUnit.x * halfT,
+    y: wallEnd.y + nUnit.y * halfT,
+  }
+  const p_end_R: Point2D = endJunction?.left || {
+    x: wallEnd.x - nUnit.x * halfT,
+    y: wallEnd.y - nUnit.y * halfT,
+  }
+
+  console.log('Polygon corners (world coords):')
+  console.log('  p_start_L:', p_start_L, startJunction ? '(from junction)' : '(default)')
+  console.log('  p_start_R:', p_start_R, startJunction ? '(from junction)' : '(default)')
+  console.log('  p_end_L:', p_end_L, endJunction ? '(from junction, swapped)' : '(default)')
+  console.log('  p_end_R:', p_end_R, endJunction ? '(from junction, swapped)' : '(default)')
+
+  // Build polygon points (exactly like demo)
+  // Order: start-right -> end-right -> [end center] -> end-left -> start-left -> [start center]
+  const polyPoints: Point2D[] = [p_start_R, p_end_R]
+  if (endJunction) {
+    polyPoints.push(wallEnd) // Add center vertex at junction
+  }
+  polyPoints.push(p_end_L, p_start_L)
+  if (startJunction) {
+    polyPoints.push(wallStart) // Add center vertex at junction
+  }
+
+  console.log('Polygon order:', polyPoints.length, 'points')
+  console.log('  Has end junction:', !!endJunction, '| Has start junction:', !!startJunction)
+
+  // Transform world coordinates to wall-local coordinates
+  // Wall-local: x along wall, z perpendicular (thickness direction)
+  const wallAngle = Math.atan2(v.y, v.x)
   const cosA = Math.cos(-wallAngle)
   const sinA = Math.sin(-wallAngle)
 
-  // Transform world point to wall-local space
   const worldToLocal = (worldPt: Point2D): { x: number; z: number } => {
-    const dx = worldPt.x - wallNode.start[0]
-    const dy = worldPt.y - wallNode.start[1]
+    const dx = worldPt.x - wallStart.x
+    const dy = worldPt.y - wallStart.y
     return {
       x: dx * cosA - dy * sinA,
       z: dx * sinA + dy * cosA,
     }
   }
 
-  // Default miter points (no junction - simple rectangle)
-  const defaultStart = {
-    left: { x: 0, z: halfT },
-    right: { x: 0, z: -halfT },
-    center: { x: 0, z: 0 },
-    hasJunction: false,
-  }
-  const defaultEnd = {
-    left: { x: length, z: halfT },
-    right: { x: length, z: -halfT },
-    center: { x: length, z: 0 },
-    hasJunction: false,
-  }
+  // Convert polygon to local coordinates
+  const localPoints = polyPoints.map(worldToLocal)
 
-  // Apply miter data if available
-  let startMiter = defaultStart
-  let endMiter = defaultEnd
-
-  if (miters?.start) {
-    const left = worldToLocal(miters.start.left)
-    const right = worldToLocal(miters.start.right)
-    const center = worldToLocal(miters.start.center)
-    startMiter = { left, right, center, hasJunction: true }
-  }
-
-  if (miters?.end) {
-    // At end, left/right are swapped because outgoing direction is reversed
-    const left = worldToLocal(miters.end.right)
-    const right = worldToLocal(miters.end.left)
-    const center = worldToLocal(miters.end.center)
-    endMiter = { left, right, center, hasJunction: true }
-  }
-
-  // Create geometry
-  const geometry = createMiteredExtrudeGeometry(height, startMiter, endMiter)
-
-  return geometry
-}
-
-interface MiterPoint {
-  x: number
-  z: number
-}
-
-interface MiterEnd {
-  left: MiterPoint
-  right: MiterPoint
-  center: MiterPoint
-  hasJunction: boolean
-}
-
-/**
- * Creates wall geometry using footprint polygon approach
- *
- * Footprint has 6 vertices - 3 on each thickness edge (start/end):
- * - start-right, start-center (if junction), start-left
- * - end-left, end-center (if junction), end-right
- *
- * Based on the prototype: center vertices are only added when there's a junction
- */
-function createMiteredExtrudeGeometry(
-  height: number,
-  startMiter: MiterEnd,
-  endMiter: MiterEnd,
-): THREE.BufferGeometry {
-  // Build footprint polygon (CCW winding, viewed from above)
-  // Following prototype: start-right -> end-right -> [end-center] -> end-left -> start-left -> [start-center]
+  // Build THREE.js shape
+  // Shape uses (x, y) where we map: shape.x = local.x, shape.y = -local.z
+  // The negation is needed because after rotateX(-PI/2), shape.y becomes -geometry.z
   const footprint = new THREE.Shape()
-
-  // Start from start-right, go to end-right
-  footprint.moveTo(startMiter.right.x, -startMiter.right.z)
-  footprint.lineTo(endMiter.right.x, -endMiter.right.z)
-
-  // Add end-center if there's a junction at end
-  if (endMiter.hasJunction) {
-    footprint.lineTo(endMiter.center.x, -endMiter.center.z)
+  footprint.moveTo(localPoints[0]!.x, -localPoints[0]!.z)
+  for (let i = 1; i < localPoints.length; i++) {
+    footprint.lineTo(localPoints[i]!.x, -localPoints[i]!.z)
   }
-
-  // Continue to end-left, then start-left
-  footprint.lineTo(endMiter.left.x, -endMiter.left.z)
-  footprint.lineTo(startMiter.left.x, -startMiter.left.z)
-
-  // Add start-center if there's a junction at start
-  if (startMiter.hasJunction) {
-    footprint.lineTo(startMiter.center.x, -startMiter.center.z)
-  }
-
   footprint.closePath()
 
   // Extrude along Z by height
