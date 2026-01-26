@@ -294,65 +294,29 @@ function calculateCornerMiters(
       })
     }
 
-    // Sort ALL walls by angle for proper adjacency
-    incomingProcessed.sort((a, b) => a.angle - b.angle)
-
     // Initialize all walls with default values
     for (const w of incomingProcessed) {
       result.set(w.wallId, { left: w.defaultLeft, right: w.defaultRight })
     }
 
-    const n = incomingProcessed.length
+    // Group walls by side, then process each side separately
+    // Walls at a T-junction don't form a closed loop - they all face toward the host
+    const leftSideWalls = incomingProcessed.filter((w) => w.approachDot > 0)
+    const rightSideWalls = incomingProcessed.filter((w) => w.approachDot <= 0)
 
-    // Process consecutive pairs of walls
-    for (let i = 0; i < n; i++) {
-      const curr = incomingProcessed[i]!
-      const next = incomingProcessed[(i + 1) % n]!
+    for (const sideWalls of [leftSideWalls, rightSideWalls]) {
+      if (sideWalls.length === 0) continue
 
-      const currFromLeft = curr.approachDot > 0
-      const nextFromLeft = next.approachDot > 0
+      // Determine which host edge this side approaches
+      const targetHostEdge = sideWalls[0]!.approachDot > 0 ? hostEdgeRight : hostEdgeLeft
 
-      if (currFromLeft === nextFromLeft) {
-        // Same side: miter their adjacent edges together
-        const cornerInt = intersectLines(curr.edgeRight, next.edgeLeft)
-        if (cornerInt) {
-          result.get(curr.wallId)!.right = cornerInt
-          result.get(next.wallId)!.left = cornerInt
-        }
-      } else {
-        // Different sides: their inner edges meet at intersection (inside the host wall)
-        const cornerInt = intersectLines(curr.edgeRight, next.edgeLeft)
-        if (cornerInt) {
-          result.get(curr.wallId)!.right = cornerInt
-          result.get(next.wallId)!.left = cornerInt
-        }
-      }
-    }
-
-    // Now set the outer edges to meet the host wall surface
-    // For each wall, find which edge is "outermost" (not adjacent to a same-side wall)
-    for (let i = 0; i < n; i++) {
-      const curr = incomingProcessed[i]!
-      const prev = incomingProcessed[(i - 1 + n) % n]!
-      const next = incomingProcessed[(i + 1) % n]!
-
-      const currFromLeft = curr.approachDot > 0
-      const prevFromLeft = prev.approachDot > 0
-      const nextFromLeft = next.approachDot > 0
-
-      // Target host edge based on which side this wall approaches from
-      const targetHostEdge = currFromLeft ? hostEdgeRight : hostEdgeLeft
-
-      // Left edge is outer if prev wall is on different side (or if only one wall)
-      if (n === 1 || prevFromLeft !== currFromLeft) {
-        const leftInt = intersectLines(curr.edgeLeft, targetHostEdge)
-        if (leftInt) result.get(curr.wallId)!.left = leftInt
-      }
-
-      // Right edge is outer if next wall is on different side (or if only one wall)
-      if (n === 1 || nextFromLeft !== currFromLeft) {
-        const rightInt = intersectLines(curr.edgeRight, targetHostEdge)
-        if (rightInt) result.get(curr.wallId)!.right = rightInt
+      // For T-junctions: ALL edges of ALL walls on this side meet the host surface
+      // This ensures walls stop at the host and don't go through it
+      for (const w of sideWalls) {
+        const leftInt = intersectLines(w.edgeLeft, targetHostEdge)
+        const rightInt = intersectLines(w.edgeRight, targetHostEdge)
+        if (leftInt) result.get(w.wallId)!.left = leftInt
+        if (rightInt) result.get(w.wallId)!.right = rightInt
       }
     }
 
