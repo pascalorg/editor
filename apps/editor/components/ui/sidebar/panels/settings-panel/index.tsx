@@ -2,14 +2,17 @@ import { useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/primitives/button";
+import useEditor from "@/store/use-editor";
 
 export function SettingsPanel() {
   const clearScene = useScene((state) => state.clearScene);
   const resetSelection = useViewer((state) => state.resetSelection);
+  const setPhase = useEditor((state) => state.setPhase);
 
   const handleResetToDefault = () => {
     clearScene();
     resetSelection();
+    setPhase("site");
   };
 
   return (
