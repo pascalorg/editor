@@ -88,6 +88,7 @@ const commitZoneDrawing = (
 type PreviewState = {
   points: Array<[number, number]>;
   cursorPoint: [number, number] | null;
+  levelY: number;
 };
 
 // Helper to validate point values (no NaN or Infinity)
@@ -103,6 +104,7 @@ export const ZoneTool: React.FC = () => {
   const mainLineRef = useRef<Line>(null!);
   const closingLineRef = useRef<Line>(null!);
   const pointsRef = useRef<Array<[number, number]>>([]);
+  const levelYRef = useRef(0); // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId);
   const setTool = useEditor((state) => state.setTool);
 
@@ -110,6 +112,7 @@ export const ZoneTool: React.FC = () => {
   const [preview, setPreview] = useState<PreviewState>({
     points: [],
     cursorPoint: null,
+    levelY: 0,
   });
 
   useEffect(() => {
@@ -123,6 +126,7 @@ export const ZoneTool: React.FC = () => {
 
     const updateLines = () => {
       const points = pointsRef.current;
+      const y = levelYRef.current + Y_OFFSET;
 
       if (points.length === 0) {
         mainLineRef.current.visible = false;
@@ -132,7 +136,7 @@ export const ZoneTool: React.FC = () => {
 
       // Build main line points
       const linePoints: Vector3[] = points.map(
-        ([x, z]) => new Vector3(x, Y_OFFSET, z)
+        ([x, z]) => new Vector3(x, y, z)
       );
 
       // Add cursor point
@@ -140,7 +144,7 @@ export const ZoneTool: React.FC = () => {
       if (lastPoint) {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition);
         if (isValidPoint(snapped)) {
-          linePoints.push(new Vector3(snapped[0], Y_OFFSET, snapped[1]));
+          linePoints.push(new Vector3(snapped[0], y, snapped[1]));
         }
       }
 
@@ -159,8 +163,8 @@ export const ZoneTool: React.FC = () => {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition);
         if (isValidPoint(snapped)) {
           const closingPoints = [
-            new Vector3(snapped[0], Y_OFFSET, snapped[1]),
-            new Vector3(firstPoint[0], Y_OFFSET, firstPoint[1]),
+            new Vector3(snapped[0], y, snapped[1]),
+            new Vector3(firstPoint[0], y, firstPoint[1]),
           ];
           closingLineRef.current.geometry.dispose();
           closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints);
@@ -182,7 +186,7 @@ export const ZoneTool: React.FC = () => {
         cursorPt = cursorPosition;
       }
 
-      setPreview({ points: [...points], cursorPoint: cursorPt });
+      setPreview({ points: [...points], cursorPoint: cursorPt, levelY: levelYRef.current });
       updateLines();
     };
 
@@ -193,6 +197,7 @@ export const ZoneTool: React.FC = () => {
       const gridX = Math.round(event.position[0] * 2) / 2;
       const gridZ = Math.round(event.position[2] * 2) / 2;
       cursorPosition = [gridX, gridZ];
+      levelYRef.current = event.position[1];
 
       // If we have points, snap to axis from last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1];
@@ -232,7 +237,7 @@ export const ZoneTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 
@@ -254,7 +259,7 @@ export const ZoneTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 
@@ -278,7 +283,7 @@ export const ZoneTool: React.FC = () => {
     };
   }, [currentLevelId, setTool]);
 
-  const { points, cursorPoint } = preview;
+  const { points, cursorPoint, levelY } = preview;
 
   // Create preview shape when we have 3+ points
   const previewShape = useMemo(() => {
@@ -325,7 +330,7 @@ export const ZoneTool: React.FC = () => {
       {previewShape && (
         <mesh
           frustumCulled={false}
-          position={[0, Y_OFFSET, 0]}
+          position={[0, levelY + Y_OFFSET, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <shapeGeometry args={[previewShape]} />
@@ -368,7 +373,7 @@ export const ZoneTool: React.FC = () => {
       {/* Point markers */}
       {points.map(([x, z], index) =>
         isValidPoint([x, z]) ? (
-          <mesh key={index} position={[x, Y_OFFSET + 0.01, z]}>
+          <mesh key={index} position={[x, levelY + Y_OFFSET + 0.01, z]}>
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshBasicMaterial
               color={index === 0 ? "#22c55e" : "#3b82f6"}

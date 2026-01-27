@@ -9,6 +9,7 @@ import {
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
+
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'

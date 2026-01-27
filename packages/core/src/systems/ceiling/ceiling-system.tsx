@@ -40,7 +40,7 @@ function updateCeilingGeometry(node: CeilingNode, mesh: THREE.Mesh) {
   mesh.geometry = newGeo
 
   // Position at the ceiling height
-  mesh.position.y = node.height ?? 2.5
+  mesh.position.y = (node.height ?? 2.5) - 0.01 // Slight offset to avoid z-fighting with upper-level slabs
 }
 
 /**

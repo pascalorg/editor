@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from "three";
 import useEditor from "@/store/use-editor";
 
-const Y_OFFSET = 2.52; // Slightly above default ceiling height
+const CEILING_HEIGHT = 2.52; // Slightly above default ceiling height
+const GRID_OFFSET = 0.02; // Small offset above floor level
 
 /**
  * Snaps a point to the nearest axis-aligned or 45-degree diagonal from the last point
@@ -69,6 +70,7 @@ const commitCeilingDrawing = (
 type PreviewState = {
   points: Array<[number, number]>;
   cursorPoint: [number, number] | null;
+  levelY: number;
 };
 
 // Helper to validate point values (no NaN or Infinity)
@@ -79,14 +81,13 @@ const isValidPoint = (
   return Number.isFinite(pt[0]) && Number.isFinite(pt[1]);
 };
 
-const GRID_Y = 0.02; // Grid level indicator
-
 export const CeilingTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null);
   const gridCursorRef = useRef<Mesh>(null);
   const mainLineRef = useRef<Line>(null!);
   const closingLineRef = useRef<Line>(null!);
   const pointsRef = useRef<Array<[number, number]>>([]);
+  const levelYRef = useRef(0); // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId);
   const setTool = useEditor((state) => state.setTool);
 
@@ -94,6 +95,7 @@ export const CeilingTool: React.FC = () => {
   const [preview, setPreview] = useState<PreviewState>({
     points: [],
     cursorPoint: null,
+    levelY: 0,
   });
 
   useEffect(() => {
@@ -107,6 +109,7 @@ export const CeilingTool: React.FC = () => {
 
     const updateLines = () => {
       const points = pointsRef.current;
+      const ceilingY = levelYRef.current + CEILING_HEIGHT;
 
       if (points.length === 0) {
         mainLineRef.current.visible = false;
@@ -116,7 +119,7 @@ export const CeilingTool: React.FC = () => {
 
       // Build main line points
       const linePoints: Vector3[] = points.map(
-        ([x, z]) => new Vector3(x, Y_OFFSET, z)
+        ([x, z]) => new Vector3(x, ceilingY, z)
       );
 
       // Add cursor point
@@ -124,7 +127,7 @@ export const CeilingTool: React.FC = () => {
       if (lastPoint) {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition);
         if (isValidPoint(snapped)) {
-          linePoints.push(new Vector3(snapped[0], Y_OFFSET, snapped[1]));
+          linePoints.push(new Vector3(snapped[0], ceilingY, snapped[1]));
         }
       }
 
@@ -143,8 +146,8 @@ export const CeilingTool: React.FC = () => {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition);
         if (isValidPoint(snapped)) {
           const closingPoints = [
-            new Vector3(snapped[0], Y_OFFSET, snapped[1]),
-            new Vector3(firstPoint[0], Y_OFFSET, firstPoint[1]),
+            new Vector3(snapped[0], ceilingY, snapped[1]),
+            new Vector3(firstPoint[0], ceilingY, firstPoint[1]),
           ];
           closingLineRef.current.geometry.dispose();
           closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints);
@@ -166,7 +169,7 @@ export const CeilingTool: React.FC = () => {
         cursorPt = cursorPosition;
       }
 
-      setPreview({ points: [...points], cursorPoint: cursorPt });
+      setPreview({ points: [...points], cursorPoint: cursorPt, levelY: levelYRef.current });
       updateLines();
     };
 
@@ -177,20 +180,24 @@ export const CeilingTool: React.FC = () => {
       const gridX = Math.round(event.position[0] * 2) / 2;
       const gridZ = Math.round(event.position[2] * 2) / 2;
       cursorPosition = [gridX, gridZ];
+      levelYRef.current = event.position[1];
+
+      const ceilingY = event.position[1] + CEILING_HEIGHT;
+      const gridY = event.position[1] + GRID_OFFSET;
 
       // If we have points, snap to axis from last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1];
       if (lastPoint) {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition);
-        cursorRef.current.position.set(snapped[0], Y_OFFSET, snapped[1]);
+        cursorRef.current.position.set(snapped[0], ceilingY, snapped[1]);
         // Also update grid-level cursor
         if (gridCursorRef.current) {
-          gridCursorRef.current.position.set(snapped[0], GRID_Y, snapped[1]);
+          gridCursorRef.current.position.set(snapped[0], gridY, snapped[1]);
         }
       } else {
-        cursorRef.current.position.set(gridX, Y_OFFSET, gridZ);
+        cursorRef.current.position.set(gridX, ceilingY, gridZ);
         if (gridCursorRef.current) {
-          gridCursorRef.current.position.set(gridX, GRID_Y, gridZ);
+          gridCursorRef.current.position.set(gridX, gridY, gridZ);
         }
       }
 
@@ -223,7 +230,7 @@ export const CeilingTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 
@@ -245,7 +252,7 @@ export const CeilingTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 
@@ -269,7 +276,7 @@ export const CeilingTool: React.FC = () => {
     };
   }, [currentLevelId, setTool]);
 
-  const { points, cursorPoint } = preview;
+  const { points, cursorPoint, levelY } = preview;
 
   // Create preview shape when we have 3+ points
   const previewShape = useMemo(() => {
@@ -327,7 +334,7 @@ export const CeilingTool: React.FC = () => {
       {previewShape && (
         <mesh
           frustumCulled={false}
-          position={[0, Y_OFFSET, 0]}
+          position={[0, levelY + CEILING_HEIGHT, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <shapeGeometry args={[previewShape]} />
@@ -370,7 +377,7 @@ export const CeilingTool: React.FC = () => {
       {/* Point markers */}
       {points.map(([x, z], index) =>
         isValidPoint([x, z]) ? (
-          <mesh key={index} position={[x, Y_OFFSET + 0.01, z]}>
+          <mesh key={index} position={[x, levelY + CEILING_HEIGHT + 0.01, z]}>
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshBasicMaterial
               color={index === 0 ? "#22c55e" : "#d4d4d4"}
