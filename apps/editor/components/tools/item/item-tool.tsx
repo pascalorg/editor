@@ -1,5 +1,6 @@
 import {
   type CeilingEvent,
+  type CeilingNode,
   emitter,
   type GridEvent,
   ItemNode,
@@ -112,7 +113,7 @@ export const ItemTool: React.FC = () => {
   const draftItem = useRef<ItemNode | null>(null)
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const selectedItem = useEditor((state) => state.selectedItem)
-  const { canPlaceOnFloor, canPlaceOnWall } = useSpatialQuery()
+  const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
   const isOnWall = useRef(false)
   const isOnCeiling = useRef(false)
 
@@ -129,7 +130,18 @@ export const ItemTool: React.FC = () => {
       if (currentLevelId && draftItem.current) {
         let placeable = true
         if (draftItem.current.asset.attachTo === 'ceiling') {
-          placeable = isOnCeiling.current && !!currentCeilingId
+          if (!isOnCeiling.current || !currentCeilingId) {
+            placeable = false
+          } else {
+            const result = canPlaceOnCeiling(
+              currentCeilingId as CeilingNode['id'],
+              [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+              draftItem.current.asset.dimensions,
+              draftItem.current.rotation,
+              [draftItem.current.id],
+            )
+            placeable = result.valid
+          }
         } else if (draftItem.current.asset.attachTo) {
           if (!isOnWall.current || !currentWallId) {
             placeable = false
@@ -541,7 +553,7 @@ export const ItemTool: React.FC = () => {
       emitter.off('ceiling:leave', onCeilingLeave)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [selectedItem, canPlaceOnFloor, canPlaceOnWall])
+  }, [selectedItem, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling])
 
   useFrame((_, delta) => {
     if (draftItem.current && !isOnWall.current && !isOnCeiling.current) {

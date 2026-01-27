@@ -1,7 +1,8 @@
 import { CeilingNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { Square } from "lucide-react";
-import { TreeNodeWrapper } from "./tree-node";
+import { useState } from "react";
+import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
 interface CeilingTreeNodeProps {
@@ -10,6 +11,7 @@ interface CeilingTreeNodeProps {
 }
 
 export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
+  const [expanded, setExpanded] = useState(false);
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -35,16 +37,20 @@ export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
       icon={<Square className="w-3.5 h-3.5" />}
       label={node.name || `Ceiling (${area}m²)`}
       depth={depth}
-      hasChildren={false}
-      expanded={false}
-      onToggle={() => {}}
+      hasChildren={node.children.length > 0}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       isSelected={isSelected}
       isHovered={isHovered}
       actions={<TreeNodeActions node={node} />}
-    />
+    >
+      {node.children.map((childId) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      ))}
+    </TreeNodeWrapper>
   );
 }
 
