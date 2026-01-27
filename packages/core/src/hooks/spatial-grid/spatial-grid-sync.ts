@@ -1,6 +1,6 @@
-import type { AnyNode } from '../../schema'
+import type { AnyNode, AnyNodeId, ItemNode, SlabNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
-import { spatialGridManager } from './spatial-grid-manager'
+import { itemOverlapsPolygon, spatialGridManager, wallOverlapsPolygon } from './spatial-grid-manager'
 
 export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // If the node itself is a level
@@ -34,6 +34,7 @@ export function initSpatialGridSync() {
   }
 
   // 2. Then subscribe to future changes
+  const markDirty = (id: AnyNodeId) => store.getState().markDirty(id)
 
   // Subscribe to all changes
   store.subscribe((state, prevState) => {
@@ -42,6 +43,11 @@ export function initSpatialGridSync() {
       if (!prevState.nodes[id as AnyNode['id']]) {
         const levelId = resolveLevelId(node, state.nodes)
         spatialGridManager.handleNodeCreated(node, levelId)
+
+        // When a slab is added, mark overlapping items/walls dirty
+        if (node.type === 'slab') {
+          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+        }
       }
     }
 
@@ -50,6 +56,11 @@ export function initSpatialGridSync() {
       if (!state.nodes[id as AnyNode['id']]) {
         const levelId = resolveLevelId(node, prevState.nodes)
         spatialGridManager.handleNodeDeleted(id, node.type, levelId)
+
+        // When a slab is removed, mark items/walls that were on it dirty (using current state)
+        if (node.type === 'slab') {
+          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+        }
       }
     }
 
@@ -72,6 +83,10 @@ export function initSpatialGridSync() {
         if (node.polygon !== prev.polygon || node.elevation !== prev.elevation) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
+
+          // Mark nodes overlapping old polygon and new polygon as dirty
+          markNodesOverlappingSlab(prev as SlabNode, state.nodes, markDirty)
+          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
         }
       }
     }
@@ -80,4 +95,34 @@ export function initSpatialGridSync() {
 
 function arraysEqual(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i])
+}
+
+/**
+ * Mark all floor items and walls that overlap a slab polygon as dirty.
+ */
+function markNodesOverlappingSlab(
+  slab: SlabNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  if (slab.polygon.length < 3) return
+  const slabLevelId = resolveLevelId(slab, nodes)
+
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'item') {
+      const item = node as ItemNode
+      // Only floor items are affected by slabs
+      if (item.asset.attachTo) continue
+      if (resolveLevelId(node, nodes) !== slabLevelId) continue
+      if (itemOverlapsPolygon(item.position, item.asset.dimensions, item.rotation, slab.polygon, 0.01)) {
+        markDirty(node.id)
+      }
+    } else if (node.type === 'wall') {
+      const wall = node as WallNode
+      if (resolveLevelId(node, nodes) !== slabLevelId) continue
+      if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
+        markDirty(node.id)
+      }
+    }
+  }
 }

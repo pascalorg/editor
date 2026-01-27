@@ -32,9 +32,11 @@ export const ItemSystem = () => {
           mesh.position.z = wallThickness / 2
         }
       } else if (!item.asset.attachTo) {
-        // Floor item: elevate by slab height
+        // Floor item: elevate by slab height (using full footprint overlap)
         const levelId = resolveLevelId(item, nodes)
-        const slabElevation = spatialGridManager.getSlabElevationAt(levelId, item.position[0], item.position[2])
+        const slabElevation = spatialGridManager.getSlabElevationForItem(
+          levelId, item.position, item.asset.dimensions, item.rotation,
+        )
         mesh.position.y = slabElevation
       }
 
