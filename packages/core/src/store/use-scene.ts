@@ -160,8 +160,6 @@ useScene.temporal.subscribe((state, prevState) => {
 
   // Trigger a full scene re-validation
   Object.values(currentNodes).forEach((node) => {
-    if (node.type === 'wall') {
-      useScene.getState().markDirty(node.id)
-    }
+    useScene.getState().markDirty(node.id)
   })
 })
