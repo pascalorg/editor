@@ -2,6 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
+import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
+import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import {
@@ -95,18 +97,22 @@ function getLevelWalls(levelId: string): WallNode[] {
  * Updates the geometry for a single wall
  */
 function updateWallGeometry(wallId: string, miterData: WallMiterData) {
-  const node = useScene.getState().nodes[wallId as WallNode['id']]
+  const nodes = useScene.getState().nodes
+  const node = nodes[wallId as WallNode['id']]
   if (!node || node.type !== 'wall') return
 
   const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
   if (!mesh) return
 
+  const levelId = resolveLevelId(node, nodes)
+  const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
+
   const childrenIds = node.children || []
   const childrenNodes = childrenIds
-    .map((childId) => useScene.getState().nodes[childId])
+    .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
 
-  const newGeo = generateExtrudedWall(node, childrenNodes, miterData)
+  const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -114,7 +120,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
-    const collisionGeo = generateExtrudedWall(node, [], miterData)
+    const collisionGeo = generateExtrudedWall(node, [], miterData, slabElevation)
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
   }
@@ -134,12 +140,13 @@ export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
   miterData: WallMiterData,
+  slabElevation = 0,
 ) {
   const { junctionData } = miterData
 
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const height = wallNode.height ?? 2.5
+  const height = (wallNode.height ?? 2.5) - slabElevation
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
 
@@ -232,6 +239,9 @@ export function generateExtrudedWall(
 
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
+  if (slabElevation > 0) {
+    geometry.translate(0, slabElevation, 0)
+  }
   geometry.computeVertexNormals()
 
   // Apply CSG subtraction for cutouts (doors/windows)

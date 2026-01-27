@@ -404,6 +404,40 @@ export class SpatialGridManager {
     return maxElevation
   }
 
+  /**
+   * Get the slab elevation for a wall by sampling its start, mid, and end points.
+   * Returns the highest slab elevation found, or 0 if none.
+   */
+  getSlabElevationForWall(
+    levelId: string,
+    start: [number, number],
+    end: [number, number],
+  ): number {
+    const slabMap = this.slabsByLevel.get(levelId)
+    if (!slabMap) return 0
+
+    const samples: [number, number][] = [
+      start,
+      [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
+      end,
+    ]
+
+    let maxElevation = 0
+    for (const slab of slabMap.values()) {
+      if (slab.polygon.length < 3) continue
+      for (const [sx, sz] of samples) {
+        if (pointInPolygon(sx, sz, slab.polygon)) {
+          const elevation = slab.elevation ?? 0.05
+          if (elevation > maxElevation) {
+            maxElevation = elevation
+          }
+          break // This slab matched, no need to check more sample points
+        }
+      }
+    }
+    return maxElevation
+  }
+
   clearLevel(levelId: string) {
     this.floorGrids.delete(levelId)
     this.wallGrids.delete(levelId)
