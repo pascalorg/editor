@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
@@ -24,18 +24,22 @@ export const ItemSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D
       if (!mesh) return
 
-      if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
+      if (item.asset.attachTo === 'wall-side') {
         // Wall-attached item: offset Z by half the parent wall's thickness
         const parentWall = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined
         if (parentWall && parentWall.type === 'wall') {
           const wallThickness = (parentWall as WallNode).thickness ?? 0.1
-          mesh.position.z = wallThickness / 2
+          const side = item.side === 'front' ? 1 : -1
+          mesh.position.z = (wallThickness / 2) * side
         }
       } else if (!item.asset.attachTo) {
         // Floor item: elevate by slab height (using full footprint overlap)
         const levelId = resolveLevelId(item, nodes)
         const slabElevation = spatialGridManager.getSlabElevationForItem(
-          levelId, item.position, item.asset.dimensions, item.rotation,
+          levelId,
+          item.position,
+          item.asset.dimensions,
+          item.rotation,
         )
         mesh.position.y = slabElevation
       }

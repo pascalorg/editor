@@ -1,488 +1,260 @@
 import {
   type CeilingEvent,
-  type CeilingNode,
   emitter,
   type GridEvent,
-  ItemNode,
-  isObject,
   sceneRegistry,
   useScene,
   useSpatialQuery,
   type WallEvent,
-  type WallNode,
 } from '@pascal-app/core'
-
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, type Mesh, type MeshStandardMaterial, Vector3 } from 'three'
 import useEditor from '@/store/use-editor'
 import { resolveLevelId } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync'
-
-/**
- * Snaps a position to 0.5 grid, with an offset to align item edges to grid lines.
- * For items with dimensions like 2.5, the center would be at 1.25 from the edge,
- * which doesn't align with 0.5 grid. This adds an offset so edges align instead.
- */
-function snapToGrid(position: number, dimension: number): number {
-  // Check if half the dimension has a 0.25 remainder (odd multiple of 0.5)
-  const halfDim = dimension / 2
-  const needsOffset = Math.abs(((halfDim * 2) % 1) - 0.5) < 0.01
-  const offset = needsOffset ? 0.25 : 0
-  // Snap to 0.5 grid with offset
-  return Math.round((position - offset) * 2) / 2 + offset
-}
-
-const stripTransient = (meta: any) => {
-  if (!isObject(meta)) return meta
-  const { isTransient, ...rest } = meta as Record<string, any>
-  return rest
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Calculate cursor rotation in WORLD space from wall normal and orientation
- */
-const calculateCursorRotation = (
-  normal: [number, number, number] | undefined,
-  wallStart: [number, number],
-  wallEnd: [number, number],
-): number => {
-  if (!normal) return 0
-
-  // Wall direction angle in world XZ plane
-  const wallAngle = Math.atan2(wallEnd[1] - wallStart[1], wallEnd[0] - wallStart[0])
-
-  // In local wall space, front face has normal.z < 0, back face has normal.z > 0
-  if (normal[2] < 0) {
-    return -wallAngle
-  } else {
-    return Math.PI - wallAngle
-  }
-}
-
-/**
- * Calculate item rotation in WALL-LOCAL space from normal
- * Items are children of the wall mesh, so their rotation is relative to wall's local space
- */
-const calculateItemRotation = (normal: [number, number, number] | undefined): number => {
-  if (!normal) return 0
-
-  // In wall-local space: X along wall, Y up, Z perpendicular (thickness)
-  // Front face (normal.z < 0): item faces -Z local → rotation = 0
-  // Back face (normal.z > 0): item faces +Z local → rotation = PI
-  return normal[2] < 0 ? 0 : Math.PI
-}
-
-/**
- * Determine which side of the wall based on the normal vector
- * In wall-local space, the wall runs along X-axis, so the normal points along Z-axis
- * Positive Z normal = 'back', Negative Z normal = 'front' (flipped due to orientation fix)
- */
-const getSideFromNormal = (normal: [number, number, number] | undefined): 'front' | 'back' => {
-  if (!normal) return 'front'
-  // The Z component of the normal determines which side
-  // Flipped: positive Z = back, negative Z = front
-  return normal[2] >= 0 ? 'back' : 'front'
-}
-
-/**
- * Check if the normal indicates a valid wall side face (front or back)
- * Filters out top face and thickness edges
- *
- * In wall-local geometry space (after ExtrudeGeometry + rotateX):
- * - X axis: along wall direction
- * - Y axis: up (height)
- * - Z axis: perpendicular to wall (thickness direction)
- *
- * So valid side faces have normals pointing in ±Z direction (local space)
- */
-const isValidWallSideFace = (normal: [number, number, number] | undefined): boolean => {
-  if (!normal) return false
-
-  // Valid side faces have normals pointing in the local Z direction (perpendicular to wall)
-  // This filters out top faces (Y direction) and end caps/junctions (X direction)
-  return Math.abs(normal[2]) > 0.7
-}
+import {
+  ceilingStrategy,
+  checkCanPlace,
+  floorStrategy,
+  wallStrategy,
+} from './placement-strategies'
+import type { PlacementState, TransitionResult } from './placement-types'
+import { useDraftNode } from './use-draft-node'
 
 export const ItemTool: React.FC = () => {
   const cursorRef = useRef<Mesh>(null!)
-  const draftItem = useRef<ItemNode | null>(null)
   const gridPosition = useRef(new Vector3(0, 0, 0))
+  const placementState = useRef<PlacementState>({
+    surface: 'floor',
+    wallId: null,
+    ceilingId: null,
+  })
+
   const selectedItem = useEditor((state) => state.selectedItem)
   const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
-  const isOnWall = useRef(false)
-  const isOnCeiling = useRef(false)
+  const draftNode = useDraftNode()
 
   useEffect(() => {
-    if (!selectedItem) {
-      return
+    if (!selectedItem) return
+
+    const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
+
+    // Reset placement state for new item
+    placementState.current = { surface: 'floor', wallId: null, ceilingId: null }
+
+    // ---- Helpers ----
+
+    const getContext = () => ({
+      asset: selectedItem,
+      levelId: useViewer.getState().selection.levelId,
+      draftItem: draftNode.current,
+      gridPosition: gridPosition.current,
+      state: { ...placementState.current },
+    })
+
+    const revalidate = (): boolean => {
+      const placeable = checkCanPlace(getContext(), validators)
+      ;(cursorRef.current.material as MeshStandardMaterial).color.set(
+        placeable ? 'green' : 'red',
+      )
+      return placeable
     }
 
-    let currentWallId: string | null = null
-    let currentCeilingId: string | null = null
+    const applyTransition = (result: TransitionResult) => {
+      Object.assign(placementState.current, result.stateUpdate)
+      gridPosition.current.set(...result.gridPosition)
+      cursorRef.current.position.set(...result.cursorPosition)
+      cursorRef.current.rotation.y = result.cursorRotationY
 
-    const checkCanPlace = () => {
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (currentLevelId && draftItem.current) {
-        let placeable = true
-        if (draftItem.current.asset.attachTo === 'ceiling') {
-          if (!isOnCeiling.current || !currentCeilingId) {
-            placeable = false
-          } else {
-            const result = canPlaceOnCeiling(
-              currentCeilingId as CeilingNode['id'],
-              [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-              draftItem.current.asset.dimensions,
-              draftItem.current.rotation,
-              [draftItem.current.id],
-            )
-            placeable = result.valid
-          }
-        } else if (draftItem.current.asset.attachTo) {
-          if (!isOnWall.current || !currentWallId) {
-            placeable = false
-          } else {
-            const result = canPlaceOnWall(
-              currentLevelId,
-              currentWallId as WallNode['id'],
-              gridPosition.current.x,
-              gridPosition.current.y,
-              draftItem.current.asset.dimensions,
-              draftItem.current.asset.attachTo as 'wall' | 'wall-side',
-              draftItem.current.side,
-              [draftItem.current.id],
-            )
-            placeable = result.valid
-          }
-        } else {
-          placeable = canPlaceOnFloor(
-            currentLevelId,
-            [gridPosition.current.x, 0, gridPosition.current.z],
-            draftItem.current.asset.dimensions,
-            [0, 0, 0],
-            [draftItem.current.id],
-          ).valid
-        }
-        if (placeable) {
-          ;(cursorRef.current.material as MeshStandardMaterial).color.set('green')
-          return true
-        } else {
-          ;(cursorRef.current.material as MeshStandardMaterial).color.set('red')
-          return false
-        }
+      const draft = draftNode.current
+      if (draft) {
+        Object.assign(draft, result.nodeUpdate)
+        useScene.getState().updateNode(draft.id, result.nodeUpdate)
       }
+      revalidate()
     }
-    const createDraftItem = () => {
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (!currentLevelId) {
-        return null
-      }
-      useScene.temporal.getState().pause()
-      draftItem.current = ItemNode.parse({
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        name: selectedItem.name,
-        asset: selectedItem,
-        metadata: {
-          isTransient: true,
-        },
-      })
-      useScene.getState().createNode(draftItem.current, currentLevelId)
-      checkCanPlace()
-    }
-    createDraftItem()
+
+    // ---- Create initial draft ----
+
+    draftNode.create(gridPosition.current, selectedItem)
+    revalidate()
+
+    // ---- Floor Handlers ----
 
     const onGridMove = (event: GridEvent) => {
-      if (!cursorRef.current) return
+      const result = floorStrategy.move(getContext(), event)
+      if (!result) return
 
-      if (isOnWall.current || isOnCeiling.current) return
+      gridPosition.current.set(...result.gridPosition)
+      cursorRef.current.position.set(...result.cursorPosition)
 
-      const [dimX, , dimZ] = selectedItem.dimensions
-      gridPosition.current.set(
-        snapToGrid(event.position[0], dimX),
-        0,
-        snapToGrid(event.position[2], dimZ),
-      )
-      cursorRef.current.position.set(
-        gridPosition.current.x,
-        event.position[1],
-        gridPosition.current.z,
-      )
-      checkCanPlace()
-      if (draftItem.current) {
-        draftItem.current.position = [gridPosition.current.x, 0, gridPosition.current.z]
-      }
+      const draft = draftNode.current
+      if (draft) draft.position = result.gridPosition
+
+      revalidate()
     }
+
     const onGridClick = (event: GridEvent) => {
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (isOnWall.current || isOnCeiling.current) return
+      const result = floorStrategy.click(getContext(), event, validators)
+      if (!result) return
 
-      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
-
-      useScene.temporal.getState().resume()
-
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, 0, gridPosition.current.z],
-        metadata: stripTransient(draftItem.current.metadata),
-      })
-      draftItem.current = null
-
-      useScene.temporal.getState().pause()
-      createDraftItem()
+      draftNode.commit(result.nodeUpdate)
+      draftNode.create(gridPosition.current, selectedItem)
+      revalidate()
     }
+
+    // ---- Wall Handlers ----
 
     const onWallEnter = (event: WallEvent) => {
-      if (
-        useViewer.getState().selection.levelId !==
-        resolveLevelId(event.node, useScene.getState().nodes)
-      ) {
-        return
-      }
-      if (
-        draftItem.current?.asset.attachTo === 'wall' ||
-        draftItem.current?.asset.attachTo === 'wall-side'
-      ) {
-        console.log('Wall enter:', event.node.id, event.normal)
-        // Ignore top face and thickness edges
-        if (!isValidWallSideFace(event.normal)) return
-
-        event.stopPropagation()
-        isOnWall.current = true
-        currentWallId = event.node.id
-
-        // Determine side and rotation from normal
-        const side = getSideFromNormal(event.normal)
-        const itemRotation = calculateItemRotation(event.normal)
-        const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
-
-        gridPosition.current.set(
-          Math.round(event.localPosition[0] * 2) / 2,
-          Math.round(event.localPosition[1] * 2) / 2,
-          Math.round(event.localPosition[2] * 2) / 2,
-        )
-        draftItem.current.parentId = event.node.id
-        draftItem.current.side = side
-        draftItem.current.rotation = [0, itemRotation, 0]
-
-        useScene.getState().updateNode(draftItem.current.id, {
-          position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-          parentId: event.node.id,
-          side,
-          rotation: [0, itemRotation, 0],
-        })
-        cursorRef.current.rotation.y = cursorRotation
-        checkCanPlace()
-      }
-    }
-
-    const onWallLeave = (event: WallEvent) => {
-      if (!isOnWall.current) return
-      isOnWall.current = false
-      currentWallId = null
-      event.stopPropagation()
-      if (!draftItem.current) return
-      const currentLevelId = useViewer.getState().selection.levelId
-      draftItem.current.parentId = currentLevelId
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        parentId: currentLevelId,
-      })
-      checkCanPlace()
-    }
-
-    const onWallClick = (event: WallEvent) => {
-      if (!isOnWall.current) return
-
-      // Ignore top face and thickness edges
-      if (!isValidWallSideFace(event.normal)) return
+      const nodes = useScene.getState().nodes
+      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+      if (!result) return
 
       event.stopPropagation()
-
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
-
-      // Get side and rotation from current draft item (already set by onWallMove)
-      const side = draftItem.current.side
-      const rotation = draftItem.current.rotation
-
-      useScene.temporal.getState().resume()
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        parentId: event.node.id,
-        side,
-        rotation,
-        metadata: stripTransient(draftItem.current.metadata),
-      })
-      useScene.getState().dirtyNodes.add(event.node.id)
-      draftItem.current = null
-
-      useScene.temporal.getState().pause()
-      createDraftItem()
-      checkCanPlace()
+      applyTransition(result)
     }
 
     const onWallMove = (event: WallEvent) => {
-      if (isOnWall.current === false) return
-      if (!draftItem.current) return
-
-      // Ignore top face and thickness edges
-      if (!isValidWallSideFace(event.normal)) return
+      const result = wallStrategy.move(getContext(), event)
+      if (!result) return
 
       event.stopPropagation()
+      gridPosition.current.set(...result.gridPosition)
+      cursorRef.current.position.set(...result.cursorPosition)
+      cursorRef.current.rotation.y = result.cursorRotationY
 
-      // Determine side and rotation from normal
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+      // Sync side/rotation on draft ref (needed by checkCanPlace)
+      const draft = draftNode.current
+      if (draft && result.nodeUpdate) {
+        if ('side' in result.nodeUpdate) draft.side = result.nodeUpdate.side
+        if ('rotation' in result.nodeUpdate)
+          draft.rotation = result.nodeUpdate.rotation as [number, number, number]
+      }
 
-      gridPosition.current.set(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[1] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
-      )
-      cursorRef.current.position.set(
-        Math.round(event.position[0] * 2) / 2,
-        Math.round(event.position[1] * 2) / 2,
-        Math.round(event.position[2] * 2) / 2,
-      )
-      cursorRef.current.rotation.y = cursorRotation
+      const placeable = revalidate()
 
-      // Update draft item side and rotation
-      draftItem.current.side = side
-      draftItem.current.rotation = [0, itemRotation, 0]
-
-      const canPlace = checkCanPlace()
-      if (draftItem.current && canPlace) {
-        draftItem.current.position = [
-          gridPosition.current.x,
-          gridPosition.current.y,
-          gridPosition.current.z,
-        ]
-        const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
-        if (draftItemMesh) {
-          draftItemMesh.position.copy(gridPosition.current)
-          draftItemMesh.rotation.y = itemRotation
+      // Only update mesh + store when placement is valid
+      if (draft && placeable) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) {
+          mesh.position.copy(gridPosition.current)
+          const rot = result.nodeUpdate?.rotation
+          if (rot) mesh.rotation.y = rot[1]
         }
-
-        useScene.getState().updateNode(draftItem.current.id, {
-          side,
-          rotation: [0, itemRotation, 0],
-        })
-        useScene.getState().dirtyNodes.add(event.node.id)
+        if (result.nodeUpdate) {
+          useScene.getState().updateNode(draft.id, result.nodeUpdate)
+        }
+        if (result.dirtyNodeId) {
+          useScene.getState().dirtyNodes.add(result.dirtyNodeId)
+        }
       }
     }
 
-    // ====================================================================
-    // CEILING HANDLERS
-    // ====================================================================
-
-    const onCeilingEnter = (event: CeilingEvent) => {
-      if (draftItem.current?.asset.attachTo !== 'ceiling') return
-      if (
-        useViewer.getState().selection.levelId !==
-        resolveLevelId(event.node, useScene.getState().nodes)
-      ) {
-        return
-      }
+    const onWallClick = (event: WallEvent) => {
+      const result = wallStrategy.click(getContext(), event, validators)
+      if (!result) return
 
       event.stopPropagation()
-      isOnCeiling.current = true
-      currentCeilingId = event.node.id
+      draftNode.commit(result.nodeUpdate)
+      if (result.dirtyNodeId) {
+        useScene.getState().dirtyNodes.add(result.dirtyNodeId)
+      }
+      draftNode.create(gridPosition.current, selectedItem)
+      revalidate()
+    }
 
-      const [dimX, , dimZ] = selectedItem.dimensions
-      const itemHeight = selectedItem.dimensions[1]
+    const onWallLeave = (event: WallEvent) => {
+      const result = wallStrategy.leave(getContext())
+      if (!result) return
 
-      gridPosition.current.set(
-        snapToGrid(event.position[0], dimX),
-        -itemHeight,
-        snapToGrid(event.position[2], dimZ),
-      )
-      cursorRef.current.position.set(
-        gridPosition.current.x,
-        event.position[1] - itemHeight,
-        gridPosition.current.z,
-      )
+      event.stopPropagation()
+      applyTransition(result)
+    }
 
-      draftItem.current.parentId = event.node.id
+    // ---- Ceiling Handlers ----
 
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        parentId: event.node.id,
-      })
-      checkCanPlace()
+    const onCeilingEnter = (event: CeilingEvent) => {
+      const nodes = useScene.getState().nodes
+      const result = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
+      if (!result) return
+
+      event.stopPropagation()
+      applyTransition(result)
     }
 
     const onCeilingMove = (event: CeilingEvent) => {
-      if (!isOnCeiling.current || !draftItem.current) return
+      const result = ceilingStrategy.move(getContext(), event)
+      if (!result) return
 
       event.stopPropagation()
+      gridPosition.current.set(...result.gridPosition)
+      cursorRef.current.position.set(...result.cursorPosition)
 
-      const [dimX, , dimZ] = selectedItem.dimensions
-      const itemHeight = selectedItem.dimensions[1]
+      revalidate()
 
-      gridPosition.current.set(
-        snapToGrid(event.position[0], dimX),
-        -itemHeight,
-        snapToGrid(event.position[2], dimZ),
-      )
-      cursorRef.current.position.set(
-        gridPosition.current.x,
-        event.position[1] - itemHeight,
-        gridPosition.current.z,
-      )
-
-      checkCanPlace()
-      if (draftItem.current) {
-        draftItem.current.position = [
-          gridPosition.current.x,
-          gridPosition.current.y,
-          gridPosition.current.z,
-        ]
-        const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
-        if (draftItemMesh) {
-          draftItemMesh.position.copy(gridPosition.current)
-        }
+      const draft = draftNode.current
+      if (draft) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) mesh.position.copy(gridPosition.current)
       }
     }
 
     const onCeilingClick = (event: CeilingEvent) => {
-      if (!isOnCeiling.current) return
+      const result = ceilingStrategy.click(getContext(), event, validators)
+      if (!result) return
 
       event.stopPropagation()
-
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
-
-      useScene.temporal.getState().resume()
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        parentId: event.node.id,
-        metadata: stripTransient(draftItem.current.metadata),
-      })
-      draftItem.current = null
-
-      useScene.temporal.getState().pause()
-      createDraftItem()
-      checkCanPlace()
+      draftNode.commit(result.nodeUpdate)
+      draftNode.create(gridPosition.current, selectedItem)
+      revalidate()
     }
 
     const onCeilingLeave = (event: CeilingEvent) => {
-      if (!isOnCeiling.current) return
-      isOnCeiling.current = false
-      currentCeilingId = null
+      const result = ceilingStrategy.leave(getContext())
+      if (!result) return
+
       event.stopPropagation()
-      if (!draftItem.current) return
-      const currentLevelId = useViewer.getState().selection.levelId
-      draftItem.current.parentId = currentLevelId
-      useScene.getState().updateNode(draftItem.current.id, {
-        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-        parentId: currentLevelId,
-      })
-      checkCanPlace()
+      applyTransition(result)
     }
+
+    // ---- Keyboard rotation ----
+
+    const ROTATION_STEP = Math.PI / 2
+    const onKeyDown = (event: KeyboardEvent) => {
+      const draft = draftNode.current
+      if (!draft) return
+
+      let rotationDelta = 0
+      if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
+      else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
+
+      if (rotationDelta !== 0) {
+        event.preventDefault()
+        const currentRotation = draft.rotation
+        const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
+        draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
+
+        useScene.getState().updateNode(draft.id, { rotation: draft.rotation })
+        cursorRef.current.rotation.y = newRotationY
+        revalidate()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+
+    // ---- Bounding box geometry ----
+
+    const boxGeometry = new BoxGeometry(
+      selectedItem.dimensions[0],
+      selectedItem.dimensions[1],
+      selectedItem.dimensions[2],
+    )
+    boxGeometry.translate(0, selectedItem.dimensions[1] / 2, 0)
+    cursorRef.current.geometry = boxGeometry
+
+    // ---- Subscribe ----
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -495,71 +267,27 @@ export const ItemTool: React.FC = () => {
     emitter.on('ceiling:click', onCeilingClick)
     emitter.on('ceiling:leave', onCeilingLeave)
 
-    // Keyboard rotation handlers
-    const ROTATION_STEP = Math.PI / 2 // 90 degrees
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!draftItem.current) return
-
-      let rotationDelta = 0
-      if (event.key === 'r' || event.key === 'R') {
-        rotationDelta = ROTATION_STEP // Counter-clockwise
-      } else if (event.key === 't' || event.key === 'T') {
-        rotationDelta = -ROTATION_STEP // Clockwise
-      }
-
-      if (rotationDelta !== 0) {
-        event.preventDefault()
-        const currentRotation = draftItem.current.rotation
-        const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
-        draftItem.current.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
-
-        useScene.getState().updateNode(draftItem.current.id, {
-          rotation: draftItem.current.rotation,
-        })
-
-        // Update cursor rotation to match
-        cursorRef.current.rotation.y = newRotationY
-
-        checkCanPlace()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-
-    const setupBoundingBox = () => {
-      const boxGeometry = new BoxGeometry(
-        selectedItem.dimensions[0],
-        selectedItem.dimensions[1],
-        selectedItem.dimensions[2],
-      )
-      boxGeometry.translate(0, selectedItem.dimensions[1] / 2, 0)
-      cursorRef.current.geometry = boxGeometry
-    }
-    setupBoundingBox()
-
     return () => {
-      if (draftItem.current) {
-        useScene.getState().deleteNode(draftItem.current.id)
-      }
-      useScene.temporal.getState().resume()
+      draftNode.destroy()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('wall:enter', onWallEnter)
-      emitter.off('wall:leave', onWallLeave)
-      emitter.off('wall:click', onWallClick)
       emitter.off('wall:move', onWallMove)
+      emitter.off('wall:click', onWallClick)
+      emitter.off('wall:leave', onWallLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [selectedItem, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling])
+  }, [selectedItem, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
 
   useFrame((_, delta) => {
-    if (draftItem.current && !isOnWall.current && !isOnCeiling.current) {
-      const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
-      if (draftItemMesh) {
-        draftItemMesh.position.lerp(gridPosition.current, delta * 20)
+    if (draftNode.current && placementState.current.surface === 'floor') {
+      const mesh = sceneRegistry.nodes.get(draftNode.current.id)
+      if (mesh) {
+        mesh.position.lerp(gridPosition.current, delta * 20)
       }
     }
   })

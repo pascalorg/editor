@@ -1079,7 +1079,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0.5,
       0.5000000000000003
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
