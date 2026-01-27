@@ -53,16 +53,23 @@ export function initSpatialGridSync() {
       }
     }
 
-    // Detect updated nodes (items with position/rotation/parentId/side changes)
+    // Detect updated nodes (items with position/rotation/parentId/side changes, slabs with polygon/elevation changes)
     for (const [id, node] of Object.entries(state.nodes)) {
       const prev = prevState.nodes[id as AnyNode['id']]
-      if (prev && node.type === 'item' && prev.type === 'item') {
+      if (!prev) continue
+
+      if (node.type === 'item' && prev.type === 'item') {
         if (
           !arraysEqual(node.position, prev.position) ||
           !arraysEqual(node.rotation, prev.rotation) ||
           node.parentId !== prev.parentId ||
           node.side !== prev.side
         ) {
+          const levelId = resolveLevelId(node, state.nodes)
+          spatialGridManager.handleNodeUpdated(node, levelId)
+        }
+      } else if (node.type === 'slab' && prev.type === 'slab') {
+        if (node.polygon !== prev.polygon || node.elevation !== prev.elevation) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
         }

@@ -1,11 +1,30 @@
-import type { AnyNode, ItemNode, WallNode } from '../../schema'
+import type { AnyNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
+
+/**
+ * Point-in-polygon test using ray casting algorithm.
+ * Returns true if point (px, pz) is inside the polygon defined by vertices.
+ */
+function pointInPolygon(px: number, pz: number, polygon: Array<[number, number]>): boolean {
+  let inside = false
+  const n = polygon.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i]![0], zi = polygon[i]![1]
+    const xj = polygon[j]![0], zj = polygon[j]![1]
+
+    if ((zi > pz) !== (zj > pz) && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) {
+      inside = !inside
+    }
+  }
+  return inside
+}
 
 export class SpatialGridManager {
   private floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
   private wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
   private walls = new Map<string, WallNode>() // wallId -> wall data (for length calculations)
+  private slabsByLevel = new Map<string, Map<string, SlabNode>>() // levelId -> (slabId -> slab)
 
   constructor(private cellSize = 0.5) {}
 
@@ -36,9 +55,18 @@ export class SpatialGridManager {
     return wall?.height ?? 2.5 // Default wall height
   }
 
+  private getSlabMap(levelId: string): Map<string, SlabNode> {
+    if (!this.slabsByLevel.has(levelId)) {
+      this.slabsByLevel.set(levelId, new Map())
+    }
+    return this.slabsByLevel.get(levelId)!
+  }
+
   // Called when nodes change
   handleNodeCreated(node: AnyNode, levelId: string) {
-    if (node.type === 'wall') {
+    if (node.type === 'slab') {
+      this.getSlabMap(levelId).set(node.id, node as SlabNode)
+    } else if (node.type === 'wall') {
       const wall = node as WallNode
       this.walls.set(wall.id, wall)
     } else if (node.type === 'item') {
@@ -79,7 +107,9 @@ export class SpatialGridManager {
   }
 
   handleNodeUpdated(node: AnyNode, levelId: string) {
-    if (node.type === 'wall') {
+    if (node.type === 'slab') {
+      this.getSlabMap(levelId).set(node.id, node as SlabNode)
+    } else if (node.type === 'wall') {
       const wall = node as WallNode
       this.walls.set(wall.id, wall)
     } else if (node.type === 'item') {
@@ -120,7 +150,9 @@ export class SpatialGridManager {
   }
 
   handleNodeDeleted(nodeId: string, nodeType: string, levelId: string) {
-    if (nodeType === 'wall') {
+    if (nodeType === 'slab') {
+      this.getSlabMap(levelId).delete(nodeId)
+    } else if (nodeType === 'wall') {
       this.walls.delete(nodeId)
       // Remove all items attached to this wall from the spatial grid
       const removedItemIds = this.getWallGrid(levelId).removeWall(nodeId)
@@ -191,15 +223,37 @@ export class SpatialGridManager {
     return this.getWallGrid(levelId).getWallForItem(itemId)
   }
 
+  /**
+   * Get the total slab elevation at a given (x, z) position on a level.
+   * Returns the highest slab elevation if the point is inside any slab polygon, otherwise 0.
+   */
+  getSlabElevationAt(levelId: string, x: number, z: number): number {
+    const slabMap = this.slabsByLevel.get(levelId)
+    if (!slabMap) return 0
+
+    let maxElevation = 0
+    for (const slab of slabMap.values()) {
+      if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
+        const elevation = slab.elevation ?? 0.05
+        if (elevation > maxElevation) {
+          maxElevation = elevation
+        }
+      }
+    }
+    return maxElevation
+  }
+
   clearLevel(levelId: string) {
     this.floorGrids.delete(levelId)
     this.wallGrids.delete(levelId)
+    this.slabsByLevel.delete(levelId)
   }
 
   clear() {
     this.floorGrids.clear()
     this.wallGrids.clear()
     this.walls.clear()
+    this.slabsByLevel.clear()
   }
 }
 
