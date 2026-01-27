@@ -1,10 +1,12 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { ItemNode } from './item'
 
 export const CeilingNode = BaseNode.extend({
   id: objectId('ceiling'),
   type: nodeType('ceiling'),
+  children: z.array(ItemNode.shape.id).default([]),
   // Specific props
   // Polygon boundary - array of [x, z] coordinates defining the ceiling
   polygon: z.array(z.tuple([z.number(), z.number()])),

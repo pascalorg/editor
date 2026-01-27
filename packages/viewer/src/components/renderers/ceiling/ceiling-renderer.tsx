@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { faceDirection, float, mix } from 'three/tsl'
 import { DoubleSide, type Mesh, MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { NodeRenderer } from '../node-renderer'
 
 // TSL material that renders differently based on face direction:
 // - Back face (looking up at ceiling from below): solid
@@ -27,6 +28,9 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     <mesh ref={ref} material={ceilingMaterial} {...handlers}>
       {/* CeilingSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
+      {node.children.map((childId) => (
+        <NodeRenderer key={childId} nodeId={childId} />
+      ))}
     </mesh>
   )
 }

@@ -1,4 +1,5 @@
 import {
+  type CeilingEvent,
   emitter,
   type GridEvent,
   ItemNode,
@@ -113,6 +114,7 @@ export const ItemTool: React.FC = () => {
   const selectedItem = useEditor((state) => state.selectedItem)
   const { canPlaceOnFloor, canPlaceOnWall } = useSpatialQuery()
   const isOnWall = useRef(false)
+  const isOnCeiling = useRef(false)
 
   useEffect(() => {
     if (!selectedItem) {
@@ -120,12 +122,15 @@ export const ItemTool: React.FC = () => {
     }
 
     let currentWallId: string | null = null
+    let currentCeilingId: string | null = null
 
     const checkCanPlace = () => {
       const currentLevelId = useViewer.getState().selection.levelId
       if (currentLevelId && draftItem.current) {
         let placeable = true
-        if (draftItem.current.asset.attachTo) {
+        if (draftItem.current.asset.attachTo === 'ceiling') {
+          placeable = isOnCeiling.current && !!currentCeilingId
+        } else if (draftItem.current.asset.attachTo) {
           if (!isOnWall.current || !currentWallId) {
             placeable = false
           } else {
@@ -181,7 +186,7 @@ export const ItemTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      if (isOnWall.current) return
+      if (isOnWall.current || isOnCeiling.current) return
 
       const [dimX, , dimZ] = selectedItem.dimensions
       gridPosition.current.set(
@@ -201,7 +206,7 @@ export const ItemTool: React.FC = () => {
     }
     const onGridClick = (event: GridEvent) => {
       const currentLevelId = useViewer.getState().selection.levelId
-      if (isOnWall.current) return
+      if (isOnWall.current || isOnCeiling.current) return
 
       if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
 
@@ -358,12 +363,125 @@ export const ItemTool: React.FC = () => {
       }
     }
 
+    // ====================================================================
+    // CEILING HANDLERS
+    // ====================================================================
+
+    const onCeilingEnter = (event: CeilingEvent) => {
+      if (draftItem.current?.asset.attachTo !== 'ceiling') return
+      if (
+        useViewer.getState().selection.levelId !==
+        resolveLevelId(event.node, useScene.getState().nodes)
+      ) {
+        return
+      }
+
+      event.stopPropagation()
+      isOnCeiling.current = true
+      currentCeilingId = event.node.id
+
+      const [dimX, , dimZ] = selectedItem.dimensions
+      const itemHeight = selectedItem.dimensions[1]
+
+      gridPosition.current.set(
+        snapToGrid(event.position[0], dimX),
+        -itemHeight,
+        snapToGrid(event.position[2], dimZ),
+      )
+      cursorRef.current.position.set(
+        gridPosition.current.x,
+        event.position[1] - itemHeight,
+        gridPosition.current.z,
+      )
+
+      draftItem.current.parentId = event.node.id
+
+      useScene.getState().updateNode(draftItem.current.id, {
+        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+        parentId: event.node.id,
+      })
+      checkCanPlace()
+    }
+
+    const onCeilingMove = (event: CeilingEvent) => {
+      if (!isOnCeiling.current || !draftItem.current) return
+
+      event.stopPropagation()
+
+      const [dimX, , dimZ] = selectedItem.dimensions
+      const itemHeight = selectedItem.dimensions[1]
+
+      gridPosition.current.set(
+        snapToGrid(event.position[0], dimX),
+        -itemHeight,
+        snapToGrid(event.position[2], dimZ),
+      )
+      cursorRef.current.position.set(
+        gridPosition.current.x,
+        event.position[1] - itemHeight,
+        gridPosition.current.z,
+      )
+
+      checkCanPlace()
+      if (draftItem.current) {
+        draftItem.current.position = [
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ]
+        const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
+        if (draftItemMesh) {
+          draftItemMesh.position.copy(gridPosition.current)
+        }
+      }
+    }
+
+    const onCeilingClick = (event: CeilingEvent) => {
+      if (!isOnCeiling.current) return
+
+      event.stopPropagation()
+
+      const currentLevelId = useViewer.getState().selection.levelId
+      if (!currentLevelId || !draftItem.current || !checkCanPlace()) return
+
+      useScene.temporal.getState().resume()
+      useScene.getState().updateNode(draftItem.current.id, {
+        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+        parentId: event.node.id,
+        metadata: stripTransient(draftItem.current.metadata),
+      })
+      draftItem.current = null
+
+      useScene.temporal.getState().pause()
+      createDraftItem()
+      checkCanPlace()
+    }
+
+    const onCeilingLeave = (event: CeilingEvent) => {
+      if (!isOnCeiling.current) return
+      isOnCeiling.current = false
+      currentCeilingId = null
+      event.stopPropagation()
+      if (!draftItem.current) return
+      const currentLevelId = useViewer.getState().selection.levelId
+      draftItem.current.parentId = currentLevelId
+      useScene.getState().updateNode(draftItem.current.id, {
+        position: [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+        parentId: currentLevelId,
+      })
+      checkCanPlace()
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('wall:enter', onWallEnter)
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     emitter.on('wall:leave', onWallLeave)
+    emitter.on('ceiling:enter', onCeilingEnter)
+    emitter.on('ceiling:move', onCeilingMove)
+    emitter.on('ceiling:click', onCeilingClick)
+    emitter.on('ceiling:leave', onCeilingLeave)
 
     // Keyboard rotation handlers
     const ROTATION_STEP = Math.PI / 2 // 90 degrees
@@ -417,12 +535,16 @@ export const ItemTool: React.FC = () => {
       emitter.off('wall:leave', onWallLeave)
       emitter.off('wall:click', onWallClick)
       emitter.off('wall:move', onWallMove)
+      emitter.off('ceiling:enter', onCeilingEnter)
+      emitter.off('ceiling:move', onCeilingMove)
+      emitter.off('ceiling:click', onCeilingClick)
+      emitter.off('ceiling:leave', onCeilingLeave)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [selectedItem, canPlaceOnFloor, canPlaceOnWall])
 
   useFrame((_, delta) => {
-    if (draftItem.current && !isOnWall.current) {
+    if (draftItem.current && !isOnWall.current && !isOnCeiling.current) {
       const draftItemMesh = sceneRegistry.nodes.get(draftItem.current.id)
       if (draftItemMesh) {
         draftItemMesh.position.lerp(gridPosition.current, delta * 20)
