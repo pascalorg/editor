@@ -1,6 +1,8 @@
 import {
   type BuildingEvent,
   type BuildingNode,
+  type CeilingEvent,
+  type CeilingNode,
   type EventSuffix,
   emitter,
   type ItemEvent,
@@ -20,6 +22,7 @@ type NodeConfig = {
   building: { node: BuildingNode; event: BuildingEvent }
   zone: { node: ZoneNode; event: ZoneEvent }
   slab: { node: SlabNode; event: SlabEvent }
+  ceiling: { node: CeilingNode; event: CeilingEvent }
 }
 
 type NodeType = keyof NodeConfig

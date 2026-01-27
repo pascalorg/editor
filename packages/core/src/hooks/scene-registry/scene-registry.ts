@@ -9,6 +9,7 @@ export const sceneRegistry = {
   // Using a Set is faster for adding/deleting than an Array
   byType: {
     building: new Set<string>(),
+    ceiling: new Set<string>(),
     level: new Set<string>(),
     wall: new Set<string>(),
     item: new Set<string>(),

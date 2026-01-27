@@ -2,15 +2,12 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 
-// Polygon boundary for zone area - array of [x, z] coordinates
-export const ZonePolygon = z.array(z.tuple([z.number(), z.number()]))
-
 export const ZoneNode = BaseNode.extend({
   id: objectId('zone'),
   type: nodeType('zone'),
   name: z.string(),
   // Polygon boundary - array of [x, z] coordinates defining the zone
-  polygon: ZonePolygon,
+  polygon: z.array(z.tuple([z.number(), z.number()])),
   // Visual styling
   color: z.string().default('#3b82f6'), // Default blue
   metadata: z.json().optional().default({}),
@@ -28,4 +25,3 @@ export const ZoneNode = BaseNode.extend({
 )
 
 export type ZoneNode = z.infer<typeof ZoneNode>
-export type ZonePolygon = z.infer<typeof ZonePolygon>

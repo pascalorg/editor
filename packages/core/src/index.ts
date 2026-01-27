@@ -10,6 +10,7 @@ export type {
   SlabEvent,
   WallEvent,
   ZoneEvent,
+  CeilingEvent,
 } from './events/bus'
 // Events
 export { emitter, eventSuffixes } from './events/bus'
@@ -27,6 +28,7 @@ export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export * from './schema'
 export { default as useScene } from './store/use-scene'
 // Systems
+export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { SlabSystem } from './systems/slab/slab-system'
 export { WallSystem } from './systems/wall/wall-system'
 

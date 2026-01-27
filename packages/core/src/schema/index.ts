@@ -2,15 +2,16 @@
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
-export { BuildingNode } from './nodes/building'
 export type { AssetInput } from './nodes/item'
 export { ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
 // Nodes
 export { SiteNode } from './nodes/site'
-export { SlabNode, SlabPolygon } from './nodes/slab'
+export { SlabNode } from './nodes/slab'
 export { WallNode } from './nodes/wall'
-export type { ZonePolygon } from './nodes/zone'
+export { BuildingNode } from './nodes/building'
+export { CeilingNode } from './nodes/ceiling'
+
 export { ZoneNode } from './nodes/zone'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types

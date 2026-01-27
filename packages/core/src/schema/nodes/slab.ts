@@ -2,15 +2,12 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 
-// Polygon boundary for zone area - array of [x, z] coordinates
-export const SlabPolygon = z.array(z.tuple([z.number(), z.number()]))
-
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
   type: nodeType('slab'),
   // Specific props
   // Polygon boundary - array of [x, z] coordinates defining the slab
-  polygon: SlabPolygon,
+  polygon: z.array(z.tuple([z.number(), z.number()])),
   elevation: z.number().default(0.05), // Elevation in meters
 }).describe(
   dedent`
@@ -21,4 +18,3 @@ export const SlabNode = BaseNode.extend({
 )
 
 export type SlabNode = z.infer<typeof SlabNode>
-export type SlabPolygon = z.infer<typeof SlabPolygon>
