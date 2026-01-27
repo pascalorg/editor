@@ -95,7 +95,7 @@ export const wallStrategy = {
     resolveLevelId: LevelResolver,
     nodes: Record<string, AnyNode>,
   ): TransitionResult | null {
-    const attachTo = ctx.draftItem?.asset.attachTo
+    const attachTo = ctx.asset.attachTo
     if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
     if (!isValidWallSideFace(event.normal)) return null
 
@@ -121,7 +121,11 @@ export const wallStrategy = {
       },
       cursorRotationY: cursorRotation,
       gridPosition: [x, y, z],
-      cursorPosition: [x, y, z],
+      cursorPosition: [
+        snapToHalf(event.position[0]),
+        snapToHalf(event.position[1]),
+        snapToHalf(event.position[2]),
+      ],
       stopPropagation: true,
     }
   },
@@ -230,7 +234,7 @@ export const ceilingStrategy = {
     resolveLevelId: LevelResolver,
     nodes: Record<string, AnyNode>,
   ): TransitionResult | null {
-    if (ctx.draftItem?.asset.attachTo !== 'ceiling') return null
+    if (ctx.asset.attachTo !== 'ceiling') return null
 
     // Level guard
     const ceilingLevelId = resolveLevelId(event.node, nodes)

@@ -75,9 +75,35 @@ export const ItemTool: React.FC = () => {
       revalidate()
     }
 
-    // ---- Create initial draft ----
+    /**
+     * Create a draft from a transition result on the first valid move.
+     * If placement is invalid at this position, the draft is immediately destroyed
+     * so no item appears in the scene until the cursor reaches a valid spot.
+     */
+    const ensureDraft = (result: TransitionResult) => {
+      gridPosition.current.set(...result.gridPosition)
+      cursorRef.current.position.set(...result.cursorPosition)
+      cursorRef.current.rotation.y = result.cursorRotationY
 
-    draftNode.create(gridPosition.current, selectedItem)
+      draftNode.create(gridPosition.current, selectedItem)
+
+      const draft = draftNode.current
+      if (draft) {
+        Object.assign(draft, result.nodeUpdate)
+        useScene.getState().updateNode(draft.id, result.nodeUpdate)
+      }
+
+      if (!revalidate()) {
+        draftNode.destroy()
+      }
+    }
+
+    // ---- Create initial draft (floor items only) ----
+    // Wall/ceiling items are created on surface enter to avoid floating items.
+
+    if (!selectedItem.attachTo) {
+      draftNode.create(gridPosition.current, selectedItem)
+    }
     revalidate()
 
     // ---- Floor Handlers ----
@@ -113,10 +139,40 @@ export const ItemTool: React.FC = () => {
 
       event.stopPropagation()
       applyTransition(result)
+
+      // Try to create draft immediately if placement is valid
+      if (!draftNode.current) {
+        ensureDraft(result)
+      }
     }
 
     const onWallMove = (event: WallEvent) => {
-      const result = wallStrategy.move(getContext(), event)
+      const ctx = getContext()
+
+      // If not yet on wall surface (e.g. entered via invalid top face),
+      // promote this move to an enter when hitting a valid side face.
+      if (ctx.state.surface !== 'wall') {
+        const nodes = useScene.getState().nodes
+        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes)
+        if (!enterResult) return
+
+        event.stopPropagation()
+        applyTransition(enterResult)
+        return
+      }
+
+      // No draft yet (first move after enter) — create at current position if valid
+      if (!draftNode.current) {
+        const nodes = useScene.getState().nodes
+        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+        if (!setup) return
+
+        event.stopPropagation()
+        ensureDraft(setup)
+        return
+      }
+
+      const result = wallStrategy.move(ctx, event)
       if (!result) return
 
       event.stopPropagation()
@@ -161,8 +217,15 @@ export const ItemTool: React.FC = () => {
       if (result.dirtyNodeId) {
         useScene.getState().dirtyNodes.add(result.dirtyNodeId)
       }
-      draftNode.create(gridPosition.current, selectedItem)
-      revalidate()
+
+      // Re-enter the wall — applyTransition creates the next draft at the correct position
+      const nodes = useScene.getState().nodes
+      const enterResult = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+      if (enterResult) {
+        applyTransition(enterResult)
+      } else {
+        revalidate()
+      }
     }
 
     const onWallLeave = (event: WallEvent) => {
@@ -170,7 +233,14 @@ export const ItemTool: React.FC = () => {
       if (!result) return
 
       event.stopPropagation()
-      applyTransition(result)
+
+      // Wall/ceiling items: destroy draft so it doesn't float on the floor
+      if (selectedItem.attachTo) {
+        draftNode.destroy()
+        Object.assign(placementState.current, result.stateUpdate)
+      } else {
+        applyTransition(result)
+      }
     }
 
     // ---- Ceiling Handlers ----
@@ -182,9 +252,25 @@ export const ItemTool: React.FC = () => {
 
       event.stopPropagation()
       applyTransition(result)
+
+      // Try to create draft immediately if placement is valid
+      if (!draftNode.current) {
+        ensureDraft(result)
+      }
     }
 
     const onCeilingMove = (event: CeilingEvent) => {
+      // No draft yet (first move after enter) — create at current position if valid
+      if (!draftNode.current && placementState.current.surface === 'ceiling') {
+        const nodes = useScene.getState().nodes
+        const setup = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
+        if (!setup) return
+
+        event.stopPropagation()
+        ensureDraft(setup)
+        return
+      }
+
       const result = ceilingStrategy.move(getContext(), event)
       if (!result) return
 
@@ -208,8 +294,15 @@ export const ItemTool: React.FC = () => {
 
       event.stopPropagation()
       draftNode.commit(result.nodeUpdate)
-      draftNode.create(gridPosition.current, selectedItem)
-      revalidate()
+
+      // Re-enter the ceiling — applyTransition creates the next draft at the correct position
+      const nodes = useScene.getState().nodes
+      const enterResult = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
+      if (enterResult) {
+        applyTransition(enterResult)
+      } else {
+        revalidate()
+      }
     }
 
     const onCeilingLeave = (event: CeilingEvent) => {
@@ -217,7 +310,14 @@ export const ItemTool: React.FC = () => {
       if (!result) return
 
       event.stopPropagation()
-      applyTransition(result)
+
+      // Wall/ceiling items: destroy draft so it doesn't float on the floor
+      if (selectedItem.attachTo) {
+        draftNode.destroy()
+        Object.assign(placementState.current, result.stateUpdate)
+      } else {
+        applyTransition(result)
+      }
     }
 
     // ---- Keyboard rotation ----
@@ -287,6 +387,13 @@ export const ItemTool: React.FC = () => {
     if (draftNode.current && placementState.current.surface === 'floor') {
       const mesh = sceneRegistry.nodes.get(draftNode.current.id)
       if (mesh) {
+        // If distance is large, snap immediately
+        const distance = mesh.position.distanceToSquared(gridPosition.current)
+        if (distance > 1) {
+          mesh.position.copy(gridPosition.current)
+          return
+        }
+        // Otherwise, lerp smoothly
         mesh.position.lerp(gridPosition.current, delta * 20)
       }
     }

@@ -363,9 +363,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      1.9999999999999991,
-      2.0000000000000004,
-      0.39999999999999936
+      2,
+      2,
+      0.4
     ],
     "attachTo": "wall"
   },
