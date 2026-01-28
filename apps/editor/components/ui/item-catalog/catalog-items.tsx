@@ -30,7 +30,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "hydrant",
-    "category": "furniture",
+    "category": "appliance",
     "name": "hydrant",
     "thumbnail": "/items/hydrant/thumbnail.webp",
     "src": "/items/hydrant/model.glb",
@@ -58,7 +58,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "sunbed",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "sunbed",
     "thumbnail": "/items/sunbed/thumbnail.webp",
     "src": "/items/sunbed/model.glb",
@@ -86,19 +86,19 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "palm",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "palm",
     "thumbnail": "/items/palm/thumbnail.webp",
     "src": "/items/palm/model.glb",
     "scale": [
       0.37,
-      0.37000000000000005,
+      0.37,
       0.37
     ],
     "offset": [
-      0.13999999999999999,
       0,
-      -0.20000000000000007
+      0,
+      0.02
     ],
     "rotation": [
       0,
@@ -106,15 +106,15 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      3.500000000000003,
-      4.500000000000007,
-      3.500000000000004
+      1,
+      4.5,
+      1
     ]
   },
   
   {
     "id": "fence",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "fence",
     "thumbnail": "/items/fence/thumbnail.webp",
     "src": "/items/fence/model.glb",
@@ -142,7 +142,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "patio-umbrella",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "patio-umbrella",
     "thumbnail": "/items/patio-umbrella/thumbnail.webp",
     "src": "/items/patio-umbrella/model.glb",
@@ -154,7 +154,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     "offset": [
       0,
       0,
-      0.09
+      0
     ],
     "rotation": [
       0,
@@ -162,9 +162,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      3.500000000000003,
-      3.0000000000000013,
-      3.500000000000002
+      1,
+      3,
+      1
     ]
   },
   
@@ -198,7 +198,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "smoke-detector",
-    "category": "furniture",
+    "category": "appliance",
     "name": "smoke-detector",
     "thumbnail": "/items/smoke-detector/thumbnail.webp",
     "src": "/items/smoke-detector/model.glb",
@@ -256,7 +256,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "sprinkler",
-    "category": "furniture",
+    "category": "appliance",
     "name": "sprinkler",
     "thumbnail": "/items/sprinkler/thumbnail.webp",
     "src": "/items/sprinkler/model.glb",
@@ -314,7 +314,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "ceiling-fan",
-    "category": "furniture",
+    "category": "appliance",
     "name": "ceiling-fan",
     "thumbnail": "/items/ceiling-fan/thumbnail.webp",
     "src": "/items/ceiling-fan/model.glb",
@@ -363,9 +363,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      2,
-      2,
-      0.4
+      1.9999999999999991,
+      2.0000000000000004,
+      0.39999999999999936
     ],
     "attachTo": "wall"
   },
@@ -401,7 +401,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "glass-door",
-    "category": "furniture",
+    "category": "door",
     "name": "glass-door",
     "thumbnail": "/items/glass-door/thumbnail.webp",
     "src": "/items/glass-door/model.glb",
@@ -430,7 +430,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "door",
-    "category": "furniture",
+    "category": "door",
     "name": "door",
     "thumbnail": "/items/door/thumbnail.webp",
     "src": "/items/door/model.glb",
@@ -459,7 +459,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "thermostat",
-    "category": "furniture",
+    "category": "appliance",
     "name": "thermostat",
     "thumbnail": "/items/thermostat/thumbnail.webp",
     "src": "/items/thermostat/model.glb",
@@ -489,7 +489,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "parking-spot",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "parking-spot",
     "thumbnail": "/items/parking-spot/thumbnail.webp",
     "src": "/items/parking-spot/model.glb",
@@ -517,7 +517,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
 
   {
     "id": "ac-block",
-    "category": "furniture",
+    "category": "appliance",
     "name": "ac-block",
     "thumbnail": "/items/ac-block/thumbnail.webp",
     "src": "/items/ac-block/model.glb",
@@ -545,7 +545,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "fire-detector",
-    "category": "furniture",
+    "category": "appliance",
     "name": "fire-detector",
     "thumbnail": "/items/fire-detector/thumbnail.webp",
     "src": "/items/fire-detector/model.glb",
@@ -574,7 +574,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "exit-sign",
-    "category": "furniture",
+    "category": "appliance",
     "name": "exit-sign",
     "thumbnail": "/items/exit-sign/thumbnail.webp",
     "src": "/items/exit-sign/model.glb",
@@ -594,28 +594,28 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      0.9999999999999999,
+      1,
       0.5,
-      0.30000000000000004
+      0.3
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
     "id": "electric-panel",
-    "category": "furniture",
+    "category": "appliance",
     "name": "electric-panel",
     "thumbnail": "/items/electric-panel/thumbnail.webp",
     "src": "/items/electric-panel/model.glb",
     "scale": [
-      0.6100000000000002,
-      0.7399999999999999,
+      0.61,
+      0.74,
       0.7
     ],
     "offset": [
       0,
       0,
-      0.060000000000000005
+      0.06
     ],
     "rotation": [
       0,
@@ -623,17 +623,17 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      0.5000000000000001,
-      0.9999999999999999,
-      0.30000000000000004
+      0.5,
+      1,
+      0.3
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   
   {
     "id": "alarm-keypad",
-    "category": "furniture",
+    "category": "appliance",
     "name": "alarm-keypad",
     "thumbnail": "/items/alarm-keypad/thumbnail.webp",
     "src": "/items/alarm-keypad/model.glb",
@@ -671,9 +671,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1
     ],
     "offset": [
-      -0.08,
       0,
-      0.020000000000000004
+      0.1,
+      0.01
     ],
     "rotation": [
       0,
@@ -681,10 +681,11 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      0.500000000000001,
-      0.30000000000000004,
-      0.5000000000000003
-    ]
+      1,
+      0.5,
+      0.7
+    ],
+    "attachTo": "wall-side"
   },
   
   {
@@ -745,7 +746,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "skate",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "skate",
     "thumbnail": "/items/skate/thumbnail.webp",
     "src": "/items/skate/model.glb",
@@ -801,7 +802,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "outdoor-playhouse",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "outdoor-playhouse",
     "thumbnail": "/items/outdoor-playhouse/thumbnail.webp",
     "src": "/items/outdoor-playhouse/model.glb",
@@ -829,7 +830,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "scooter",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "scooter",
     "thumbnail": "/items/scooter/thumbnail.webp",
     "src": "/items/scooter/model.glb",
@@ -857,7 +858,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "basket-hoop",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "basket-hoop",
     "thumbnail": "/items/basket-hoop/thumbnail.webp",
     "src": "/items/basket-hoop/model.glb",
@@ -941,7 +942,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "hood",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "hood",
     "thumbnail": "/items/hood/thumbnail.webp",
     "src": "/items/hood/model.glb",
@@ -952,8 +953,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "offset": [
       0,
-      0.5200000000000002,
-      0.00999999999999999
+      0.52,
+      0.01
     ],
     "rotation": [
       0,
@@ -961,16 +962,16 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      1.5000000000000016,
+      1.5,
       1,
-      1.1000000000000003
+      1.1
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
     "id": "kitchen-shelf",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "kitchen-shelf",
     "thumbnail": "/items/kitchen-shelf/thumbnail.webp",
     "src": "/items/kitchen-shelf/model.glb",
@@ -981,8 +982,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "offset": [
       0,
-      0.5200000000000002,
-      0.00999999999999999
+      0.52,
+      0.01
     ],
     "rotation": [
       0,
@@ -990,11 +991,11 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      2.500000000000002,
+      2.5,
       1,
-      1.1000000000000003
+      1.1
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -1027,7 +1028,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "drying-rack",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "drying-rack",
     "thumbnail": "/items/drying-rack/thumbnail.webp",
     "src": "/items/drying-rack/model.glb",
@@ -1066,8 +1067,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "offset": [
       0,
-      0.19000000000000003,
-      0.11999999999999998
+      0.19,
+      0.12
     ],
     "rotation": [
       0,
@@ -1075,16 +1076,16 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      0.5000000000000008,
       0.5,
-      0.5000000000000003
+      0.5,
+      0.5
     ],
     "attachTo": "wall-side"
   },
   
   {
     "id": "cutting-board",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "cutting-board",
     "thumbnail": "/items/cutting-board/thumbnail.webp",
     "src": "/items/cutting-board/model.glb",
@@ -1112,7 +1113,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "frying-pan",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "frying-pan",
     "thumbnail": "/items/frying-pan/thumbnail.webp",
     "src": "/items/frying-pan/model.glb",
@@ -1140,7 +1141,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "kitchen-utensils",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "kitchen-utensils",
     "thumbnail": "/items/kitchen-utensils/thumbnail.webp",
     "src": "/items/kitchen-utensils/model.glb",
@@ -1168,7 +1169,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "kitchen-counter",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "kitchen-counter",
     "thumbnail": "/items/kitchen-counter/thumbnail.webp",
     "src": "/items/kitchen-counter/model.glb",
@@ -1196,7 +1197,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "kitchen-cabinet",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "kitchen-cabinet",
     "thumbnail": "/items/kitchen-cabinet/thumbnail.webp",
     "src": "/items/kitchen-cabinet/model.glb",
@@ -1336,7 +1337,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "television",
-    "category": "furniture",
+    "category": "appliance",
     "name": "television",
     "thumbnail": "/items/television/thumbnail.webp",
     "src": "/items/television/model.glb",
@@ -1392,7 +1393,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "air-conditioning",
-    "category": "furniture",
+    "category": "appliance",
     "name": "air-conditioning",
     "thumbnail": "/items/air-conditioning/thumbnail.webp",
     "src": "/items/air-conditioning/model.glb",
@@ -1403,8 +1404,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "offset": [
       0,
-      0.37000000000000016,
-      0.21000000000000005
+      0.37,
+      0.21
     ],
     "rotation": [
       0,
@@ -1414,14 +1415,14 @@ export const CATALOG_ITEMS: AssetInput[] = [
     "dimensions": [
       2,
       1,
-      0.8999999999999999
+      0.9
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
     "id": "sewing-machine",
-    "category": "furniture",
+    "category": "appliance",
     "name": "sewing-machine",
     "thumbnail": "/items/sewing-machine/thumbnail.webp",
     "src": "/items/sewing-machine/model.glb",
@@ -1533,7 +1534,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "toaster",
-    "category": "furniture",
+    "category": "appliance",
     "name": "toaster",
     "thumbnail": "/items/toaster/thumbnail.webp",
     "src": "/items/toaster/model.glb",
@@ -1618,7 +1619,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
 
   {
   "id": "kettle",
-  "category": "furniture",
+  "category": "appliance",
   "name": "kettle",
   "thumbnail": "/items/kettle/thumbnail.webp",
   "src": "/items/kettle/model.glb",
@@ -1646,7 +1647,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "iron",
-    "category": "furniture",
+    "category": "appliance",
     "name": "iron",
     "thumbnail": "/items/iron/thumbnail.webp",
     "src": "/items/iron/model.glb",
@@ -1760,7 +1761,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "coffee-machine",
-    "category": "furniture",
+    "category": "appliance",
     "name": "coffee-machine",
     "thumbnail": "/items/coffee-machine/thumbnail.webp",
     "src": "/items/coffee-machine/model.glb",
@@ -1788,7 +1789,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "wine-bottle",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "wine-bottle",
     "thumbnail": "/items/wine-bottle/thumbnail.webp",
     "src": "/items/wine-bottle/model.glb",
@@ -1816,7 +1817,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "fruits",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "fruits",
     "thumbnail": "/items/fruits/thumbnail.webp",
     "src": "/items/fruits/model.glb",
@@ -1868,7 +1869,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       0.1
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
@@ -1901,7 +1902,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "ball",
-    "category": "furniture",
+    "category": "outdoor",
     "name": "ball",
     "thumbnail": "/items/ball/thumbnail.webp",
     "src": "/items/ball/model.glb",
@@ -1950,7 +1951,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       1.5,
-      1,
+      0.8,
       1
     ]
   },
@@ -2037,12 +2038,12 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1,
       0.2
     ],
-    "attachTo": "wall"
+    "attachTo": "wall-side"
   },
   
   {
     "id": "stereo-speaker",
-    "category": "furniture",
+    "category": "appliance",
     "name": "stereo-speaker",
     "thumbnail": "/items/stereo-speaker/thumbnail.webp",
     "src": "/items/stereo-speaker/model.glb",
@@ -2098,7 +2099,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "stove",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "stove",
     "thumbnail": "/items/stove/thumbnail.webp",
     "src": "/items/stove/model.glb",
@@ -2126,7 +2127,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "fridge",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "fridge",
     "thumbnail": "/items/fridge/thumbnail.webp",
     "src": "/items/fridge/model.glb",
@@ -2154,7 +2155,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "kitchen",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "kitchen",
     "thumbnail": "/items/kitchen/thumbnail.webp",
     "src": "/items/kitchen/model.glb",
@@ -2182,7 +2183,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "microwave",
-    "category": "furniture",
+    "category": "kitchen",
     "name": "microwave",
     "thumbnail": "/items/microwave/thumbnail.webp",
     "src": "/items/microwave/model.glb",
@@ -2322,7 +2323,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "washing-machine",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "washing-machine",
     "thumbnail": "/items/washing-machine/thumbnail.webp",
     "src": "/items/washing-machine/model.glb",
@@ -2350,7 +2351,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "laundry-bag",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "laundry-bag",
     "thumbnail": "/items/laundry-bag/thumbnail.webp",
     "src": "/items/laundry-bag/model.glb",
@@ -2378,7 +2379,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "shower-angle",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "shower-angle",
     "thumbnail": "/items/shower-angle/thumbnail.webp",
     "src": "/items/shower-angle/model.glb",
@@ -2406,7 +2407,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "bathtub",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "bathtub",
     "thumbnail": "/items/bathtub/thumbnail.webp",
     "src": "/items/bathtub/model.glb",
@@ -2427,14 +2428,14 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       2.5,
-      1,
+      0.8,
       1.5
     ]
   },
   
   {
     "id": "toilet",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "toilet",
     "thumbnail": "/items/toilet/thumbnail.webp",
     "src": "/items/toilet/model.glb",
@@ -2455,7 +2456,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       1,
-      1,
+      0.9,
       1
     ]
   },
@@ -2483,14 +2484,14 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       2.5,
-      1,
+      0.8,
       1.5
     ]
   },
   
   {
     "id": "shower-square",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "shower-square",
     "thumbnail": "/items/shower-square/thumbnail.webp",
     "src": "/items/shower-square/model.glb",
@@ -2518,7 +2519,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   
   {
     "id": "bathroom-sink",
-    "category": "furniture",
+    "category": "bathroom",
     "name": "bathroom-sink",
     "thumbnail": "/items/bathroom-sink/thumbnail.webp",
     "src": "/items/bathroom-sink/model.glb",
@@ -2547,7 +2548,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   {
     "id": "coffee-table",
     "category": "furniture",
-    "name": "Coffee-table",
+    "name": "coffee-table",
     "thumbnail": "/items/coffee-table/thumbnail.webp",
     "src": "/items/coffee-table/model.glb",
     "scale": [
@@ -2566,16 +2567,16 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      2.0,
-      0.5,
+      2,
+      0.4,
       1.5
     ]
   },
   
   {
     "id": "computer",
-    "category": "furniture",
-    "name": "Computer",
+    "category": "appliance",
+    "name": "computer",
     "thumbnail": "/items/computer/thumbnail.webp",
     "src": "/items/computer/model.glb",
     "scale": [
@@ -2624,7 +2625,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       1.5,
-      1,
+      0.8,
       1.5
     ]
   },
@@ -2652,7 +2653,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       1,
-      1.5,
+      1.2,
       1
     ]
   },
@@ -2708,7 +2709,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ],
     "dimensions": [
       2.5,
-      1,
+      0.8,
       1
     ]
   },
@@ -2796,32 +2797,5 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0.30000000000000004
     ],
     "attachTo": "wall"
-  },
-  {
-    "id": "couch-medium",
-    "category": "furniture",
-    "name": "Couch",
-    "thumbnail": "/items/couch-medium/thumbnail.webp",
-    "src": "/items/couch-medium/model.glb",
-    "scale": [
-      0.39,
-      0.39,
-      0.39
-    ],
-    "offset": [
-      0,
-      0,
-      0.03
-    ],
-    "rotation": [
-      0,
-      0,
-      0
-    ],
-    "dimensions": [
-      2,
-      0.8,
-      1
-    ]
-  },
+  }
 ];

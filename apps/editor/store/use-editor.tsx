@@ -1,6 +1,6 @@
 'use client'
 
-import { type BuildingNode, type LevelNode, useScene } from '@pascal-app/core'
+import { type BuildingNode, type ItemNode, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import type { Asset } from '../../../packages/core/src/schema/nodes/item'
@@ -56,6 +56,8 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: Asset | null
   setSelectedItem: (item: Asset) => void
+  movingNode: ItemNode | null
+  setMovingNode: (node: ItemNode | null) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -169,6 +171,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setCatalogCategory: (category) => set({ catalogCategory: category }),
   selectedItem: null,
   setSelectedItem: (item) => set({ selectedItem: item }),
+  movingNode: null,
+  setMovingNode: (node) => set({ movingNode: node }),
 }))
 
 export default useEditor

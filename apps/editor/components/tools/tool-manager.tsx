@@ -2,6 +2,7 @@ import useEditor, { type Phase, type Tool } from "@/store/use-editor";
 import { useViewer } from "@pascal-app/viewer";
 import { CeilingTool } from "./ceiling/ceiling-tool";
 import { ItemTool } from "./item/item-tool";
+import { MoveTool } from "./item/move-tool";
 import { SlabTool } from "./slab/slab-tool";
 import { WallTool } from "./wall/wall-tool";
 import { ZoneBoundaryEditor } from "./zone/zone-boundary-editor";
@@ -25,6 +26,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase);
   const mode = useEditor((state) => state.mode);
   const tool = useEditor((state) => state.tool);
+  const movingNode = useEditor((state) => state.movingNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
 
   // Show zone boundary editor when in structure/select mode with a zone selected
@@ -39,7 +41,8 @@ export const ToolManager: React.FC = () => {
   return (
     <>
       {showZoneBoundaryEditor && <ZoneBoundaryEditor />}
-      {BuildToolComponent && <BuildToolComponent />}
+      {movingNode && <MoveTool />}
+      {!movingNode && BuildToolComponent && <BuildToolComponent />}
     </>
   );
 };

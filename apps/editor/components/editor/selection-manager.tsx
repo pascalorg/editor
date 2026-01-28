@@ -46,6 +46,11 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   structure: {
     types: ["wall", "item", "zone", "slab", "ceiling"],
     handleSelect: (node, isShift) => {
+      // Single click on item (door/window) → enter move mode
+      if (!isShift && node.type === 'item') {
+        useEditor.getState().setMovingNode(node as ItemNode);
+        return;
+      }
       const { selection, setSelection } = useViewer.getState();
       if (node.type === 'zone') {
         setSelection({ zoneId: node.id });
@@ -88,6 +93,11 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   furnish: {
     types: ["item"],
     handleSelect: (node, isShift) => {
+      // Single click on item → enter move mode
+      if (!isShift && node.type === 'item') {
+        useEditor.getState().setMovingNode(node as ItemNode);
+        return;
+      }
       const { selection, setSelection } = useViewer.getState();
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)
@@ -112,8 +122,11 @@ export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase);
   const mode = useEditor((s) => s.mode);
 
+  const movingNode = useEditor((s) => s.movingNode);
+
   useEffect(() => {
     if (mode !== "select") return;
+    if (movingNode) return;
 
     const strategy = SELECTION_STRATEGIES[phase];
     if (!strategy) return;
@@ -158,7 +171,7 @@ export const SelectionManager = () => {
       });
       emitter.off("grid:click", onGridClick);
     };
-  }, [phase, mode]);
+  }, [phase, mode, movingNode]);
 
   return <EditorOutlinerSync />;
 };
