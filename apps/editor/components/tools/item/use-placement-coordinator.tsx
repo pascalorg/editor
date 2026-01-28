@@ -79,11 +79,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       const draft = draftNode.current
       if (draft) {
+        // Update ref for validation — no store update during drag
         Object.assign(draft, result.nodeUpdate)
-        // In move mode, skip store updates — only the ref + mesh matter during drag
-        if (!draftNode.isAdopted) {
-          useScene.getState().updateNode(draft.id, result.nodeUpdate)
-        }
       }
       revalidate()
     }
@@ -98,9 +95,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       if (draft) {
         Object.assign(draft, result.nodeUpdate)
-        if (!draftNode.isAdopted) {
-          useScene.getState().updateNode(draft.id, result.nodeUpdate)
-        }
+        // One-time setup: put node in the right parent so it renders correctly
+        useScene.getState().updateNode(draft.id, result.nodeUpdate)
       }
 
       if (!revalidate()) {
@@ -212,14 +208,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           const rot = result.nodeUpdate?.rotation
           if (rot) mesh.rotation.y = rot[1]
         }
-        // In move mode, skip store updates — only the ref + mesh matter during drag
-        if (!draftNode.isAdopted) {
-          if (result.nodeUpdate) {
-            useScene.getState().updateNode(draft.id, result.nodeUpdate)
-          }
-          if (result.dirtyNodeId) {
-            useScene.getState().dirtyNodes.add(result.dirtyNodeId)
-          }
+        // Mark parent wall dirty so it rebuilds geometry — no store update needed
+        if (result.dirtyNodeId) {
+          useScene.getState().dirtyNodes.add(result.dirtyNodeId)
         }
       }
     }
@@ -358,10 +349,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
-        // In move mode, skip store update — only the ref + cursor mesh matter during drag
-        if (!draftNode.isAdopted) {
-          useScene.getState().updateNode(draft.id, { rotation: draft.rotation })
-        }
+        // Ref + cursor mesh only — no store update during drag
         cursorRef.current.rotation.y = newRotationY
         revalidate()
       }
