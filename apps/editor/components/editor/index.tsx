@@ -10,6 +10,7 @@ import { MathUtils, type Mesh } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useKeyboard } from '@/hooks/use-keyboard'
+import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { SidebarProvider } from '../ui/primitives/sidebar'
@@ -36,6 +37,8 @@ export default function Editor() {
       </SidebarProvider>
       <Viewer>
         <SelectionManager />
+        {/* Editor only system to toggle zone visibility */}
+        <ZoneSystem />
         {/* <Stats /> */}
         <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
         <ToolManager />
