@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   type CeilingEvent,
   emitter,
   type GridEvent,
@@ -10,7 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, type Mesh, type MeshStandardMaterial, Vector3 } from 'three'
+import { BoxGeometry, Euler, type Mesh, type MeshStandardMaterial, Quaternion, Vector3 } from 'three'
 import { resolveLevelId } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync'
 import {
   ceilingStrategy,
@@ -107,13 +108,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Init draft ----
     config.initDraft(gridPosition.current)
 
-    // Sync cursor to the draft mesh's world position (handles floor + wall/ceiling items)
+    // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
       const mesh = sceneRegistry.nodes.get(draftNode.current.id)
       if (mesh) {
         mesh.getWorldPosition(cursorRef.current.position)
+        // Extract world Y rotation (handles wall-parented items correctly)
+        const q = new Quaternion()
+        mesh.getWorldQuaternion(q)
+        cursorRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
       } else {
         cursorRef.current.position.copy(gridPosition.current)
+        cursorRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
       }
     }
 
@@ -157,6 +163,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (!draftNode.current) {
         ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        // Existing draft (move mode): reparent to new wall
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        if (result.stateUpdate.wallId) {
+          useScene.getState().dirtyNodes.add(result.stateUpdate.wallId as AnyNodeId)
+        }
       }
     }
 
@@ -170,6 +182,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
         event.stopPropagation()
         applyTransition(enterResult)
+        if (draftNode.current && enterResult.nodeUpdate.parentId) {
+          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+          if (enterResult.stateUpdate.wallId) {
+            useScene.getState().dirtyNodes.add(enterResult.stateUpdate.wallId as AnyNodeId)
+          }
+        }
         return
       }
 
@@ -187,6 +205,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
+
+      const posChanged =
+        gridPosition.current.x !== result.gridPosition[0] ||
+        gridPosition.current.y !== result.gridPosition[1] ||
+        gridPosition.current.z !== result.gridPosition[2]
+
       gridPosition.current.set(...result.gridPosition)
       cursorRef.current.position.set(...result.cursorPosition)
       cursorRef.current.rotation.y = result.cursorRotationY
@@ -208,8 +232,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           const rot = result.nodeUpdate?.rotation
           if (rot) mesh.rotation.y = rot[1]
         }
-        // Mark parent wall dirty so it rebuilds geometry — no store update needed
-        if (result.dirtyNodeId) {
+        // Mark parent wall dirty so it rebuilds geometry — only when position changed
+        if (result.dirtyNodeId && posChanged) {
           useScene.getState().dirtyNodes.add(result.dirtyNodeId)
         }
       }
@@ -243,8 +267,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
 
       if (asset.attachTo) {
-        draftNode.destroy()
-        Object.assign(placementState.current, result.stateUpdate)
+        if (draftNode.isAdopted) {
+          // Move mode: keep draft alive, reparent to level
+          const oldWallId = placementState.current.wallId
+          applyTransition(result)
+          const draft = draftNode.current
+          if (draft) {
+            useScene.getState().updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
+          }
+          if (oldWallId) {
+            useScene.getState().dirtyNodes.add(oldWallId as AnyNodeId)
+          }
+        } else {
+          // Create mode: destroy transient and reset state
+          draftNode.destroy()
+          Object.assign(placementState.current, result.stateUpdate)
+        }
       } else {
         applyTransition(result)
       }
@@ -262,6 +300,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (!draftNode.current) {
         ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        // Existing draft (move mode): reparent to new ceiling
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        if (result.stateUpdate.ceilingId) {
+          useScene.getState().dirtyNodes.add(result.stateUpdate.ceilingId as AnyNodeId)
+        }
       }
     }
 
@@ -318,8 +362,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
 
       if (asset.attachTo) {
-        draftNode.destroy()
-        Object.assign(placementState.current, result.stateUpdate)
+        if (draftNode.isAdopted) {
+          // Move mode: keep draft alive, reparent to level
+          const oldCeilingId = placementState.current.ceilingId
+          applyTransition(result)
+          const draft = draftNode.current
+          if (draft) {
+            useScene.getState().updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
+          }
+          if (oldCeilingId) {
+            useScene.getState().dirtyNodes.add(oldCeilingId as AnyNodeId)
+          }
+        } else {
+          // Create mode: destroy transient and reset state
+          draftNode.destroy()
+          Object.assign(placementState.current, result.stateUpdate)
+        }
       } else {
         applyTransition(result)
       }
@@ -407,16 +465,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
 
   useFrame((_, delta) => {
-    if (draftNode.current && placementState.current.surface === 'floor') {
-      const mesh = sceneRegistry.nodes.get(draftNode.current.id)
-      if (mesh) {
-        const distance = mesh.position.distanceToSquared(gridPosition.current)
-        if (distance > 1) {
-          mesh.position.copy(gridPosition.current)
-          return
-        }
-        mesh.position.lerp(gridPosition.current, delta * 20)
+    if (!draftNode.current) return
+    const mesh = sceneRegistry.nodes.get(draftNode.current.id)
+    if (!mesh) return
+
+    // Hide wall/ceiling-attached items when between surfaces (only cursor visible)
+    if (asset.attachTo && placementState.current.surface === 'floor') {
+      mesh.visible = false
+      return
+    }
+    mesh.visible = true
+
+    if (placementState.current.surface === 'floor') {
+      const distance = mesh.position.distanceToSquared(gridPosition.current)
+      if (distance > 1) {
+        mesh.position.copy(gridPosition.current)
+        return
       }
+      mesh.position.lerp(gridPosition.current, delta * 20)
     }
   })
 

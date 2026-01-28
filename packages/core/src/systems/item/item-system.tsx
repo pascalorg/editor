@@ -24,14 +24,13 @@ export const ItemSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D
       if (!mesh) return
 
-
       if (item.asset.attachTo === 'wall-side') {
         // Wall-attached item: offset Z by half the parent wall's thickness
         const parentWall = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined
         if (parentWall && parentWall.type === 'wall') {
           const wallThickness = (parentWall as WallNode).thickness ?? 0.1
           const side = item.side === 'front' ? 1 : -1
-          mesh.position.z = (wallThickness / 2) * side
+          mesh.position.z = (wallThickness / 2) * side;
         }
       } else if (!item.asset.attachTo) {
         // Floor item: elevate by slab height (using full footprint overlap)
