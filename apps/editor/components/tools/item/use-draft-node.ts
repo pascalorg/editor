@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef } from 'react'
-import { ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
 import type { Asset } from '../../../../../packages/core/src/schema/nodes/item'
 import { stripTransient } from './placement-math'
@@ -10,9 +10,9 @@ export interface DraftNodeHandle {
   readonly current: ItemNode | null
   /** Create a new draft item at the given position. Returns the created node or null. */
   create: (gridPosition: Vector3, asset: Asset) => ItemNode | null
-  /** Commit the current draft: resume temporal, strip transient, update node, clear ref. Returns committed ID. */
+  /** Commit the current draft: delete draft (paused), resume, create fresh node (tracked), re-pause. */
   commit: (finalUpdate: Partial<ItemNode>) => string | null
-  /** Destroy the current draft: delete node, resume temporal. */
+  /** Destroy the current draft: delete node (stays paused, no undo entry). */
   destroy: () => void
 }
 
@@ -27,14 +27,13 @@ export function useDraftNode(): DraftNodeHandle {
     const currentLevelId = useViewer.getState().selection.levelId
     if (!currentLevelId) return null
 
-    useScene.temporal.getState().pause()
-
     const node = ItemNode.parse({
       position: [gridPosition.x, gridPosition.y, gridPosition.z],
       name: asset.name,
       asset,
       metadata: { isTransient: true },
     })
+    console.log('create node', node)
 
     useScene.getState().createNode(node, currentLevelId)
     draftRef.current = node
@@ -45,18 +44,31 @@ export function useDraftNode(): DraftNodeHandle {
     const draft = draftRef.current
     if (!draft) return null
 
-    useScene.temporal.getState().resume()
+    const { parentId: newParentId, ...updateProps } = finalUpdate
+    const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
+    if (!parentId) return null
 
-    const update = {
-      ...finalUpdate,
-      metadata: finalUpdate.metadata ?? stripTransient(draft.metadata),
-    }
-
-    useScene.getState().updateNode(draft.id, update)
-    const committedId = draft.id
+    // Delete draft while paused (invisible to undo)
+    useScene.getState().deleteNode(draft.id)
     draftRef.current = null
 
-    return committedId
+    // Briefly resume → create fresh node (the single undoable action)
+    useScene.temporal.getState().resume()
+
+    const finalNode = ItemNode.parse({
+      name: draft.name,
+      asset: draft.asset,
+      position: updateProps.position ?? draft.position,
+      rotation: updateProps.rotation ?? draft.rotation,
+      side: updateProps.side ?? draft.side,
+      metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+    })
+    useScene.getState().createNode(finalNode, parentId)
+
+    // Re-pause for next draft cycle
+    useScene.temporal.getState().pause()
+
+    return finalNode.id
   }, [])
 
   const destroy = useCallback(() => {
@@ -64,7 +76,6 @@ export function useDraftNode(): DraftNodeHandle {
       useScene.getState().deleteNode(draftRef.current.id)
       draftRef.current = null
     }
-    useScene.temporal.getState().resume()
   }, [])
 
   return useMemo(

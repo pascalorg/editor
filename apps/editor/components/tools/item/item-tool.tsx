@@ -38,6 +38,8 @@ export const ItemTool: React.FC = () => {
   useEffect(() => {
     if (!selectedItem) return
 
+    useScene.temporal.getState().pause()
+
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
     // Reset placement state for new item
@@ -369,6 +371,7 @@ export const ItemTool: React.FC = () => {
 
     return () => {
       draftNode.destroy()
+      useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('wall:enter', onWallEnter)
