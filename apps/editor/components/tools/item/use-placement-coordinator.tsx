@@ -7,11 +7,13 @@ import {
   useScene,
   useSpatialQuery,
   type WallEvent,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, Euler, type Mesh, type MeshStandardMaterial, Quaternion, Vector3 } from 'three'
+import { spatialGridManager } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync'
 import {
   ceilingStrategy,
@@ -231,6 +233,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           mesh.position.copy(gridPosition.current)
           const rot = result.nodeUpdate?.rotation
           if (rot) mesh.rotation.y = rot[1]
+
+          // Push wall-side items out by half the parent wall's thickness
+          if (asset.attachTo === 'wall-side' && placementState.current.wallId) {
+            const parentWall = useScene.getState().nodes[placementState.current.wallId as AnyNodeId]
+            if (parentWall?.type === 'wall') {
+              const wallThickness = (parentWall as WallNode).thickness ?? 0.1
+              mesh.position.z = (wallThickness / 2) * (draft.side === 'front' ? 1 : -1)
+            }
+          }
         }
         // Mark parent wall dirty so it rebuilds geometry — only when position changed
         if (result.dirtyNodeId && posChanged) {
@@ -480,9 +491,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const distance = mesh.position.distanceToSquared(gridPosition.current)
       if (distance > 1) {
         mesh.position.copy(gridPosition.current)
-        return
+      } else {
+        mesh.position.lerp(gridPosition.current, delta * 20)
       }
-      mesh.position.lerp(gridPosition.current, delta * 20)
+
+      // Adjust Y for slab elevation (floor items on top of slabs)
+      if (!asset.attachTo) {
+        const levelId = useViewer.getState().selection.levelId
+        if (levelId) {
+          mesh.position.y = spatialGridManager.getSlabElevationForItem(
+            levelId,
+            [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+            asset.dimensions,
+            draftNode.current.rotation,
+          )
+        }
+      }
     }
   })
 
