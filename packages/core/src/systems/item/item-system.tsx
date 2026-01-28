@@ -24,6 +24,7 @@ export const ItemSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D
       if (!mesh) return
 
+
       if (item.asset.attachTo === 'wall-side') {
         // Wall-attached item: offset Z by half the parent wall's thickness
         const parentWall = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined

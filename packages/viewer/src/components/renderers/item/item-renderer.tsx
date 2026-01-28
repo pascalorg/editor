@@ -1,7 +1,7 @@
 import { type AnyNodeId, type ItemNode, useRegistry, useScene } from '@pascal-app/core'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
-import { Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -57,12 +57,12 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
   }, [node.parentId])
 
-  useEffect(() => {
+  useMemo(() => {
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
         if (mesh.name === 'cutout') {
-          child.visible = false
+          child.visible = false;
           return
         }
 

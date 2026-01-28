@@ -37,6 +37,7 @@ export const WallSystem = () => {
       const levelId = node.parentId
       if (!levelId) return
 
+
       if (!dirtyWallsByLevel.has(levelId)) {
         dirtyWallsByLevel.set(levelId, new Set())
       }
