@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "dedent": "^1.7.1",
+    "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
     "zod": "^4.3.5",

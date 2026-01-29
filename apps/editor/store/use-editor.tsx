@@ -58,6 +58,8 @@ type EditorState = {
   setSelectedItem: (item: Asset) => void
   movingNode: ItemNode | null
   setMovingNode: (node: ItemNode | null) => void
+  selectedReferenceId: string | null
+  setSelectedReferenceId: (id: string | null) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -173,6 +175,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setSelectedItem: (item) => set({ selectedItem: item }),
   movingNode: null,
   setMovingNode: (node) => set({ movingNode: node }),
+  selectedReferenceId: null,
+  setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
 }))
 
 export default useEditor

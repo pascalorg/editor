@@ -10,12 +10,15 @@ import {
   ChevronDown,
   Hexagon,
   Layers,
+  MoreHorizontal,
   Plus,
   Trash2,
 } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import { TreeNode } from "./tree-node";
+import { ReferencesDialog } from "./references-dialog";
 import {
   Popover,
   PopoverContent,
@@ -156,6 +159,8 @@ function LevelsSection() {
   const selectedLevelId = useViewer((state) => state.selection.levelId);
   const setSelection = useViewer((state) => state.setSelection);
 
+  const [referencesLevelId, setReferencesLevelId] = useState<string | null>(null);
+
   const building = selectedBuildingId
     ? (nodes[selectedBuildingId] as BuildingNode)
     : null;
@@ -194,19 +199,46 @@ function LevelsSection() {
       {/* Level buttons */}
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {levels.map((level) => (
-          <button
+          <div
             key={level.id}
             className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer",
+              "flex items-center group/level rounded transition-colors",
               selectedLevelId === level.id
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-accent/50 text-foreground"
             )}
-            onClick={() => setSelection({ levelId: level.id })}
           >
-            <Layers className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{level.name || `Level ${level.level}`}</span>
-          </button>
+            <button
+              className="flex-1 flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer min-w-0"
+              onClick={() => setSelection({ levelId: level.id })}
+            >
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{level.name || `Level ${level.level}`}</span>
+            </button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "opacity-0 group-hover/level:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded cursor-pointer shrink-0",
+                    selectedLevelId === level.id
+                      ? "hover:bg-primary-foreground/20"
+                      : "hover:bg-accent"
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="right" className="w-40 p-1">
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent cursor-pointer"
+                  onClick={() => setReferencesLevelId(level.id)}
+                >
+                  References
+                </button>
+              </PopoverContent>
+            </Popover>
+          </div>
         ))}
         {levels.length === 0 && (
           <div className="text-xs text-muted-foreground px-2 py-1">
@@ -214,6 +246,17 @@ function LevelsSection() {
           </div>
         )}
       </div>
+
+      {/* References dialog */}
+      {referencesLevelId && (
+        <ReferencesDialog
+          levelId={referencesLevelId}
+          open={!!referencesLevelId}
+          onOpenChange={(open) => {
+            if (!open) setReferencesLevelId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
