@@ -11,7 +11,12 @@ export const ZoneSystem = () => {
     zones.forEach((zoneId) => {
       const node = sceneRegistry.nodes.get(zoneId)
       if (node) {
-        node.visible = visible
+        node.visible = visible;
+        const label = node.getObjectByName('label');
+        if (label) {
+          label.position.y = visible ? 1 : -1000;
+          // Hacky way to hide the label when not visible
+        }
       }
     })
   }, [structureLayer])

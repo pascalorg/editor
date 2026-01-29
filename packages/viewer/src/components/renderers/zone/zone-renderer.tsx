@@ -1,4 +1,5 @@
 import { useRegistry, type ZoneNode } from '@pascal-app/core'
+import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
 import { color, float, uv } from 'three/tsl'
@@ -125,6 +126,33 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     return createWallGeometry(node.polygon)
   }, [node?.polygon])
 
+  // Calculate polygon centroid for label positioning using the geometric centroid formula
+  // This correctly handles polygons regardless of vertex distribution along edges
+  const centroid = useMemo(() => {
+    if (!node?.polygon || node.polygon.length < 3) return [0, 0] as [number, number]
+
+    const polygon = node.polygon
+    let signedArea = 0
+    let cx = 0
+    let cz = 0
+
+    for (let i = 0; i < polygon.length; i++) {
+      const [x0, z0] = polygon[i]!
+      const [x1, z1] = polygon[(i + 1) % polygon.length]!
+
+      // Cross product for signed area
+      const cross = x0 * z1 - x1 * z0
+      signedArea += cross
+      cx += (x0 + x1) * cross
+      cz += (z0 + z1) * cross
+    }
+
+    signedArea /= 2
+    const factor = 1 / (6 * signedArea)
+
+    return [cx * factor, cz * factor] as [number, number]
+  }, [node?.polygon])
+
   // Create materials
   const floorMaterial = useMemo(() => {
     if (!node?.color) return null
@@ -144,8 +172,26 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   return (
     <group ref={ref} {...handlers}>
+      <Html name="label" position={[centroid[0], 1, centroid[1]]}>
+        <div style={{
+          transform: 'translate3d(-50%, -50%, 0)',
+          width: 'max-content',
+          color: 'white',
+          textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+        }}>
+          {/* <div style={{
+            height: '8px',
+            width: '8px',
+            borderRadius: "9999px",
+            backgroundColor: node.color
+          }}></div> */}
+          {node.name}</div>
+      </Html>
       {/* Floor fill */}
-      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}  material={floorMaterial}>
+      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMaterial}>
         <shapeGeometry args={[floorShape]} />
       </mesh>
 
