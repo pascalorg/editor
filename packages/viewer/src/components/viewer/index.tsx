@@ -4,7 +4,9 @@ import { CeilingSystem, ItemSystem, SlabSystem, WallSystem } from '@pascal-app/c
 import { Bvh, Environment } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
+import { GuideSystem } from '../../systems/guide/guide-system'
 import { LevelSystem } from '../../systems/level/level-system'
+import { ScanSystem } from '../../systems/scan/scan-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import PostProcessing from './post-processing'
 import { ViewerCamera } from './viewer-camera'
@@ -42,6 +44,9 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
 
       {/* Default Systems */}
       <LevelSystem />
+      <GuideSystem />
+      <ScanSystem />
+      {/* Core systems */}
       <CeilingSystem />
       <ItemSystem />
       <SlabSystem />
