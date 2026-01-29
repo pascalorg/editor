@@ -210,7 +210,6 @@ export class SpatialGridManager {
   // Called when nodes change
   handleNodeCreated(node: AnyNode, levelId: string) {
     if (node.type === 'slab') {
-      console.log(`[SpatialGrid] Adding slab ${node.id} to level ${levelId}`, (node as SlabNode).polygon)
       this.getSlabMap(levelId).set(node.id, node as SlabNode)
     } else if (node.type === 'ceiling') {
       this.ceilings.set(node.id, node as CeilingNode)
@@ -459,7 +458,6 @@ export class SpatialGridManager {
     end: [number, number],
   ): number {
     const slabMap = this.slabsByLevel.get(levelId)
-    console.log(`[SpatialGrid] getSlabElevationForWall | levelId: ${levelId} | slabMap size: ${slabMap?.size ?? 0} | slabs:`, slabMap ? Array.from(slabMap.keys()) : [])
     if (!slabMap) return 0
 
     let maxElevation = 0

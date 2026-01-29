@@ -29,9 +29,6 @@ export default function Editor() {
 
   return (
     <div className="w-full h-full">
-      {/* <LevelModeSwitcher /> */}
-
-      <TestUndo />
       <ActionMenu />
       <ReferencePanel />
       <RoofPanel />
@@ -52,30 +49,6 @@ export default function Editor() {
   )
 }
 
-const TestUndo = () => {
-  const { undo, redo, futureStates, pastStates } = useScene.temporal.getState()
-
-  return (
-    <div className="absolute top-4 right-4 z-10 flex gap-2">
-      <button
-        className="px-4 py-2 rounded bg-white"
-        onClick={() => {
-          undo()
-        }}
-      >
-        Undo
-      </button>
-      <button
-        className="px-4 py-2 rounded bg-white"
-        onClick={() => {
-          redo()
-        }}
-      >
-        Redo
-      </button>
-    </div>
-  )
-}
 
 const Grid = ({
   cellSize = 0.5,

@@ -1,25 +1,24 @@
-import { RoofNode } from "@pascal-app/core";
+import { ZoneNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
-import Image from "next/image";
 import { useState } from "react";
 import { RenamePopover } from "./rename-popover";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
-interface RoofTreeNodeProps {
-  node: RoofNode;
+interface ZoneTreeNodeProps {
+  node: ZoneNode;
   depth: number;
 }
 
-export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
+export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
   const [renameOpen, setRenameOpen] = useState(false);
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const isSelected = useViewer((state) => state.selection.zoneId === node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
 
   const handleClick = () => {
-    setSelection({ selectedIds: [node.id] });
+    setSelection({ zoneId: node.id });
   };
 
   const handleDoubleClick = () => {
@@ -34,10 +33,9 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
     setHoveredId(null);
   };
 
-  // Calculate dimensions: length × total width (leftWidth + rightWidth)
-  const totalWidth = node.leftWidth + node.rightWidth;
-  const sizeLabel = `${node.length.toFixed(1)}×${totalWidth.toFixed(1)}m`;
-  const defaultName = `Roof (${sizeLabel})`;
+  // Calculate approximate area from polygon
+  const area = calculatePolygonArea(node.polygon).toFixed(1);
+  const defaultName = `Zone (${area}m²)`;
 
   return (
     <RenamePopover
@@ -47,7 +45,12 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
       defaultName={defaultName}
     >
       <TreeNodeWrapper
-        icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain" />}
+        icon={
+          <div
+            className="w-3 h-3 rounded-sm border border-border/50"
+            style={{ backgroundColor: node.color }}
+          />
+        }
         label={node.name || defaultName}
         depth={depth}
         hasChildren={false}
@@ -63,4 +66,22 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
       />
     </RenamePopover>
   );
+}
+
+/**
+ * Calculate the area of a polygon using the shoelace formula
+ */
+function calculatePolygonArea(polygon: Array<[number, number]>): number {
+  if (polygon.length < 3) return 0;
+
+  let area = 0;
+  const n = polygon.length;
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += polygon[i]![0] * polygon[j]![1];
+    area -= polygon[j]![0] * polygon[i]![1];
+  }
+
+  return Math.abs(area) / 2;
 }

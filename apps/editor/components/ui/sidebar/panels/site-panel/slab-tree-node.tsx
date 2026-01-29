@@ -1,6 +1,8 @@
 import { SlabNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
-import { RectangleHorizontal } from "lucide-react";
+import Image from "next/image";
+import { useState } from "react";
+import { RenamePopover } from "./rename-popover";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
@@ -10,6 +12,7 @@ interface SlabTreeNodeProps {
 }
 
 export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
+  const [renameOpen, setRenameOpen] = useState(false);
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -17,6 +20,10 @@ export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
+  };
+
+  const handleDoubleClick = () => {
+    setRenameOpen(true);
   };
 
   const handleMouseEnter = () => {
@@ -29,22 +36,31 @@ export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
 
   // Calculate approximate area from polygon
   const area = calculatePolygonArea(node.polygon).toFixed(1);
+  const defaultName = `Slab (${area}m²)`;
 
   return (
-    <TreeNodeWrapper
-      icon={<RectangleHorizontal className="w-3.5 h-3.5" />}
-      label={node.name || `Slab (${area}m²)`}
-      depth={depth}
-      hasChildren={false}
-      expanded={false}
-      onToggle={() => {}}
-      onClick={handleClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      isSelected={isSelected}
-      isHovered={isHovered}
-      actions={<TreeNodeActions node={node} />}
-    />
+    <RenamePopover
+      node={node}
+      open={renameOpen}
+      onOpenChange={setRenameOpen}
+      defaultName={defaultName}
+    >
+      <TreeNodeWrapper
+        icon={<Image src="/icons/floor.png" alt="" width={14} height={14} className="object-contain" />}
+        label={node.name || defaultName}
+        depth={depth}
+        hasChildren={false}
+        expanded={false}
+        onToggle={() => {}}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        isSelected={isSelected}
+        isHovered={isHovered}
+        actions={<TreeNodeActions node={node} />}
+      />
+    </RenamePopover>
   );
 }
 

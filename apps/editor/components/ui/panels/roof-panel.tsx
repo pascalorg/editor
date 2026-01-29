@@ -2,7 +2,8 @@
 
 import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Home, X } from 'lucide-react'
+import { X } from 'lucide-react'
+import Image from 'next/image'
 import { useCallback } from 'react'
 
 export function RoofPanel() {
@@ -40,7 +41,7 @@ export function RoofPanel() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 border-b p-3">
         <div className="flex items-center gap-2 min-w-0">
-          <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Image src="/icons/roof.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold text-foreground text-sm truncate">
             {node.name || 'Gable Roof'}
           </h2>
