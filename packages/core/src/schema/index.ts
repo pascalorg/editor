@@ -13,6 +13,7 @@ export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 
 export { ZoneNode } from './nodes/zone'
+export { RoofNode } from './nodes/roof'
 export { ScanNode } from './nodes/scan'
 export { GuideNode } from './nodes/guide'
 export type { AnyNodeId, AnyNodeType } from './types'

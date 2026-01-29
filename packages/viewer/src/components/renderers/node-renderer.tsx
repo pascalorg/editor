@@ -6,6 +6,7 @@ import { CeilingRenderer } from './ceiling/ceiling-renderer'
 import { GuideRenderer } from './guide/guide-renderer'
 import { ItemRenderer } from './item/item-renderer'
 import { LevelRenderer } from './level/level-renderer'
+import { RoofRenderer } from './roof/roof-renderer'
 import { ScanRenderer } from './scan/scan-renderer'
 import { SlabRenderer } from './slab/slab-renderer'
 import { WallRenderer } from './wall/wall-renderer'
@@ -25,6 +26,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'slab' && <SlabRenderer node={node} />}
       {node.type === 'wall' && <WallRenderer node={node} />}
       {node.type === 'zone' && <ZoneRenderer node={node} />}
+      {node.type === 'roof' && <RoofRenderer node={node} />}
       {node.type === 'scan' && <ScanRenderer node={node} />}
       {node.type === 'guide' && <GuideRenderer node={node} />}
     </>

@@ -7,6 +7,8 @@ import {
   emitter,
   type ItemEvent,
   type ItemNode,
+  type RoofEvent,
+  type RoofNode,
   type SlabEvent,
   type SlabNode,
   type WallEvent,
@@ -23,6 +25,7 @@ type NodeConfig = {
   zone: { node: ZoneNode; event: ZoneEvent }
   slab: { node: SlabNode; event: SlabEvent }
   ceiling: { node: CeilingNode; event: CeilingEvent }
+  roof: { node: RoofNode; event: RoofEvent }
 }
 
 type NodeType = keyof NodeConfig

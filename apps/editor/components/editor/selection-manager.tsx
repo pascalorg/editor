@@ -20,7 +20,7 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   return nodeLevelId === currentLevelId;
 };
 
-type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling';
+type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling' | 'roof';
 
 interface SelectionStrategy {
   types: SelectableNodeType[];
@@ -44,7 +44,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ["wall", "item", "zone", "slab", "ceiling"],
+    types: ["wall", "item", "zone", "slab", "ceiling", "roof"],
     handleSelect: (node, isShift) => {
       // Single click on item (door/window) → enter move mode
       if (!isShift && node.type === 'item') {
@@ -78,7 +78,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         if (node.type === "zone") return true;
         return false;
       } else {
-        if (node.type === "wall" || node.type === "slab" || node.type === "ceiling") return true;
+        if (node.type === "wall" || node.type === "slab" || node.type === "ceiling" || node.type === "roof") return true;
         if (node.type === "item") {
           return (
             (node as ItemNode).asset.category === "door" ||

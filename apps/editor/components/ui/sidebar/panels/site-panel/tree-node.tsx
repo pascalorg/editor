@@ -5,6 +5,7 @@ import { BuildingTreeNode } from "./building-tree-node";
 import { CeilingTreeNode } from "./ceiling-tree-node";
 import { ItemTreeNode } from "./item-tree-node";
 import { LevelTreeNode } from "./level-tree-node";
+import { RoofTreeNode } from "./roof-tree-node";
 import { SlabTreeNode } from "./slab-tree-node";
 import { WallTreeNode } from "./wall-tree-node";
 
@@ -29,6 +30,8 @@ export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
       return <SlabTreeNode node={node} depth={depth} />;
     case "wall":
       return <WallTreeNode node={node} depth={depth} />;
+    case "roof":
+      return <RoofTreeNode node={node} depth={depth} />;
     case "item":
       return <ItemTreeNode node={node} depth={depth} />;
     default:

@@ -3,6 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { CeilingTool } from "./ceiling/ceiling-tool";
 import { ItemTool } from "./item/item-tool";
 import { MoveTool } from "./item/move-tool";
+import { RoofTool } from "./roof/roof-tool";
 import { SlabTool } from "./slab/slab-tool";
 import { WallTool } from "./wall/wall-tool";
 import { ZoneBoundaryEditor } from "./zone/zone-boundary-editor";
@@ -14,6 +15,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     wall: WallTool,
     slab: SlabTool,
     ceiling: CeilingTool,
+    roof: RoofTool,
     item: ItemTool,
     zone: ZoneTool,
   },

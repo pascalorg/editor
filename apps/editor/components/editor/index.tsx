@@ -14,6 +14,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { ReferencePanel } from '../ui/panels/reference-panel'
+import { RoofPanel } from '../ui/panels/roof-panel'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
@@ -33,6 +34,7 @@ export default function Editor() {
       <TestUndo />
       <ActionMenu />
       <ReferencePanel />
+      <RoofPanel />
 
       <SidebarProvider className="fixed z-10">
         <AppSidebar />

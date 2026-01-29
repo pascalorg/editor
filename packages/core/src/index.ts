@@ -11,6 +11,7 @@ export type {
   WallEvent,
   ZoneEvent,
   CeilingEvent,
+  RoofEvent,
 } from './events/bus'
 // Events
 export { emitter, eventSuffixes } from './events/bus'
@@ -30,6 +31,7 @@ export { default as useScene } from './store/use-scene'
 // Systems
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { ItemSystem } from './systems/item/item-system'
+export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'
 export { WallSystem } from './systems/wall/wall-system'
 
