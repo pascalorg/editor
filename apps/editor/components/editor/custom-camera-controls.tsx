@@ -48,21 +48,22 @@ export const CustomCameraControls = () => {
   }, [currentLevelId]);
 
   // Configure mouse buttons based on control mode and camera mode
+  const cameraMode = useViewer((state) => state.cameraMode);
   const mouseButtons = useMemo(() => {
     // Use ZOOM for orthographic camera, DOLLY for perspective camera
-    // const wheelAction =
-    //   cameraMode === 'orthographic'
-    //     ? CameraControlsImpl.ACTION.ZOOM
-    //     : CameraControlsImpl.ACTION.DOLLY
-    const wheelAction = CameraControlsImpl.ACTION.DOLLY;
+    const wheelAction =
+      cameraMode === 'orthographic'
+        ? CameraControlsImpl.ACTION.ZOOM
+        : CameraControlsImpl.ACTION.DOLLY
 
     return {
       left: CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
-    };
-  }, []);
+    }
+  }, [cameraMode]);
+
 
   useEffect(() => {
     const handleNodeCapture = ({ nodeId }: CameraControlEvent) => {
@@ -110,5 +111,8 @@ export const CustomCameraControls = () => {
     };
   }, []);
 
-  return <CameraControls ref={controls} mouseButtons={mouseButtons} />;
+  return <CameraControls maxDistance={100}
+      maxPolarAngle={Math.PI / 2 - 0.1}
+      minDistance={10}
+      minPolarAngle={0} ref={controls} mouseButtons={mouseButtons} />;
 };
