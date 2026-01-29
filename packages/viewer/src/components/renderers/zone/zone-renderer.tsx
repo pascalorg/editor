@@ -27,6 +27,7 @@ const createWallGradientMaterial = (zoneColor: string) => {
     opacityNode: opacity,
     side: DoubleSide,
     depthWrite: false,
+    depthTest: false,
   })
 }
 
@@ -144,7 +145,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   return (
     <group ref={ref} {...handlers}>
       {/* Floor fill */}
-      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMaterial}>
+      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]}  material={floorMaterial}>
         <shapeGeometry args={[floorShape]} />
       </mesh>
 

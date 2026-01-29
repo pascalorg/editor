@@ -112,17 +112,14 @@ const useEditor = create<EditorState>()((set, get) => ({
       case 'site':
         // In Site mode, we zoom out and deselect specific levels/buildings
         viewer.resetSelection()
-        viewer.setLevelMode('stacked')
         break
 
       case 'structure':
         selectBuildingAndLevel0()
-        viewer.setLevelMode('stacked')
         break
 
       case 'furnish':
         selectBuildingAndLevel0()
-        viewer.setLevelMode('solo')
         // Furnish mode only supports elements layer, not zones
         set({ structureLayer: 'elements' })
         break
