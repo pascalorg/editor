@@ -1,5 +1,4 @@
 import { type ScanNode, useRegistry } from '@pascal-app/core'
-import { Clone } from '@react-three/drei/core/Clone'
 import { Suspense, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 import { useAssetUrl } from '../../../hooks/use-asset-url'
@@ -49,6 +48,14 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
 
+        // Disable raycasting
+        mesh.raycast = () => {}
+
+        // Exclude from bounding box calculations
+        mesh.geometry.boundingBox = null
+        mesh.geometry.boundingSphere = null
+        mesh.frustumCulled = false
+
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach((material) => {
             updateMaterial(material)
@@ -60,5 +67,5 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
     })
   }, [scene, opacity])
 
-  return <Clone object={scene} />
+  return <primitive object={scene} />
 }

@@ -36,19 +36,19 @@ export function ReferencePanel() {
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-72 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
       {/* Header */}
-      <div className="flex items-center justify-between border-b p-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 border-b p-3">
+        <div className="flex items-center gap-2 min-w-0">
           {isScan ? (
-            <Box className="h-4 w-4 text-muted-foreground" />
+            <Box className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
-            <Image className="h-4 w-4 text-muted-foreground" />
+            <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <h2 className="font-semibold text-foreground text-sm">
+          <h2 className="font-semibold text-foreground text-sm truncate">
             {node.name || (isScan ? '3D Scan' : 'Guide Image')}
           </h2>
         </div>
         <button
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
           onClick={handleClose}
         >
           <X className="h-4 w-4" />

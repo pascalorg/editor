@@ -1,9 +1,9 @@
 import { type GuideNode, useRegistry } from '@pascal-app/core'
+import { useLoader } from '@react-three/fiber'
 import { Suspense, useMemo, useRef } from 'react'
 import { DoubleSide, type Group, type Texture, TextureLoader } from 'three'
 import { float, texture } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { useLoader } from '@react-three/fiber'
 import { useAssetUrl } from '../../../hooks/use-asset-url'
 
 export const GuideRenderer = ({ node }: { node: GuideNode }) => {
@@ -13,11 +13,7 @@ export const GuideRenderer = ({ node }: { node: GuideNode }) => {
   const resolvedUrl = useAssetUrl(node.url)
 
   return (
-    <group
-      ref={ref}
-      position={node.position}
-      rotation={[0, node.rotation[1], 0]}
-    >
+    <group ref={ref} position={node.position} rotation={[0, node.rotation[1], 0]}>
       {resolvedUrl && (
         <Suspense>
           <GuidePlane url={resolvedUrl} scale={node.scale} opacity={node.opacity} />
@@ -54,8 +50,13 @@ const GuidePlane = ({ url, scale, opacity }: { url: string; scale: number; opaci
   }, [tex, scale, opacity])
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} material={material}>
-      <planeGeometry args={[width, height]} />
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      material={material}
+      raycast={() => {}}
+      frustumCulled={false}
+    >
+      <planeGeometry args={[width, height]} boundingBox={null} boundingSphere={null} />
     </mesh>
   )
 }
