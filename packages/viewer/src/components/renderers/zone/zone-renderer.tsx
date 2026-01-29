@@ -172,7 +172,9 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   return (
     <group ref={ref} {...handlers}>
-      <Html name="label" position={[centroid[0], 1, centroid[1]]}>
+      <Html name="label" position={[centroid[0], 1, centroid[1]]} style={{
+        pointerEvents: 'none'
+      }}>
         <div style={{
           transform: 'translate3d(-50%, -50%, 0)',
           width: 'max-content',
@@ -182,12 +184,6 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
           gap: '8px',
           alignItems: 'center',
         }}>
-          {/* <div style={{
-            height: '8px',
-            width: '8px',
-            borderRadius: "9999px",
-            backgroundColor: node.color
-          }}></div> */}
           {node.name}</div>
       </Html>
       {/* Floor fill */}

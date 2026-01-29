@@ -1,186 +1,241 @@
 'use client'
 
 import {
+  type AnyNode,
   type BuildingNode,
+  type ItemNode,
   type LevelNode,
   type NodeEvent,
+  type WallNode,
+  type ZoneNode,
   emitter,
+  pointInPolygon,
   sceneRegistry,
+  useScene,
 } from '@pascal-app/core'
-import { useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
 import useViewer from '../../store/use-viewer'
+
+type SelectableNodeType = 'building' | 'level' | 'zone' | 'wall' | 'item' | 'slab' | 'ceiling' | 'roof'
+
+interface SelectionStrategy {
+  types: SelectableNodeType[]
+  handleClick: (node: AnyNode) => void
+  handleDeselect: () => void
+  isValid: (node: AnyNode) => boolean
+}
+
+// Check if a node is within the selected zone's polygon
+const isNodeInZone = (node: AnyNode, zoneId: string): boolean => {
+  const nodes = useScene.getState().nodes
+  const zone = nodes[zoneId] as ZoneNode | undefined
+  if (!zone?.polygon?.length) return false
+
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    return pointInPolygon(item.position[0], item.position[2], zone.polygon)
+  }
+
+  if (node.type === 'wall') {
+    const wall = node as WallNode
+    const startIn = pointInPolygon(wall.start[0], wall.start[1], zone.polygon)
+    const endIn = pointInPolygon(wall.end[0], wall.end[1], zone.polygon)
+    return startIn || endIn
+  }
+
+  if (node.type === 'slab' || node.type === 'ceiling') {
+    const poly = (node as { polygon: [number, number][] }).polygon
+    if (!poly?.length) return false
+    // Check if any point of the node's polygon is in the zone
+    for (const [px, pz] of poly) {
+      if (pointInPolygon(px, pz, zone.polygon)) return true
+    }
+    // Check if any point of the zone is in the node's polygon
+    for (const [zx, zz] of zone.polygon) {
+      if (pointInPolygon(zx, zz, poly)) return true
+    }
+    return false
+  }
+
+  if (node.type === 'roof') {
+    // Roofs may not have a polygon, check by parent level
+    return true // Allow all roofs when zone is selected
+  }
+
+  return false
+}
+
+const getStrategy = (): SelectionStrategy | null => {
+  const { buildingId, levelId, zoneId } = useViewer.getState().selection
+
+  // No building selected -> can select buildings
+  if (!buildingId) {
+    return {
+      types: ['building'],
+      handleClick: (node) => {
+        useViewer.getState().setSelection({ buildingId: (node as BuildingNode).id })
+      },
+      handleDeselect: () => {
+        // Nothing to deselect at root level
+      },
+      isValid: (node) => node.type === 'building',
+    }
+  }
+
+  // Building selected, no level -> can select levels
+  if (!levelId) {
+    return {
+      types: ['level'],
+      handleClick: (node) => {
+        useViewer.getState().setSelection({ levelId: (node as LevelNode).id })
+      },
+      handleDeselect: () => {
+        useViewer.getState().setSelection({ buildingId: null })
+      },
+      isValid: (node) => node.type === 'level',
+    }
+  }
+
+  // Level selected, no zone -> can select zones
+  if (!zoneId) {
+    return {
+      types: ['zone'],
+      handleClick: (node) => {
+        useViewer.getState().setSelection({ zoneId: (node as ZoneNode).id })
+      },
+      handleDeselect: () => {
+        useViewer.getState().setSelection({ levelId: null })
+      },
+      isValid: (node) => node.type === 'zone',
+    }
+  }
+
+  // Zone selected -> can hover contents (walls, items, slabs, ceilings, roofs)
+  return {
+    types: ['wall', 'item', 'slab', 'ceiling', 'roof'],
+    handleClick: () => {
+      // No action on click at zone content level
+    },
+    handleDeselect: () => {
+      useViewer.getState().setSelection({ zoneId: null })
+    },
+    isValid: (node) => {
+      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof']
+      if (!validTypes.includes(node.type)) return false
+      return isNodeInZone(node, zoneId)
+    },
+  }
+}
 
 export const SelectionManager = () => {
   const selection = useViewer((s) => s.selection)
+  const clickHandledRef = useRef(false)
 
   useEffect(() => {
-    const { buildingId, levelId, zoneId } = selection
-
-    // Determine current selection depth and what can be clicked
-    // 0: no building → can click buildings
-    // 1: building selected → can click levels
-    // 2: level selected → can click/hover zones
-    // 3: zone selected → can hover items/walls (no click needed)
-
-    const onBuildingClick = (event: NodeEvent<BuildingNode>) => {
-      if (buildingId) return // Already have a building selected
-      event.stopPropagation()
-      useViewer.getState().setSelection({ buildingId: event.node.id })
-    }
-
-    const onBuildingEnter = (event: NodeEvent<BuildingNode>) => {
-      if (buildingId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: event.node.id })
-    }
-
-    const onBuildingLeave = (event: NodeEvent<BuildingNode>) => {
-      if (buildingId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: null })
-    }
-
-    const onLevelClick = (event: NodeEvent<LevelNode>) => {
-      if (!buildingId || levelId) return // Need building, but no level yet
-      event.stopPropagation()
-      useViewer.getState().setSelection({ levelId: event.node.id })
-    }
-
-    const onLevelEnter = (event: NodeEvent<LevelNode>) => {
-      if (!buildingId || levelId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: event.node.id })
-    }
-
-    const onLevelLeave = (event: NodeEvent<LevelNode>) => {
-      if (!buildingId || levelId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: null })
-    }
-
-    const onZoneClick = (event: NodeEvent) => {
-      if (!levelId || zoneId) return // Need level, but no zone yet
-      event.stopPropagation()
-      useViewer.getState().setSelection({ zoneId: event.node.id })
-    }
-
-    const onZoneEnter = (event: NodeEvent) => {
-      if (!levelId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: event.node.id })
-    }
-
-    const onZoneLeave = (event: NodeEvent) => {
-      if (!levelId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: null })
-    }
-
-    // Hover for items/walls when zone is selected
-    const onItemEnter = (event: NodeEvent) => {
-      if (!zoneId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: event.node.id })
-    }
-
-    const onItemLeave = (event: NodeEvent) => {
-      if (!zoneId) return
-      event.stopPropagation()
-      useViewer.setState({ hoveredId: null })
-    }
-
-    // Grid click deselects in reverse order
-    const onGridClick = () => {
-      const { buildingId, levelId, zoneId, selectedIds } = useViewer.getState().selection
-
-      if (selectedIds.length > 0) {
-        useViewer.getState().setSelection({ selectedIds: [] })
-      } else if (zoneId) {
-        useViewer.getState().setSelection({ zoneId: null })
-      } else if (levelId) {
-        useViewer.getState().setSelection({ levelId: null })
-      } else if (buildingId) {
-        useViewer.getState().setSelection({ buildingId: null })
+    const onEnter = (event: NodeEvent) => {
+      const strategy = getStrategy()
+      if (!strategy) return
+      if (strategy.isValid(event.node)) {
+        event.stopPropagation()
+        useViewer.setState({ hoveredId: event.node.id })
       }
     }
 
-    // Subscribe to events
-    emitter.on('building:click', onBuildingClick)
-    emitter.on('building:enter', onBuildingEnter)
-    emitter.on('building:leave', onBuildingLeave)
+    const onLeave = (event: NodeEvent) => {
+      const strategy = getStrategy()
+      if (!strategy) return
+      if (strategy.isValid(event.node)) {
+        event.stopPropagation()
+        useViewer.setState({ hoveredId: null })
+      }
+    }
 
-    emitter.on('level:click', onLevelClick)
-    emitter.on('level:enter', onLevelEnter)
-    emitter.on('level:leave', onLevelLeave)
+    const onClick = (event: NodeEvent) => {
+      const strategy = getStrategy()
+      if (!strategy) return
+      if (!strategy.isValid(event.node)) return
 
-    emitter.on('zone:click', onZoneClick)
-    emitter.on('zone:enter', onZoneEnter)
-    emitter.on('zone:leave', onZoneLeave)
+      event.stopPropagation()
+      clickHandledRef.current = true
+      strategy.handleClick(event.node)
+    }
 
-    emitter.on('item:enter', onItemEnter)
-    emitter.on('item:leave', onItemLeave)
-    emitter.on('wall:enter', onItemEnter)
-    emitter.on('wall:leave', onItemLeave)
-
-    emitter.on('grid:click', onGridClick)
+    // Subscribe to all node types
+    const allTypes: SelectableNodeType[] = ['building', 'level', 'zone', 'wall', 'item', 'slab', 'ceiling', 'roof']
+    for (const type of allTypes) {
+      emitter.on(`${type}:enter`, onEnter)
+      emitter.on(`${type}:leave`, onLeave)
+      emitter.on(`${type}:click`, onClick)
+    }
 
     return () => {
-      emitter.off('building:click', onBuildingClick)
-      emitter.off('building:enter', onBuildingEnter)
-      emitter.off('building:leave', onBuildingLeave)
-
-      emitter.off('level:click', onLevelClick)
-      emitter.off('level:enter', onLevelEnter)
-      emitter.off('level:leave', onLevelLeave)
-
-      emitter.off('zone:click', onZoneClick)
-      emitter.off('zone:enter', onZoneEnter)
-      emitter.off('zone:leave', onZoneLeave)
-
-      emitter.off('item:enter', onItemEnter)
-      emitter.off('item:leave', onItemLeave)
-      emitter.off('wall:enter', onItemEnter)
-      emitter.off('wall:leave', onItemLeave)
-
-      emitter.off('grid:click', onGridClick)
+      for (const type of allTypes) {
+        emitter.off(`${type}:enter`, onEnter)
+        emitter.off(`${type}:leave`, onLeave)
+        emitter.off(`${type}:click`, onClick)
+      }
     }
   }, [selection])
 
-  return <OutlinerSync />
+  return (
+    <>
+      <PointerMissedHandler clickHandledRef={clickHandledRef} />
+      <OutlinerSync />
+    </>
+  )
+}
+
+const PointerMissedHandler = ({ clickHandledRef }: { clickHandledRef: React.MutableRefObject<boolean> }) => {
+  const gl = useThree((s) => s.gl)
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      // Only handle left clicks
+      if (event.button !== 0) return
+
+      // Use requestAnimationFrame to check after R3F event handlers
+      requestAnimationFrame(() => {
+        if (clickHandledRef.current) {
+          clickHandledRef.current = false
+          return
+        }
+
+        // Click was not handled by any 3D object -> deselect
+        const strategy = getStrategy()
+        if (strategy) {
+          strategy.handleDeselect()
+          useViewer.setState({ hoveredId: null })
+        }
+      })
+    }
+
+    const canvas = gl.domElement
+    canvas.addEventListener('click', handleClick)
+
+    return () => {
+      canvas.removeEventListener('click', handleClick)
+    }
+  }, [gl, clickHandledRef])
+
+  return null
 }
 
 const OutlinerSync = () => {
-  const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
   const outliner = useViewer((s) => s.outliner)
 
   useEffect(() => {
-    let idsToHighlight: string[] = []
-
-    // Highlight based on the "deepest" selection
-    if (selection.selectedIds.length > 0) {
-      idsToHighlight = selection.selectedIds
-    } else if (selection.zoneId) {
-      idsToHighlight = [selection.zoneId]
-    } else if (selection.levelId) {
-      idsToHighlight = [selection.levelId]
-    } else if (selection.buildingId) {
-      idsToHighlight = [selection.buildingId]
-    }
-
-    // Sync with the imperative outliner arrays
+    // Clear selected objects - we only show hover in viewer
     outliner.selectedObjects.length = 0
-    for (const id of idsToHighlight) {
-      const obj = sceneRegistry.nodes.get(id)
-      if (obj) outliner.selectedObjects.push(obj)
-    }
 
+    // Sync hovered objects
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, outliner])
+  }, [hoveredId, outliner])
 
   return null
 }
