@@ -22,8 +22,9 @@ export const RoofSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {
         updateRoofGeometry(node as RoofNode, mesh)
+        clearDirty(id as AnyNodeId)
       }
-      clearDirty(id as AnyNodeId)
+      // If mesh not found, keep it dirty for next frame
     })
   })
 

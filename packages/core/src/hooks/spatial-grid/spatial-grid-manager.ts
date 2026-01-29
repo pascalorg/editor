@@ -210,6 +210,7 @@ export class SpatialGridManager {
   // Called when nodes change
   handleNodeCreated(node: AnyNode, levelId: string) {
     if (node.type === 'slab') {
+      console.log(`[SpatialGrid] Adding slab ${node.id} to level ${levelId}`, (node as SlabNode).polygon)
       this.getSlabMap(levelId).set(node.id, node as SlabNode)
     } else if (node.type === 'ceiling') {
       this.ceilings.set(node.id, node as CeilingNode)
@@ -448,7 +449,8 @@ export class SpatialGridManager {
   }
 
   /**
-   * Get the slab elevation for a wall by sampling its start, mid, and end points.
+   * Get the slab elevation for a wall by checking if it overlaps with any slab polygon.
+   * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    */
   getSlabElevationForWall(
@@ -457,24 +459,16 @@ export class SpatialGridManager {
     end: [number, number],
   ): number {
     const slabMap = this.slabsByLevel.get(levelId)
+    console.log(`[SpatialGrid] getSlabElevationForWall | levelId: ${levelId} | slabMap size: ${slabMap?.size ?? 0} | slabs:`, slabMap ? Array.from(slabMap.keys()) : [])
     if (!slabMap) return 0
-
-    const samples: [number, number][] = [
-      start,
-      [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
-      end,
-    ]
 
     let maxElevation = 0
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
-      for (const [sx, sz] of samples) {
-        if (pointInPolygon(sx, sz, slab.polygon)) {
-          const elevation = slab.elevation ?? 0.05
-          if (elevation > maxElevation) {
-            maxElevation = elevation
-          }
-          break // This slab matched, no need to check more sample points
+      if (wallOverlapsPolygon(start, end, slab.polygon)) {
+        const elevation = slab.elevation ?? 0.05
+        if (elevation > maxElevation) {
+          maxElevation = elevation
         }
       }
     }

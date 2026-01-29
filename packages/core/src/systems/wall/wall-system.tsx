@@ -53,8 +53,9 @@ export const WallSystem = () => {
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
           updateWallGeometry(wallId, miterData)
+          clearDirty(wallId as AnyNodeId)
         }
-        clearDirty(wallId as AnyNodeId)
+        // If mesh not found, keep it dirty for next frame
       }
 
       // Update adjacent walls that share junctions
@@ -106,6 +107,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
 
   const levelId = resolveLevelId(node, nodes)
   const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
+  console.log(`[WallSystem] Wall ${node.name || node.id} | levelId: ${levelId} | start: [${node.start}] | end: [${node.end}] | slabElevation: ${slabElevation}`)
 
   const childrenIds = node.children || []
   const childrenNodes = childrenIds

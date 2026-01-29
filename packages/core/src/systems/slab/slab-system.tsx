@@ -22,8 +22,9 @@ export const SlabSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {
         updateSlabGeometry(node as SlabNode, mesh)
+        clearDirty(id as AnyNodeId)
       }
-      clearDirty(id as AnyNodeId)
+      // If mesh not found, keep it dirty for next frame
     })
   })
 

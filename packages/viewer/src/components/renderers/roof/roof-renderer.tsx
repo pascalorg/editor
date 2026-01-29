@@ -21,7 +21,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     >
       {/* RoofSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
-      <meshStandardMaterial color="#8b4513" />
+      <meshStandardMaterial color="white" />
     </mesh>
   )
 }

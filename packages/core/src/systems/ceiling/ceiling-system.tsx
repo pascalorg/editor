@@ -22,8 +22,9 @@ export const CeilingSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {
         updateCeilingGeometry(node as CeilingNode, mesh)
+        clearDirty(id as AnyNodeId)
       }
-      clearDirty(id as AnyNodeId)
+      // If mesh not found, keep it dirty for next frame
     })
   })
 
