@@ -9,6 +9,7 @@ import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import PostProcessing from './post-processing'
+import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
 declare module '@react-three/fiber' {
@@ -19,9 +20,10 @@ extend(THREE as any)
 
 interface ViewerProps {
   children?: React.ReactNode
+  selectionManager?: 'default' | 'custom'
 }
 
-const Viewer: React.FC<ViewerProps> = ({ children }) => {
+const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
   return (
     <Canvas
       className={'bg-[#303035]'}
@@ -54,6 +56,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
       <WallSystem />
       <PostProcessing />
 
+      {selectionManager === 'default' && <SelectionManager />}
       {children}
     </Canvas>
   )

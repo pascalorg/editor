@@ -37,7 +37,7 @@ export default function Editor() {
       <SidebarProvider className="fixed z-10">
         <AppSidebar />
       </SidebarProvider>
-      <Viewer>
+      <Viewer selectionManager="custom">
         <SelectionManager />
         <ExportManager />
         {/* Editor only system to toggle zone visibility */}

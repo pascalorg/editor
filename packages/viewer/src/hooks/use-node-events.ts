@@ -7,6 +7,8 @@ import {
   emitter,
   type ItemEvent,
   type ItemNode,
+  type LevelEvent,
+  type LevelNode,
   type RoofEvent,
   type RoofNode,
   type SlabEvent,
@@ -22,6 +24,7 @@ type NodeConfig = {
   item: { node: ItemNode; event: ItemEvent }
   wall: { node: WallNode; event: WallEvent }
   building: { node: BuildingNode; event: BuildingEvent }
+  level: { node: LevelNode; event: LevelEvent }
   zone: { node: ZoneNode; event: ZoneEvent }
   slab: { node: SlabNode; event: SlabEvent }
   ceiling: { node: CeilingNode; event: CeilingEvent }

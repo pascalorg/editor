@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
-import type { BuildingNode, CeilingNode, ItemNode, RoofNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import type { BuildingNode, CeilingNode, ItemNode, LevelNode, RoofNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
@@ -21,6 +21,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type WallEvent = NodeEvent<WallNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
+export type LevelEvent = NodeEvent<LevelNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
 export type SlabEvent = NodeEvent<SlabNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
@@ -61,6 +62,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'building', BuildingEvent> &
+  NodeEvents<'level', LevelEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'ceiling', CeilingEvent> &

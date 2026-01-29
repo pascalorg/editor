@@ -6,6 +6,7 @@ export type {
   EventSuffix,
   GridEvent,
   ItemEvent,
+  LevelEvent,
   NodeEvent,
   SlabEvent,
   WallEvent,
