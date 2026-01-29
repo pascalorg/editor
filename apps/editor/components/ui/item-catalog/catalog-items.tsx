@@ -1,6 +1,347 @@
 import { AssetInput, ItemNode } from "@pascal-app/core";
 export const CATALOG_ITEMS: AssetInput[] = [
-   {
+   
+  {
+    "id": "pillar",
+    "category": "outdoor",
+    "name": "pillar",
+    "thumbnail": "/items/pillar/thumbnail.webp",
+    "src": "/items/pillar/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      1.3,
+      0.5
+    ]
+  },
+  
+  {
+    "id": "patio-umbrella",
+    "category": "outdoor",
+    "name": "patio-umbrella",
+    "thumbnail": "/items/patio-umbrella/thumbnail.webp",
+    "src": "/items/patio-umbrella/model.glb",
+    "scale": [
+      0.96,
+      0.96,
+      0.96
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      1,
+      3,
+      1
+    ]
+  },
+  
+  {
+    "id": "door-bar",
+    "category": "door",
+    "name": "door-bar",
+    "thumbnail": "/items/door-bar/thumbnail.webp",
+    "src": "/items/door-bar/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      -0.48,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      1.5,
+      2.5,
+      0.5
+    ],
+    "attachTo": "wall"
+  },
+  
+  {
+    "id": "column",
+    "category": "furniture",
+    "name": "column",
+    "thumbnail": "/items/column/thumbnail.webp",
+    "src": "/items/column/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      1.26,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      2.6,
+      0.5
+    ]
+  },
+  
+  {
+    "id": "stairs",
+    "category": "furniture",
+    "name": "stairs",
+    "thumbnail": "/items/stairs/thumbnail.webp",
+    "src": "/items/stairs/model.glb",
+    "scale": [
+      0.91,
+      0.91,
+      0.91
+    ],
+    "offset": [
+      0,
+      0.03,
+      2.7
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      1.5,
+      3.7,
+      5
+    ]
+  },
+  
+  {
+    "id": "bush",
+    "category": "outdoor",
+    "name": "bush",
+    "thumbnail": "/items/bush/thumbnail.webp",
+    "src": "/items/bush/model.glb",
+    "scale": [
+      0.96,
+      0.96,
+      0.96
+    ],
+    "offset": [
+      -0.14,
+      0.01,
+      -0.13
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      3,
+      1.1,
+      1
+    ]
+  },
+  
+  {
+    "id": "high-fence",
+    "category": "outdoor",
+    "name": "high-fence",
+    "thumbnail": "/items/high-fence/thumbnail.webp",
+    "src": "/items/high-fence/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.01,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      4,
+      4.1,
+      0.5
+    ]
+  },
+  
+  {
+    "id": "low-fence",
+    "category": "outdoor",
+    "name": "low-fence",
+    "thumbnail": "/items/low-fence/thumbnail.webp",
+    "src": "/items/low-fence/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.01,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      2,
+      0.8,
+      0.5
+    ]
+  },
+  
+  {
+    "id": "fir-tree",
+    "category": "outdoor",
+    "name": "fir-tree",
+    "thumbnail": "/items/fir-tree/thumbnail.webp",
+    "src": "/items/fir-tree/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      -0.09,
+      0.05,
+      0.03
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      1.5,
+      3.2,
+      1.5
+    ]
+  },
+  
+  {
+    "id": "tree",
+    "category": "outdoor",
+    "name": "tree",
+    "thumbnail": "/items/tree/thumbnail.webp",
+    "src": "/items/tree/model.glb",
+    "scale": [
+      0.65,
+      0.65,
+      0.65
+    ],
+    "offset": [
+      0.09,
+      0.17,
+      0.06
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      4,
+      5,
+      4
+    ]
+  },
+  
+  {
+    "id": "window-double",
+    "category": "window",
+    "name": "Window-double",
+    "thumbnail": "/items/window-double/thumbnail.webp",
+    "src": "/items/window-double/model.glb",
+    "scale": [
+      0.75,
+      0.75,
+      0.75
+    ],
+    "offset": [
+      0,
+      -0.18,
+      0.02
+    ],
+    "rotation": [
+      0,
+      3.14,
+      0
+    ],
+    "dimensions": [
+      1.5,
+      1.5,
+      0.5
+    ],
+    "attachTo": "wall"
+  },
+  
+  {
+    "id": "window-simple",
+    "category": "window",
+    "name": "Window-simple",
+    "thumbnail": "/items/window-simple/thumbnail.webp",
+    "src": "/items/window-simple/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      1.06,
+      0,
+      0.05
+    ],
+    "rotation": [
+      0,
+      3.14,
+      0
+    ],
+    "dimensions": [
+      1.5,
+      2,
+      0.5
+    ],
+    "attachTo": "wall"
+  },
+
+  
+  {
     id: "shower-rug",
     category: "furniture",
     name: "shower-rug",
@@ -49,27 +390,31 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
 
   {
-    id: "fence",
-    category: "outdoor",
-    name: "fence",
-    thumbnail: "/items/fence/thumbnail.webp",
-    src: "/items/fence/model.glb",
-    scale: [0.8, 0.8, 0.8],
-    offset: [0, 0, 0],
-    rotation: [0, 0, 0],
-    dimensions: [2, 0.7, 0.5],
-  },
-
-  {
-    id: "patio-umbrella",
-    category: "outdoor",
-    name: "patio-umbrella",
-    thumbnail: "/items/patio-umbrella/thumbnail.webp",
-    src: "/items/patio-umbrella/model.glb",
-    scale: [0.8, 0.8, 0.8],
-    offset: [0, 0, 0],
-    rotation: [0, 0, 0],
-    dimensions: [1, 3, 1],
+    "id": "low-fence",
+    "category": "outdoor",
+    "name": "low-fence",
+    "thumbnail": "/items/low-fence/thumbnail.webp",
+    "src": "/items/low-fence/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.01,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      2,
+      0.8,
+      0.5
+    ]
   },
 
   {
@@ -150,29 +495,32 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
 
   {
-    id: "window-large",
-    category: "window",
-    name: "window-large",
-    thumbnail: "/items/window-large/thumbnail.webp",
-    src: "/items/window-large/model.glb",
-    scale: [1, 1, 1],
-    offset: [0, 1, 0],
-    rotation: [0, 0, 0],
-    dimensions: [2, 2, 0.4],
-    attachTo: "wall",
-  },
-
-  {
-    id: "window-rectangle",
-    category: "window",
-    name: "window-rectangle",
-    thumbnail: "/items/window-rectangle/thumbnail.webp",
-    src: "/items/window-rectangle/model.glb",
-    scale: [0.68, 0.68, 0.68],
-    offset: [0, 0.75, 0],
-    rotation: [0, 0, 0],
-    dimensions: [2, 1.5, 0.4],
-    attachTo: "wall",
+    "id": "window-rectangle",
+    "category": "window",
+    "name": "Window-rectangle",
+    "thumbnail": "/items/window-rectangle/thumbnail.webp",
+    "src": "/items/window-rectangle/model.glb",
+    "scale": [
+      0.95,
+      1,
+      1
+    ],
+    "offset": [
+      -1.65,
+      -0.34,
+      0.1
+    ],
+    "rotation": [
+      0,
+      3.14,
+      0
+    ],
+    "dimensions": [
+      3,
+      2,
+      0.5
+    ],
+    "attachTo": "wall"
   },
 
   {
@@ -194,10 +542,10 @@ export const CATALOG_ITEMS: AssetInput[] = [
     name: "door",
     thumbnail: "/items/door/thumbnail.webp",
     src: "/items/door/model.glb",
-    scale: [0.9, 0.9, 0.9],
+    scale: [0.8, 0.8, 0.8],
     offset: [-0.43, 0, 0],
     rotation: [0, 0, 0],
-    dimensions: [1.5, 2.5, 0.4],
+    dimensions: [1.5, 2, 0.4],
     attachTo: "wall",
   },
 

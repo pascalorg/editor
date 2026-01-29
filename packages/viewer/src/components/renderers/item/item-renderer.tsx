@@ -3,7 +3,7 @@ import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
 // Shared materials to avoid creating new instances for every mesh
@@ -20,6 +20,8 @@ const glassMaterial = new MeshStandardNodeMaterial({
   metalness: 0,
   transparent: true,
   opacity: 0.25,
+  side: DoubleSide,
+  depthWrite: false,
 })
 
 const getMaterialForOriginal = (original: Material): MeshStandardNodeMaterial => {
