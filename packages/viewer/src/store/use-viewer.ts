@@ -34,6 +34,12 @@ type ViewerState = {
   levelMode: "stacked" | "exploded" | "solo" | "manual";
   setLevelMode: (mode: "stacked" | "exploded" | "solo" | "manual") => void;
 
+  showScans: boolean;
+  setShowScans: (show: boolean) => void;
+
+  showGuides: boolean;
+  setShowGuides: (show: boolean) => void;
+
   // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void;
   resetSelection: () => void;
@@ -51,6 +57,12 @@ const useViewer = create<ViewerState>()((set, get) => ({
 
   levelMode: "stacked",
   setLevelMode: (mode) => set({ levelMode: mode }),
+
+  showScans: true,
+  setShowScans: (show) => set({ showScans: show }),
+
+  showGuides: true,
+  setShowGuides: (show) => set({ showGuides: show }),
 
   setSelection: (updates) =>
     set((state) => {

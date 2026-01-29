@@ -7,6 +7,7 @@ import * as THREE from 'three/webgpu'
 import { LevelSystem } from '../../systems/level/level-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import PostProcessing from './post-processing'
+import { ViewerCamera } from './viewer-camera'
 
 declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -31,6 +32,7 @@ const Viewer: React.FC<ViewerProps> = ({ children }) => {
       camera={{ position: [50, 50, 50], fov: 50 }}
     >
       <color attach="background" args={['#ececec']} />
+      <ViewerCamera />
 
       <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow />
       <Environment preset="sunset" environmentIntensity={0.3} />

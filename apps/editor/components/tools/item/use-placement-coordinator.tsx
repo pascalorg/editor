@@ -418,8 +418,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
-        // Ref + cursor mesh only — no store update during drag
+        // Ref + cursor mesh + item mesh — no store update during drag
         cursorRef.current.rotation.y = newRotationY
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) mesh.rotation.y = newRotationY
         revalidate()
       }
     }

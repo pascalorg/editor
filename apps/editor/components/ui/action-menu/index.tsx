@@ -10,7 +10,7 @@ import useEditor from "@/store/use-editor";
 import { AnimatePresence, motion } from "motion/react";
 import { ItemCatalog } from "../item-catalog/item-catalog";
 import { FurnishTools } from "./furnish-tools";
-// import { ViewToggles } from "./view-toggles";
+import { ViewToggles } from "./view-toggles";
 
 export function ActionMenu({ className }: { className?: string }) {
   const phase = useEditor((state) => state.phase);
@@ -138,8 +138,8 @@ export function ActionMenu({ className }: { className?: string }) {
           <PhaseSwitcher />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ControlModes />
-          {/* <div className="mx-1 h-5 w-px bg-zinc-700" /> */}
-          {/* <ViewToggles /> */}
+          <div className="mx-1 h-5 w-px bg-zinc-700" />
+          <ViewToggles />
         </div>
       </div>
     </TooltipProvider>
