@@ -22,6 +22,7 @@ export type SceneState = {
   // Actions
   loadScene: () => void
   clearScene: () => void
+  setScene: (nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -58,6 +59,18 @@ const useScene = create<SceneState>()(
             dirtyNodes: new Set<AnyNodeId>(),
           })
           get().loadScene() // Default scene
+        },
+
+        setScene: (nodes, rootNodeIds) => {
+          set({
+            nodes,
+            rootNodeIds,
+            dirtyNodes: new Set<AnyNodeId>(),
+          })
+          // Mark all nodes as dirty to trigger re-validation
+          Object.values(nodes).forEach((node) => {
+            get().markDirty(node.id)
+          })
         },
 
         loadScene: () => {

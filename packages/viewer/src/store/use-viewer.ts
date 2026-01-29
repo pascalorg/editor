@@ -45,6 +45,10 @@ type ViewerState = {
   resetSelection: () => void;
 
   outliner: Outliner; // No setter as we will manipulate directly the arrays
+
+  // Export functionality
+  exportScene: (() => Promise<void>) | null;
+  setExportScene: (fn: (() => Promise<void>) | null) => void;
 };
 
 const useViewer = create<ViewerState>()((set, get) => ({
@@ -94,6 +98,9 @@ const useViewer = create<ViewerState>()((set, get) => ({
     }),
 
   outliner: { selectedObjects: [], hoveredObjects: [] },
+
+  exportScene: null,
+  setExportScene: (fn) => set({ exportScene: fn }),
 }));
 
 export default useViewer;

@@ -18,6 +18,7 @@ import { RoofPanel } from '../ui/panels/roof-panel'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
+import { ExportManager } from './export-manager'
 import { SelectionManager } from './selection-manager'
 
 useScene.getState().loadScene()
@@ -38,6 +39,7 @@ export default function Editor() {
       </SidebarProvider>
       <Viewer>
         <SelectionManager />
+        <ExportManager />
         {/* Editor only system to toggle zone visibility */}
         <ZoneSystem />
         {/* <Stats /> */}
