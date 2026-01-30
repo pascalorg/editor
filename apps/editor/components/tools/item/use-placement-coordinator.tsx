@@ -93,7 +93,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       cursorRef.current.position.set(...result.cursorPosition)
       cursorRef.current.rotation.y = result.cursorRotationY
 
-      draftNode.create(gridPosition.current, asset)
+      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0])
 
       const draft = draftNode.current
       if (draft) {
@@ -146,9 +146,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const result = floorStrategy.click(getContext(), event, validators)
       if (!result) return
 
+      // Preserve cursor rotation for the next draft
+      const currentRotation: [number, number, number] = [0, cursorRef.current.rotation.y, 0]
+
       draftNode.commit(result.nodeUpdate)
       if (config.onCommitted()) {
-        draftNode.create(gridPosition.current, asset)
+        draftNode.create(gridPosition.current, asset, currentRotation)
         revalidate()
       }
     }
