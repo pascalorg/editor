@@ -2,7 +2,7 @@
 
 import { type AnyNode, type BuildingNode, type LevelNode, type ZoneNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ChevronRight } from 'lucide-react'
+import { Box, ChevronRight, Diamond, Eye, EyeOff, Image, Layers, Layers2 } from 'lucide-react'
 
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
@@ -17,6 +17,10 @@ const getNodeName = (node: AnyNode): string => {
 export const ViewerOverlay = () => {
   const selection = useViewer((s) => s.selection)
   const nodes = useScene((s) => s.nodes)
+  const showScans = useViewer((s) => s.showScans)
+  const showGuides = useViewer((s) => s.showGuides)
+  const cameraMode = useViewer((s) => s.cameraMode)
+  const levelMode = useViewer((s) => s.levelMode)
 
   const building = selection.buildingId ? (nodes[selection.buildingId] as BuildingNode | undefined) : null
   const level = selection.levelId ? (nodes[selection.levelId] as LevelNode | undefined) : null
@@ -53,6 +57,7 @@ export const ViewerOverlay = () => {
   }
 
   return (
+    <>
     <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-sm">
@@ -124,5 +129,80 @@ export const ViewerOverlay = () => {
         </div>
       )}
     </div>
+
+    {/* Controls Panel - Top Right */}
+    <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+      {/* Visibility Controls */}
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+        <span className="text-xs text-neutral-500 px-2 pb-1">Visibility</span>
+        <button
+          onClick={() => useViewer.getState().setShowScans(!showScans)}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            showScans ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <Box className="w-4 h-4" />
+          3D Scans
+        </button>
+        <button
+          onClick={() => useViewer.getState().setShowGuides(!showGuides)}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            showGuides ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <Image className="w-4 h-4" />
+          Guides
+        </button>
+      </div>
+
+      {/* Camera Mode */}
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+        <span className="text-xs text-neutral-500 px-2 pb-1">Camera</span>
+        <button
+          onClick={() => useViewer.getState().setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
+          className="flex items-center gap-2 px-2 py-1 rounded text-sm text-neutral-700 hover:bg-neutral-100 transition-colors"
+        >
+          {cameraMode === 'perspective' ? (
+            <Eye className="w-4 h-4" />
+          ) : (
+            <EyeOff className="w-4 h-4" />
+          )}
+          {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+        </button>
+      </div>
+
+      {/* Level Mode */}
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+        <span className="text-xs text-neutral-500 px-2 pb-1">Level Mode</span>
+        <button
+          onClick={() => useViewer.getState().setLevelMode('stacked')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            levelMode === 'stacked' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          Stacked
+        </button>
+        <button
+          onClick={() => useViewer.getState().setLevelMode('exploded')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            levelMode === 'exploded' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <Layers2 className="w-4 h-4" />
+          Exploded
+        </button>
+        <button
+          onClick={() => useViewer.getState().setLevelMode('solo')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            levelMode === 'solo' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <Diamond className="w-4 h-4" />
+          Solo
+        </button>
+      </div>
+    </div>
+    </>
   )
 }

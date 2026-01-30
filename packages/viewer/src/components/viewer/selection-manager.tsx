@@ -15,9 +15,48 @@ import {
 } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
+import { Vector3 } from 'three'
 import useViewer from '../../store/use-viewer'
 
+const tempWorldPos = new Vector3()
+
+// Tolerance for edge detection (in meters)
+const EDGE_TOLERANCE = 0.5
+
 type SelectableNodeType = 'building' | 'level' | 'zone' | 'wall' | 'item' | 'slab' | 'ceiling' | 'roof'
+
+// Expand polygon outward by a small amount to include items on edges
+const expandPolygon = (polygon: [number, number][], tolerance: number): [number, number][] => {
+  if (polygon.length < 3) return polygon
+
+  // Calculate centroid
+  let cx = 0, cz = 0
+  for (const [x, z] of polygon) {
+    cx += x
+    cz += z
+  }
+  cx /= polygon.length
+  cz /= polygon.length
+
+  // Expand each point outward from centroid
+  return polygon.map(([x, z]) => {
+    const dx = x - cx
+    const dz = z - cz
+    const len = Math.sqrt(dx * dx + dz * dz)
+    if (len === 0) return [x, z] as [number, number]
+    const scale = (len + tolerance) / len
+    return [cx + dx * scale, cz + dz * scale] as [number, number]
+  })
+}
+
+// Check if point is in polygon with tolerance for edges
+const pointInPolygonWithTolerance = (x: number, z: number, polygon: [number, number][]): boolean => {
+  // First try exact check
+  if (pointInPolygon(x, z, polygon)) return true
+  // Then try with expanded polygon for edge tolerance
+  const expanded = expandPolygon(polygon, EDGE_TOLERANCE)
+  return pointInPolygon(x, z, expanded)
+}
 
 interface SelectionStrategy {
   types: SelectableNodeType[]
@@ -26,30 +65,59 @@ interface SelectionStrategy {
   isValid: (node: AnyNode) => boolean
 }
 
-// Check if a node is within the selected zone's polygon
-const isNodeInZone = (node: AnyNode, zoneId: string): boolean => {
+// Check if a node belongs to the selected level (directly or via wall parent)
+const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
   const nodes = useScene.getState().nodes
-  const zone = nodes[zoneId] as ZoneNode | undefined
+
+  // Direct child of level
+  if (node.parentId === levelId) return true
+
+  // Wall-attached items (windows/doors): check if parent wall is on the level
+  if (node.type === 'item' && node.parentId) {
+    const parentNode = nodes[node.parentId as keyof typeof nodes]
+    if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
+      return true
+    }
+  }
+
+  return false
+}
+
+// Check if a node is on the selected level and within the selected zone's polygon
+const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean => {
+  const nodes = useScene.getState().nodes
+  const zone = nodes[zoneId as keyof typeof nodes] as ZoneNode | undefined
   if (!zone?.polygon?.length) return false
 
+  // First check: node must be on the same level (directly or via wall)
+  if (!isNodeOnLevel(node, levelId)) return false
+
+  // Use world position from scene registry for accurate polygon check
+  const object3D = sceneRegistry.nodes.get(node.id)
+  if (object3D) {
+    object3D.getWorldPosition(tempWorldPos)
+    return pointInPolygonWithTolerance(tempWorldPos.x, tempWorldPos.z, zone.polygon)
+  }
+
+  // Fallback to node data if 3D object not available
   if (node.type === 'item') {
     const item = node as ItemNode
-    return pointInPolygon(item.position[0], item.position[2], zone.polygon)
+    return pointInPolygonWithTolerance(item.position[0], item.position[2], zone.polygon)
   }
 
   if (node.type === 'wall') {
     const wall = node as WallNode
-    const startIn = pointInPolygon(wall.start[0], wall.start[1], zone.polygon)
-    const endIn = pointInPolygon(wall.end[0], wall.end[1], zone.polygon)
+    const startIn = pointInPolygonWithTolerance(wall.start[0], wall.start[1], zone.polygon)
+    const endIn = pointInPolygonWithTolerance(wall.end[0], wall.end[1], zone.polygon)
     return startIn || endIn
   }
 
   if (node.type === 'slab' || node.type === 'ceiling') {
     const poly = (node as { polygon: [number, number][] }).polygon
     if (!poly?.length) return false
-    // Check if any point of the node's polygon is in the zone
+    // Check if any point of the node's polygon is in the zone (with tolerance)
     for (const [px, pz] of poly) {
-      if (pointInPolygon(px, pz, zone.polygon)) return true
+      if (pointInPolygonWithTolerance(px, pz, zone.polygon)) return true
     }
     // Check if any point of the zone is in the node's polygon
     for (const [zx, zz] of zone.polygon) {
@@ -59,8 +127,8 @@ const isNodeInZone = (node: AnyNode, zoneId: string): boolean => {
   }
 
   if (node.type === 'roof') {
-    // Roofs may not have a polygon, check by parent level
-    return true // Allow all roofs when zone is selected
+    // Roofs on the same level are valid when zone is selected
+    return true
   }
 
   return false
@@ -97,7 +165,7 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Level selected, no zone -> can select zones
+  // Level selected, no zone -> can select zones (only zones on the selected level)
   if (!zoneId) {
     return {
       types: ['zone'],
@@ -107,7 +175,7 @@ const getStrategy = (): SelectionStrategy | null => {
       handleDeselect: () => {
         useViewer.getState().setSelection({ levelId: null })
       },
-      isValid: (node) => node.type === 'zone',
+      isValid: (node) => node.type === 'zone' && node.parentId === levelId,
     }
   }
 
@@ -135,7 +203,7 @@ const getStrategy = (): SelectionStrategy | null => {
     isValid: (node) => {
       const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof']
       if (!validTypes.includes(node.type)) return false
-      return isNodeInZone(node, zoneId)
+      return isNodeInZone(node, levelId, zoneId)
     },
   }
 }
@@ -171,6 +239,8 @@ export const SelectionManager = () => {
       event.stopPropagation()
       clickHandledRef.current = true
       strategy.handleClick(event.node)
+      // Clear hover immediately after clicking on building/level/zone
+      useViewer.setState({ hoveredId: null })
     }
 
     // Subscribe to all node types

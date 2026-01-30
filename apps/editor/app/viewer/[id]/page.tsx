@@ -2,9 +2,9 @@
 
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
 import { Viewer } from '@pascal-app/viewer'
-import { OrbitControls } from '@react-three/drei'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
 
 export default function ViewerPage() {
@@ -56,7 +56,7 @@ export default function ViewerPage() {
     <div className="relative h-screen w-full">
       <ViewerOverlay />
       <Viewer>
-        <OrbitControls makeDefault />
+        <ViewerCameraControls />
       </Viewer>
     </div>
   )
