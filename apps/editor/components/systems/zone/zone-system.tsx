@@ -1,24 +1,36 @@
-import { sceneRegistry } from '@pascal-app/core'
+import { type ZoneNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import useEditor from '@/store/use-editor'
 
 export const ZoneSystem = () => {
   const structureLayer = useEditor((state) => state.structureLayer)
+  const levelMode = useViewer((state) => state.levelMode)
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
 
   useEffect(() => {
     const visible = structureLayer === 'zones'
     const zones = sceneRegistry.byType.zone || new Set()
+    const nodes = useScene.getState().nodes
+
     zones.forEach((zoneId) => {
-      const node = sceneRegistry.nodes.get(zoneId)
-      if (node) {
-        node.visible = visible;
-        const label = node.getObjectByName('label');
-        if (label) {
-          label.position.y = visible ? 1 : -1000;
-          // Hacky way to hide the label when not visible
-        }
+      const obj = sceneRegistry.nodes.get(zoneId)
+      if (!obj) return
+
+      const zone = nodes[zoneId as ZoneNode['id']] as ZoneNode | undefined
+
+      // In solo mode, hide labels for zones not on the current level
+      const isOnSelectedLevel = zone?.parentId === selectedLevelId
+      const hideInSoloMode = levelMode === 'solo' && selectedLevelId && !isOnSelectedLevel
+
+      obj.visible = visible
+      const label = obj.getObjectByName('label')
+      if (label) {
+        // Hide label if zone layer is off OR if in solo mode on a different level
+        label.position.y = (visible && !hideInSoloMode) ? 1 : -1000
       }
     })
-  }, [structureLayer])
-  return null;
+  }, [structureLayer, levelMode, selectedLevelId])
+
+  return null
 }
