@@ -111,14 +111,26 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Zone selected -> can hover contents (walls, items, slabs, ceilings, roofs)
+  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs)
   return {
     types: ['wall', 'item', 'slab', 'ceiling', 'roof'],
-    handleClick: () => {
-      // No action on click at zone content level
+    handleClick: (node) => {
+      const { selectedIds } = useViewer.getState().selection
+      // Toggle selection - if already selected, deselect; otherwise select
+      if (selectedIds.includes(node.id)) {
+        useViewer.getState().setSelection({ selectedIds: selectedIds.filter((id) => id !== node.id) })
+      } else {
+        useViewer.getState().setSelection({ selectedIds: [node.id] })
+      }
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ zoneId: null })
+      const { selectedIds } = useViewer.getState().selection
+      // If items are selected, deselect them first; otherwise go back to level
+      if (selectedIds.length > 0) {
+        useViewer.getState().setSelection({ selectedIds: [] })
+      } else {
+        useViewer.getState().setSelection({ zoneId: null })
+      }
     },
     isValid: (node) => {
       const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof']
@@ -222,12 +234,17 @@ const PointerMissedHandler = ({ clickHandledRef }: { clickHandledRef: React.Muta
 }
 
 const OutlinerSync = () => {
+  const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
   const outliner = useViewer((s) => s.outliner)
 
   useEffect(() => {
-    // Clear selected objects - we only show hover in viewer
+    // Sync selected objects
     outliner.selectedObjects.length = 0
+    for (const id of selection.selectedIds) {
+      const obj = sceneRegistry.nodes.get(id)
+      if (obj) outliner.selectedObjects.push(obj)
+    }
 
     // Sync hovered objects
     outliner.hoveredObjects.length = 0
@@ -235,7 +252,7 @@ const OutlinerSync = () => {
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [hoveredId, outliner])
+  }, [selection, hoveredId, outliner])
 
   return null
 }

@@ -5,6 +5,7 @@ import { Viewer } from '@pascal-app/viewer'
 import { OrbitControls } from '@react-three/drei'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ViewerOverlay } from './viewer-overlay'
 
 export default function ViewerPage() {
   const params = useParams()
@@ -52,7 +53,8 @@ export default function ViewerPage() {
   }
 
   return (
-    <div className="h-screen w-full">
+    <div className="relative h-screen w-full">
+      <ViewerOverlay />
       <Viewer>
         <OrbitControls makeDefault />
       </Viewer>
