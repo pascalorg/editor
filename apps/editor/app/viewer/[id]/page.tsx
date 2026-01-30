@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
+import { ViewerZoneSystem } from './viewer-zone-system'
 
 export default function ViewerPage() {
   const params = useParams()
@@ -56,7 +57,10 @@ export default function ViewerPage() {
     <div className="relative h-screen w-full">
       <ViewerOverlay />
       <Viewer>
+        {/* Custom Camera Controls */}
         <ViewerCameraControls />
+        {/* Custom Zone System */}
+        <ViewerZoneSystem />
       </Viewer>
     </div>
   )
