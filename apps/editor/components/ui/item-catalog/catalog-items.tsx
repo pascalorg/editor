@@ -2,6 +2,34 @@ import { AssetInput, ItemNode } from "@pascal-app/core";
 export const CATALOG_ITEMS: AssetInput[] = [
    
   {
+    "id": "medium-fence",
+    "category": "outdoor",
+    "name": "medium-fence",
+    "thumbnail": "/items/medium-fence/thumbnail.webp",
+    "src": "/items/medium-fence/model.glb",
+    "scale": [
+      0.49,
+      0.49,
+      0.49
+    ],
+    "offset": [
+      0,
+      0.01,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      2,
+      2,
+      0.5
+    ]
+  },
+  
+  {
     "id": "pillar",
     "category": "outdoor",
     "name": "pillar",
@@ -238,9 +266,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       1
     ],
     "offset": [
-      -0.09,
+      -0.01,
       0.05,
-      0.03
+      -0.07
     ],
     "rotation": [
       0,
@@ -248,9 +276,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      1.5,
-      3.2,
-      1.5
+      0.5,
+      3,
+      0.5
     ]
   },
   
@@ -266,9 +294,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0.65
     ],
     "offset": [
-      0.09,
+      -0.02,
       0.17,
-      0.06
+      -0.04
     ],
     "rotation": [
       0,
@@ -276,9 +304,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      4,
+      1,
       5,
-      4
+      1
     ]
   },
   
@@ -289,14 +317,14 @@ export const CATALOG_ITEMS: AssetInput[] = [
     "thumbnail": "/items/window-double/thumbnail.webp",
     "src": "/items/window-double/model.glb",
     "scale": [
-      0.75,
-      0.75,
-      0.75
+      0.81,
+      0.81,
+      0.81
     ],
     "offset": [
       0,
-      -0.18,
-      0.02
+      -0.32,
+      0
     ],
     "rotation": [
       0,
@@ -312,33 +340,33 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   
   {
-    "id": "window-simple",
-    "category": "window",
-    "name": "Window-simple",
-    "thumbnail": "/items/window-simple/thumbnail.webp",
-    "src": "/items/window-simple/model.glb",
-    "scale": [
-      1,
-      1,
-      1
-    ],
-    "offset": [
-      1.06,
-      0,
-      0.05
-    ],
-    "rotation": [
-      0,
-      3.14,
-      0
-    ],
-    "dimensions": [
-      1.5,
-      2,
-      0.5
-    ],
-    "attachTo": "wall"
-  },
+  "id": "window-simple",
+  "category": "window",
+  "name": "Window-simple",
+  "thumbnail": "/items/window-simple/thumbnail.webp",
+  "src": "/items/window-simple/model.glb",
+  "scale": [
+    1,
+    1,
+    1
+  ],
+  "offset": [
+    1.06,
+    -0.21,
+    0.05
+  ],
+  "rotation": [
+    0,
+    3.14,
+    0
+  ],
+  "dimensions": [
+    1.5,
+    2,
+    0.5
+  ],
+  "attachTo": "wall"
+},
 
   
   {
@@ -501,14 +529,14 @@ export const CATALOG_ITEMS: AssetInput[] = [
     "thumbnail": "/items/window-rectangle/thumbnail.webp",
     "src": "/items/window-rectangle/model.glb",
     "scale": [
-      0.95,
-      1,
-      1
+      0.81,
+      0.81,
+      0.81
     ],
     "offset": [
-      -1.65,
-      -0.34,
-      0.1
+      -1.41,
+      -0.28,
+      0.08
     ],
     "rotation": [
       0,
@@ -516,8 +544,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
       0
     ],
     "dimensions": [
-      3,
-      2,
+      2.5,
+      1.5,
       0.5
     ],
     "attachTo": "wall"
@@ -542,10 +570,10 @@ export const CATALOG_ITEMS: AssetInput[] = [
     name: "door",
     thumbnail: "/items/door/thumbnail.webp",
     src: "/items/door/model.glb",
-    scale: [0.8, 0.8, 0.8],
+    scale: [0.9, 0.9, 0.9],
     offset: [-0.43, 0, 0],
     rotation: [0, 0, 0],
-    dimensions: [1.5, 2, 0.4],
+    dimensions: [1.5, 2.5, 0.4],
     attachTo: "wall",
   },
 
@@ -1542,18 +1570,5 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [0.5, 1, 0.5],
-  },
-
-  {
-    id: "window-square",
-    category: "window",
-    name: "Window-square",
-    thumbnail: "/items/window-square/thumbnail.webp",
-    src: "/items/window-square/model.glb",
-    scale: [0.5, 0.5, 0.5],
-    offset: [0, 0.72, 0],
-    rotation: [0, Math.PI, 0],
-    dimensions: [1, 1.5, 0.3],
-    attachTo: "wall",
   },
 ];
