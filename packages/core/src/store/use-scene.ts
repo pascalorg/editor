@@ -1,7 +1,8 @@
 'use client'
 
+import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BuildingNode } from '../schema'
 import { LevelNode } from '../schema/nodes/level'
@@ -39,7 +40,11 @@ export type SceneState = {
 
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
 
-const useScene = create<SceneState>()(
+type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
+  temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds'>>>
+}
+
+const useScene: UseSceneStore = create<SceneState>()(
   persist(
     temporal(
       (set, get) => ({

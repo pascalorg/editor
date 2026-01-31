@@ -24,6 +24,8 @@ import {
   stripTransient,
 } from './placement-math'
 
+const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
+
 // ============================================================================
 // FLOOR STRATEGY
 // ============================================================================
@@ -36,7 +38,8 @@ export const floorStrategy = {
   move(ctx: PlacementContext, event: GridEvent): PlacementResult | null {
     if (ctx.state.surface !== 'floor') return null
 
-    const [dimX, , dimZ] = ctx.asset.dimensions
+    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const [dimX, , dimZ] = dims
     const x = snapToGrid(event.position[0], dimX)
     const z = snapToGrid(event.position[2], dimZ)
 
@@ -240,8 +243,9 @@ export const ceilingStrategy = {
     const ceilingLevelId = resolveLevelId(event.node, nodes)
     if (ctx.levelId !== ceilingLevelId) return null
 
-    const [dimX, , dimZ] = ctx.asset.dimensions
-    const itemHeight = ctx.asset.dimensions[1]
+    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const [dimX, , dimZ] = dims
+    const itemHeight = dims[1]
 
     const x = snapToGrid(event.position[0], dimX)
     const z = snapToGrid(event.position[2], dimZ)
@@ -266,8 +270,9 @@ export const ceilingStrategy = {
     if (ctx.state.surface !== 'ceiling') return null
     if (!ctx.draftItem) return null
 
-    const [dimX, , dimZ] = ctx.asset.dimensions
-    const itemHeight = ctx.asset.dimensions[1]
+    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const [dimX, , dimZ] = dims
+    const itemHeight = dims[1]
 
     const x = snapToGrid(event.position[0], dimX)
     const z = snapToGrid(event.position[2], dimZ)

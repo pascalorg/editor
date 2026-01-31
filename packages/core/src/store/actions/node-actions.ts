@@ -1,6 +1,8 @@
 import type { AnyNode, AnyNodeId } from '../../schema'
 import type { SceneState } from '../use-scene'
 
+type AnyContainerNode = AnyNode & { children: string[] }
+
 export const createNodesAction = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
@@ -54,7 +56,7 @@ export const updateNodesAction = (
   get: () => SceneState,
   updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
 ) => {
-  const parentsToUpdate = new Set<string>()
+  const parentsToUpdate = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -66,28 +68,30 @@ export const updateNodesAction = (
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
         // 1. Remove from old parent
-        if (currentNode.parentId && nextNodes[currentNode.parentId]) {
-          const oldParent = nextNodes[currentNode.parentId] as AnyContainerNode
+        const oldParentId = currentNode.parentId as AnyNodeId | null
+        if (oldParentId && nextNodes[oldParentId]) {
+          const oldParent = nextNodes[oldParentId] as AnyContainerNode
           nextNodes[oldParent.id] = {
             ...oldParent,
             children: oldParent.children.filter((childId) => childId !== id),
-          }
+          } as AnyNode
           parentsToUpdate.add(oldParent.id)
         }
 
         // 2. Add to new parent
-        if (data.parentId && nextNodes[data.parentId]) {
-          const newParent = nextNodes[data.parentId] as AnyContainerNode
+        const newParentId = data.parentId as AnyNodeId | null
+        if (newParentId && nextNodes[newParentId]) {
+          const newParent = nextNodes[newParentId] as AnyContainerNode
           nextNodes[newParent.id] = {
             ...newParent,
             children: Array.from(new Set([...newParent.children, id])),
-          }
+          } as AnyNode
           parentsToUpdate.add(newParent.id)
         }
       }
 
       // Apply the update
-      nextNodes[id] = { ...nextNodes[id], ...data }
+      nextNodes[id] = { ...nextNodes[id], ...data } as AnyNode
     }
 
     return { nodes: nextNodes }
@@ -103,7 +107,7 @@ export const deleteNodesAction = (
   get: () => SceneState,
   ids: AnyNodeId[],
 ) => {
-  const parentsToMarkDirty = new Set<string>()
+  const parentsToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -114,13 +118,14 @@ export const deleteNodesAction = (
       if (!node) continue
 
       // 1. Remove reference from Parent
-      if (node.parentId && nextNodes[node.parentId]) {
-        const parent = nextNodes[node.parentId] as AnyContainerNode
+      const parentId = node.parentId as AnyNodeId | null
+      if (parentId && nextNodes[parentId]) {
+        const parent = nextNodes[parentId] as AnyContainerNode
         if (parent.children) {
           nextNodes[parent.id] = {
             ...parent,
             children: parent.children.filter((cid) => cid !== id),
-          }
+          } as AnyNode
           parentsToMarkDirty.add(parent.id)
         }
       }
@@ -134,7 +139,7 @@ export const deleteNodesAction = (
       // Inside the deleteNodes loop
       if ('children' in node && node.children.length > 0) {
         // Recursively delete all children first
-        get().deleteNodes(node.children)
+        get().deleteNodes(node.children as AnyNodeId[])
       }
     }
 

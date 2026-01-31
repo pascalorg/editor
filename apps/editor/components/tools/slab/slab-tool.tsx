@@ -218,7 +218,7 @@ export const SlabTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: 0 });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 
@@ -240,7 +240,7 @@ export const SlabTool: React.FC = () => {
 
         // Reset state
         pointsRef.current = [];
-        setPreview({ points: [], cursorPoint: null });
+        setPreview({ points: [], cursorPoint: null, levelY: 0 });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
 

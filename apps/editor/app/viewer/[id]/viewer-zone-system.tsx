@@ -21,7 +21,7 @@ export const ViewerZoneSystem = () => {
       // 2. Zone is not on the selected level
       // 3. A zone is already selected (hide all zones to show zone contents)
       const isOnSelectedLevel = zone.parentId === levelId
-      const shouldShow = levelId && isOnSelectedLevel && !zoneId
+      const shouldShow = !!levelId && isOnSelectedLevel && !zoneId
 
       obj.visible = shouldShow
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type BuildingNode, type LevelNode, type ZoneNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type BuildingNode, type LevelNode, type ZoneNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Box, ChevronRight, Diamond, Eye, EyeOff, Image, Layers, Layers2 } from 'lucide-react'
 
@@ -28,16 +28,16 @@ export const ViewerOverlay = () => {
 
   // Get the first selected item (if any)
   const selectedNode = selection.selectedIds.length > 0
-    ? (nodes[selection.selectedIds[0]!] as AnyNode | undefined)
+    ? (nodes[selection.selectedIds[0] as AnyNodeId] as AnyNode | undefined)
     : null
 
   // Get all levels for the selected building
   const levels = building?.children
-    .map((id) => nodes[id] as LevelNode | undefined)
+    .map((id) => nodes[id as AnyNodeId] as LevelNode | undefined)
     .filter((n): n is LevelNode => n?.type === 'level')
     .sort((a, b) => a.level - b.level) ?? []
 
-  const handleLevelClick = (levelId: string) => {
+  const handleLevelClick = (levelId: LevelNode['id']) => {
     // When switching levels, deselect zone and items
     useViewer.getState().setSelection({ levelId })
   }

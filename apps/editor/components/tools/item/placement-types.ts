@@ -1,6 +1,5 @@
-import type { AnyNode, CeilingNode, ItemNode, LevelNode, WallNode } from '@pascal-app/core'
+import type { AnyNode, AssetInput, CeilingNode, ItemNode, LevelNode, WallNode } from '@pascal-app/core'
 import type { Vector3 } from 'three'
-import type { Asset } from '../../../../../packages/core/src/schema/nodes/item'
 
 // ============================================================================
 // PLACEMENT STATE
@@ -26,7 +25,7 @@ export interface PlacementState {
  * Read-only snapshot passed to every strategy call.
  */
 export interface PlacementContext {
-  asset: Asset
+  asset: AssetInput
   levelId: LevelNode['id'] | null
   draftItem: ItemNode | null
   gridPosition: Vector3

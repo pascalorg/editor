@@ -23,10 +23,12 @@ import {
 } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
-import type { Asset } from '../../../../../packages/core/src/schema/nodes/item'
+import type { AssetInput } from '@pascal-app/core'
+
+const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
 export interface PlacementCoordinatorConfig {
-  asset: Asset
+  asset: AssetInput
   draftNode: DraftNodeHandle
   initDraft: (gridPosition: Vector3) => void
   onCommitted: () => boolean
@@ -441,12 +443,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Bounding box geometry ----
 
-    const boxGeometry = new BoxGeometry(
-      asset.dimensions[0],
-      asset.dimensions[1],
-      asset.dimensions[2],
-    )
-    boxGeometry.translate(0, asset.dimensions[1] / 2, 0)
+    const dims = asset.dimensions ?? DEFAULT_DIMENSIONS
+    const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
+    boxGeometry.translate(0, dims[1] / 2, 0)
     cursorRef.current.geometry = boxGeometry
 
     // ---- Subscribe ----
@@ -507,7 +506,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           mesh.position.y = spatialGridManager.getSlabElevationForItem(
             levelId,
             [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-            asset.dimensions,
+            asset.dimensions ?? DEFAULT_DIMENSIONS,
             draftNode.current.rotation,
           )
         }

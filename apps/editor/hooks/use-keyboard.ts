@@ -1,4 +1,4 @@
-import { useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import useEditor from '@/store/use-editor'
@@ -44,7 +44,7 @@ export const useKeyboard = () => {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
 
-        const selectedNodeIds = useViewer.getState().selection.selectedIds
+        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
           useScene.getState().deleteNodes(selectedNodeIds)

@@ -5,7 +5,7 @@ import type {
   BaseNode,
   BuildingNode,
   LevelNode,
-  Zone,
+  ZoneNode,
 } from "@pascal-app/core";
 import type { Object3D } from "three";
 
@@ -14,7 +14,7 @@ import { create } from "zustand";
 type SelectionPath = {
   buildingId: BuildingNode["id"] | null;
   levelId: LevelNode["id"] | null;
-  zoneId: Zone["id"] | null;
+  zoneId: ZoneNode["id"] | null;
   selectedIds: BaseNode["id"][]; // For items/assets (multi-select)
 };
 
@@ -25,8 +25,8 @@ type Outliner = {
 
 type ViewerState = {
   selection: SelectionPath;
-  hoveredId: AnyNode["id"] | Zone["id"] | null;
-  setHoveredId: (id: AnyNode["id"] | Zone["id"] | null) => void;
+  hoveredId: AnyNode["id"] | ZoneNode["id"] | null;
+  setHoveredId: (id: AnyNode["id"] | ZoneNode["id"] | null) => void;
 
   cameraMode: "perspective" | "orthographic";
   setCameraMode: (mode: "perspective" | "orthographic") => void;

@@ -3,7 +3,7 @@
 import { type BuildingNode, type ItemNode, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
-import type { Asset } from '../../../packages/core/src/schema/nodes/item'
+import type { AssetInput } from '@pascal-app/core'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -54,8 +54,8 @@ type EditorState = {
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
-  selectedItem: Asset | null
-  setSelectedItem: (item: Asset) => void
+  selectedItem: AssetInput | null
+  setSelectedItem: (item: AssetInput) => void
   movingNode: ItemNode | null
   setMovingNode: (node: ItemNode | null) => void
   selectedReferenceId: string | null

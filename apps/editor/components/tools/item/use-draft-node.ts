@@ -2,7 +2,7 @@ import { type AnyNodeId, ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
-import type { Asset } from '../../../../../packages/core/src/schema/nodes/item'
+import type { AssetInput } from '@pascal-app/core'
 import { stripTransient } from './placement-math'
 
 interface OriginalState {
@@ -19,7 +19,7 @@ export interface DraftNodeHandle {
   /** Whether the current draft was adopted (move mode) vs created (create mode) */
   readonly isAdopted: boolean
   /** Create a new draft item at the given position. Returns the created node or null. */
-  create: (gridPosition: Vector3, asset: Asset, rotation?: [number, number, number]) => ItemNode | null
+  create: (gridPosition: Vector3, asset: AssetInput, rotation?: [number, number, number]) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
   /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place. */
@@ -41,7 +41,7 @@ export function useDraftNode(): DraftNodeHandle {
   const adoptedRef = useRef(false)
   const originalStateRef = useRef<OriginalState | null>(null)
 
-  const create = useCallback((gridPosition: Vector3, asset: Asset, rotation?: [number, number, number]): ItemNode | null => {
+  const create = useCallback((gridPosition: Vector3, asset: AssetInput, rotation?: [number, number, number]): ItemNode | null => {
     const currentLevelId = useViewer.getState().selection.levelId
     if (!currentLevelId) return null
 

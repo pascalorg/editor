@@ -2,9 +2,9 @@
 
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Slider } from '@/components/ui/slider'
+import { Button } from '@/components/ui/primitives/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
+import { Slider } from '@/components/ui/primitives/slider'
 import { cn } from '@/lib/utils'
 
 interface OpacityControlProps {
@@ -65,8 +65,8 @@ export function OpacityControl({
             <Slider
               max={100}
               min={0}
-              onValueChange={([value]) => {
-                onOpacityChange(value)
+              onValueChange={(values: number[]) => {
+                if (values[0] !== undefined) onOpacityChange(values[0])
               }}
               step={1}
               value={[actualOpacity]}
