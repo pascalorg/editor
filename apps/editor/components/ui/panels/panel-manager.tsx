@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '@/store/use-editor'
 import { ReferencePanel } from './reference-panel'
@@ -19,7 +19,8 @@ export function PanelManager() {
 
   // Show appropriate panel based on selected node type
   if (selectedIds.length === 1) {
-    const node = nodes[selectedIds[0]!]
+    const selectedNode = selectedIds[0]
+    const node = nodes[selectedNode as AnyNodeId]
     if (node) {
       switch (node.type) {
         case 'roof':
