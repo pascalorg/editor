@@ -12,7 +12,7 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
   const handlers = useNodeEvents(node, 'wall')
 
   return (
-    <mesh ref={ref} castShadow receiveShadow>
+    <mesh ref={ref} castShadow receiveShadow visible={node.visible}>
       {/* WallSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
       <meshStandardMaterial color="lightgray"  />

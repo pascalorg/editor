@@ -17,6 +17,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
       receiveShadow
       position={node.position}
       rotation-y={node.rotation}
+      visible={node.visible}
       {...handlers}
     >
       {/* RoofSystem will replace this geometry in the next frame */}

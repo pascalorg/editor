@@ -37,7 +37,7 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
   useRegistry(node.id, node.type, ref)
 
   return (
-    <group position={node.position} rotation={node.rotation} ref={ref}>
+    <group position={node.position} rotation={node.rotation} ref={ref} visible={node.visible}>
       <Suspense>
         <ModelRenderer node={node} />
       </Suspense>

@@ -58,6 +58,7 @@ interface TreeNodeWrapperProps {
   children?: React.ReactNode;
   isSelected?: boolean;
   isHovered?: boolean;
+  isVisible?: boolean;
 }
 
 export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
@@ -77,6 +78,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       children,
       isSelected,
       isHovered,
+      isVisible = true,
     },
     ref
   ) {
@@ -89,7 +91,8 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
               : isHovered
                 ? "bg-accent/70 text-foreground"
-                : "text-muted-foreground hover:bg-accent/50"
+                : "text-muted-foreground hover:bg-accent/50",
+            !isVisible && "opacity-50"
           )}
           style={{ paddingLeft: depth * 12 + 4 }}
           onMouseEnter={onMouseEnter}

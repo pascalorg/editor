@@ -11,7 +11,7 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const handlers = useNodeEvents(node, 'slab')
 
   return (
-    <mesh ref={ref} castShadow receiveShadow {...handlers}>
+    <mesh ref={ref} castShadow receiveShadow {...handlers} visible={node.visible}>
       {/* SlabSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
       <meshStandardMaterial color="#e5e5e5" />

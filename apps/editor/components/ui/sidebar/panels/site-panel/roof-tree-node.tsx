@@ -59,6 +59,7 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
         onMouseLeave={handleMouseLeave}
         isSelected={isSelected}
         isHovered={isHovered}
+        isVisible={node.visible !== false}
         actions={<TreeNodeActions node={node} />}
       />
     </RenamePopover>
