@@ -22,14 +22,17 @@ const csgEvaluator = new Evaluator()
 // ============================================================================
 
 export const WallSystem = () => {
-  const { nodes, dirtyNodes, clearDirty } = useScene()
+  const dirtyNodes = useScene((state) => state.dirtyNodes)
+  const clearDirty = useScene((state) => state.clearDirty)
 
+  console.log('wall system rerendering')
   useFrame(() => {
     if (dirtyNodes.size === 0) return
 
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
+    const nodes = useScene.getState().nodes
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return
@@ -45,6 +48,7 @@ export const WallSystem = () => {
 
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
+      console.log(`Updating walls for level ${levelId}`)
       const levelWalls = getLevelWalls(levelId)
       const miterData = calculateLevelMiters(levelWalls)
 
