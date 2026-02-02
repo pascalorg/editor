@@ -49,7 +49,6 @@ export const WallSystem = () => {
 
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
-      console.log(`Updating walls for level ${levelId}`)
       const levelWalls = getLevelWalls(levelId)
       const miterData = calculateLevelMiters(levelWalls)
 
@@ -153,6 +152,7 @@ export function generateExtrudedWall(
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   // Wall height is adjusted by slab elevation (positive reduces, negative increases)
   const height = (wallNode.height ?? 2.5) - slabElevation
+
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
 

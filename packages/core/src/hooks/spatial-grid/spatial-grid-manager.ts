@@ -138,19 +138,73 @@ export function itemOverlapsPolygon(
 }
 
 /**
+ * Check if wall segment (a) is substantially on polygon edge segment (b).
+ * Returns true only if BOTH endpoints of the wall are on or very close to the edge.
+ * This prevents walls that just touch one point from being detected.
+ */
+function segmentsCollinearAndOverlap(
+  ax1: number, az1: number, ax2: number, az2: number,
+  bx1: number, bz1: number, bx2: number, bz2: number,
+): boolean {
+  const EPSILON = 1e-6
+
+  // Cross product to check collinearity
+  const cross1 = (ax2 - ax1) * (bz1 - az1) - (az2 - az1) * (bx1 - ax1)
+  const cross2 = (ax2 - ax1) * (bz2 - az1) - (az2 - az1) * (bx2 - ax1)
+
+  if (Math.abs(cross1) > EPSILON || Math.abs(cross2) > EPSILON) {
+    return false // Not collinear
+  }
+
+  // Check if a point is on segment b
+  const onSegment = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
+    Math.min(px, qx) - EPSILON <= rx && rx <= Math.max(px, qx) + EPSILON &&
+    Math.min(pz, qz) - EPSILON <= rz && rz <= Math.max(pz, qz) + EPSILON
+
+  // BOTH endpoints of wall (a) must be on edge (b) for substantial overlap
+  const a1OnB = onSegment(bx1, bz1, bx2, bz2, ax1, az1)
+  const a2OnB = onSegment(bx1, bz1, bx2, bz2, ax2, az2)
+
+  return a1OnB && a2OnB
+}
+
+/**
  * Test if a wall segment overlaps with a polygon.
+ * A wall is considered to overlap if:
+ * - Its midpoint is inside the polygon (wall crosses through)
+ * - At least one endpoint is inside (wall partially or fully in slab)
+ * - It's collinear with and overlaps a polygon edge (wall on slab boundary)
+ *
+ * Note: A wall with just one endpoint touching the edge but the rest outside
+ * is NOT considered overlapping (adjacent only).
  */
 export function wallOverlapsPolygon(
   start: [number, number],
   end: [number, number],
   polygon: Array<[number, number]>,
 ): boolean {
-  // Either endpoint inside the polygon
-  if (pointInPolygon(start[0], start[1], polygon)) return true
-  if (pointInPolygon(end[0], end[1], polygon)) return true
+  const startInside = pointInPolygon(start[0], start[1], polygon)
+  const endInside = pointInPolygon(end[0], end[1], polygon)
 
-  // Wall segment intersects any polygon edge
-  if (segmentIntersectsPolygon(start[0], start[1], end[0], end[1], polygon)) return true
+  // At least one endpoint strictly inside the polygon
+  if (startInside || endInside) return true
+
+  // Check if midpoint is inside (catches walls crossing through)
+  const midX = (start[0] + end[0]) / 2
+  const midZ = (start[1] + end[1]) / 2
+  if (pointInPolygon(midX, midZ, polygon)) return true
+
+  // Check if the wall is collinear with and overlaps any polygon edge
+  const n = polygon.length
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    const [p1x, p1z] = polygon[i]!
+    const [p2x, p2z] = polygon[j]!
+
+    if (segmentsCollinearAndOverlap(start[0], start[1], end[0], end[1], p1x, p1z, p2x, p2z)) {
+      return true
+    }
+  }
 
   return false
 }
@@ -460,7 +514,7 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    let maxElevation = 0
+    let maxElevation = -Infinity
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
       if (wallOverlapsPolygon(start, end, slab.polygon)) {
@@ -470,7 +524,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return maxElevation
+    return maxElevation === -Infinity ? 0 : maxElevation
   }
 
   /**
