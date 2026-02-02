@@ -68,15 +68,18 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
           return
         }
 
-        mesh.castShadow = true
-        mesh.receiveShadow = true
+        let hasGlass = false;
 
         // Handle both single material and material array cases
         if (Array.isArray(mesh.material)) {
           mesh.material = mesh.material.map((mat) => getMaterialForOriginal(mat))
+          hasGlass = mesh.material.some(mat => mat.name === 'glass');
         } else {
           mesh.material = getMaterialForOriginal(mesh.material)
+          hasGlass = mesh.material.name === 'glass';
         }
+        mesh.castShadow = !hasGlass
+        mesh.receiveShadow = !hasGlass
       }
     })
   }, [scene])
