@@ -97,9 +97,15 @@ export const updateNodesAction = (
     return { nodes: nextNodes }
   })
 
-  // Mark dirty
-  updates.forEach((u) => get().markDirty(u.id))
-  parentsToUpdate.forEach((pId) => get().markDirty(pId))
+  // Mark dirty after the next frame to ensure React renders complete
+  requestAnimationFrame(() => {
+    updates.forEach((u) => {
+      get().markDirty(u.id)
+    })
+    parentsToUpdate.forEach((pId) => {
+      get().markDirty(pId)
+    })
+  })
 }
 
 export const deleteNodesAction = (
