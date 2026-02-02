@@ -179,17 +179,12 @@ useScene.temporal.subscribe((state) => {
   const currentPastLength = state.pastStates.length
   const currentFutureLength = state.futureStates.length
 
-  console.log('Temporal state changed:', {
-    pastStates: { prev: prevPastLength, current: currentPastLength },
-    futureStates: { prev: prevFutureLength, current: currentFutureLength },
-  })
 
   // Undo: futureStates increases (state moved from past to future)
   // Redo: pastStates increases while futureStates decreases (state moved from future to past)
   const didUndo = currentFutureLength > prevFutureLength
   const didRedo = currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
 
-  console.log('Detection:', { didUndo, didRedo })
 
   if (didUndo || didRedo) {
     // Use RAF to ensure all middleware and store updates are complete

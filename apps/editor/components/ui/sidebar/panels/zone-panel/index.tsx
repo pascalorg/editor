@@ -1,6 +1,7 @@
-import { useScene, type ZoneNode } from "@pascal-app/core";
+import { emitter, useScene, type ZoneNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
-import { Hexagon, Trash2 } from "lucide-react";
+import { Camera, Hexagon, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import {
@@ -22,6 +23,7 @@ const PRESET_COLORS = [
 ];
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
+  const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
   const deleteNode = useScene((state) => state.deleteNode);
   const updateNode = useScene((state) => state.updateNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
@@ -85,6 +87,67 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       </Popover>
       <Hexagon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
       <span className="truncate flex-1">{zone.name}</span>
+      {/* Camera snapshot button */}
+      <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className="relative opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
+            onClick={(e) => e.stopPropagation()}
+            title="Camera snapshot"
+          >
+            <Camera className="w-3 h-3" />
+            {zone.camera && (
+              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="start"
+          className="w-auto p-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col gap-0.5">
+            {zone.camera && (
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  emitter.emit("camera-controls:view", { nodeId: zone.id });
+                  setCameraPopoverOpen(false);
+                }}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                View snapshot
+              </button>
+            )}
+            <button
+              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                emitter.emit("camera-controls:capture", { nodeId: zone.id });
+                setCameraPopoverOpen(false);
+              }}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              {zone.camera ? "Update snapshot" : "Take snapshot"}
+            </button>
+            {zone.camera && (
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateNode(zone.id, { camera: undefined });
+                  setCameraPopoverOpen(false);
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear snapshot
+              </button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
       <button
         className="opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
         onClick={handleDelete}

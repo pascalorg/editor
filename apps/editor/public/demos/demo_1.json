@@ -58,9 +58,34 @@
         "item_0e9paq67kdbm5ux0",
         "item_iyu7knyxqe82c3yg",
         "item_nwe34qk8vzs1vag7",
-        "guide_vh96481lk2oqzf4d"
+        "item_oay55zmjjo76s1fs",
+        "item_g060bhthvcra992w",
+        "item_38kt7s45alt2vrjg",
+        "item_n10cp9ke7n9hxl96",
+        "item_nt5fxip4a03cmaoi",
+        "item_1quoil3ytsuuarni",
+        "item_e1w89kkg2pql1v45",
+        "item_3akotmiffzdr8ule",
+        "item_1b3tinfswueb6gr8",
+        "item_y164oe3lxfx9qefg",
+        "item_dsalxofuqf96h8t4",
+        "roof_ui8zhim41alg6lq4",
+        "guide_acs9nzz19rm4vl2c"
       ],
-      "level": 0
+      "level": 0,
+      "camera": {
+        "position": [
+          32.19770918094574,
+          13.355189178183336,
+          32.63027548275616
+        ],
+        "target": [
+          4.8501257048479305,
+          -6.656412040461838e-16,
+          7.3634421472590255
+        ],
+        "mode": "perspective"
+      }
     },
     "slab_gr6zxi4915gqwjbn": {
       "object": "node",
@@ -100,7 +125,20 @@
       "children": [
         "roof_jxd8tc6rcuaujl25"
       ],
-      "level": 1
+      "level": 1,
+      "camera": {
+        "position": [
+          11.709072311989358,
+          25.635955613557638,
+          50.59653427090403
+        ],
+        "target": [
+          6.9995635873796855,
+          2.4999999999999996,
+          0.6911898255966076
+        ],
+        "mode": "perspective"
+      }
     },
     "roof_jxd8tc6rcuaujl25": {
       "object": "node",
@@ -117,9 +155,9 @@
       ],
       "rotation": 0,
       "length": 5.5,
-      "height": 1.5,
-      "leftWidth": 2.5,
-      "rightWidth": 2.5
+      "height": 1.6,
+      "leftWidth": 4.7,
+      "rightWidth": 2.7
     },
     "zone_iozx54yy1hmmoads": {
       "object": "node",
@@ -147,7 +185,20 @@
           6
         ]
       ],
-      "color": "#3b82f6"
+      "color": "#3b82f6",
+      "camera": {
+        "position": [
+          18.715003971902778,
+          18.8254836683251,
+          12.086656976691291
+        ],
+        "target": [
+          6.9995635873796855,
+          1.6971845387795204e-17,
+          0.6911898255966076
+        ],
+        "mode": "perspective"
+      }
     },
     "item_137wje66gax2c6bc": {
       "object": "node",
@@ -757,7 +808,7 @@
       "visible": true,
       "metadata": {},
       "position": [
-        3.5,
+        4.5,
         0,
         0
       ],
@@ -1185,9 +1236,9 @@
       "metadata": {},
       "children": [
         "item_s9fs055u0ilri7pi",
-        "item_4dehdkm4vx6r4ghv",
         "item_0173tdywhm704hah",
-        "item_7ykyzy2yre3761dq"
+        "item_7ykyzy2yre3761dq",
+        "item_4dehdkm4vx6r4ghv"
       ],
       "start": [
         1,
@@ -1255,7 +1306,7 @@
       "visible": true,
       "metadata": {},
       "position": [
-        9,
+        8.5,
         0.5,
         0
       ],
@@ -1303,7 +1354,7 @@
       "visible": true,
       "metadata": {},
       "position": [
-        6,
+        6.5,
         0,
         0
       ],
@@ -2053,7 +2104,20 @@
           15.5
         ]
       ],
-      "color": "#22c55e"
+      "color": "#22c55e",
+      "camera": {
+        "position": [
+          -6.654332076100337,
+          17.996846152830106,
+          22.501743052051737
+        ],
+        "target": [
+          5.317880378107912,
+          -2.779128022959309e-17,
+          10.080522989431769
+        ],
+        "mode": "perspective"
+      }
     },
     "item_0e9paq67kdbm5ux0": {
       "object": "node",
@@ -2193,18 +2257,497 @@
         ]
       }
     },
-    "guide_vh96481lk2oqzf4d": {
+    "item_oay55zmjjo76s1fs": {
       "object": "node",
-      "id": "guide_vh96481lk2oqzf4d",
-      "type": "guide",
-      "name": "elestio-postgis-thumbnail.png",
+      "id": "item_oay55zmjjo76s1fs",
+      "type": "item",
+      "name": "High Fence",
       "parentId": "level_pojp0mw3qssu110w",
       "visible": true,
       "metadata": {},
-      "url": "asset://129b9095-60c3-4239-92b6-3cef391721fb",
+      "position": [
+        23,
+        0,
+        4.25
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "high-fence",
+        "category": "outdoor",
+        "name": "High Fence",
+        "thumbnail": "/items/high-fence/thumbnail.webp",
+        "src": "/items/high-fence/model.glb",
+        "dimensions": [
+          4,
+          4.1,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "item_g060bhthvcra992w": {
+      "object": "node",
+      "id": "item_g060bhthvcra992w",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        23,
+        0,
+        -1.25
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "item_38kt7s45alt2vrjg": {
+      "object": "node",
+      "id": "item_38kt7s45alt2vrjg",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        22,
+        0,
+        -2.25
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "item_n10cp9ke7n9hxl96": {
+      "object": "node",
+      "id": "item_n10cp9ke7n9hxl96",
+      "type": "item",
+      "name": "Low Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        23,
+        0,
+        -4.75
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "asset": {
+        "id": "low-fence",
+        "category": "outdoor",
+        "name": "Low Fence",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          2,
+          0.8,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "item_nt5fxip4a03cmaoi": {
+      "object": "node",
+      "id": "item_nt5fxip4a03cmaoi",
+      "type": "item",
+      "name": "Low Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        22,
+        0,
+        -5.75
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "low-fence",
+        "category": "outdoor",
+        "name": "Low Fence",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          2,
+          0.8,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "item_1quoil3ytsuuarni": {
+      "object": "node",
+      "id": "item_1quoil3ytsuuarni",
+      "type": "item",
+      "name": "High Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        15,
+        0,
+        4.25
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "high-fence",
+        "category": "outdoor",
+        "name": "High Fence",
+        "thumbnail": "/items/high-fence/thumbnail.webp",
+        "src": "/items/high-fence/model.glb",
+        "dimensions": [
+          4,
+          4.1,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "item_e1w89kkg2pql1v45": {
+      "object": "node",
+      "id": "item_e1w89kkg2pql1v45",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        17,
+        0,
+        0.25
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "item_3akotmiffzdr8ule": {
+      "object": "node",
+      "id": "item_3akotmiffzdr8ule",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        17,
+        0,
+        -1.75
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "item_1b3tinfswueb6gr8": {
+      "object": "node",
+      "id": "item_1b3tinfswueb6gr8",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        17,
+        0,
+        -4.75
+      ],
+      "rotation": [
+        0,
+        4.71238898038469,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "item_y164oe3lxfx9qefg": {
+      "object": "node",
+      "id": "item_y164oe3lxfx9qefg",
+      "type": "item",
+      "name": "Medium Fence",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        17,
+        0,
+        -6.75
+      ],
+      "rotation": [
+        0,
+        4.71238898038469,
+        0
+      ],
+      "asset": {
+        "id": "medium-fence",
+        "category": "outdoor",
+        "name": "Medium Fence",
+        "thumbnail": "/items/medium-fence/thumbnail.webp",
+        "src": "/items/medium-fence/model.glb",
+        "dimensions": [
+          2,
+          2,
+          0.5
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.49,
+          0.49,
+          0.49
+        ]
+      }
+    },
+    "roof_ui8zhim41alg6lq4": {
+      "object": "node",
+      "id": "roof_ui8zhim41alg6lq4",
+      "type": "roof",
+      "name": "Roof 2",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        1,
+        0,
+        -5.5
+      ],
+      "rotation": 0,
+      "length": 0.5,
+      "height": 1.5,
+      "leftWidth": 12.1,
+      "rightWidth": 1
+    },
+    "guide_acs9nzz19rm4vl2c": {
+      "object": "node",
+      "id": "guide_acs9nzz19rm4vl2c",
+      "type": "guide",
+      "name": "FaceIt0703_FaceItProductPage.png",
+      "parentId": "level_pojp0mw3qssu110w",
+      "visible": true,
+      "metadata": {},
+      "url": "asset://1e66ba17-99d2-4c5c-ad2b-00dff438b6a7",
       "position": [
         0,
-        1.2,
+        0,
         0
       ],
       "rotation": [
@@ -2213,7 +2756,7 @@
         0
       ],
       "scale": 1,
-      "opacity": 100
+      "opacity": 51
     }
   },
   "rootNodeIds": [
