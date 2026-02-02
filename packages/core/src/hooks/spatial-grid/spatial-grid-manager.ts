@@ -435,7 +435,7 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    let maxElevation = 0
+    let maxElevation = -Infinity
     for (const slab of slabMap.values()) {
       if (slab.polygon.length >= 3 && itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
         const elevation = slab.elevation ?? 0.05
@@ -444,7 +444,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return maxElevation
+    return maxElevation === -Infinity ? 0 : maxElevation
   }
 
   /**
