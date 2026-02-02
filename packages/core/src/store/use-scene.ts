@@ -170,14 +170,35 @@ const useScene: UseSceneStore = create<SceneState>()(
 
 export default useScene
 
-// Subscribe to the temporal store (Undo/Redo events)
-useScene.temporal.subscribe((state, prevState) => {
-  // Check if we just jumped in time (Undo/Redo)
-  // If the 'nodes' object changed but it wasn't a normal 'set'
-  const currentNodes = useScene.getState().nodes
+// Track previous temporal state lengths
+let prevPastLength = 0
+let prevFutureLength = 0
 
-  // Trigger a full scene re-validation
-  Object.values(currentNodes).forEach((node) => {
-    useScene.getState().markDirty(node.id)
-  })
+// Subscribe to the temporal store (Undo/Redo events)
+useScene.temporal.subscribe((state) => {
+  const currentPastLength = state.pastStates.length
+  const currentFutureLength = state.futureStates.length
+
+
+  // Undo: futureStates increases (state moved from past to future)
+  // Redo: pastStates increases while futureStates decreases (state moved from future to past)
+  const didUndo = currentFutureLength > prevFutureLength
+  const didRedo = currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
+
+
+  if (didUndo || didRedo) {
+    // Use RAF to ensure all middleware and store updates are complete
+    requestAnimationFrame(() => {
+      const currentNodes = useScene.getState().nodes
+
+      // Trigger a full scene re-validation after undo/redo
+      Object.values(currentNodes).forEach((node) => {
+        useScene.getState().markDirty(node.id)
+      })
+    })
+  }
+
+  // Update tracked lengths
+  prevPastLength = currentPastLength
+  prevFutureLength = currentFutureLength
 })

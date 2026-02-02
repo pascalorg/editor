@@ -59,6 +59,7 @@ export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
         onMouseLeave={handleMouseLeave}
         isSelected={isSelected}
         isHovered={isHovered}
+        isVisible={node.visible !== false}
         actions={<TreeNodeActions node={node} />}
       >
         {node.children.map((childId) => (

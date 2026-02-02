@@ -58,6 +58,7 @@ export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
         onMouseLeave={handleMouseLeave}
         isSelected={isSelected}
         isHovered={isHovered}
+        isVisible={node.visible !== false}
         actions={<TreeNodeActions node={node} />}
       />
     </RenamePopover>

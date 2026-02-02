@@ -46,12 +46,12 @@ const calculateSnapPoint = (
 };
 
 /**
- * Creates a slab with the given polygon points
+ * Creates a slab with the given polygon points and returns its ID
  */
 const commitSlabDrawing = (
   levelId: LevelNode["id"],
   points: Array<[number, number]>
-) => {
+): string => {
   const { createNode, nodes } = useScene.getState();
 
   // Count existing slabs for naming
@@ -64,6 +64,7 @@ const commitSlabDrawing = (
   });
 
   createNode(slab, levelId);
+  return slab.id;
 };
 
 type PreviewState = {
@@ -87,6 +88,7 @@ export const SlabTool: React.FC = () => {
   const pointsRef = useRef<Array<[number, number]>>([]);
   const levelYRef = useRef(0); // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId);
+  const setSelection = useViewer((state) => state.setSelection);
   const setTool = useEditor((state) => state.setTool);
 
   // Preview state for reactive rendering (for shape and point markers)
@@ -213,17 +215,15 @@ export const SlabTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        // Create the slab
-        commitSlabDrawing(currentLevelId, pointsRef.current);
+        // Create the slab and select it
+        const slabId = commitSlabDrawing(currentLevelId, pointsRef.current);
+        setSelection({ selectedIds: [slabId] });
 
         // Reset state
         pointsRef.current = [];
         setPreview({ points: [], cursorPoint: null, levelY: 0 });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
-
-        // Deactivate tool
-        setTool(null);
       } else {
         // Add point to polygon
         pointsRef.current = [...pointsRef.current, clickPoint];
@@ -236,16 +236,15 @@ export const SlabTool: React.FC = () => {
 
       // Need at least 3 points to form a polygon
       if (pointsRef.current.length >= 3) {
-        commitSlabDrawing(currentLevelId, pointsRef.current);
+        // Create the slab and select it
+        const slabId = commitSlabDrawing(currentLevelId, pointsRef.current);
+        setSelection({ selectedIds: [slabId] });
 
         // Reset state
         pointsRef.current = [];
         setPreview({ points: [], cursorPoint: null, levelY: 0 });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
-
-        // Deactivate tool
-        setTool(null);
       }
     };
 
@@ -262,7 +261,7 @@ export const SlabTool: React.FC = () => {
       // Reset state on unmount
       pointsRef.current = [];
     };
-  }, [currentLevelId, setTool]);
+  }, [currentLevelId, setSelection]);
 
   const { points, cursorPoint, levelY } = preview;
 

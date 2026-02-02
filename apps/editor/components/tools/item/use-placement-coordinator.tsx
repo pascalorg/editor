@@ -503,12 +503,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!asset.attachTo) {
         const levelId = useViewer.getState().selection.levelId
         if (levelId) {
-          mesh.position.y = spatialGridManager.getSlabElevationForItem(
+          const slabElevation = spatialGridManager.getSlabElevationForItem(
             levelId,
             [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
             asset.dimensions ?? DEFAULT_DIMENSIONS,
             draftNode.current.rotation,
           )
+          mesh.position.y = slabElevation
+          cursorRef.current.position.y = slabElevation
         }
       }
     }

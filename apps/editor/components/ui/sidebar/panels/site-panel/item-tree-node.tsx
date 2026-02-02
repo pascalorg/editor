@@ -67,6 +67,7 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
         onMouseLeave={handleMouseLeave}
         isSelected={isSelected}
         isHovered={isHovered}
+        isVisible={node.visible !== false}
         actions={<TreeNodeActions node={node} />}
       />
     </RenamePopover>

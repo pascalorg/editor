@@ -22,14 +22,18 @@ const csgEvaluator = new Evaluator()
 // ============================================================================
 
 export const WallSystem = () => {
-  const { nodes, dirtyNodes, clearDirty } = useScene()
+  const dirtyNodes = useScene((state) => state.dirtyNodes)
+  const clearDirty = useScene((state) => state.clearDirty)
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
 
+    const nodes = useScene.getState().nodes
+
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
+    
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return
@@ -146,7 +150,9 @@ export function generateExtrudedWall(
 
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
+  // Wall height is adjusted by slab elevation (positive reduces, negative increases)
   const height = (wallNode.height ?? 2.5) - slabElevation
+
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
 
@@ -239,7 +245,8 @@ export function generateExtrudedWall(
 
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
-  if (slabElevation > 0) {
+  // Translate by slab elevation (works for both positive and negative values)
+  if (slabElevation !== 0) {
     geometry.translate(0, slabElevation, 0)
   }
   geometry.computeVertexNormals()
