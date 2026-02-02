@@ -25,14 +25,15 @@ export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
 
-  console.log('wall system rerendering')
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+
+    const nodes = useScene.getState().nodes
 
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
-    const nodes = useScene.getState().nodes
+    
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return

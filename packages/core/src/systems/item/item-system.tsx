@@ -11,10 +11,12 @@ import useScene from '../../store/use-scene'
 // ============================================================================
 
 export const ItemSystem = () => {
-  const { nodes, dirtyNodes, clearDirty } = useScene()
+  const dirtyNodes = useScene((state) => state.dirtyNodes)
+  const clearDirty = useScene((state) => state.clearDirty)
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    const nodes = useScene.getState().nodes
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
