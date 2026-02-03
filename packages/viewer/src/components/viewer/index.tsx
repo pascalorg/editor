@@ -7,6 +7,7 @@ import * as THREE from 'three/webgpu'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
+import { WallCutout } from '../../systems/wall/wall-cutout'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { Lights } from './lights'
 import PostProcessing from './post-processing'
@@ -55,6 +56,7 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' 
       <LevelSystem />
       <GuideSystem />
       <ScanSystem />
+      <WallCutout />
       {/* Core systems */}
       <CeilingSystem />
       <ItemSystem />
