@@ -33,7 +33,7 @@ export const SSGI_PARAMS = {
   thickness: 0.5,
   backfaceLighting: 0.5,
   aoIntensity: 1.5,
-  giIntensity: 1,
+  giIntensity: 0.5,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
   useTemporalFiltering: true,
