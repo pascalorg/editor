@@ -38,6 +38,7 @@ export const WallSystem = () => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return
 
+      console.log('wall front/back', node.frontSide, node.backSide)
       const levelId = node.parentId
       if (!levelId) return
 
