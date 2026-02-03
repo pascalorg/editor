@@ -1,6 +1,6 @@
 'use client'
 
-import { type BuildingNode, type ItemNode, type LevelNode, useScene } from '@pascal-app/core'
+import { type BuildingNode, type ItemNode, type LevelNode, type Space, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import type { AssetInput } from '@pascal-app/core'
@@ -50,7 +50,7 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
-    structureLayer: StructureLayer
+  structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
@@ -60,6 +60,9 @@ type EditorState = {
   setMovingNode: (node: ItemNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  // Space detection for cutaway mode
+  spaces: Record<string, Space>
+  setSpaces: (spaces: Record<string, Space>) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -174,6 +177,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setMovingNode: (node) => set({ movingNode: node }),
   selectedReferenceId: null,
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+  spaces: {},
+  setSpaces: (spaces) => set({ spaces }),
 }))
 
 export default useEditor

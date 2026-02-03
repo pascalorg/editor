@@ -40,3 +40,5 @@ export { WallSystem } from './systems/wall/wall-system'
 export { isObject } from './utils/types'
 // Asset storage
 export { saveAsset, loadAssetUrl } from './lib/asset-storage'
+// Space detection
+export { detectSpacesForLevel, wallTouchesOthers, initSpaceDetectionSync, type Space } from './lib/space-detection'

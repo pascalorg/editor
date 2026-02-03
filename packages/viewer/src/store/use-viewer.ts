@@ -24,32 +24,35 @@ type Outliner = {
 };
 
 type ViewerState = {
-  selection: SelectionPath;
-  hoveredId: AnyNode["id"] | ZoneNode["id"] | null;
-  setHoveredId: (id: AnyNode["id"] | ZoneNode["id"] | null) => void;
+  selection: SelectionPath
+  hoveredId: AnyNode['id'] | ZoneNode['id'] | null
+  setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
 
-  cameraMode: "perspective" | "orthographic";
-  setCameraMode: (mode: "perspective" | "orthographic") => void;
+  cameraMode: 'perspective' | 'orthographic'
+  setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
-  levelMode: "stacked" | "exploded" | "solo" | "manual";
-  setLevelMode: (mode: "stacked" | "exploded" | "solo" | "manual") => void;
+  levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
+  setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
-  showScans: boolean;
-  setShowScans: (show: boolean) => void;
+  wallMode: 'up' | 'cutaway' | 'down'
+  setWallMode: (mode: 'up' | 'cutaway' | 'down') => void
 
-  showGuides: boolean;
-  setShowGuides: (show: boolean) => void;
+  showScans: boolean
+  setShowScans: (show: boolean) => void
+
+  showGuides: boolean
+  setShowGuides: (show: boolean) => void
 
   // Smart selection update
-  setSelection: (updates: Partial<SelectionPath>) => void;
-  resetSelection: () => void;
+  setSelection: (updates: Partial<SelectionPath>) => void
+  resetSelection: () => void
 
-  outliner: Outliner; // No setter as we will manipulate directly the arrays
+  outliner: Outliner // No setter as we will manipulate directly the arrays
 
   // Export functionality
-  exportScene: (() => Promise<void>) | null;
-  setExportScene: (fn: (() => Promise<void>) | null) => void;
-};
+  exportScene: (() => Promise<void>) | null
+  setExportScene: (fn: (() => Promise<void>) | null) => void
+}
 
 const useViewer = create<ViewerState>()((set, get) => ({
   selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
@@ -61,6 +64,9 @@ const useViewer = create<ViewerState>()((set, get) => ({
 
   levelMode: "stacked",
   setLevelMode: (mode) => set({ levelMode: mode }),
+
+  wallMode: 'cutaway',
+  setWallMode: (mode) => set({ wallMode: mode }),
 
   showScans: true,
   setShowScans: (show) => set({ showScans: show }),

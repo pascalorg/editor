@@ -9,17 +9,17 @@ import { useNodeEvents } from '../../../hooks/use-node-events'
 // Shared materials to avoid creating new instances for every mesh
 const defaultMaterial = new MeshStandardNodeMaterial({
   color: 0xffffff,
-  roughness: 0.8,
+  roughness: 1,
   metalness: 0,
 })
 
 const glassMaterial = new MeshStandardNodeMaterial({
   name: 'glass',
-  color: 'skyblue',
+  color: 'lightgray',
   roughness: 0.8,
   metalness: 0,
   transparent: true,
-  opacity: 0.25,
+  opacity: 0.35,
   side: DoubleSide,
   depthWrite: false,
 })

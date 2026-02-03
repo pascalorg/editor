@@ -21,6 +21,7 @@ export const ViewerOverlay = () => {
   const showGuides = useViewer((s) => s.showGuides)
   const cameraMode = useViewer((s) => s.cameraMode)
   const levelMode = useViewer((s) => s.levelMode)
+  const wallMode = useViewer((s) => s.wallMode)
 
   const building = selection.buildingId ? (nodes[selection.buildingId] as BuildingNode | undefined) : null
   const level = selection.levelId ? (nodes[selection.levelId] as LevelNode | undefined) : null
@@ -200,6 +201,38 @@ export const ViewerOverlay = () => {
         >
           <Diamond className="w-4 h-4" />
           Solo
+        </button>
+      </div>
+
+      {/* Wall Mode */}
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+        <span className="text-xs text-neutral-500 px-2 pb-1">Wall Mode</span>
+        <button
+          onClick={() => useViewer.getState().setWallMode('cutaway')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            wallMode === 'cutaway' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <img alt="Cutaway" height={16} src="/icons/wallcut.png" width={16} className="w-4 h-4" />
+          Cutaway
+        </button>
+        <button
+          onClick={() => useViewer.getState().setWallMode('up')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            wallMode === 'up' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <img alt="Full Height" height={16} src="/icons/room.png" width={16} className="w-4 h-4" />
+          Full Height
+        </button>
+        <button
+          onClick={() => useViewer.getState().setWallMode('down')}
+          className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
+            wallMode === 'down' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+          }`}
+        >
+          <img alt="Low" height={16} src="/icons/walllow.png" width={16} className="w-4 h-4" />
+          Low
         </button>
       </div>
     </div>
