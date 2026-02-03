@@ -18,11 +18,39 @@ const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
 
 const levelModeOrder: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
 
+type WallMode = 'up' | 'cutaway' | 'down'
+
+const wallModeConfig: Record<
+  WallMode,
+  { icon: React.FC<React.ComponentProps<'img'>>; label: string }
+> = {
+  up: {
+    icon: (props) => (
+      <img alt="Full Height" height={20} src="/icons/room.png" width={20} {...props} />
+    ),
+    label: 'Full Height',
+  },
+  cutaway: {
+    icon: (props) => (
+      <img alt="Cutaway" height={20} src="/icons/wallcut.png" width={20} {...props} />
+    ),
+    label: 'Cutaway',
+  },
+  down: {
+    icon: (props) => <img alt="Low" height={20} src="/icons/walllow.png" width={20} {...props} />,
+    label: 'Low',
+  },
+}
+
+const wallModeOrder: WallMode[] = ['cutaway', 'up', 'down']
+
 export function ViewToggles() {
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
   const levelMode = useViewer((state) => state.levelMode)
   const setLevelMode = useViewer((state) => state.setLevelMode)
+  const wallMode = useViewer((state) => state.wallMode)
+  const setWallMode = useViewer((state) => state.setWallMode)
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
@@ -41,6 +69,13 @@ export function ViewToggles() {
     const nextIndex = (currentIndex + 1) % levelModeOrder.length
     const nextMode = levelModeOrder[nextIndex]
     if (nextMode) setLevelMode(nextMode)
+  }
+
+  const cycleWallMode = () => {
+    const currentIndex = wallModeOrder.indexOf(wallMode)
+    const nextIndex = (currentIndex + 1) % wallModeOrder.length
+    const nextMode = wallModeOrder[nextIndex]
+    if (nextMode) setWallMode(nextMode)
   }
 
   return (
@@ -88,6 +123,31 @@ export function ViewToggles() {
         </TooltipTrigger>
         <TooltipContent>
           <p>Levels: {levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}</p>
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Wall Mode */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            className={cn(
+              'h-8 w-8 text-zinc-400 transition-all p-0',
+              wallMode !== 'cutaway'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'hover:bg-zinc-800',
+            )}
+            onClick={cycleWallMode}
+            size="icon"
+            variant="ghost"
+          >
+            {(() => {
+              const Icon = wallModeConfig[wallMode].icon
+              return <Icon className="h-5 w-5" />
+            })()}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Walls: {wallModeConfig[wallMode].label}</p>
         </TooltipContent>
       </Tooltip>
 
