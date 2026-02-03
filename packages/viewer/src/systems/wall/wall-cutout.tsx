@@ -42,6 +42,8 @@ const invsibleWallMaterial = new MeshStandardNodeMaterial({
 })
 const wallMaterial = new MeshStandardNodeMaterial({
   color: 'white',
+  roughness: 1,
+  metalness: 0,
 })
 
 export const WallCutout = () => {

@@ -1,6 +1,11 @@
 'use client'
 
-import { initSpatialGridSync, initSpaceDetectionSync, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  initSpaceDetectionSync,
+  initSpatialGridSync,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useGridEvents, useViewer, Viewer } from '@pascal-app/viewer'
 
 import { useFrame } from '@react-three/fiber'
@@ -43,14 +48,13 @@ export default function Editor() {
         {/* Editor only system to toggle zone visibility */}
         <ZoneSystem />
         {/* <Stats /> */}
-        <Grid cellColor="#666" sectionColor="#999" fadeDistance={30} />
+        <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={30} />
         <ToolManager />
         <CustomCameraControls />
       </Viewer>
     </div>
   )
 }
-
 
 const Grid = ({
   cellSize = 0.5,
