@@ -352,7 +352,7 @@ function floodFillFromEdges(grid: Grid): void {
     const [x, z] = parseCellKey(key)
 
     // Check 4 neighbors
-    const neighbors = [
+    const neighbors: [number, number][] = [
       [x + 1, z],
       [x - 1, z],
       [x, z + 1],
@@ -408,7 +408,7 @@ function findInteriorSpaces(grid: Grid, levelId: string): Space[] {
         const curKey = queue.shift()!
         const [cx, cz] = parseCellKey(curKey)
 
-        const neighbors = [
+        const neighbors: [number, number][] = [
           [cx + 1, cz],
           [cx - 1, cz],
           [cx, cz + 1],
