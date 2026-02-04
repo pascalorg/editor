@@ -1,135 +1,397 @@
-# Turborepo starter
+# Pascal Editor
 
-This Turborepo starter is maintained by the Turborepo core team.
+A 3D building editor built with React Three Fiber and WebGPU.
 
-## Using this example
+## Repository Architecture
 
-Run the following command:
-
-```sh
-npx create-turbo@latest
-```
-
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
+This is a Turborepo monorepo with three main packages:
 
 ```
-cd my-turborepo
+editor-v2/
+├── apps/
+│   └── editor/          # Next.js application
+├── packages/
+│   ├── core/            # Schema definitions, state management, systems
+│   └── viewer/          # 3D rendering components
+```
 
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
+### Separation of Concerns
+
+| Package | Responsibility |
+|---------|---------------|
+| **@pascal-app/core** | Node schemas, scene state (Zustand), systems (geometry generation), spatial queries, event bus |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, default camera/controls, post-processing |
+| **apps/editor** | UI components, tools, custom behaviors, editor-specific systems |
+
+The **viewer** renders the scene with sensible defaults. The **editor** extends it with interactive tools, selection management, and editing capabilities.
+
+### Stores
+
+Each package has its own Zustand store for managing state:
+
+| Store | Package | Responsibility |
+|-------|---------|----------------|
+| `useScene` | `@pascal-app/core` | Scene data: nodes, root IDs, dirty nodes, CRUD operations. Persisted to IndexedDB with undo/redo via Zundo. |
+| `useViewer` | `@pascal-app/viewer` | Viewer state: current selection (building/level/zone IDs), level display mode (stacked/exploded/solo), camera mode. |
+| `useEditor` | `apps/editor` | Editor state: active tool, structure layer visibility, panel states, editor-specific preferences. |
+
+**Access patterns:**
+
+```typescript
+// Subscribe to state changes (React component)
+const nodes = useScene((state) => state.nodes)
+const levelId = useViewer((state) => state.selection.levelId)
+const activeTool = useEditor((state) => state.tool)
+
+// Access state outside React (callbacks, systems)
+const node = useScene.getState().nodes[id]
+useViewer.getState().setSelection({ levelId: 'level_123' })
+```
+
+---
+
+## Core Concepts
+
+### Nodes
+
+Nodes are the data primitives that describe the 3D scene. All nodes extend `BaseNode`:
+
+```typescript
+BaseNode {
+  id: string              // Auto-generated with type prefix (e.g., "wall_abc123")
+  type: string            // Discriminator for type-safe handling
+  parentId: string | null // Parent node reference
+  visible: boolean
+  camera?: Camera         // Optional saved camera position
+  metadata?: JSON         // Arbitrary metadata (e.g., { isTransient: true })
+}
+```
+
+**Node Hierarchy:**
+
+```
+Site
+└── Building
+    └── Level
+        ├── Wall → Item (doors, windows)
+        ├── Slab
+        ├── Ceiling → Item (lights)
+        ├── Roof
+        ├── Zone
+        ├── Scan (3D reference)
+        └── Guide (2D reference)
+```
+
+Nodes are stored in a **flat dictionary** (`Record<id, Node>`), not a nested tree. Parent-child relationships are defined via `parentId` and `children` arrays.
+
+---
+
+### Scene State (Zustand Store)
+
+The scene is managed by a Zustand store in `@pascal-app/core`:
+
+```typescript
+useScene.getState() = {
+  nodes: Record<id, AnyNode>,  // All nodes
+  rootNodeIds: string[],       // Top-level nodes (sites)
+  dirtyNodes: Set<string>,     // Nodes pending system updates
+
+  createNode(node, parentId),
+  updateNode(id, updates),
+  deleteNode(id),
+}
+```
+
+**Middleware:**
+- **Persist** - Saves to IndexedDB (excludes transient nodes)
+- **Temporal** (Zundo) - Undo/redo with 50-step history
+
+---
+
+### Scene Registry
+
+The registry maps node IDs to their Three.js objects for fast lookup:
+
+```typescript
+sceneRegistry = {
+  nodes: Map<id, Object3D>,    // ID → 3D object
+  byType: {
+    wall: Set<id>,
+    item: Set<id>,
+    zone: Set<id>,
+    // ...
+  }
+}
+```
+
+Renderers register their refs using the `useRegistry` hook:
+
+```tsx
+const ref = useRef<Mesh>(null!)
+useRegistry(node.id, 'wall', ref)
+```
+
+This allows systems to access 3D objects directly without traversing the scene graph.
+
+---
+
+### Node Renderers
+
+Renderers are React components that create Three.js objects for each node type:
+
+```
+SceneRenderer
+└── NodeRenderer (dispatches by type)
+    ├── BuildingRenderer
+    ├── LevelRenderer
+    ├── WallRenderer
+    ├── SlabRenderer
+    ├── ZoneRenderer
+    ├── ItemRenderer
+    └── ...
+```
+
+**Pattern:**
+1. Renderer creates a placeholder mesh/group
+2. Registers it with `useRegistry`
+3. Systems update geometry based on node data
+
+Example (simplified):
+```tsx
+const WallRenderer = ({ node }) => {
+  const ref = useRef<Mesh>(null!)
+  useRegistry(node.id, 'wall', ref)
+
+  return (
+    <mesh ref={ref}>
+      <boxGeometry args={[0, 0, 0]} />  {/* Replaced by WallSystem */}
+      <meshStandardMaterial />
+      {node.children.map(id => <NodeRenderer key={id} nodeId={id} />)}
+    </mesh>
+  )
+}
+```
+
+---
+
+### Systems
+
+Systems are React components that run in the render loop (`useFrame`) to update geometry and transforms. They process **dirty nodes** marked by the store.
+
+**Core Systems (in `@pascal-app/core`):**
+
+| System | Responsibility |
+|--------|---------------|
+| `WallSystem` | Generates wall geometry with mitering and CSG cutouts for doors/windows |
+| `SlabSystem` | Generates floor geometry from polygons |
+| `CeilingSystem` | Generates ceiling geometry |
+| `RoofSystem` | Generates roof geometry |
+| `ItemSystem` | Positions items on walls, ceilings, or floors (slab elevation) |
+
+**Viewer Systems (in `@pascal-app/viewer`):**
+
+| System | Responsibility |
+|--------|---------------|
+| `LevelSystem` | Handles level visibility and vertical positioning (stacked/exploded/solo modes) |
+| `ScanSystem` | Controls 3D scan visibility |
+| `GuideSystem` | Controls guide image visibility |
+
+**Processing Pattern:**
+```typescript
+useFrame(() => {
+  for (const id of dirtyNodes) {
+    const obj = sceneRegistry.nodes.get(id)
+    const node = useScene.getState().nodes[id]
+
+    // Update geometry, transforms, etc.
+    updateGeometry(obj, node)
+
+    dirtyNodes.delete(id)
+  }
+})
+```
+
+---
+
+### Dirty Nodes
+
+When a node changes, it's marked as **dirty** in `useScene.getState().dirtyNodes`. Systems check this set each frame and only recompute geometry for dirty nodes.
+
+```typescript
+// Automatic: createNode, updateNode, deleteNode mark nodes dirty
+useScene.getState().updateNode(wallId, { thickness: 0.2 })
+// → wallId added to dirtyNodes
+// → WallSystem regenerates geometry next frame
+// → wallId removed from dirtyNodes
+```
+
+**Manual marking:**
+```typescript
+useScene.getState().dirtyNodes.add(wallId)
+```
+
+---
+
+### Event Bus
+
+Inter-component communication uses a typed event emitter (mitt):
+
+```typescript
+// Node events
+emitter.on('wall:click', (event) => { ... })
+emitter.on('item:enter', (event) => { ... })
+emitter.on('zone:context-menu', (event) => { ... })
+
+// Grid events (background)
+emitter.on('grid:click', (event) => { ... })
+
+// Event payload
+NodeEvent {
+  node: AnyNode
+  position: [x, y, z]
+  localPosition: [x, y, z]
+  normal?: [x, y, z]
+  stopPropagation: () => void
+}
+```
+
+---
+
+### Spatial Grid Manager
+
+Handles collision detection and placement validation:
+
+```typescript
+spatialGridManager.canPlaceOnFloor(levelId, position, dimensions, rotation)
+spatialGridManager.canPlaceOnWall(wallId, t, height, dimensions)
+spatialGridManager.getSlabElevationAt(levelId, x, z)
+```
+
+Used by item placement tools to validate positions and calculate slab elevations.
+
+---
+
+## Editor Architecture
+
+The editor extends the viewer with:
+
+### Tools
+
+Tools are activated via the toolbar and handle user input for specific operations:
+
+- **SelectTool** - Selection and manipulation
+- **WallTool** - Draw walls
+- **ZoneTool** - Create zones
+- **ItemTool** - Place furniture/fixtures
+- **SlabTool** - Create floor slabs
+
+### Selection Manager
+
+The editor uses a custom selection manager with hierarchical navigation:
+
+```
+Site → Building → Level → Zone → Items
+```
+
+Each depth level has its own selection strategy for hover/click behavior.
+
+### Editor-Specific Systems
+
+- `ZoneSystem` - Controls zone visibility based on level mode
+- Custom camera controls with node focusing
+
+---
+
+## Data Flow
+
+```
+User Action (click, drag)
+       ↓
+Tool Handler
+       ↓
+useScene.createNode() / updateNode()
+       ↓
+Node added/updated in store
+Node marked dirty
+       ↓
+React re-renders NodeRenderer
+useRegistry() registers 3D object
+       ↓
+System detects dirty node (useFrame)
+Updates geometry via sceneRegistry
+Clears dirty flag
+```
+
+---
+
+## Technology Stack
+
+- **React 19** + **Next.js 16**
+- **Three.js** (WebGPU renderer)
+- **React Three Fiber** + **Drei**
+- **Zustand** (state management)
+- **Zod** (schema validation)
+- **Zundo** (undo/redo)
+- **three-bvh-csg** (Boolean geometry operations)
+- **Turborepo** (monorepo management)
+- **Bun** (package manager)
+
+---
+
+## Getting Started
+
+### Development
+
+Run the development server from the **root directory** to enable hot reload for all packages:
+
+```bash
+# Install dependencies
+bun install
+
+# Run development server (builds packages + starts editor with watch mode)
+bun dev
+
+# This will:
+# 1. Build @pascal-app/core and @pascal-app/viewer
+# 2. Start watching both packages for changes
+# 3. Start the Next.js editor dev server
+# Open http://localhost:3000
+```
+
+**Important:** Always run `bun dev` from the root directory to ensure the package watchers are running. This enables hot reload when you edit files in `packages/core/src/` or `packages/viewer/src/`.
+
+### Building for Production
+
+```bash
+# Build all packages
 turbo build
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+# Build specific package
+turbo build --filter=@pascal-app/core
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### Publishing Packages
 
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+```bash
+# Build packages
+turbo build --filter=@pascal-app/core --filter=@pascal-app/viewer
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+# Publish to npm
+npm publish --workspace=@pascal-app/core --access public
+npm publish --workspace=@pascal-app/viewer --access public
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+---
 
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+## Key Files
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+| Path | Description |
+|------|-------------|
+| `packages/core/src/schema/` | Node type definitions (Zod schemas) |
+| `packages/core/src/store/use-scene.ts` | Scene state store |
+| `packages/core/src/hooks/scene-registry/` | 3D object registry |
+| `packages/core/src/systems/` | Geometry generation systems |
+| `packages/viewer/src/components/renderers/` | Node renderers |
+| `packages/viewer/src/components/viewer/` | Main Viewer component |
+| `apps/editor/components/tools/` | Editor tools |
+| `apps/editor/store/` | Editor-specific state |

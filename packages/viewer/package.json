@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/viewer",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "3D viewer component for Pascal building editor",
   "type": "module",
   "main": "./dist/index.js",
