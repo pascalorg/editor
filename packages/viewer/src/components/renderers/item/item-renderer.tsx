@@ -4,6 +4,7 @@ import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
+import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
 // Shared materials to avoid creating new instances for every mesh
@@ -46,7 +47,7 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
 }
 
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
-  const { scene, nodes } = useGLTF(node.asset.src)
+  const { scene, nodes } = useGLTF(resolveCdnUrl(node.asset.src) || '')
 
   if (nodes.cutout) {
     nodes.cutout.visible = false
@@ -64,19 +65,19 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
         if (mesh.name === 'cutout') {
-          child.visible = false;
+          child.visible = false
           return
         }
 
-        let hasGlass = false;
+        let hasGlass = false
 
         // Handle both single material and material array cases
         if (Array.isArray(mesh.material)) {
           mesh.material = mesh.material.map((mat) => getMaterialForOriginal(mat))
-          hasGlass = mesh.material.some(mat => mat.name === 'glass');
+          hasGlass = mesh.material.some((mat) => mat.name === 'glass')
         } else {
           mesh.material = getMaterialForOriginal(mesh.material)
-          hasGlass = mesh.material.name === 'glass';
+          hasGlass = mesh.material.name === 'glass'
         }
         mesh.castShadow = !hasGlass
         mesh.receiveShadow = !hasGlass

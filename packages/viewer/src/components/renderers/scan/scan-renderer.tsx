@@ -27,7 +27,8 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
 }
 
 const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
-  const { scene } = useGLTFKTX2(url)
+  const gltf = useGLTFKTX2(url) as any
+  const scene = gltf.scene
 
   useMemo(() => {
     const normalizedOpacity = opacity / 100
@@ -44,7 +45,7 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
       material.needsUpdate = true
     }
 
-    scene.traverse((child) => {
+    scene.traverse((child: any) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
 

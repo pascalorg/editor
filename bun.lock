@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "editor",
@@ -63,14 +62,16 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "0.0.1",
+      "version": "0.1.3",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",
         "nanoid": "^5.1.6",
+        "three-bvh-csg": "^0.0.17",
         "zod": "^4.3.5",
         "zundo": "^2.3.0",
+        "zustand": "^5",
       },
       "devDependencies": {
         "@repo/typescript-config": "*",
@@ -81,6 +82,7 @@
       "peerDependencies": {
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
+        "react": "^18 || ^19",
         "three": "^0.182",
       },
     },
@@ -124,7 +126,10 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "0.0.1",
+      "version": "0.1.3",
+      "dependencies": {
+        "zustand": "^5",
+      },
       "devDependencies": {
         "@repo/typescript-config": "*",
         "@types/react": "^19.2.2",
@@ -132,9 +137,10 @@
         "typescript": "5.9.2",
       },
       "peerDependencies": {
-        "@pascal-app/core": "*",
+        "@pascal-app/core": "^0.1.3",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
+        "react": "^18 || ^19",
         "three": "^0.182",
       },
     },

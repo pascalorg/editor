@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import useEditor, { CatalogCategory } from "@/store/use-editor";
 import { CATALOG_ITEMS } from "./catalog-items";
 import { AssetInput } from "@pascal-app/core";
+import { resolveCdnUrl } from "@pascal-app/viewer";
 
 export function ItemCatalog({ category }: { category: CatalogCategory }) {
   const selectedItem = useEditor((state) => state.selectedItem);
@@ -62,7 +63,7 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
                   alt={item.name}
                   className="rounded-lg object-cover"
                   fill
-                  src={item.thumbnail}
+                  src={resolveCdnUrl(item.thumbnail) || ''}
                 />
                 {attachmentIcon && (
                   <div className="absolute right-0.5 bottom-0.5 flex h-4 w-4 items-center justify-center rounded bg-black/60">
