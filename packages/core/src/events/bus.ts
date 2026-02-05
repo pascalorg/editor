@@ -56,6 +56,9 @@ export interface CameraControlEvent {
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:capture': CameraControlEvent
+  'camera-controls:top-view': undefined
+  'camera-controls:orbit-cw': undefined
+  'camera-controls:orbit-ccw': undefined
 }
 
 type EditorEvents = GridEvents &

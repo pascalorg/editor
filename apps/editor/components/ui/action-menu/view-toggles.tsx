@@ -88,7 +88,7 @@ export function ViewToggles() {
               'h-8 w-8 text-zinc-400 transition-all',
               cameraMode === 'orthographic'
                 ? 'bg-violet-500/20 text-violet-400'
-                : 'hover:bg-zinc-800',
+                : 'hover:text-violet-400',
             )}
             onClick={toggleCameraMode}
             size="icon"
@@ -110,7 +110,7 @@ export function ViewToggles() {
               'h-8 w-8 text-zinc-400 transition-all',
               levelMode !== 'stacked'
                 ? 'bg-amber-500/20 text-amber-400'
-                : 'hover:bg-zinc-800',
+                : 'hover:text-amber-400',
             )}
             onClick={cycleLevelMode}
             size="icon"
