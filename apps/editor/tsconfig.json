@@ -17,5 +17,9 @@
     "next.config.js",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/viewer" }
+  ]
 }

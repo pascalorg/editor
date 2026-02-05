@@ -6,7 +6,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 const ktx2LoaderInstance = new KTX2Loader()
 ktx2LoaderInstance.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')
 
-const useGLTFKTX2 = (path: string) => {
+const useGLTFKTX2 = (path: string): ReturnType<typeof useGLTF> => {
   const gl = useThree((state) => state.gl)
 
   return useGLTF(path, true, true, (loader) => {

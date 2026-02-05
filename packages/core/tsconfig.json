@@ -2,8 +2,10 @@
   "extends": "@repo/typescript-config/react-library.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "composite": true,
+    "incremental": true
   },
-  "include": ["src", "../viewer/src/systems/level"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }
