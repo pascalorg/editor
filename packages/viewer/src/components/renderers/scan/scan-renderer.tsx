@@ -38,9 +38,11 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
       if (isTransparent) {
         material.transparent = true
         material.opacity = normalizedOpacity
+        material.depthWrite = false;
       } else {
         material.transparent = false
         material.opacity = 1
+        material.depthWrite = true;
       }
       material.needsUpdate = true
     }

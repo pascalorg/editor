@@ -83,15 +83,17 @@ const useEditor = create<EditorState>()((set, get) => ({
     const selectBuildingAndLevel0 = () => {
       let buildingId = viewer.selection.buildingId
 
-      // If no building selected, find the first one
+      // If no building selected, find the first one from site's children
       if (!buildingId) {
-        const firstBuildingId = scene.rootNodeIds.find((id) => {
-          const node = scene.nodes[id]
-          return node?.type === 'building'
-        })
-        if (firstBuildingId) {
-          buildingId = firstBuildingId as BuildingNode['id']
-          viewer.setSelection({ buildingId })
+        const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
+        if (siteNode?.type === 'site') {
+          const firstBuilding = siteNode.children
+            .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
+            .find((node) => node?.type === 'building')
+          if (firstBuilding) {
+            buildingId = firstBuilding.id as BuildingNode['id']
+            viewer.setSelection({ buildingId })
+          }
         }
       }
 

@@ -59,8 +59,11 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       })
       createNode(node, levelId as AnyNodeId)
       e.target.value = ''
+      // Auto-select and close dialog
+      setSelectedReferenceId(node.id)
+      onOpenChange(false)
     },
-    [levelId, createNode],
+    [levelId, createNode, setSelectedReferenceId, onOpenChange],
   )
 
   const handleAddGuide = useCallback(
@@ -75,8 +78,11 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       })
       createNode(node, levelId as AnyNodeId)
       e.target.value = ''
+      // Auto-select and close dialog
+      setSelectedReferenceId(node.id)
+      onOpenChange(false)
     },
-    [levelId, createNode],
+    [levelId, createNode, setSelectedReferenceId, onOpenChange],
   )
 
   const handleEdit = useCallback(

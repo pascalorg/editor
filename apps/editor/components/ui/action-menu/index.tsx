@@ -3,6 +3,7 @@
 import { TooltipProvider } from "@/components/ui/primitives/tooltip";
 import { cn } from "@/lib/utils";
 
+import { CameraActions } from "./camera-actions";
 import { ControlModes } from "./control-modes";
 import { PhaseSwitcher } from "./phase-switcher";
 import { StructureTools } from "./structure-tools";
@@ -140,6 +141,8 @@ export function ActionMenu({ className }: { className?: string }) {
           <ControlModes />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ViewToggles />
+          <div className="mx-1 h-5 w-px bg-zinc-700" />
+          <CameraActions />
         </div>
       </div>
     </TooltipProvider>

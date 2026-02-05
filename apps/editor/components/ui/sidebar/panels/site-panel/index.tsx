@@ -49,8 +49,10 @@ function SitePhaseView() {
   const selectedBuildingId = useViewer((state) => state.selection.buildingId);
   const setSelection = useViewer((state) => state.setSelection);
 
-  const buildings = rootNodeIds
-    .map((id) => nodes[id])
+  // Get site node and its building children
+  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
+  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
+    .map((child) => typeof child === 'string' ? nodes[child] : child)
     .filter((node): node is BuildingNode => node?.type === "building");
 
   if (buildings.length === 0) {
@@ -92,8 +94,10 @@ function BuildingSelector() {
   const selectedBuildingId = useViewer((state) => state.selection.buildingId);
   const setSelection = useViewer((state) => state.setSelection);
 
-  const buildings = rootNodeIds
-    .map((id) => nodes[id])
+  // Get site node and its building children
+  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
+  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
+    .map((child) => typeof child === 'string' ? nodes[child] : child)
     .filter((node): node is BuildingNode => node?.type === "building");
 
   const selectedBuilding = selectedBuildingId

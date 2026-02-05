@@ -4,13 +4,16 @@ import { CeilingTool } from "./ceiling/ceiling-tool";
 import { ItemTool } from "./item/item-tool";
 import { MoveTool } from "./item/move-tool";
 import { RoofTool } from "./roof/roof-tool";
+import { SiteBoundaryEditor } from "./site/site-boundary-editor";
 import { SlabTool } from "./slab/slab-tool";
 import { WallTool } from "./wall/wall-tool";
 import { ZoneBoundaryEditor } from "./zone/zone-boundary-editor";
 import { ZoneTool } from "./zone/zone-tool";
 
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
-  site: {},
+  site: {
+    "property-line": SiteBoundaryEditor,
+  },
   structure: {
     wall: WallTool,
     slab: SlabTool,
@@ -31,6 +34,9 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
 
+  // Show site boundary editor when in site phase and edit mode
+  const showSiteBoundaryEditor = phase === "site" && mode === "edit";
+
   // Show zone boundary editor when in structure/select mode with a zone selected
   const showZoneBoundaryEditor =
     phase === "structure" && mode === "select" && selectedZoneId !== null;
@@ -42,6 +48,7 @@ export const ToolManager: React.FC = () => {
 
   return (
     <>
+      {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {showZoneBoundaryEditor && <ZoneBoundaryEditor />}
       {movingNode && <MoveTool />}
       {!movingNode && BuildToolComponent && <BuildToolComponent />}
