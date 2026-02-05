@@ -6,6 +6,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BuildingNode } from '../schema'
 import { LevelNode } from '../schema/nodes/level'
+import { SiteNode } from '../schema/nodes/site'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { isObject } from '../utils/types'
 import * as nodeActions from './actions/node-actions'
@@ -87,25 +88,29 @@ const useScene: UseSceneStore = create<SceneState>()(
             return // Scene already loaded
           }
 
-          const building = BuildingNode.parse({
-            children: [],
-          })
-
+          // Create hierarchy: Site → Building → Level
           const level0 = LevelNode.parse({
             level: 0,
             children: [],
           })
 
-          building.children.push(level0.id)
+          const building = BuildingNode.parse({
+            children: [level0.id],
+          })
+
+          const site = SiteNode.parse({
+            children: [building],
+          })
 
           // Define all nodes flat
           const nodes: Record<AnyNodeId, AnyNode> = {
+            [site.id]: site,
             [building.id]: building,
             [level0.id]: level0,
           }
 
-          // Root nodes are the levels
-          const rootNodeIds = [building.id]
+          // Site is the root
+          const rootNodeIds = [site.id]
 
           set({ nodes, rootNodeIds })
         },
@@ -155,13 +160,44 @@ const useScene: UseSceneStore = create<SceneState>()(
       onRehydrateStorage: (state) => {
         console.log('hydrating...')
 
-        // optional
         return (state, error) => {
           if (error) {
             console.log('an error happened during hydration', error)
-          } else {
-            console.log('hydration finished')
+            return
           }
+
+          if (!state) {
+            console.log('hydration finished - no state')
+            return
+          }
+
+          // Migration: Wrap old scenes (where root is not a SiteNode) in a SiteNode
+          const rootId = state.rootNodeIds?.[0]
+          const rootNode = rootId ? state.nodes[rootId] : null
+
+          if (rootNode && rootNode.type !== 'site') {
+            console.log('Migrating old scene: wrapping in SiteNode')
+
+            // Collect existing root nodes (should be BuildingNode or ItemNode)
+            const existingRoots = (state.rootNodeIds || [])
+              .map(id => state.nodes[id])
+              .filter(node => node?.type === 'building' || node?.type === 'item')
+
+            // Create a new SiteNode with existing roots as children
+            const site = SiteNode.parse({
+              children: existingRoots,
+            })
+
+            // Add site to nodes
+            state.nodes[site.id] = site
+
+            // Update root to be the site
+            state.rootNodeIds = [site.id]
+
+            console.log('Migration complete: scene now has SiteNode as root')
+          }
+
+          console.log('hydration finished')
         }
       },
     },

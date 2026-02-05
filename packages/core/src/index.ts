@@ -8,6 +8,7 @@ export type {
   ItemEvent,
   LevelEvent,
   NodeEvent,
+  SiteEvent,
   SlabEvent,
   WallEvent,
   ZoneEvent,

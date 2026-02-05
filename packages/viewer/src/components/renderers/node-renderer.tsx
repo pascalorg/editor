@@ -8,6 +8,7 @@ import { ItemRenderer } from './item/item-renderer'
 import { LevelRenderer } from './level/level-renderer'
 import { RoofRenderer } from './roof/roof-renderer'
 import { ScanRenderer } from './scan/scan-renderer'
+import { SiteRenderer } from './site/site-renderer'
 import { SlabRenderer } from './slab/slab-renderer'
 import { WallRenderer } from './wall/wall-renderer'
 import { ZoneRenderer } from './zone/zone-renderer'
@@ -19,6 +20,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
 
   return (
     <>
+      {node.type === 'site' && <SiteRenderer node={node} />}
       {node.type === 'building' && <BuildingRenderer node={node} />}
       {node.type === 'ceiling' && <CeilingRenderer node={node} />}
       {node.type === 'level' && <LevelRenderer node={node} />}

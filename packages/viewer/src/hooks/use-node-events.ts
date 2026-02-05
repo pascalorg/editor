@@ -11,6 +11,8 @@ import {
   type LevelNode,
   type RoofEvent,
   type RoofNode,
+  type SiteEvent,
+  type SiteNode,
   type SlabEvent,
   type SlabNode,
   type WallEvent,
@@ -21,6 +23,7 @@ import {
 import type { ThreeEvent } from '@react-three/fiber'
 
 type NodeConfig = {
+  site: { node: SiteNode; event: SiteEvent }
   item: { node: ItemNode; event: ItemEvent }
   wall: { node: WallNode; event: WallEvent }
   building: { node: BuildingNode; event: BuildingEvent }
