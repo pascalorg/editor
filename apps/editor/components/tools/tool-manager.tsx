@@ -6,6 +6,7 @@ import { MoveTool } from "./item/move-tool";
 import { RoofTool } from "./roof/roof-tool";
 import { SlabTool } from "./slab/slab-tool";
 import { WallTool } from "./wall/wall-tool";
+import { SiteBoundaryEditor } from "./site/site-boundary-editor";
 import { ZoneBoundaryEditor } from "./zone/zone-boundary-editor";
 import { ZoneTool } from "./zone/zone-tool";
 
@@ -31,6 +32,9 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode);
   const selectedZoneId = useViewer((state) => state.selection.zoneId);
 
+  // Show site boundary editor when in site/edit mode
+  const showSiteBoundaryEditor = phase === "site" && mode === "edit";
+
   // Show zone boundary editor when in structure/select mode with a zone selected
   const showZoneBoundaryEditor =
     phase === "structure" && mode === "select" && selectedZoneId !== null;
@@ -42,6 +46,7 @@ export const ToolManager: React.FC = () => {
 
   return (
     <>
+      {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {showZoneBoundaryEditor && <ZoneBoundaryEditor />}
       {movingNode && <MoveTool />}
       {!movingNode && BuildToolComponent && <BuildToolComponent />}

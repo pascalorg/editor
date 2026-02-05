@@ -6,6 +6,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BuildingNode } from '../schema'
 import { LevelNode } from '../schema/nodes/level'
+import { SiteNode } from '../schema/nodes/site'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { isObject } from '../utils/types'
 import * as nodeActions from './actions/node-actions'
@@ -80,12 +81,27 @@ const useScene: UseSceneStore = create<SceneState>()(
 
         loadScene: () => {
           if (get().rootNodeIds.length > 0) {
+            // Ensure a SiteNode exists (for scenes saved before site support)
+            const { nodes, rootNodeIds } = get()
+            const hasSite = rootNodeIds.some((id) => nodes[id]?.type === 'site')
+            if (!hasSite) {
+              const site = SiteNode.parse({ children: [] })
+              set({
+                nodes: { ...nodes, [site.id]: site },
+                rootNodeIds: [site.id, ...rootNodeIds],
+              })
+            }
+
             // Assign all nodes as dirty to force re-validation
             Object.values(get().nodes).forEach((node) => {
               get().markDirty(node.id)
             })
             return // Scene already loaded
           }
+
+          const site = SiteNode.parse({
+            children: [],
+          })
 
           const building = BuildingNode.parse({
             children: [],
@@ -100,12 +116,12 @@ const useScene: UseSceneStore = create<SceneState>()(
 
           // Define all nodes flat
           const nodes: Record<AnyNodeId, AnyNode> = {
+            [site.id]: site,
             [building.id]: building,
             [level0.id]: level0,
           }
 
-          // Root nodes are the levels
-          const rootNodeIds = [building.id]
+          const rootNodeIds = [site.id, building.id]
 
           set({ nodes, rootNodeIds })
         },

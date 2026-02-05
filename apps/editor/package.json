@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "set -a && . ./.env 2>/dev/null && set +a && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint",

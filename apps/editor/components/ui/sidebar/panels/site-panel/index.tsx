@@ -1,6 +1,7 @@
 import {
   type BuildingNode,
   LevelNode,
+  type SiteNode,
   useScene,
   type ZoneNode,
 } from "@pascal-app/core";
@@ -9,7 +10,9 @@ import {
   Building2,
   ChevronDown,
   Layers,
+  MapPin,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -38,7 +41,174 @@ const PRESET_COLORS = [
 ];
 
 // ============================================================================
-// SITE PHASE VIEW - Simple building buttons
+// PROPERTY LINE SECTION
+// ============================================================================
+
+function calculatePerimeter(points: Array<[number, number]>): number {
+  if (points.length < 2) return 0;
+  let perimeter = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x1, z1] = points[i]!;
+    const [x2, z2] = points[(i + 1) % points.length]!;
+    perimeter += Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+  }
+  return perimeter;
+}
+
+function useSiteNode(): SiteNode | null {
+  const siteId = useScene((state) => {
+    for (const id of state.rootNodeIds) {
+      if (state.nodes[id]?.type === "site") return id;
+    }
+    return null;
+  });
+  return useScene((state) =>
+    siteId ? ((state.nodes[siteId] as SiteNode | undefined) ?? null) : null
+  );
+}
+
+function PropertyLineSection() {
+  const siteNode = useSiteNode();
+  const updateNode = useScene((state) => state.updateNode);
+  const mode = useEditor((state) => state.mode);
+  const setMode = useEditor((state) => state.setMode);
+
+  if (!siteNode) return null;
+
+  const points = siteNode.polygon?.points ?? [];
+  const area = calculatePolygonArea(points);
+  const perimeter = calculatePerimeter(points);
+  const isEditing = mode === "edit";
+
+  const handleToggleEdit = () => {
+    setMode(isEditing ? "select" : "edit");
+  };
+
+  const handlePointChange = (index: number, axis: 0 | 1, value: number) => {
+    const newPoints = [...points.map((p) => [...p] as [number, number])];
+    newPoints[index]![axis] = value;
+    updateNode(siteNode.id, {
+      polygon: { type: "polygon" as const, points: newPoints },
+    });
+  };
+
+  const handleAddPoint = () => {
+    const lastPoint = points[points.length - 1];
+    const firstPoint = points[0];
+    if (!lastPoint || !firstPoint) return;
+
+    const newPoint: [number, number] = [
+      (lastPoint[0] + firstPoint[0]) / 2,
+      (lastPoint[1] + firstPoint[1]) / 2,
+    ];
+    const newPoints = [...points, newPoint];
+    updateNode(siteNode.id, {
+      polygon: { type: "polygon" as const, points: newPoints },
+    });
+  };
+
+  const handleDeletePoint = (index: number) => {
+    if (points.length <= 3) return;
+    const newPoints = points.filter((_, i) => i !== index);
+    updateNode(siteNode.id, {
+      polygon: { type: "polygon" as const, points: newPoints },
+    });
+  };
+
+  return (
+    <div className="border-b border-border/50">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Property Line</span>
+        </div>
+        <button
+          className={cn(
+            "w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors",
+            isEditing
+              ? "bg-orange-500/20 text-orange-400"
+              : "hover:bg-accent text-muted-foreground"
+          )}
+          onClick={handleToggleEdit}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Measurements */}
+      <div className="flex gap-3 px-3 pb-2">
+        <div className="text-xs text-muted-foreground">
+          Area: <span className="text-foreground">{area.toFixed(1)} m²</span>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Perimeter:{" "}
+          <span className="text-foreground">{perimeter.toFixed(1)} m</span>
+        </div>
+      </div>
+
+      {/* Vertex list (shown when editing) */}
+      {isEditing && (
+        <div className="px-3 pb-2">
+          <div className="flex flex-col gap-1">
+            {points.map((point, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-1.5 text-xs"
+              >
+                <span className="w-4 text-muted-foreground text-right shrink-0">
+                  {index + 1}
+                </span>
+                <label className="text-muted-foreground shrink-0">X</label>
+                <input
+                  type="number"
+                  value={point[0]}
+                  onChange={(e) =>
+                    handlePointChange(index, 0, parseFloat(e.target.value) || 0)
+                  }
+                  step={0.5}
+                  className="w-16 bg-accent/50 rounded px-1.5 py-0.5 text-xs text-foreground border border-border/50 focus:outline-none focus:border-primary"
+                />
+                <label className="text-muted-foreground shrink-0">Z</label>
+                <input
+                  type="number"
+                  value={point[1]}
+                  onChange={(e) =>
+                    handlePointChange(index, 1, parseFloat(e.target.value) || 0)
+                  }
+                  step={0.5}
+                  className="w-16 bg-accent/50 rounded px-1.5 py-0.5 text-xs text-foreground border border-border/50 focus:outline-none focus:border-primary"
+                />
+                <button
+                  className={cn(
+                    "w-5 h-5 flex items-center justify-center rounded cursor-pointer shrink-0",
+                    points.length > 3
+                      ? "hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+                      : "text-muted-foreground/30 cursor-not-allowed"
+                  )}
+                  onClick={() => handleDeletePoint(index)}
+                  disabled={points.length <= 3}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="flex items-center gap-1 mt-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded cursor-pointer transition-colors"
+            onClick={handleAddPoint}
+          >
+            <Plus className="w-3 h-3" />
+            Add point
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// SITE PHASE VIEW - Property line + building buttons
 // ============================================================================
 
 function SitePhaseView() {
@@ -51,31 +221,32 @@ function SitePhaseView() {
     .map((id) => nodes[id])
     .filter((node): node is BuildingNode => node?.type === "building");
 
-  if (buildings.length === 0) {
-    return (
-      <div className="px-3 py-4 text-sm text-muted-foreground">
-        No buildings yet
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-1 p-2">
-      {buildings.map((building) => (
-        <button
-          key={building.id}
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer",
-            selectedBuildingId === building.id
-              ? "bg-primary text-primary-foreground"
-              : "bg-accent/50 hover:bg-accent text-foreground"
-          )}
-          onClick={() => setSelection({ buildingId: building.id })}
-        >
-          <Building2 className="w-4 h-4 shrink-0" />
-          <span className="truncate">{building.name || "Building"}</span>
-        </button>
-      ))}
+    <div className="flex flex-col h-full">
+      <PropertyLineSection />
+      {buildings.length === 0 ? (
+        <div className="px-3 py-4 text-sm text-muted-foreground">
+          No buildings yet
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1 p-2">
+          {buildings.map((building) => (
+            <button
+              key={building.id}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer",
+                selectedBuildingId === building.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-accent/50 hover:bg-accent text-foreground"
+              )}
+              onClick={() => setSelection({ buildingId: building.id })}
+            >
+              <Building2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">{building.name || "Building"}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
