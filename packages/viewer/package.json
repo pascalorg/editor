@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/viewer",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "3D viewer component for Pascal building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,8 +17,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --declaration --emitDeclarationOnly && tsc",
-    "dev": "tsc --declaration --emitDeclarationOnly --watch & tsc --watch",
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
