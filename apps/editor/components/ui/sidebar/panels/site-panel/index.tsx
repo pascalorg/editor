@@ -545,6 +545,7 @@ function ContentSection() {
   const nodes = useScene((state) => state.nodes);
   const selectedLevelId = useViewer((state) => state.selection.levelId);
   const structureLayer = useEditor((state) => state.structureLayer);
+  const phase = useEditor((state) => state.phase);
   const setPhase = useEditor((state) => state.setPhase);
   const setMode = useEditor((state) => state.setMode);
   const setTool = useEditor((state) => state.setTool);
@@ -595,10 +596,34 @@ function ContentSection() {
     );
   }
 
-  // Show elements (walls, items, etc.) for this level - filter out zones
+  // Filter elements based on phase
   const elementChildren = level.children.filter((childId) => {
     const childNode = nodes[childId];
-    return childNode && childNode.type !== "zone";
+    if (!childNode || childNode.type === "zone") return false;
+
+    // In structure mode, show structural elements (walls, slabs, etc.) and doors/windows
+    if (phase === "structure") {
+      if (childNode.type === "item") {
+        const category = childNode.asset?.category?.toLowerCase() || "";
+        // Only show doors and windows in structure mode
+        return category === "door" || category === "window";
+      }
+      // Show all other structural elements (walls, slabs, ceiling, roof)
+      return true;
+    }
+
+    // In furnish mode, only show items that are NOT doors or windows
+    if (phase === "furnish") {
+      if (childNode.type === "item") {
+        const category = childNode.asset?.category?.toLowerCase() || "";
+        // Hide doors and windows in furnish mode
+        return category !== "door" && category !== "window";
+      }
+      // Hide structural elements in furnish mode
+      return false;
+    }
+
+    return true;
   });
 
   if (elementChildren.length === 0) {
