@@ -48,7 +48,7 @@ export default function Editor() {
         {/* Editor only system to toggle zone visibility */}
         <ZoneSystem />
         {/* <Stats /> */}
-        <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={100} />
+        <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
         <ToolManager />
         <CustomCameraControls />
       </Viewer>
