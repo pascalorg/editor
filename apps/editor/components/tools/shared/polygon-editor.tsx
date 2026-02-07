@@ -24,19 +24,29 @@ export interface PolygonEditorProps {
   color?: string
   onPolygonChange: (polygon: Array<[number, number]>) => void
   minVertices?: number
+  levelY?: number
+  /** Height of the surface being edited (e.g. slab elevation). Handles adapt to this. */
+  surfaceHeight?: number
 }
 
 /**
  * Generic polygon editor component for editing polygon vertices
  * Used by zone and site boundary editors
  */
+const MIN_HANDLE_HEIGHT = 0.15
+
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   polygon,
   color = '#3b82f6',
   onPolygonChange,
   minVertices = 3,
+  levelY = 0,
+  surfaceHeight = 0,
 }) => {
   const { gl, camera } = useThree()
+
+  // Compute the editing plane height (level Y + small offset above floor)
+  const editY = levelY + Y_OFFSET
 
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null)
@@ -45,9 +55,19 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [hoveredMidpoint, setHoveredMidpoint] = useState<number | null>(null)
 
   // Refs for raycasting during drag
-  const dragPlane = useRef(new Plane(new Vector3(0, 1, 0), -Y_OFFSET))
+  const dragPlane = useRef(new Plane(new Vector3(0, 1, 0), -editY))
+  dragPlane.current.constant = -editY
   const raycaster = useRef(new Raycaster())
   const lineRef = useRef<Mesh>(null!)
+
+  // Track the last polygon prop to detect external changes (undo/redo)
+  const lastPolygonRef = useRef(polygon)
+  if (polygon !== lastPolygonRef.current) {
+    lastPolygonRef.current = polygon
+    // External change (e.g. undo/redo) — clear any stale preview/drag state
+    if (previewPolygon) setPreviewPolygon(null)
+    if (dragState) setDragState(null)
+  }
 
   // The polygon to display (preview during drag, or actual polygon)
   const displayPolygon = previewPolygon ?? polygon
@@ -141,15 +161,33 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     }
 
     const handlePointerUp = (e: PointerEvent) => {
+      // Stop the event from reaching R3F's handlers, which would otherwise
+      // fire a grid:click and deselect the node being edited.
+      e.stopImmediatePropagation()
+      e.preventDefault()
+
       // Release pointer capture
       if (canvas.hasPointerCapture(e.pointerId)) {
         canvas.releasePointerCapture(e.pointerId)
       }
+
+      // Suppress the follow-up click event that browsers fire after pointerup
+      const suppressClick = (ce: MouseEvent) => {
+        ce.stopImmediatePropagation()
+        ce.preventDefault()
+        canvas.removeEventListener('click', suppressClick, true)
+      }
+      canvas.addEventListener('click', suppressClick, true)
+      // Safety cleanup in case no click fires
+      requestAnimationFrame(() => {
+        canvas.removeEventListener('click', suppressClick, true)
+      })
+
       commitPolygonChange()
     }
 
     canvas.addEventListener('pointermove', handlePointerMove)
-    canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointerup', handlePointerUp, true)
 
     return () => {
       // Release capture on cleanup
@@ -157,7 +195,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         canvas.releasePointerCapture(pointerId)
       }
       canvas.removeEventListener('pointermove', handlePointerMove)
-      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointerup', handlePointerUp, true)
     }
   }, [dragState, gl, handleVertexDrag, commitPolygonChange])
 
@@ -167,18 +205,18 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
     const positions: number[] = []
     for (const [x, z] of displayPolygon) {
-      positions.push(x!, Y_OFFSET + 0.01, z!)
+      positions.push(x!, editY + 0.01, z!)
     }
     // Close the loop
     const first = displayPolygon[0]!
-    positions.push(first[0]!, Y_OFFSET + 0.01, first[1]!)
+    positions.push(first[0]!, editY + 0.01, first[1]!)
 
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
 
     lineRef.current.geometry.dispose()
     lineRef.current.geometry = geometry
-  }, [displayPolygon])
+  }, [displayPolygon, editY])
 
   if (displayPolygon.length < minVertices) return null
 
@@ -200,15 +238,18 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         />
       </line>
 
-      {/* Vertex handles */}
+      {/* Vertex handles - blue cylinders that match surface height */}
       {displayPolygon.map(([x, z], index) => {
         const isHovered = hoveredVertex === index
         const isDragging = dragState?.vertexIndex === index
+        const radius = 0.1
+        const height = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
 
         return (
           <mesh
             key={`vertex-${index}`}
-            position={[x!, Y_OFFSET, z!]}
+            position={[x!, editY + height / 2, z!]}
+            castShadow
             onPointerEnter={(e) => {
               e.stopPropagation()
               setHoveredVertex(index)
@@ -218,6 +259,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               setHoveredVertex(null)
             }}
             onPointerDown={(e) => {
+              if (e.button !== 0) return
               e.stopPropagation()
               setDragState({
                 isDragging: true,
@@ -227,36 +269,36 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               })
             }}
             onClick={(e) => {
+              if (e.button !== 0) return
               e.stopPropagation()
             }}
             onDoubleClick={(e) => {
+              if (e.button !== 0) return
               e.stopPropagation()
               if (canDelete) {
                 handleDeleteVertex(index)
               }
             }}
           >
-            <sphereGeometry args={[isHovered || isDragging ? 0.3 : 0.25, 16, 16]} />
-            <meshBasicMaterial
-              color={
-                isDragging ? '#22c55e' : isHovered ? (canDelete ? '#ef4444' : '#ffffff') : color
-              }
-              depthTest={false}
-              depthWrite={false}
+            <cylinderGeometry args={[radius, radius, height, 16]} />
+            <meshStandardMaterial
+              color={isDragging ? '#22c55e' : isHovered ? '#60a5fa' : '#3b82f6'}
             />
           </mesh>
         )
       })}
 
-      {/* Midpoint handles for adding vertices (hidden while dragging) */}
+      {/* Midpoint handles - smaller green cylinders for adding vertices (hidden while dragging) */}
       {!dragState &&
         midpoints.map(([x, z], index) => {
           const isHovered = hoveredMidpoint === index
+          const radius = 0.06
+          const height = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
 
           return (
             <mesh
               key={`midpoint-${index}`}
-              position={[x!, Y_OFFSET, z!]}
+              position={[x!, editY + height / 2, z!]}
               onPointerEnter={(e) => {
                 e.stopPropagation()
                 setHoveredMidpoint(index)
@@ -266,6 +308,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 setHoveredMidpoint(null)
               }}
               onPointerDown={(e) => {
+                if (e.button !== 0) return
                 e.stopPropagation()
                 const newVertexIndex = handleAddVertex(index, [x!, z!])
                 if (newVertexIndex >= 0) {
@@ -279,16 +322,15 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 }
               }}
               onClick={(e) => {
+                if (e.button !== 0) return
                 e.stopPropagation()
               }}
             >
-              <sphereGeometry args={[isHovered ? 0.3 : 0.25, 16, 16]} />
-              <meshBasicMaterial
-                color={isHovered ? '#22c55e' : color}
-                depthTest={false}
-                depthWrite={false}
+              <cylinderGeometry args={[radius, radius, height, 16]} />
+              <meshStandardMaterial
+                color={isHovered ? '#4ade80' : '#22c55e'}
                 transparent
-                opacity={isHovered ? 1 : 0.6}
+                opacity={isHovered ? 1 : 0.7}
               />
             </mesh>
           )

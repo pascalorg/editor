@@ -148,6 +148,15 @@ const Grid = ({
       const levelMesh = sceneRegistry.nodes.get(currentLevelId)
       if (levelMesh) {
         targetY = levelMesh.position.y
+      } else {
+        // Fallback: compute from level node data when mesh isn't registered yet
+        const levelNode = useScene.getState().nodes[currentLevelId]
+        if (levelNode && 'level' in levelNode) {
+          const levelMode = useViewer.getState().levelMode
+          const LEVEL_HEIGHT = 2.5
+          const EXPLODED_GAP = 5
+          targetY = ((levelNode as any).level || 0) * (LEVEL_HEIGHT + (levelMode === 'exploded' ? EXPLODED_GAP : 0))
+        }
       }
     }
     gridRef.current.position.y = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
