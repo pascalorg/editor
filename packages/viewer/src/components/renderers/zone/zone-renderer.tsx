@@ -2,7 +2,7 @@ import { useRegistry, type ZoneNode } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
-import { color, float, uv } from 'three/tsl'
+import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
@@ -19,16 +19,20 @@ const createWallGradientMaterial = (zoneColor: string) => {
   // Use UV y coordinate for vertical gradient (0 at bottom, 1 at top)
   const gradientT = uv().y
 
+  const opacity = uniform(0);
   // Fade opacity from 0.6 at bottom to 0 at top
-  const opacity = float(0.6).mul(float(1).sub(gradientT))
+  const finalOpacity = float(0.6).mul(float(1).sub(gradientT)).mul(opacity);
 
   return new MeshBasicNodeMaterial({
     transparent: true,
     colorNode: baseColor,
-    opacityNode: opacity,
+    opacityNode: finalOpacity,
     side: DoubleSide,
     depthWrite: false,
     depthTest: false,
+    userData: {
+      uOpacity: opacity,
+    }
   })
 }
 
@@ -37,13 +41,15 @@ const createWallGradientMaterial = (zoneColor: string) => {
  */
 const createFloorMaterial = (zoneColor: string) => {
   const baseColor = color(new Color(zoneColor))
-
+  const opacity = uniform(0)
   return new MeshBasicNodeMaterial({
     transparent: true,
     colorNode: baseColor,
-    opacityNode: float(0.15),
+    opacityNode: float(0.25).mul(opacity),
     side: DoubleSide,
     depthWrite: false,
+    depthTest: false,
+    userData: { uOpacity: opacity}
   })
 }
 
@@ -174,7 +180,8 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     <group ref={ref} {...handlers}>
       <Html name="label" position={[centroid[0], 1, centroid[1]]} style={{
         pointerEvents: 'none'
-      }}>
+      }}
+          zIndexRange={[10, 0]}>
         <div style={{
           transform: 'translate3d(-50%, -50%, 0)',
           width: 'max-content',
@@ -187,12 +194,12 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
           {node.name}</div>
       </Html>
       {/* Floor fill */}
-      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMaterial}>
+      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMaterial} name="floor">
         <shapeGeometry args={[floorShape]} />
       </mesh>
 
       {/* Wall borders with gradient */}
-      <mesh geometry={wallGeometry} material={wallMaterial} />
+      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" />
     </group>
   )
 }

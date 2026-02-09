@@ -26,10 +26,10 @@ import useViewer from '../../store/use-viewer'
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 2,
+  sliceCount: 1,
   stepCount: 8,
-  radius: 2,
-  expFactor: 2,
+  radius: 1,
+  expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
   aoIntensity: 1.5,
@@ -80,6 +80,8 @@ const PostProcessingPasses = () => {
 
     // SSGI Pass (cast to PerspectiveCamera for SSGI)
     const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
+    
+    
     giPass.sliceCount.value = SSGI_PARAMS.sliceCount
     giPass.stepCount.value = SSGI_PARAMS.stepCount
     giPass.radius.value = SSGI_PARAMS.radius

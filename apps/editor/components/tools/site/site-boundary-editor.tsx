@@ -1,4 +1,4 @@
-import { useScene, type SiteNode } from '@pascal-app/core'
+import { type SiteNode, useScene } from '@pascal-app/core'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
 
@@ -34,7 +34,7 @@ export const SiteBoundaryEditor: React.FC = () => {
   return (
     <PolygonEditor
       polygon={site.polygon.points}
-      color="#f59e0b"
+      color="#10b981"
       onPolygonChange={handlePolygonChange}
       minVertices={3}
     />

@@ -1,14 +1,7 @@
-import { useThree } from '@react-three/fiber'
+import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BufferGeometry,
-  Float32BufferAttribute,
-  type Mesh,
-  Plane,
-  Raycaster,
-  Vector2,
-  Vector3,
-} from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
 
 const Y_OFFSET = 0.02
 
@@ -24,7 +17,8 @@ export interface PolygonEditorProps {
   color?: string
   onPolygonChange: (polygon: Array<[number, number]>) => void
   minVertices?: number
-  levelY?: number
+  /** Level ID to mount the editor to. If provided, uses createPortal for automatic level animation following. */
+  levelId?: string
   /** Height of the surface being edited (e.g. slab elevation). Handles adapt to this. */
   surfaceHeight?: number
 }
@@ -40,24 +34,23 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   color = '#3b82f6',
   onPolygonChange,
   minVertices = 3,
-  levelY = 0,
+  levelId,
   surfaceHeight = 0,
 }) => {
-  const { gl, camera } = useThree()
+  // Get level node from registry if levelId is provided
+  const levelNode = levelId ? sceneRegistry.nodes.get(levelId) : null
 
-  // Compute the editing plane height (level Y + small offset above floor)
-  const editY = levelY + Y_OFFSET
+  // When using portal, edit at Y_OFFSET (local to level)
+  // When not using portal, edit at world origin
+  const editY = levelNode ? Y_OFFSET : 0
 
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const [hoveredVertex, setHoveredVertex] = useState<number | null>(null)
   const [hoveredMidpoint, setHoveredMidpoint] = useState<number | null>(null)
+  const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
 
-  // Refs for raycasting during drag
-  const dragPlane = useRef(new Plane(new Vector3(0, 1, 0), -editY))
-  dragPlane.current.constant = -editY
-  const raycaster = useRef(new Raycaster())
   const lineRef = useRef<Mesh>(null!)
 
   // Track the last polygon prop to detect external changes (undo/redo)
@@ -82,30 +75,15 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     })
   }, [displayPolygon])
 
-  // Handle vertex drag
+  // Update vertex position using grid cursor position
   const handleVertexDrag = useCallback(
-    (clientX: number, clientY: number, vertexIndex: number) => {
-      const canvas = gl.domElement
-      const rect = canvas.getBoundingClientRect()
-      const x = ((clientX - rect.left) / rect.width) * 2 - 1
-      const y = -((clientY - rect.top) / rect.height) * 2 + 1
-
-      raycaster.current.setFromCamera(new Vector2(x, y), camera)
-      const intersection = new Vector3()
-      raycaster.current.ray.intersectPlane(dragPlane.current, intersection)
-
-      if (intersection) {
-        // Snap to 0.5 grid
-        const gridX = Math.round(intersection.x * 2) / 2
-        const gridZ = Math.round(intersection.z * 2) / 2
-
-        const basePolygon = previewPolygon ?? polygon
-        const newPolygon = [...basePolygon]
-        newPolygon[vertexIndex] = [gridX, gridZ]
-        setPreviewPolygon(newPolygon)
-      }
+    (vertexIndex: number) => {
+      const basePolygon = previewPolygon ?? polygon
+      const newPolygon = [...basePolygon]
+      newPolygon[vertexIndex] = cursorPosition
+      setPreviewPolygon(newPolygon)
     },
-    [gl, camera, previewPolygon, polygon],
+    [cursorPosition, previewPolygon, polygon],
   )
 
   // Commit polygon changes
@@ -146,58 +124,58 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     [polygon, previewPolygon, onPolygonChange, minVertices],
   )
 
-  // Set up pointer move/up listeners for dragging with pointer capture
+  // Listen to grid:move events to track cursor position
+  useEffect(() => {
+    const onGridMove = (event: GridEvent) => {
+      const gridX = Math.round(event.position[0] * 2) / 2
+      const gridZ = Math.round(event.position[2] * 2) / 2
+      setCursorPosition([gridX, gridZ])
+
+      // Update vertex position during drag
+      if (dragState?.isDragging) {
+        handleVertexDrag(dragState.vertexIndex)
+      }
+    }
+
+    emitter.on('grid:move', onGridMove)
+    return () => {
+      emitter.off('grid:move', onGridMove)
+    }
+  }, [dragState, handleVertexDrag])
+
+  // Set up pointer up listener for ending drag
   useEffect(() => {
     if (!dragState?.isDragging) return
 
-    const canvas = gl.domElement
-    const pointerId = dragState.pointerId
-
-    // Capture pointer to prevent R3F events from firing on other objects (like the grid)
-    canvas.setPointerCapture(pointerId)
-
-    const handlePointerMove = (e: PointerEvent) => {
-      handleVertexDrag(e.clientX, e.clientY, dragState.vertexIndex)
-    }
-
     const handlePointerUp = (e: PointerEvent) => {
-      // Stop the event from reaching R3F's handlers, which would otherwise
-      // fire a grid:click and deselect the node being edited.
+      // Only handle the specific pointer that started the drag
+      if (e.pointerId !== dragState.pointerId) return
+
+      // Stop the event from propagating to prevent grid click
       e.stopImmediatePropagation()
       e.preventDefault()
-
-      // Release pointer capture
-      if (canvas.hasPointerCapture(e.pointerId)) {
-        canvas.releasePointerCapture(e.pointerId)
-      }
 
       // Suppress the follow-up click event that browsers fire after pointerup
       const suppressClick = (ce: MouseEvent) => {
         ce.stopImmediatePropagation()
         ce.preventDefault()
-        canvas.removeEventListener('click', suppressClick, true)
+        window.removeEventListener('click', suppressClick, true)
       }
-      canvas.addEventListener('click', suppressClick, true)
+      window.addEventListener('click', suppressClick, true)
+
       // Safety cleanup in case no click fires
       requestAnimationFrame(() => {
-        canvas.removeEventListener('click', suppressClick, true)
+        window.removeEventListener('click', suppressClick, true)
       })
 
       commitPolygonChange()
     }
 
-    canvas.addEventListener('pointermove', handlePointerMove)
-    canvas.addEventListener('pointerup', handlePointerUp, true)
-
+    window.addEventListener('pointerup', handlePointerUp, true)
     return () => {
-      // Release capture on cleanup
-      if (canvas.hasPointerCapture(pointerId)) {
-        canvas.releasePointerCapture(pointerId)
-      }
-      canvas.removeEventListener('pointermove', handlePointerMove)
-      canvas.removeEventListener('pointerup', handlePointerUp, true)
+      window.removeEventListener('pointerup', handlePointerUp, true)
     }
-  }, [dragState, gl, handleVertexDrag, commitPolygonChange])
+  }, [dragState, commitPolygonChange])
 
   // Update line geometry when polygon changes
   useEffect(() => {
@@ -222,11 +200,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const canDelete = displayPolygon.length > minVertices
 
-  return (
+  const editorContent = (
     <group>
       {/* Border line */}
       {/* @ts-ignore */}
-      <line ref={lineRef} frustumCulled={false} renderOrder={10}>
+      <line ref={lineRef} frustumCulled={false} renderOrder={10} raycast={() => {}}>
         <bufferGeometry />
         <lineBasicNodeMaterial
           color={color}
@@ -337,4 +315,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         })}
     </group>
   )
+
+  // Mount to level node if available, otherwise render at world origin
+  return levelNode ? createPortal(editorContent, levelNode) : editorContent
 }
