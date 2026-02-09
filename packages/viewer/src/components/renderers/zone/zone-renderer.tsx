@@ -180,7 +180,8 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     <group ref={ref} {...handlers}>
       <Html name="label" position={[centroid[0], 1, centroid[1]]} style={{
         pointerEvents: 'none'
-      }}>
+      }}
+          zIndexRange={[10, 0]}>
         <div style={{
           transform: 'translate3d(-50%, -50%, 0)',
           width: 'max-content',
