@@ -1,122 +1,112 @@
-import { emitter, type GridEvent, useScene, CeilingNode } from "@pascal-app/core";
-import { useViewer } from "@pascal-app/viewer";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from "three";
-import useEditor from "@/store/use-editor";
+import { CeilingNode, emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
+import useEditor from '@/store/use-editor'
 
-const CEILING_HEIGHT = 2.52;
-const GRID_OFFSET = 0.02;
+const CEILING_HEIGHT = 2.52
+const GRID_OFFSET = 0.02
 
 /**
  * Snaps a point to the nearest axis-aligned or 45-degree diagonal from the last point
  */
 const calculateSnapPoint = (
   lastPoint: [number, number],
-  currentPoint: [number, number]
+  currentPoint: [number, number],
 ): [number, number] => {
-  const [x1, y1] = lastPoint;
-  const [x, y] = currentPoint;
+  const [x1, y1] = lastPoint
+  const [x, y] = currentPoint
 
-  const dx = x - x1;
-  const dy = y - y1;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
+  const dx = x - x1
+  const dy = y - y1
+  const absDx = Math.abs(dx)
+  const absDy = Math.abs(dy)
 
   // Calculate distances to horizontal, vertical, and diagonal lines
-  const horizontalDist = absDy;
-  const verticalDist = absDx;
-  const diagonalDist = Math.abs(absDx - absDy);
+  const horizontalDist = absDy
+  const verticalDist = absDx
+  const diagonalDist = Math.abs(absDx - absDy)
 
   // Find the minimum distance to determine which axis to snap to
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist);
+  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
 
   if (minDist === diagonalDist) {
     // Snap to 45° diagonal
-    const diagonalLength = Math.min(absDx, absDy);
-    return [
-      x1 + Math.sign(dx) * diagonalLength,
-      y1 + Math.sign(dy) * diagonalLength,
-    ];
+    const diagonalLength = Math.min(absDx, absDy)
+    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
   } else if (minDist === horizontalDist) {
     // Snap to horizontal
-    return [x, y1];
+    return [x, y1]
   } else {
     // Snap to vertical
-    return [x1, y];
+    return [x1, y]
   }
-};
+}
 
 /**
  * Creates a ceiling with the given polygon points
  */
-const commitCeilingDrawing = (
-  levelId: string,
-  points: Array<[number, number]>
-) => {
-  const { createNode, nodes } = useScene.getState();
+const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
+  const { createNode, nodes } = useScene.getState()
 
   // Count existing ceilings for naming
-  const ceilingCount = Object.values(nodes).filter((n) => n.type === "ceiling").length;
-  const name = `Ceiling ${ceilingCount + 1}`;
+  const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
+  const name = `Ceiling ${ceilingCount + 1}`
 
   const ceiling = CeilingNode.parse({
     name,
     polygon: points,
-  });
+  })
 
-  createNode(ceiling, levelId);
-};
+  createNode(ceiling, levelId)
+}
 
 export const CeilingTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null);
-  const gridCursorRef = useRef<Mesh>(null);
-  const mainLineRef = useRef<Line>(null!);
-  const closingLineRef = useRef<Line>(null!);
-  const currentLevelId = useViewer((state) => state.selection.levelId);
-  const setTool = useEditor((state) => state.setTool);
+  const cursorRef = useRef<Mesh>(null)
+  const gridCursorRef = useRef<Mesh>(null)
+  const mainLineRef = useRef<Line>(null!)
+  const closingLineRef = useRef<Line>(null!)
+  const currentLevelId = useViewer((state) => state.selection.levelId)
+  const setTool = useEditor((state) => state.setTool)
 
-  const [points, setPoints] = useState<Array<[number, number]>>([]);
-  const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0]);
-  const [levelY, setLevelY] = useState(0);
+  const [points, setPoints] = useState<Array<[number, number]>>([])
+  const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
+  const [levelY, setLevelY] = useState(0)
 
   // Update cursor position and lines on grid move
   useEffect(() => {
-    if (!currentLevelId) return;
+    if (!currentLevelId) return
 
     const onGridMove = (event: GridEvent) => {
-      if (!cursorRef.current || !gridCursorRef.current) return;
+      if (!cursorRef.current || !gridCursorRef.current) return
 
-      const gridX = Math.round(event.position[0] * 2) / 2;
-      const gridZ = Math.round(event.position[2] * 2) / 2;
-      const gridPosition: [number, number] = [gridX, gridZ];
+      const gridX = Math.round(event.position[0] * 2) / 2
+      const gridZ = Math.round(event.position[2] * 2) / 2
+      const gridPosition: [number, number] = [gridX, gridZ]
 
-      setCursorPosition(gridPosition);
-      setLevelY(event.position[1]);
+      setCursorPosition(gridPosition)
+      setLevelY(event.position[1])
 
-      const ceilingY = event.position[1] + CEILING_HEIGHT;
-      const gridY = event.position[1] + GRID_OFFSET;
+      const ceilingY = event.position[1] + CEILING_HEIGHT
+      const gridY = event.position[1] + GRID_OFFSET
 
       // Calculate snapped display position
-      const lastPoint = points[points.length - 1];
-      const displayPoint = lastPoint
-        ? calculateSnapPoint(lastPoint, gridPosition)
-        : gridPosition;
+      const lastPoint = points[points.length - 1]
+      const displayPoint = lastPoint ? calculateSnapPoint(lastPoint, gridPosition) : gridPosition
 
-      cursorRef.current.position.set(displayPoint[0], ceilingY, displayPoint[1]);
-      gridCursorRef.current.position.set(displayPoint[0], gridY, displayPoint[1]);
-    };
+      cursorRef.current.position.set(displayPoint[0], ceilingY, displayPoint[1])
+      gridCursorRef.current.position.set(displayPoint[0], gridY, displayPoint[1])
+    }
 
     const onGridClick = (_event: GridEvent) => {
-      if (!currentLevelId) return;
+      if (!currentLevelId) return
 
       // Calculate snapped click point
-      const lastPoint = points[points.length - 1];
-      const clickPoint = lastPoint
-        ? calculateSnapPoint(lastPoint, cursorPosition)
-        : cursorPosition;
+      const lastPoint = points[points.length - 1]
+      const clickPoint = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
 
       // Check if clicking on the first point to close the shape
-      const firstPoint = points[0];
+      const firstPoint = points[0]
       if (
         points.length >= 3 &&
         firstPoint &&
@@ -124,133 +114,120 @@ export const CeilingTool: React.FC = () => {
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
         // Create the ceiling
-        commitCeilingDrawing(currentLevelId, points);
-        setPoints([]);
-        setTool(null);
+        commitCeilingDrawing(currentLevelId, points)
+        setPoints([])
+        setTool(null)
       } else {
         // Add point to polygon
-        setPoints([...points, clickPoint]);
+        setPoints([...points, clickPoint])
       }
-    };
+    }
 
     const onGridDoubleClick = (_event: GridEvent) => {
-      if (!currentLevelId) return;
+      if (!currentLevelId) return
 
       // Need at least 3 points to form a polygon
       if (points.length >= 3) {
-        commitCeilingDrawing(currentLevelId, points);
-        setPoints([]);
-        setTool(null);
+        commitCeilingDrawing(currentLevelId, points)
+        setPoints([])
+        setTool(null)
       }
-    };
+    }
 
-    emitter.on("grid:move", onGridMove);
-    emitter.on("grid:click", onGridClick);
-    emitter.on("grid:double-click", onGridDoubleClick);
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', onGridClick)
+    emitter.on('grid:double-click', onGridDoubleClick)
 
     return () => {
-      emitter.off("grid:move", onGridMove);
-      emitter.off("grid:click", onGridClick);
-      emitter.off("grid:double-click", onGridDoubleClick);
-    };
-  }, [currentLevelId, points, cursorPosition, setTool]);
+      emitter.off('grid:move', onGridMove)
+      emitter.off('grid:click', onGridClick)
+      emitter.off('grid:double-click', onGridDoubleClick)
+    }
+  }, [currentLevelId, points, cursorPosition, setTool])
 
   // Update line geometries when points change
   useEffect(() => {
-    if (!mainLineRef.current || !closingLineRef.current) return;
+    if (!mainLineRef.current || !closingLineRef.current) return
 
     if (points.length === 0) {
-      mainLineRef.current.visible = false;
-      closingLineRef.current.visible = false;
-      return;
+      mainLineRef.current.visible = false
+      closingLineRef.current.visible = false
+      return
     }
 
-    const ceilingY = levelY + CEILING_HEIGHT;
-    const lastPoint = points[points.length - 1];
-    const snappedCursor = lastPoint
-      ? calculateSnapPoint(lastPoint, cursorPosition)
-      : cursorPosition;
+    const ceilingY = levelY + CEILING_HEIGHT
+    const lastPoint = points[points.length - 1]
+    const snappedCursor = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
 
     // Build main line points
-    const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, ceilingY, z));
-    linePoints.push(new Vector3(snappedCursor[0], ceilingY, snappedCursor[1]));
+    const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, ceilingY, z))
+    linePoints.push(new Vector3(snappedCursor[0], ceilingY, snappedCursor[1]))
 
     // Update main line
     if (linePoints.length >= 2) {
-      mainLineRef.current.geometry.dispose();
-      mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints);
-      mainLineRef.current.visible = true;
+      mainLineRef.current.geometry.dispose()
+      mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints)
+      mainLineRef.current.visible = true
     } else {
-      mainLineRef.current.visible = false;
+      mainLineRef.current.visible = false
     }
 
     // Update closing line (from cursor back to first point)
-    const firstPoint = points[0];
+    const firstPoint = points[0]
     if (points.length >= 2 && firstPoint) {
       const closingPoints = [
         new Vector3(snappedCursor[0], ceilingY, snappedCursor[1]),
         new Vector3(firstPoint[0], ceilingY, firstPoint[1]),
-      ];
-      closingLineRef.current.geometry.dispose();
-      closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints);
-      closingLineRef.current.visible = true;
+      ]
+      closingLineRef.current.geometry.dispose()
+      closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
+      closingLineRef.current.visible = true
     } else {
-      closingLineRef.current.visible = false;
+      closingLineRef.current.visible = false
     }
-  }, [points, cursorPosition, levelY]);
+  }, [points, cursorPosition, levelY])
 
   // Create preview shape when we have 3+ points
   const previewShape = useMemo(() => {
-    if (points.length < 3) return null;
+    if (points.length < 3) return null
 
-    const lastPoint = points[points.length - 1];
-    const snappedCursor = lastPoint
-      ? calculateSnapPoint(lastPoint, cursorPosition)
-      : cursorPosition;
+    const lastPoint = points[points.length - 1]
+    const snappedCursor = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
 
-    const allPoints = [...points, snappedCursor];
+    const allPoints = [...points, snappedCursor]
 
     // THREE.Shape is in X-Y plane. After rotation of -PI/2 around X:
     // - Shape X -> World X
     // - Shape Y -> World -Z (so we negate Z to get correct orientation)
-    const firstPt = allPoints[0];
-    if (!firstPt) return null;
+    const firstPt = allPoints[0]
+    if (!firstPt) return null
 
-    const shape = new Shape();
-    shape.moveTo(firstPt[0], -firstPt[1]);
+    const shape = new Shape()
+    shape.moveTo(firstPt[0], -firstPt[1])
 
     for (let i = 1; i < allPoints.length; i++) {
-      const pt = allPoints[i];
+      const pt = allPoints[i]
       if (pt) {
-        shape.lineTo(pt[0], -pt[1]);
+        shape.lineTo(pt[0], -pt[1])
       }
     }
-    shape.closePath();
+    shape.closePath()
 
-    return shape;
-  }, [points, cursorPosition]);
+    return shape
+  }, [points, cursorPosition])
 
   return (
     <group>
       {/* Cursor at ceiling height */}
       <mesh ref={cursorRef}>
         <sphereGeometry args={[0.1, 16, 16]} />
-        <meshBasicMaterial
-          color="#d4d4d4"
-          depthTest={false}
-          depthWrite={false}
-        />
+        <meshBasicMaterial color="#d4d4d4" depthTest={false} depthWrite={false} />
       </mesh>
 
       {/* Grid-level cursor indicator */}
       <mesh ref={gridCursorRef} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.15, 0.2, 32]} />
-        <meshBasicMaterial
-          color="#a3a3a3"
-          side={DoubleSide}
-          depthTest={false}
-          depthWrite={false}
-        />
+        <meshBasicMaterial color="#a3a3a3" side={DoubleSide} depthTest={false} depthWrite={false} />
       </mesh>
 
       {/* Preview fill */}
@@ -275,12 +252,7 @@ export const CeilingTool: React.FC = () => {
       {/* @ts-ignore */}
       <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
-        <lineBasicNodeMaterial
-          color="#a3a3a3"
-          linewidth={3}
-          depthTest={false}
-          depthWrite={false}
-        />
+        <lineBasicNodeMaterial color="#a3a3a3" linewidth={3} depthTest={false} depthWrite={false} />
       </line>
 
       {/* Closing line */}
@@ -302,12 +274,12 @@ export const CeilingTool: React.FC = () => {
         <mesh key={index} position={[x, levelY + CEILING_HEIGHT + 0.01, z]}>
           <sphereGeometry args={[0.1, 16, 16]} />
           <meshBasicMaterial
-            color={index === 0 ? "#22c55e" : "#d4d4d4"}
+            color={index === 0 ? '#22c55e' : '#d4d4d4'}
             depthTest={false}
             depthWrite={false}
           />
         </mesh>
       ))}
     </group>
-  );
-};
+  )
+}
