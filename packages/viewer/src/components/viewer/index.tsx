@@ -8,6 +8,7 @@ import { GuideSystem } from '../../systems/guide/guide-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
+import { ZoneSystem } from '../../systems/zone/zone-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { Lights } from './lights'
 import PostProcessing from './post-processing'
@@ -63,6 +64,7 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' 
       <RoofSystem />
       <SlabSystem />
       <WallSystem />
+      <ZoneSystem />
       <PostProcessing />
 
       {selectionManager === 'default' && <SelectionManager />}
