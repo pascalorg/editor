@@ -29,6 +29,7 @@ interface ViewerProps {
 const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
   return (
     <Canvas
+      dpr={[1, 1.5]}
       className={'bg-[#fafafa]'}
       gl={async (props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
