@@ -1,13 +1,13 @@
 'use client'
 
-import { sceneRegistry } from '@pascal-app/core'
+import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { MathUtils, type Mesh, Vector2 } from 'three'
 
-import { color, float, fract, fwidth, mix, positionLocal } from 'three/tsl'
+import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '@/hooks/use-grid-events'
 
@@ -20,6 +20,7 @@ export const Grid = ({
   sectionColor = '#000000',
   fadeDistance = 100,
   fadeStrength = 1,
+  revealRadius = 10,
 }: {
   cellSize?: number
   cellThickness?: number
@@ -29,10 +30,16 @@ export const Grid = ({
   sectionColor?: string
   fadeDistance?: number
   fadeStrength?: number
+  revealRadius?: number
 }) => {
+  const cursorPositionRef = useRef(new Vector2(0, 0))
+
   const material = useMemo(() => {
     // Use xy since plane geometry is in XY space (before rotation)
     const pos = positionLocal.xy
+
+    // Cursor position uniform
+    const cursorPos = uniform(cursorPositionRef.current)
 
     // Grid line function using fwidth for anti-aliasing
     // Returns 1 on grid lines, 0 elsewhere
@@ -65,6 +72,10 @@ export const Grid = ({
     const dist = pos.length()
     const fade = float(1).sub(dist.div(fadeDistance).min(1)).pow(fadeStrength)
 
+    // Cursor reveal effect - distance from cursor
+    const cursorDist = pos.sub(cursorPos).length()
+    const cursorFade = float(1).sub(cursorDist.div(revealRadius).clamp(0, 1)).smoothstep(0, 1)
+
     // Mix colors based on section grid
     const gridColor = mix(
       color(cellColor),
@@ -72,8 +83,8 @@ export const Grid = ({
       float(sectionThickness).mul(g2).min(1),
     )
 
-    // Combined alpha
-    const alpha = g1.add(g2).mul(fade)
+    // Combined alpha with cursor fade
+    const alpha = g1.add(g2).mul(fade).mul(cursorFade)
     const finalAlpha = mix(alpha.mul(0.75), alpha, g2)
 
     return new MeshBasicNodeMaterial({
@@ -91,6 +102,7 @@ export const Grid = ({
     sectionColor,
     fadeDistance,
     fadeStrength,
+    revealRadius,
   ])
 
   const gridRef = useRef<Mesh>(null!)
@@ -98,6 +110,18 @@ export const Grid = ({
 
   // Use custom raycasting for grid events (independent of mesh events)
   useGridEvents(gridY)
+
+  // Update cursor position from grid:move events
+  useEffect(() => {
+    const onGridMove = (event: GridEvent) => {
+      cursorPositionRef.current.set(event.position[0], -event.position[2])
+    }
+
+    emitter.on('grid:move', onGridMove)
+    return () => {
+      emitter.off('grid:move', onGridMove)
+    }
+  }, [])
 
   useFrame((_, delta) => {
     const currentLevelId = useViewer.getState().selection.levelId
