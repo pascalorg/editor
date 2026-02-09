@@ -1,25 +1,26 @@
-import { useScene, type ZoneNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { resolveLevelId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
 
+interface ZoneBoundaryEditorProps {
+  zoneId: ZoneNode['id']
+}
+
 /**
- * Zone boundary editor - allows editing zone polygon vertices when a zone is selected
+ * Zone boundary editor - allows editing zone polygon vertices for a specific zone
  * Uses the generic PolygonEditor component
  */
-export const ZoneBoundaryEditor: React.FC = () => {
-  const selectedZoneId = useViewer((state) => state.selection.zoneId)
-  const zoneNode = useScene((state) => (selectedZoneId ? state.nodes[selectedZoneId] : null))
-  const zone = zoneNode?.type === 'zone' ? (zoneNode as ZoneNode) : null
+export const ZoneBoundaryEditor: React.FC<ZoneBoundaryEditorProps> = ({ zoneId }) => {
+  const zoneNode = useScene((state) => state.nodes[zoneId])
   const updateNode = useScene((state) => state.updateNode)
+
+  const zone = zoneNode?.type === 'zone' ? (zoneNode as ZoneNode) : null
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
-      if (selectedZoneId) {
-        updateNode(selectedZoneId, { polygon: newPolygon })
-      }
+      updateNode(zoneId, { polygon: newPolygon })
     },
-    [selectedZoneId, updateNode],
+    [zoneId, updateNode],
   )
 
   if (!zone || !zone.polygon || zone.polygon.length < 3) return null
@@ -32,6 +33,7 @@ export const ZoneBoundaryEditor: React.FC = () => {
       color={zoneColor}
       onPolygonChange={handlePolygonChange}
       minVertices={3}
+      levelId={resolveLevelId(zone, useScene.getState().nodes)}
     />
   )
 }

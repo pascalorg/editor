@@ -1,4 +1,5 @@
-import { useThree } from '@react-three/fiber'
+import { createPortal, useThree } from '@react-three/fiber'
+import { sceneRegistry } from '@pascal-app/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
@@ -24,7 +25,8 @@ export interface PolygonEditorProps {
   color?: string
   onPolygonChange: (polygon: Array<[number, number]>) => void
   minVertices?: number
-  levelY?: number
+  /** Level ID to mount the editor to. If provided, uses createPortal for automatic level animation following. */
+  levelId?: string
   /** Height of the surface being edited (e.g. slab elevation). Handles adapt to this. */
   surfaceHeight?: number
 }
@@ -40,13 +42,17 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   color = '#3b82f6',
   onPolygonChange,
   minVertices = 3,
-  levelY = 0,
+  levelId,
   surfaceHeight = 0,
 }) => {
   const { gl, camera } = useThree()
 
-  // Compute the editing plane height (level Y + small offset above floor)
-  const editY = levelY + Y_OFFSET
+  // Get level node from registry if levelId is provided
+  const levelNode = levelId ? sceneRegistry.nodes.get(levelId) : null
+
+  // When using portal, edit at Y_OFFSET (local to level)
+  // When not using portal, edit at world origin
+  const editY = levelNode ? Y_OFFSET : 0
 
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null)
@@ -222,7 +228,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const canDelete = displayPolygon.length > minVertices
 
-  return (
+  const editorContent = (
     <group>
       {/* Border line */}
       {/* @ts-ignore */}
@@ -337,4 +343,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         })}
     </group>
   )
+
+  // Mount to level node if available, otherwise render at world origin
+  return levelNode ? createPortal(editorContent, levelNode) : editorContent
 }

@@ -1,5 +1,5 @@
 import useEditor, { type Phase, type Tool } from "@/store/use-editor";
-import { useScene, type AnyNodeId } from "@pascal-app/core";
+import { useScene, type AnyNodeId, type SlabNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { CeilingTool } from "./ceiling/ceiling-tool";
 import { ItemTool } from "./item/item-tool";
@@ -39,14 +39,14 @@ export const ToolManager: React.FC = () => {
   const nodes = useScene((state) => state.nodes);
 
   // Check if a slab is selected
-  const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === "slab") ?? null;
+  const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === "slab") as SlabNode['id'] | undefined;
 
   // Show site boundary editor when in site phase and edit mode
   const showSiteBoundaryEditor = phase === "site" && mode === "edit";
 
   // Show slab boundary editor when in structure/select mode with a slab selected
   const showSlabBoundaryEditor =
-    phase === "structure" && mode === "select" && selectedSlabId !== null;
+    phase === "structure" && mode === "select" && selectedSlabId !== undefined;
 
   // Show zone boundary editor when in structure/select mode with a zone selected
   // Hide when editing a slab to avoid overlapping handles
@@ -61,8 +61,8 @@ export const ToolManager: React.FC = () => {
   return (
     <>
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {showZoneBoundaryEditor && <ZoneBoundaryEditor />}
-      {showSlabBoundaryEditor && <SlabBoundaryEditor />}
+      {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
+      {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
       {movingNode && <MoveTool />}
       {!movingNode && BuildToolComponent && <BuildToolComponent />}
     </>

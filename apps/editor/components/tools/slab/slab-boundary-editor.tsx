@@ -1,52 +1,30 @@
-import { sceneRegistry, useScene, type AnyNodeId, type SlabNode } from '@pascal-app/core'
+import { resolveLevelId, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
 
+interface SlabBoundaryEditorProps {
+  slabId: SlabNode['id']
+}
+
 /**
- * Slab boundary editor - allows editing slab polygon vertices when a slab is selected
+ * Slab boundary editor - allows editing slab polygon vertices for a specific slab
  * Uses the generic PolygonEditor component
  */
-export const SlabBoundaryEditor: React.FC = () => {
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const levelId = useViewer((state) => state.selection.levelId)
-  const setSelection = useViewer((state) => state.setSelection)
-  const nodes = useScene((state) => state.nodes)
+export const SlabBoundaryEditor: React.FC<SlabBoundaryEditorProps> = ({ slabId }) => {
+  const slabNode = useScene((state) => state.nodes[slabId])
   const updateNode = useScene((state) => state.updateNode)
+  const setSelection = useViewer((state) => state.setSelection)
 
-  // Find the first selected slab
-  const selectedSlabId =
-    selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'slab') ?? null
-  const slab = selectedSlabId ? (nodes[selectedSlabId as AnyNodeId] as SlabNode) : null
-
-  // Get level Y position for the editing plane
-  let levelY = 0
-  if (levelId) {
-    const levelMesh = sceneRegistry.nodes.get(levelId)
-    if (levelMesh) {
-      levelY = levelMesh.position.y
-    } else {
-      const levelNode = nodes[levelId]
-      if (levelNode && 'level' in levelNode) {
-        const levelMode = useViewer.getState().levelMode
-        const LEVEL_HEIGHT = 2.5
-        const EXPLODED_GAP = 5
-        levelY =
-          ((levelNode as any).level || 0) *
-          (LEVEL_HEIGHT + (levelMode === 'exploded' ? EXPLODED_GAP : 0))
-      }
-    }
-  }
+  const slab = slabNode?.type === 'slab' ? (slabNode as SlabNode) : null
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
-      if (selectedSlabId) {
-        updateNode(selectedSlabId as SlabNode['id'], { polygon: newPolygon })
-        // Re-assert selection so the slab stays selected after the edit
-        setSelection({ selectedIds: [selectedSlabId] })
-      }
+      updateNode(slabId, { polygon: newPolygon })
+      // Re-assert selection so the slab stays selected after the edit
+      setSelection({ selectedIds: [slabId] })
     },
-    [selectedSlabId, updateNode, setSelection],
+    [slabId, updateNode, setSelection],
   )
 
   if (!slab || !slab.polygon || slab.polygon.length < 3) return null
@@ -57,7 +35,7 @@ export const SlabBoundaryEditor: React.FC = () => {
       color="#a3a3a3"
       onPolygonChange={handlePolygonChange}
       minVertices={3}
-      levelY={levelY}
+      levelId={resolveLevelId(slab, useScene.getState().nodes)}
       surfaceHeight={slab.elevation ?? 0.05}
     />
   )
