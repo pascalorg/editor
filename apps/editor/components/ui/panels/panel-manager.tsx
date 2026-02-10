@@ -3,6 +3,7 @@
 import { AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '@/store/use-editor'
+import { ItemPanel } from './item-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { SlabPanel } from './slab-panel'
@@ -23,6 +24,8 @@ export function PanelManager() {
     const node = nodes[selectedNode as AnyNodeId]
     if (node) {
       switch (node.type) {
+        case 'item':
+          return <ItemPanel />
         case 'roof':
           return <RoofPanel />
         case 'slab':

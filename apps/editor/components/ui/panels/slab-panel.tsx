@@ -5,6 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { X } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback } from 'react'
+import { NumberInput } from '@/components/ui/primitives/number-input'
 
 export function SlabPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -76,17 +77,14 @@ export function SlabPanel() {
               Elevation
             </label>
             <div className="flex items-center gap-2">
-              <input
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
-                onChange={(e) => {
-                  const value = Number.parseFloat(e.target.value)
-                  if (!Number.isNaN(value)) {
-                    handleUpdate({ elevation: value })
-                  }
-                }}
-                step="0.05"
-                type="number"
+              <NumberInput
+                label="Elevation"
                 value={Math.round(node.elevation * 1000) / 1000}
+                onChange={(value) => {
+                  handleUpdate({ elevation: value })
+                }}
+                precision={3}
+                className="flex-1"
               />
               <span className="text-muted-foreground text-xs shrink-0">m</span>
             </div>
