@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { computeBoundsTree } from 'three-mesh-bvh'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
@@ -260,6 +261,10 @@ export function generateExtrudedWall(
   }
 
   // Create wall brush from geometry
+  // Pre-compute BVH with new API to avoid deprecation warning
+  geometry.computeBoundsTree = computeBoundsTree
+  geometry.computeBoundsTree({ maxLeafSize: 10 })
+
   const wallBrush = new Brush(geometry)
   wallBrush.updateMatrixWorld()
 
@@ -349,6 +354,10 @@ function collectCutoutBrushes(
       minY + height / 2,
       0, // Center on Z axis (wall thickness direction)
     )
+
+    // Pre-compute BVH with new API to avoid deprecation warning
+    boxGeo.computeBoundsTree = computeBoundsTree
+    boxGeo.computeBoundsTree({ maxLeafSize: 10 })
 
     const brush = new Brush(boxGeo)
     brushes.push(brush)
