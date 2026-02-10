@@ -4,6 +4,7 @@ import { type AnyNode, type GuideNode, type ScanNode, useScene } from '@pascal-a
 import { Box, Image, X } from 'lucide-react'
 import { useCallback } from 'react'
 import useEditor from '@/store/use-editor'
+import { NumberInput } from '@/components/ui/primitives/number-input'
 
 type ReferenceNode = ScanNode | GuideNode
 
@@ -65,23 +66,17 @@ export function ReferencePanel() {
             </label>
             <div className="grid grid-cols-3 gap-2">
               {([0, 1, 2] as const).map((i) => (
-                <div key={i} className="space-y-1">
-                  <label className="text-muted-foreground text-xs">{['X', 'Y', 'Z'][i]}</label>
-                  <input
-                    className="w-full rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
-                    onChange={(e) => {
-                      const value = Number.parseFloat(e.target.value)
-                      if (!Number.isNaN(value)) {
-                        const pos = [...node.position] as [number, number, number]
-                        pos[i] = value
-                        handleUpdate({ position: pos })
-                      }
-                    }}
-                    step="0.1"
-                    type="number"
-                    value={Math.round(node.position[i] * 100) / 100}
-                  />
-                </div>
+                <NumberInput
+                  key={i}
+                  label={['X', 'Y', 'Z'][i]!}
+                  value={Math.round(node.position[i] * 100) / 100}
+                  onChange={(value) => {
+                    const pos = [...node.position] as [number, number, number]
+                    pos[i] = value
+                    handleUpdate({ position: pos })
+                  }}
+                  precision={2}
+                />
               ))}
             </div>
           </div>
@@ -92,20 +87,17 @@ export function ReferencePanel() {
               Rotation
             </label>
             <div className="flex items-center gap-1.5">
-              <input
-                className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
-                onChange={(e) => {
-                  const degrees = Number.parseFloat(e.target.value)
-                  if (!Number.isNaN(degrees)) {
-                    const radians = (degrees * Math.PI) / 180
-                    handleUpdate({
-                      rotation: [node.rotation[0], radians, node.rotation[2]],
-                    })
-                  }
-                }}
-                step="1"
-                type="number"
+              <NumberInput
+                label="Y"
                 value={Math.round((node.rotation[1] * 180) / Math.PI)}
+                onChange={(degrees) => {
+                  const radians = (degrees * Math.PI) / 180
+                  handleUpdate({
+                    rotation: [node.rotation[0], radians, node.rotation[2]],
+                  })
+                }}
+                precision={0}
+                className="min-w-0 flex-1"
               />
               <span className="text-muted-foreground text-xs shrink-0">&deg;</span>
               <button
@@ -136,18 +128,16 @@ export function ReferencePanel() {
             <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
               Scale
             </label>
-            <input
-              className="w-full rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
-              min="0.01"
-              onChange={(e) => {
-                const value = Number.parseFloat(e.target.value)
-                if (!Number.isNaN(value) && value > 0) {
+            <NumberInput
+              label="Scale"
+              value={Math.round(node.scale * 100) / 100}
+              onChange={(value) => {
+                if (value > 0) {
                   handleUpdate({ scale: value })
                 }
               }}
-              step="0.1"
-              type="number"
-              value={Math.round(node.scale * 100) / 100}
+              min={0.01}
+              precision={2}
             />
           </div>
 

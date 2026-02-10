@@ -46,11 +46,6 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   structure: {
     types: ["wall", "item", "zone", "slab", "ceiling", "roof"],
     handleSelect: (node, isShift) => {
-      // Single click on item (door/window) → enter move mode
-      if (!isShift && node.type === 'item') {
-        useEditor.getState().setMovingNode(node as ItemNode);
-        return;
-      }
       const { selection, setSelection } = useViewer.getState();
       if (node.type === 'zone') {
         setSelection({ zoneId: node.id });
@@ -93,11 +88,6 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   furnish: {
     types: ["item"],
     handleSelect: (node, isShift) => {
-      // Single click on item → enter move mode
-      if (!isShift && node.type === 'item') {
-        useEditor.getState().setMovingNode(node as ItemNode);
-        return;
-      }
       const { selection, setSelection } = useViewer.getState();
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)

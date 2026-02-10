@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "editor",
@@ -63,13 +62,14 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",
         "nanoid": "^5.1.6",
         "three-bvh-csg": "^0.0.17",
+        "three-mesh-bvh": "^0.9.8",
         "zod": "^4.3.5",
         "zundo": "^2.3.0",
         "zustand": "^5",
@@ -127,7 +127,7 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "dependencies": {
         "zustand": "^5",
       },
