@@ -27,7 +27,7 @@ export {
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
-export { pointInPolygon } from './hooks/spatial-grid/spatial-grid-manager'
+export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 // Schema
 export * from './schema'
 export { default as useScene } from './store/use-scene'

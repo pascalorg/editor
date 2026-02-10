@@ -28,7 +28,7 @@ export default function Editor() {
       <ActionMenu />
       <PanelManager />
 
-      <SidebarProvider className="fixed z-10">
+      <SidebarProvider className="fixed z-100">
         <AppSidebar />
       </SidebarProvider>
       <Viewer selectionManager="custom">

@@ -1,9 +1,12 @@
+import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNodeId,
   type CeilingEvent,
   emitter,
   type GridEvent,
+  resolveLevelId,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   useSpatialQuery,
   type WallEvent,
@@ -12,18 +15,17 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { BoxGeometry, Euler, type Mesh, type MeshStandardMaterial, Quaternion, Vector3 } from 'three'
-import { spatialGridManager } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../../../../packages/core/src/hooks/spatial-grid/spatial-grid-sync'
 import {
-  ceilingStrategy,
-  checkCanPlace,
-  floorStrategy,
-  wallStrategy,
-} from './placement-strategies'
+  BoxGeometry,
+  Euler,
+  type Mesh,
+  type MeshStandardMaterial,
+  Quaternion,
+  Vector3,
+} from 'three'
+import { ceilingStrategy, checkCanPlace, floorStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
-import type { AssetInput } from '@pascal-app/core'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
@@ -43,6 +45,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null },
   )
 
+  // Store config callbacks in refs to avoid re-running effect when they change
+  const configRef = useRef(config)
+  configRef.current = config
+
   const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
   const { asset, draftNode } = config
 
@@ -52,7 +58,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
     // Reset placement state
-    placementState.current = config.initialState ?? {
+    placementState.current = configRef.current.initialState ?? {
       surface: 'floor',
       wallId: null,
       ceilingId: null,
@@ -70,9 +76,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const revalidate = (): boolean => {
       const placeable = checkCanPlace(getContext(), validators)
-      ;(cursorRef.current.material as MeshStandardMaterial).color.set(
-        placeable ? 'green' : 'red',
-      )
+      ;(cursorRef.current.material as MeshStandardMaterial).color.set(placeable ? 'green' : 'red')
       return placeable
     }
 
@@ -110,7 +114,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     // ---- Init draft ----
-    config.initDraft(gridPosition.current)
+    configRef.current.initDraft(gridPosition.current)
 
     // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
@@ -136,7 +140,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       gridPosition.current.set(...result.gridPosition)
-      cursorRef.current.position.set(...result.cursorPosition)
+      // Only update X and Z for cursor - useFrame will handle Y (slab elevation)
+      cursorRef.current.position.x = result.cursorPosition[0]
+      cursorRef.current.position.z = result.cursorPosition[2]
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -152,7 +158,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const currentRotation: [number, number, number] = [0, cursorRef.current.rotation.y, 0]
 
       draftNode.commit(result.nodeUpdate)
-      if (config.onCommitted()) {
+      if (configRef.current.onCommitted()) {
         draftNode.create(gridPosition.current, asset, currentRotation)
         revalidate()
       }
@@ -265,7 +271,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useScene.getState().dirtyNodes.add(result.dirtyNodeId)
       }
 
-      if (config.onCommitted()) {
+      if (configRef.current.onCommitted()) {
         const nodes = useScene.getState().nodes
         const enterResult = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
         if (enterResult) {
@@ -289,7 +295,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           applyTransition(result)
           const draft = draftNode.current
           if (draft) {
-            useScene.getState().updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
+            useScene
+              .getState()
+              .updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
           }
           if (oldWallId) {
             useScene.getState().dirtyNodes.add(oldWallId as AnyNodeId)
@@ -360,7 +368,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       draftNode.commit(result.nodeUpdate)
 
-      if (config.onCommitted()) {
+      if (configRef.current.onCommitted()) {
         const nodes = useScene.getState().nodes
         const enterResult = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
         if (enterResult) {
@@ -384,7 +392,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           applyTransition(result)
           const draft = draftNode.current
           if (draft) {
-            useScene.getState().updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
+            useScene
+              .getState()
+              .updateNode(draft.id, { parentId: result.nodeUpdate.parentId as string })
           }
           if (oldCeilingId) {
             useScene.getState().dirtyNodes.add(oldCeilingId as AnyNodeId)
@@ -404,9 +414,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const ROTATION_STEP = Math.PI / 2
     const onKeyDown = (event: KeyboardEvent) => {
       // Escape / right-click → cancel
-      if (event.key === 'Escape' && config.onCancel) {
+      if (event.key === 'Escape' && configRef.current.onCancel) {
         event.preventDefault()
-        config.onCancel()
+        configRef.current.onCancel()
         return
       }
 
@@ -434,9 +444,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Right-click cancel ----
     const onContextMenu = (event: MouseEvent) => {
-      if (config.onCancel) {
+      if (configRef.current.onCancel) {
         event.preventDefault()
-        config.onCancel()
+        configRef.current.onCancel()
       }
     }
     window.addEventListener('contextmenu', onContextMenu)
@@ -501,17 +511,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Adjust Y for slab elevation (floor items on top of slabs)
       if (!asset.attachTo) {
-        const levelId = useViewer.getState().selection.levelId
-        if (levelId) {
-          const slabElevation = spatialGridManager.getSlabElevationForItem(
-            levelId,
-            [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-            asset.dimensions ?? DEFAULT_DIMENSIONS,
-            draftNode.current.rotation,
-          )
-          mesh.position.y = slabElevation
-          cursorRef.current.position.y = slabElevation
-        }
+        const nodes = useScene.getState().nodes
+        const levelId = resolveLevelId(draftNode.current, nodes)
+        const slabElevation = spatialGridManager.getSlabElevationForItem(
+          levelId,
+          [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+          asset.dimensions ?? DEFAULT_DIMENSIONS,
+          draftNode.current.rotation,
+        )
+        mesh.position.y = slabElevation
+        cursorRef.current.position.y = slabElevation
       }
     }
   })
