@@ -3,9 +3,10 @@ import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
+import { positionLocal, smoothstep, time } from 'three/tsl'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
-import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { resolveCdnUrl } from '../../../lib/asset-url'
 
 // Shared materials to avoid creating new instances for every mesh
 const defaultMaterial = new MeshStandardNodeMaterial({
@@ -39,10 +40,32 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
 
   return (
     <group position={node.position} rotation={node.rotation} ref={ref} visible={node.visible}>
-      <Suspense>
+      <Suspense fallback={<PreviewModel node={node} />}>
         <ModelRenderer node={node} />
       </Suspense>
     </group>
+  )
+}
+
+const previewMaterial = new MeshStandardNodeMaterial({
+  color: '#cccccc',
+  roughness: 1,
+  metalness: 0,
+  depthTest: false,
+})
+
+const previewOpacity = smoothstep(0.42, 0.55, positionLocal.y.add(time.mul(-0.2)).mul(10).fract())
+
+previewMaterial.opacityNode = previewOpacity
+previewMaterial.transparent = true
+
+const PreviewModel = ({ node }: { node: ItemNode }) => {
+  return (
+    <mesh position-y={node.asset.dimensions[1] / 2} material={previewMaterial}>
+      <boxGeometry
+        args={[node.asset.dimensions[0], node.asset.dimensions[1], node.asset.dimensions[2]]}
+      />
+    </mesh>
   )
 }
 
