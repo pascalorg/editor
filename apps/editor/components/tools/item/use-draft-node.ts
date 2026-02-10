@@ -50,6 +50,7 @@ export function useDraftNode(): DraftNodeHandle {
       rotation: rotation ?? [0, 0, 0],
       name: asset.name,
       asset,
+      parentId: currentLevelId,
       metadata: { isTransient: true },
     })
 
