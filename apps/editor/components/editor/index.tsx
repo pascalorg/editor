@@ -7,6 +7,7 @@ import useEditor from '@/store/use-editor'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
+import { CloudSaveButton } from '../ui/cloud-save-button'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
@@ -27,6 +28,7 @@ export default function Editor() {
     <div className="w-full h-full">
       <ActionMenu />
       <PanelManager />
+      <CloudSaveButton />
 
       <SidebarProvider className="fixed z-20">
         <AppSidebar />

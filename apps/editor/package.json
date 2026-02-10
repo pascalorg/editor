@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3002",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint",
@@ -29,6 +29,7 @@
     "@repo/ui": "*",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/three": "^0.182.0",
+    "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
