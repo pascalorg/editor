@@ -24,10 +24,15 @@ export function ItemPanel() {
 
   const handleUpdate = useCallback(
     (updates: Partial<ItemNode>) => {
-      if (!selectedId) return
+      if (!selectedId || !node) return
       updateNode(selectedId as AnyNode['id'], updates)
+
+      // Mark parent wall as dirty if item is attached to wall
+      if (node.asset.attachTo === 'wall' && node.parentId) {
+        useScene.getState().dirtyNodes.add(node.parentId as AnyNode['id'])
+      }
     },
-    [selectedId, updateNode],
+    [selectedId, node, updateNode],
   )
 
   const handleClose = useCallback(() => {
@@ -175,18 +180,18 @@ export function ItemPanel() {
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-2 rounded border border-border bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
             onClick={handleMove}
           >
-            <Move className="h-4 w-4" />
+            <Move className="h-3.5 w-3.5" />
             <span>Move</span>
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-2 rounded border border-border bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
             onClick={handleDelete}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
             <span>Delete</span>
           </button>
         </div>
