@@ -73,9 +73,15 @@ export function NumberInput({
         document.removeEventListener('mousemove', handleMouseMove)
         document.removeEventListener('mouseup', handleMouseUp)
 
-        // Resume history tracking and commit final value
-        useScene.temporal.getState().resume()
-        onChange(finalValue)
+        // Reset to initial value while still paused (no history entry)
+        // Then resume and apply final value (creates single history entry)
+        if (finalValue !== startValueRef.current) {
+          onChange(startValueRef.current)
+          useScene.temporal.getState().resume()
+          onChange(finalValue)
+        } else {
+          useScene.temporal.getState().resume()
+        }
       }
 
       document.addEventListener('mousemove', handleMouseMove)
