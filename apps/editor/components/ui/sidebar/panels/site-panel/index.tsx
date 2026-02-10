@@ -345,6 +345,7 @@ function LevelsSection() {
   const nodes = useScene((state) => state.nodes);
   const createNode = useScene((state) => state.createNode);
   const updateNode = useScene((state) => state.updateNode);
+  const deleteNode = useScene((state) => state.deleteNode);
   const selectedBuildingId = useViewer((state) => state.selection.buildingId);
   const selectedLevelId = useViewer((state) => state.selection.levelId);
   const setSelection = useViewer((state) => state.setSelection);
@@ -493,6 +494,15 @@ function LevelsSection() {
                 >
                   References
                 </button>
+                {level.level !== 0 && (
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent hover:text-red-600 cursor-pointer"
+                    onClick={() => deleteNode(level.id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
+                )}
               </PopoverContent>
             </Popover>
           </div>

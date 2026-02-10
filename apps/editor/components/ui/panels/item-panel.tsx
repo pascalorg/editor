@@ -29,7 +29,9 @@ export function ItemPanel() {
 
       // Mark parent wall as dirty if item is attached to wall
       if (node.asset.attachTo === 'wall' && node.parentId) {
-        useScene.getState().dirtyNodes.add(node.parentId as AnyNode['id'])
+        requestAnimationFrame(() => {
+          useScene.getState().dirtyNodes.add(node.parentId as AnyNode['id'])
+        })
       }
     },
     [selectedId, node, updateNode],

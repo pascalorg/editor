@@ -64,8 +64,13 @@ export function NumberInput({
 
         const deltaValue = deltaX * step
         const newValue = clamp(startValueRef.current + deltaValue)
-        finalValue = Number.parseFloat(newValue.toFixed(precision))
-        onChange(finalValue)
+        const newFinalValue = Number.parseFloat(newValue.toFixed(precision))
+
+        // Only call onChange if value actually changed (avoid extra processing on tiny moves)
+        if (newFinalValue !== finalValue) {
+          finalValue = newFinalValue
+          onChange(finalValue)
+        }
       }
 
       const handleMouseUp = () => {
