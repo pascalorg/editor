@@ -2,7 +2,7 @@
 
 import { Cloud } from 'lucide-react'
 import { useState } from 'react'
-import { useAuth } from '@/lib/auth/use-auth'
+import { useAuth } from '../lib/auth/hooks'
 import { ProfileDropdown } from './profile-dropdown'
 import { PropertyDropdown } from './property-dropdown'
 import { SignInDialog } from './sign-in-dialog'

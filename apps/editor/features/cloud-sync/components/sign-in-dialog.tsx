@@ -2,8 +2,8 @@
 
 import { Mail, X } from 'lucide-react'
 import { useState } from 'react'
-import { authClient } from '@/lib/auth/auth-client'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './primitives/dialog'
+import { authClient } from '../lib/auth/client'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/primitives/dialog'
 
 interface SignInDialogProps {
   open: boolean

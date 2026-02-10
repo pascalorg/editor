@@ -2,8 +2,9 @@
 
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { createProperty } from '@/lib/properties/actions'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './primitives/dialog'
+import { createProperty } from '../lib/properties/actions'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/primitives/dialog'
+import { GoogleAddressSearch } from './google-address-search'
 
 interface NewPropertyDialogProps {
   open: boolean
@@ -11,37 +12,57 @@ interface NewPropertyDialogProps {
   onSuccess?: () => void
 }
 
+interface AddressData {
+  streetNumber?: string
+  route?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  country?: string
+  center: [number, number]
+  formattedAddress: string
+}
+
 /**
- * NewPropertyDialog - Dialog for creating a new property
- *
- * TODO: Add Google Maps address search integration
- * TODO: Add address parsing and validation
- * TODO: Add duplicate checking before creation
+ * NewPropertyDialog - Dialog for creating a new property with Google Maps address search
  */
 export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewPropertyDialogProps) {
-  const [name, setName] = useState('')
+  const [address, setAddress] = useState<AddressData | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleAddressSelect = (addressData: AddressData) => {
+    setAddress(addressData)
+    setError(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!address) {
+      setError('Please select an address')
+      return
+    }
+
     setIsCreating(true)
 
     try {
-      // TODO: Replace with actual address data from Google Maps
+      // Use formatted address as property name (like monorepo)
       const result = await createProperty({
-        name,
-        center: [0, 0], // TODO: Get from Google Maps
-        city: '',
-        state: '',
-        postalCode: '',
-        country: 'US',
+        name: address.formattedAddress,
+        center: address.center,
+        streetNumber: address.streetNumber,
+        route: address.route,
+        city: address.city,
+        state: address.state,
+        postalCode: address.postalCode,
+        country: address.country || 'US',
       })
 
       if (result.success) {
         onOpenChange(false)
-        setName('')
+        setAddress(null)
         onSuccess?.()
       } else {
         setError(result.error || 'Failed to create property')
@@ -56,14 +77,17 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
   const handleClose = () => {
     if (!isCreating) {
       onOpenChange(false)
-      setName('')
+      setAddress(null)
       setError(null)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={handleClose} modal={false}>
+      <DialogContent
+        className="sm:max-w-[500px]"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Add New Property</DialogTitle>
           <button
@@ -77,30 +101,16 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* TODO: Add Google Maps address search component */}
-          <div className="space-y-2">
-            <label className="font-medium text-sm" htmlFor="property-name">
-              Property Name
-            </label>
-            <input
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isCreating}
-              id="property-name"
-              placeholder="Enter property name"
-              required
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
+          {/* Google Maps Address Search */}
+          <GoogleAddressSearch onAddressSelect={handleAddressSelect} disabled={isCreating} />
 
-          {/* TODO: Add address fields with Google Maps autocomplete */}
-          <div className="rounded-md border border-border bg-muted/30 p-4 text-muted-foreground text-sm">
-            <p>TODO: Google Maps address search will be integrated here</p>
-            <p className="mt-2 text-xs">
-              For now, property creation is not fully functional. This is a placeholder for the UI.
-            </p>
-          </div>
+          {/* Show selected address */}
+          {address && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">Selected Address:</p>
+              <p className="mt-1 text-muted-foreground">{address.formattedAddress}</p>
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
@@ -119,7 +129,7 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
             </button>
             <button
               className="rounded-md bg-primary px-4 py-2 text-primary-foreground text-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
-              disabled={isCreating || !name}
+              disabled={isCreating || !address}
               type="submit"
             >
               {isCreating ? 'Creating...' : 'Create Property'}

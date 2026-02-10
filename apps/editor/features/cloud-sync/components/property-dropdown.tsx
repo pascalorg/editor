@@ -2,14 +2,14 @@
 
 import { Check, ChevronDown, Home, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useActiveProperty, useProperties } from '@/lib/properties/use-properties'
+import { useActiveProperty, useProperties } from '../lib/properties/hooks'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from './primitives/dropdown-menu'
+} from '@/components/ui/primitives/dropdown-menu'
 import { NewPropertyDialog } from './new-property-dialog'
 
 /**

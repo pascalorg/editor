@@ -1,12 +1,12 @@
 'use client'
 
-import { useAuth } from '@/lib/auth/use-auth'
+import { useAuth } from '../lib/auth/hooks'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from './primitives/dropdown-menu'
+} from '@/components/ui/primitives/dropdown-menu'
 
 function getInitials(name: string): string {
   return name

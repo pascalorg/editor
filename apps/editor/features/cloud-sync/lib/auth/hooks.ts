@@ -1,6 +1,6 @@
 'use client'
 
-import { authClient } from './auth-client'
+import { authClient } from './client'
 
 /**
  * Hook to access authentication state using better-auth
