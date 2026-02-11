@@ -4,9 +4,11 @@ import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-a
 import { Viewer } from '@pascal-app/viewer'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import useEditor from '@/store/use-editor'
+import { usePropertyScene } from '@/features/community/lib/models/hooks'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
+import { CloudSaveButton } from '@/features/community/components/cloud-save-button'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
@@ -15,8 +17,8 @@ import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 
+// Load default scene initially (will be replaced when property loads)
 useScene.getState().loadScene()
-console.log('Loaded scene in editor')
 initSpatialGridSync()
 initSpaceDetectionSync(useScene, useEditor)
 
@@ -27,6 +29,7 @@ export default function Editor() {
     <div className="w-full h-full">
       <ActionMenu />
       <PanelManager />
+      <CloudSaveButton />
 
       <SidebarProvider className="fixed z-20">
         <AppSidebar />
