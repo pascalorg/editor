@@ -1,125 +1,76 @@
-import { db, schema } from '@pascal-app/db'
+import type { Database } from '@pascal-app/db'
+import { schema } from '@pascal-app/db'
+import type { BetterAuthOptions } from 'better-auth'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { magicLink } from 'better-auth/plugins'
-import { Resend } from 'resend'
 
-let _auth: ReturnType<typeof betterAuth> | null = null
-
-function getAuth() {
-  if (!_auth) {
-    const betterAuthSecret = process.env.BETTER_AUTH_SECRET
-    const betterAuthUrl = process.env.BETTER_AUTH_URL
-
-    if (!betterAuthSecret) {
-      throw new Error(
-        'Missing BETTER_AUTH_SECRET environment variable. Please configure it in your deployment settings or .env.local file. Generate one with: openssl rand -base64 32',
-      )
-    }
-
-    if (!betterAuthUrl) {
-      throw new Error(
-        'Missing BETTER_AUTH_URL environment variable. Please configure it in your deployment settings or .env.local file. Set it to your app URL (e.g., http://localhost:3000 or https://yourdomain.com)',
-      )
-    }
-
-    // Initialize Resend for email sending
-    const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-
-    _auth = betterAuth({
-      database: drizzleAdapter(db, {
-        provider: 'pg',
-        usePlural: true,
-        schema,
-      }),
-      advanced: {
-        database: {
-          generateId: false, // Use our prefixed nanoid IDs from schema
-        },
-      },
-      secret: betterAuthSecret,
-      baseURL: betterAuthUrl,
-      plugins: [
-        magicLink({
-          sendMagicLink: async ({ email, url }) => {
-            if (!resend) {
-              console.log(`[DEV] Magic link for ${email}: ${url}`)
-              return
-            }
-
-            try {
-              await resend.emails.send({
-                from: 'Pascal <noreply@pascal.app>',
-                to: email,
-                subject: 'Sign in to Pascal Editor',
-                html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Sign in to Pascal Editor</h2>
-                <p>Click the button below to sign in to your account:</p>
-                <a href="${url}" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-                  Sign In
-                </a>
-                <p style="color: #666; font-size: 14px;">This link will expire in 5 minutes.</p>
-                <p style="color: #666; font-size: 14px;">If you didn't request this email, you can safely ignore it.</p>
-              </div>
-            `,
-              })
-              console.log(`✓ Magic link email sent to ${email}`)
-            } catch (error) {
-              console.error('Failed to send magic link email:', error)
-              throw error
-            }
-          },
-        }),
-      ],
-      session: {
-        expiresIn: 60 * 60 * 24 * 7, // 7 days
-        updateAge: 60 * 60 * 24, // 1 day
-        cookieCache: {
-          enabled: true,
-          maxAge: 5 * 60, // 5 minutes
-        },
-        additionalFields: {
-          activePropertyId: {
-            type: 'string',
-          },
-        },
-      },
-    })
-  }
-  return _auth
-}
-
-/**
- * Better Auth server instance
- * Configured with PostgreSQL database (Supabase) and magic link authentication
- *
- * Initialized lazily to avoid requiring env vars at build time
- */
-export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
-  get(_target, prop) {
-    return Reflect.get(getAuth(), prop)
-  },
-})
-
-/**
- * Type helpers for better-auth session
- * These are generic types that should match Better Auth's session structure
- */
-export type Session = {
-  id: string
-  userId: string
-  activePropertyId?: string | null
-  expiresAt: Date
-  createdAt: Date
-  updatedAt: Date
-}
-
-export type User = {
-  id: string
+export interface SendMagicLinkParams {
   email: string
-  emailVerified: boolean
-  name: string
-  createdAt: Date
-  updatedAt: Date
+  url: string
+  token: string
 }
+
+export interface AuthConfig {
+  db: Database
+  appName: string
+  baseURL: string
+  secret: string
+  /** Callback to send magic link emails */
+  sendMagicLink?: (params: SendMagicLinkParams) => Promise<void>
+  /** Additional plugins to add (e.g., nextCookies for web) */
+  additionalPlugins?: BetterAuthOptions['plugins']
+}
+
+/**
+ * Creates a Better Auth instance with full configuration including:
+ * - Magic link authentication
+ * - Custom session with activePropertyId
+ * - Session cookie caching
+ */
+export function createAuth(config: AuthConfig): ReturnType<typeof betterAuth> {
+  return betterAuth({
+    appName: config.appName,
+    baseURL: config.baseURL,
+    secret: config.secret,
+    basePath: '/api/auth',
+    database: drizzleAdapter(config.db, {
+      provider: 'pg',
+      usePlural: true,
+      schema,
+    }),
+    advanced: {
+      database: {
+        generateId: false, // Use our prefixed nanoid IDs from schema
+      },
+    },
+    session: {
+      // Session caching to reduce database queries
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // Cache duration in seconds (5 minutes)
+      },
+      additionalFields: {
+        // Additional fields for the session table
+        activePropertyId: {
+          type: 'string',
+        },
+      },
+    },
+    plugins: [
+      ...(config.additionalPlugins ?? []),
+      // Magic link authentication
+      ...(config.sendMagicLink
+        ? [
+            magicLink({
+              sendMagicLink: config.sendMagicLink,
+              expiresIn: 300, // 5 minutes
+              disableSignUp: false, // Allow new users to sign up via magic link
+            }),
+          ]
+        : []),
+    ],
+  })
+}
+
+export type Auth = ReturnType<typeof createAuth>
