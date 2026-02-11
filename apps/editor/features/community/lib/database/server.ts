@@ -1,9 +1,8 @@
 /**
  * Supabase server client for database access
- * Re-exports from @pascal-app/db package
  */
 
-import { supabaseAdmin } from '@pascal-app/db/server'
+import { supabaseAdmin } from '@/lib/supabase/server'
 
 /**
  * Create a Supabase client for server-side use with service role key

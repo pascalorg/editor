@@ -1,10 +1,9 @@
 /**
  * Database package
- * Exports Supabase clients, Drizzle ORM, and types
+ * Exports Drizzle ORM and types
+ * Note: Supabase clients are kept in the app's lib directory to avoid build-time initialization
  */
 
-export { supabase } from './client'
-export { supabaseAdmin } from './server'
 export type { Database as SupabaseDatabase } from './types'
 
 // Drizzle exports
