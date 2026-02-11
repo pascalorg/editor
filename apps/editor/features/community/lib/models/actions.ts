@@ -49,7 +49,7 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
       .from('properties')
       .select('id, owner_id')
       .eq('id', propertyId)
-      .single()
+      .single<{ id: string; owner_id: string }>()
 
     if (propertyError || !property) {
       return {
@@ -77,7 +77,7 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
       .order('version', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .single<PropertyModel>()
 
     console.log('[getPropertyModel] Query result:', {
       propertyId,
@@ -149,7 +149,7 @@ export async function savePropertyModel(
       .from('properties')
       .select('id, owner_id, name')
       .eq('id', propertyId)
-      .single()
+      .single<{ id: string; owner_id: string; name: string }>()
 
     if (propertyError || !property) {
       return {
@@ -175,19 +175,20 @@ export async function savePropertyModel(
       .order('version', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .single<{ id: string; version: number }>()
 
     if (existingModel) {
       // Update existing model
-      const { data: updatedModel, error: updateError } = await supabase
-        .from('properties_models')
-        .update({
-          scene_graph: sceneGraph as any,
-          updated_at: new Date().toISOString(),
-        })
+      const updateData = {
+        scene_graph: sceneGraph,
+        updated_at: new Date().toISOString(),
+      }
+      const { data: updatedModel, error: updateError } = (await (supabase
+        .from('properties_models') as any)
+        .update(updateData)
         .eq('id', existingModel.id)
         .select()
-        .single()
+        .single()) as { data: PropertyModel | null; error: any }
 
       if (updateError) {
         return {
@@ -205,18 +206,19 @@ export async function savePropertyModel(
       // Create new model
       const modelId = createId('model')
 
-      const { data: newModel, error: createError } = await supabase
-        .from('properties_models')
-        .insert({
-          id: modelId,
-          property_id: propertyId,
-          name: `${property.name} - Editor`,
-          version: 1,
-          draft: true,
-          scene_graph: sceneGraph as any,
-        })
+      const insertData = {
+        id: modelId,
+        property_id: propertyId,
+        name: `${property.name} - Editor`,
+        version: 1,
+        draft: true,
+        scene_graph: sceneGraph,
+      }
+      const { data: newModel, error: createError } = (await (supabase
+        .from('properties_models') as any)
+        .insert(insertData)
         .select()
-        .single()
+        .single()) as { data: PropertyModel | null; error: any }
 
       if (createError) {
         return {

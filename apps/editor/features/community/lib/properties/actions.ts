@@ -86,7 +86,7 @@ export async function getActiveProperty(): Promise<ActionResult<Property | null>
       .from('auth_sessions')
       .select('active_property_id')
       .eq('user_id', session.user.id)
-      .single()
+      .single<{ active_property_id: string | null }>()
 
     if (sessionError || !sessionData?.active_property_id) {
       return {
@@ -103,7 +103,7 @@ export async function getActiveProperty(): Promise<ActionResult<Property | null>
         address:properties_addresses(*)
       `)
       .eq('id', sessionData.active_property_id)
-      .single()
+      .single<Property>()
 
     if (error) {
       return {
@@ -143,8 +143,8 @@ export async function setActiveProperty(propertyId: string | null): Promise<Acti
     const supabase = await createServerSupabaseClient()
 
     // Update session's active_property_id
-    const { error } = await supabase
-      .from('auth_sessions')
+    const { error } = await (supabase
+      .from('auth_sessions') as any)
       .update({ active_property_id: propertyId })
       .eq('user_id', session.user.id)
 
@@ -188,21 +188,22 @@ export async function createProperty(params: CreatePropertyParams): Promise<Acti
     const propertyId = createId('property')
 
     // First, create the address
-    const { data: address, error: addressError } = await supabase
-      .from('properties_addresses')
-      .insert({
-        id: addressId,
-        street_number: params.streetNumber,
-        route: params.route,
-        city: params.city || '',
-        state: params.state || '',
-        postal_code: params.postalCode || '',
-        country: params.country || 'US',
-        latitude: params.center[1].toString(),
-        longitude: params.center[0].toString(),
-      })
+    const addressData = {
+      id: addressId,
+      street_number: params.streetNumber,
+      route: params.route,
+      city: params.city || '',
+      state: params.state || '',
+      postal_code: params.postalCode || '',
+      country: params.country || 'US',
+      latitude: params.center[1].toString(),
+      longitude: params.center[0].toString(),
+    }
+    const { data: address, error: addressError } = (await (supabase
+      .from('properties_addresses') as any)
+      .insert(addressData)
       .select()
-      .single()
+      .single()) as { data: Property['address'] | null; error: any }
 
     if (addressError || !address) {
       return {
@@ -212,23 +213,24 @@ export async function createProperty(params: CreatePropertyParams): Promise<Acti
     }
 
     // Create the property
-    const { data, error } = await supabase
-      .from('properties')
-      .insert({
-        id: propertyId,
-        name: params.name,
-        address_id: address.id,
-        owner_id: session.user.id,
-        details_json: {
-          coordinates: params.center,
-          createdFrom: 'editor-app',
-        },
-      })
+    const propertyData = {
+      id: propertyId,
+      name: params.name,
+      address_id: address.id,
+      owner_id: session.user.id,
+      details_json: {
+        coordinates: params.center,
+        createdFrom: 'editor-app',
+      },
+    }
+    const { data, error } = (await (supabase
+      .from('properties') as any)
+      .insert(propertyData)
       .select(`
         *,
         address:properties_addresses(*)
       `)
-      .single()
+      .single()) as { data: Property | null; error: any }
 
     if (error) {
       return {
@@ -300,12 +302,12 @@ export async function checkPropertyDuplicate(params: {
     }
 
     if (data && data.length > 0) {
-      const existingProperty = data[0] as Property
+      const existingProperty = data[0] as unknown as Property
       return {
         success: true,
         data: {
           isDuplicate: true,
-          isUserProperty: existingProperty.ownerId === session.user.id,
+          isUserProperty: existingProperty.owner_id === session.user.id,
           existingProperty,
         },
       }

@@ -6,18 +6,18 @@
 export type Property = {
   id: string
   name: string
-  ownerId: string
-  organizationId: string | null
-  addressId: string
-  createdAt: Date
-  updatedAt: Date
+  owner_id: string
+  organization_id: string | null
+  address_id: string
+  created_at: string
+  updated_at: string
   address: {
     id: string
-    streetNumber?: string
+    street_number?: string
     route?: string
     city?: string
     state?: string
-    postalCode?: string
+    postal_code?: string
     country?: string
     latitude?: string
     longitude?: string

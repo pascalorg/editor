@@ -21,7 +21,7 @@ export function usePropertyScene() {
   const isLoadingProperty = usePropertyStore((state) => state.isLoading)
 
   const lastPropertyIdRef = useRef<string | null>(null)
-  const saveTimeoutRef = useRef<NodeJS.Timeout>()
+  const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
   const currentPropertyIdRef = useRef<string | null>(null)
 
