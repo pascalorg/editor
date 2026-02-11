@@ -19,11 +19,11 @@ function getHandler() {
 
 // Export route handlers that initialize lazily
 export async function GET(request: NextRequest) {
-  const { GET: getHandler } = getHandler()
-  return getHandler(request)
+  const handlers = getHandler()
+  return handlers.GET(request)
 }
 
 export async function POST(request: NextRequest) {
-  const { POST: postHandler } = getHandler()
-  return postHandler(request)
+  const handlers = getHandler()
+  return handlers.POST(request)
 }
