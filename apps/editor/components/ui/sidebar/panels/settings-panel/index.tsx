@@ -4,6 +4,7 @@ import { Download, Save, Trash2, Upload } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/primitives/button";
 import useEditor from "@/store/use-editor";
+import { AudioSettingsDialog } from "./audio-settings-dialog";
 
 export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +112,14 @@ export function SettingsPanel() {
           ref={fileInputRef}
           type="file"
         />
+      </div>
+
+      {/* Audio Section */}
+      <div className="space-y-2">
+        <label className="font-medium text-muted-foreground text-xs uppercase">
+          Audio
+        </label>
+        <AudioSettingsDialog />
       </div>
 
       {/* Danger Zone */}

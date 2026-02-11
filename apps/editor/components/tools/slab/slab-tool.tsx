@@ -2,6 +2,7 @@ import { emitter, type GridEvent, type LevelNode, SlabNode, useScene } from '@pa
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 const Y_OFFSET = 0.02
 
@@ -57,6 +58,7 @@ const commitSlabDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
   })
 
   createNode(slab, levelId)
+  sfxEmitter.emit('sfx:structure-build')
   return slab.id
 }
 
@@ -70,6 +72,7 @@ export const SlabTool: React.FC = () => {
   const [points, setPoints] = useState<Array<[number, number]>>([])
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
   const [levelY, setLevelY] = useState(0)
+  const previousSnappedPointRef = useRef<[number, number] | null>(null)
 
   // Update cursor position and lines on grid move
   useEffect(() => {
@@ -89,6 +92,13 @@ export const SlabTool: React.FC = () => {
       const lastPoint = points[points.length - 1]
       const displayPoint = lastPoint ? calculateSnapPoint(lastPoint, gridPosition) : gridPosition
 
+      // Play snap sound when the snapped position actually changes (only when drawing)
+      if (points.length > 0 && previousSnappedPointRef.current &&
+          (displayPoint[0] !== previousSnappedPointRef.current[0] || displayPoint[1] !== previousSnappedPointRef.current[1])) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousSnappedPointRef.current = displayPoint
       cursorRef.current.position.set(displayPoint[0], event.position[1], displayPoint[1])
     }
 

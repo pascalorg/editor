@@ -23,6 +23,7 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
+import { sfxEmitter } from '@/lib/sfx-bus'
 import { ceilingStrategy, checkCanPlace, floorStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
@@ -83,6 +84,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const applyTransition = (result: TransitionResult) => {
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
+
       cursorRef.current.position.set(...result.cursorPosition)
       cursorRef.current.rotation.y = result.cursorRotationY
 
@@ -135,10 +137,20 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Floor Handlers ----
 
+    let previousGridPos: [number, number, number] | null = null
+
     const onGridMove = (event: GridEvent) => {
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
 
+      // Play snap sound when grid position changes
+      if (previousGridPos &&
+          (result.gridPosition[0] !== previousGridPos[0] ||
+           result.gridPosition[2] !== previousGridPos[2])) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousGridPos = [...result.gridPosition]
       gridPosition.current.set(...result.gridPosition)
       // Only update X and Z for cursor - useFrame will handle Y (slab elevation)
       cursorRef.current.position.x = result.cursorPosition[0]

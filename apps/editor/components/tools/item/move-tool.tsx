@@ -1,10 +1,14 @@
-import useEditor from '@/store/use-editor'
 import { Vector3 } from 'three'
+import { sfxEmitter } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
+import type { PlacementState } from './placement-types'
 import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
-import type { PlacementState } from './placement-types'
 
-function getInitialState(node: { asset: { attachTo?: string }; parentId: string | null }): PlacementState {
+function getInitialState(node: {
+  asset: { attachTo?: string }
+  parentId: string | null
+}): PlacementState {
   const attachTo = node.asset.attachTo
   if (attachTo === 'wall' || attachTo === 'wall-side') {
     return { surface: 'wall', wallId: node.parentId, ceilingId: null }
@@ -33,6 +37,7 @@ export const MoveTool: React.FC = () => {
       gridPosition.copy(new Vector3(...movingNode.position))
     },
     onCommitted: () => {
+      sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
       return false
     },

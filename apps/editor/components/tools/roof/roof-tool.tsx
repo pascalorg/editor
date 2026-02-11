@@ -3,6 +3,7 @@ import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BufferGeometry, DoubleSide, type Line, Vector3 } from "three";
 import useEditor from "@/store/use-editor";
+import { sfxEmitter } from '@/lib/sfx-bus';
 
 // Default roof dimensions
 const DEFAULT_HEIGHT = 1.5;
@@ -42,6 +43,7 @@ const commitRoofPlacement = (
   });
 
   createNode(roof, levelId);
+  sfxEmitter.emit('sfx:structure-build');
   return roof.id;
 };
 
@@ -59,6 +61,7 @@ export const RoofTool: React.FC = () => {
   const setMode = useEditor((state) => state.setMode);
 
   const corner1Ref = useRef<[number, number, number] | null>(null);
+  const previousGridPosRef = useRef<[number, number] | null>(null);
   const [preview, setPreview] = useState<PreviewState>({
     corner1: null,
     cursorPosition: [0, 0, 0],
@@ -92,6 +95,14 @@ export const RoofTool: React.FC = () => {
       const y = event.position[1];
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ];
+
+      // Play snap sound when grid position changes (only when placing)
+      if (corner1Ref.current && previousGridPosRef.current &&
+          (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])) {
+        sfxEmitter.emit('sfx:grid-snap');
+      }
+
+      previousGridPosRef.current = [gridX, gridZ];
 
       setPreview({
         corner1: corner1Ref.current,

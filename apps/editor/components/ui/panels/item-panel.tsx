@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { useCallback } from 'react'
 import useEditor from '@/store/use-editor'
 import { NumberInput } from '@/components/ui/primitives/number-input'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 export function ItemPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -43,6 +44,7 @@ export function ItemPanel() {
 
   const handleMove = useCallback(() => {
     if (node) {
+      sfxEmitter.emit('sfx:item-pick')
       setMovingNode(node)
       // Deselect so the panel closes
       setSelection({ selectedIds: [] })

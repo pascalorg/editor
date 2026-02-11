@@ -2,6 +2,7 @@ import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 const Y_OFFSET = 0.02
 
@@ -52,6 +53,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
 
   const lineRef = useRef<Mesh>(null!)
+  const previousPositionRef = useRef<[number, number] | null>(null)
 
   // Track the last polygon prop to detect external changes (undo/redo)
   const lastPolygonRef = useRef(polygon)
@@ -129,7 +131,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     const onGridMove = (event: GridEvent) => {
       const gridX = Math.round(event.position[0] * 2) / 2
       const gridZ = Math.round(event.position[2] * 2) / 2
-      setCursorPosition([gridX, gridZ])
+      const newPosition: [number, number] = [gridX, gridZ]
+
+      // Play snap sound when cursor moves to a new grid cell during drag
+      if (dragState?.isDragging && previousPositionRef.current &&
+          (newPosition[0] !== previousPositionRef.current[0] || newPosition[1] !== previousPositionRef.current[1])) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousPositionRef.current = newPosition
+      setCursorPosition(newPosition)
 
       // Update vertex position during drag
       if (dragState?.isDragging) {
