@@ -4,6 +4,7 @@ import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-a
 import { Viewer } from '@pascal-app/viewer'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import useEditor from '@/store/use-editor'
+import { usePropertyScene } from '@/features/cloud-sync/lib/models/hooks'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
@@ -16,8 +17,8 @@ import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 
+// Load default scene initially (will be replaced when property loads)
 useScene.getState().loadScene()
-console.log('Loaded scene in editor')
 initSpatialGridSync()
 initSpaceDetectionSync(useScene, useEditor)
 

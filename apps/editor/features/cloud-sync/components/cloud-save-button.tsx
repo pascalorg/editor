@@ -1,8 +1,9 @@
 'use client'
 
 import { Cloud } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/hooks'
+import { usePropertyStore } from '../lib/properties/store'
 import { ProfileDropdown } from './profile-dropdown'
 import { PropertyDropdown } from './property-dropdown'
 import { SignInDialog } from './sign-in-dialog'
@@ -16,6 +17,14 @@ import { SignInDialog } from './sign-in-dialog'
 export function CloudSaveButton() {
   const { isAuthenticated, isLoading } = useAuth()
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false)
+  const initialize = usePropertyStore(state => state.initialize)
+
+  // Initialize property store when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      initialize()
+    }
+  }, [isAuthenticated, initialize])
 
   if (isLoading) {
     return (

@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, Home, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useActiveProperty, useProperties } from '../lib/properties/hooks'
+import { usePropertyStore } from '../lib/properties/store'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -11,13 +11,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/primitives/dropdown-menu'
 import { NewPropertyDialog } from './new-property-dialog'
+import { usePropertyScene } from '../lib/models/hooks'
 
 /**
  * PropertyDropdown - Shows active property and allows switching between properties
  */
 export function PropertyDropdown() {
-  const { properties, isLoading: propertiesLoading, refetch } = useProperties()
-  const { activeProperty, setActiveProperty, isPending } = useActiveProperty()
+  usePropertyScene() // Load and auto-save property scenes
+
+  // Use property store
+  const properties = usePropertyStore(state => state.properties)
+  const activeProperty = usePropertyStore(state => state.activeProperty)
+  const isLoading = usePropertyStore(state => state.isLoading)
+  const setActiveProperty = usePropertyStore(state => state.setActiveProperty)
+  const fetchProperties = usePropertyStore(state => state.fetchProperties)
+
   const [isNewPropertyDialogOpen, setIsNewPropertyDialogOpen] = useState(false)
 
   const handlePropertySelect = async (propertyId: string) => {
@@ -28,8 +36,9 @@ export function PropertyDropdown() {
     setIsNewPropertyDialogOpen(true)
   }
 
-  const handlePropertyCreated = () => {
-    refetch()
+  const handlePropertyCreated = async (propertyId: string) => {
+    // Set the newly created property as active (this will also fetch properties)
+    await setActiveProperty(propertyId)
   }
 
   return (
@@ -38,7 +47,7 @@ export function PropertyDropdown() {
         <DropdownMenuTrigger asChild>
           <button
             className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background/95 px-3 text-sm shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50 focus:outline-none"
-            disabled={propertiesLoading || isPending}
+            disabled={isLoading}
             type="button"
           >
             <Home className="h-4 w-4" />

@@ -8,6 +8,8 @@ The cloud sync feature provides:
 
 - **Authentication** - Sign in with magic link via Better Auth
 - **Property Management** - Create and manage properties with Google Maps address search
+- **Scene Loading** - Automatically load property scenes from the database when a property is selected
+- **Auto-Save** - Automatically save scene changes to the database (2-second debounce)
 - **Database Sync** - Save and load editor state from a PostgreSQL database via Supabase
 
 ## Architecture
@@ -50,6 +52,13 @@ features/cloud-sync/
 2. Address and property are saved to PostgreSQL via Supabase
 3. Properties are associated with the authenticated user
 4. User can switch between properties
+
+### Scene Management
+1. When a property is selected, its scene is loaded from `properties_models` table
+2. If no scene exists, loads default empty scene
+3. Scene changes are auto-saved every 2 seconds (debounced)
+4. Updates existing model (highest version) instead of creating new ones
+5. Scene graph includes all nodes and hierarchy
 
 ### Database Integration
 - Uses Supabase (PostgreSQL) for database access

@@ -9,7 +9,7 @@ import { GoogleAddressSearch } from './google-address-search'
 interface NewPropertyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  onSuccess?: (propertyId: string) => void
 }
 
 interface AddressData {
@@ -60,10 +60,10 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
         country: address.country || 'US',
       })
 
-      if (result.success) {
+      if (result.success && result.data) {
         onOpenChange(false)
         setAddress(null)
-        onSuccess?.()
+        onSuccess?.(result.data.id)
       } else {
         setError(result.error || 'Failed to create property')
       }
