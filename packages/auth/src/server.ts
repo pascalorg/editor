@@ -104,6 +104,22 @@ export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
 
 /**
  * Type helpers for better-auth session
+ * These are generic types that should match Better Auth's session structure
  */
-export type Session = typeof auth.$Infer.Session.session
-export type User = typeof auth.$Infer.Session.user
+export type Session = {
+  id: string
+  userId: string
+  activePropertyId?: string | null
+  expiresAt: Date
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type User = {
+  id: string
+  email: string
+  emailVerified: boolean
+  name: string
+  createdAt: Date
+  updatedAt: Date
+}

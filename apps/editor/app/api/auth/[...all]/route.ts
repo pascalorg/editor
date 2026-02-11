@@ -5,5 +5,25 @@
 
 import { auth } from '@pascal-app/auth/server'
 import { toNextJsHandler } from 'better-auth/next-js'
+import type { NextRequest } from 'next/server'
 
-export const { GET, POST } = toNextJsHandler(auth)
+// Lazy initialization of the handler
+let handler: ReturnType<typeof toNextJsHandler> | null = null
+
+function getHandler() {
+  if (!handler) {
+    handler = toNextJsHandler(auth)
+  }
+  return handler
+}
+
+// Export route handlers that initialize lazily
+export async function GET(request: NextRequest) {
+  const { GET: getHandler } = getHandler()
+  return getHandler(request)
+}
+
+export async function POST(request: NextRequest) {
+  const { POST: postHandler } = getHandler()
+  return postHandler(request)
+}
