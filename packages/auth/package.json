@@ -1,0 +1,24 @@
+{
+  "name": "@pascal-app/auth",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    }
+  },
+  "dependencies": {
+    "@pascal-app/db": "*",
+    "better-auth": "^1.4.18",
+    "resend": "^4.0.1"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "typescript": "5.9.2"
+  }
+}

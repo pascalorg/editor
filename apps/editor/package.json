@@ -4,14 +4,16 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3002",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@pascal-app/auth": "*",
     "@pascal-app/core": "*",
+    "@pascal-app/db": "*",
     "@pascal-app/viewer": "*",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-context-menu": "^2.2.16",

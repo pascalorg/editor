@@ -1,0 +1,35 @@
+{
+  "name": "@pascal-app/db",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "drizzle-orm": "^0.39.0",
+    "drizzle-zod": "^0.5.1",
+    "nanoid": "^5.0.9",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "drizzle-kit": "^0.30.0",
+    "typescript": "5.9.2"
+  }
+}
