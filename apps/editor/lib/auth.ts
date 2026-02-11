@@ -7,19 +7,11 @@ import { BASE_URL } from './utils'
 const resendApiKey = process.env.RESEND_API_KEY
 const resend = resendApiKey && resendApiKey.trim() !== '' ? new Resend(resendApiKey) : null
 
-// Better Auth secret is required
-const betterAuthSecret = process.env.BETTER_AUTH_SECRET
-if (!betterAuthSecret) {
-  throw new Error(
-    'Missing BETTER_AUTH_SECRET environment variable. Generate one with: openssl rand -base64 32',
-  )
-}
-
 export const auth = createAuth({
   db,
   appName: 'Pascal Editor',
   baseURL: BASE_URL,
-  secret: betterAuthSecret,
+  secret: process.env.BETTER_AUTH_SECRET!,
   sendMagicLink: async ({ email, url }) => {
     if (!resend) {
       console.log(`[DEV] Magic link for ${email}: ${url}`)
