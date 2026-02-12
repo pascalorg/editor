@@ -2,6 +2,7 @@ import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import useEditor from '@/store/use-editor'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 export const useKeyboard = () => {
   useEffect(() => {
@@ -47,6 +48,18 @@ export const useKeyboard = () => {
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
+          // Play appropriate SFX based on what's being deleted
+          if (selectedNodeIds.length === 1) {
+            const node = useScene.getState().nodes[selectedNodeIds[0]!]
+            if (node?.type === 'item') {
+              sfxEmitter.emit('sfx:item-delete')
+            } else {
+              sfxEmitter.emit('sfx:structure-delete')
+            }
+          } else {
+            sfxEmitter.emit('sfx:structure-delete')
+          }
+
           useScene.getState().deleteNodes(selectedNodeIds)
         }
       }

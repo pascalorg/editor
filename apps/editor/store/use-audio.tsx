@@ -21,7 +21,7 @@ const useAudio = create<AudioState>()(
     (set) => ({
       masterVolume: 70,
       sfxVolume: 50,
-      radioVolume: 50,
+      radioVolume: 25,
       muted: false,
       autoplay: true,
       setMasterVolume: (v) => set({ masterVolume: v }),

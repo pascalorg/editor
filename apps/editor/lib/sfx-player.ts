@@ -7,6 +7,7 @@ export const SFX = {
   itemDelete: '/audios/sfx/item_delete.mp3',
   itemPick: '/audios/sfx/item_pick.mp3',
   itemPlace: '/audios/sfx/item_place.mp3',
+  itemRotate: '/audios/sfx/item_rotate.mp3',
   structureBuild: '/audios/sfx/structure_build.mp3',
   structureDelete: '/audios/sfx/structure_delete.mp3',
 } as const

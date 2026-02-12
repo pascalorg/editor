@@ -11,6 +11,7 @@ import { ActionMenu } from '../ui/action-menu'
 import { CloudSaveButton } from '@/features/community/components/cloud-save-button'
 import { PascalRadio } from '../pascal-radio'
 import { PanelManager } from '../ui/panels/panel-manager'
+import { HelperManager } from '../ui/helpers/helper-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
@@ -34,6 +35,7 @@ export default function Editor() {
     <div className="w-full h-full">
       <ActionMenu />
       <PanelManager />
+      <HelperManager />
 
       {/* Top-right controls */}
       <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">

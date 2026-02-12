@@ -98,6 +98,7 @@ export const WallTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
+  const shiftPressed = useRef(false)
 
   useEffect(() => {
     let gridPosition: [number, number] = [0, 0]
@@ -111,8 +112,10 @@ export const WallTool: React.FC = () => {
       cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
 
       if (buildingState.current === 1) {
-        // Snap to 45° angles
-        const snapped = snapTo45Degrees(startingPoint.current, cursorPosition)
+        // Snap to 45° angles only if shift is not pressed
+        const snapped = shiftPressed.current
+          ? cursorPosition
+          : snapTo45Degrees(startingPoint.current, cursorPosition)
         endingPoint.current.copy(snapped)
 
         // Play snap sound only when the actual wall end position changes
@@ -143,12 +146,28 @@ export const WallTool: React.FC = () => {
       }
     }
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftPressed.current = true
+      }
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftPressed.current = false
+      }
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
     }
   }, [])
 
@@ -156,8 +175,8 @@ export const WallTool: React.FC = () => {
     <group>
       {/* Cursor indicator */}
       <mesh ref={cursorRef}>
-        <boxGeometry args={[0.2, 0.2, 0.2]} />
-        <meshStandardMaterial color="red" />
+        <sphereGeometry args={[0.1, 16, 16]} />
+        <meshBasicMaterial color="#a3a3a3" depthTest={false} depthWrite={false} />
       </mesh>
 
       {/* Wall preview */}

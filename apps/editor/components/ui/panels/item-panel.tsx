@@ -53,6 +53,7 @@ export function ItemPanel() {
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return
+    sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     setSelection({ selectedIds: [] })
   }, [selectedId, deleteNode, setSelection])
@@ -144,6 +145,7 @@ export function ItemPanel() {
                 type="button"
                 className="flex-1 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
                 onClick={() => {
+                  sfxEmitter.emit('sfx:item-rotate')
                   const currentDegrees = (node.rotation[1] * 180) / Math.PI
                   const newDegrees = currentDegrees - 90
                   const radians = (newDegrees * Math.PI) / 180
@@ -156,6 +158,7 @@ export function ItemPanel() {
                 type="button"
                 className="flex-1 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
                 onClick={() => {
+                  sfxEmitter.emit('sfx:item-rotate')
                   const currentDegrees = (node.rotation[1] * 180) / Math.PI
                   const newDegrees = currentDegrees + 90
                   const radians = (newDegrees * Math.PI) / 180

@@ -17,18 +17,45 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import {
   BoxGeometry,
+  EdgesGeometry,
   Euler,
+  type Group,
+  type LineSegments,
   type Mesh,
-  type MeshStandardMaterial,
+  PlaneGeometry,
   Quaternion,
   Vector3,
 } from 'three'
+import { distance, smoothstep, uv, vec2 } from 'three/tsl'
+import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { ceilingStrategy, checkCanPlace, floorStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
+
+// Shared materials for placement cursor - we just change colors, not swap materials
+// Note: EdgesGeometry doesn't work with dashed lines, so using solid lines
+const edgeMaterial = new LineBasicNodeMaterial({
+  color: 0xef4444, // red-500 (invalid)
+  linewidth: 3,
+  depthTest: false,
+  depthWrite: false,
+})
+
+const basePlaneMaterial = new MeshBasicNodeMaterial({
+  color: 0xef4444, // red-500 (invalid)
+  transparent: true,
+  depthTest: false,
+  depthWrite: false,
+})
+
+// Create radial opacity: transparent in center, opaque at edges
+const center = vec2(0.5, 0.5)
+const dist = distance(uv(), center)
+const radialOpacity = smoothstep(0, 0.7, dist).mul(0.6)
+basePlaneMaterial.opacityNode = radialOpacity
 
 export interface PlacementCoordinatorConfig {
   asset: AssetInput
@@ -40,7 +67,9 @@ export interface PlacementCoordinatorConfig {
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
-  const cursorRef = useRef<Mesh>(null!)
+  const cursorGroupRef = useRef<Group>(null!)
+  const edgesRef = useRef<LineSegments>(null!)
+  const basePlaneRef = useRef<Mesh>(null!)
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const placementState = useRef<PlacementState>(
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null },
@@ -77,7 +106,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const revalidate = (): boolean => {
       const placeable = checkCanPlace(getContext(), validators)
-      ;(cursorRef.current.material as MeshStandardMaterial).color.set(placeable ? 'green' : 'red')
+      const color = placeable ? 0x22c55e : 0xef4444 // green-500 : red-500
+      edgeMaterial.color.setHex(color)
+      basePlaneMaterial.color.setHex(color)
       return placeable
     }
 
@@ -85,8 +116,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
 
-      cursorRef.current.position.set(...result.cursorPosition)
-      cursorRef.current.rotation.y = result.cursorRotationY
+      cursorGroupRef.current.position.set(...result.cursorPosition)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) {
@@ -98,8 +129,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const ensureDraft = (result: TransitionResult) => {
       gridPosition.current.set(...result.gridPosition)
-      cursorRef.current.position.set(...result.cursorPosition)
-      cursorRef.current.rotation.y = result.cursorRotationY
+      cursorGroupRef.current.position.set(...result.cursorPosition)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
 
       draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0])
 
@@ -122,14 +153,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (draftNode.current) {
       const mesh = sceneRegistry.nodes.get(draftNode.current.id)
       if (mesh) {
-        mesh.getWorldPosition(cursorRef.current.position)
+        mesh.getWorldPosition(cursorGroupRef.current.position)
         // Extract world Y rotation (handles wall-parented items correctly)
         const q = new Quaternion()
         mesh.getWorldQuaternion(q)
-        cursorRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+        cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
       } else {
-        cursorRef.current.position.copy(gridPosition.current)
-        cursorRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+        cursorGroupRef.current.position.copy(gridPosition.current)
+        cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
       }
     }
 
@@ -144,17 +175,19 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       // Play snap sound when grid position changes
-      if (previousGridPos &&
-          (result.gridPosition[0] !== previousGridPos[0] ||
-           result.gridPosition[2] !== previousGridPos[2])) {
+      if (
+        previousGridPos &&
+        (result.gridPosition[0] !== previousGridPos[0] ||
+          result.gridPosition[2] !== previousGridPos[2])
+      ) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
       previousGridPos = [...result.gridPosition]
       gridPosition.current.set(...result.gridPosition)
       // Only update X and Z for cursor - useFrame will handle Y (slab elevation)
-      cursorRef.current.position.x = result.cursorPosition[0]
-      cursorRef.current.position.z = result.cursorPosition[2]
+      cursorGroupRef.current.position.x = result.cursorPosition[0]
+      cursorGroupRef.current.position.z = result.cursorPosition[2]
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -167,7 +200,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       // Preserve cursor rotation for the next draft
-      const currentRotation: [number, number, number] = [0, cursorRef.current.rotation.y, 0]
+      const currentRotation: [number, number, number] = [0, cursorGroupRef.current.rotation.y, 0]
 
       draftNode.commit(result.nodeUpdate)
       if (configRef.current.onCommitted()) {
@@ -237,8 +270,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       gridPosition.current.set(...result.gridPosition)
-      cursorRef.current.position.set(...result.cursorPosition)
-      cursorRef.current.rotation.y = result.cursorRotationY
+      cursorGroupRef.current.position.set(...result.cursorPosition)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft && result.nodeUpdate) {
@@ -361,7 +394,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
       gridPosition.current.set(...result.gridPosition)
-      cursorRef.current.position.set(...result.cursorPosition)
+      cursorGroupRef.current.position.set(...result.cursorPosition)
 
       revalidate()
 
@@ -441,12 +474,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (rotationDelta !== 0) {
         event.preventDefault()
+        sfxEmitter.emit('sfx:item-rotate')
         const currentRotation = draft.rotation
         const newRotationY = (currentRotation[1] ?? 0) + rotationDelta
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
         // Ref + cursor mesh + item mesh — no store update during drag
-        cursorRef.current.rotation.y = newRotationY
+        cursorGroupRef.current.rotation.y = newRotationY
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.rotation.y = newRotationY
         revalidate()
@@ -468,7 +502,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const dims = asset.dimensions ?? DEFAULT_DIMENSIONS
     const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
     boxGeometry.translate(0, dims[1] / 2, 0)
-    cursorRef.current.geometry = boxGeometry
+    const edgesGeometry = new EdgesGeometry(boxGeometry)
+    edgesRef.current.geometry = edgesGeometry
 
     // ---- Subscribe ----
 
@@ -532,17 +567,26 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
-        cursorRef.current.position.y = slabElevation
+        cursorGroupRef.current.position.y = slabElevation
       }
     }
   })
 
+  const dims = config.asset.dimensions ?? DEFAULT_DIMENSIONS
+  const initialBoxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
+  initialBoxGeometry.translate(0, dims[1] / 2, 0)
+
+  // Base plane geometry (colored rectangle on the ground)
+  const basePlaneGeometry = new PlaneGeometry(dims[0], dims[2])
+  basePlaneGeometry.rotateX(-Math.PI / 2) // Make it horizontal
+  basePlaneGeometry.translate(0, 0.01, 0) // Slightly above ground to avoid z-fighting
+
   return (
-    <group>
-      <mesh ref={cursorRef}>
-        <boxGeometry args={[0.1, 0.1, 0.1]} />
-        <meshStandardMaterial color="red" wireframe />
-      </mesh>
+    <group ref={cursorGroupRef}>
+      <lineSegments ref={edgesRef} material={edgeMaterial}>
+        <edgesGeometry args={[initialBoxGeometry]} />
+      </lineSegments>
+      <mesh ref={basePlaneRef} geometry={basePlaneGeometry} material={basePlaneMaterial} />
     </group>
   )
 }
