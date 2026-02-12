@@ -124,22 +124,20 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   shape.closePath()
 
   // Add holes to the shape
-  if (slabNode.holes && slabNode.holes.length > 0) {
-    for (const holePolygon of slabNode.holes) {
-      if (holePolygon.length < 3) continue
+  for (const holePolygon of slabNode.holes) {
+    if (holePolygon.length < 3) continue
 
-      const holePath = new THREE.Path()
-      const holeFirstPt = holePolygon[0]!
-      holePath.moveTo(holeFirstPt[0], -holeFirstPt[1])
+    const holePath = new THREE.Path()
+    const holeFirstPt = holePolygon[0]!
+    holePath.moveTo(holeFirstPt[0], -holeFirstPt[1])
 
-      for (let i = 1; i < holePolygon.length; i++) {
-        const pt = holePolygon[i]!
-        holePath.lineTo(pt[0], -pt[1])
-      }
-      holePath.closePath()
-
-      shape.holes.push(holePath)
+    for (let i = 1; i < holePolygon.length; i++) {
+      const pt = holePolygon[i]!
+      holePath.lineTo(pt[0], -pt[1])
     }
+    holePath.closePath()
+
+    shape.holes.push(holePath)
   }
 
   // Extrude the shape by elevation

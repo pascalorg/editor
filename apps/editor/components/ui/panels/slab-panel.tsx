@@ -93,7 +93,7 @@ export function SlabPanel() {
         setEditingHoleIndex(null)
       }
     },
-    [node?.holes, handleUpdate, editingHoleIndex],
+    [node?.holes, handleUpdate, editingHoleIndex, setEditingHoleIndex],
   )
 
   // Only show if exactly one slab is selected

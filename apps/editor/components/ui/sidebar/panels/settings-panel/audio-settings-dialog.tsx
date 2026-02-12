@@ -34,7 +34,7 @@ export function AudioSettingsDialog() {
             </div>
             <Slider
               value={[masterVolume]}
-              onValueChange={(value) => setMasterVolume(value[0])}
+              onValueChange={(value) => value[0] !== undefined && setMasterVolume(value[0])}
               max={100}
               step={1}
               disabled={muted}
@@ -49,7 +49,7 @@ export function AudioSettingsDialog() {
             </div>
             <Slider
               value={[radioVolume]}
-              onValueChange={(value) => setRadioVolume(value[0])}
+              onValueChange={(value) => value[0] !== undefined && setRadioVolume(value[0])}
               max={100}
               step={1}
               disabled={muted}
@@ -64,7 +64,7 @@ export function AudioSettingsDialog() {
             </div>
             <Slider
               value={[sfxVolume]}
-              onValueChange={(value) => setSfxVolume(value[0])}
+              onValueChange={(value) => value[0] !== undefined && setSfxVolume(value[0])}
               max={100}
               step={1}
               disabled={muted}

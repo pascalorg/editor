@@ -468,12 +468,10 @@ export class SpatialGridManager {
       if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
         // Check if point is in any hole
         let inHole = false
-        if (slab.holes && slab.holes.length > 0) {
-          for (const hole of slab.holes) {
-            if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
-              inHole = true
-              break
-            }
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
+            inHole = true
+            break
           }
         }
 
@@ -508,13 +506,11 @@ export class SpatialGridManager {
         // Check if item is entirely within a hole (if so, ignore this slab)
         // We consider it entirely in a hole if the item center is in the hole
         let inHole = false
-        if (slab.holes && slab.holes.length > 0) {
-          const [cx, , cz] = position
-          for (const hole of slab.holes) {
-            if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) {
-              inHole = true
-              break
-            }
+        const [cx, , cz] = position
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) {
+            inHole = true
+            break
           }
         }
 
@@ -548,14 +544,12 @@ export class SpatialGridManager {
       if (wallOverlapsPolygon(start, end, slab.polygon)) {
         // Check if wall midpoint is in a hole (if so, ignore this slab)
         let inHole = false
-        if (slab.holes && slab.holes.length > 0) {
-          const midX = (start[0] + end[0]) / 2
-          const midZ = (start[1] + end[1]) / 2
-          for (const hole of slab.holes) {
-            if (hole.length >= 3 && pointInPolygon(midX, midZ, hole)) {
-              inHole = true
-              break
-            }
+        const midX = (start[0] + end[0]) / 2
+        const midZ = (start[1] + end[1]) / 2
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(midX, midZ, hole)) {
+            inHole = true
+            break
           }
         }
 
