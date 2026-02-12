@@ -1,9 +1,15 @@
 'use client'
 
-import { type BuildingNode, type ItemNode, type LevelNode, type Space, useScene } from '@pascal-app/core'
+import type { AssetInput } from '@pascal-app/core'
+import {
+  type BuildingNode,
+  type ItemNode,
+  type LevelNode,
+  type Space,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
-import type { AssetInput } from '@pascal-app/core'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -139,6 +145,14 @@ const useEditor = create<EditorState>()((set, get) => ({
 
     const { phase, structureLayer, tool } = get()
 
+    if (mode === 'build') {
+      // Clear selection when entering build mode
+      const viewer = useViewer.getState()
+      viewer.setSelection({
+        selectedIds: [],
+        zoneId: null,
+      })
+    }
     // When entering build mode in structure phase with zones layer, activate zone tool
     if (mode === 'build' && phase === 'structure' && structureLayer === 'zones') {
       set({ tool: 'zone' })
