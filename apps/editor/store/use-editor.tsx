@@ -63,6 +63,9 @@ type EditorState = {
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
+  // Slab hole editing
+  editingSlabHoleIndex: number | null
+  setEditingSlabHoleIndex: (index: number | null) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -181,6 +184,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
   spaces: {},
   setSpaces: (spaces) => set({ spaces }),
+  editingSlabHoleIndex: null,
+  setEditingSlabHoleIndex: (index) => set({ editingSlabHoleIndex: index }),
 }))
 
 export default useEditor
