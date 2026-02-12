@@ -42,6 +42,13 @@ export function SlabPanel() {
     }
   }, [node, setEditingHoleIndex])
 
+  // Clear hole editing state on unmount
+  useEffect(() => {
+    return () => {
+      setEditingHoleIndex(null)
+    }
+  }, [setEditingHoleIndex])
+
   const handleAddHole = useCallback(() => {
     if (!node) return
 
