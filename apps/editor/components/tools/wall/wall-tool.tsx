@@ -1,7 +1,8 @@
 import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef, useMemo } from 'react'
-import { DoubleSide, type Mesh, Vector3, Shape, ShapeGeometry } from 'three'
+import { useEffect, useRef } from 'react'
+import { DoubleSide, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 const WALL_HEIGHT = 2.5
 const WALL_THICKNESS = 0.15
@@ -88,6 +89,7 @@ const commitWallDrawing = (start: [number, number], end: [number, number]) => {
   const wall = WallNode.parse({ start, end })
 
   createNode(wall, currentLevelId)
+  sfxEmitter.emit('sfx:structure-build')
 }
 
 export const WallTool: React.FC = () => {
@@ -96,9 +98,11 @@ export const WallTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
+  const shiftPressed = useRef(false)
 
   useEffect(() => {
     let gridPosition: [number, number] = [0, 0]
+    let previousWallEnd: [number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current || !wallPreviewRef.current) return
@@ -108,9 +112,19 @@ export const WallTool: React.FC = () => {
       cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
 
       if (buildingState.current === 1) {
-        // Snap to 45° angles
-        const snapped = snapTo45Degrees(startingPoint.current, cursorPosition)
+        // Snap to 45° angles only if shift is not pressed
+        const snapped = shiftPressed.current
+          ? cursorPosition
+          : snapTo45Degrees(startingPoint.current, cursorPosition)
         endingPoint.current.copy(snapped)
+
+        // Play snap sound only when the actual wall end position changes
+        const currentWallEnd: [number, number] = [endingPoint.current.x, endingPoint.current.z]
+        if (previousWallEnd &&
+            (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])) {
+          sfxEmitter.emit('sfx:grid-snap')
+        }
+        previousWallEnd = currentWallEnd
 
         // Update wall preview geometry
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
@@ -125,19 +139,35 @@ export const WallTool: React.FC = () => {
       } else if (buildingState.current === 1) {
         commitWallDrawing(
           [startingPoint.current.x, startingPoint.current.z],
-          [endingPoint.current.x, endingPoint.current.z]
+          [endingPoint.current.x, endingPoint.current.z],
         )
         wallPreviewRef.current.visible = false
         buildingState.current = 0
       }
     }
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftPressed.current = true
+      }
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftPressed.current = false
+      }
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
     }
   }, [])
 
@@ -145,8 +175,8 @@ export const WallTool: React.FC = () => {
     <group>
       {/* Cursor indicator */}
       <mesh ref={cursorRef}>
-        <boxGeometry args={[0.2, 0.2, 0.2]} />
-        <meshStandardMaterial color="red" />
+        <sphereGeometry args={[0.1, 16, 16]} />
+        <meshBasicMaterial color="#a3a3a3" depthTest={false} depthWrite={false} />
       </mesh>
 
       {/* Wall preview */}

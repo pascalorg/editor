@@ -8,6 +8,7 @@ import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
+import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
 import { WallTool } from './wall/wall-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
@@ -35,6 +36,7 @@ export const ToolManager: React.FC = () => {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useEditor((state) => state.movingNode)
+  const editingSlabHoleIndex = useEditor((state) => state.editingSlabHoleIndex)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
@@ -52,9 +54,13 @@ export const ToolManager: React.FC = () => {
   // Show site boundary editor when in site phase and edit mode
   const showSiteBoundaryEditor = phase === 'site' && mode === 'edit'
 
-  // Show slab boundary editor when in structure/select mode with a slab selected
+  // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
-    phase === 'structure' && mode === 'select' && selectedSlabId !== undefined
+    phase === 'structure' && mode === 'select' && selectedSlabId !== undefined && editingSlabHoleIndex === null
+
+  // Show slab hole editor when editing a specific hole
+  const showSlabHoleEditor =
+    selectedSlabId !== undefined && editingSlabHoleIndex !== null
 
   // Show ceiling boundary editor when in structure/select mode with a ceiling selected
   const showCeilingBoundaryEditor =
@@ -79,6 +85,9 @@ export const ToolManager: React.FC = () => {
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
       {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
+      {showSlabHoleEditor && selectedSlabId && editingSlabHoleIndex !== null && (
+        <SlabHoleEditor slabId={selectedSlabId} holeIndex={editingSlabHoleIndex} />
+      )}
       {showCeilingBoundaryEditor && selectedCeilingId && (
         <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
       )}

@@ -457,7 +457,7 @@ export class SpatialGridManager {
 
   /**
    * Get the total slab elevation at a given (x, z) position on a level.
-   * Returns the highest slab elevation if the point is inside any slab polygon, otherwise 0.
+   * Returns the highest slab elevation if the point is inside any slab polygon (but not in any holes), otherwise 0.
    */
   getSlabElevationAt(levelId: string, x: number, z: number): number {
     const slabMap = this.slabsByLevel.get(levelId)
@@ -466,9 +466,20 @@ export class SpatialGridManager {
     let maxElevation = 0
     for (const slab of slabMap.values()) {
       if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) {
-          maxElevation = elevation
+        // Check if point is in any hole
+        let inHole = false
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
+            inHole = true
+            break
+          }
+        }
+
+        if (!inHole) {
+          const elevation = slab.elevation ?? 0.05
+          if (elevation > maxElevation) {
+            maxElevation = elevation
+          }
         }
       }
     }
@@ -477,7 +488,7 @@ export class SpatialGridManager {
 
   /**
    * Get the slab elevation for an item using its full footprint (bounding box).
-   * Checks if any part of the item's rotated footprint overlaps with any slab polygon.
+   * Checks if any part of the item's rotated footprint overlaps with any slab polygon (excluding holes).
    * Returns the highest overlapping slab elevation, or 0 if none.
    */
   getSlabElevationForItem(
@@ -492,9 +503,22 @@ export class SpatialGridManager {
     let maxElevation = -Infinity
     for (const slab of slabMap.values()) {
       if (slab.polygon.length >= 3 && itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) {
-          maxElevation = elevation
+        // Check if item is entirely within a hole (if so, ignore this slab)
+        // We consider it entirely in a hole if the item center is in the hole
+        let inHole = false
+        const [cx, , cz] = position
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) {
+            inHole = true
+            break
+          }
+        }
+
+        if (!inHole) {
+          const elevation = slab.elevation ?? 0.05
+          if (elevation > maxElevation) {
+            maxElevation = elevation
+          }
         }
       }
     }
@@ -502,7 +526,7 @@ export class SpatialGridManager {
   }
 
   /**
-   * Get the slab elevation for a wall by checking if it overlaps with any slab polygon.
+   * Get the slab elevation for a wall by checking if it overlaps with any slab polygon (excluding holes).
    * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    */
@@ -518,9 +542,22 @@ export class SpatialGridManager {
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
       if (wallOverlapsPolygon(start, end, slab.polygon)) {
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) {
-          maxElevation = elevation
+        // Check if wall midpoint is in a hole (if so, ignore this slab)
+        let inHole = false
+        const midX = (start[0] + end[0]) / 2
+        const midZ = (start[1] + end[1]) / 2
+        for (const hole of slab.holes) {
+          if (hole.length >= 3 && pointInPolygon(midX, midZ, hole)) {
+            inHole = true
+            break
+          }
+        }
+
+        if (!inHole) {
+          const elevation = slab.elevation ?? 0.05
+          if (elevation > maxElevation) {
+            maxElevation = elevation
+          }
         }
       }
     }

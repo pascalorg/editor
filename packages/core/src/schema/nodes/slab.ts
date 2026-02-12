@@ -8,6 +8,7 @@ export const SlabNode = BaseNode.extend({
   // Specific props
   // Polygon boundary - array of [x, z] coordinates defining the slab
   polygon: z.array(z.tuple([z.number(), z.number()])),
+  holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   elevation: z.number().default(0.05), // Elevation in meters
 }).describe(
   dedent`

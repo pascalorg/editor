@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { useCallback } from 'react'
 import useEditor from '@/store/use-editor'
 import { NumberInput } from '@/components/ui/primitives/number-input'
+import { sfxEmitter } from '@/lib/sfx-bus'
 
 export function ItemPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -43,6 +44,7 @@ export function ItemPanel() {
 
   const handleMove = useCallback(() => {
     if (node) {
+      sfxEmitter.emit('sfx:item-pick')
       setMovingNode(node)
       // Deselect so the panel closes
       setSelection({ selectedIds: [] })
@@ -51,6 +53,7 @@ export function ItemPanel() {
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return
+    sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     setSelection({ selectedIds: [] })
   }, [selectedId, deleteNode, setSelection])
@@ -142,6 +145,7 @@ export function ItemPanel() {
                 type="button"
                 className="flex-1 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
                 onClick={() => {
+                  sfxEmitter.emit('sfx:item-rotate')
                   const currentDegrees = (node.rotation[1] * 180) / Math.PI
                   const newDegrees = currentDegrees - 90
                   const radians = (newDegrees * Math.PI) / 180
@@ -154,6 +158,7 @@ export function ItemPanel() {
                 type="button"
                 className="flex-1 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
                 onClick={() => {
+                  sfxEmitter.emit('sfx:item-rotate')
                   const currentDegrees = (node.rotation[1] * 180) / Math.PI
                   const newDegrees = currentDegrees + 90
                   const radians = (newDegrees * Math.PI) / 180

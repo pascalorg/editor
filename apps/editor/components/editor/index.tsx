@@ -9,18 +9,24 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { CloudSaveButton } from '@/features/community/components/cloud-save-button'
+import { PascalRadio } from '../pascal-radio'
 import { PanelManager } from '../ui/panels/panel-manager'
+import { HelperManager } from '../ui/helpers/helper-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
+import { initSFXBus } from '@/lib/sfx-bus'
 
 // Load default scene initially (will be replaced when property loads)
 useScene.getState().loadScene()
 initSpatialGridSync()
 initSpaceDetectionSync(useScene, useEditor)
+
+// Initialize SFX bus to connect events to sound effects
+initSFXBus()
 
 export default function Editor() {
   useKeyboard()
@@ -29,7 +35,17 @@ export default function Editor() {
     <div className="w-full h-full">
       <ActionMenu />
       <PanelManager />
-      <CloudSaveButton />
+      <HelperManager />
+
+      {/* Top-right controls */}
+      <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">
+        <div className="pointer-events-auto">
+          <PascalRadio />
+        </div>
+        <div className="pointer-events-auto">
+          <CloudSaveButton />
+        </div>
+      </div>
 
       <SidebarProvider className="fixed z-20">
         <AppSidebar />

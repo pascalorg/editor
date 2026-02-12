@@ -1,9 +1,15 @@
 'use client'
 
-import { type BuildingNode, type ItemNode, type LevelNode, type Space, useScene } from '@pascal-app/core'
+import type { AssetInput } from '@pascal-app/core'
+import {
+  type BuildingNode,
+  type ItemNode,
+  type LevelNode,
+  type Space,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
-import type { AssetInput } from '@pascal-app/core'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -63,6 +69,9 @@ type EditorState = {
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
+  // Slab hole editing
+  editingSlabHoleIndex: number | null
+  setEditingSlabHoleIndex: (index: number | null) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -136,6 +145,14 @@ const useEditor = create<EditorState>()((set, get) => ({
 
     const { phase, structureLayer, tool } = get()
 
+    if (mode === 'build') {
+      // Clear selection when entering build mode
+      const viewer = useViewer.getState()
+      viewer.setSelection({
+        selectedIds: [],
+        zoneId: null,
+      })
+    }
     // When entering build mode in structure phase with zones layer, activate zone tool
     if (mode === 'build' && phase === 'structure' && structureLayer === 'zones') {
       set({ tool: 'zone' })
@@ -181,6 +198,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
   spaces: {},
   setSpaces: (spaces) => set({ spaces }),
+  editingSlabHoleIndex: null,
+  setEditingSlabHoleIndex: (index) => set({ editingSlabHoleIndex: index }),
 }))
 
 export default useEditor

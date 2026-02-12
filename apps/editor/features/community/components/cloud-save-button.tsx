@@ -28,7 +28,7 @@ export function CloudSaveButton() {
 
   if (isLoading) {
     return (
-      <div className="pointer-events-auto fixed top-4 right-4 z-50">
+      <div className="pointer-events-auto">
         <div className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-md">
           <div className="h-4 w-4 animate-pulse rounded-full bg-muted" />
         </div>
@@ -39,7 +39,7 @@ export function CloudSaveButton() {
   if (!isAuthenticated) {
     return (
       <>
-        <div className="pointer-events-auto fixed top-4 right-4 z-50">
+        <div className="pointer-events-auto">
           <button
             className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-accent-foreground"
             onClick={() => setIsSignInDialogOpen(true)}
@@ -54,7 +54,7 @@ export function CloudSaveButton() {
   }
 
   return (
-    <div className="pointer-events-auto fixed top-4 right-4 z-50">
+    <div className="pointer-events-auto">
       <div className="flex items-center gap-2">
         <PropertyDropdown />
         <ProfileDropdown />

@@ -1,3 +1,4 @@
+import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
@@ -14,7 +15,10 @@ export const ItemTool: React.FC = () => {
         draftNode.create(gridPosition, selectedItem!)
       }
     },
-    onCommitted: () => true,
+    onCommitted: () => {
+      sfxEmitter.emit('sfx:item-place')
+      return true
+    },
   })
 
   if (!selectedItem) return null

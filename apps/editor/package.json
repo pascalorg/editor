@@ -36,6 +36,7 @@
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "howler": "^2.2.4",
     "lucide-react": "^0.562.0",
     "motion": "^12.26.2",
     "nanoid": "^5.1.6",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
+    "@types/howler": "^2.2.12",
     "@types/node": "^22.15.3",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
