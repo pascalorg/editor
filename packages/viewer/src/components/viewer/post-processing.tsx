@@ -26,7 +26,7 @@ import useViewer from '../../store/use-viewer'
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 1,
+  sliceCount: 1, 
   stepCount: 8,
   radius: 1,
   expFactor: 1.5,
@@ -104,9 +104,6 @@ const PostProcessingPasses = () => {
       scenePassColor.a,
     )
 
-    // TRAA (Temporal Reprojection Anti-Aliasing)
-    const traaPass = traa(compositePass, scenePassDepth, scenePassVelocity, camera)
-
     function generateSelectedOutlinePass() {
       const edgeStrength = uniform(3)
       const edgeGlow = uniform(0)
@@ -160,10 +157,13 @@ const PostProcessingPasses = () => {
     const selectedOutlinePass = generateSelectedOutlinePass()
     const hoverOutlinePass = generateHoverOutlinePass()
 
-    // Combine SSGI output with outlines
-    const finalOutput = SSGI_PARAMS.enabled
-      ? selectedOutlinePass.add(hoverOutlinePass).add(traaPass)
-      : selectedOutlinePass.add(hoverOutlinePass).add(scenePassColor)
+    // Combine composite with outlines BEFORE applying TRAA
+    const compositeWithOutlines = SSGI_PARAMS.enabled
+      ? vec4(add(compositePass.rgb, selectedOutlinePass.add(hoverOutlinePass)), compositePass.a)
+      : vec4(add(scenePassColor.rgb, selectedOutlinePass.add(hoverOutlinePass)), scenePassColor.a)
+
+    // TRAA (Temporal Reprojection Anti-Aliasing) - applied AFTER combining everything
+    const finalOutput = traa(compositeWithOutlines, scenePassDepth, scenePassVelocity, camera)
 
     postProcessing.outputNode = finalOutput
     postProcessingRef.current = postProcessing
