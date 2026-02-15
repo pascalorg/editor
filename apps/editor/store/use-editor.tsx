@@ -69,9 +69,9 @@ type EditorState = {
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
-  // Slab hole editing
-  editingSlabHoleIndex: number | null
-  setEditingSlabHoleIndex: (index: number | null) => void
+  // Generic hole editing (works for slabs, ceilings, and any future polygon nodes)
+  editingHole: { nodeId: string; holeIndex: number } | null
+  setEditingHole: (hole: { nodeId: string; holeIndex: number } | null) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -198,8 +198,8 @@ const useEditor = create<EditorState>()((set, get) => ({
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
   spaces: {},
   setSpaces: (spaces) => set({ spaces }),
-  editingSlabHoleIndex: null,
-  setEditingSlabHoleIndex: (index) => set({ editingSlabHoleIndex: index }),
+  editingHole: null,
+  setEditingHole: (hole) => set({ editingHole: hole }),
 }))
 
 export default useEditor

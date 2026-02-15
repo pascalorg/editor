@@ -566,7 +566,7 @@ export class SpatialGridManager {
 
   /**
    * Check if an item can be placed on a ceiling.
-   * Validates that the footprint is within the ceiling polygon and doesn't overlap other ceiling items.
+   * Validates that the footprint is within the ceiling polygon (but not in any holes) and doesn't overlap other ceiling items.
    */
   canPlaceOnCeiling(
     ceilingId: string,
@@ -584,6 +584,15 @@ export class SpatialGridManager {
     const corners = getItemFootprint(position, dimensions, rotation)
     for (const [cx, cz] of corners) {
       if (!pointInPolygon(cx, cz, ceiling.polygon)) {
+        return { valid: false, conflictIds: [] }
+      }
+    }
+
+    // Check if item center is in any hole (if so, it cannot be placed)
+    const [centerX, , centerZ] = position
+    const holes = ceiling.holes || []
+    for (const hole of holes) {
+      if (hole.length >= 3 && pointInPolygon(centerX, centerZ, hole)) {
         return { valid: false, conflictIds: [] }
       }
     }
