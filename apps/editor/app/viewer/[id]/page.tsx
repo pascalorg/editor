@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
+import { getPropertyModelPublic, incrementPropertyViews } from '@/features/community/lib/properties/actions'
 
 export default function ViewerPage() {
   const params = useParams()
@@ -16,25 +17,47 @@ export default function ViewerPage() {
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
-    const loadDemo = async () => {
+    const loadContent = async () => {
       try {
-        const response = await fetch(`/demos/${id}.json`)
-        if (!response.ok) {
-          throw new Error(`Demo "${id}" not found`)
+        // Check if it's a demo file (starts with 'demo_')
+        if (id.startsWith('demo_')) {
+          const response = await fetch(`/demos/${id}.json`)
+          if (!response.ok) {
+            throw new Error(`Demo "${id}" not found`)
+          }
+          const data = await response.json()
+          if (data.nodes && data.rootNodeIds) {
+            setScene(data.nodes, data.rootNodeIds)
+            initSpatialGridSync()
+          }
+        } else {
+          // Load from database (public property)
+          const result = await getPropertyModelPublic(id)
+
+          if (result.success && result.data) {
+            const { model } = result.data
+
+            if (model?.scene_graph) {
+              const { nodes, rootNodeIds } = model.scene_graph
+              setScene(nodes, rootNodeIds)
+              initSpatialGridSync()
+            }
+
+            // Increment view count
+            await incrementPropertyViews(id)
+          } else {
+            throw new Error(result.error || 'Property not found')
+          }
         }
-        const data = await response.json()
-        if (data.nodes && data.rootNodeIds) {
-          setScene(data.nodes, data.rootNodeIds)
-          initSpatialGridSync()
-        }
+
         setLoading(false)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load demo')
+        setError(err instanceof Error ? err.message : 'Failed to load content')
         setLoading(false)
       }
     }
 
-    loadDemo()
+    loadContent()
   }, [id, setScene])
 
   if (loading) {

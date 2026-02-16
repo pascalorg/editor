@@ -19,11 +19,19 @@ export const properties = pgTable(
       .references(() => users.id, { onDelete: 'set null' }),
     detailsJson: t.jsonb('details_json'),
     metadata: t.jsonb('metadata'),
+    // Community features
+    isPrivate: t.boolean('is_private').notNull().default(true),
+    views: t.integer('views').notNull().default(0),
+    likes: t.integer('likes').notNull().default(0),
+    thumbnailUrl: t.text('thumbnail_url'),
     ...timestampsColumns,
   }),
   (t) => [
     index('property_address_idx').on(t.addressId),
     index('property_owner_idx').on(t.ownerId),
+    index('property_is_private_idx').on(t.isPrivate),
+    index('property_views_idx').on(t.views),
+    index('property_likes_idx').on(t.likes),
   ],
 ).enableRLS()
 

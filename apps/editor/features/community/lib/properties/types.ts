@@ -11,6 +11,11 @@ export type Property = {
   address_id: string
   created_at: string
   updated_at: string
+  // Community features
+  is_private: boolean
+  views: number
+  likes: number
+  thumbnail_url: string | null
   address: {
     id: string
     street_number?: string
@@ -40,4 +45,6 @@ export type CreatePropertyParams = {
   country?: string
   countryLong?: string
   rawJson?: Record<string, unknown>
+  isPrivate?: boolean
+  sceneGraph?: any
 }

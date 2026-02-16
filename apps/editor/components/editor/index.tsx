@@ -5,6 +5,8 @@ import { Viewer } from '@pascal-app/viewer'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import useEditor from '@/store/use-editor'
 import { usePropertyScene } from '@/features/community/lib/models/hooks'
+import { useLocalPropertyScene } from '@/features/community/lib/local-storage/hooks'
+import { useAuth } from '@/features/community/lib/auth/hooks'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
@@ -28,8 +30,24 @@ initSpaceDetectionSync(useScene, useEditor)
 // Initialize SFX bus to connect events to sound effects
 initSFXBus()
 
-export default function Editor() {
+interface EditorProps {
+  propertyId?: string
+}
+
+export default function Editor({ propertyId }: EditorProps) {
   useKeyboard()
+  const { isAuthenticated } = useAuth()
+
+  // Determine which mode to use
+  const isLocalProperty = propertyId?.startsWith('local_')
+  const shouldUseCloud = isAuthenticated && !isLocalProperty
+  const shouldUseLocal = !shouldUseCloud && !!propertyId
+
+  // Call hooks unconditionally (hooks internally check if they should activate)
+  // Cloud hook activates when there's an activeProperty in the store
+  usePropertyScene()
+  // Local hook activates when propertyId is provided and starts with 'local_'
+  useLocalPropertyScene(shouldUseLocal ? propertyId : undefined)
 
   return (
     <div className="w-full h-full">
@@ -43,7 +61,7 @@ export default function Editor() {
           <PascalRadio />
         </div>
         <div className="pointer-events-auto">
-          <CloudSaveButton />
+          <CloudSaveButton propertyId={propertyId} />
         </div>
       </div>
 

@@ -4,12 +4,18 @@ import { X } from 'lucide-react'
 import { useState } from 'react'
 import { createProperty } from '../lib/properties/actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/primitives/dialog'
+import { Switch } from '@/components/ui/primitives/switch'
 import { GoogleAddressSearch } from './google-address-search'
 
 interface NewPropertyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: (propertyId: string) => void
+  localPropertyData?: {
+    id: string
+    name: string
+    sceneGraph: any
+  }
 }
 
 interface AddressData {
@@ -26,8 +32,9 @@ interface AddressData {
 /**
  * NewPropertyDialog - Dialog for creating a new property with Google Maps address search
  */
-export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewPropertyDialogProps) {
+export function NewPropertyDialog({ open, onOpenChange, onSuccess, localPropertyData }: NewPropertyDialogProps) {
   const [address, setAddress] = useState<AddressData | null>(null)
+  const [isPrivate, setIsPrivate] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,11 +65,14 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
         state: address.state,
         postalCode: address.postalCode,
         country: address.country || 'US',
+        isPrivate,
+        sceneGraph: localPropertyData?.sceneGraph,
       })
 
       if (result.success && result.data) {
         onOpenChange(false)
         setAddress(null)
+        setIsPrivate(false)
         onSuccess?.(result.data.id)
       } else {
         setError(result.error || 'Failed to create property')
@@ -78,6 +88,7 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
     if (!isCreating) {
       onOpenChange(false)
       setAddress(null)
+      setIsPrivate(false)
       setError(null)
     }
   }
@@ -109,6 +120,31 @@ export function NewPropertyDialog({ open, onOpenChange, onSuccess }: NewProperty
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
               <p className="font-medium">Selected Address:</p>
               <p className="mt-1 text-muted-foreground">{address.formattedAddress}</p>
+            </div>
+          )}
+
+          {/* Privacy Toggle */}
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div>
+              <div className="font-medium text-sm">Privacy</div>
+              <div className="text-xs text-muted-foreground">
+                {isPrivate ? 'Only you can view this property' : 'Anyone can view this property'}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Public</span>
+              <Switch checked={!isPrivate} onCheckedChange={(checked) => setIsPrivate(!checked)} />
+            </div>
+          </div>
+
+          {localPropertyData && (
+            <div className="rounded-md border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
+              <p className="font-medium text-blue-700 dark:text-blue-300">
+                Saving local property: {localPropertyData.name}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your building data will be preserved
+              </p>
             </div>
           )}
 

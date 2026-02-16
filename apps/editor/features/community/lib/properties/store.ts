@@ -54,17 +54,8 @@ export const usePropertyStore = create<PropertyStore>((set, get) => ({
         isLoading: false,
         error: null
       })
-
-      // If no active property, auto-select the first one
-      if (!result.data) {
-        const propertiesResult = await getUserProperties()
-        if (propertiesResult.success && propertiesResult.data && propertiesResult.data.length > 0) {
-          const firstProperty = propertiesResult.data[0]
-          if (firstProperty) {
-            await get().setActiveProperty(firstProperty.id)
-          }
-        }
-      }
+      // Note: Auto-select logic removed - now using URL-based routing
+      // The URL parameter determines which property to load
     } else {
       set({
         error: result.error || 'Failed to fetch active property',
