@@ -52,6 +52,9 @@ type ViewerState = {
   // Export functionality
   exportScene: (() => Promise<void>) | null
   setExportScene: (fn: (() => Promise<void>) | null) => void
+
+  cameraDragging: boolean
+  setCameraDragging: (dragging: boolean) => void
 }
 
 const useViewer = create<ViewerState>()((set, get) => ({
@@ -107,6 +110,9 @@ const useViewer = create<ViewerState>()((set, get) => ({
 
   exportScene: null,
   setExportScene: (fn) => set({ exportScene: fn }),
+
+  cameraDragging: false,
+  setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
 }));
 
 export default useViewer;

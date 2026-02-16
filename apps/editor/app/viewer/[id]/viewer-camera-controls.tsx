@@ -3,7 +3,7 @@
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 
 const tempBox = new Box3()
@@ -28,7 +28,7 @@ export const ViewerCameraControls = () => {
         : CameraControlsImpl.ACTION.DOLLY
 
     return {
-      left: CameraControlsImpl.ACTION.NONE,
+      left: CameraControlsImpl.ACTION.SCREEN_PAN,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
@@ -59,7 +59,7 @@ export const ViewerCameraControls = () => {
         target[0],
         target[1],
         target[2],
-        true
+        true,
       )
       return
     }
@@ -81,7 +81,7 @@ export const ViewerCameraControls = () => {
     const cameraPos = new Vector3(
       tempCenter.x + distance * 0.7,
       tempCenter.y + distance * 0.5,
-      tempCenter.z + distance * 0.7
+      tempCenter.z + distance * 0.7,
     )
 
     controls.current.setLookAt(
@@ -91,9 +91,17 @@ export const ViewerCameraControls = () => {
       tempCenter.x,
       tempCenter.y,
       tempCenter.z,
-      true
+      true,
     )
   }, [targetNodeId, nodes])
+
+  const onTransitionStart = useCallback(() => {
+    useViewer.getState().setCameraDragging(true)
+  }, [])
+
+  const onRest = useCallback(() => {
+    useViewer.getState().setCameraDragging(false)
+  }, [])
 
   return (
     <CameraControls
@@ -103,6 +111,10 @@ export const ViewerCameraControls = () => {
       maxPolarAngle={Math.PI / 2 - 0.1}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
+      onTransitionStart={onTransitionStart}
+      onRest={onRest}
+      restThreshold={0.01}
+      
     />
   )
 }
