@@ -4,6 +4,9 @@ type AttachType = 'wall' | 'wall-side'
 // Small tolerance for floating point comparison to allow adjacent items
 const EPSILON = 0.001
 
+// Margin from ceiling/floor when auto-snapping items
+const AUTO_SNAP_MARGIN = 0.05
+
 interface WallItemPlacement {
   itemId: string
   wallId: string
@@ -15,12 +18,42 @@ interface WallItemPlacement {
   side?: WallSide // Which side for 'wall-side' items (undefined means both for 'wall')
 }
 
+/**
+ * Auto-adjust Y position to fit item within wall bounds
+ * Returns the adjusted Y position (bottom of item)
+ */
+function autoAdjustYPosition(
+  yBottom: number,
+  itemHeight: number,
+  wallHeight: number,
+): { adjustedY: number; wasAdjusted: boolean } {
+  const yTop = yBottom + itemHeight
+
+  // If fits perfectly, no adjustment needed
+  if (yBottom >= 0 && yTop <= wallHeight) {
+    return { adjustedY: yBottom, wasAdjusted: false }
+  }
+
+  // If too high (top exceeds wall height), snap down from ceiling
+  if (yTop > wallHeight) {
+    const adjustedY = wallHeight - itemHeight - AUTO_SNAP_MARGIN
+    return { adjustedY: Math.max(0, adjustedY), wasAdjusted: true }
+  }
+
+  // If too low (bottom below floor), snap up from floor
+  if (yBottom < 0) {
+    return { adjustedY: AUTO_SNAP_MARGIN, wasAdjusted: true }
+  }
+
+  return { adjustedY: yBottom, wasAdjusted: false }
+}
+
 export class WallSpatialGrid {
   private wallItems = new Map<string, WallItemPlacement[]>() // wallId -> placements
   private itemToWall = new Map<string, string>() // itemId -> wallId (reverse lookup)
 
   /**
-   * Check if an item can be placed on a wall
+   * Check if an item can be placed on a wall with auto-adjustment for vertical position
    * @param wallId - The wall to place on
    * @param wallLength - Length of the wall
    * @param wallHeight - Height of the wall
@@ -31,6 +64,7 @@ export class WallSpatialGrid {
    * @param attachType - 'wall' (blocks both sides) or 'wall-side' (blocks one side)
    * @param side - Which side for 'wall-side' items
    * @param ignoreIds - Item IDs to ignore in conflict check
+   * @returns Validation result with auto-adjusted Y position if needed
    */
   canPlaceOnWall(
     wallId: string,
@@ -43,18 +77,20 @@ export class WallSpatialGrid {
     attachType: AttachType = 'wall',
     side?: WallSide,
     ignoreIds: string[] = [],
-  ): { valid: boolean; conflictIds: string[] } {
+  ): { valid: boolean; conflictIds: string[]; adjustedY: number; wasAdjusted: boolean } {
     const halfW = itemWidth / wallLength / 2
     const tStart = tCenter - halfW
     const tEnd = tCenter + halfW
-    // yBottom is the bottom of the item, so yEnd = yBottom + itemHeight
-    const yStart = yBottom
-    const yEnd = yBottom + itemHeight
 
-    // Check wall boundaries
-    if (tStart < 0 || tEnd > 1 || yStart < 0 || yEnd > wallHeight) {
-      return { valid: false, conflictIds: [] }
+    // Check horizontal boundaries (still reject if item exceeds wall width)
+    if (tStart < 0 || tEnd > 1) {
+      return { valid: false, conflictIds: [], adjustedY: yBottom, wasAdjusted: false }
     }
+
+    // Auto-adjust vertical position to fit within wall bounds
+    const { adjustedY, wasAdjusted } = autoAdjustYPosition(yBottom, itemHeight, wallHeight)
+    const yStart = adjustedY
+    const yEnd = adjustedY + itemHeight
 
     const existing = this.wallItems.get(wallId) ?? []
     const ignoreSet = new Set(ignoreIds)
@@ -76,7 +112,7 @@ export class WallSpatialGrid {
       }
     }
 
-    return { valid: conflicts.length === 0, conflictIds: conflicts }
+    return { valid: conflicts.length === 0, conflictIds: conflicts, adjustedY, wasAdjusted }
   }
 
   /**

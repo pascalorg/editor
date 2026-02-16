@@ -91,12 +91,14 @@ export const wallStrategy = {
   /**
    * Handle wall:enter — transition from floor to wall surface.
    * Returns null if item doesn't attach to walls, face is invalid, or wrong level.
+   * Auto-adjusts Y position to fit within wall bounds.
    */
   enter(
     ctx: PlacementContext,
     event: WallEvent,
     resolveLevelId: LevelResolver,
     nodes: Record<string, AnyNode>,
+    validators: SpatialValidators,
   ): TransitionResult | null {
     const attachTo = ctx.asset.attachTo
     if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
@@ -114,16 +116,30 @@ export const wallStrategy = {
     const y = snapToHalf(event.localPosition[1])
     const z = snapToHalf(event.localPosition[2])
 
+    // Get auto-adjusted Y position from validator
+    const validation = validators.canPlaceOnWall(
+      ctx.levelId,
+      event.node.id,
+      x,
+      y,
+      ctx.asset.dimensions ?? DEFAULT_DIMENSIONS,
+      attachTo,
+      side,
+      [],
+    )
+
+    const adjustedY = validation.adjustedY ?? y
+
     return {
       stateUpdate: { surface: 'wall', wallId: event.node.id },
       nodeUpdate: {
-        position: [x, y, z],
+        position: [x, adjustedY, z],
         parentId: event.node.id,
         side,
         rotation: [0, itemRotation, 0],
       },
       cursorRotationY: cursorRotation,
-      gridPosition: [x, y, z],
+      gridPosition: [x, adjustedY, z],
       cursorPosition: [
         snapToHalf(event.position[0]),
         snapToHalf(event.position[1]),
@@ -136,22 +152,37 @@ export const wallStrategy = {
   /**
    * Handle wall:move — update position while on wall.
    * Returns null if not on a wall or face is invalid.
+   * Auto-adjusts Y position to fit within wall bounds.
    */
-  move(ctx: PlacementContext, event: WallEvent): PlacementResult | null {
+  move(ctx: PlacementContext, event: WallEvent, validators: SpatialValidators): PlacementResult | null {
     if (ctx.state.surface !== 'wall') return null
-    if (!ctx.draftItem) return null
+    if (!ctx.draftItem || !ctx.levelId) return null
     if (!isValidWallSideFace(event.normal)) return null
 
     const side = getSideFromNormal(event.normal)
     const itemRotation = calculateItemRotation(event.normal)
     const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
+    const snappedX = snapToHalf(event.localPosition[0])
+    const snappedY = snapToHalf(event.localPosition[1])
+    const snappedZ = snapToHalf(event.localPosition[2])
+
+    // Get auto-adjusted Y position from validator
+    const validation = validators.canPlaceOnWall(
+      ctx.levelId,
+      event.node.id,
+      snappedX,
+      snappedY,
+      ctx.draftItem.asset.dimensions,
+      ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
+      side,
+      [ctx.draftItem.id],
+    )
+
+    const adjustedY = validation.adjustedY ?? snappedY
+
     return {
-      gridPosition: [
-        snapToHalf(event.localPosition[0]),
-        snapToHalf(event.localPosition[1]),
-        snapToHalf(event.localPosition[2]),
-      ],
+      gridPosition: [snappedX, adjustedY, snappedZ],
       cursorPosition: [
         snapToHalf(event.position[0]),
         snapToHalf(event.position[1]),
@@ -159,6 +190,7 @@ export const wallStrategy = {
       ],
       cursorRotationY: cursorRotation,
       nodeUpdate: {
+        position: [snappedX, adjustedY, snappedZ],
         side,
         rotation: [0, itemRotation, 0],
       },

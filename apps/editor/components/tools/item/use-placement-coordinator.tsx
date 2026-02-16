@@ -213,7 +213,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onWallEnter = (event: WallEvent) => {
       const nodes = useScene.getState().nodes
-      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
       if (!result) return
 
       event.stopPropagation()
@@ -235,7 +235,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (ctx.state.surface !== 'wall') {
         const nodes = useScene.getState().nodes
-        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes)
+        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes, validators)
         if (!enterResult) return
 
         event.stopPropagation()
@@ -251,7 +251,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (!draftNode.current) {
         const nodes = useScene.getState().nodes
-        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
         if (!setup) return
 
         event.stopPropagation()
@@ -259,7 +259,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      const result = wallStrategy.move(ctx, event)
+      const result = wallStrategy.move(ctx, event, validators)
       if (!result) return
 
       event.stopPropagation()
@@ -318,7 +318,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (configRef.current.onCommitted()) {
         const nodes = useScene.getState().nodes
-        const enterResult = wallStrategy.enter(getContext(), event, resolveLevelId, nodes)
+        const enterResult = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
