@@ -1,6 +1,8 @@
 "use client";
 
 import { Building2, Layers, Settings } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
 import {
   Tooltip,
   TooltipContent,
@@ -34,6 +36,28 @@ export function IconRail({
         className,
       )}
     >
+      {/* Pascal Logo - Link to Hub */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link
+            href="/"
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 mb-1"
+          >
+            <Image
+              src="/pascal-logo-shape.svg"
+              alt="Pascal"
+              width={16}
+              height={16}
+              className="h-4 w-4"
+            />
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right">Back to Hub</TooltipContent>
+      </Tooltip>
+
+      {/* Divider */}
+      <div className="w-8 h-px bg-border/50 mb-1" />
+
       {panels.map((panel) => {
         const Icon = panel.icon;
         const isActive = activePanel === panel.id;

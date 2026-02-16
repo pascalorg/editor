@@ -10,7 +10,6 @@ import { useAuth } from '@/features/community/lib/auth/hooks'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
-import { CloudSaveButton } from '@/features/community/components/cloud-save-button'
 import { PascalRadio } from '../pascal-radio'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { HelperManager } from '../ui/helpers/helper-manager'
@@ -59,9 +58,6 @@ export default function Editor({ propertyId }: EditorProps) {
       <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">
         <div className="pointer-events-auto">
           <PascalRadio />
-        </div>
-        <div className="pointer-events-auto">
-          <CloudSaveButton propertyId={propertyId} />
         </div>
       </div>
 

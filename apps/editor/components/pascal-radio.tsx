@@ -108,7 +108,7 @@ export function PascalRadio() {
       soundRef.current?.unload()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleNext, currentTrack.file])
+  }, [handleNext, currentTrack.file, muted, isPlaying, effectiveVolume])
 
   // Update volume when settings change
   useEffect(() => {
@@ -163,7 +163,7 @@ export function PascalRadio() {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md">
       <Disc3 className={cn('h-4 w-4', isPlaying && 'animate-spin')} />
-      <span className="hidden sm:inline">Pascal Radio</span>
+      <span className="hidden sm:inline">Radio Pascal</span>
       <div
         onClick={handlePlayPause}
         className="rounded-sm p-1 transition-all cursor-pointer bg-accent/30 hover:bg-accent hover:text-accent-foreground hover:shadow-sm"

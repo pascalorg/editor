@@ -1,17 +1,18 @@
 'use client'
 
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/hooks'
-import { useRouter } from 'next/navigation'
-import { SignInDialog } from './sign-in-dialog'
-import { PropertyGrid } from './property-grid'
-import { CreatePropertyButton } from './create-property-button'
-import { ProfileDropdown } from './profile-dropdown'
-import { NewPropertyDialog } from './new-property-dialog'
-import { getPublicProperties, getUserProperties } from '../lib/properties/actions'
-import { getLocalProperties, createLocalProperty } from '../lib/local-storage/property-store'
-import type { Property } from '../lib/properties/types'
 import type { LocalProperty } from '../lib/local-storage/property-store'
+import { createLocalProperty, getLocalProperties } from '../lib/local-storage/property-store'
+import { getPublicProperties, getUserProperties } from '../lib/properties/actions'
+import type { Property } from '../lib/properties/types'
+import { CreatePropertyButton } from './create-property-button'
+import { NewPropertyDialog } from './new-property-dialog'
+import { ProfileDropdown } from './profile-dropdown'
+import { PropertyGrid } from './property-grid'
+import { SignInDialog } from './sign-in-dialog'
 
 export default function CommunityHub() {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth()
@@ -94,7 +95,6 @@ export default function CommunityHub() {
     router.push(`/viewer/${propertyId}`)
   }
 
-
   if (authLoading || loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -109,7 +109,16 @@ export default function CommunityHub() {
       <header className="border-b border-border bg-background/95 backdrop-blur sticky top-0 z-10">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Hub</h1>
+            <div className="flex items-center gap-2">
+              <Image
+                src="/pascal-logo-shape.svg"
+                alt="Pascal"
+                width={64}
+                height={64}
+                className="h-5 w-5"
+              />
+              <h1 className="text-2xl font-bold">Hub</h1>
+            </div>
             {!isAuthenticated ? (
               <button
                 onClick={() => setIsSignInDialogOpen(true)}
@@ -190,9 +199,7 @@ export default function CommunityHub() {
               showOwner
             />
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              No public properties yet
-            </div>
+            <div className="text-center py-12 text-muted-foreground">No public properties yet</div>
           )}
         </section>
       </main>
