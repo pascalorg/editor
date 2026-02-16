@@ -468,7 +468,8 @@ export class SpatialGridManager {
       if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
         // Check if point is in any hole
         let inHole = false
-        for (const hole of slab.holes) {
+        const holes = slab.holes || []
+        for (const hole of holes) {
           if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
             inHole = true
             break
@@ -507,7 +508,8 @@ export class SpatialGridManager {
         // We consider it entirely in a hole if the item center is in the hole
         let inHole = false
         const [cx, , cz] = position
-        for (const hole of slab.holes) {
+        const holes = slab.holes || []
+        for (const hole of holes) {
           if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) {
             inHole = true
             break
@@ -546,7 +548,8 @@ export class SpatialGridManager {
         let inHole = false
         const midX = (start[0] + end[0]) / 2
         const midZ = (start[1] + end[1]) / 2
-        for (const hole of slab.holes) {
+        const holes = slab.holes || []
+        for (const hole of holes) {
           if (hole.length >= 3 && pointInPolygon(midX, midZ, hole)) {
             inHole = true
             break
