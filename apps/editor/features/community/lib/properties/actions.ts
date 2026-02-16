@@ -8,7 +8,7 @@
 import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
-import type { CreatePropertyParams, Property } from './types'
+import type { CreatePropertyParams, Property, Database } from './types'
 
 export type ActionResult<T = unknown> = {
   success: boolean
@@ -249,7 +249,7 @@ export async function createProperty(params: CreatePropertyParams): Promise<Acti
         property_id: propertyId,
         version: 1,
         scene_graph: params.sceneGraph,
-      })
+      } as any)
 
       if (modelError) {
         console.error('Failed to create model:', modelError)
@@ -408,20 +408,21 @@ export async function getPropertyModelPublic(propertyId: string): Promise<
       return {
         success: false,
         error: 'Property not found',
-        data: null,
+        data: undefined,
       }
     }
 
     // Check if user can view this property
     // Allow if: property is public OR user owns it
-    const isOwner = session?.user && property.owner_id === session.user.id
-    const isPublic = property.is_private === false
+    const propertyData = property as any
+    const isOwner = session?.user && propertyData.owner_id === session.user.id
+    const isPublic = propertyData.is_private === false
 
     if (!isPublic && !isOwner) {
       return {
         success: false,
         error: 'Property is private',
-        data: null,
+        data: undefined,
       }
     }
 
@@ -438,7 +439,7 @@ export async function getPropertyModelPublic(propertyId: string): Promise<
     return {
       success: true,
       data: {
-        property: property as Property,
+        property: propertyData as Property,
         model: model || null,
       },
     }
@@ -446,7 +447,7 @@ export async function getPropertyModelPublic(propertyId: string): Promise<
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch property',
-      data: null,
+      data: undefined,
     }
   }
 }
@@ -460,7 +461,7 @@ export async function incrementPropertyViews(propertyId: string): Promise<Action
 
     const { error } = await supabase.rpc('increment_property_views', {
       property_id: propertyId,
-    })
+    } as any)
 
     if (error) {
       console.error('Failed to increment views:', error)
@@ -500,7 +501,7 @@ export async function updatePropertyPrivacy(
       .eq('id', propertyId)
       .single()
 
-    if (property?.owner_id !== session.user.id) {
+    if ((property as any)?.owner_id !== session.user.id) {
       return {
         success: false,
         error: 'Unauthorized',
@@ -508,8 +509,8 @@ export async function updatePropertyPrivacy(
     }
 
     // Update privacy
-    const { error } = await supabase
-      .from('properties')
+    const { error } = await (supabase
+      .from('properties') as any)
       .update({ is_private: isPrivate })
       .eq('id', propertyId)
 
@@ -572,7 +573,7 @@ export async function updatePropertyAddress(
       }
     }
 
-    if (property.owner_id !== session.user.id) {
+    if ((property as any).owner_id !== session.user.id) {
       return {
         success: false,
         error: 'Unauthorized',
@@ -580,10 +581,10 @@ export async function updatePropertyAddress(
     }
 
     // Update address
-    const { error } = await supabase
-      .from('properties_addresses')
+    const { error } = await (supabase
+      .from('properties_addresses') as any)
       .update(addressData)
-      .eq('id', property.address_id)
+      .eq('id', (property as any).address_id)
 
     if (error) {
       return {
@@ -628,7 +629,7 @@ export async function migrateLocalProperty(
 
     // Create a default address (user can edit later via settings)
     const addressId = createId('address')
-    const { error: addressError } = await supabase.from('properties_addresses').insert({
+    const { error: addressError } = await (supabase.from('properties_addresses') as any).insert({
       id: addressId,
       country: 'US',
     })
@@ -642,7 +643,7 @@ export async function migrateLocalProperty(
 
     // Create the property
     const propertyId = createId('property')
-    const { error: propertyError } = await supabase.from('properties').insert({
+    const { error: propertyError } = await (supabase.from('properties') as any).insert({
       id: propertyId,
       name: localProperty.name,
       owner_id: session.user.id,
@@ -660,7 +661,7 @@ export async function migrateLocalProperty(
     // Create the model with the scene graph
     if (localProperty.scene_graph) {
       const modelId = createId('model')
-      const { error: modelError } = await supabase.from('properties_models').insert({
+      const { error: modelError } = await (supabase.from('properties_models') as any).insert({
         id: modelId,
         property_id: propertyId,
         version: 1,
@@ -719,7 +720,7 @@ export async function deleteProperty(propertyId: string): Promise<ActionResult> 
       }
     }
 
-    if (property.owner_id !== session.user.id) {
+    if ((property as any).owner_id !== session.user.id) {
       return {
         success: false,
         error: 'Unauthorized',
@@ -785,7 +786,7 @@ export async function getUserPropertyLikes(
     // Convert array to map
     const likeMap: Record<string, boolean> = {}
     propertyIds.forEach((id) => {
-      likeMap[id] = likes?.some((like) => like.property_id === id) || false
+      likeMap[id] = likes?.some((like) => (like as any).property_id === id) || false
     })
 
     return {
@@ -833,10 +834,10 @@ export async function togglePropertyLike(
 
     if (existingLike) {
       // Unlike - remove the like
-      const { error } = await supabase
-        .from('property_likes')
+      const { error } = await (supabase
+        .from('property_likes') as any)
         .delete()
-        .eq('id', existingLike.id)
+        .eq('id', (existingLike as any).id)
 
       if (error) {
         return {
@@ -849,7 +850,7 @@ export async function togglePropertyLike(
     } else {
       // Like - add a new like
       const likeId = createId('like')
-      const { error } = await supabase.from('property_likes').insert({
+      const { error } = await (supabase.from('property_likes') as any).insert({
         id: likeId,
         property_id: propertyId,
         user_id: userId,
@@ -868,11 +869,11 @@ export async function togglePropertyLike(
     // Get updated like count
     const { data: likeCount } = await supabase.rpc('get_property_like_count', {
       property_id: propertyId,
-    })
+    } as any)
 
     // Update the property's like count cache
-    await supabase
-      .from('properties')
+    await (supabase
+      .from('properties') as any)
       .update({ likes: likeCount || 0 })
       .eq('id', propertyId)
 

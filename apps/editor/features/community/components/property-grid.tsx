@@ -104,8 +104,9 @@ export function PropertyGrid({
 
     if (result.success && result.data) {
       // Update with actual values from server
-      setUserLikes((prev) => ({ ...prev, [propertyId]: result.data.liked }))
-      setLikeCounts((prev) => ({ ...prev, [propertyId]: result.data.likes }))
+      const data = result.data
+      setUserLikes((prev) => ({ ...prev, [propertyId]: data.liked }))
+      setLikeCounts((prev) => ({ ...prev, [propertyId]: data.likes }))
     } else {
       // Revert on error
       setUserLikes((prev) => ({ ...prev, [propertyId]: wasLiked }))

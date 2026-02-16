@@ -1,6 +1,6 @@
 'use client'
 
-import { initSpatialGridSync, useScene } from '@pascal-app/core'
+import { type AnyNodeId, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import useEditor from '@/store/use-editor'
@@ -32,7 +32,7 @@ export function useLocalPropertyScene(propertyId?: string) {
 
     if (property?.scene_graph) {
       const { nodes, rootNodeIds } = property.scene_graph
-      useScene.getState().setScene(nodes, rootNodeIds)
+      useScene.getState().setScene(nodes, rootNodeIds as AnyNodeId[])
       initSpatialGridSync()
     } else {
       useScene.getState().clearScene()
