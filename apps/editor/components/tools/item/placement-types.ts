@@ -93,7 +93,7 @@ export interface SpatialValidators {
     attachType: 'wall' | 'wall-side',
     side?: 'front' | 'back',
     ignoreIds?: string[],
-  ) => { valid: boolean }
+  ) => { valid: boolean; adjustedY?: number; wasAdjusted?: boolean }
   canPlaceOnCeiling: (
     ceilingId: CeilingNode['id'],
     position: [number, number, number],

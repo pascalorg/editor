@@ -124,7 +124,8 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   shape.closePath()
 
   // Add holes to the shape
-  for (const holePolygon of slabNode.holes) {
+  const holes = slabNode.holes || []
+  for (const holePolygon of holes) {
     if (holePolygon.length < 3) continue
 
     const holePath = new THREE.Path()

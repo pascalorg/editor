@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Plus, Trash2, X } from 'lucide-react'
 import Image from 'next/image'
@@ -8,7 +8,7 @@ import { useCallback, useEffect } from 'react'
 import useEditor from '@/store/use-editor'
 import { NumberInput } from '@/components/ui/primitives/number-input'
 
-export function SlabPanel() {
+export function CeilingPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
@@ -16,14 +16,14 @@ export function SlabPanel() {
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
-  // Get the first selected node if it's a slab
+  // Get the first selected node if it's a ceiling
   const selectedId = selectedIds[0]
   const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as SlabNode | undefined)
+    ? (nodes[selectedId as AnyNode['id']] as CeilingNode | undefined)
     : undefined
 
   const handleUpdate = useCallback(
-    (updates: Partial<SlabNode>) => {
+    (updates: Partial<CeilingNode>) => {
       if (!selectedId) return
       updateNode(selectedId as AnyNode['id'], updates)
     },
@@ -35,7 +35,7 @@ export function SlabPanel() {
     setEditingHole(null)
   }, [setSelection, setEditingHole])
 
-  // Clear hole editing state when slab is deselected
+  // Clear hole editing state when ceiling is deselected
   useEffect(() => {
     if (!node) {
       setEditingHole(null)
@@ -52,7 +52,7 @@ export function SlabPanel() {
   const handleAddHole = useCallback(() => {
     if (!node || !selectedId) return
 
-    // Calculate centroid of the slab polygon
+    // Calculate centroid of the ceiling polygon
     const polygon = node.polygon
     let cx = 0
     let cz = 0
@@ -63,7 +63,7 @@ export function SlabPanel() {
     cx /= polygon.length
     cz /= polygon.length
 
-    // Create a default small rectangular hole centered at the slab's centroid
+    // Create a default small rectangular hole centered at the ceiling's centroid
     const holeSize = 0.5
     const newHole: Array<[number, number]> = [
       [cx - holeSize, cz - holeSize],
@@ -98,8 +98,8 @@ export function SlabPanel() {
     [selectedId, node?.holes, handleUpdate, editingHole, setEditingHole],
   )
 
-  // Only show if exactly one slab is selected
-  if (!node || node.type !== 'slab' || selectedIds.length !== 1) return null
+  // Only show if exactly one ceiling is selected
+  if (!node || node.type !== 'ceiling' || selectedIds.length !== 1) return null
 
   // Calculate approximate area from polygon
   const calculateArea = (polygon: Array<[number, number]>): number => {
@@ -121,9 +121,9 @@ export function SlabPanel() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 border-b p-3">
         <div className="flex items-center gap-2 min-w-0">
-          <Image src="/icons/floor.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
+          <Image src="/icons/ceiling.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold text-foreground text-sm truncate">
-            {node.name || `Slab (${area.toFixed(1)}m²)`}
+            {node.name || `Ceiling (${area.toFixed(1)}m²)`}
           </h2>
         </div>
         <button
@@ -138,17 +138,17 @@ export function SlabPanel() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
         <div className="space-y-4">
-          {/* Elevation */}
+          {/* Height */}
           <div className="space-y-2">
             <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              Elevation
+              Height
             </label>
             <div className="flex items-center gap-2">
               <NumberInput
-                label="Elevation"
-                value={Math.round(node.elevation * 1000) / 1000}
+                label="Height"
+                value={Math.round(node.height * 1000) / 1000}
                 onChange={(value) => {
-                  handleUpdate({ elevation: value })
+                  handleUpdate({ height: value })
                 }}
                 precision={3}
                 className="flex-1"
@@ -156,7 +156,7 @@ export function SlabPanel() {
               <span className="text-muted-foreground text-xs shrink-0">m</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Height offset from the level base (positive = raised, negative = sunken)
+              Height from the floor where the ceiling is positioned
             </p>
           </div>
 
@@ -165,34 +165,27 @@ export function SlabPanel() {
             <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
               Presets
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 className="rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
-                onClick={() => handleUpdate({ elevation: -0.15 })}
+                onClick={() => handleUpdate({ height: 2.4 })}
               >
-                Sunken (-15cm)
+                Low (2.4m)
               </button>
               <button
                 type="button"
                 className="rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
-                onClick={() => handleUpdate({ elevation: 0 })}
+                onClick={() => handleUpdate({ height: 2.5 })}
               >
-                Ground (0m)
+                Standard (2.5m)
               </button>
               <button
                 type="button"
                 className="rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
-                onClick={() => handleUpdate({ elevation: 0.05 })}
+                onClick={() => handleUpdate({ height: 3.0 })}
               >
-                Raised (5cm)
-              </button>
-              <button
-                type="button"
-                className="rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
-                onClick={() => handleUpdate({ elevation: 0.15 })}
-              >
-                Step (15cm)
+                High (3m)
               </button>
             </div>
           </div>

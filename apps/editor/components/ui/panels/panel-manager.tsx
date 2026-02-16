@@ -3,6 +3,7 @@
 import { AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '@/store/use-editor'
+import { CeilingPanel } from './ceiling-panel'
 import { ItemPanel } from './item-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
@@ -30,6 +31,8 @@ export function PanelManager() {
           return <RoofPanel />
         case 'slab':
           return <SlabPanel />
+        case 'ceiling':
+          return <CeilingPanel />
       }
     }
   }

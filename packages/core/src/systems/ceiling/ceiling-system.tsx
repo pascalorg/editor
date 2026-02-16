@@ -70,6 +70,24 @@ export function generateCeilingGeometry(ceilingNode: CeilingNode): THREE.BufferG
   }
   shape.closePath()
 
+  // Add holes to the shape
+  const holes = ceilingNode.holes || []
+  for (const holePolygon of holes) {
+    if (holePolygon.length < 3) continue
+
+    const holePath = new THREE.Path()
+    const holeFirstPt = holePolygon[0]!
+    holePath.moveTo(holeFirstPt[0], -holeFirstPt[1])
+
+    for (let i = 1; i < holePolygon.length; i++) {
+      const pt = holePolygon[i]!
+      holePath.lineTo(pt[0], -pt[1])
+    }
+    holePath.closePath()
+
+    shape.holes.push(holePath)
+  }
+
   // Create flat shape geometry (no extrusion)
   const geometry = new THREE.ShapeGeometry(shape)
 

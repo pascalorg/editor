@@ -10,11 +10,13 @@ export const CeilingNode = BaseNode.extend({
   // Specific props
   // Polygon boundary - array of [x, z] coordinates defining the ceiling
   polygon: z.array(z.tuple([z.number(), z.number()])),
+  holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   height: z.number().default(2.5), // Height in meters
 }).describe(
   dedent`
   Ceiling node - used to represent a ceiling in the building
   - polygon: array of [x, z] points defining the ceiling boundary
+  - holes: array of polygons representing holes in the ceiling
   `,
 )
 

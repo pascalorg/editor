@@ -1,23 +1,31 @@
 'use client'
 
-import { Cloud } from 'lucide-react'
+import { Cloud, Home } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '../lib/auth/hooks'
 import { usePropertyStore } from '../lib/properties/store'
 import { ProfileDropdown } from './profile-dropdown'
-import { PropertyDropdown } from './property-dropdown'
 import { SignInDialog } from './sign-in-dialog'
+
+interface CloudSaveButtonProps {
+  propertyId?: string
+}
 
 /**
  * CloudSaveButton - Shows authentication state and property management
  *
- * Not authenticated: Shows "Save to cloud" button
- * Authenticated: Shows PropertyDropdown and ProfileDropdown
+ * Guest with local property: Shows "Save to cloud" button
+ * Guest without property: Shows "Home" button
+ * Authenticated: Shows ProfileDropdown
  */
-export function CloudSaveButton() {
+export function CloudSaveButton({ propertyId }: CloudSaveButtonProps) {
   const { isAuthenticated, isLoading } = useAuth()
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false)
   const initialize = usePropertyStore(state => state.initialize)
+  const router = useRouter()
+
+  const isLocalProperty = propertyId?.startsWith('local_')
 
   // Initialize property store when authenticated
   useEffect(() => {
@@ -36,7 +44,8 @@ export function CloudSaveButton() {
     )
   }
 
-  if (!isAuthenticated) {
+  // Guest user with local property
+  if (!isAuthenticated && isLocalProperty) {
     return (
       <>
         <div className="pointer-events-auto">
@@ -53,12 +62,25 @@ export function CloudSaveButton() {
     )
   }
 
+  // Guest user (no property context or browsing)
+  if (!isAuthenticated) {
+    return (
+      <div className="pointer-events-auto">
+        <button
+          className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-accent-foreground"
+          onClick={() => router.push('/')}
+        >
+          <Home className="h-4 w-4" />
+          Home
+        </button>
+      </div>
+    )
+  }
+
+  // Authenticated user
   return (
     <div className="pointer-events-auto">
-      <div className="flex items-center gap-2">
-        <PropertyDropdown />
-        <ProfileDropdown />
-      </div>
+      <ProfileDropdown />
     </div>
   )
 }
