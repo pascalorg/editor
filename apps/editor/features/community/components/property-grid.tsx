@@ -118,10 +118,10 @@ export function PropertyGrid({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {properties.map((property) => (
-          <button
+          <div
             key={property.id}
             onClick={() => onPropertyClick(property.id)}
-            className="group relative overflow-hidden rounded-lg border border-border bg-card hover:border-primary transition-all text-left"
+            className="group relative overflow-hidden rounded-lg border border-border bg-card hover:border-primary transition-all text-left cursor-pointer"
           >
             {/* Thumbnail */}
             <div className="aspect-video bg-muted relative">
@@ -213,7 +213,7 @@ export function PropertyGrid({
                 </div>
               )}
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
