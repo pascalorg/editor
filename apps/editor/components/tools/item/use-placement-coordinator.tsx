@@ -269,6 +269,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
+      // Play snap sound when grid position changes
+      if (posChanged) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
       gridPosition.current.set(...result.gridPosition)
       cursorGroupRef.current.position.set(...result.cursorPosition)
       cursorGroupRef.current.rotation.y = result.cursorRotationY
@@ -393,6 +398,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
+
+      // Play snap sound when grid position changes
+      const posChanged =
+        gridPosition.current.x !== result.gridPosition[0] ||
+        gridPosition.current.y !== result.gridPosition[1] ||
+        gridPosition.current.z !== result.gridPosition[2]
+
+      if (posChanged) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
       gridPosition.current.set(...result.gridPosition)
       cursorGroupRef.current.position.set(...result.cursorPosition)
 
