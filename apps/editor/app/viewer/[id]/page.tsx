@@ -8,14 +8,14 @@ import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
 import { ThumbnailGenerator } from './thumbnail-generator'
-import { getPropertyModelPublic, incrementPropertyViews } from '@/features/community/lib/properties/actions'
+import { getProjectModelPublic, incrementProjectViews } from '@/features/community/lib/projects/actions'
 
 export default function ViewerPage() {
   const params = useParams()
   const id = params.id as string
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [propertyId, setPropertyId] = useState<string | null>(null)
+  const [projectId, setProjectId] = useState<string | null>(null)
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
@@ -33,12 +33,12 @@ export default function ViewerPage() {
             initSpatialGridSync()
           }
         } else {
-          // Load from database (public property)
-          const result = await getPropertyModelPublic(id)
+          // Load from database (public project)
+          const result = await getProjectModelPublic(id)
 
           if (result.success && result.data) {
-            const { property, model } = result.data
-            setPropertyId(property.id)
+            const { project, model } = result.data
+            setProjectId(project.id)
 
             if (model?.scene_graph) {
               const { nodes, rootNodeIds } = model.scene_graph
@@ -47,9 +47,9 @@ export default function ViewerPage() {
             }
 
             // Increment view count
-            await incrementPropertyViews(id)
+            await incrementProjectViews(id)
           } else {
-            throw new Error(result.error || 'Property not found')
+            throw new Error(result.error || 'Project not found')
           }
         }
 
@@ -88,7 +88,7 @@ export default function ViewerPage() {
         {/* Custom Zone System */}
         <ViewerZoneSystem />
         {/* Thumbnail Generator */}
-        <ThumbnailGenerator propertyId={propertyId || undefined} />
+        <ThumbnailGenerator projectId={projectId || undefined} />
       </Viewer>
     </div>
   )

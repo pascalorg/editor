@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/primitives/button";
 import useEditor from "@/store/use-editor";
 import { AudioSettingsDialog } from "./audio-settings-dialog";
-import { usePropertyStore } from "@/features/community/lib/properties/store";
+import { useProjectStore } from "@/features/community/lib/projects/store";
 
 export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,11 +16,11 @@ export function SettingsPanel() {
   const resetSelection = useViewer((state) => state.resetSelection);
   const exportScene = useViewer((state) => state.exportScene);
   const setPhase = useEditor((state) => state.setPhase);
-  const activeProperty = usePropertyStore((state) => state.activeProperty);
+  const activeProject = useProjectStore((state) => state.activeProject);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
 
-  const propertyId = activeProperty?.id;
-  const isLocalProperty = false; // Store only contains cloud properties
+  const projectId = activeProject?.id;
+  const isLocalProject = false; // Store only contains cloud projects
 
   const handleExport = async () => {
     if (exportScene) {
@@ -71,14 +71,14 @@ export function SettingsPanel() {
   };
 
   const handleGenerateThumbnail = () => {
-    if (!propertyId) {
-      console.error('❌ No property ID found');
+    if (!projectId) {
+      console.error('❌ No project ID found');
       return;
     }
-    console.log('🎯 Generate thumbnail clicked for property:', propertyId);
+    console.log('🎯 Generate thumbnail clicked for project:', projectId);
     setIsGeneratingThumbnail(true);
-    emitter.emit('camera-controls:generate-thumbnail', { propertyId });
-    console.log('📤 Event emitted with property ID:', propertyId);
+    emitter.emit('camera-controls:generate-thumbnail', { projectId });
+    console.log('📤 Event emitted with project ID:', projectId);
     // Reset loading state after a delay (thumbnail generation is async)
     setTimeout(() => setIsGeneratingThumbnail(false), 3000);
   };
@@ -100,8 +100,8 @@ export function SettingsPanel() {
         </Button>
       </div>
 
-      {/* Thumbnail Section (only for cloud properties) */}
-      {propertyId && !isLocalProperty && (
+      {/* Thumbnail Section (only for cloud projects) */}
+      {projectId && !isLocalProject && (
         <div className="space-y-2">
           <label className="font-medium text-muted-foreground text-xs uppercase">
             Thumbnail

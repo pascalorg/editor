@@ -4,44 +4,41 @@ import { emitter } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { uploadPropertyThumbnail } from '@/features/community/lib/properties/actions'
+import { uploadProjectThumbnail } from '@/features/community/lib/projects/actions'
 
 const THUMBNAIL_WIDTH = 1920
 const THUMBNAIL_HEIGHT = 1080
 
 interface ThumbnailGeneratorProps {
-  propertyId?: string
+  projectId?: string
 }
 
-export const ThumbnailGenerator = ({ propertyId: propPropertyId }: ThumbnailGeneratorProps) => {
+export const ThumbnailGenerator = ({ projectId: propProjectId }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
   const isGenerating = useRef(false)
 
-  // Use prop propertyId (from URL)
-  const fallbackPropertyId = propPropertyId
+  // Use prop projectId (from URL)
+  const fallbackProjectId = propProjectId
 
   useEffect(() => {
-    const handleGenerateThumbnail = async (event: { propertyId: string }) => {
+    const handleGenerateThumbnail = async (event: { projectId: string }) => {
       if (isGenerating.current) {
         console.log('⏸️ Thumbnail generation already in progress')
         return
       }
 
-      // Prioritize prop propertyId over event propertyId (URL has priority over session)
-      const propertyId = fallbackPropertyId || event.propertyId
+      // Prioritize prop projectId over event projectId (URL has priority over session)
+      const projectId = fallbackProjectId || event.projectId
 
-      if (!propertyId) {
-        console.error('❌ No property ID provided')
+      if (!projectId) {
+        console.error('❌ No project ID provided')
         return
       }
 
       isGenerating.current = true
-      console.log('📸 Generating thumbnail for property:', propertyId)
-      console.log('📝 Property ID from URL/prop:', fallbackPropertyId)
-      console.log('📝 Property ID from event:', event.propertyId)
-      console.log('✅ Using property ID:', propertyId, fallbackPropertyId ? '(from URL)' : '(from event)')
+      console.log('📸 Generating thumbnail for project:', projectId)
 
       try {
         // Save current renderer state
@@ -70,7 +67,7 @@ export const ThumbnailGenerator = ({ propertyId: propPropertyId }: ThumbnailGene
           if (blob) {
             // Upload to Supabase Storage
             console.log('☁️ Uploading thumbnail to storage...')
-            const result = await uploadPropertyThumbnail(propertyId, blob)
+            const result = await uploadProjectThumbnail(projectId, blob)
 
             if (result.success) {
               console.log('✅ Thumbnail uploaded successfully!')
@@ -116,7 +113,7 @@ export const ThumbnailGenerator = ({ propertyId: propPropertyId }: ThumbnailGene
     return () => {
       emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
     }
-  }, [gl, scene, camera, fallbackPropertyId])
+  }, [gl, scene, camera, fallbackProjectId])
 
   return null
 }

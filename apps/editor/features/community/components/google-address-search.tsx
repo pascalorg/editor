@@ -96,7 +96,7 @@ export function GoogleAddressSearch({ onAddressSelect, disabled }: GoogleAddress
       <div className="space-y-2">
         <label className="flex items-center gap-2 font-medium text-sm">
           <MapPin className="h-4 w-4" />
-          Property Address
+          Project Address
         </label>
         <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
           <input

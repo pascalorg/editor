@@ -13,8 +13,8 @@ export const sessions = pgTable('auth_sessions', (t) => ({
   token: t.text('token').notNull(),
   ipAddress: t.text('ip_address'),
   userAgent: t.text('user_agent'),
-  // Custom: active property for the session context
-  activePropertyId: t.text('active_property_id'),
+  // Custom: active project for the session context
+  activeProjectId: t.text('active_project_id'),
   // Admin plugin support: tracks who is impersonating this session
   impersonatedBy: t
     .text('impersonated_by')

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { id, timestampsColumns } from '../../helpers'
 
 export const addresses = pgTable(
-  'properties_addresses',
+  'projects_addresses',
   (t) => ({
     id: id('address'),
     streetNumber: t.text('street_number'),

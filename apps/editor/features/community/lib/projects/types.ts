@@ -1,15 +1,15 @@
 /**
- * Property-related type definitions
+ * Project-related type definitions
  * Isolated from monorepo database schema
  */
 
 // Database table row types
-export type DbProperty = {
+export type DbProject = {
   id: string
   name: string
   owner_id: string
   organization_id: string | null
-  address_id: string
+  address_id: string | null
   created_at: string
   updated_at: string
   is_private: boolean
@@ -18,7 +18,7 @@ export type DbProperty = {
   thumbnail_url: string | null
 }
 
-export type DbPropertyAddress = {
+export type DbProjectAddress = {
   id: string
   street_number?: string
   route?: string
@@ -32,9 +32,9 @@ export type DbPropertyAddress = {
   updated_at: string
 }
 
-export type DbPropertyModel = {
+export type DbProjectModel = {
   id: string
-  property_id: string
+  project_id: string
   version: number
   scene_graph: any
   created_at: string
@@ -42,9 +42,9 @@ export type DbPropertyModel = {
   deleted_at: string | null
 }
 
-export type DbPropertyLike = {
+export type DbProjectLike = {
   id: string
-  property_id: string
+  project_id: string
   user_id: string
   created_at: string
 }
@@ -53,46 +53,46 @@ export type DbPropertyLike = {
 export type Database = {
   public: {
     Tables: {
-      properties: {
-        Row: DbProperty
-        Insert: Omit<DbProperty, 'created_at' | 'updated_at' | 'views' | 'likes'>
-        Update: Partial<Omit<DbProperty, 'id' | 'created_at' | 'updated_at'>>
+      projects: {
+        Row: DbProject
+        Insert: Omit<DbProject, 'created_at' | 'updated_at' | 'views' | 'likes'>
+        Update: Partial<Omit<DbProject, 'id' | 'created_at' | 'updated_at'>>
       }
-      properties_addresses: {
-        Row: DbPropertyAddress
-        Insert: Omit<DbPropertyAddress, 'created_at' | 'updated_at'>
-        Update: Partial<Omit<DbPropertyAddress, 'id' | 'created_at' | 'updated_at'>>
+      projects_addresses: {
+        Row: DbProjectAddress
+        Insert: Omit<DbProjectAddress, 'created_at' | 'updated_at'>
+        Update: Partial<Omit<DbProjectAddress, 'id' | 'created_at' | 'updated_at'>>
       }
-      properties_models: {
-        Row: DbPropertyModel
-        Insert: Omit<DbPropertyModel, 'created_at' | 'updated_at' | 'deleted_at'>
-        Update: Partial<Omit<DbPropertyModel, 'id' | 'created_at' | 'updated_at'>>
+      projects_models: {
+        Row: DbProjectModel
+        Insert: Omit<DbProjectModel, 'created_at' | 'updated_at' | 'deleted_at'>
+        Update: Partial<Omit<DbProjectModel, 'id' | 'created_at' | 'updated_at'>>
       }
-      property_likes: {
-        Row: DbPropertyLike
-        Insert: Omit<DbPropertyLike, 'created_at'>
-        Update: Partial<Omit<DbPropertyLike, 'id' | 'created_at'>>
+      projects_likes: {
+        Row: DbProjectLike
+        Insert: Omit<DbProjectLike, 'created_at'>
+        Update: Partial<Omit<DbProjectLike, 'id' | 'created_at'>>
       }
     }
     Functions: {
-      increment_property_views: {
-        Args: { property_id: string }
+      increment_project_views: {
+        Args: { project_id: string }
         Returns: undefined
       }
-      get_property_like_count: {
-        Args: { property_id: string }
+      get_project_like_count: {
+        Args: { project_id: string }
         Returns: number
       }
     }
   }
 }
 
-export type Property = {
+export type Project = {
   id: string
   name: string
   owner_id: string
   organization_id: string | null
-  address_id: string
+  address_id: string | null
   created_at: string
   updated_at: string
   // Community features
@@ -110,12 +110,12 @@ export type Property = {
     country?: string
     latitude?: string
     longitude?: string
-  }
+  } | null
 }
 
-export type CreatePropertyParams = {
+export type CreateProjectParams = {
   name: string
-  center: [number, number]
+  center?: [number, number]
   streetNumber?: string
   route?: string
   routeShort?: string

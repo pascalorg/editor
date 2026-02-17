@@ -4,8 +4,8 @@ import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-a
 import { Viewer } from '@pascal-app/viewer'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import useEditor from '@/store/use-editor'
-import { usePropertyScene } from '@/features/community/lib/models/hooks'
-import { useLocalPropertyScene } from '@/features/community/lib/local-storage/hooks'
+import { useProjectScene } from '@/features/community/lib/models/hooks'
+import { useLocalProjectScene } from '@/features/community/lib/local-storage/hooks'
 import { useAuth } from '@/features/community/lib/auth/hooks'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
@@ -22,7 +22,7 @@ import { SelectionManager } from './selection-manager'
 import { initSFXBus } from '@/lib/sfx-bus'
 import { ThumbnailGenerator } from '@/app/viewer/[id]/thumbnail-generator'
 
-// Load default scene initially (will be replaced when property loads)
+// Load default scene initially (will be replaced when project loads)
 useScene.getState().loadScene()
 initSpatialGridSync()
 initSpaceDetectionSync(useScene, useEditor)
@@ -31,23 +31,23 @@ initSpaceDetectionSync(useScene, useEditor)
 initSFXBus()
 
 interface EditorProps {
-  propertyId?: string
+  projectId?: string
 }
 
-export default function Editor({ propertyId }: EditorProps) {
+export default function Editor({ projectId }: EditorProps) {
   useKeyboard()
   const { isAuthenticated } = useAuth()
 
   // Determine which mode to use
-  const isLocalProperty = propertyId?.startsWith('local_')
-  const shouldUseCloud = isAuthenticated && !isLocalProperty
-  const shouldUseLocal = !shouldUseCloud && !!propertyId
+  const isLocalProject = projectId?.startsWith('local_')
+  const shouldUseCloud = isAuthenticated && !isLocalProject
+  const shouldUseLocal = !shouldUseCloud && !!projectId
 
   // Call hooks unconditionally (hooks internally check if they should activate)
-  // Cloud hook activates when there's an activeProperty in the store
-  usePropertyScene()
-  // Local hook activates when propertyId is provided and starts with 'local_'
-  useLocalPropertyScene(shouldUseLocal ? propertyId : undefined)
+  // Cloud hook activates when there's an activeProject in the store
+  useProjectScene()
+  // Local hook activates when projectId is provided and starts with 'local_'
+  useLocalProjectScene(shouldUseLocal ? projectId : undefined)
 
   return (
     <div className="w-full h-full">
@@ -74,7 +74,7 @@ export default function Editor({ propertyId }: EditorProps) {
         <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
         <ToolManager />
         <CustomCameraControls />
-        <ThumbnailGenerator propertyId={propertyId} />
+        <ThumbnailGenerator projectId={projectId} />
       </Viewer>
     </div>
   )

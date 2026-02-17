@@ -1,6 +1,6 @@
 /**
- * Property model actions - Server actions for scene loading/saving
- * Manages 3D models (scene graphs) stored in properties_models table
+ * Project model actions - Server actions for scene loading/saving
+ * Manages 3D models (scene graphs) stored in projects_models table
  */
 
 'use server'
@@ -9,28 +9,28 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
-import type { ActionResult } from '../properties/actions'
+import type { ActionResult } from '../projects/actions'
 
 export interface SceneGraph {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
 }
 
-export interface PropertyModel {
+export interface ProjectModel {
   id: string
   name: string
   version: number
   draft: boolean
-  property_id: string
+  project_id: string
   scene_graph: SceneGraph | null
   created_at: string
   updated_at: string
 }
 
 /**
- * Get the latest model for a property (highest version)
+ * Get the latest model for a project (highest version)
  */
-export async function getPropertyModel(propertyId: string): Promise<ActionResult<PropertyModel | null>> {
+export async function getProjectModel(projectId: string): Promise<ActionResult<ProjectModel | null>> {
   try {
     const session = await getSession()
 
@@ -44,23 +44,23 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
 
     const supabase = await createServerSupabaseClient()
 
-    // Get the property to verify ownership
-    const { data: property, error: propertyError } = await supabase
-      .from('properties')
+    // Get the project to verify ownership
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
       .select('id, owner_id')
-      .eq('id', propertyId)
+      .eq('id', projectId)
       .single<{ id: string; owner_id: string }>()
 
-    if (propertyError || !property) {
+    if (projectError || !project) {
       return {
         success: false,
-        error: 'Property not found',
+        error: 'Project not found',
         data: null,
       }
     }
 
     // Verify ownership
-    if (property.owner_id !== session.user.id) {
+    if (project.owner_id !== session.user.id) {
       return {
         success: false,
         error: 'Unauthorized',
@@ -70,17 +70,17 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
 
     // Get the latest model (highest version, then most recent)
     const { data: model, error: modelError } = await supabase
-      .from('properties_models')
+      .from('projects_models')
       .select('*')
-      .eq('property_id', propertyId)
+      .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('version', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
-      .single<PropertyModel>()
+      .single<ProjectModel>()
 
-    console.log('[getPropertyModel] Query result:', {
-      propertyId,
+    console.log('[getProjectModel] Query result:', {
+      projectId,
       hasModel: !!model,
       modelError: modelError?.message,
       errorCode: modelError?.code,
@@ -90,14 +90,14 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
     if (modelError) {
       // No model found is not an error - just return null
       if (modelError.code === 'PGRST116') {
-        console.log('[getPropertyModel] No model found (PGRST116), returning null')
+        console.log('[getProjectModel] No model found (PGRST116), returning null')
         return {
           success: true,
           data: null,
         }
       }
 
-      console.log('[getPropertyModel] Database error:', modelError)
+      console.log('[getProjectModel] Database error:', modelError)
       return {
         success: false,
         error: modelError.message,
@@ -105,7 +105,7 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
       }
     }
 
-    console.log('[getPropertyModel] Model found:', {
+    console.log('[getProjectModel] Model found:', {
       id: model.id,
       version: model.version,
       hasSceneGraph: !!model.scene_graph,
@@ -113,25 +113,25 @@ export async function getPropertyModel(propertyId: string): Promise<ActionResult
 
     return {
       success: true,
-      data: model as PropertyModel,
+      data: model as ProjectModel,
     }
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch property model',
+      error: error instanceof Error ? error.message : 'Failed to fetch project model',
       data: null,
     }
   }
 }
 
 /**
- * Save or update a property model's scene graph
+ * Save or update a project model's scene graph
  * If a model exists, updates it. Otherwise creates a new one.
  */
-export async function savePropertyModel(
-  propertyId: string,
+export async function saveProjectModel(
+  projectId: string,
   sceneGraph: SceneGraph,
-): Promise<ActionResult<PropertyModel>> {
+): Promise<ActionResult<ProjectModel>> {
   try {
     const session = await getSession()
 
@@ -144,22 +144,22 @@ export async function savePropertyModel(
 
     const supabase = await createServerSupabaseClient()
 
-    // Get the property to verify ownership
-    const { data: property, error: propertyError } = await supabase
-      .from('properties')
+    // Get the project to verify ownership
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
       .select('id, owner_id, name')
-      .eq('id', propertyId)
+      .eq('id', projectId)
       .single<{ id: string; owner_id: string; name: string }>()
 
-    if (propertyError || !property) {
+    if (projectError || !project) {
       return {
         success: false,
-        error: 'Property not found',
+        error: 'Project not found',
       }
     }
 
     // Verify ownership
-    if (property.owner_id !== session.user.id) {
+    if (project.owner_id !== session.user.id) {
       return {
         success: false,
         error: 'Unauthorized',
@@ -168,9 +168,9 @@ export async function savePropertyModel(
 
     // Check if a model already exists
     const { data: existingModel } = await supabase
-      .from('properties_models')
+      .from('projects_models')
       .select('id, version')
-      .eq('property_id', propertyId)
+      .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('version', { ascending: false })
       .order('created_at', { ascending: false })
@@ -184,11 +184,11 @@ export async function savePropertyModel(
         updated_at: new Date().toISOString(),
       }
       const { data: updatedModel, error: updateError } = (await (supabase
-        .from('properties_models') as any)
+        .from('projects_models') as any)
         .update(updateData)
         .eq('id', existingModel.id)
         .select()
-        .single()) as { data: PropertyModel | null; error: any }
+        .single()) as { data: ProjectModel | null; error: any }
 
       if (updateError) {
         return {
@@ -199,7 +199,7 @@ export async function savePropertyModel(
 
       return {
         success: true,
-        data: updatedModel as PropertyModel,
+        data: updatedModel as ProjectModel,
         message: 'Model updated successfully',
       }
     } else {
@@ -208,17 +208,17 @@ export async function savePropertyModel(
 
       const insertData = {
         id: modelId,
-        property_id: propertyId,
-        name: `${property.name} - Editor`,
+        project_id: projectId,
+        name: `${project.name} - Editor`,
         version: 1,
         draft: true,
         scene_graph: sceneGraph,
       }
       const { data: newModel, error: createError } = (await (supabase
-        .from('properties_models') as any)
+        .from('projects_models') as any)
         .insert(insertData)
         .select()
-        .single()) as { data: PropertyModel | null; error: any }
+        .single()) as { data: ProjectModel | null; error: any }
 
       if (createError) {
         return {
@@ -229,14 +229,14 @@ export async function savePropertyModel(
 
       return {
         success: true,
-        data: newModel as PropertyModel,
+        data: newModel as ProjectModel,
         message: 'Model created successfully',
       }
     }
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to save property model',
+      error: error instanceof Error ? error.message : 'Failed to save project model',
     }
   }
 }
