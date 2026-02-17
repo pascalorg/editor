@@ -1,7 +1,7 @@
 import { type SiteNode, useRegistry } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Group, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
 
@@ -91,26 +91,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Transparent floor fill */}
-      <mesh position={[0, Y_OFFSET - 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, Y_OFFSET - 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <shapeGeometry args={[floorShape]} />
-        <meshBasicMaterial
-          color="#f59e0b"
-          transparent
-          opacity={0.05}
-          side={DoubleSide}
-          depthWrite={false}
-        />
+        <shadowMaterial  transparent opacity={0.75} />
       </mesh>
 
       {/* Simple boundary line */}
       {/* @ts-ignore */}
       <line geometry={lineGeometry} frustumCulled={false} renderOrder={9}>
-        <lineBasicMaterial
-          color="#f59e0b"
-          linewidth={2}
-          transparent
-          opacity={0.6}
-        />
+        <lineBasicMaterial color="#f59e0b" linewidth={2} transparent opacity={0.6} />
       </line>
 
       {/* Edge distance labels */}
