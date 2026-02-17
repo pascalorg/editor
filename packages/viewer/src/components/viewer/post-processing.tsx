@@ -26,7 +26,7 @@ import useViewer from '../../store/use-viewer'
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 1, 
+  sliceCount: 2, 
   stepCount: 8,
   radius: 1,
   expFactor: 1.5,

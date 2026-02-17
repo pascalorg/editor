@@ -10,6 +10,7 @@ const assetSchema = z.object({
   src: z.string(),
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
+  tags: z.array(z.string()).optional(),
   // These are "Corrective" transforms to normalize the GLB
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
@@ -42,6 +43,7 @@ export const ItemNode = BaseNode.extend({
     - offset: corrective position offset for the model
     - rotation: corrective rotation for the model
     - scale: corrective scale for the model
+    - tags: tags associated with the item
 `)
 
 export type ItemNode = z.infer<typeof ItemNode>
