@@ -1,8 +1,7 @@
-import { type AnyNodeId, ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type AssetInput, ItemNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
-import type { AssetInput } from '@pascal-app/core'
 import { stripTransient } from './placement-math'
 
 interface OriginalState {
@@ -159,14 +158,25 @@ export function useDraftNode(): DraftNodeHandle {
     if (adoptedRef.current && originalStateRef.current) {
       // Move mode: restore original state instead of deleting
       const original = originalStateRef.current
+      const id = draftRef.current.id
 
-      useScene.getState().updateNode(draftRef.current.id, {
+      useScene.getState().updateNode(id, {
         position: original.position,
         rotation: original.rotation,
         side: original.side,
         parentId: original.parentId,
         metadata: original.metadata,
       })
+
+      // Also reset the Three.js mesh directly — the store update triggers a React
+      // re-render but the mesh position was mutated by useFrame and may not reset
+      // until the next render cycle, leaving a visual glitch.
+      const mesh = sceneRegistry.nodes.get(id as AnyNodeId)
+      if (mesh) {
+        mesh.position.set(original.position[0], original.position[1], original.position[2])
+        mesh.rotation.y = original.rotation[1] ?? 0
+        mesh.visible = true
+      }
     } else {
       // Create mode: delete the transient node
       useScene.getState().deleteNode(draftRef.current.id)

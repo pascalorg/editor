@@ -138,14 +138,20 @@ export const SlabTool: React.FC = () => {
       }
     }
 
+    const onCancel = () => {
+      setPoints([])
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
+    emitter.on('tool:cancel', onCancel)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
+      emitter.off('tool:cancel', onCancel)
     }
   }, [currentLevelId, points, cursorPosition, setSelection])
 

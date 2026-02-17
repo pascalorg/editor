@@ -3,7 +3,7 @@
 import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
 
 const currentTarget = new Vector3()
@@ -48,6 +48,85 @@ export const CustomCameraControls = () => {
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
+    }
+  }, [cameraMode])
+
+  useEffect(() => {
+    const keyState = {
+      shiftRight: false,
+      shiftLeft: false,
+      controlRight: false,
+      controlLeft: false,
+      space: false,
+    }
+
+    const updateConfig = () => {
+      if (!controls.current) return
+
+      const shift = keyState.shiftRight || keyState.shiftLeft
+      const control = keyState.controlRight || keyState.controlLeft
+      const space = keyState.space
+
+      const wheelAction =
+        cameraMode === 'orthographic'
+          ? CameraControlsImpl.ACTION.ZOOM
+          : CameraControlsImpl.ACTION.DOLLY
+      controls.current.mouseButtons.wheel = wheelAction
+      controls.current.mouseButtons.left = CameraControlsImpl.ACTION.NONE
+      controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
+      controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
+      if (space) {
+        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
+      }
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        keyState.space = true
+        document.body.style.cursor = 'grab'
+      }
+      if (event.code === 'ShiftRight') {
+        keyState.shiftRight = true
+      }
+      if (event.code === 'ShiftLeft') {
+        keyState.shiftLeft = true
+      }
+      if (event.code === 'ControlRight') {
+        keyState.controlRight = true
+      }
+      if (event.code === 'ControlLeft') {
+        keyState.controlLeft = true
+      }
+      updateConfig()
+    }
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        keyState.space = false
+        document.body.style.cursor = ''
+      }
+      if (event.code === 'ShiftRight') {
+        keyState.shiftRight = false
+      }
+      if (event.code === 'ShiftLeft') {
+        keyState.shiftLeft = false
+      }
+      if (event.code === 'ControlRight') {
+        keyState.controlRight = false
+      }
+      if (event.code === 'ControlLeft') {
+        keyState.controlLeft = false
+      }
+      updateConfig()
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+    updateConfig()
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
     }
   }, [cameraMode])
 
@@ -139,6 +218,14 @@ export const CustomCameraControls = () => {
     }
   }, [])
 
+  const onTransitionStart = useCallback(() => {
+    useViewer.getState().setCameraDragging(true)
+  }, [])
+
+  const onRest = useCallback(() => {
+    useViewer.getState().setCameraDragging(false)
+  }, [])
+
   return (
     <CameraControls
       makeDefault
@@ -148,6 +235,9 @@ export const CustomCameraControls = () => {
       minPolarAngle={0}
       ref={controls}
       mouseButtons={mouseButtons}
+      onTransitionStart={onTransitionStart}
+      onRest={onRest}
+      restThreshold={0.01}
     />
   )
 }

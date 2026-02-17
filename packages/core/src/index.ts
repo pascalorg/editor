@@ -3,17 +3,17 @@
 export type {
   BuildingEvent,
   CameraControlEvent,
+  CeilingEvent,
   EventSuffix,
   GridEvent,
   ItemEvent,
   LevelEvent,
   NodeEvent,
+  RoofEvent,
   SiteEvent,
   SlabEvent,
   WallEvent,
   ZoneEvent,
-  CeilingEvent,
-  RoofEvent,
 } from './events/bus'
 // Events
 export { emitter, eventSuffixes } from './events/bus'
@@ -37,6 +37,7 @@ export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'
 export { WallSystem } from './systems/wall/wall-system'
+export { WindowSystem } from './systems/window/window-system'
 
 export { isObject } from './utils/types'
 // Asset storage

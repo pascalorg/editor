@@ -74,6 +74,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const placementState = useRef<PlacementState>(
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null },
   )
+  const shiftFreeRef = useRef(false)
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -104,8 +105,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       state: { ...placementState.current },
     })
 
+    const getActiveValidators = () => shiftFreeRef.current
+      ? { canPlaceOnFloor: () => ({ valid: true }), canPlaceOnWall: () => ({ valid: true }), canPlaceOnCeiling: () => ({ valid: true }) }
+      : validators
+
     const revalidate = (): boolean => {
-      const placeable = checkCanPlace(getContext(), validators)
+      const placeable = shiftFreeRef.current || checkCanPlace(getContext(), validators)
       const color = placeable ? 0x22c55e : 0xef4444 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
@@ -196,7 +201,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onGridClick = (event: GridEvent) => {
-      const result = floorStrategy.click(getContext(), event, validators)
+      const result = floorStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
 
       // Preserve cursor rotation for the next draft
@@ -213,7 +218,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onWallEnter = (event: WallEvent) => {
       const nodes = useScene.getState().nodes
-      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
+      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, getActiveValidators())
       if (!result) return
 
       event.stopPropagation()
@@ -235,7 +240,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (ctx.state.surface !== 'wall') {
         const nodes = useScene.getState().nodes
-        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes, validators)
+        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes, getActiveValidators())
         if (!enterResult) return
 
         event.stopPropagation()
@@ -251,7 +256,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (!draftNode.current) {
         const nodes = useScene.getState().nodes
-        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
+        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, getActiveValidators())
         if (!setup) return
 
         event.stopPropagation()
@@ -259,7 +264,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      const result = wallStrategy.move(ctx, event, validators)
+      const result = wallStrategy.move(ctx, event, getActiveValidators())
       if (!result) return
 
       event.stopPropagation()
@@ -312,7 +317,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallClick = (event: WallEvent) => {
-      const result = wallStrategy.click(getContext(), event, validators)
+      const result = wallStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
 
       event.stopPropagation()
@@ -423,7 +428,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingClick = (event: CeilingEvent) => {
-      const result = ceilingStrategy.click(getContext(), event, validators)
+      const result = ceilingStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
 
       event.stopPropagation()
@@ -474,10 +479,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const ROTATION_STEP = Math.PI / 2
     const onKeyDown = (event: KeyboardEvent) => {
-      // Escape / right-click → cancel
-      if (event.key === 'Escape' && configRef.current.onCancel) {
-        event.preventDefault()
-        configRef.current.onCancel()
+      if (event.key === 'Shift') {
+        shiftFreeRef.current = true
+        revalidate()
         return
       }
 
@@ -502,7 +506,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         revalidate()
       }
     }
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        shiftFreeRef.current = false
+        revalidate()
+      }
+    }
+
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+
+    // ---- tool:cancel (Escape / programmatic) ----
+    const onCancel = () => {
+      if (configRef.current.onCancel) {
+        configRef.current.onCancel()
+      }
+    }
+    emitter.on('tool:cancel', onCancel)
 
     // ---- Right-click cancel ----
     const onContextMenu = (event: MouseEvent) => {
@@ -547,7 +568,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
+      emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('contextmenu', onContextMenu)
     }
   }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])

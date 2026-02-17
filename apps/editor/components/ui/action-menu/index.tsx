@@ -34,7 +34,7 @@ export function ActionMenu({ className }: { className?: string }) {
           {mode === "build" && tool === "item" && catalogCategory && (
             <motion.div
               className={cn(
-                "overflow-hidden border-zinc-800 max-h-96 border-b px-2 py-2",
+                "overflow-hidden border-zinc-800 border-b px-2 py-2",
               )}
               initial={{
                 opacity: 0,
@@ -45,7 +45,7 @@ export function ActionMenu({ className }: { className?: string }) {
               }}
               animate={{
                 opacity: 1,
-                maxHeight: 80,
+                maxHeight: 160,
                 paddingTop: 8,
                 paddingBottom: 8,
                 borderBottomWidth: 1,

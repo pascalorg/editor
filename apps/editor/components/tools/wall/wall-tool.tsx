@@ -158,14 +158,23 @@ export const WallTool: React.FC = () => {
       }
     }
 
+    const onCancel = () => {
+      if (buildingState.current === 1) {
+        buildingState.current = 0
+        wallPreviewRef.current.visible = false
+      }
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
+    emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
+      emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }

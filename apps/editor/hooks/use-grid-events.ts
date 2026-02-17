@@ -1,4 +1,5 @@
 import { type EventSuffix, emitter, type GridEvent } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
@@ -53,29 +54,35 @@ export function useGridEvents(gridY: number) {
     }
 
     const handlePointerDown = (e: PointerEvent) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     }
 
     const handlePointerUp = (e: PointerEvent) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerup', e)
     }
 
     const handleClick = (e: PointerEvent) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('click', e)
     }
 
     const handlePointerMove = (e: PointerEvent) => {
+      if (useViewer.getState().cameraDragging) return
       emit('move', e)
     }
 
     const handleDoubleClick = (e: MouseEvent) => {
+      if (useViewer.getState().cameraDragging) return
       emit('double-click', e)
     }
 
     const handleContextMenu = (e: MouseEvent) => {
+      if (useViewer.getState().cameraDragging) return
       emit('context-menu', e)
     }
 
@@ -95,5 +102,5 @@ export function useGridEvents(gridY: number) {
       canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('contextmenu', handleContextMenu)
     }
-  }, [camera, gl, gridY])
+  }, [camera, gl])
 }

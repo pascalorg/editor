@@ -21,6 +21,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
+import useViewer from '../store/use-viewer';
 
 type NodeConfig = {
   site: { node: SiteNode; event: SiteEvent }
@@ -54,21 +55,24 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
 
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerup', e)
     },
     onClick: (e: ThreeEvent<PointerEvent>) => {
+      if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('click', e)
     },
-    onPointerEnter: (e: ThreeEvent<PointerEvent>) => emit('enter', e),
-    onPointerLeave: (e: ThreeEvent<PointerEvent>) => emit('leave', e),
-    onPointerMove: (e: ThreeEvent<PointerEvent>) => emit('move', e),
-    onDoubleClick: (e: ThreeEvent<PointerEvent>) => emit('double-click', e),
-    onContextMenu: (e: ThreeEvent<PointerEvent>) => emit('context-menu', e),
+    onPointerEnter: (e: ThreeEvent<PointerEvent>) => {if (useViewer.getState().cameraDragging) return; emit('enter', e)},
+    onPointerLeave: (e: ThreeEvent<PointerEvent>) => {if (useViewer.getState().cameraDragging) return; emit('leave', e)},
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => {if (useViewer.getState().cameraDragging) return; emit('move', e)},
+    onDoubleClick: (e: ThreeEvent<PointerEvent>) => {if (useViewer.getState().cameraDragging) return; emit('double-click', e)},
+    onContextMenu: (e: ThreeEvent<PointerEvent>) => {if (useViewer.getState().cameraDragging) return; emit('context-menu', e)},
   }
 }

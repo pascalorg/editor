@@ -17,5 +17,6 @@ export { RoofNode } from './nodes/roof'
 export { ScanNode } from './nodes/scan'
 export { GuideNode } from './nodes/guide'
 export type { AnyNodeId, AnyNodeType } from './types'
+export { WindowNode } from './nodes/window'
 // Union types
 export { AnyNode } from './types'

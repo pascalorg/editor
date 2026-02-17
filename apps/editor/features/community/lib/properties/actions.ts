@@ -66,6 +66,40 @@ export async function getUserProperties(): Promise<ActionResult<Property[]>> {
 }
 
 /**
+ * Get a specific property by ID for the current user
+ */
+export async function getPropertyById(propertyId: string): Promise<ActionResult<Property | null>> {
+  try {
+    const session = await getSession()
+
+    if (!session?.user) {
+      return { success: false, error: 'Not authenticated', data: null }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('properties')
+      .select(`*, address:properties_addresses(*)`)
+      .eq('id', propertyId)
+      .eq('owner_id', session.user.id)
+      .single<Property>()
+
+    if (error) {
+      return { success: false, error: error.message, data: null }
+    }
+
+    return { success: true, data: data as Property }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch property',
+      data: null,
+    }
+  }
+}
+
+/**
  * Get the active property for the current session
  */
 export async function getActiveProperty(): Promise<ActionResult<Property | null>> {
@@ -888,6 +922,87 @@ export async function togglePropertyLike(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to toggle like',
+    }
+  }
+}
+
+/**
+ * Upload a thumbnail image to Supabase Storage and update the property
+ */
+export async function uploadPropertyThumbnail(
+  propertyId: string,
+  blob: Blob
+): Promise<{ success: true; data: { thumbnail_url: string } } | { success: false; error: string }> {
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    // Validate file size (max 10MB)
+    const MAX_SIZE = 10 * 1024 * 1024
+    if (blob.size > MAX_SIZE) {
+      return { success: false, error: `Image too large (${(blob.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB.` }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // Verify the user owns this property
+    const { data: property, error: propertyError } = await supabase
+      .from('properties')
+      .select('owner_id')
+      .eq('id', propertyId)
+      .single()
+
+    if (propertyError || !property) {
+      return { success: false, error: 'Property not found' }
+    }
+
+    if ((property as any).owner_id !== session.user.id) {
+      return { success: false, error: 'Not authorized to update this property' }
+    }
+
+    // Generate a unique filename
+    const timestamp = Date.now()
+    const filename = `${propertyId}/${timestamp}.png`
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('property-thumbnails')
+      .upload(filename, blob, {
+        contentType: 'image/png',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      return { success: false, error: `Upload failed: ${uploadError.message}` }
+    }
+
+    // Get the public URL
+    const { data: urlData } = supabase.storage
+      .from('property-thumbnails')
+      .getPublicUrl(uploadData.path)
+
+    const thumbnailUrl = urlData.publicUrl
+
+    // Update the property with the new thumbnail URL
+    const { error: updateError } = await (supabase
+      .from('properties') as any)
+      .update({ thumbnail_url: thumbnailUrl })
+      .eq('id', propertyId)
+
+    if (updateError) {
+      return { success: false, error: `Failed to update property: ${updateError.message}` }
+    }
+
+    return {
+      success: true,
+      data: { thumbnail_url: thumbnailUrl },
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to upload thumbnail',
     }
   }
 }

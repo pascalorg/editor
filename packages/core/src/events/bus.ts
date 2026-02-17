@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
-import type { BuildingNode, CeilingNode, ItemNode, LevelNode, RoofNode, SiteNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import type { BuildingNode, CeilingNode, ItemNode, LevelNode, RoofNode, SiteNode, SlabNode, WallNode, WindowNode, ZoneNode } from '../schema'
 import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
@@ -27,6 +27,7 @@ export type ZoneEvent = NodeEvent<ZoneNode>
 export type SlabEvent = NodeEvent<SlabNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type RoofEvent = NodeEvent<RoofNode>
+export type WindowEvent = NodeEvent<WindowNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -54,12 +55,21 @@ export interface CameraControlEvent {
   nodeId: AnyNode['id']
 }
 
+export interface ThumbnailGenerateEvent {
+  propertyId: string
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:capture': CameraControlEvent
   'camera-controls:top-view': undefined
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
+  'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+}
+
+type ToolEvents = {
+  'tool:cancel': undefined
 }
 
 type EditorEvents = GridEvents &
@@ -72,6 +82,8 @@ type EditorEvents = GridEvents &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'roof', RoofEvent> &
-  CameraControlEvents
+  NodeEvents<'window', WindowEvent> &
+  CameraControlEvents &
+  ToolEvents
 
 export const emitter = mitt<EditorEvents>()

@@ -3,15 +3,15 @@
 import {
   type AnyNode,
   type BuildingNode,
+  emitter,
   type ItemNode,
   type LevelNode,
   type NodeEvent,
-  type WallNode,
-  type ZoneNode,
-  emitter,
   pointInPolygon,
   sceneRegistry,
   useScene,
+  type WallNode,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -23,14 +23,24 @@ const tempWorldPos = new Vector3()
 // Tolerance for edge detection (in meters)
 const EDGE_TOLERANCE = 0.5
 
-type SelectableNodeType = 'building' | 'level' | 'zone' | 'wall' | 'item' | 'slab' | 'ceiling' | 'roof'
+type SelectableNodeType =
+  | 'building'
+  | 'level'
+  | 'zone'
+  | 'wall'
+  | 'window'
+  | 'item'
+  | 'slab'
+  | 'ceiling'
+  | 'roof'
 
 // Expand polygon outward by a small amount to include items on edges
 const expandPolygon = (polygon: [number, number][], tolerance: number): [number, number][] => {
   if (polygon.length < 3) return polygon
 
   // Calculate centroid
-  let cx = 0, cz = 0
+  let cx = 0,
+    cz = 0
   for (const [x, z] of polygon) {
     cx += x
     cz += z
@@ -50,7 +60,11 @@ const expandPolygon = (polygon: [number, number][], tolerance: number): [number,
 }
 
 // Check if point is in polygon with tolerance for edges
-const pointInPolygonWithTolerance = (x: number, z: number, polygon: [number, number][]): boolean => {
+const pointInPolygonWithTolerance = (
+  x: number,
+  z: number,
+  polygon: [number, number][],
+): boolean => {
   // First try exact check
   if (pointInPolygon(x, z, polygon)) return true
   // Then try with expanded polygon for edge tolerance
@@ -179,14 +193,16 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs)
+  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows)
   return {
-    types: ['wall', 'item', 'slab', 'ceiling', 'roof'],
+    types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window'],
     handleClick: (node) => {
       const { selectedIds } = useViewer.getState().selection
       // Toggle selection - if already selected, deselect; otherwise select
       if (selectedIds.includes(node.id)) {
-        useViewer.getState().setSelection({ selectedIds: selectedIds.filter((id) => id !== node.id) })
+        useViewer
+          .getState()
+          .setSelection({ selectedIds: selectedIds.filter((id) => id !== node.id) })
       } else {
         useViewer.getState().setSelection({ selectedIds: [node.id] })
       }
@@ -201,7 +217,7 @@ const getStrategy = (): SelectionStrategy | null => {
       }
     },
     isValid: (node) => {
-      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof']
+      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof', 'window']
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
     },
@@ -244,7 +260,17 @@ export const SelectionManager = () => {
     }
 
     // Subscribe to all node types
-    const allTypes: SelectableNodeType[] = ['building', 'level', 'zone', 'wall', 'item', 'slab', 'ceiling', 'roof']
+    const allTypes: SelectableNodeType[] = [
+      'building',
+      'level',
+      'zone',
+      'wall',
+      'item',
+      'slab',
+      'ceiling',
+      'roof',
+      'window',
+    ]
     for (const type of allTypes) {
       emitter.on(`${type}:enter`, onEnter)
       emitter.on(`${type}:leave`, onLeave)
@@ -258,7 +284,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:click`, onClick)
       }
     }
-  }, [selection])
+  }, [])
 
   return (
     <>
@@ -268,12 +294,17 @@ export const SelectionManager = () => {
   )
 }
 
-const PointerMissedHandler = ({ clickHandledRef }: { clickHandledRef: React.MutableRefObject<boolean> }) => {
+const PointerMissedHandler = ({
+  clickHandledRef,
+}: {
+  clickHandledRef: React.MutableRefObject<boolean>
+}) => {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
+      if (useViewer.getState().cameraDragging) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

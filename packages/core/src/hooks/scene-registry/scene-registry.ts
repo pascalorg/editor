@@ -19,6 +19,7 @@ export const sceneRegistry = {
     roof: new Set<string>(),
     scan: new Set<string>(),
     guide: new Set<string>(),
+    window: new Set<string>(),
   },
 };
 
