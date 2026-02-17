@@ -20,6 +20,7 @@ import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 import { initSFXBus } from '@/lib/sfx-bus'
+import { ThumbnailGenerator } from '@/app/viewer/[id]/thumbnail-generator'
 
 // Load default scene initially (will be replaced when property loads)
 useScene.getState().loadScene()
@@ -73,6 +74,7 @@ export default function Editor({ propertyId }: EditorProps) {
         <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
         <ToolManager />
         <CustomCameraControls />
+        <ThumbnailGenerator propertyId={propertyId} />
       </Viewer>
     </div>
   )

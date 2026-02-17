@@ -54,12 +54,17 @@ export interface CameraControlEvent {
   nodeId: AnyNode['id']
 }
 
+export interface ThumbnailGenerateEvent {
+  propertyId: string
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:capture': CameraControlEvent
   'camera-controls:top-view': undefined
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
+  'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
 }
 
 type EditorEvents = GridEvents &

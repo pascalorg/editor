@@ -7,7 +7,7 @@ import type { Property } from './types'
 import {
   getActiveProperty,
   getUserProperties,
-  setActiveProperty as setActivePropertyAction,
+  getPropertyById,
 } from './actions'
 
 interface PropertyStore {
@@ -65,44 +65,16 @@ export const usePropertyStore = create<PropertyStore>((set, get) => ({
     }
   },
 
-  // Set active property
+  // Set active property by fetching it directly by ID (URL-based, no session update)
   setActiveProperty: async (propertyId: string) => {
     set({ isLoading: true })
 
-    // Update database
-    const result = await setActivePropertyAction(propertyId)
+    const result = await getPropertyById(propertyId)
 
-    if (result.success) {
-      // Fetch properties to get the full property object
-      const propertiesResult = await getUserProperties()
-
-      if (propertiesResult.success && propertiesResult.data) {
-        const selectedProperty = propertiesResult.data.find(p => p.id === propertyId)
-
-        if (selectedProperty) {
-          set({
-            activeProperty: selectedProperty,
-            properties: propertiesResult.data,
-            isLoading: false,
-            error: null
-          })
-        } else {
-          set({
-            isLoading: false,
-            error: 'Property not found'
-          })
-        }
-      } else {
-        set({
-          isLoading: false,
-          error: 'Failed to fetch properties'
-        })
-      }
+    if (result.success && result.data) {
+      set({ activeProperty: result.data, isLoading: false, error: null })
     } else {
-      set({
-        isLoading: false,
-        error: result.error || 'Failed to set active property'
-      })
+      set({ isLoading: false, error: result.error || 'Property not found' })
     }
   },
 

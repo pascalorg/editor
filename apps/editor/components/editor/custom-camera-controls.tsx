@@ -52,7 +52,6 @@ export const CustomCameraControls = () => {
   }, [cameraMode])
 
   useEffect(() => {
-    console.log('ohla')
     const keyState = {
       shiftRight: false,
       shiftLeft: false,

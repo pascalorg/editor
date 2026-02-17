@@ -1,10 +1,11 @@
-import { useScene } from "@pascal-app/core";
+import { emitter, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
-import { Download, Save, Trash2, Upload } from "lucide-react";
-import { useRef } from "react";
+import { Camera, Download, Save, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/primitives/button";
 import useEditor from "@/store/use-editor";
 import { AudioSettingsDialog } from "./audio-settings-dialog";
+import { usePropertyStore } from "@/features/community/lib/properties/store";
 
 export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -15,6 +16,11 @@ export function SettingsPanel() {
   const resetSelection = useViewer((state) => state.resetSelection);
   const exportScene = useViewer((state) => state.exportScene);
   const setPhase = useEditor((state) => state.setPhase);
+  const activeProperty = usePropertyStore((state) => state.activeProperty);
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+
+  const propertyId = activeProperty?.id;
+  const isLocalProperty = false; // Store only contains cloud properties
 
   const handleExport = async () => {
     if (exportScene) {
@@ -64,6 +70,19 @@ export function SettingsPanel() {
     setPhase("site");
   };
 
+  const handleGenerateThumbnail = () => {
+    if (!propertyId) {
+      console.error('❌ No property ID found');
+      return;
+    }
+    console.log('🎯 Generate thumbnail clicked for property:', propertyId);
+    setIsGeneratingThumbnail(true);
+    emitter.emit('camera-controls:generate-thumbnail', { propertyId });
+    console.log('📤 Event emitted with property ID:', propertyId);
+    // Reset loading state after a delay (thumbnail generation is async)
+    setTimeout(() => setIsGeneratingThumbnail(false), 3000);
+  };
+
   return (
     <div className="flex flex-col gap-6 p-3">
       {/* Export Section */}
@@ -80,6 +99,24 @@ export function SettingsPanel() {
           Export 3D Model
         </Button>
       </div>
+
+      {/* Thumbnail Section (only for cloud properties) */}
+      {propertyId && !isLocalProperty && (
+        <div className="space-y-2">
+          <label className="font-medium text-muted-foreground text-xs uppercase">
+            Thumbnail
+          </label>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={handleGenerateThumbnail}
+            variant="outline"
+            disabled={isGeneratingThumbnail}
+          >
+            <Camera className="size-4" />
+            {isGeneratingThumbnail ? 'Generating...' : 'Generate Thumbnail'}
+          </Button>
+        </div>
+      )}
 
       {/* Save/Load Section */}
       <div className="space-y-2">

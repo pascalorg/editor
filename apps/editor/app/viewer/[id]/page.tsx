@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
+import { ThumbnailGenerator } from './thumbnail-generator'
 import { getPropertyModelPublic, incrementPropertyViews } from '@/features/community/lib/properties/actions'
 
 export default function ViewerPage() {
@@ -14,6 +15,7 @@ export default function ViewerPage() {
   const id = params.id as string
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [propertyId, setPropertyId] = useState<string | null>(null)
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
@@ -35,7 +37,8 @@ export default function ViewerPage() {
           const result = await getPropertyModelPublic(id)
 
           if (result.success && result.data) {
-            const { model } = result.data
+            const { property, model } = result.data
+            setPropertyId(property.id)
 
             if (model?.scene_graph) {
               const { nodes, rootNodeIds } = model.scene_graph
@@ -84,6 +87,8 @@ export default function ViewerPage() {
         <ViewerCameraControls />
         {/* Custom Zone System */}
         <ViewerZoneSystem />
+        {/* Thumbnail Generator */}
+        <ThumbnailGenerator propertyId={propertyId || undefined} />
       </Viewer>
     </div>
   )
