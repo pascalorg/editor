@@ -13,6 +13,10 @@ export function ItemHelper({ showEsc }: ItemHelperProps) {
         <kbd className="rounded bg-muted px-2 py-1 text-xs font-medium">T</kbd>
         <span className="text-muted-foreground">Rotate clockwise</span>
       </div>
+      <div className="flex items-center gap-2 text-sm">
+        <kbd className="rounded bg-muted px-2 py-1 text-xs font-medium">Shift</kbd>
+        <span className="text-muted-foreground">Free place</span>
+      </div>
       {showEsc && (
         <div className="flex items-center gap-2 text-sm">
           <kbd className="rounded bg-muted px-2 py-1 text-xs font-medium">Esc</kbd>
