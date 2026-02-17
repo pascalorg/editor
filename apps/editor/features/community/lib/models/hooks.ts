@@ -1,5 +1,5 @@
 /**
- * Hooks for property model (scene) loading and auto-saving
+ * Hooks for project model (scene) loading and auto-saving
  */
 
 'use client'
@@ -8,48 +8,48 @@ import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import useEditor from '@/store/use-editor'
-import { usePropertyStore } from '../properties/store'
-import { getPropertyModel, savePropertyModel } from './actions'
+import { useProjectStore } from '../projects/store'
+import { getProjectModel, saveProjectModel } from './actions'
 
 /**
- * Load the scene when a property becomes active
+ * Load the scene when a project becomes active
  * Saves changes automatically with debouncing
  */
-export function usePropertyScene() {
-  // Subscribe to property store
-  const activeProperty = usePropertyStore((state) => state.activeProperty)
-  const isLoadingProperty = usePropertyStore((state) => state.isLoading)
+export function useProjectScene() {
+  // Subscribe to project store
+  const activeProject = useProjectStore((state) => state.activeProject)
+  const isLoadingProject = useProjectStore((state) => state.isLoading)
 
-  const lastPropertyIdRef = useRef<string | null>(null)
+  const lastProjectIdRef = useRef<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
-  const currentPropertyIdRef = useRef<string | null>(null)
+  const currentProjectIdRef = useRef<string | null>(null)
 
-  // Extract property ID for dependency tracking
-  const propertyId = activeProperty?.id ?? null
-  const propertyName = activeProperty?.name ?? null
+  // Extract project ID for dependency tracking
+  const projectId = activeProject?.id ?? null
+  const projectName = activeProject?.name ?? null
 
-  // Load scene when active property changes
+  // Load scene when active project changes
   useEffect(() => {
-    if (isLoadingProperty) {
+    if (isLoadingProject) {
       return
     }
 
-    if (!propertyId) {
+    if (!projectId) {
       return
     }
 
-    // Skip if same property
-    if (lastPropertyIdRef.current === propertyId) {
+    // Skip if same project
+    if (lastProjectIdRef.current === projectId) {
       return
     }
 
-    lastPropertyIdRef.current = propertyId
+    lastProjectIdRef.current = projectId
 
-    // Load the property's scene
+    // Load the project's scene
     async function loadScene() {
       try {
-        const result = await getPropertyModel(propertyId || '')
+        const result = await getProjectModel(projectId || '')
 
         if (result.success && result.data?.scene_graph) {
           // Load the scene graph into the store
@@ -75,16 +75,16 @@ export function usePropertyScene() {
     }
 
     loadScene()
-  }, [propertyId, isLoadingProperty])
+  }, [projectId, isLoadingProject])
 
   // Auto-save scene changes with debouncing
   useEffect(() => {
-    if (!propertyId) {
-      currentPropertyIdRef.current = null
+    if (!projectId) {
+      currentProjectIdRef.current = null
       return
     }
 
-    currentPropertyIdRef.current = propertyId
+    currentProjectIdRef.current = projectId
 
     // Subscribe to any scene changes
     // Use JSON stringification to detect any node changes, not just count
@@ -113,9 +113,9 @@ export function usePropertyScene() {
 
       // Debounce save by 2 seconds
       saveTimeoutRef.current = setTimeout(async () => {
-        // Get the current property ID at save time (not the captured value)
-        const currentPropertyId = currentPropertyIdRef.current
-        if (!currentPropertyId) {
+        // Get the current project ID at save time (not the captured value)
+        const currentProjectId = currentProjectIdRef.current
+        if (!currentProjectId) {
           return
         }
 
@@ -125,7 +125,7 @@ export function usePropertyScene() {
         isSavingRef.current = true
 
         try {
-          await savePropertyModel(currentPropertyId, sceneGraph)
+          await saveProjectModel(currentProjectId, sceneGraph)
         } finally {
           isSavingRef.current = false
         }
@@ -138,5 +138,5 @@ export function usePropertyScene() {
       }
       unsubscribe()
     }
-  }, [propertyId])
+  }, [projectId])
 }

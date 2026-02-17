@@ -5,15 +5,14 @@ import { id, timestampsColumns } from '../../helpers'
 import { users } from '../auth/users'
 import { addresses } from './addresses'
 
-export const properties = pgTable(
-  'properties',
+export const projects = pgTable(
+  'projects',
   (t) => ({
-    id: id('property'),
+    id: id('project'),
     name: t.text('name'),
     addressId: t
       .text('address_id')
-      .references(() => addresses.id, { onDelete: 'set null' })
-      .unique(),
+      .references(() => addresses.id, { onDelete: 'set null' }),
     ownerId: t
       .text('owner_id')
       .references(() => users.id, { onDelete: 'set null' }),
@@ -27,26 +26,26 @@ export const properties = pgTable(
     ...timestampsColumns,
   }),
   (t) => [
-    index('property_address_idx').on(t.addressId),
-    index('property_owner_idx').on(t.ownerId),
-    index('property_is_private_idx').on(t.isPrivate),
-    index('property_views_idx').on(t.views),
-    index('property_likes_idx').on(t.likes),
+    index('project_address_idx').on(t.addressId),
+    index('project_owner_idx').on(t.ownerId),
+    index('project_is_private_idx').on(t.isPrivate),
+    index('project_views_idx').on(t.views),
+    index('project_likes_idx').on(t.likes),
   ],
 ).enableRLS()
 
-export const propertiesRelations = relations(properties, ({ one }) => ({
+export const projectsRelations = relations(projects, ({ one }) => ({
   address: one(addresses, {
-    fields: [properties.addressId],
+    fields: [projects.addressId],
     references: [addresses.id],
   }),
   owner: one(users, {
-    fields: [properties.ownerId],
+    fields: [projects.ownerId],
     references: [users.id],
   }),
 }))
 
-export type Property = typeof properties.$inferSelect
-export type NewProperty = typeof properties.$inferInsert
-export const insertPropertySchema = createInsertSchema(properties)
-export const selectPropertySchema = createSelectSchema(properties)
+export type Project = typeof projects.$inferSelect
+export type NewProject = typeof projects.$inferInsert
+export const insertProjectSchema = createInsertSchema(projects)
+export const selectProjectSchema = createSelectSchema(projects)

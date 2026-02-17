@@ -56,7 +56,7 @@ export interface CameraControlEvent {
 }
 
 export interface ThumbnailGenerateEvent {
-  propertyId: string
+  projectId: string
 }
 
 type CameraControlEvents = {

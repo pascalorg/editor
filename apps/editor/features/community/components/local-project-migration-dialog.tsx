@@ -9,21 +9,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/primitives/dialog'
-import type { LocalProperty } from '../lib/local-storage/property-store'
+import type { LocalProject } from '../lib/local-storage/project-store'
 
-interface LocalPropertyMigrationDialogProps {
-  localProperties: LocalProperty[]
+interface LocalProjectMigrationDialogProps {
+  localProjects: LocalProject[]
   open: boolean
   onMigrate: () => Promise<void>
   onSkip: () => void
 }
 
-export function LocalPropertyMigrationDialog({
-  localProperties,
+export function LocalProjectMigrationDialog({
+  localProjects,
   open,
   onMigrate,
   onSkip,
-}: LocalPropertyMigrationDialogProps) {
+}: LocalProjectMigrationDialogProps) {
   const [isMigrating, setIsMigrating] = useState(false)
 
   const handleMigrate = async () => {
@@ -39,21 +39,21 @@ export function LocalPropertyMigrationDialog({
     <Dialog open={open} onOpenChange={(open) => !open && !isMigrating && onSkip()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Save Local Properties to Cloud</DialogTitle>
+          <DialogTitle>Save Local Projects to Cloud</DialogTitle>
           <DialogDescription>
-            You have {localProperties.length} local {localProperties.length === 1 ? 'property' : 'properties'} that {localProperties.length === 1 ? 'hasn\'t' : 'haven\'t'} been saved to the cloud yet.
+            You have {localProjects.length} local {localProjects.length === 1 ? 'project' : 'projects'} that {localProjects.length === 1 ? 'hasn\'t' : 'haven\'t'} been saved to the cloud yet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2 py-4">
           <p className="text-sm text-muted-foreground">
-            Would you like to save {localProperties.length === 1 ? 'it' : 'them'} to your account?
+            Would you like to save {localProjects.length === 1 ? 'it' : 'them'} to your account?
           </p>
           <ul className="space-y-1 text-sm">
-            {localProperties.map((property) => (
-              <li key={property.id} className="flex items-center gap-2">
+            {localProjects.map((project) => (
+              <li key={project.id} className="flex items-center gap-2">
                 <span className="text-muted-foreground">•</span>
-                <span className="font-medium">{property.name}</span>
+                <span className="font-medium">{project.name}</span>
               </li>
             ))}
           </ul>

@@ -1,13 +1,13 @@
 /**
- * Navigation helpers for property-based routing
+ * Navigation helpers for project-based routing
  */
 
-export function getEditorUrl(propertyId: string): string {
-  return `/editor/${propertyId}`
+export function getEditorUrl(projectId: string): string {
+  return `/editor/${projectId}`
 }
 
-export function getViewerUrl(propertyId: string): string {
-  return `/viewer/${propertyId}`
+export function getViewerUrl(projectId: string): string {
+  return `/viewer/${projectId}`
 }
 
 export function getHomeUrl(): string {

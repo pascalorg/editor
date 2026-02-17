@@ -4,30 +4,30 @@ import { Cloud, Home } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../lib/auth/hooks'
-import { usePropertyStore } from '../lib/properties/store'
+import { useProjectStore } from '../lib/projects/store'
 import { ProfileDropdown } from './profile-dropdown'
 import { SignInDialog } from './sign-in-dialog'
 
 interface CloudSaveButtonProps {
-  propertyId?: string
+  projectId?: string
 }
 
 /**
- * CloudSaveButton - Shows authentication state and property management
+ * CloudSaveButton - Shows authentication state and project management
  *
- * Guest with local property: Shows "Save to cloud" button
- * Guest without property: Shows "Home" button
+ * Guest with local project: Shows "Save to cloud" button
+ * Guest without project: Shows "Home" button
  * Authenticated: Shows ProfileDropdown
  */
-export function CloudSaveButton({ propertyId }: CloudSaveButtonProps) {
+export function CloudSaveButton({ projectId }: CloudSaveButtonProps) {
   const { isAuthenticated, isLoading } = useAuth()
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false)
-  const initialize = usePropertyStore(state => state.initialize)
+  const initialize = useProjectStore(state => state.initialize)
   const router = useRouter()
 
-  const isLocalProperty = propertyId?.startsWith('local_')
+  const isLocalProject = projectId?.startsWith('local_')
 
-  // Initialize property store when authenticated
+  // Initialize project store when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       initialize()
@@ -44,8 +44,8 @@ export function CloudSaveButton({ propertyId }: CloudSaveButtonProps) {
     )
   }
 
-  // Guest user with local property
-  if (!isAuthenticated && isLocalProperty) {
+  // Guest user with local project
+  if (!isAuthenticated && isLocalProject) {
     return (
       <>
         <div className="pointer-events-auto">
@@ -62,7 +62,7 @@ export function CloudSaveButton({ propertyId }: CloudSaveButtonProps) {
     )
   }
 
-  // Guest user (no property context or browsing)
+  // Guest user (no project context or browsing)
   if (!isAuthenticated) {
     return (
       <div className="pointer-events-auto">

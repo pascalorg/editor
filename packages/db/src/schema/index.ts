@@ -5,7 +5,8 @@ export * from './auth/sessions'
 export * from './auth/users'
 export * from './auth/verifications'
 
-// Property tables
-export * from './properties/addresses'
-export * from './properties/models'
-export * from './properties/properties'
+// Project tables
+export * from './projects/addresses'
+export * from './projects/likes'
+export * from './projects/models'
+export * from './projects/projects'

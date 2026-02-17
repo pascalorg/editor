@@ -2,86 +2,86 @@
 
 import { Eye, Heart, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Property } from '../lib/properties/types'
-import type { LocalProperty } from '../lib/local-storage/property-store'
-import { PropertySettingsDialog } from './property-settings-dialog'
-import { getUserPropertyLikes, togglePropertyLike } from '../lib/properties/actions'
+import type { Project } from '../lib/projects/types'
+import type { LocalProject } from '../lib/local-storage/project-store'
+import { ProjectSettingsDialog } from './project-settings-dialog'
+import { getUserProjectLikes, toggleProjectLike } from '../lib/projects/actions'
 import { useAuth } from '../lib/auth/hooks'
 
-interface PropertyGridProps {
-  properties: (Property | LocalProperty)[]
-  onPropertyClick: (id: string) => void
+interface ProjectGridProps {
+  projects: (Project | LocalProject)[]
+  onProjectClick: (id: string) => void
   onViewClick?: (id: string) => void
-  onSaveToCloud?: (property: LocalProperty) => void
+  onSaveToCloud?: (project: LocalProject) => void
   showOwner: boolean
   isLocal?: boolean
   canEdit?: boolean
   onUpdate?: () => void
 }
 
-function isLocalProperty(prop: Property | LocalProperty): prop is LocalProperty {
+function isLocalProject(prop: Project | LocalProject): prop is LocalProject {
   return 'is_local' in prop && prop.is_local === true
 }
 
-export function PropertyGrid({
-  properties,
-  onPropertyClick,
+export function ProjectGrid({
+  projects,
+  onProjectClick,
   onViewClick,
   onSaveToCloud,
   showOwner,
   isLocal = false,
   canEdit = false,
   onUpdate,
-}: PropertyGridProps) {
+}: ProjectGridProps) {
   const { isAuthenticated } = useAuth()
-  const [settingsProperty, setSettingsProperty] = useState<Property | null>(null)
+  const [settingsProject, setSettingsProject] = useState<Project | null>(null)
   const [userLikes, setUserLikes] = useState<Record<string, boolean>>({})
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({})
 
-  // Initialize like counts from properties
+  // Initialize like counts from projects
   useEffect(() => {
     const counts: Record<string, number> = {}
-    properties.forEach((prop) => {
-      if (!isLocalProperty(prop)) {
-        counts[prop.id] = prop.likes
+    projects.forEach((proj) => {
+      if (!isLocalProject(proj)) {
+        counts[proj.id] = proj.likes
       }
     })
     setLikeCounts(counts)
-  }, [properties])
+  }, [projects])
 
-  // Fetch which properties the user has liked
+  // Fetch which projects the user has liked
   useEffect(() => {
     if (!isAuthenticated) {
       setUserLikes({})
       return
     }
 
-    const propertyIds = properties
-      .filter((p) => !isLocalProperty(p))
+    const projectIds = projects
+      .filter((p) => !isLocalProject(p))
       .map((p) => p.id)
 
-    if (propertyIds.length === 0) return
+    if (projectIds.length === 0) return
 
-    getUserPropertyLikes(propertyIds).then((result) => {
+    getUserProjectLikes(projectIds).then((result) => {
       if (result.success && result.data) {
         setUserLikes(result.data)
       }
     })
-  }, [properties, isAuthenticated])
+  }, [projects, isAuthenticated])
 
-  const handleSettingsClick = (e: React.MouseEvent, property: Property | LocalProperty) => {
+  const handleSettingsClick = (e: React.MouseEvent, project: Project | LocalProject) => {
     e.stopPropagation()
-    if (!isLocalProperty(property)) {
-      setSettingsProperty(property)
+    if (!isLocalProject(project)) {
+      setSettingsProject(project)
     }
   }
 
-  const handleViewClick = (e: React.MouseEvent, propertyId: string) => {
+  const handleViewClick = (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation()
-    onViewClick?.(propertyId)
+    onViewClick?.(projectId)
   }
 
-  const handleLikeClick = async (e: React.MouseEvent, propertyId: string) => {
+  const handleLikeClick = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation()
 
     if (!isAuthenticated) {
@@ -90,45 +90,45 @@ export function PropertyGrid({
     }
 
     // Optimistic update
-    const wasLiked = userLikes[propertyId] || false
-    const currentCount = likeCounts[propertyId] || 0
+    const wasLiked = userLikes[projectId] || false
+    const currentCount = likeCounts[projectId] || 0
 
-    setUserLikes((prev) => ({ ...prev, [propertyId]: !wasLiked }))
+    setUserLikes((prev) => ({ ...prev, [projectId]: !wasLiked }))
     setLikeCounts((prev) => ({
       ...prev,
-      [propertyId]: wasLiked ? currentCount - 1 : currentCount + 1
+      [projectId]: wasLiked ? currentCount - 1 : currentCount + 1
     }))
 
     // Call server action
-    const result = await togglePropertyLike(propertyId)
+    const result = await toggleProjectLike(projectId)
 
     if (result.success && result.data) {
       // Update with actual values from server
       const data = result.data
-      setUserLikes((prev) => ({ ...prev, [propertyId]: data.liked }))
-      setLikeCounts((prev) => ({ ...prev, [propertyId]: data.likes }))
+      setUserLikes((prev) => ({ ...prev, [projectId]: data.liked }))
+      setLikeCounts((prev) => ({ ...prev, [projectId]: data.likes }))
     } else {
       // Revert on error
-      setUserLikes((prev) => ({ ...prev, [propertyId]: wasLiked }))
-      setLikeCounts((prev) => ({ ...prev, [propertyId]: currentCount }))
+      setUserLikes((prev) => ({ ...prev, [projectId]: wasLiked }))
+      setLikeCounts((prev) => ({ ...prev, [projectId]: currentCount }))
     }
   }
 
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {properties.map((property) => (
+        {projects.map((project) => (
           <div
-            key={property.id}
-            onClick={() => onPropertyClick(property.id)}
+            key={project.id}
+            onClick={() => onProjectClick(project.id)}
             className="group relative overflow-hidden rounded-lg border border-border bg-card hover:border-primary transition-all text-left cursor-pointer"
           >
             {/* Thumbnail */}
             <div className="aspect-video bg-muted relative">
-              {!isLocalProperty(property) && property.thumbnail_url ? (
+              {!isLocalProject(project) && project.thumbnail_url ? (
                 <img
-                  src={property.thumbnail_url}
-                  alt={property.name}
+                  src={project.thumbnail_url}
+                  alt={project.name}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -136,13 +136,13 @@ export function PropertyGrid({
                   No preview
                 </div>
               )}
-              {isLocalProperty(property) && (
+              {isLocalProject(project) && (
                 <div className="absolute top-2 right-2">
                   {isAuthenticated && onSaveToCloud ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        onSaveToCloud(property)
+                        onSaveToCloud(project)
                       }}
                       className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors"
                       title="Save to cloud"
@@ -156,11 +156,11 @@ export function PropertyGrid({
                   )}
                 </div>
               )}
-              {canEdit && !isLocalProperty(property) && (
+              {canEdit && !isLocalProject(project) && (
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {onViewClick && (
                     <button
-                      onClick={(e) => handleViewClick(e, property.id)}
+                      onClick={(e) => handleViewClick(e, project.id)}
                       className="bg-background/80 hover:bg-background rounded-md p-1.5"
                       aria-label="View"
                       title="View in viewer mode"
@@ -169,10 +169,10 @@ export function PropertyGrid({
                     </button>
                   )}
                   <button
-                    onClick={(e) => handleSettingsClick(e, property)}
+                    onClick={(e) => handleSettingsClick(e, project)}
                     className="bg-background/80 hover:bg-background rounded-md p-1.5"
                     aria-label="Settings"
-                    title="Property settings"
+                    title="Project settings"
                   >
                     <Settings className="w-4 h-4" />
                   </button>
@@ -182,34 +182,34 @@ export function PropertyGrid({
 
             {/* Info */}
             <div className="p-4">
-              <h3 className="font-medium text-left line-clamp-2 mb-2">{property.name}</h3>
+              <h3 className="font-medium text-left line-clamp-2 mb-2">{project.name}</h3>
 
-              {!isLocalProperty(property) && (
+              {!isLocalProject(project) && (
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Eye className="w-4 h-4" />
-                    <span>{property.views}</span>
+                    <span>{project.views}</span>
                   </div>
                   <button
-                    onClick={(e) => handleLikeClick(e, property.id)}
+                    onClick={(e) => handleLikeClick(e, project.id)}
                     className="flex items-center gap-1 hover:text-red-500 transition-colors"
                     disabled={!isAuthenticated}
                   >
                     <Heart
                       className={`w-4 h-4 ${
-                        userLikes[property.id]
+                        userLikes[project.id]
                           ? 'fill-red-500 text-red-500'
                           : ''
                       }`}
                     />
-                    <span>{likeCounts[property.id] ?? property.likes}</span>
+                    <span>{likeCounts[project.id] ?? project.likes}</span>
                   </button>
                 </div>
               )}
 
-              {isLocalProperty(property) && (
+              {isLocalProject(project) && (
                 <div className="text-sm text-muted-foreground">
-                  {new Date(property.updated_at).toLocaleDateString()}
+                  {new Date(project.updated_at).toLocaleDateString()}
                 </div>
               )}
             </div>
@@ -218,14 +218,14 @@ export function PropertyGrid({
       </div>
 
       {/* Settings Dialog */}
-      {settingsProperty && (
-        <PropertySettingsDialog
-          property={settingsProperty}
-          open={!!settingsProperty}
-          onOpenChange={(open) => !open && setSettingsProperty(null)}
+      {settingsProject && (
+        <ProjectSettingsDialog
+          project={settingsProject}
+          open={!!settingsProject}
+          onOpenChange={(open) => !open && setSettingsProject(null)}
           onUpdate={onUpdate}
           onDelete={() => {
-            setSettingsProperty(null)
+            setSettingsProject(null)
             onUpdate?.()
           }}
         />

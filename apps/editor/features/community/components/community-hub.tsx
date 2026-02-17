@@ -4,95 +4,95 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/hooks'
-import type { LocalProperty } from '../lib/local-storage/property-store'
-import { createLocalProperty, getLocalProperties } from '../lib/local-storage/property-store'
-import { getPublicProperties, getUserProperties } from '../lib/properties/actions'
-import type { Property } from '../lib/properties/types'
-import { CreatePropertyButton } from './create-property-button'
-import { NewPropertyDialog } from './new-property-dialog'
+import type { LocalProject } from '../lib/local-storage/project-store'
+import { createLocalProject, getLocalProjects } from '../lib/local-storage/project-store'
+import { getPublicProjects, getUserProjects } from '../lib/projects/actions'
+import type { Project } from '../lib/projects/types'
+import { CreateProjectButton } from './create-project-button'
+import { NewProjectDialog } from './new-project-dialog'
 import { ProfileDropdown } from './profile-dropdown'
-import { PropertyGrid } from './property-grid'
+import { ProjectGrid } from './project-grid'
 import { SignInDialog } from './sign-in-dialog'
 
 export default function CommunityHub() {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth()
   const router = useRouter()
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false)
-  const [isNewPropertyDialogOpen, setIsNewPropertyDialogOpen] = useState(false)
-  const [localPropertyToSave, setLocalPropertyToSave] = useState<LocalProperty | null>(null)
-  const [publicProperties, setPublicProperties] = useState<Property[]>([])
-  const [userProperties, setUserProperties] = useState<Property[]>([])
-  const [localProperties, setLocalProperties] = useState<LocalProperty[]>([])
+  const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
+  const [localProjectToSave, setLocalProjectToSave] = useState<LocalProject | null>(null)
+  const [publicProjects, setPublicProjects] = useState<Project[]>([])
+  const [userProjects, setUserProjects] = useState<Project[]>([])
+  const [localProjects, setLocalProjects] = useState<LocalProject[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadProperties() {
+    async function loadProjects() {
       setLoading(true)
 
-      // Load public properties (always)
-      const publicResult = await getPublicProperties()
+      // Load public projects (always)
+      const publicResult = await getPublicProjects()
       if (publicResult.success) {
-        setPublicProperties(publicResult.data || [])
+        setPublicProjects(publicResult.data || [])
       }
 
-      // Load user properties if authenticated
+      // Load user projects if authenticated
       if (isAuthenticated) {
-        const userResult = await getUserProperties()
+        const userResult = await getUserProjects()
         if (userResult.success) {
-          setUserProperties(userResult.data || [])
+          setUserProjects(userResult.data || [])
         }
       }
 
-      // Always load local properties
-      setLocalProperties(getLocalProperties())
+      // Always load local projects
+      setLocalProjects(getLocalProjects())
 
       setLoading(false)
     }
 
     if (!authLoading) {
-      loadProperties()
+      loadProjects()
     }
   }, [isAuthenticated, authLoading])
 
-  const handleCreateProperty = async () => {
+  const handleCreateProject = async () => {
     if (!isAuthenticated) {
-      // Create local property for guest
-      const property = createLocalProperty('Untitled Property')
-      router.push(`/editor/${property.id}`)
+      // Create local project for guest
+      const project = createLocalProject('Untitled Project')
+      router.push(`/editor/${project.id}`)
     } else {
-      // Open property creation dialog for authenticated users
-      setIsNewPropertyDialogOpen(true)
+      // Open project creation dialog for authenticated users
+      setIsNewProjectDialogOpen(true)
     }
   }
 
-  const handlePropertyCreated = async (propertyId: string) => {
-    // If this was a local property being saved, delete it from localStorage
-    if (localPropertyToSave) {
-      const { deleteLocalProperty } = await import('../lib/local-storage/property-store')
-      deleteLocalProperty(localPropertyToSave.id)
-      setLocalProperties(getLocalProperties())
-      setLocalPropertyToSave(null)
+  const handleProjectCreated = async (projectId: string) => {
+    // If this was a local project being saved, delete it from localStorage
+    if (localProjectToSave) {
+      const { deleteLocalProject } = await import('../lib/local-storage/project-store')
+      deleteLocalProject(localProjectToSave.id)
+      setLocalProjects(getLocalProjects())
+      setLocalProjectToSave(null)
     }
 
-    // Reload properties and navigate to the new property
-    const result = await getUserProperties()
+    // Reload projects and navigate to the new project
+    const result = await getUserProjects()
     if (result.success) {
-      setUserProperties(result.data || [])
+      setUserProjects(result.data || [])
     }
-    router.push(`/editor/${propertyId}`)
+    router.push(`/editor/${projectId}`)
   }
 
-  const handleSaveLocalToCloud = (localProperty: LocalProperty) => {
-    setLocalPropertyToSave(localProperty)
-    setIsNewPropertyDialogOpen(true)
+  const handleSaveLocalToCloud = (localProject: LocalProject) => {
+    setLocalProjectToSave(localProject)
+    setIsNewProjectDialogOpen(true)
   }
 
-  const handlePropertyClick = (propertyId: string) => {
-    router.push(`/editor/${propertyId}`)
+  const handleProjectClick = (projectId: string) => {
+    router.push(`/editor/${projectId}`)
   }
 
-  const handleViewProperty = (propertyId: string) => {
-    router.push(`/viewer/${propertyId}`)
+  const handleViewProject = (projectId: string) => {
+    router.push(`/viewer/${projectId}`)
   }
 
   if (authLoading || loading) {
@@ -134,26 +134,26 @@ export default function CommunityHub() {
       </header>
 
       <main className="container mx-auto px-6 py-8 space-y-12">
-        {/* User's Properties Section */}
-        {isAuthenticated && (userProperties.length > 0 || localProperties.length > 0) && (
+        {/* User's Projects Section */}
+        {isAuthenticated && (userProjects.length > 0 || localProjects.length > 0) && (
           <section>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold">My Properties</h2>
-              <CreatePropertyButton onCreateProperty={handleCreateProperty} />
+              <h2 className="text-xl font-semibold">My Projects</h2>
+              <CreateProjectButton onCreateProject={handleCreateProject} />
             </div>
-            <PropertyGrid
-              properties={[...userProperties, ...localProperties]}
-              onPropertyClick={handlePropertyClick}
-              onViewClick={handleViewProperty}
+            <ProjectGrid
+              projects={[...userProjects, ...localProjects]}
+              onProjectClick={handleProjectClick}
+              onViewClick={handleViewProject}
               onSaveToCloud={handleSaveLocalToCloud}
               showOwner={false}
               canEdit
               onUpdate={() => {
-                // Reload properties after settings update
+                // Reload projects after settings update
                 if (!authLoading) {
-                  getUserProperties().then((result) => {
+                  getUserProjects().then((result) => {
                     if (result.success) {
-                      setUserProperties(result.data || [])
+                      setUserProjects(result.data || [])
                     }
                   })
                 }
@@ -162,59 +162,59 @@ export default function CommunityHub() {
           </section>
         )}
 
-        {/* Local Properties Section (Guest Users) */}
-        {!isAuthenticated && localProperties.length > 0 && (
+        {/* Local Projects Section (Guest Users) */}
+        {!isAuthenticated && localProjects.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold">My Local Projects</h2>
-              <CreatePropertyButton onCreateProperty={handleCreateProperty} />
+              <CreateProjectButton onCreateProject={handleCreateProject} />
             </div>
-            <PropertyGrid
-              properties={localProperties}
-              onPropertyClick={handlePropertyClick}
+            <ProjectGrid
+              projects={localProjects}
+              onProjectClick={handleProjectClick}
               showOwner={false}
               isLocal
             />
           </section>
         )}
 
-        {/* Create First Property CTA */}
-        {!isAuthenticated && localProperties.length === 0 && (
+        {/* Create First Project CTA */}
+        {!isAuthenticated && localProjects.length === 0 && (
           <section className="text-center py-12">
             <h2 className="text-2xl font-semibold mb-4">Get Started</h2>
             <p className="text-muted-foreground mb-6">
-              Create your first property to start designing
+              Create your first project to start designing
             </p>
-            <CreatePropertyButton onCreateProperty={handleCreateProperty} />
+            <CreateProjectButton onCreateProject={handleCreateProject} />
           </section>
         )}
 
-        {/* Public Properties Section */}
+        {/* Public Projects Section */}
         <section>
-          <h2 className="text-xl font-semibold mb-6">Community Properties</h2>
-          {publicProperties.length > 0 ? (
-            <PropertyGrid
-              properties={publicProperties}
-              onPropertyClick={handleViewProperty}
+          <h2 className="text-xl font-semibold mb-6">Community Projects</h2>
+          {publicProjects.length > 0 ? (
+            <ProjectGrid
+              projects={publicProjects}
+              onProjectClick={handleViewProject}
               showOwner
             />
           ) : (
-            <div className="text-center py-12 text-muted-foreground">No public properties yet</div>
+            <div className="text-center py-12 text-muted-foreground">No public projects yet</div>
           )}
         </section>
       </main>
 
       <SignInDialog open={isSignInDialogOpen} onOpenChange={setIsSignInDialogOpen} />
-      <NewPropertyDialog
-        open={isNewPropertyDialogOpen}
-        onOpenChange={setIsNewPropertyDialogOpen}
-        onSuccess={handlePropertyCreated}
-        localPropertyData={
-          localPropertyToSave
+      <NewProjectDialog
+        open={isNewProjectDialogOpen}
+        onOpenChange={setIsNewProjectDialogOpen}
+        onSuccess={handleProjectCreated}
+        localProjectData={
+          localProjectToSave
             ? {
-                id: localPropertyToSave.id,
-                name: localPropertyToSave.name,
-                sceneGraph: localPropertyToSave.scene_graph,
+                id: localProjectToSave.id,
+                name: localProjectToSave.name,
+                sceneGraph: localProjectToSave.scene_graph,
               }
             : undefined
         }

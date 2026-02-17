@@ -8,7 +8,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export interface Database {
   public: {
     Tables: {
-      properties: {
+      projects: {
         Row: {
           id: string
           name: string
@@ -31,10 +31,10 @@ export interface Database {
           updated_at?: string
         }
       }
-      properties_addresses: {
+      projects_addresses: {
         Row: {
           id: string
-          property_id: string
+          project_id: string
           formatted_address: string
           street_number: string | null
           route: string | null
@@ -51,7 +51,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          property_id: string
+          project_id: string
           formatted_address: string
           street_number?: string | null
           route?: string | null
@@ -68,7 +68,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          property_id?: string
+          project_id?: string
           formatted_address?: string
           street_number?: string | null
           route?: string | null
@@ -84,10 +84,10 @@ export interface Database {
           updated_at?: string
         }
       }
-      properties_models: {
+      projects_models: {
         Row: {
           id: string
-          property_id: string
+          project_id: string
           name: string
           version: number
           draft: boolean
@@ -97,7 +97,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          property_id: string
+          project_id: string
           name: string
           version?: number
           draft?: boolean
@@ -107,7 +107,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          property_id?: string
+          project_id?: string
           name?: string
           version?: number
           draft?: boolean

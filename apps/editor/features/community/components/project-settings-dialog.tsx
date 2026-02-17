@@ -10,42 +10,42 @@ import {
   DialogTitle,
 } from '@/components/ui/primitives/dialog'
 import { Switch } from '@/components/ui/primitives/switch'
-import { updatePropertyAddress, updatePropertyPrivacy, deleteProperty } from '../lib/properties/actions'
-import type { Property } from '../lib/properties/types'
+import { updateProjectAddress, updateProjectPrivacy, deleteProject } from '../lib/projects/actions'
+import type { Project } from '../lib/projects/types'
 
-interface PropertySettingsDialogProps {
-  property: Property
+interface ProjectSettingsDialogProps {
+  project: Project
   open: boolean
   onOpenChange: (open: boolean) => void
   onUpdate?: () => void
   onDelete?: () => void
 }
 
-export function PropertySettingsDialog({
-  property,
+export function ProjectSettingsDialog({
+  project,
   open,
   onOpenChange,
   onUpdate,
   onDelete,
-}: PropertySettingsDialogProps) {
+}: ProjectSettingsDialogProps) {
   const [loading, setLoading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isPrivate, setIsPrivate] = useState(property.is_private)
+  const [isPrivate, setIsPrivate] = useState(project.is_private)
   const [address, setAddress] = useState({
-    street_number: property.address.street_number || '',
-    route: property.address.route || '',
-    city: property.address.city || '',
-    state: property.address.state || '',
-    postal_code: property.address.postal_code || '',
-    country: property.address.country || 'US',
+    street_number: project.address?.street_number || '',
+    route: project.address?.route || '',
+    city: project.address?.city || '',
+    state: project.address?.state || '',
+    postal_code: project.address?.postal_code || '',
+    country: project.address?.country || 'US',
   })
 
   const handleSave = async () => {
     setLoading(true)
     try {
       // Update privacy if changed
-      if (isPrivate !== property.is_private) {
-        const privacyResult = await updatePropertyPrivacy(property.id, isPrivate)
+      if (isPrivate !== project.is_private) {
+        const privacyResult = await updateProjectPrivacy(project.id, isPrivate)
         if (!privacyResult.success) {
           alert(`Failed to update privacy: ${privacyResult.error}`)
           setLoading(false)
@@ -53,21 +53,23 @@ export function PropertySettingsDialog({
         }
       }
 
-      // Update address if changed
-      const addressChanged =
-        address.street_number !== (property.address.street_number || '') ||
-        address.route !== (property.address.route || '') ||
-        address.city !== (property.address.city || '') ||
-        address.state !== (property.address.state || '') ||
-        address.postal_code !== (property.address.postal_code || '') ||
-        address.country !== (property.address.country || 'US')
+      // Update address if changed and project has an address
+      if (project.address) {
+        const addressChanged =
+          address.street_number !== (project.address.street_number || '') ||
+          address.route !== (project.address.route || '') ||
+          address.city !== (project.address.city || '') ||
+          address.state !== (project.address.state || '') ||
+          address.postal_code !== (project.address.postal_code || '') ||
+          address.country !== (project.address.country || 'US')
 
-      if (addressChanged) {
-        const addressResult = await updatePropertyAddress(property.id, address)
-        if (!addressResult.success) {
-          alert(`Failed to update address: ${addressResult.error}`)
-          setLoading(false)
-          return
+        if (addressChanged) {
+          const addressResult = await updateProjectAddress(project.id, address)
+          if (!addressResult.success) {
+            alert(`Failed to update address: ${addressResult.error}`)
+            setLoading(false)
+            return
+          }
         }
       }
 
@@ -81,21 +83,21 @@ export function PropertySettingsDialog({
   }
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this property? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
       return
     }
 
     setIsDeleting(true)
     try {
-      const result = await deleteProperty(property.id)
+      const result = await deleteProject(project.id)
       if (result.success) {
         onDelete?.()
         onOpenChange(false)
       } else {
-        alert(`Failed to delete property: ${result.error}`)
+        alert(`Failed to delete project: ${result.error}`)
       }
     } catch (error) {
-      alert('Failed to delete property')
+      alert('Failed to delete project')
     } finally {
       setIsDeleting(false)
     }
@@ -105,8 +107,8 @@ export function PropertySettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Property Settings</DialogTitle>
-          <DialogDescription>Update property address and privacy settings</DialogDescription>
+          <DialogTitle>Project Settings</DialogTitle>
+          <DialogDescription>Update project address and privacy settings</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -115,7 +117,7 @@ export function PropertySettingsDialog({
             <div>
               <div className="font-medium">Privacy</div>
               <div className="text-sm text-muted-foreground">
-                {isPrivate ? 'Only you can view this property' : 'Anyone can view this property'}
+                {isPrivate ? 'Only you can view this project' : 'Anyone can view this project'}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -205,7 +207,7 @@ export function PropertySettingsDialog({
           <div className="border-t border-border pt-6">
             <h3 className="font-medium text-destructive mb-2">Danger Zone</h3>
             <p className="text-sm text-muted-foreground mb-3">
-              Once you delete a property, there is no going back. Please be certain.
+              Once you delete a project, there is no going back. Please be certain.
             </p>
             <button
               type="button"
@@ -213,7 +215,7 @@ export function PropertySettingsDialog({
               className="rounded-md border border-destructive bg-destructive/10 px-4 py-2 text-sm text-destructive hover:bg-destructive/20"
               disabled={isDeleting || loading}
             >
-              {isDeleting ? 'Deleting...' : 'Delete Property'}
+              {isDeleting ? 'Deleting...' : 'Delete Project'}
             </button>
           </div>
         </div>
