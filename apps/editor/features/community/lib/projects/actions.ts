@@ -575,6 +575,71 @@ export async function updateProjectPrivacy(
 }
 
 /**
+ * Update project name
+ */
+export async function updateProjectName(
+  projectId: string,
+  name: string,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession()
+
+    if (!session?.user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      }
+    }
+
+    if (!name.trim()) {
+      return {
+        success: false,
+        error: 'Project name cannot be empty',
+      }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // Verify ownership
+    const { data: project } = await supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
+      .single()
+
+    if ((project as any)?.owner_id !== session.user.id) {
+      return {
+        success: false,
+        error: 'Unauthorized',
+      }
+    }
+
+    // Update name
+    const { error } = await (supabase
+      .from('projects') as any)
+      .update({ name: name.trim() })
+      .eq('id', projectId)
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Project name updated',
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update project name',
+    }
+  }
+}
+
+/**
  * Update project address
  */
 export async function updateProjectAddress(
