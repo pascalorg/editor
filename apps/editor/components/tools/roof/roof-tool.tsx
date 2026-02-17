@@ -151,13 +151,23 @@ export const RoofTool: React.FC = () => {
       }
     };
 
+    const onCancel = () => {
+      if (corner1Ref.current) {
+        corner1Ref.current = null;
+        outlineRef.current.visible = false;
+        setPreview((prev) => ({ ...prev, corner1: null }));
+      }
+    };
+
     // Subscribe to events
     emitter.on("grid:move", onGridMove);
     emitter.on("grid:click", onGridClick);
+    emitter.on("tool:cancel", onCancel);
 
     return () => {
       emitter.off("grid:move", onGridMove);
       emitter.off("grid:click", onGridClick);
+      emitter.off("tool:cancel", onCancel);
 
       // Reset state on unmount
       corner1Ref.current = null;

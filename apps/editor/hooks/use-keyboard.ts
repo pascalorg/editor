@@ -1,8 +1,8 @@
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import useEditor from '@/store/use-editor'
 import { sfxEmitter } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
 
 export const useKeyboard = () => {
   useEffect(() => {
@@ -14,13 +14,7 @@ export const useKeyboard = () => {
 
       if (e.key === 'Escape') {
         e.preventDefault()
-        // Emit tool:cancel event - each tool handles its own cancellation logic
-        // if (useEditor.getState().controlMode === 'building') {
-        //   emitter.emit('tool:cancel', undefined)
-        // }
-        // if (selectedNodeIds.length > 0) {
-        //   handleClear()
-        // }
+        emitter.emit('tool:cancel')
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
@@ -33,7 +27,8 @@ export const useKeyboard = () => {
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('select')
-      } if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
+      }
+      if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {

@@ -474,13 +474,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const ROTATION_STEP = Math.PI / 2
     const onKeyDown = (event: KeyboardEvent) => {
-      // Escape / right-click → cancel
-      if (event.key === 'Escape' && configRef.current.onCancel) {
-        event.preventDefault()
-        configRef.current.onCancel()
-        return
-      }
-
       const draft = draftNode.current
       if (!draft) return
 
@@ -503,6 +496,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
     window.addEventListener('keydown', onKeyDown)
+
+    // ---- tool:cancel (Escape / programmatic) ----
+    const onCancel = () => {
+      if (configRef.current.onCancel) {
+        configRef.current.onCancel()
+      }
+    }
+    emitter.on('tool:cancel', onCancel)
 
     // ---- Right-click cancel ----
     const onContextMenu = (event: MouseEvent) => {
@@ -547,6 +548,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
+      emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('contextmenu', onContextMenu)
     }

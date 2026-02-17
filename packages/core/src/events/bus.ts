@@ -67,6 +67,10 @@ type CameraControlEvents = {
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
 }
 
+type ToolEvents = {
+  'tool:cancel': undefined
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'item', ItemEvent> &
@@ -77,6 +81,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'roof', RoofEvent> &
-  CameraControlEvents
+  CameraControlEvents &
+  ToolEvents
 
 export const emitter = mitt<EditorEvents>()
