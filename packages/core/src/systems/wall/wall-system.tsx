@@ -309,7 +309,7 @@ function collectCutoutBrushes(
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
 
   for (const child of childrenNodes) {
-    if (child.type !== 'item') continue
+    if (child.type !== 'item' && child.type !== 'window') continue
 
     const childMesh = sceneRegistry.nodes.get(child.id)
     if (!childMesh) continue

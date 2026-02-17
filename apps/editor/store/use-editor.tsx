@@ -27,6 +27,7 @@ export type StructureTool =
   | 'stair'
   | 'item'
   | 'zone'
+  | 'window'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'

@@ -28,6 +28,7 @@ type SelectableNodeType =
   | 'level'
   | 'zone'
   | 'wall'
+  | 'window'
   | 'item'
   | 'slab'
   | 'ceiling'
@@ -192,9 +193,9 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs)
+  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows)
   return {
-    types: ['wall', 'item', 'slab', 'ceiling', 'roof'],
+    types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window'],
     handleClick: (node) => {
       const { selectedIds } = useViewer.getState().selection
       // Toggle selection - if already selected, deselect; otherwise select
@@ -216,7 +217,7 @@ const getStrategy = (): SelectionStrategy | null => {
       }
     },
     isValid: (node) => {
-      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof']
+      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof', 'window']
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
     },
@@ -268,6 +269,7 @@ export const SelectionManager = () => {
       'slab',
       'ceiling',
       'roof',
+      'window',
     ]
     for (const type of allTypes) {
       emitter.on(`${type}:enter`, onEnter)

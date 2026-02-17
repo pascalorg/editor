@@ -11,6 +11,7 @@ import { ScanRenderer } from './scan/scan-renderer'
 import { SiteRenderer } from './site/site-renderer'
 import { SlabRenderer } from './slab/slab-renderer'
 import { WallRenderer } from './wall/wall-renderer'
+import { WindowRenderer } from './window/window-renderer'
 import { ZoneRenderer } from './zone/zone-renderer'
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
@@ -27,6 +28,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'item' && <ItemRenderer node={node} />}
       {node.type === 'slab' && <SlabRenderer node={node} />}
       {node.type === 'wall' && <WallRenderer node={node} />}
+      {node.type === 'window' && <WindowRenderer node={node} />}
       {node.type === 'zone' && <ZoneRenderer node={node} />}
       {node.type === 'roof' && <RoofRenderer node={node} />}
       {node.type === 'scan' && <ScanRenderer node={node} />}

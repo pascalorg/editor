@@ -12,6 +12,7 @@ import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
 import { WallTool } from './wall/wall-tool'
+import { WindowTool } from './window/window-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
 
@@ -26,6 +27,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     roof: RoofTool,
     item: ItemTool,
     zone: ZoneTool,
+    window: WindowTool,
   },
   furnish: {
     item: ItemTool,
