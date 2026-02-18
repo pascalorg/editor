@@ -73,8 +73,10 @@ export const CeilingTool: React.FC = () => {
 
   const [points, setPoints] = useState<Array<[number, number]>>([])
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
+  const [snappedCursorPosition, setSnappedCursorPosition] = useState<[number, number]>([0, 0])
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
+  const shiftPressed = useRef(false)
 
   // Update cursor position and lines on grid move
   useEffect(() => {
@@ -93,9 +95,10 @@ export const CeilingTool: React.FC = () => {
       const ceilingY = event.position[1] + CEILING_HEIGHT
       const gridY = event.position[1] + GRID_OFFSET
 
-      // Calculate snapped display position
+      // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = points[points.length - 1]
-      const displayPoint = lastPoint ? calculateSnapPoint(lastPoint, gridPosition) : gridPosition
+      const displayPoint = (shiftPressed.current || !lastPoint) ? gridPosition : calculateSnapPoint(lastPoint, gridPosition)
+      setSnappedCursorPosition(displayPoint)
 
       // Play snap sound when the snapped position actually changes (only when drawing)
       if (points.length > 0 && previousSnappedPointRef.current &&
@@ -111,9 +114,8 @@ export const CeilingTool: React.FC = () => {
     const onGridClick = (_event: GridEvent) => {
       if (!currentLevelId) return
 
-      // Calculate snapped click point
-      const lastPoint = points[points.length - 1]
-      const clickPoint = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
+      // Use the last displayed snapped position (respects Shift state from onGridMove)
+      const clickPoint = previousSnappedPointRef.current ?? cursorPosition
 
       // Check if clicking on the first point to close the shape
       const firstPoint = points[0]
@@ -148,12 +150,19 @@ export const CeilingTool: React.FC = () => {
       setPoints([])
     }
 
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = true }
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = false }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
@@ -172,8 +181,7 @@ export const CeilingTool: React.FC = () => {
     }
 
     const ceilingY = levelY + CEILING_HEIGHT
-    const lastPoint = points[points.length - 1]
-    const snappedCursor = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
+    const snappedCursor = snappedCursorPosition
 
     // Build main line points
     const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, ceilingY, z))
@@ -201,14 +209,13 @@ export const CeilingTool: React.FC = () => {
     } else {
       closingLineRef.current.visible = false
     }
-  }, [points, cursorPosition, levelY])
+  }, [points, snappedCursorPosition, levelY])
 
   // Create preview shape when we have 3+ points
   const previewShape = useMemo(() => {
     if (points.length < 3) return null
 
-    const lastPoint = points[points.length - 1]
-    const snappedCursor = lastPoint ? calculateSnapPoint(lastPoint, cursorPosition) : cursorPosition
+    const snappedCursor = snappedCursorPosition
 
     const allPoints = [...points, snappedCursor]
 
@@ -230,7 +237,7 @@ export const CeilingTool: React.FC = () => {
     shape.closePath()
 
     return shape
-  }, [points, cursorPosition])
+  }, [points, snappedCursorPosition])
 
   return (
     <group>
