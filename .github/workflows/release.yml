@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
@@ -66,7 +66,11 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance
+            npm publish --access public --provenance 2>&1 || {
+              echo "❌ Publish failed. Debug log:"
+              cat ~/.npm/_logs/*-debug-0.log 2>/dev/null | tail -80
+              exit 1
+            }
             echo "📦 Published @pascal-app/core@$VERSION"
           fi
 
