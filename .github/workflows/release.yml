@@ -44,6 +44,9 @@ jobs:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
 
+      - name: Pin npm to stable version
+        run: npm install -g npm@10
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
