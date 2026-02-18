@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
@@ -55,6 +55,8 @@ jobs:
       - name: Bump & publish core
         if: inputs.package == 'core' || inputs.package == 'both'
         working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
@@ -66,17 +68,15 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance 2>&1 || {
-              echo "❌ Publish failed. Debug log:"
-              cat ~/.npm/_logs/*-debug-0.log 2>/dev/null | tail -80
-              exit 1
-            }
+            npm publish --access public --provenance
             echo "📦 Published @pascal-app/core@$VERSION"
           fi
 
       - name: Bump & publish viewer
         if: inputs.package == 'viewer' || inputs.package == 'both'
         working-directory: packages/viewer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
