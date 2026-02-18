@@ -85,7 +85,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 
   const {
     width, height, frameDepth, frameThickness,
-    columnRatios, rowRatios, dividerThickness,
+    columnRatios, rowRatios, columnDividerThickness, rowDividerThickness,
     sill, sillDepth, sillThickness,
   } = node
 
@@ -104,8 +104,8 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   const numCols = columnRatios.length
   const numRows = rowRatios.length
 
-  const usableW = innerW - (numCols - 1) * dividerThickness
-  const usableH = innerH - (numRows - 1) * dividerThickness
+  const usableW = innerW - (numCols - 1) * columnDividerThickness
+  const usableH = innerH - (numRows - 1) * rowDividerThickness
 
   const colSum = columnRatios.reduce((a, b) => a + b, 0)
   const rowSum = rowRatios.reduce((a, b) => a + b, 0)
@@ -118,35 +118,35 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   for (let c = 0; c < numCols; c++) {
     colXCenters.push(cx + colWidths[c]! / 2)
     cx += colWidths[c]!
-    if (c < numCols - 1) cx += dividerThickness
+    if (c < numCols - 1) cx += columnDividerThickness
   }
 
-  // Compute row y-centers starting from bottom edge of inner area
+  // Compute row y-centers starting from top edge of inner area (R1 = top)
   const rowYCenters: number[] = []
-  let cy = -innerH / 2
+  let cy = innerH / 2
   for (let r = 0; r < numRows; r++) {
-    rowYCenters.push(cy + rowHeights[r]! / 2)
-    cy += rowHeights[r]!
-    if (r < numRows - 1) cy += dividerThickness
+    rowYCenters.push(cy - rowHeights[r]! / 2)
+    cy -= rowHeights[r]!
+    if (r < numRows - 1) cy -= rowDividerThickness
   }
 
   // Column dividers — full inner height
   cx = -innerW / 2
   for (let c = 0; c < numCols - 1; c++) {
     cx += colWidths[c]!
-    addBox(mesh, frameMaterial, dividerThickness, innerH, frameDepth, cx + dividerThickness / 2, 0, 0)
-    cx += dividerThickness
+    addBox(mesh, frameMaterial, columnDividerThickness, innerH, frameDepth, cx + columnDividerThickness / 2, 0, 0)
+    cx += columnDividerThickness
   }
 
-  // Row dividers — per column width, so they don't overlap column dividers
-  cy = -innerH / 2
+  // Row dividers — per column width, so they don't overlap column dividers (top to bottom)
+  cy = innerH / 2
   for (let r = 0; r < numRows - 1; r++) {
-    cy += rowHeights[r]!
-    const divY = cy + dividerThickness / 2
+    cy -= rowHeights[r]!
+    const divY = cy - rowDividerThickness / 2
     for (let c = 0; c < numCols; c++) {
-      addBox(mesh, frameMaterial, colWidths[c]!, dividerThickness, frameDepth, colXCenters[c]!, divY, 0)
+      addBox(mesh, frameMaterial, colWidths[c]!, rowDividerThickness, frameDepth, colXCenters[c]!, divY, 0)
     }
-    cy += dividerThickness
+    cy -= rowDividerThickness
   }
 
   // Glass panes
