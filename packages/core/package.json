@@ -54,8 +54,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/pascal-editor.git",
+    "url": "https://github.com/pascalorg/editor.git",
     "directory": "packages/core"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://github.com/pascalorg/editor/tree/main/packages/core#readme",
+  "bugs": "https://github.com/pascalorg/editor/issues"
 }
