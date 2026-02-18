@@ -5,25 +5,30 @@ project_id = "pascal-editor"
 
 [api]
 enabled = true
-port = 54321
+port = 55321
 schemas = ["public"]
 extra_search_path = ["public"]
 max_rows = 1000
 
 [db]
-port = 54322
-shadow_port = 54320
+port = 55322
+shadow_port = 55320
 major_version = 17
 
 [studio]
 enabled = true
-port = 54323
+port = 55323
 
 [inbucket]
 enabled = true
-port = 54324
-smtp_port = 54325
-pop3_port = 54326
+port = 55324
+smtp_port = 55325
+pop3_port = 55326
+
+[analytics]
+enabled = true
+port = 55328
+backend = "postgres"
 
 [auth]
 enabled = true

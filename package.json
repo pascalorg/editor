@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",
@@ -11,10 +11,11 @@
     "check": "biome check",
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
-    "db:start": "cd packages/db && supabase start",
-    "db:stop": "cd packages/db && supabase stop",
-    "db:reset": "cd packages/db && supabase db reset",
-    "db:status": "cd packages/db && supabase status"
+    "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:status": "supabase status"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -22,14 +23,14 @@
     "three": "^0.182.0",
     "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.9.8",
-    "zustand": "^5.0.10"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.13",
+    "@biomejs/biome": "^2.4.2",
     "supabase": "2.75.3",
-    "turbo": "^2.8.1",
+    "turbo": "^2.8.9",
     "typescript": "5.9.2",
-    "ultracite": "^7.1.1"
+    "ultracite": "^7.2.3"
   },
   "engines": {
     "node": ">=18"
