@@ -68,7 +68,7 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance
+            npm publish --access public
             echo "📦 Published @pascal-app/core@$VERSION"
           fi
 
@@ -88,7 +88,7 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance
+            npm publish --access public
             echo "📦 Published @pascal-app/viewer@$VERSION"
           fi
 
