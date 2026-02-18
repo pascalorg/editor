@@ -56,7 +56,7 @@ jobs:
         if: inputs.package == 'core' || inputs.package == 'both'
         working-directory: packages/core
         env:
-          NODE_AUTH_TOKEN: ""
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
@@ -76,7 +76,7 @@ jobs:
         if: inputs.package == 'viewer' || inputs.package == 'both'
         working-directory: packages/viewer
         env:
-          NODE_AUTH_TOKEN: ""
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
