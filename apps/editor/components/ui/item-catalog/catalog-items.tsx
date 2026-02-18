@@ -435,6 +435,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [2, 0.8, 1],
+    surface: {
+      height: 0.75
+    }
   },
 
   {
@@ -448,6 +451,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [2, 1.1, 1],
+    surface: {
+      height: 1.1
+    }
   },
 
   {
@@ -1176,6 +1182,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [1, 0.5, 0.7],
     attachTo: "wall-side",
+    surface: {
+      height: 0.12
+    }
   },
 
   {
@@ -1255,6 +1264,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [1.5, 0.8, 1],
+    surface: {
+      height: 0.8
+    }
   },
 
   {
@@ -1385,6 +1397,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, -0.01],
     rotation: [0, 0, 0],
     dimensions: [0.5, 0.5, 0.5],
+    surface: {
+      height: 0.5
+    }
   },
 
   {
@@ -1398,6 +1413,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [2, 0.4, 1.5],
+    surface: {
+      height: 0.3
+    }
   },
 
   {
@@ -1411,6 +1429,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     dimensions: [2, 0.8, 1],
+    surface: {
+      height: 0.75
+    }
   },
 
   {
@@ -1424,5 +1445,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0, 0, -0.01],
     rotation: [0, 0, 0],
     dimensions: [2.5, 0.8, 1],
+    surface: {
+      height: 0.8
+    }
   },
 ];

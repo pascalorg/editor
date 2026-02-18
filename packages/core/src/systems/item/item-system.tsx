@@ -35,15 +35,19 @@ export const ItemSystem = () => {
           mesh.position.z = (wallThickness / 2) * side;
         }
       } else if (!item.asset.attachTo) {
-        // Floor item: elevate by slab height (using full footprint overlap)
-        const levelId = resolveLevelId(item, nodes)
-        const slabElevation = spatialGridManager.getSlabElevationForItem(
-          levelId,
-          item.position,
-          item.asset.dimensions,
-          item.rotation,
-        )
-        mesh.position.y = slabElevation + item.position[1]
+        // If parented to another item (surface placement), R3F handles positioning via the hierarchy
+        const parentNode = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined
+        if (parentNode?.type !== 'item') {
+          // Floor item: elevate by slab height (using full footprint overlap)
+          const levelId = resolveLevelId(item, nodes)
+          const slabElevation = spatialGridManager.getSlabElevationForItem(
+            levelId,
+            item.position,
+            item.asset.dimensions,
+            item.rotation,
+          )
+          mesh.position.y = slabElevation + item.position[1]
+        }
       }
 
       clearDirty(id as AnyNodeId)

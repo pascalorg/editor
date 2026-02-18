@@ -5,7 +5,7 @@ import type { Vector3 } from 'three'
 // PLACEMENT STATE
 // ============================================================================
 
-export type SurfaceType = 'floor' | 'wall' | 'ceiling'
+export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface'
 
 /**
  * Tracks which surface the draft item is currently on.
@@ -15,6 +15,7 @@ export interface PlacementState {
   surface: SurfaceType
   wallId: string | null
   ceilingId: string | null
+  surfaceItemId: string | null
 }
 
 // ============================================================================

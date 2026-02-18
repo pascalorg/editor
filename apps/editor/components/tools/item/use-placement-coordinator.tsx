@@ -4,6 +4,7 @@ import {
   type CeilingEvent,
   emitter,
   type GridEvent,
+  type ItemEvent,
   resolveLevelId,
   sceneRegistry,
   spatialGridManager,
@@ -29,7 +30,7 @@ import {
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '@/lib/sfx-bus'
-import { ceilingStrategy, checkCanPlace, floorStrategy, wallStrategy } from './placement-strategies'
+import { ceilingStrategy, checkCanPlace, floorStrategy, itemSurfaceStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
@@ -93,6 +94,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       surface: 'floor',
       wallId: null,
       ceilingId: null,
+      surfaceItemId: null,
     }
 
     // ---- Helpers ----
@@ -367,6 +369,114 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    // ---- Item Surface Handlers ----
+
+    const onItemEnter = (event: ItemEvent) => {
+      if (event.node.id === draftNode.current?.id) return
+      const result = itemSurfaceStrategy.enter(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      applyTransition(result)
+
+      if (!draftNode.current) {
+        ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        // Existing draft (move mode): reparent to surface item
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+      }
+    }
+
+    const onItemMove = (event: ItemEvent) => {
+      if (event.node.id === draftNode.current?.id) return
+      const ctx = getContext()
+
+      if (ctx.state.surface !== 'item-surface') {
+        // Try entering surface mode
+        const enterResult = itemSurfaceStrategy.enter(ctx, event)
+        if (!enterResult) return
+
+        event.stopPropagation()
+        applyTransition(enterResult)
+        if (draftNode.current && enterResult.nodeUpdate.parentId) {
+          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+        }
+        return
+      }
+
+      if (!draftNode.current) {
+        const enterResult = itemSurfaceStrategy.enter(getContext(), event)
+        if (!enterResult) return
+        event.stopPropagation()
+        ensureDraft(enterResult)
+        return
+      }
+
+      const result = itemSurfaceStrategy.move(ctx, event)
+      if (!result) return
+
+      event.stopPropagation()
+
+      gridPosition.current.set(...result.gridPosition)
+      cursorGroupRef.current.position.set(...result.cursorPosition)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
+
+      const draft = draftNode.current
+      if (draft) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) mesh.position.set(...result.gridPosition)
+      }
+
+      revalidate()
+    }
+
+    const onItemLeave = (event: ItemEvent) => {
+      if (event.node.id === draftNode.current?.id) return
+      if (placementState.current.surface !== 'item-surface') return
+
+      event.stopPropagation()
+
+      // Transition back to floor using event world position
+      const wx = Math.round(event.position[0] * 2) / 2
+      const wz = Math.round(event.position[2] * 2) / 2
+      const floorPos: [number, number, number] = [wx, 0, wz]
+
+      Object.assign(placementState.current, { surface: 'floor', surfaceItemId: null })
+      gridPosition.current.set(wx, 0, wz)
+      cursorGroupRef.current.position.set(wx, event.position[1], wz)
+
+      const draft = draftNode.current
+      if (draft) {
+        draft.position = floorPos
+        useScene.getState().updateNode(draft.id, {
+          parentId: useViewer.getState().selection.levelId as string,
+          position: floorPos,
+        })
+      }
+
+      revalidate()
+    }
+
+    const onItemClick = (event: ItemEvent) => {
+      if (event.node.id === draftNode.current?.id) return
+      const result = itemSurfaceStrategy.click(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      draftNode.commit(result.nodeUpdate)
+
+      if (configRef.current.onCommitted()) {
+        // Try to set up next draft on the same surface
+        const enterResult = itemSurfaceStrategy.enter(getContext(), event)
+        if (enterResult) {
+          applyTransition(enterResult)
+        } else {
+          revalidate()
+        }
+      }
+    }
+
     // ---- Ceiling Handlers ----
 
     const onCeilingEnter = (event: CeilingEvent) => {
@@ -546,6 +656,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
+    emitter.on('item:enter', onItemEnter)
+    emitter.on('item:move', onItemMove)
+    emitter.on('item:leave', onItemLeave)
+    emitter.on('item:click', onItemClick)
     emitter.on('wall:enter', onWallEnter)
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
@@ -560,6 +674,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
+      emitter.off('item:enter', onItemEnter)
+      emitter.off('item:move', onItemMove)
+      emitter.off('item:leave', onItemLeave)
+      emitter.off('item:click', onItemClick)
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
