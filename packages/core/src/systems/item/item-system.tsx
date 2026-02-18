@@ -43,7 +43,7 @@ export const ItemSystem = () => {
           item.asset.dimensions,
           item.rotation,
         )
-        mesh.position.y = slabElevation
+        mesh.position.y = slabElevation + item.position[1]
       }
 
       clearDirty(id as AnyNodeId)
