@@ -42,9 +42,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Configure npm auth
-        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -53,13 +51,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Debug auth
-        run: |
-          echo "npm version: $(npm --version)"
-          echo "node version: $(node --version)"
-          npm whoami 2>&1 || echo "whoami failed"
-          cat ~/.npmrc | sed 's/npm_[a-zA-Z0-9]*/npm_REDACTED/g'
 
       - name: Bump & publish core
         if: inputs.package == 'core' || inputs.package == 'both'
@@ -71,18 +62,11 @@ jobs:
 
           bun run build
 
-          echo "📋 Package contents:"
-          npm pack --dry-run 2>&1 || true
-
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --loglevel verbose 2>&1 || {
-              echo "❌ Publish failed, dumping debug log:"
-              cat ~/.npm/_logs/*-debug-0.log 2>/dev/null | tail -50
-              exit 1
-            }
+            npm publish --access public --provenance
             echo "📦 Published @pascal-app/core@$VERSION"
           fi
 
@@ -100,7 +84,7 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public
+            npm publish --access public --provenance
             echo "📦 Published @pascal-app/viewer@$VERSION"
           fi
 
