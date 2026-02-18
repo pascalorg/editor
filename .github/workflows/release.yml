@@ -31,7 +31,6 @@ jobs:
     environment: npm
     permissions:
       contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,17 +67,8 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance --loglevel verbose 2>&1 || true
-            echo "📋 npm debug logs:"
-            cat ~/.npm/_logs/*debug*.log 2>/dev/null || echo "No debug logs found"
-            # Check if publish actually succeeded
-            PUBLISHED=$(npm view @pascal-app/core version 2>/dev/null)
-            if [ "$PUBLISHED" = "$VERSION" ]; then
-              echo "📦 Published @pascal-app/core@$VERSION"
-            else
-              echo "❌ Publish failed — expected $VERSION, found $PUBLISHED on registry"
-              exit 1
-            fi
+            npm publish --access public
+            echo "📦 Published @pascal-app/core@$VERSION"
           fi
 
       - name: Bump & publish viewer
@@ -97,7 +87,7 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance
+            npm publish --access public
             echo "📦 Published @pascal-app/viewer@$VERSION"
           fi
 
