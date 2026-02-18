@@ -135,30 +135,35 @@ export default function CommunityHub() {
 
       <main className="container mx-auto px-6 py-8 space-y-12">
         {/* User's Projects Section */}
-        {isAuthenticated && (userProjects.length > 0 || localProjects.length > 0) && (
+        {isAuthenticated && (
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold">My Projects</h2>
               <CreateProjectButton onCreateProject={handleCreateProject} />
             </div>
-            <ProjectGrid
-              projects={[...userProjects, ...localProjects]}
-              onProjectClick={handleProjectClick}
-              onViewClick={handleViewProject}
-              onSaveToCloud={handleSaveLocalToCloud}
-              showOwner={false}
-              canEdit
-              onUpdate={() => {
-                // Reload projects after settings update
-                if (!authLoading) {
-                  getUserProjects().then((result) => {
-                    if (result.success) {
-                      setUserProjects(result.data || [])
-                    }
-                  })
-                }
-              }}
-            />
+            {userProjects.length === 0 && localProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+                <p className="text-muted-foreground">You don&apos;t have any projects yet.</p>
+              </div>
+            ) : (
+              <ProjectGrid
+                projects={[...userProjects, ...localProjects]}
+                onProjectClick={handleProjectClick}
+                onViewClick={handleViewProject}
+                onSaveToCloud={handleSaveLocalToCloud}
+                showOwner={false}
+                canEdit
+                onUpdate={() => {
+                  if (!authLoading) {
+                    getUserProjects().then((result) => {
+                      if (result.success) {
+                        setUserProjects(result.data || [])
+                      }
+                    })
+                  }
+                }}
+              />
+            )}
           </section>
         )}
 

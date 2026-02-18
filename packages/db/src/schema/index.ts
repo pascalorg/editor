@@ -5,6 +5,9 @@ export * from './auth/sessions'
 export * from './auth/users'
 export * from './auth/verifications'
 
+// Feedback table
+export * from './feedback/feedback'
+
 // Project tables
 export * from './projects/addresses'
 export * from './projects/likes'
