@@ -14,7 +14,8 @@ export async function submitFeedback(
     const session = await getSession()
     const supabase = await createServerSupabaseClient()
 
-    const { error } = await supabase.from('feedback').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('feedback').insert({
       id: createId('feedback'),
       user_id: session?.user?.id ?? null,
       message: trimmed,

@@ -1,4 +1,4 @@
-import { ItemNode } from "@pascal-app/core";
+import { type AnyNodeId, ItemNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState } from "react";

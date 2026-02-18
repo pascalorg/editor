@@ -11,12 +11,12 @@ function getInitialState(node: {
 }): PlacementState {
   const attachTo = node.asset.attachTo
   if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return { surface: 'wall', wallId: node.parentId, ceilingId: null }
+    return { surface: 'wall', wallId: node.parentId, ceilingId: null, surfaceItemId: null }
   }
   if (attachTo === 'ceiling') {
-    return { surface: 'ceiling', wallId: null, ceilingId: node.parentId }
+    return { surface: 'ceiling', wallId: null, ceilingId: node.parentId, surfaceItemId: null }
   }
-  return { surface: 'floor', wallId: null, ceilingId: null }
+  return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
 }
 
 export const MoveTool: React.FC = () => {

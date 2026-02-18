@@ -1167,7 +1167,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
     scale: [1, 1, 1],
     offset: [0, 0.21, 0],
     rotation: [0, 0, 0],
-    dimensions: [2, 0.4, 0.5],
+    dimensions: [2, 0.4, 0.5],surface: {
+      height: 0.36
+    }
   },
 
   {

@@ -73,7 +73,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const basePlaneRef = useRef<Mesh>(null!)
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const placementState = useRef<PlacementState>(
-    config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null },
+    config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
   )
   const shiftFreeRef = useRef(false)
 

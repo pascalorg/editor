@@ -45,7 +45,7 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
         <ModelRenderer node={node} />
       </Suspense>
       {node.children?.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId as ItemNode['id']} />
+        <NodeRenderer key={childId} nodeId={childId } />
         ))}
     </group>
   )
