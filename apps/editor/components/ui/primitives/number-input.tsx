@@ -145,7 +145,8 @@ export function NumberInput({
         {isEditing ? (
           <input
             autoFocus
-            className="flex-1 bg-transparent px-2 py-1 text-foreground text-sm outline-none text-right"
+            size={1}
+            className="flex-1 min-w-0 bg-transparent px-2 py-1 text-foreground text-sm outline-none text-right"
             onBlur={handleInputBlur}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
