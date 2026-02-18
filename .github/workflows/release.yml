@@ -68,8 +68,17 @@ jobs:
             echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
             npm publish --dry-run --access public
           else
-            npm publish --access public --provenance
-            echo "📦 Published @pascal-app/core@$VERSION"
+            npm publish --access public --provenance --loglevel verbose 2>&1 || true
+            echo "📋 npm debug logs:"
+            cat ~/.npm/_logs/*debug*.log 2>/dev/null || echo "No debug logs found"
+            # Check if publish actually succeeded
+            PUBLISHED=$(npm view @pascal-app/core version 2>/dev/null)
+            if [ "$PUBLISHED" = "$VERSION" ]; then
+              echo "📦 Published @pascal-app/core@$VERSION"
+            else
+              echo "❌ Publish failed — expected $VERSION, found $PUBLISHED on registry"
+              exit 1
+            fi
           fi
 
       - name: Bump & publish viewer
