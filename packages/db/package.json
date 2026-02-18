@@ -2,6 +2,12 @@
   "name": "@pascal-app/db",
   "version": "0.0.0",
   "type": "module",
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "bunx supabase --workdir ../.. db push --local",
+    "db:push": "drizzle-kit push --config drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config drizzle.config.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
