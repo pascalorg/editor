@@ -1020,16 +1020,14 @@ export async function uploadProjectThumbnail(
       return { success: false, error: 'Not authorized to update this project' }
     }
 
-    // Generate a unique filename
-    const timestamp = Date.now()
-    const filename = `${projectId}/${timestamp}.png`
+    const filename = `${projectId}/thumbnail.png`
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage (upsert to override existing thumbnail)
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('project-thumbnails')
       .upload(filename, blob, {
         contentType: 'image/png',
-        upsert: false,
+        upsert: true,
       })
 
     if (uploadError) {
@@ -1041,7 +1039,7 @@ export async function uploadProjectThumbnail(
       .from('project-thumbnails')
       .getPublicUrl(uploadData.path)
 
-    const thumbnailUrl = urlData.publicUrl
+    const thumbnailUrl = `${urlData.publicUrl}?t=${Date.now()}`
 
     // Update the project with the new thumbnail URL
     const { error: updateError } = await (supabase

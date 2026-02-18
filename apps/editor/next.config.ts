@@ -2,6 +2,11 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   transpilePackages: ['three', '@pascal-app/viewer', '@pascal-app/core'],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
   images: {
     remotePatterns: [
       {

@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { uploadProjectThumbnail } from '@/features/community/lib/projects/actions'
+import { useProjectStore } from '@/features/community/lib/projects/store'
 
 const THUMBNAIL_WIDTH = 1920
 const THUMBNAIL_HEIGHT = 1080
@@ -70,8 +71,7 @@ export const ThumbnailGenerator = ({ projectId: propProjectId }: ThumbnailGenera
             const result = await uploadProjectThumbnail(projectId, blob)
 
             if (result.success) {
-              console.log('✅ Thumbnail uploaded successfully!')
-              console.log('🔗 URL:', result.data.thumbnail_url)
+              useProjectStore.getState().updateActiveThumbnail(result.data.thumbnail_url)
             } else {
               console.error('❌ Failed to upload thumbnail:', result.error)
             }
