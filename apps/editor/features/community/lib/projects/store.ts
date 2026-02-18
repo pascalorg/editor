@@ -22,6 +22,7 @@ interface ProjectStore {
   fetchActiveProject: () => Promise<void>
   setActiveProject: (projectId: string) => Promise<void>
   initialize: () => Promise<void>
+  updateActiveThumbnail: (thumbnailUrl: string) => void
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -76,6 +77,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     } else {
       set({ isLoading: false, error: result.error || 'Project not found' })
     }
+  },
+
+  // Patch the active project's thumbnail URL in place (no refetch)
+  updateActiveThumbnail: (thumbnailUrl: string) => {
+    set((state) => ({
+      activeProject: state.activeProject
+        ? { ...state.activeProject, thumbnail_url: thumbnailUrl }
+        : null,
+    }))
   },
 
   // Initialize - fetch both projects and active project

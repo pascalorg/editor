@@ -15,6 +15,11 @@ const assetSchema = z.object({
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
+  surface: z
+    .object({
+      height: z.number(), // where things rest 
+    })
+    .optional(), // undefined = can't place things on it
 })
 
 export type AssetInput = z.input<typeof assetSchema>
@@ -26,6 +31,7 @@ export const ItemNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  children: z.array(objectId('item')).default([]),
 
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),

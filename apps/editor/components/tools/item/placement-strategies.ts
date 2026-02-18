@@ -1,11 +1,16 @@
 import type {
   AnyNode,
+  AnyNodeId,
   CeilingEvent,
   CeilingNode,
   GridEvent,
+  ItemEvent,
+  ItemNode,
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
+import { Vector3 } from 'three'
 import type {
   CommitResult,
   LevelResolver,
@@ -374,6 +379,105 @@ export const ceilingStrategy = {
 }
 
 // ============================================================================
+// ITEM SURFACE STRATEGY
+// ============================================================================
+
+export const itemSurfaceStrategy = {
+  /**
+   * Handle item:enter — transition from floor to an item surface.
+   * Returns null if: item has no surface, our item doesn't fit, or it's the draft itself.
+   */
+  enter(ctx: PlacementContext, event: ItemEvent): TransitionResult | null {
+    // Only floor items can be placed on surfaces
+    if (ctx.asset.attachTo) return null
+
+    const surfaceItem = event.node as ItemNode
+    // Don't surface-place on the draft itself
+    if (surfaceItem.id === ctx.draftItem?.id) return null
+    // Surface item must declare a surface
+    if (!surfaceItem.asset.surface) return null
+
+    // Size check: our footprint must fit on surface item's footprint
+    const ourDims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const surfDims = surfaceItem.asset.dimensions
+    if (ourDims[0] > surfDims[0] || ourDims[2] > surfDims[2]) return null
+
+    const surfaceMesh = sceneRegistry.nodes.get(surfaceItem.id)
+    if (!surfaceMesh) return null
+
+    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
+    const localPos = surfaceMesh.worldToLocal(worldPos)
+
+    const x = snapToGrid(localPos.x, ourDims[0])
+    const z = snapToGrid(localPos.z, ourDims[2])
+    const y = surfaceItem.asset.surface.height
+
+    const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
+
+    return {
+      stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
+      nodeUpdate: { position: [x, y, z], parentId: surfaceItem.id },
+      cursorRotationY: 0,
+      gridPosition: [x, y, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      stopPropagation: true,
+    }
+  },
+
+  /**
+   * Handle item:move — update position while on an item surface.
+   */
+  move(ctx: PlacementContext, event: ItemEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'item-surface') return null
+    if (!ctx.state.surfaceItemId || !ctx.draftItem) return null
+
+    const nodes = useScene.getState().nodes
+    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
+    if (!surfaceItem?.asset.surface) return null
+
+    const surfaceMesh = sceneRegistry.nodes.get(ctx.state.surfaceItemId)
+    if (!surfaceMesh) return null
+
+    const ourDims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
+    const localPos = surfaceMesh.worldToLocal(worldPos)
+
+    const x = snapToGrid(localPos.x, ourDims[0])
+    const z = snapToGrid(localPos.z, ourDims[2])
+    const y = surfaceItem.asset.surface.height
+
+    const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
+
+    return {
+      gridPosition: [x, y, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      cursorRotationY: 0,
+      nodeUpdate: { position: [x, y, z] },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  /**
+   * Handle item:click — commit placement on item surface.
+   */
+  click(ctx: PlacementContext, _event: ItemEvent): CommitResult | null {
+    if (ctx.state.surface !== 'item-surface') return null
+    if (!ctx.draftItem || !ctx.state.surfaceItemId) return null
+
+    return {
+      nodeUpdate: {
+        position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+        parentId: ctx.state.surfaceItemId,
+        metadata: stripTransient(ctx.draftItem.metadata),
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+}
+
+// ============================================================================
 // VALIDATION
 // ============================================================================
 
@@ -383,6 +487,11 @@ export const ceilingStrategy = {
  */
 export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidators): boolean {
   if (!ctx.levelId || !ctx.draftItem) return false
+
+  // Item surface: valid if we entered (size check was in enter)
+  if (ctx.state.surface === 'item-surface') {
+    return ctx.state.surfaceItemId !== null
+  }
 
   const attachTo = ctx.draftItem.asset.attachTo
 

@@ -7,6 +7,7 @@ import { positionLocal, smoothstep, time } from 'three/tsl'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
+import { NodeRenderer } from '../node-renderer'
 
 // Shared materials to avoid creating new instances for every mesh
 const defaultMaterial = new MeshStandardNodeMaterial({
@@ -43,6 +44,9 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
       <Suspense fallback={<PreviewModel node={node} />}>
         <ModelRenderer node={node} />
       </Suspense>
+      {node.children?.map((childId) => (
+        <NodeRenderer key={childId} nodeId={childId } />
+        ))}
     </group>
   )
 }

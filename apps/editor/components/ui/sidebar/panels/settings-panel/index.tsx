@@ -71,15 +71,9 @@ export function SettingsPanel() {
   };
 
   const handleGenerateThumbnail = () => {
-    if (!projectId) {
-      console.error('❌ No project ID found');
-      return;
-    }
-    console.log('🎯 Generate thumbnail clicked for project:', projectId);
+    if (!projectId) return;
     setIsGeneratingThumbnail(true);
     emitter.emit('camera-controls:generate-thumbnail', { projectId });
-    console.log('📤 Event emitted with project ID:', projectId);
-    // Reset loading state after a delay (thumbnail generation is async)
     setTimeout(() => setIsGeneratingThumbnail(false), 3000);
   };
 
@@ -106,6 +100,16 @@ export function SettingsPanel() {
           <label className="font-medium text-muted-foreground text-xs uppercase">
             Thumbnail
           </label>
+          {activeProject?.thumbnail_url && (
+            <div className="rounded overflow-hidden border border-border aspect-video w-full bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activeProject.thumbnail_url}
+                alt="Project thumbnail"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
           <Button
             className="w-full justify-start gap-2"
             onClick={handleGenerateThumbnail}

@@ -280,13 +280,15 @@ export const WindowTool: React.FC = () => {
         frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
-        dividerThickness: draft.dividerThickness,
+        columnDividerThickness: draft.columnDividerThickness,
+        rowDividerThickness: draft.rowDividerThickness,
         sill: draft.sill,
         sillDepth: draft.sillDepth,
         sillThickness: draft.sillThickness,
       })
 
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
 
       event.stopPropagation()

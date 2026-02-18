@@ -237,6 +237,7 @@ export const CustomCameraControls = () => {
       mouseButtons={mouseButtons}
       onTransitionStart={onTransitionStart}
       onRest={onRest}
+      onSleep={onRest}
       restThreshold={0.01}
     />
   )

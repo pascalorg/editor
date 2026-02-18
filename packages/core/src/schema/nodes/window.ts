@@ -28,7 +28,8 @@ export const WindowNode = BaseNode.extend({
   // [1] = single pane (no division)
   columnRatios: z.array(z.number()).default([1]),
   rowRatios: z.array(z.number()).default([1]),
-  dividerThickness: z.number().default(0.03),
+  columnDividerThickness: z.number().default(0.03),
+  rowDividerThickness: z.number().default(0.03),
 
   // Sill
   sill: z.boolean().default(true),

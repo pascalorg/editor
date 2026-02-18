@@ -10,6 +10,7 @@ interface NumberInputProps {
   min?: number
   max?: number
   precision?: number
+  step?: number
   className?: string
 }
 
@@ -20,6 +21,7 @@ export function NumberInput({
   min,
   max,
   precision = 2,
+  step = 0.1,
   className = '',
 }: NumberInputProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -55,14 +57,14 @@ export function NumberInput({
         const deltaX = moveEvent.clientX - startXRef.current
 
         // Determine step size based on modifier keys
-        let step = 0.1 // Default
+        let dragStep = step // Default from prop
         if (moveEvent.shiftKey) {
-          step = 1.0 // Coarse
+          dragStep = step * 10 // Coarse
         } else if (moveEvent.altKey) {
-          step = 0.01 // Fine
+          dragStep = step * 0.1 // Fine
         }
 
-        const deltaValue = deltaX * step
+        const deltaValue = deltaX * dragStep
         const newValue = clamp(startValueRef.current + deltaValue)
         const newFinalValue = Number.parseFloat(newValue.toFixed(precision))
 
@@ -143,7 +145,8 @@ export function NumberInput({
         {isEditing ? (
           <input
             autoFocus
-            className="flex-1 bg-transparent px-2 py-1 text-foreground text-sm outline-none text-right"
+            size={1}
+            className="flex-1 min-w-0 bg-transparent px-2 py-1 text-foreground text-sm outline-none text-right"
             onBlur={handleInputBlur}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}

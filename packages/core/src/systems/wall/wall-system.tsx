@@ -132,7 +132,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     collisionMesh.geometry = collisionGeo
   }
 
-  mesh.position.set(node.start[0], 0, node.start[1])
+  mesh.position.set(node.start[0], slabElevation, node.start[1])
   const angle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   mesh.rotation.y = -angle
 }
@@ -153,8 +153,10 @@ export function generateExtrudedWall(
 
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  // Wall height is adjusted by slab elevation (positive reduces, negative increases)
-  const height = (wallNode.height ?? 2.5) - slabElevation
+  // Positive slab: shift the whole wall up (full height preserved)
+  // Negative slab: extend wall downward so top stays fixed at wallNode.height
+  const wallHeight = wallNode.height ?? 2.5
+  const height = slabElevation > 0 ? wallHeight : wallHeight - slabElevation
 
   const thickness = wallNode.thickness ?? 0.1
   const halfT = thickness / 2
@@ -248,10 +250,6 @@ export function generateExtrudedWall(
 
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
-  // Translate by slab elevation (works for both positive and negative values)
-  if (slabElevation !== 0) {
-    geometry.translate(0, slabElevation, 0)
-  }
   geometry.computeVertexNormals()
 
   // Apply CSG subtraction for cutouts (doors/windows)
