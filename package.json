@@ -15,7 +15,12 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:status": "supabase status"
+    "db:status": "supabase status",
+    "release": "gh workflow run release.yml -f package=both -f bump=patch",
+    "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
+    "release:core": "gh workflow run release.yml -f package=core -f bump=patch",
+    "release:minor": "gh workflow run release.yml -f package=both -f bump=minor",
+    "release:major": "gh workflow run release.yml -f package=both -f bump=major"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
