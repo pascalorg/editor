@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to release"
+        required: true
+        type: choice
+        options:
+          - core
+          - viewer
+          - both
+      bump:
+        description: "Version bump"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry-run:
+        description: "Dry run (no publish)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump & publish core
+        if: inputs.package == 'core' || inputs.package == 'both'
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ""
+        run: |
+          npm version ${{ inputs.bump }} --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "CORE_VERSION=$VERSION" >> $GITHUB_ENV
+
+          bun run build
+
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
+            npm publish --dry-run --access public
+          else
+            npm publish --access public --provenance
+            echo "📦 Published @pascal-app/core@$VERSION"
+          fi
+
+      - name: Bump & publish viewer
+        if: inputs.package == 'viewer' || inputs.package == 'both'
+        working-directory: packages/viewer
+        env:
+          NODE_AUTH_TOKEN: ""
+        run: |
+          npm version ${{ inputs.bump }} --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VIEWER_VERSION=$VERSION" >> $GITHUB_ENV
+
+          bun run build
+
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/viewer@$VERSION"
+            npm publish --dry-run --access public
+          else
+            npm publish --access public --provenance
+            echo "📦 Published @pascal-app/viewer@$VERSION"
+          fi
+
+      - name: Commit version bumps & tag
+        if: inputs.dry-run == false
+        run: |
+          git add -A
+          PKGS=""
+          TAGS=""
+
+          if [ -n "$CORE_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/core@$CORE_VERSION"
+            TAGS="$TAGS @pascal-app/core@$CORE_VERSION"
+          fi
+          if [ -n "$VIEWER_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/viewer@$VIEWER_VERSION"
+            TAGS="$TAGS @pascal-app/viewer@$VIEWER_VERSION"
+          fi
+
+          git commit -m "release:${PKGS}"
+
+          for TAG in $TAGS; do
+            git tag "$TAG"
+          done
+
+          git push --follow-tags
