@@ -36,7 +36,7 @@ export function IconRail({
         className,
       )}
     >
-      {/* Pascal Logo - Link to Hub */}
+      {/* Pascal logo - link to the home page */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Link
@@ -52,7 +52,7 @@ export function IconRail({
             />
           </Link>
         </TooltipTrigger>
-        <TooltipContent side="right">Back to Hub</TooltipContent>
+        <TooltipContent side="right">Back to Pascal Editor</TooltipContent>
       </Tooltip>
 
       {/* Divider */}
