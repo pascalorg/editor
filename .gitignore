@@ -2,6 +2,7 @@
 
 # Dependencies
 node_modules
+package-lock.json
 .pnp
 .pnp.js
 
@@ -42,3 +43,4 @@ yarn-error.log*
 .DS_Store
 *.pem
 /.playwright-mcp
+og-test
