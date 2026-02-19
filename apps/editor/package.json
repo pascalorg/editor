@@ -31,6 +31,7 @@
     "@react-three/uikit-lucide": "^1.0.60",
     "@repo/ui": "*",
     "@supabase/supabase-js": "^2.95.3",
+    "@t3-oss/env-nextjs": "^0.13.10",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/three": "^0.182.0",
     "@vercel/analytics": "^1.6.1",
@@ -48,7 +49,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",

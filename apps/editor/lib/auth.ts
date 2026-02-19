@@ -1,19 +1,19 @@
 import { createAuth } from '@pascal-app/auth/server'
 import { db } from '@pascal-app/db'
 import { Resend } from 'resend'
+import { env } from '@/env.mjs'
 import { BASE_URL } from './utils'
 
 // Initialize Resend only if API key is available
-const resendApiKey = process.env.RESEND_API_KEY
-const resend = resendApiKey && resendApiKey.trim() !== '' ? new Resend(resendApiKey) : null
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null
 
 export const auth = createAuth({
   db,
   appName: 'Pascal Editor',
   baseURL: BASE_URL,
-  secret: process.env.BETTER_AUTH_SECRET || 'build-placeholder-not-used-at-runtime',
-  googleClientId: process.env.GOOGLE_CLIENT_ID,
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  secret: env.BETTER_AUTH_SECRET,
+  googleClientId: env.GOOGLE_CLIENT_ID,
+  googleClientSecret: env.GOOGLE_CLIENT_SECRET,
   sendMagicLink: async ({ email, url }) => {
     if (!resend) {
       console.log(`[DEV] Magic link for ${email}: ${url}`)

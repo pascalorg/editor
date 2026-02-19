@@ -7,6 +7,7 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
+        "SKIP_ENV_VALIDATION",
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "GOOGLE_CLIENT_ID",

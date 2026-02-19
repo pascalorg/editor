@@ -1,8 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { SupabaseDatabase } from '@pascal-app/db'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
+import { env } from '@/env.mjs'
 
 /**
  * Supabase client for server-side use with service role key
@@ -10,8 +8,8 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeho
  * Always filter by user_id to enforce permissions
  */
 export const supabaseAdmin = createClient<SupabaseDatabase>(
-  supabaseUrl,
-  supabaseServiceRoleKey,
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
       persistSession: false,
