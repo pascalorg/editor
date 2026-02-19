@@ -3,9 +3,11 @@ import { useViewer } from "@pascal-app/viewer";
 import { Camera, Download, Save, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/primitives/button";
+import { Switch } from "@/components/ui/primitives/switch";
 import useEditor from "@/store/use-editor";
 import { AudioSettingsDialog } from "./audio-settings-dialog";
 import { useProjectStore } from "@/features/community/lib/projects/store";
+import { updateProjectVisibility } from "@/features/community/lib/projects/actions";
 
 export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,8 +79,74 @@ export function SettingsPanel() {
     setTimeout(() => setIsGeneratingThumbnail(false), 3000);
   };
 
+  const handleVisibilityChange = async (
+    field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
+    value: boolean,
+  ) => {
+    if (!projectId) return;
+
+    // Optimistic update
+    useProjectStore.setState((state) => ({
+      activeProject: state.activeProject
+        ? {
+            ...state.activeProject,
+            ...(field === 'isPrivate' && { is_private: value }),
+            ...(field === 'showScansPublic' && { show_scans_public: value }),
+            ...(field === 'showGuidesPublic' && { show_guides_public: value }),
+          }
+        : null,
+    }));
+
+    await updateProjectVisibility(projectId, { [field]: value });
+  };
+
   return (
     <div className="flex flex-col gap-6 p-3">
+      {/* Visibility Section (only for cloud projects) */}
+      {projectId && !isLocalProject && (
+        <div className="space-y-3">
+          <label className="font-medium text-muted-foreground text-xs uppercase">
+            Visibility
+          </label>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Public</div>
+              <div className="text-xs text-muted-foreground">
+                {activeProject?.is_private ? 'Only you' : 'Anyone'} can view
+              </div>
+            </div>
+            <Switch
+              checked={!activeProject?.is_private}
+              onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Show 3D Scans</div>
+              <div className="text-xs text-muted-foreground">
+                Visible to public viewers
+              </div>
+            </div>
+            <Switch
+              checked={activeProject?.show_scans_public ?? true}
+              onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Show Floorplans</div>
+              <div className="text-xs text-muted-foreground">
+                Visible to public viewers
+              </div>
+            </div>
+            <Switch
+              checked={activeProject?.show_guides_public ?? true}
+              onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Export Section */}
       <div className="space-y-2">
         <label className="font-medium text-muted-foreground text-xs uppercase">

@@ -1,16 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/primitives/dialog'
 import { Switch } from '@/components/ui/primitives/switch'
-import { updateProjectName, updateProjectPrivacy, deleteProject } from '../lib/projects/actions'
+import { updateProjectName, updateProjectVisibility, deleteProject } from '../lib/projects/actions'
 import type { Project } from '../lib/projects/types'
 
 interface ProjectSettingsDialogProps {
@@ -28,42 +27,35 @@ export function ProjectSettingsDialog({
   onUpdate,
   onDelete,
 }: ProjectSettingsDialogProps) {
-  const [loading, setLoading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [name, setName] = useState(project.name || '')
   const [isPrivate, setIsPrivate] = useState(project.is_private)
+  const [showScansPublic, setShowScansPublic] = useState(project.show_scans_public ?? true)
+  const [showGuidesPublic, setShowGuidesPublic] = useState(project.show_guides_public ?? true)
+  const nameTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
-  const handleSave = async () => {
-    setLoading(true)
-    try {
-      // Update name if changed
-      const trimmedName = name.trim()
-      if (trimmedName && trimmedName !== (project.name || '')) {
-        const nameResult = await updateProjectName(project.id, trimmedName)
-        if (!nameResult.success) {
-          alert(`Failed to update name: ${nameResult.error}`)
-          setLoading(false)
-          return
-        }
+  const handleNameChange = (value: string) => {
+    setName(value)
+    if (nameTimerRef.current) clearTimeout(nameTimerRef.current)
+    nameTimerRef.current = setTimeout(async () => {
+      const trimmed = value.trim()
+      if (trimmed && trimmed !== (project.name || '')) {
+        await updateProjectName(project.id, trimmed)
+        onUpdate?.()
       }
+    }, 500)
+  }
 
-      // Update privacy if changed
-      if (isPrivate !== project.is_private) {
-        const privacyResult = await updateProjectPrivacy(project.id, isPrivate)
-        if (!privacyResult.success) {
-          alert(`Failed to update privacy: ${privacyResult.error}`)
-          setLoading(false)
-          return
-        }
-      }
+  const handleVisibilityChange = async (
+    field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
+    value: boolean,
+  ) => {
+    if (field === 'isPrivate') setIsPrivate(value)
+    if (field === 'showScansPublic') setShowScansPublic(value)
+    if (field === 'showGuidesPublic') setShowGuidesPublic(value)
 
-      onUpdate?.()
-      onOpenChange(false)
-    } catch (error) {
-      alert('Failed to save settings')
-    } finally {
-      setLoading(false)
-    }
+    await updateProjectVisibility(project.id, { [field]: value })
+    onUpdate?.()
   }
 
   const handleDelete = async () => {
@@ -92,7 +84,7 @@ export function ProjectSettingsDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
-          <DialogDescription>Update project name and privacy settings</DialogDescription>
+          <DialogDescription>Changes are saved automatically</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -105,10 +97,9 @@ export function ProjectSettingsDialog({
               id="project-name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               placeholder="My Project"
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={loading}
             />
           </div>
 
@@ -122,8 +113,29 @@ export function ProjectSettingsDialog({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Public</span>
-              <Switch checked={!isPrivate} onCheckedChange={(checked) => setIsPrivate(!checked)} />
+              <Switch checked={!isPrivate} onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)} />
             </div>
+          </div>
+
+          {/* Public Visibility Toggles */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Show 3D Scans</div>
+              <div className="text-sm text-muted-foreground">
+                Visible to public viewers
+              </div>
+            </div>
+            <Switch checked={showScansPublic} onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)} />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Show Floorplans</div>
+              <div className="text-sm text-muted-foreground">
+                Visible to public viewers
+              </div>
+            </div>
+            <Switch checked={showGuidesPublic} onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)} />
           </div>
 
           {/* Danger Zone */}
@@ -136,31 +148,12 @@ export function ProjectSettingsDialog({
               type="button"
               onClick={handleDelete}
               className="rounded-md border border-destructive bg-destructive/10 px-4 py-2 text-sm text-destructive hover:bg-destructive/20"
-              disabled={isDeleting || loading}
+              disabled={isDeleting}
             >
               {isDeleting ? 'Deleting...' : 'Delete Project'}
             </button>
           </div>
         </div>
-
-        <DialogFooter>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent"
-            disabled={loading || isDeleting}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-            disabled={loading || isDeleting}
-          >
-            {loading ? 'Saving...' : 'Save Changes'}
-          </button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

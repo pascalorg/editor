@@ -13,6 +13,8 @@ export type DbProject = {
   created_at: string
   updated_at: string
   is_private: boolean
+  show_scans_public: boolean
+  show_guides_public: boolean
   views: number
   likes: number
   thumbnail_url: string | null
@@ -55,7 +57,7 @@ export type Database = {
     Tables: {
       projects: {
         Row: DbProject
-        Insert: Omit<DbProject, 'created_at' | 'updated_at' | 'views' | 'likes'>
+        Insert: Omit<DbProject, 'created_at' | 'updated_at' | 'views' | 'likes' | 'show_scans_public' | 'show_guides_public'> & { show_scans_public?: boolean; show_guides_public?: boolean }
         Update: Partial<Omit<DbProject, 'id' | 'created_at' | 'updated_at'>>
       }
       projects_addresses: {
@@ -104,6 +106,8 @@ export type Project = {
   updated_at: string
   // Community features
   is_private: boolean
+  show_scans_public: boolean
+  show_guides_public: boolean
   views: number
   likes: number
   thumbnail_url: string | null

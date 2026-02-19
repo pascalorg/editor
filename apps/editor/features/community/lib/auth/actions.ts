@@ -64,10 +64,15 @@ export async function updateUsername(
     return { success: false, error: 'Username is already taken' }
   }
 
-  await db
+  const updated = await db
     .update(schema.users)
     .set({ username: trimmed })
     .where(eq(schema.users.id, session.user.id))
+    .returning({ id: schema.users.id })
+
+  if (updated.length === 0) {
+    return { success: false, error: 'User not found. Please sign out and sign in again.' }
+  }
 
   revalidatePath('/')
   revalidatePath('/settings')

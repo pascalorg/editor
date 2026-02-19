@@ -19,9 +19,11 @@ const getNodeName = (node: AnyNode): string => {
 interface ViewerOverlayProps {
   projectName?: string | null
   owner?: ProjectOwner | null
+  canShowScans?: boolean
+  canShowGuides?: boolean
 }
 
-export const ViewerOverlay = ({ projectName, owner }: ViewerOverlayProps) => {
+export const ViewerOverlay = ({ projectName, owner, canShowScans = true, canShowGuides = true }: ViewerOverlayProps) => {
   const selection = useViewer((s) => s.selection)
   const nodes = useScene((s) => s.nodes)
   const showScans = useViewer((s) => s.showScans)
@@ -171,8 +173,10 @@ export const ViewerOverlay = ({ projectName, owner }: ViewerOverlayProps) => {
     {/* Controls Panel - Top Right */}
     <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
       {/* Visibility Controls */}
+      {(canShowScans || canShowGuides) && (
       <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
         <span className="text-xs text-neutral-500 px-2 pb-1">Visibility</span>
+        {canShowScans && (
         <button
           onClick={() => useViewer.getState().setShowScans(!showScans)}
           className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
@@ -182,6 +186,8 @@ export const ViewerOverlay = ({ projectName, owner }: ViewerOverlayProps) => {
           <Box className="w-4 h-4" />
           3D Scans
         </button>
+        )}
+        {canShowGuides && (
         <button
           onClick={() => useViewer.getState().setShowGuides(!showGuides)}
           className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
@@ -191,7 +197,9 @@ export const ViewerOverlay = ({ projectName, owner }: ViewerOverlayProps) => {
           <Image className="w-4 h-4" />
           Guides
         </button>
+        )}
       </div>
+      )}
 
       {/* Camera Mode */}
       <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">

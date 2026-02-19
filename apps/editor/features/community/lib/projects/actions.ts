@@ -461,7 +461,7 @@ export async function getPublicProjectsByUserId(userId: string): Promise<ActionR
  * Allows viewing if: project is public OR user owns the project
  */
 export async function getProjectModelPublic(projectId: string): Promise<
-  ActionResult<{ project: Project; model: any | null }>
+  ActionResult<{ project: Project; model: any | null; isOwner: boolean }>
 > {
   try {
     const session = await getSession()
@@ -515,6 +515,7 @@ export async function getProjectModelPublic(projectId: string): Promise<
       data: {
         project: projectData as Project,
         model: model || null,
+        isOwner: !!isOwner,
       },
     }
   } catch (error) {
@@ -603,6 +604,64 @@ export async function updateProjectPrivacy(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update project privacy',
+    }
+  }
+}
+
+/**
+ * Update project visibility settings (privacy + public scan/guide visibility)
+ */
+export async function updateProjectVisibility(
+  projectId: string,
+  settings: {
+    isPrivate?: boolean
+    showScansPublic?: boolean
+    showGuidesPublic?: boolean
+  },
+): Promise<ActionResult> {
+  try {
+    const session = await getSession()
+
+    if (!session?.user) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // Verify ownership
+    const { data: project } = await supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
+      .single()
+
+    if ((project as any)?.owner_id !== session.user.id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const updateData: Record<string, boolean> = {}
+    if (settings.isPrivate !== undefined) updateData.is_private = settings.isPrivate
+    if (settings.showScansPublic !== undefined) updateData.show_scans_public = settings.showScansPublic
+    if (settings.showGuidesPublic !== undefined) updateData.show_guides_public = settings.showGuidesPublic
+
+    if (Object.keys(updateData).length === 0) {
+      return { success: true, message: 'No changes' }
+    }
+
+    const { error } = await (supabase
+      .from('projects') as any)
+      .update(updateData)
+      .eq('id', projectId)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, message: 'Visibility settings updated' }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update visibility settings',
     }
   }
 }
