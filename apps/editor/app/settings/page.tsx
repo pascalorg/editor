@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { getSession } from '@/features/community/lib/auth/server'
-import { getUserProfile } from '@/features/community/lib/auth/actions'
+import { getUserProfile, getConnectedAccounts } from '@/features/community/lib/auth/actions'
 import { SettingsPage } from '@/features/community/components/settings-page'
 
 export default async function Settings() {
@@ -11,7 +11,10 @@ export default async function Settings() {
     redirect('/')
   }
 
-  const profile = await getUserProfile()
+  const [profile, connectedAccounts] = await Promise.all([
+    getUserProfile(),
+    getConnectedAccounts(),
+  ])
 
   return (
     <SettingsPage
@@ -19,6 +22,7 @@ export default async function Settings() {
       currentUsername={profile?.username ?? null}
       currentGithubUrl={profile?.githubUrl ?? null}
       currentXUrl={profile?.xUrl ?? null}
+      connectedAccounts={connectedAccounts}
     />
   )
 }

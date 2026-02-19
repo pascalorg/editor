@@ -6,6 +6,7 @@ import { db, schema } from '@pascal-app/db'
 import { eq, and, ne, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { getSession } from './server'
+import { createServerSupabaseClient } from '../database/server'
 
 /**
  * Sign in with a social provider (Google)
@@ -198,4 +199,77 @@ export async function getPublicProfile(username: string): Promise<{
   }
 
   return { success: true, data: user as typeof user & { username: string } }
+}
+
+/**
+ * Get connected accounts for the current user
+ */
+export async function getConnectedAccounts(): Promise<
+  { providerId: string; accountId: string }[]
+> {
+  const session = await getSession()
+  if (!session?.user) return []
+
+  const result = await db
+    .select({
+      providerId: schema.accounts.providerId,
+      accountId: schema.accounts.accountId,
+    })
+    .from(schema.accounts)
+    .where(eq(schema.accounts.userId, session.user.id))
+
+  return result
+}
+
+/**
+ * Upload avatar image to Supabase Storage and update user record
+ */
+export async function uploadAvatar(
+  formData: FormData,
+): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  const session = await getSession()
+  if (!session?.user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  const file = formData.get('avatar') as File | null
+  if (!file) {
+    return { success: false, error: 'No file provided' }
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    return { success: false, error: 'File too large (max 5MB)' }
+  }
+
+  if (!file.type.startsWith('image/')) {
+    return { success: false, error: 'File must be an image' }
+  }
+
+  const supabase = await createServerSupabaseClient()
+  const ext = file.name.split('.').pop() || 'png'
+  const filename = `${session.user.id}/avatar.${ext}`
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(filename, file, {
+      contentType: file.type,
+      upsert: true,
+    })
+
+  if (uploadError) {
+    return { success: false, error: `Upload failed: ${uploadError.message}` }
+  }
+
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(uploadData.path)
+  const imageUrl = `${urlData.publicUrl}?t=${Date.now()}`
+
+  // Update user image in database
+  await db
+    .update(schema.users)
+    .set({ image: imageUrl })
+    .where(eq(schema.users.id, session.user.id))
+
+  revalidatePath('/')
+  revalidatePath('/settings')
+  return { success: true, imageUrl }
 }

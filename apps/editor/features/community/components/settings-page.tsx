@@ -2,9 +2,33 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
-import { updateUsername, updateProfile } from '../lib/auth/actions'
+import { ArrowLeft, Pencil } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { authClient } from '../lib/auth/client'
+import { updateUsername, updateProfile, uploadAvatar } from '../lib/auth/actions'
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  )
+}
 
 interface SettingsPageProps {
   user: {
@@ -16,6 +40,7 @@ interface SettingsPageProps {
   currentUsername: string | null
   currentGithubUrl: string | null
   currentXUrl: string | null
+  connectedAccounts: { providerId: string; accountId: string }[]
 }
 
 export function SettingsPage({
@@ -23,12 +48,17 @@ export function SettingsPage({
   currentUsername,
   currentGithubUrl,
   currentXUrl,
+  connectedAccounts,
 }: SettingsPageProps) {
   const [username, setUsername] = useState(currentUsername ?? '')
   const [githubUrl, setGithubUrl] = useState(currentGithubUrl ?? '')
   const [xUrl, setXUrl] = useState(currentXUrl ?? '')
+  const [avatarUrl, setAvatarUrl] = useState(user.image)
   const [isSavingUsername, setIsSavingUsername] = useState(false)
   const [isSavingSocial, setIsSavingSocial] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [usernameMessage, setUsernameMessage] = useState<{
     type: 'success' | 'error'
     text: string
@@ -38,19 +68,61 @@ export function SettingsPage({
     text: string
   } | null>(null)
 
+  const isGoogleConnected = connectedAccounts.some((a) => a.providerId === 'google')
+  const initials = currentUsername
+    ? currentUsername.slice(0, 2).toUpperCase()
+    : user.name
+      ? user.name
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2)
+      : user.email?.[0]?.toUpperCase() || 'U'
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingAvatar(true)
+    const formData = new FormData()
+    formData.append('avatar', file)
+
+    const result = await uploadAvatar(formData)
+    if (result.success && result.imageUrl) {
+      setAvatarUrl(result.imageUrl)
+    }
+    setIsUploadingAvatar(false)
+    // Reset input so the same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleConnectGoogle = async () => {
+    setIsConnectingGoogle(true)
+    try {
+      await authClient.signIn.social({
+        provider: 'google',
+        callbackURL: '/settings',
+      })
+    } catch {
+      setIsConnectingGoogle(false)
+    }
+  }
+
   const handleSaveUsername = async (e: React.FormEvent) => {
     e.preventDefault()
     setUsernameMessage(null)
     setIsSavingUsername(true)
 
     const result = await updateUsername(username)
-
-    if (result.success) {
-      setUsernameMessage({ type: 'success', text: 'Username updated successfully' })
-    } else {
-      setUsernameMessage({ type: 'error', text: result.error ?? 'Failed to update username' })
-    }
-
+    setUsernameMessage({
+      type: result.success ? 'success' : 'error',
+      text: result.success ? 'Username updated successfully' : (result.error ?? 'Failed'),
+    })
     setIsSavingUsername(false)
   }
 
@@ -63,13 +135,12 @@ export function SettingsPage({
       githubUrl: githubUrl.trim() || null,
       xUrl: xUrl.trim() || null,
     })
-
-    if (result.success) {
-      setSocialMessage({ type: 'success', text: 'Social links updated successfully' })
-    } else {
-      setSocialMessage({ type: 'error', text: result.error ?? 'Failed to update social links' })
-    }
-
+    setSocialMessage({
+      type: result.success ? 'success' : 'error',
+      text: result.success
+        ? 'Social links updated successfully'
+        : (result.error ?? 'Failed'),
+    })
     setIsSavingSocial(false)
   }
 
@@ -101,19 +172,42 @@ export function SettingsPage({
           <h2 className="text-lg font-semibold">Profile</h2>
           <div className="rounded-lg border border-border p-6 space-y-6">
             <div className="flex items-center gap-4">
-              {user.image ? (
-                <Image
-                  src={user.image}
-                  alt={user.name || 'Profile'}
-                  width={64}
-                  height={64}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted font-semibold text-lg">
-                  {user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+              {/* Avatar with upload */}
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                disabled={isUploadingAvatar}
+                className="relative group shrink-0"
+              >
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={user.name || 'Profile'}
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted font-semibold text-lg">
+                    {initials}
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Pencil className="h-4 w-4 text-white" />
                 </div>
-              )}
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  </div>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
               <div>
                 {user.name && <div className="font-medium">{user.name}</div>}
                 {user.email && (
@@ -170,6 +264,44 @@ export function SettingsPage({
                 {isSavingUsername ? 'Saving...' : 'Save Username'}
               </button>
             </form>
+          </div>
+        </section>
+
+        {/* Connected Accounts Section */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Connected Accounts</h2>
+          <div className="rounded-lg border border-border p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <GoogleIcon className="h-5 w-5" />
+                <div>
+                  <div className="text-sm font-medium">Google</div>
+                  {isGoogleConnected ? (
+                    <div className="text-xs text-muted-foreground">
+                      Connected
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                      Not connected
+                    </div>
+                  )}
+                </div>
+              </div>
+              {isGoogleConnected ? (
+                <span className="text-xs text-green-600 dark:text-green-400 font-medium px-2 py-1 rounded-full bg-green-50 dark:bg-green-900/20">
+                  Connected
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectGoogle}
+                  disabled={isConnectingGoogle}
+                  className="rounded-md border border-input px-3 py-1.5 text-sm transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  {isConnectingGoogle ? 'Connecting...' : 'Connect'}
+                </button>
+              )}
+            </div>
           </div>
         </section>
 

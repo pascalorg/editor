@@ -37,7 +37,7 @@ export function ProfileDropdown() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-border bg-background/95 font-medium text-sm shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none"
+          className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-muted font-medium text-xs shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-80 focus:outline-none"
           type="button"
         >
           {user?.image ? (
