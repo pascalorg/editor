@@ -11,7 +11,7 @@ export const auth = createAuth({
   db,
   appName: 'Pascal Editor',
   baseURL: BASE_URL,
-  secret: process.env.BETTER_AUTH_SECRET!,
+  secret: process.env.BETTER_AUTH_SECRET || 'build-placeholder-not-used-at-runtime',
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
   sendMagicLink: async ({ email, url }) => {
