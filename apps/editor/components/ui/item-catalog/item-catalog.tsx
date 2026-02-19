@@ -21,12 +21,6 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
   const [activePlacementTag, setActivePlacementTag] = useState<string | null>(null);
   const [activeFunctionalTag, setActiveFunctionalTag] = useState<string | null>(null);
 
-  // Reset tag filters when category changes
-  useEffect(() => {
-    setActivePlacementTag(null);
-    setActiveFunctionalTag(null);
-  }, [category]);
-
   const categoryItems = CATALOG_ITEMS.filter(
     (item) => item.category === category,
   );

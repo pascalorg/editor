@@ -8,6 +8,7 @@ import { ControlModes } from "./control-modes";
 import { PhaseSwitcher } from "./phase-switcher";
 import { StructureTools } from "./structure-tools";
 import useEditor from "@/store/use-editor";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { AnimatePresence, motion } from "motion/react";
 import { ItemCatalog } from "../item-catalog/item-catalog";
 import { FurnishTools } from "./furnish-tools";
@@ -18,6 +19,8 @@ export function ActionMenu({ className }: { className?: string }) {
   const mode = useEditor((state) => state.mode);
   const tool = useEditor((state) => state.tool);
   const catalogCategory = useEditor((state) => state.catalogCategory);
+  const reducedMotion = useReducedMotion();
+  const transition = reducedMotion ? { duration: 0 } : undefined;
 
   return (
     <TooltipProvider>
@@ -57,8 +60,9 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 0,
                 borderBottomWidth: 0,
               }}
+              transition={transition}
             >
-              <ItemCatalog category={catalogCategory} />
+              <ItemCatalog key={catalogCategory} category={catalogCategory} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -91,6 +95,7 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 0,
                 borderBottomWidth: 0,
               }}
+              transition={transition}
             >
               <div className="mx-auto w-max">
                 <FurnishTools />
@@ -127,6 +132,7 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 0,
                 borderBottomWidth: 0,
               }}
+              transition={transition}
             >
               <div className="w-max">
                 <StructureTools />
