@@ -1,7 +1,7 @@
 'use client'
 
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
-import { Viewer } from '@pascal-app/viewer'
+import { Viewer, useViewer } from '@pascal-app/viewer'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ViewerCameraControls } from './viewer-camera-controls'
@@ -20,6 +20,8 @@ export default function ViewerPage() {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState<string | null>(null)
   const [owner, setOwner] = useState<ProjectOwner | null>(null)
+  const [canShowScans, setCanShowScans] = useState(true)
+  const [canShowGuides, setCanShowGuides] = useState(true)
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
@@ -42,10 +44,26 @@ export default function ViewerPage() {
           const result = await getProjectModelPublic(id)
 
           if (result.success && result.data) {
-            const { project, model } = result.data
+            const { project, model, isOwner } = result.data
+            const projectData = project as any
             setProjectId(project.id)
             setProjectName(project.name)
-            setOwner((project as any).owner ?? null)
+            setOwner(projectData.owner ?? null)
+
+            // Apply public visibility settings for scans/guides (only for non-owners)
+            if (!isOwner) {
+              const scansAllowed = projectData.show_scans_public !== false
+              const guidesAllowed = projectData.show_guides_public !== false
+              setCanShowScans(scansAllowed)
+              setCanShowGuides(guidesAllowed)
+
+              if (!scansAllowed) {
+                useViewer.getState().setShowScans(false)
+              }
+              if (!guidesAllowed) {
+                useViewer.getState().setShowGuides(false)
+              }
+            }
 
             if (model?.scene_graph) {
               const { nodes, rootNodeIds } = model.scene_graph
@@ -88,7 +106,7 @@ export default function ViewerPage() {
 
   return (
     <div className="relative h-screen w-full">
-      <ViewerOverlay projectName={projectName} owner={owner} />
+      <ViewerOverlay projectName={projectName} owner={owner} canShowScans={canShowScans} canShowGuides={canShowGuides} />
       <ViewerGuestCTA />
       <Viewer>
         <ViewerCameraControls />
