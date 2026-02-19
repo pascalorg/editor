@@ -1,6 +1,7 @@
 'use client'
 
 import { Eye, Heart, Settings } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { Project } from '../lib/projects/types'
 import type { LocalProject } from '../lib/local-storage/project-store'
@@ -116,105 +117,144 @@ export function ProjectGrid({
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            onClick={() => onProjectClick(project.id)}
-            className="group relative overflow-hidden rounded-lg border border-border bg-card hover:border-primary transition-all text-left cursor-pointer"
-          >
-            {/* Thumbnail */}
-            <div className="aspect-video bg-muted relative">
-              {!isLocalProject(project) && project.thumbnail_url ? (
-                <img
-                  src={project.thumbnail_url}
-                  alt={project.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                  No preview
-                </div>
-              )}
-              {isLocalProject(project) && (
-                <div className="absolute top-2 right-2">
-                  {isAuthenticated && onSaveToCloud ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onSaveToCloud(project)
-                      }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors"
-                      title="Save to cloud"
-                    >
-                      Save to cloud
-                    </button>
-                  ) : (
-                    <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                      Local
-                    </div>
-                  )}
-                </div>
-              )}
-              {canEdit && !isLocalProject(project) && (
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {onViewClick && (
-                    <button
-                      onClick={(e) => handleViewClick(e, project.id)}
-                      className="bg-background/80 hover:bg-background rounded-md p-1.5"
-                      aria-label="View"
-                      title="View in viewer mode"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => handleSettingsClick(e, project)}
-                    className="bg-background/80 hover:bg-background rounded-md p-1.5"
-                    aria-label="Settings"
-                    title="Project settings"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+        {projects.map((project) => {
+          const owner = !isLocalProject(project) ? project.owner : null
 
-            {/* Info */}
-            <div className="p-4">
-              <h3 className="font-medium text-left line-clamp-2 mb-2">{project.name}</h3>
-
-              {!isLocalProject(project) && (
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Eye className="w-4 h-4" />
-                    <span>{project.views}</span>
+          return (
+            <div
+              key={project.id}
+              onClick={() => onProjectClick(project.id)}
+              className="group text-left cursor-pointer"
+            >
+              {/* Thumbnail card */}
+              <div className="relative aspect-[4/3] rounded-xl rounded-smooth-xl bg-neutral-50 overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] transition-shadow group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]">
+                {!isLocalProject(project) && project.thumbnail_url ? (
+                  <img
+                    src={project.thumbnail_url}
+                    alt={project.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+                    No preview
                   </div>
-                  <button
-                    onClick={(e) => handleLikeClick(e, project.id)}
-                    className="flex items-center gap-1 hover:text-red-500 transition-colors"
-                    disabled={!isAuthenticated}
-                  >
-                    <Heart
-                      className={`w-4 h-4 ${
-                        userLikes[project.id]
-                          ? 'fill-red-500 text-red-500'
-                          : ''
-                      }`}
-                    />
-                    <span>{likeCounts[project.id] ?? project.likes}</span>
-                  </button>
-                </div>
-              )}
+                )}
+                {isLocalProject(project) && (
+                  <div className="absolute top-3 right-3">
+                    {isAuthenticated && onSaveToCloud ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSaveToCloud(project)
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2.5 py-1 rounded-md transition-colors"
+                        title="Save to cloud"
+                      >
+                        Save to cloud
+                      </button>
+                    ) : (
+                      <div className="bg-blue-500 text-white text-xs px-2.5 py-1 rounded-md">
+                        Local
+                      </div>
+                    )}
+                  </div>
+                )}
+                {canEdit && !isLocalProject(project) && (
+                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {onViewClick && (
+                      <button
+                        onClick={(e) => handleViewClick(e, project.id)}
+                        className="bg-background/80 hover:bg-background rounded-md p-1.5"
+                        aria-label="View"
+                        title="View in viewer mode"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => handleSettingsClick(e, project)}
+                      className="bg-background/80 hover:bg-background rounded-md p-1.5"
+                      aria-label="Settings"
+                      title="Project settings"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
 
-              {isLocalProject(project) && (
-                <div className="text-sm text-muted-foreground">
-                  {new Date(project.updated_at).toLocaleDateString()}
+              {/* Info row below the card */}
+              <div className="flex items-center gap-3 mt-3">
+                {/* Avatar */}
+                {showOwner && owner ? (
+                  <Link
+                    href={owner.username ? `/u/${owner.username}` : '#'}
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0"
+                  >
+                    {owner.image ? (
+                      <img
+                        src={owner.image}
+                        alt={owner.name}
+                        className="w-9 h-9 rounded-full object-cover shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.1)]"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center text-sm font-medium shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
+                        {owner.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                  </Link>
+                ) : null}
+
+                {/* Name + stats */}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium text-sm truncate">{project.name}</h3>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                    {showOwner && owner && (
+                      <>
+                        <Link
+                          href={owner.username ? `/u/${owner.username}` : '#'}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-foreground transition-colors truncate"
+                        >
+                          {owner.username || owner.name}
+                        </Link>
+                        {!isLocalProject(project) && <span className="shrink-0">·</span>}
+                      </>
+                    )}
+                    {!isLocalProject(project) && (
+                      <>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>{project.views}</span>
+                        </div>
+                        <span className="shrink-0">·</span>
+                        <button
+                          onClick={(e) => handleLikeClick(e, project.id)}
+                          className="flex items-center gap-0.5 shrink-0 hover:text-red-500 transition-colors"
+                          disabled={!isAuthenticated}
+                        >
+                          <Heart
+                            className={`w-3.5 h-3.5 ${
+                              userLikes[project.id]
+                                ? 'fill-red-500 text-red-500'
+                                : ''
+                            }`}
+                          />
+                          <span>{likeCounts[project.id] ?? project.likes}</span>
+                        </button>
+                      </>
+                    )}
+                    {isLocalProject(project) && (
+                      <span>{new Date(project.updated_at).toLocaleDateString()}</span>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Settings Dialog */}

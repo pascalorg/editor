@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1771477810895,
+      "tag": "20260219051010_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771477819937,
+      "tag": "20260219051019_add-username-field",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771478645202,
+      "tag": "20260219052405_add-social-profile-fields",
+      "breakpoints": true
+    }
+  ]
+}

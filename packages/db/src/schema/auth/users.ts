@@ -13,13 +13,22 @@ export const users = pgTable(
     emailVerified: t.boolean('email_verified').notNull().default(false),
     name: t.text('name').notNull(),
     image: t.text('image'),
+    /** Public username for the community hub */
+    username: t.text('username'),
+    /** GitHub profile URL */
+    githubUrl: t.text('github_url'),
+    /** X/Twitter profile URL */
+    xUrl: t.text('x_url'),
     role: userRoles('role').notNull().default('user'),
     banned: t.boolean('banned').notNull().default(false),
     banReason: t.text('ban_reason'),
     banExpires: t.timestamp('ban_expires', { withTimezone: true }),
     ...timestampsColumns,
   }),
-  (t) => [uniqueIndex('email_unique_index').on(lower(t.email))],
+  (t) => [
+    uniqueIndex('email_unique_index').on(lower(t.email)),
+    uniqueIndex('username_unique_index').on(lower(t.username)),
+  ],
 ).enableRLS()
 
 export type User = typeof users.$inferSelect

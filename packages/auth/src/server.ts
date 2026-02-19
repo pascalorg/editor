@@ -16,6 +16,10 @@ export interface AuthConfig {
   appName: string
   baseURL: string
   secret: string
+  /** Google OAuth client ID */
+  googleClientId?: string
+  /** Google OAuth client secret */
+  googleClientSecret?: string
   /** Callback to send magic link emails */
   sendMagicLink?: (params: SendMagicLinkParams) => Promise<void>
   /** Additional plugins to add (e.g., nextCookies for web) */
@@ -57,6 +61,22 @@ export function createAuth(config: AuthConfig): ReturnType<typeof betterAuth> {
         },
       },
     },
+    // Google OAuth provider (only enabled when credentials are provided)
+    ...(config.googleClientId &&
+      config.googleClientSecret && {
+        socialProviders: {
+          google: {
+            clientId: config.googleClientId,
+            clientSecret: config.googleClientSecret,
+          },
+        },
+        account: {
+          accountLinking: {
+            enabled: true,
+            trustedProviders: ['google'],
+          },
+        },
+      }),
     plugins: [
       ...(config.additionalPlugins ?? []),
       // Magic link authentication

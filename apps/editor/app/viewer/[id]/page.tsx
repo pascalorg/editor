@@ -8,7 +8,9 @@ import { ViewerCameraControls } from './viewer-camera-controls'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
 import { ThumbnailGenerator } from './thumbnail-generator'
+import { ViewerGuestCTA } from './viewer-guest-cta'
 import { getProjectModelPublic, incrementProjectViews } from '@/features/community/lib/projects/actions'
+import type { ProjectOwner } from '@/features/community/lib/projects/types'
 
 export default function ViewerPage() {
   const params = useParams()
@@ -16,6 +18,8 @@ export default function ViewerPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
+  const [projectName, setProjectName] = useState<string | null>(null)
+  const [owner, setOwner] = useState<ProjectOwner | null>(null)
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
@@ -32,6 +36,7 @@ export default function ViewerPage() {
             setScene(data.nodes, data.rootNodeIds)
             initSpatialGridSync()
           }
+          setProjectName('Demo')
         } else {
           // Load from database (public project)
           const result = await getProjectModelPublic(id)
@@ -39,6 +44,8 @@ export default function ViewerPage() {
           if (result.success && result.data) {
             const { project, model } = result.data
             setProjectId(project.id)
+            setProjectName(project.name)
+            setOwner((project as any).owner ?? null)
 
             if (model?.scene_graph) {
               const { nodes, rootNodeIds } = model.scene_graph
@@ -81,13 +88,11 @@ export default function ViewerPage() {
 
   return (
     <div className="relative h-screen w-full">
-      <ViewerOverlay />
+      <ViewerOverlay projectName={projectName} owner={owner} />
+      <ViewerGuestCTA />
       <Viewer>
-        {/* Custom Camera Controls */}
         <ViewerCameraControls />
-        {/* Custom Zone System */}
         <ViewerZoneSystem />
-        {/* Thumbnail Generator */}
         <ThumbnailGenerator projectId={projectId || undefined} />
       </Viewer>
     </div>

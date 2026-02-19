@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
+import { UsernameGate } from '@/features/community/components/username-gate'
 import './globals.css'
 
 const geistSans = localFont({
@@ -23,7 +24,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <UsernameGate>{children}</UsernameGate>
+      </body>
     </html>
   )
 }

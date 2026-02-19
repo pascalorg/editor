@@ -2,7 +2,9 @@
 
 import { type AnyNode, type AnyNodeId, type BuildingNode, type LevelNode, type ZoneNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Box, ChevronRight, Diamond, Eye, EyeOff, Image, Layers, Layers2 } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Box, ChevronRight, Diamond, Eye, EyeOff, Image, Layers, Layers2 } from 'lucide-react'
+import type { ProjectOwner } from '@/features/community/lib/projects/types'
 
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
@@ -14,7 +16,12 @@ const getNodeName = (node: AnyNode): string => {
   return node.type
 }
 
-export const ViewerOverlay = () => {
+interface ViewerOverlayProps {
+  projectName?: string | null
+  owner?: ProjectOwner | null
+}
+
+export const ViewerOverlay = ({ projectName, owner }: ViewerOverlayProps) => {
   const selection = useViewer((s) => s.selection)
   const nodes = useScene((s) => s.nodes)
   const showScans = useViewer((s) => s.showScans)
@@ -59,60 +66,90 @@ export const ViewerOverlay = () => {
 
   return (
     <>
+    {/* Unified top-left card */}
     <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-sm">
-        <button
-          onClick={() => handleBreadcrumbClick('root')}
-          className="text-neutral-500 hover:text-neutral-800 transition-colors"
-        >
-          Site
-        </button>
+      <div className="bg-white/80 backdrop-blur-sm rounded-lg rounded-smooth shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)] overflow-hidden">
+        {/* Project info + back */}
+        <div className="flex items-center gap-3 px-3 py-2">
+          <Link
+            href="/"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-neutral-100 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 text-neutral-500" />
+          </Link>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-neutral-800 truncate">
+              {projectName || 'Untitled'}
+            </div>
+            {owner?.username && (
+              <Link
+                href={`/u/${owner.username}`}
+                className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
+              >
+                @{owner.username}
+              </Link>
+            )}
+          </div>
+        </div>
 
+        {/* Breadcrumb — only shown when navigated into a building */}
         {building && (
-          <>
-            <ChevronRight className="w-4 h-4 text-neutral-400" />
+        <div className="border-t border-neutral-100 px-3 py-1.5">
+          <div className="flex items-center gap-1 text-xs">
             <button
-              onClick={() => handleBreadcrumbClick('building')}
-              className={`transition-colors ${level ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
+              onClick={() => handleBreadcrumbClick('root')}
+              className="text-neutral-500 hover:text-neutral-800 transition-colors"
             >
-              {building.name || 'Building'}
+              Site
             </button>
-          </>
-        )}
 
-        {level && (
-          <>
-            <ChevronRight className="w-4 h-4 text-neutral-400" />
-            <button
-              onClick={() => handleBreadcrumbClick('level')}
-              className={`transition-colors ${zone ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
-            >
-              {level.name || `Level ${level.level}`}
-            </button>
-          </>
-        )}
+            {building && (
+              <>
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+                <button
+                  onClick={() => handleBreadcrumbClick('building')}
+                  className={`transition-colors truncate ${level ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
+                >
+                  {building.name || 'Building'}
+                </button>
+              </>
+            )}
 
-        {zone && (
-          <>
-            <ChevronRight className="w-4 h-4 text-neutral-400" />
-            <span className={`transition-colors ${selectedNode ? 'text-neutral-500' : 'text-neutral-800 font-medium'}`}>
-              {zone.name}
-            </span>
-          </>
-        )}
+            {level && (
+              <>
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+                <button
+                  onClick={() => handleBreadcrumbClick('level')}
+                  className={`transition-colors truncate ${zone ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
+                >
+                  {level.name || `Level ${level.level}`}
+                </button>
+              </>
+            )}
 
-        {selectedNode && zone && (
-          <>
-            <ChevronRight className="w-4 h-4 text-neutral-400" />
-            <span className="text-neutral-800 font-medium">{getNodeName(selectedNode)}</span>
-          </>
+            {zone && (
+              <>
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+                <span className={`transition-colors truncate ${selectedNode ? 'text-neutral-500' : 'text-neutral-800 font-medium'}`}>
+                  {zone.name}
+                </span>
+              </>
+            )}
+
+            {selectedNode && zone && (
+              <>
+                <ChevronRight className="w-3 h-3 text-neutral-400" />
+                <span className="text-neutral-800 font-medium truncate">{getNodeName(selectedNode)}</span>
+              </>
+            )}
+          </div>
+        </div>
         )}
       </div>
 
       {/* Level List (only when building is selected) */}
       {building && levels.length > 0 && (
-        <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200 w-40">
+        <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)] w-40">
           <span className="text-xs text-neutral-500 px-2 pb-1">Levels</span>
           {levels.map((lvl) => (
             <button
@@ -134,7 +171,7 @@ export const ViewerOverlay = () => {
     {/* Controls Panel - Top Right */}
     <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
       {/* Visibility Controls */}
-      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
         <span className="text-xs text-neutral-500 px-2 pb-1">Visibility</span>
         <button
           onClick={() => useViewer.getState().setShowScans(!showScans)}
@@ -157,7 +194,7 @@ export const ViewerOverlay = () => {
       </div>
 
       {/* Camera Mode */}
-      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
         <span className="text-xs text-neutral-500 px-2 pb-1">Camera</span>
         <button
           onClick={() => useViewer.getState().setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
@@ -173,7 +210,7 @@ export const ViewerOverlay = () => {
       </div>
 
       {/* Level Mode */}
-      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
         <span className="text-xs text-neutral-500 px-2 pb-1">Level Mode</span>
         <button
           onClick={() => useViewer.getState().setLevelMode('stacked')}
@@ -205,7 +242,7 @@ export const ViewerOverlay = () => {
       </div>
 
       {/* Wall Mode */}
-      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-sm border border-neutral-200">
+      <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
         <span className="text-xs text-neutral-500 px-2 pb-1">Wall Mode</span>
         <button
           onClick={() => useViewer.getState().setWallMode('cutaway')}

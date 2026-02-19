@@ -119,6 +119,21 @@
   body {
     @apply bg-background text-foreground;
   }
+  button,
+  [role="button"],
+  a {
+    cursor: pointer;
+  }
+}
+
+/* Apple-style smooth corners (squircle) — progressive enhancement */
+.rounded-smooth {
+  border-radius: var(--radius-lg);
+  corner-shape: squircle;
+}
+.rounded-smooth-xl {
+  border-radius: var(--radius-xl);
+  corner-shape: squircle;
 }
 
 .no-scrollbar::-webkit-scrollbar {

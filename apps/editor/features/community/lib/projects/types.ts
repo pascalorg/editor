@@ -87,6 +87,13 @@ export type Database = {
   }
 }
 
+export type ProjectOwner = {
+  id: string
+  name: string
+  username: string | null
+  image: string | null
+}
+
 export type Project = {
   id: string
   name: string
@@ -111,6 +118,7 @@ export type Project = {
     latitude?: string
     longitude?: string
   } | null
+  owner?: ProjectOwner | null
 }
 
 export type CreateProjectParams = {

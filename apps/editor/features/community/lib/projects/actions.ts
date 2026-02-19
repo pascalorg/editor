@@ -397,7 +397,8 @@ export async function getPublicProjects(): Promise<ActionResult<Project[]>> {
       .from('projects')
       .select(`
         *,
-        address:projects_addresses(*)
+        address:projects_addresses(*),
+        owner:auth_users!owner_id(id, name, username, image)
       `)
       .eq('is_private', false)
       .order('views', { ascending: false })
@@ -425,6 +426,37 @@ export async function getPublicProjects(): Promise<ActionResult<Project[]>> {
 }
 
 /**
+ * Fetch public projects for a specific user (by user ID)
+ */
+export async function getPublicProjectsByUserId(userId: string): Promise<ActionResult<Project[]>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        address:projects_addresses(*)
+      `)
+      .eq('owner_id', userId)
+      .eq('is_private', false)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      return { success: false, error: error.message, data: [] }
+    }
+
+    return { success: true, data: data as Project[] }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch projects',
+      data: [],
+    }
+  }
+}
+
+/**
  * Get a project model for viewing
  * Allows viewing if: project is public OR user owns the project
  */
@@ -440,7 +472,8 @@ export async function getProjectModelPublic(projectId: string): Promise<
       .from('projects')
       .select(`
         *,
-        address:projects_addresses(*)
+        address:projects_addresses(*),
+        owner:auth_users!owner_id(id, name, username, image)
       `)
       .eq('id', projectId)
       .single()
