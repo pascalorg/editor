@@ -38,15 +38,6 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
   const scanInputRef = useRef<HTMLInputElement>(null)
   const guideInputRef = useRef<HTMLInputElement>(null)
 
-  const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
-  if (!level) return null
-
-  // Find all scan and guide children of this level
-  const references = Object.values(nodes).filter(
-    (node): node is ScanNode | GuideNode =>
-      (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
-  )
-
   const handleAddScan = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
@@ -98,6 +89,15 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       deleteNode(nodeId as AnyNodeId)
     },
     [deleteNode],
+  )
+
+  const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
+  if (!level) return null
+
+  // Find all scan and guide children of this level
+  const references = Object.values(nodes).filter(
+    (node): node is ScanNode | GuideNode =>
+      (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
   )
 
   return (
