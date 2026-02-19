@@ -36,12 +36,20 @@ function GoogleIcon({ className }: { className?: string }) {
 /**
  * SignInDialog - Authentication dialog with Google OAuth and magic link
  */
+const LOGIN_METHOD_LABELS: Record<string, string> = {
+  google: 'Google',
+  'magic-link': 'email link',
+}
+
 export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const lastMethod = authClient.getLastUsedLoginMethod?.()
+  const lastMethodLabel = lastMethod ? LOGIN_METHOD_LABELS[lastMethod] ?? lastMethod : null
 
   const handleGoogleSignIn = async () => {
     setError(null)
@@ -134,6 +142,12 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
           </div>
         ) : (
           <div className="space-y-4">
+            {lastMethodLabel && (
+              <p className="text-center text-muted-foreground text-xs">
+                Last signed in with {lastMethodLabel}
+              </p>
+            )}
+
             {/* Google Sign-In */}
             <button
               className="flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
