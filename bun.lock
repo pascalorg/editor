@@ -121,6 +121,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@supabase/supabase-js": "^2.95.3",
+        "drizzle-orm": "^0.39.0",
         "drizzle-zod": "^0.5.1",
         "nanoid": "^5.0.9",
         "postgres": "^3.4.5",
@@ -129,9 +130,6 @@
         "@repo/typescript-config": "*",
         "drizzle-kit": "^0.30.0",
         "typescript": "5.9.2",
-      },
-      "peerDependencies": {
-        "drizzle-orm": ">=0.39.0",
       },
     },
     "packages/eslint-config": {
