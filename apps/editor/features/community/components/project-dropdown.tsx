@@ -11,14 +11,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/primitives/dropdown-menu'
 import { NewProjectDialog } from './new-project-dialog'
-import { useProjectScene } from '../lib/models/hooks'
 
 /**
  * ProjectDropdown - Shows active project and allows switching between projects
+ * Note: useProjectScene() is called in the Editor component, not here.
+ * Having it in both places caused duplicate subscriptions and 2x server action calls.
  */
 export function ProjectDropdown() {
-  useProjectScene() // Load and auto-save project scenes
-
   // Use project store
   const projects = useProjectStore(state => state.projects)
   const activeProject = useProjectStore(state => state.activeProject)
