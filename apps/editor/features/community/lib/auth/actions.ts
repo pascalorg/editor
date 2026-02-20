@@ -122,6 +122,7 @@ export async function getUserProfile(): Promise<{
   username: string | null
   githubUrl: string | null
   xUrl: string | null
+  emailNotifications: boolean
 } | null> {
   const session = await getSession()
   if (!session?.user) return null
@@ -131,6 +132,7 @@ export async function getUserProfile(): Promise<{
       username: schema.users.username,
       githubUrl: schema.users.githubUrl,
       xUrl: schema.users.xUrl,
+      emailNotifications: schema.users.emailNotifications,
     })
     .from(schema.users)
     .where(eq(schema.users.id, session.user.id))
@@ -277,4 +279,24 @@ export async function uploadAvatar(
   revalidatePath('/')
   revalidatePath('/settings')
   return { success: true, imageUrl }
+}
+
+/**
+ * Update the current user's email notification preference
+ */
+export async function updateEmailNotifications(
+  enabled: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession()
+  if (!session?.user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  await db
+    .update(schema.users)
+    .set({ emailNotifications: enabled })
+    .where(eq(schema.users.id, session.user.id))
+
+  revalidatePath('/settings')
+  return { success: true }
 }

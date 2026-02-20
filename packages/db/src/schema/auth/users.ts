@@ -19,6 +19,8 @@ export const users = pgTable(
     githubUrl: t.text('github_url'),
     /** X/Twitter profile URL */
     xUrl: t.text('x_url'),
+    /** Whether the user wants to receive email notifications about new features and updates */
+    emailNotifications: t.boolean('email_notifications').notNull().default(true),
     role: userRoles('role').notNull().default('user'),
     banned: t.boolean('banned').notNull().default(false),
     banReason: t.text('ban_reason'),
