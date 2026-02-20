@@ -2,14 +2,14 @@
 
 import { Check, ChevronDown, Home, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useProjectStore } from '../lib/projects/store'
-import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/primitives/dropdown-menu'
+import { cn } from '@/lib/utils'
+import { useProjectStore } from '../lib/projects/store'
 import { NewProjectDialog } from './new-project-dialog'
 
 /**
@@ -19,11 +19,11 @@ import { NewProjectDialog } from './new-project-dialog'
  */
 export function ProjectDropdown() {
   // Use project store
-  const projects = useProjectStore(state => state.projects)
-  const activeProject = useProjectStore(state => state.activeProject)
-  const isLoading = useProjectStore(state => state.isLoading)
-  const setActiveProject = useProjectStore(state => state.setActiveProject)
-  const fetchProjects = useProjectStore(state => state.fetchProjects)
+  const projects = useProjectStore((state) => state.projects)
+  const activeProject = useProjectStore((state) => state.activeProject)
+  const isLoading = useProjectStore((state) => state.isLoading)
+  const setActiveProject = useProjectStore((state) => state.setActiveProject)
+  const fetchProjects = useProjectStore((state) => state.fetchProjects)
 
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
 
