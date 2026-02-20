@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { authClient } from '../lib/auth/client'
-import { updateUsername, updateProfile, uploadAvatar } from '../lib/auth/actions'
+import { updateUsername, updateProfile, uploadAvatar, updateEmailNotifications } from '../lib/auth/actions'
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -40,6 +40,7 @@ interface SettingsPageProps {
   currentUsername: string | null
   currentGithubUrl: string | null
   currentXUrl: string | null
+  currentEmailNotifications: boolean
   connectedAccounts: { providerId: string; accountId: string }[]
 }
 
@@ -48,6 +49,7 @@ export function SettingsPage({
   currentUsername,
   currentGithubUrl,
   currentXUrl,
+  currentEmailNotifications,
   connectedAccounts,
 }: SettingsPageProps) {
   const [username, setUsername] = useState(currentUsername ?? '')
@@ -67,6 +69,8 @@ export function SettingsPage({
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  const [emailNotifications, setEmailNotifications] = useState(currentEmailNotifications)
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false)
 
   const isGoogleConnected = connectedAccounts.some((a) => a.providerId === 'google')
   const initials = currentUsername
@@ -148,6 +152,14 @@ export function SettingsPage({
   const socialChanged =
     (githubUrl.trim() || '') !== (currentGithubUrl ?? '') ||
     (xUrl.trim() || '') !== (currentXUrl ?? '')
+
+  const handleToggleEmailNotifications = async () => {
+    const newValue = !emailNotifications
+    setEmailNotifications(newValue)
+    setIsSavingNotifications(true)
+    await updateEmailNotifications(newValue)
+    setIsSavingNotifications(false)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -301,6 +313,37 @@ export function SettingsPage({
                   {isConnectingGoogle ? 'Connecting...' : 'Connect'}
                 </button>
               )}
+            </div>
+          </div>
+        </section>
+
+        {/* Notifications Section */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Notifications</h2>
+          <div className="rounded-lg border border-border p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-medium">Email notifications</div>
+                <p className="text-muted-foreground text-xs">
+                  Receive emails about new features and updates.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={emailNotifications}
+                onClick={handleToggleEmailNotifications}
+                disabled={isSavingNotifications}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  emailNotifications ? 'bg-primary' : 'bg-input'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    emailNotifications ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
             </div>
           </div>
         </section>

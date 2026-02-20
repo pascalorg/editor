@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Mail, X } from 'lucide-react'
 import { useState } from 'react'
 import { authClient } from '../lib/auth/client'
@@ -218,7 +219,15 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
             </form>
 
             <p className="text-center text-muted-foreground text-xs">
-              Sign in with Google or receive a magic link via email.
+              By signing in, you agree to our{' '}
+              <Link href="/terms" className="underline hover:text-foreground">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" className="underline hover:text-foreground">
+                Privacy Policy
+              </Link>
+              .
             </p>
           </div>
         )}
