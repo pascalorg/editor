@@ -24,13 +24,28 @@ function getInitialState(node: {
 function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   const draftNode = useDraftNode()
 
+  const meta = (typeof movingNode.metadata === 'object' && movingNode.metadata !== null)
+    ? movingNode.metadata as Record<string, unknown>
+    : {}
+  const isNew = !!meta.isNew
+
   const cursor = usePlacementCoordinator({
     asset: movingNode.asset,
     draftNode,
-    initialState: getInitialState(movingNode),
+    // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
+    initialState: isNew ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null } : getInitialState(movingNode),
     initDraft: (gridPosition) => {
-      draftNode.adopt(movingNode)
-      gridPosition.copy(new Vector3(...movingNode.position))
+      if (isNew) {
+        // Duplicate: use the same create() path as ItemTool so ghost rendering works correctly.
+        // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
+        gridPosition.copy(new Vector3(...movingNode.position))
+        if (!movingNode.asset.attachTo) {
+          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation)
+        }
+      } else {
+        draftNode.adopt(movingNode)
+        gridPosition.copy(new Vector3(...movingNode.position))
+      }
     },
     onCommitted: () => {
       sfxEmitter.emit('sfx:item-place')
