@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   emitter,
+  sceneRegistry,
   useScene,
   type WallEvent,
   WindowNode,
@@ -77,6 +78,11 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
     }
 
+    const getLevelYOffset = () => {
+      const id = useViewer.getState().selection.levelId
+      return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
+    }
+
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
     }
@@ -128,7 +134,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         movingWindowNode.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY), cursorRotation, valid)
+      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
       event.stopPropagation()
     }
 
@@ -166,7 +172,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         movingWindowNode.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY), cursorRotation, valid)
+      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
       event.stopPropagation()
     }
 

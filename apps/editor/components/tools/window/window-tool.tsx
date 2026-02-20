@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   emitter,
+  sceneRegistry,
   useScene,
   type WallEvent,
   WindowNode,
@@ -39,6 +40,10 @@ export const WindowTool: React.FC = () => {
     useScene.temporal.getState().pause()
 
     const getLevelId = () => useViewer.getState().selection.levelId
+    const getLevelYOffset = () => {
+      const id = getLevelId()
+      return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
+    }
 
     const markWallDirty = (wallId: string) => {
       useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
@@ -103,7 +108,7 @@ export const WindowTool: React.FC = () => {
 
       const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY), cursorRotation, valid)
+      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
       event.stopPropagation()
     }
 
@@ -137,7 +142,7 @@ export const WindowTool: React.FC = () => {
         draftRef.current?.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY), cursorRotation, valid)
+      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
       event.stopPropagation()
     }
 
