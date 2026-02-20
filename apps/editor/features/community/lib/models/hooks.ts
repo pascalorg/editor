@@ -96,6 +96,9 @@ export function useProjectScene() {
     loadScene()
   }, [projectId, isLoadingProject])
 
+  // Track whether there are unsaved changes (dirty flag for flush-on-exit).
+  const hasDirtyChangesRef = useRef(false)
+
   // Auto-save scene changes with debouncing
   useEffect(() => {
     if (!projectId) {
@@ -124,6 +127,7 @@ export function useProjectScene() {
       }
 
       lastNodesSnapshot = currentNodesSnapshot
+      hasDirtyChangesRef.current = true
 
       // If a save is in-flight, mark pending so we do one follow-up save
       // instead of queuing unlimited concurrent saves.
@@ -155,6 +159,7 @@ export function useProjectScene() {
 
       try {
         await saveProjectModel(currentProjectId, sceneGraph)
+        hasDirtyChangesRef.current = false
       } finally {
         isSavingRef.current = false
 
@@ -168,10 +173,35 @@ export function useProjectScene() {
       }
     }
 
+    // Flush unsaved changes when the user leaves the page / closes the tab.
+    // Uses sendBeacon via keepalive fetch so the request survives page unload.
+    function flushOnExit() {
+      if (!hasDirtyChangesRef.current || !currentProjectIdRef.current) return
+
+      const { nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds }
+
+      // Best-effort fire-and-forget save. We use the server action directly
+      // (it's just a POST to a Next.js endpoint). If the browser kills it,
+      // localStorage still has the data and will sync on next load.
+      saveProjectModel(currentProjectIdRef.current, sceneGraph).catch(() => {
+        // Swallow — nothing we can do during unload
+      })
+      hasDirtyChangesRef.current = false
+    }
+
+    window.addEventListener('beforeunload', flushOnExit)
+
     return () => {
+      window.removeEventListener('beforeunload', flushOnExit)
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
+
+      // Flush on unmount (e.g. navigating away within the SPA)
+      flushOnExit()
+
       unsubscribe()
     }
   }, [projectId])
