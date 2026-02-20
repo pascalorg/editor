@@ -20,7 +20,8 @@ import {
   vec4,
   velocity,
 } from 'three/tsl'
-import { PostProcessing, type WebGPURenderer } from 'three/webgpu'
+
+import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
@@ -41,7 +42,7 @@ export const SSGI_PARAMS = {
 
 const PostProcessingPasses = () => {
   const { gl: renderer, scene, camera } = useThree()
-  const postProcessingRef = useRef<PostProcessing | null>(null)
+  const renderPipelineRef = useRef<RenderPipeline | null>(null)
 
   useEffect(() => {
     if (!renderer || !scene || !camera) {
@@ -151,9 +152,6 @@ const PostProcessingPasses = () => {
       return outlinePulse
     }
 
-    // Setup post-processing
-    const postProcessing = new PostProcessing(renderer as unknown as WebGPURenderer)
-
     const selectedOutlinePass = generateSelectedOutlinePass()
     const hoverOutlinePass = generateHoverOutlinePass()
 
@@ -165,20 +163,21 @@ const PostProcessingPasses = () => {
     // TRAA (Temporal Reprojection Anti-Aliasing) - applied AFTER combining everything
     const finalOutput = traa(compositeWithOutlines, scenePassDepth, scenePassVelocity, camera)
 
-    postProcessing.outputNode = finalOutput
-    postProcessingRef.current = postProcessing
+    const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
+    renderPipeline.outputNode = finalOutput
+    renderPipelineRef.current = renderPipeline
 
     return () => {
-      if (postProcessingRef.current) {
-        postProcessingRef.current.dispose()
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
       }
-      postProcessingRef.current = null
+      renderPipelineRef.current = null
     }
   }, [renderer, scene, camera])
 
   useFrame(() => {
-    if (postProcessingRef.current) {
-      postProcessingRef.current.render()
+    if (renderPipelineRef.current) {
+      renderPipelineRef.current.render()
     }
   }, 1)
 
