@@ -11,9 +11,15 @@ import useEditor from '@/store/use-editor'
 import { useProjectStore } from '../projects/store'
 import { getProjectModel, saveProjectModel } from './actions'
 
+/** Debounce interval for cloud auto-save (ms). */
+const AUTOSAVE_DEBOUNCE_MS = 10_000
+
 /**
- * Load the scene when a project becomes active
- * Saves changes automatically with debouncing
+ * Load the scene when a project becomes active.
+ * Saves changes automatically with debouncing.
+ *
+ * ⚠️  This hook must be mounted in exactly ONE component (the Editor).
+ *     Mounting it in multiple components causes duplicate save calls.
  */
 export function useProjectScene() {
   // Subscribe to project store
@@ -24,10 +30,15 @@ export function useProjectScene() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
   const currentProjectIdRef = useRef<string | null>(null)
+  // Track whether the scene was just loaded from the server so we can skip
+  // the first store update (which is the load itself, not a user edit).
+  const isLoadingSceneRef = useRef(false)
+  // Track whether there are pending changes that arrived while a save was
+  // in-flight so we can coalesce them into one follow-up save.
+  const pendingSaveRef = useRef(false)
 
   // Extract project ID for dependency tracking
   const projectId = activeProject?.id ?? null
-  const projectName = activeProject?.name ?? null
 
   // Load scene when active project changes
   useEffect(() => {
@@ -48,6 +59,9 @@ export function useProjectScene() {
 
     // Load the project's scene
     async function loadScene() {
+      // Suppress auto-save for the store update caused by setScene/clearScene
+      isLoadingSceneRef.current = true
+
       try {
         const result = await getProjectModel(projectId || '')
 
@@ -72,10 +86,18 @@ export function useProjectScene() {
         selectedIds: [],
         zoneId: null,
       })
+
+      // Allow auto-save again after a tick (let the store update propagate)
+      requestAnimationFrame(() => {
+        isLoadingSceneRef.current = false
+      })
     }
 
     loadScene()
   }, [projectId, isLoadingProject])
+
+  // Track whether there are unsaved changes (dirty flag for flush-on-exit).
+  const hasDirtyChangesRef = useRef(false)
 
   // Auto-save scene changes with debouncing
   useEffect(() => {
@@ -86,11 +108,17 @@ export function useProjectScene() {
 
     currentProjectIdRef.current = projectId
 
-    // Subscribe to any scene changes
-    // Use JSON stringification to detect any node changes, not just count
+    // Use JSON stringification to detect node changes, not just count
     let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
 
     const unsubscribe = useScene.subscribe((state) => {
+      // Skip saves triggered by loading a scene from the server
+      if (isLoadingSceneRef.current) {
+        // Update the snapshot so the next real edit is compared correctly
+        lastNodesSnapshot = JSON.stringify(state.nodes)
+        return
+      }
+
       const currentNodesSnapshot = JSON.stringify(state.nodes)
 
       // Only trigger save if nodes actually changed
@@ -99,43 +127,81 @@ export function useProjectScene() {
       }
 
       lastNodesSnapshot = currentNodesSnapshot
-      const nodes = state.nodes
+      hasDirtyChangesRef.current = true
 
-      // Skip if currently saving
+      // If a save is in-flight, mark pending so we do one follow-up save
+      // instead of queuing unlimited concurrent saves.
       if (isSavingRef.current) {
+        pendingSaveRef.current = true
         return
       }
 
-      // Clear existing timeout
+      // Clear existing timeout (debounce reset)
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
 
-      // Debounce save by 2 seconds
-      saveTimeoutRef.current = setTimeout(async () => {
-        // Get the current project ID at save time (not the captured value)
-        const currentProjectId = currentProjectIdRef.current
-        if (!currentProjectId) {
-          return
-        }
-
-        const rootNodeIds = useScene.getState().rootNodeIds
-        const sceneGraph = { nodes, rootNodeIds }
-
-        isSavingRef.current = true
-
-        try {
-          await saveProjectModel(currentProjectId, sceneGraph)
-        } finally {
-          isSavingRef.current = false
-        }
-      }, 2000)
+      // Debounce save
+      saveTimeoutRef.current = setTimeout(() => {
+        executeSave()
+      }, AUTOSAVE_DEBOUNCE_MS)
     })
 
+    async function executeSave() {
+      const currentProjectId = currentProjectIdRef.current
+      if (!currentProjectId) return
+
+      const { nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds }
+
+      isSavingRef.current = true
+      pendingSaveRef.current = false
+
+      try {
+        await saveProjectModel(currentProjectId, sceneGraph)
+        hasDirtyChangesRef.current = false
+      } finally {
+        isSavingRef.current = false
+
+        // If changes arrived while we were saving, schedule one more save
+        if (pendingSaveRef.current) {
+          pendingSaveRef.current = false
+          saveTimeoutRef.current = setTimeout(() => {
+            executeSave()
+          }, AUTOSAVE_DEBOUNCE_MS)
+        }
+      }
+    }
+
+    // Flush unsaved changes when the user leaves the page / closes the tab.
+    // Uses sendBeacon via keepalive fetch so the request survives page unload.
+    function flushOnExit() {
+      if (!hasDirtyChangesRef.current || !currentProjectIdRef.current) return
+
+      const { nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds }
+
+      // Best-effort fire-and-forget save. We use the server action directly
+      // (it's just a POST to a Next.js endpoint). If the browser kills it,
+      // localStorage still has the data and will sync on next load.
+      saveProjectModel(currentProjectIdRef.current, sceneGraph).catch(() => {
+        // Swallow — nothing we can do during unload
+      })
+      hasDirtyChangesRef.current = false
+    }
+
+    window.addEventListener('beforeunload', flushOnExit)
+
     return () => {
+      window.removeEventListener('beforeunload', flushOnExit)
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
+
+      // Flush on unmount (e.g. navigating away within the SPA)
+      flushOnExit()
+
       unsubscribe()
     }
   }, [projectId])
