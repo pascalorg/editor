@@ -53,6 +53,7 @@
         "better-auth": "^1.4.18",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "drizzle-orm": "0.39.3",
         "howler": "^2.2.4",
         "lucide-react": "^0.562.0",
         "motion": "^12.26.2",
@@ -120,7 +121,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@supabase/supabase-js": "^2.95.3",
-        "drizzle-orm": "^0.39.0",
         "drizzle-zod": "^0.5.1",
         "nanoid": "^5.0.9",
         "postgres": "^3.4.5",
@@ -129,6 +129,9 @@
         "@repo/typescript-config": "*",
         "drizzle-kit": "^0.30.0",
         "typescript": "5.9.2",
+      },
+      "peerDependencies": {
+        "drizzle-orm": ">=0.39.0",
       },
     },
     "packages/eslint-config": {
@@ -189,6 +192,9 @@
         "three": "^0.183",
       },
     },
+  },
+  "overrides": {
+    "drizzle-orm": "0.39.3",
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
