@@ -1,6 +1,6 @@
 import { type CeilingNode, useRegistry } from '@pascal-app/core'
 import { useRef } from 'react'
-import { faceDirection, float, mix, positionWorld, smoothstep } from 'three/tsl'
+import { faceDirection, float, mix, positionWorld, smoothstep, step } from 'three/tsl'
 import { DoubleSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
@@ -35,7 +35,7 @@ const gridOpacity = mix(float(0.1), float(0.8), gridPattern)
 
 // faceDirection is 1.0 for front face, -1.0 for back face
 // Front face (top, looking down): grid pattern, Back face (bottom, looking up): solid
-ceilingMaterial.opacityNode = mix(float(1.0), gridOpacity, faceDirection.greaterThan(0.0))
+ceilingMaterial.opacityNode = mix(float(1.0), gridOpacity, step(float(0.0), float(faceDirection)))
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)

@@ -1,8 +1,8 @@
 'use client'
 
-import { type AnyNode, type ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNode, ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Move, Trash2, X } from 'lucide-react'
+import { Copy, Move, Trash2, X } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback } from 'react'
 import useEditor from '@/store/use-editor'
@@ -49,6 +49,24 @@ export function ItemPanel() {
       // Deselect so the panel closes
       setSelection({ selectedIds: [] })
     }
+  }, [node, setMovingNode, setSelection])
+
+  const handleDuplicate = useCallback(() => {
+    if (!node) return
+    sfxEmitter.emit('sfx:item-pick')
+    // Create a proto node (not added to scene) as a carrier for asset/position info.
+    // MoveItemContent detects metadata.isNew and uses draftNode.create() so ghost rendering works correctly.
+    const proto = ItemNode.parse({
+      position: [...node.position] as [number, number, number],
+      rotation: [...node.rotation] as [number, number, number],
+      name: node.name,
+      asset: node.asset,
+      parentId: node.parentId,
+      side: node.side,
+      metadata: { isNew: true },
+    })
+    setMovingNode(proto)
+    setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
@@ -192,6 +210,14 @@ export function ItemPanel() {
           >
             <Move className="h-3.5 w-3.5" />
             <span>Move</span>
+          </button>
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            onClick={handleDuplicate}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span>Duplicate</span>
           </button>
           <button
             type="button"

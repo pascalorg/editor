@@ -25,7 +25,7 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.182"
+    "three": "^0.183"
   },
   "dependencies": {
     "dedent": "^1.7.1",
@@ -42,7 +42,7 @@
     "@repo/typescript-config": "*",
     "@types/react": "^19.2.2",
     "typescript": "5.9.2",
-    "@types/three": "^0.182.0"
+    "@types/three": "^0.183.0"
   },
   "keywords": [
     "3d",

@@ -7,6 +7,7 @@ import {
   type LevelNode,
   type Space,
   useScene,
+  type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
@@ -63,8 +64,8 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode: ItemNode | null
-  setMovingNode: (node: ItemNode | null) => void
+  movingNode: ItemNode | WindowNode | null
+  setMovingNode: (node: ItemNode | WindowNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
