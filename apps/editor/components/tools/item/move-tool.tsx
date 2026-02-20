@@ -1,6 +1,8 @@
+import type { ItemNode, WindowNode } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
+import { MoveWindowTool } from '../window/move-window-tool'
 import type { PlacementState } from './placement-types'
 import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
@@ -19,34 +21,35 @@ function getInitialState(node: {
   return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
 }
 
-export const MoveTool: React.FC = () => {
-  const movingNode = useEditor((state) => state.movingNode)
+function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   const draftNode = useDraftNode()
 
-  const exitMoveMode = () => {
-    useEditor.getState().setMovingNode(null)
-  }
-
   const cursor = usePlacementCoordinator({
-    asset: movingNode!.asset,
+    asset: movingNode.asset,
     draftNode,
-    initialState: movingNode ? getInitialState(movingNode) : undefined,
+    initialState: getInitialState(movingNode),
     initDraft: (gridPosition) => {
-      if (!movingNode) return
       draftNode.adopt(movingNode)
       gridPosition.copy(new Vector3(...movingNode.position))
     },
     onCommitted: () => {
       sfxEmitter.emit('sfx:item-place')
-      exitMoveMode()
+      useEditor.getState().setMovingNode(null)
       return false
     },
     onCancel: () => {
       draftNode.destroy()
-      exitMoveMode()
+      useEditor.getState().setMovingNode(null)
     },
   })
 
-  if (!movingNode) return null
   return <>{cursor}</>
+}
+
+export const MoveTool: React.FC = () => {
+  const movingNode = useEditor((state) => state.movingNode)
+
+  if (!movingNode) return null
+  if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
+  return <MoveItemContent movingNode={movingNode as ItemNode} />
 }

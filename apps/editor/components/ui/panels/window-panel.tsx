@@ -1,10 +1,12 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type WindowNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, WindowNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { FlipHorizontal2, X } from 'lucide-react'
+import { Copy, FlipHorizontal2, Move, Trash2, X } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback } from 'react'
+import { sfxEmitter } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
 import { NumberInput } from '@/components/ui/primitives/number-input'
 import { Switch } from '@/components/ui/primitives/switch'
 
@@ -13,6 +15,8 @@ export function WindowPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
+  const deleteNode = useScene((s) => s.deleteNode)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -39,6 +43,49 @@ export function WindowPanel() {
       rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
     })
   }, [node, handleUpdate])
+
+  const handleMove = useCallback(() => {
+    if (!node) return
+    sfxEmitter.emit('sfx:item-pick')
+    setMovingNode(node)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
+
+  const handleDelete = useCallback(() => {
+    if (!selectedId || !node) return
+    sfxEmitter.emit('sfx:item-delete')
+    deleteNode(selectedId as AnyNode['id'])
+    if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+    setSelection({ selectedIds: [] })
+  }, [selectedId, node, deleteNode, setSelection])
+
+  const handleDuplicate = useCallback(() => {
+    if (!node || !node.parentId) return
+    sfxEmitter.emit('sfx:item-pick')
+    useScene.temporal.getState().pause()
+    const duplicate = WindowNode.parse({
+      position: [...node.position] as [number, number, number],
+      rotation: [...node.rotation] as [number, number, number],
+      side: node.side,
+      wallId: node.wallId,
+      parentId: node.parentId,
+      width: node.width,
+      height: node.height,
+      frameThickness: node.frameThickness,
+      frameDepth: node.frameDepth,
+      columnRatios: [...node.columnRatios],
+      rowRatios: [...node.rowRatios],
+      columnDividerThickness: node.columnDividerThickness,
+      rowDividerThickness: node.rowDividerThickness,
+      sill: node.sill,
+      sillDepth: node.sillDepth,
+      sillThickness: node.sillThickness,
+      metadata: {  isNew: true },
+    })
+    useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
+    setMovingNode(duplicate)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
 
   if (!node || node.type !== 'window' || selectedIds.length !== 1) return null
 
@@ -332,6 +379,36 @@ export function WindowPanel() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="border-t p-3">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            onClick={handleMove}
+          >
+            <Move className="h-3.5 w-3.5" />
+            <span>Move</span>
+          </button>
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            onClick={handleDuplicate}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span>Duplicate</span>
+          </button>
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
+          </button>
         </div>
       </div>
     </div>
