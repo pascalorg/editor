@@ -29,7 +29,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
-    "three": "^0.182.0",
+    "three": "^0.183.0",
     "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.9.8",
     "zustand": "^5.0.11"

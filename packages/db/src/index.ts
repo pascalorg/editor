@@ -10,6 +10,7 @@ export type { Database as SupabaseDatabase } from './types'
 export { type Database, db } from './drizzle'
 export * from './schema'
 
+
 import * as dbSchema from './schema'
 export const schema = dbSchema
 export {

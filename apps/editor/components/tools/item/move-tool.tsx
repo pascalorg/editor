@@ -1,6 +1,8 @@
+import type { ItemNode, WindowNode } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
+import { MoveWindowTool } from '../window/move-window-tool'
 import type { PlacementState } from './placement-types'
 import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
@@ -19,34 +21,50 @@ function getInitialState(node: {
   return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
 }
 
-export const MoveTool: React.FC = () => {
-  const movingNode = useEditor((state) => state.movingNode)
+function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   const draftNode = useDraftNode()
 
-  const exitMoveMode = () => {
-    useEditor.getState().setMovingNode(null)
-  }
+  const meta = (typeof movingNode.metadata === 'object' && movingNode.metadata !== null)
+    ? movingNode.metadata as Record<string, unknown>
+    : {}
+  const isNew = !!meta.isNew
 
   const cursor = usePlacementCoordinator({
-    asset: movingNode!.asset,
+    asset: movingNode.asset,
     draftNode,
-    initialState: movingNode ? getInitialState(movingNode) : undefined,
+    // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
+    initialState: isNew ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null } : getInitialState(movingNode),
     initDraft: (gridPosition) => {
-      if (!movingNode) return
-      draftNode.adopt(movingNode)
-      gridPosition.copy(new Vector3(...movingNode.position))
+      if (isNew) {
+        // Duplicate: use the same create() path as ItemTool so ghost rendering works correctly.
+        // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
+        gridPosition.copy(new Vector3(...movingNode.position))
+        if (!movingNode.asset.attachTo) {
+          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation)
+        }
+      } else {
+        draftNode.adopt(movingNode)
+        gridPosition.copy(new Vector3(...movingNode.position))
+      }
     },
     onCommitted: () => {
       sfxEmitter.emit('sfx:item-place')
-      exitMoveMode()
+      useEditor.getState().setMovingNode(null)
       return false
     },
     onCancel: () => {
       draftNode.destroy()
-      exitMoveMode()
+      useEditor.getState().setMovingNode(null)
     },
   })
 
-  if (!movingNode) return null
   return <>{cursor}</>
+}
+
+export const MoveTool: React.FC = () => {
+  const movingNode = useEditor((state) => state.movingNode)
+
+  if (!movingNode) return null
+  if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
+  return <MoveItemContent movingNode={movingNode as ItemNode} />
 }

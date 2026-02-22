@@ -693,6 +693,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
   }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
 
+  // Reparent floor draft to the new level when the user switches levels mid-placement.
+  // Wall/ceiling items are managed by their own surface entry events (ensureDraft / reparent).
+  const viewerLevelId = useViewer((s) => s.selection.levelId)
+  useEffect(() => {
+    const draft = draftNode.current
+    if (!draft || !viewerLevelId || asset.attachTo) return
+    if (draft.parentId === viewerLevelId) return
+    draft.parentId = viewerLevelId
+    useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
+  }, [viewerLevelId, draftNode, asset])
+
   useFrame((_, delta) => {
     if (!draftNode.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
@@ -724,7 +735,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
-        cursorGroupRef.current.position.y = slabElevation
+        // Cursor group is at the world root (not inside a level group), so add the
+        // level group's current world Y to convert from level-local to world space.
+        const levelGroup = sceneRegistry.nodes.get(levelId as AnyNodeId)
+        cursorGroupRef.current.position.y = slabElevation + (levelGroup?.position.y ?? 0)
       }
     }
   })

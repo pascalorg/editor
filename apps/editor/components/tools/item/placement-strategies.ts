@@ -80,6 +80,7 @@ export const floorStrategy = {
     return {
       nodeUpdate: {
         position: pos,
+        parentId: ctx.levelId,
         metadata: stripTransient(ctx.draftItem.metadata),
       },
       stopPropagation: false,
