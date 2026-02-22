@@ -1,6 +1,0 @@
-{
-  "framework": "nextjs",
-  "buildCommand": "cd apps/editor && next build",
-  "outputDirectory": "apps/editor/.next",
-  "installCommand": "bun install"
-}
