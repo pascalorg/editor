@@ -48,8 +48,5 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ],
-  "overrides": {
-    "drizzle-orm": "0.39.3"
-  }
+  ]
 }

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { and, db, eq, ne, schema, sql } from '@pascal-app/db'
+import { db, schema } from '@pascal-app/db'
+import { eq, and, ne, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { getSession } from './server'
 import { createServerSupabaseClient } from '../database/server'
