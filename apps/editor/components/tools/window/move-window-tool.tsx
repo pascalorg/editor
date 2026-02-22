@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   emitter,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallEvent,
   WindowNode,
@@ -78,10 +79,17 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
     }
 
+    const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
-      const id = useViewer.getState().selection.levelId
+      const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
     }
+    const getSlabElevation = (wallEvent: WallEvent) =>
+      spatialGridManager.getSlabElevationForWall(
+        wallEvent.node.parentId ?? '',
+        wallEvent.node.start,
+        wallEvent.node.end,
+      )
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
@@ -102,6 +110,8 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
 
     const onWallEnter = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
@@ -134,12 +144,18 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         movingWindowNode.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
+      updateCursor(
+        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        cursorRotation,
+        valid,
+      )
       event.stopPropagation()
     }
 
     const onWallMove = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
@@ -172,12 +188,18 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         movingWindowNode.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
+      updateCursor(
+        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        cursorRotation,
+        valid,
+      )
       event.stopPropagation()
     }
 
     const onWallClick = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
