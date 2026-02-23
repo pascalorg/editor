@@ -1,4 +1,4 @@
-import { type AnyNodeId, type ItemNode, useScene, type WallNode, type WindowNode } from '@pascal-app/core'
+import { getScaledDimensions, type AnyNodeId, type ItemNode, useScene, type WallNode, type WindowNode } from '@pascal-app/core'
 
 /**
  * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
@@ -79,7 +79,7 @@ export function hasWallChildOverlap(
     if (child.type === 'item') {
       const item = child as ItemNode
       if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
-      const [w, h] = item.asset.dimensions
+      const [w, h] = getScaledDimensions(item)
       childLeft = item.position[0] - w / 2
       childRight = item.position[0] + w / 2
       childBottom = item.position[1]       // items store bottom Y

@@ -40,7 +40,7 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
   useRegistry(node.id, node.type, ref)
 
   return (
-    <group position={node.position} rotation={node.rotation} ref={ref} visible={node.visible}>
+    <group position={node.position} rotation={node.rotation} scale={node.scale} ref={ref} visible={node.visible}>
       <Suspense fallback={<PreviewModel node={node} />}>
         <ModelRenderer node={node} />
       </Suspense>

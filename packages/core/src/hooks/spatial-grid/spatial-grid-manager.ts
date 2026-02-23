@@ -1,3 +1,4 @@
+import { getScaledDimensions } from '../../schema'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
@@ -291,7 +292,7 @@ export class SpatialGridManager {
         if (wallId && this.walls.has(wallId)) {
           const wallLength = this.getWallLength(wallId)
           if (wallLength > 0) {
-            const [width, height] = item.asset.dimensions
+            const [width, height] = getScaledDimensions(item)
             const halfW = width / wallLength / 2
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength
@@ -312,7 +313,7 @@ export class SpatialGridManager {
         // Ceiling item - use parentId as the ceiling ID
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, item.asset.dimensions, item.rotation)
+          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
@@ -320,7 +321,7 @@ export class SpatialGridManager {
         this.getFloorGrid(levelId).insert(
           item.id,
           item.position,
-          item.asset.dimensions,
+          getScaledDimensions(item),
           item.rotation,
         )
       }
@@ -344,7 +345,7 @@ export class SpatialGridManager {
         if (wallId && this.walls.has(wallId)) {
           const wallLength = this.getWallLength(wallId)
           if (wallLength > 0) {
-            const [width, height] = item.asset.dimensions
+            const [width, height] = getScaledDimensions(item)
             const halfW = width / wallLength / 2
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength
@@ -371,14 +372,14 @@ export class SpatialGridManager {
         // Insert into new ceiling grid
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, item.asset.dimensions, item.rotation)
+          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
         this.getFloorGrid(levelId).update(
           item.id,
           item.position,
-          item.asset.dimensions,
+          getScaledDimensions(item),
           item.rotation,
         )
       }

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type CeilingEvent,
   emitter,
+  getScaledDimensions,
   type GridEvent,
   type ItemEvent,
   resolveLevelId,
@@ -646,7 +647,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Bounding box geometry ----
 
-    const dims = asset.dimensions ?? DEFAULT_DIMENSIONS
+    const draft = draftNode.current
+    const dims = draft ? getScaledDimensions(draft) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
     const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
     boxGeometry.translate(0, dims[1] / 2, 0)
     const edgesGeometry = new EdgesGeometry(boxGeometry)
@@ -731,7 +733,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const slabElevation = spatialGridManager.getSlabElevationForItem(
           levelId,
           [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-          asset.dimensions ?? DEFAULT_DIMENSIONS,
+          getScaledDimensions(draftNode.current),
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
