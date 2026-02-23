@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { computeBoundsTree } from 'three-mesh-bvh'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { computeBoundsTree } from 'three-mesh-bvh'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
@@ -22,7 +22,7 @@ const csgEvaluator = new Evaluator()
 // WALL SYSTEM
 // ============================================================================
 
-let useFrameNb = 0;
+let useFrameNb = 0
 export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
@@ -35,7 +35,7 @@ export const WallSystem = () => {
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
-    useFrameNb += 1;    
+    useFrameNb += 1
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return
@@ -75,7 +75,7 @@ export const WallSystem = () => {
         }
       }
     }
-  })
+  }, 4)
 
   return null
 }
@@ -107,7 +107,6 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const nodes = useScene.getState().nodes
   const node = nodes[wallId as WallNode['id']]
   if (!node || node.type !== 'wall') return
-
 
   const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
   if (!mesh) return

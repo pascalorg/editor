@@ -50,7 +50,7 @@ export const WindowSystem = () => {
         useScene.getState().dirtyNodes.add((node as WindowNode).parentId as AnyNodeId)
       }
     })
-  })
+  }, 3)
 
   return null
 }

@@ -29,7 +29,7 @@ export const SlabSystem = () => {
       }
       // If mesh not found, keep it dirty for next frame
     })
-  })
+  }, 1)
 
   return null
 }

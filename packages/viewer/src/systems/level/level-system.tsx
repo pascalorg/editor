@@ -33,7 +33,10 @@ function getLevelHeight(
     } else if (child.type === 'wall') {
       // Wall mesh is pushed up to slabElevation by WallSystem.
       // mesh.position.y + wall.height gives the actual top Y in level-local space.
-      const meshY = sceneRegistry.nodes.get(childId as any)?.position.y ?? 0
+      let meshY = sceneRegistry.nodes.get(childId as any)?.position.y ?? 0
+      if (meshY < 0) {
+        meshY = 0 // Guard against invalid negative Y which could cause incorrect height calculation (e.g. from sunken slabs)
+      }
       const top = meshY + ((child as WallNode).height ?? DEFAULT_LEVEL_HEIGHT)
       if (top > maxTop) maxTop = top
     }
@@ -78,11 +81,11 @@ export const LevelSystem = () => {
       const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
       const targetY = baseY + explodedExtra
 
-      obj.position.y = lerp(obj.position.y, targetY, delta * 3)
+      obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
       obj.visible = levelMode !== 'solo' || level?.id === selectedLevel || !selectedLevel
 
       cumulativeY += getLevelHeight(levelId, nodes)
     }
-  })
+  }, 5) // Using a lower priority so it runs after transforms from other systems have settled
   return null
 }

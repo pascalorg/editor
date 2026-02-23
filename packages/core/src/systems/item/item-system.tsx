@@ -51,7 +51,7 @@ export const ItemSystem = () => {
       }
 
       clearDirty(id as AnyNodeId)
-    })
+    }, 2)
   })
 
   return null
