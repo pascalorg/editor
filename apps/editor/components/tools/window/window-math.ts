@@ -1,16 +1,18 @@
-import { type AnyNodeId, type ItemNode, useScene, type WallNode, type WindowNode } from '@pascal-app/core'
+import { getScaledDimensions, type AnyNodeId, type ItemNode, useScene, type WallNode, type WindowNode } from '@pascal-app/core'
 
 /**
- * Converts wall-local (X along wall, Y = height above level floor) to world XYZ.
+ * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
  * Wall XZ uses level-local coordinates (levels only offset in Y, not XZ).
- * Pass levelYOffset (the level group's current world Y) so the cursor lands at the
- * correct world height when the cursor group is at the scene root.
+ * Pass levelYOffset (the level group's current world Y) and slabElevation (the
+ * wall mesh's Y within the level group) so the cursor lands at the correct world
+ * height — matching how WallSystem positions the wall mesh at slabElevation.
  */
 export function wallLocalToWorld(
   wallNode: WallNode,
   localX: number,
   localY: number,
   levelYOffset = 0,
+  slabElevation = 0,
 ): [number, number, number] {
   const wallAngle = Math.atan2(
     wallNode.end[1] - wallNode.start[1],
@@ -18,7 +20,7 @@ export function wallLocalToWorld(
   )
   return [
     wallNode.start[0] + localX * Math.cos(wallAngle),
-    localY + levelYOffset,
+    slabElevation + localY + levelYOffset,
     wallNode.start[1] + localX * Math.sin(wallAngle),
   ]
 }
@@ -77,7 +79,7 @@ export function hasWallChildOverlap(
     if (child.type === 'item') {
       const item = child as ItemNode
       if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
-      const [w, h] = item.asset.dimensions
+      const [w, h] = getScaledDimensions(item)
       childLeft = item.position[0] - w / 2
       childRight = item.position[0] + w / 2
       childBottom = item.position[1]       // items store bottom Y

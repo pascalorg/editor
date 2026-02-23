@@ -3,7 +3,7 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
 export type { AssetInput } from './nodes/item'
-export { ItemNode } from './nodes/item'
+export { getScaledDimensions, ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
 // Nodes
 export { SiteNode } from './nodes/site'

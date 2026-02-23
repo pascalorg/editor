@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId, ItemNode, SlabNode, WallNode } from '../../schema'
+import { getScaledDimensions, type AnyNode, type AnyNodeId, type ItemNode, type SlabNode, type WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import { itemOverlapsPolygon, spatialGridManager, wallOverlapsPolygon } from './spatial-grid-manager'
 
@@ -73,11 +73,16 @@ export function initSpatialGridSync() {
         if (
           !arraysEqual(node.position, prev.position) ||
           !arraysEqual(node.rotation, prev.rotation) ||
+          !arraysEqual(node.scale, prev.scale) ||
           node.parentId !== prev.parentId ||
           node.side !== prev.side
         ) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
+          // Scale changes affect footprint size — mark dirty so slab elevation recalculates
+          if (!arraysEqual(node.scale, prev.scale)) {
+            markDirty(node.id)
+          }
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
         if (node.polygon !== prev.polygon || node.elevation !== prev.elevation) {
@@ -114,7 +119,7 @@ function markNodesOverlappingSlab(
       // Only floor items are affected by slabs
       if (item.asset.attachTo) continue
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (itemOverlapsPolygon(item.position, item.asset.dimensions, item.rotation, slab.polygon, 0.01)) {
+      if (itemOverlapsPolygon(item.position, getScaledDimensions(item), item.rotation, slab.polygon, 0.01)) {
         markDirty(node.id)
       }
     } else if (node.type === 'wall') {

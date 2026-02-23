@@ -30,6 +30,7 @@ export const ItemNode = BaseNode.extend({
   type: nodeType('item'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
   side: z.enum(['front', 'back']).optional(),
   children: z.array(objectId('item')).default([]),
 
@@ -53,3 +54,13 @@ export const ItemNode = BaseNode.extend({
 `)
 
 export type ItemNode = z.infer<typeof ItemNode>
+
+/**
+ * Returns the effective world-space dimensions of an item after applying its scale.
+ * Use this everywhere item.asset.dimensions is used for spatial calculations.
+ */
+export function getScaledDimensions(item: ItemNode): [number, number, number] {
+  const [w, h, d] = item.asset.dimensions
+  const [sx, sy, sz] = item.scale
+  return [w * sx, h * sy, d * sz]
+}

@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   emitter,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallEvent,
   WindowNode,
@@ -44,6 +45,12 @@ export const WindowTool: React.FC = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
     }
+    const getSlabElevation = (wallEvent: WallEvent) =>
+      spatialGridManager.getSlabElevationForWall(
+        wallEvent.node.parentId ?? '',
+        wallEvent.node.start,
+        wallEvent.node.end,
+      )
 
     const markWallDirty = (wallId: string) => {
       useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
@@ -79,6 +86,8 @@ export const WindowTool: React.FC = () => {
       if (!isValidWallSideFace(event.normal)) return
       const levelId = getLevelId()
       if (!levelId) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== levelId) return
 
       destroyDraft()
 
@@ -108,12 +117,18 @@ export const WindowTool: React.FC = () => {
 
       const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
+      updateCursor(
+        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        cursorRotation,
+        valid,
+      )
       event.stopPropagation()
     }
 
     const onWallMove = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
@@ -142,13 +157,19 @@ export const WindowTool: React.FC = () => {
         draftRef.current?.id,
       )
 
-      updateCursor(wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset()), cursorRotation, valid)
+      updateCursor(
+        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        cursorRotation,
+        valid,
+      )
       event.stopPropagation()
     }
 
     const onWallClick = (event: WallEvent) => {
       if (!draftRef.current) return
       if (!isValidWallSideFace(event.normal)) return
+      // Only interact with walls on the current level
+      if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)

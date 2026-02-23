@@ -1,3 +1,4 @@
+import { getScaledDimensions } from '../../schema'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
@@ -183,11 +184,24 @@ export function wallOverlapsPolygon(
   end: [number, number],
   polygon: Array<[number, number]>,
 ): boolean {
-  const startInside = pointInPolygon(start[0], start[1], polygon)
-  const endInside = pointInPolygon(end[0], end[1], polygon)
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const len = Math.sqrt(dx * dx + dz * dz)
 
-  // At least one endpoint strictly inside the polygon
-  if (startInside || endInside) return true
+  // Nudge endpoint test points a tiny step inward along the wall direction before
+  // testing containment. pointInPolygon (ray casting) produces false positives for
+  // points exactly on polygon vertices or edges — specifically the minimum-z corner
+  // of an axis-aligned polygon returns "inside" because the ray hits the opposite
+  // vertical edge exactly at its base. Nudging by 1e-6 m avoids this: a wall that
+  // merely starts at a slab corner and extends outward will have its nudged point
+  // clearly outside, while a wall that genuinely starts inside stays inside.
+  if (len > 1e-10) {
+    const step = Math.min(1e-6, len * 0.01)
+    const nx = (dx / len) * step
+    const nz = (dz / len) * step
+    if (pointInPolygon(start[0] + nx, start[1] + nz, polygon)) return true
+    if (pointInPolygon(end[0] - nx, end[1] - nz, polygon)) return true
+  }
 
   // Check if midpoint is inside (catches walls crossing through)
   const midX = (start[0] + end[0]) / 2
@@ -278,7 +292,7 @@ export class SpatialGridManager {
         if (wallId && this.walls.has(wallId)) {
           const wallLength = this.getWallLength(wallId)
           if (wallLength > 0) {
-            const [width, height] = item.asset.dimensions
+            const [width, height] = getScaledDimensions(item)
             const halfW = width / wallLength / 2
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength
@@ -299,7 +313,7 @@ export class SpatialGridManager {
         // Ceiling item - use parentId as the ceiling ID
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, item.asset.dimensions, item.rotation)
+          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
@@ -307,7 +321,7 @@ export class SpatialGridManager {
         this.getFloorGrid(levelId).insert(
           item.id,
           item.position,
-          item.asset.dimensions,
+          getScaledDimensions(item),
           item.rotation,
         )
       }
@@ -331,7 +345,7 @@ export class SpatialGridManager {
         if (wallId && this.walls.has(wallId)) {
           const wallLength = this.getWallLength(wallId)
           if (wallLength > 0) {
-            const [width, height] = item.asset.dimensions
+            const [width, height] = getScaledDimensions(item)
             const halfW = width / wallLength / 2
             // Calculate t from local X position (position[0] is distance along wall)
             const t = item.position[0] / wallLength
@@ -358,14 +372,14 @@ export class SpatialGridManager {
         // Insert into new ceiling grid
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, item.asset.dimensions, item.rotation)
+          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
         this.getFloorGrid(levelId).update(
           item.id,
           item.position,
-          item.asset.dimensions,
+          getScaledDimensions(item),
           item.rotation,
         )
       }

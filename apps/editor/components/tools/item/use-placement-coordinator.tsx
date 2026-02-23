@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type CeilingEvent,
   emitter,
+  getScaledDimensions,
   type GridEvent,
   type ItemEvent,
   resolveLevelId,
@@ -65,6 +66,8 @@ export interface PlacementCoordinatorConfig {
   onCommitted: () => boolean
   onCancel?: () => void
   initialState?: PlacementState
+  /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
+  defaultScale?: [number, number, number]
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -139,7 +142,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       cursorGroupRef.current.position.set(...result.cursorPosition)
       cursorGroupRef.current.rotation.y = result.cursorRotationY
 
-      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0])
+      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0], configRef.current.defaultScale)
 
       const draft = draftNode.current
       if (draft) {
@@ -646,7 +649,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Bounding box geometry ----
 
-    const dims = asset.dimensions ?? DEFAULT_DIMENSIONS
+    const draft = draftNode.current
+    const dims = draft ? getScaledDimensions(draft) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
     const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
     boxGeometry.translate(0, dims[1] / 2, 0)
     const edgesGeometry = new EdgesGeometry(boxGeometry)
@@ -731,7 +735,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const slabElevation = spatialGridManager.getSlabElevationForItem(
           levelId,
           [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-          asset.dimensions ?? DEFAULT_DIMENSIONS,
+          getScaledDimensions(draftNode.current),
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
@@ -743,7 +747,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
   })
 
-  const dims = config.asset.dimensions ?? DEFAULT_DIMENSIONS
+  const initialDraft = draftNode.current
+  const dims = initialDraft ? getScaledDimensions(initialDraft) : (config.asset.dimensions ?? DEFAULT_DIMENSIONS)
   const initialBoxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
   initialBoxGeometry.translate(0, dims[1] / 2, 0)
 

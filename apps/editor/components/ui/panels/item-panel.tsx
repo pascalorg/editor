@@ -1,10 +1,10 @@
 'use client'
 
-import { type AnyNode, ItemNode, useScene } from '@pascal-app/core'
+import { getScaledDimensions, type AnyNode, ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Move, Trash2, X } from 'lucide-react'
+import { Copy, Link, Link2Off, Move, Trash2, X } from 'lucide-react'
 import Image from 'next/image'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import useEditor from '@/store/use-editor'
 import { NumberInput } from '@/components/ui/primitives/number-input'
 import { sfxEmitter } from '@/lib/sfx-bus'
@@ -22,6 +22,8 @@ export function ItemPanel() {
   const node = selectedId
     ? (nodes[selectedId as AnyNode['id']] as ItemNode | undefined)
     : undefined
+
+  const [uniformScale, setUniformScale] = useState(true)
 
   const handleUpdate = useCallback(
     (updates: Partial<ItemNode>) => {
@@ -188,13 +190,75 @@ export function ItemPanel() {
             </div>
           </div>
 
-          {/* Dimensions (read-only) */}
+          {/* Scale */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                Scale
+              </label>
+              <button
+                type="button"
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+                onClick={() => setUniformScale((v) => !v)}
+                title={uniformScale ? 'Unlock axes' : 'Lock axes'}
+              >
+                {uniformScale ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            {uniformScale ? (
+              <NumberInput
+                label="XYZ"
+                value={Math.round(node.scale[0] * 100) / 100}
+                onChange={(value) => {
+                  const v = Math.max(0.01, value)
+                  handleUpdate({ scale: [v, v, v] })
+                }}
+                precision={2}
+                step={0.1}
+              />
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <NumberInput
+                  label="X"
+                  value={Math.round(node.scale[0] * 100) / 100}
+                  onChange={(value) => {
+                    handleUpdate({ scale: [Math.max(0.01, value), node.scale[1], node.scale[2]] })
+                  }}
+                  precision={2}
+                  step={0.1}
+                />
+                <NumberInput
+                  label="Y"
+                  value={Math.round(node.scale[1] * 100) / 100}
+                  onChange={(value) => {
+                    handleUpdate({ scale: [node.scale[0], Math.max(0.01, value), node.scale[2]] })
+                  }}
+                  precision={2}
+                  step={0.1}
+                />
+                <NumberInput
+                  label="Z"
+                  value={Math.round(node.scale[2] * 100) / 100}
+                  onChange={(value) => {
+                    handleUpdate({ scale: [node.scale[0], node.scale[1], Math.max(0.01, value)] })
+                  }}
+                  precision={2}
+                  step={0.1}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Dimensions (effective, read-only) */}
           <div className="space-y-2">
             <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
               Dimensions
             </label>
             <div className="rounded border border-border bg-muted/50 px-3 py-2 text-sm">
-              {node.asset.dimensions[0]}m × {node.asset.dimensions[1]}m × {node.asset.dimensions[2]}m
+              {(() => {
+                const [w, h, d] = getScaledDimensions(node)
+                return `${Math.round(w * 100) / 100}m × ${Math.round(h * 100) / 100}m × ${Math.round(d * 100) / 100}m`
+              })()}
             </div>
           </div>
         </div>

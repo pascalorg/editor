@@ -3,7 +3,7 @@ import type * as THREE from 'three'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNodeId, ItemNode, WallNode } from '../../schema'
+import { getScaledDimensions, type AnyNodeId, type ItemNode, type WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
 // ============================================================================
@@ -43,7 +43,7 @@ export const ItemSystem = () => {
           const slabElevation = spatialGridManager.getSlabElevationForItem(
             levelId,
             item.position,
-            item.asset.dimensions,
+            getScaledDimensions(item),
             item.rotation,
           )
           mesh.position.y = slabElevation + item.position[1]
@@ -51,7 +51,7 @@ export const ItemSystem = () => {
       }
 
       clearDirty(id as AnyNodeId)
-    })
+    }, 2)
   })
 
   return null

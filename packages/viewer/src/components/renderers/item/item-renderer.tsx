@@ -73,6 +73,9 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
+const multiplyScales = (a: [number, number, number], b: [number, number, number]): [number, number, number] => 
+  [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const { scene, nodes } = useGLTF(resolveCdnUrl(node.asset.src) || '')
 
@@ -115,7 +118,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   return (
     <Clone
       object={scene}
-      scale={node.asset.scale}
+      scale={multiplyScales(node.asset.scale, node.scale)}
       position={node.asset.offset}
       rotation={node.asset.rotation}
       {...handlers}

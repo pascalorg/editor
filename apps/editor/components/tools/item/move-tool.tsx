@@ -34,13 +34,15 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
     draftNode,
     // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
     initialState: isNew ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null } : getInitialState(movingNode),
+    // Preserve the original item's scale so Y-position calculations use the correct height
+    defaultScale: isNew ? movingNode.scale : undefined,
     initDraft: (gridPosition) => {
       if (isNew) {
         // Duplicate: use the same create() path as ItemTool so ghost rendering works correctly.
         // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
         gridPosition.copy(new Vector3(...movingNode.position))
         if (!movingNode.asset.attachTo) {
-          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation)
+          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation, movingNode.scale)
         }
       } else {
         draftNode.adopt(movingNode)

@@ -9,7 +9,7 @@ import type {
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { getScaledDimensions, sceneRegistry, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import type {
   CommitResult,
@@ -43,7 +43,7 @@ export const floorStrategy = {
   move(ctx: PlacementContext, event: GridEvent): PlacementResult | null {
     if (ctx.state.surface !== 'floor') return null
 
-    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const dims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const [dimX, , dimZ] = dims
     const x = snapToGrid(event.position[0], dimX)
     const z = snapToGrid(event.position[2], dimZ)
@@ -70,7 +70,7 @@ export const floorStrategy = {
     const valid = validators.canPlaceOnFloor(
       ctx.levelId,
       pos,
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       [0, 0, 0],
       [ctx.draftItem.id],
     ).valid
@@ -128,7 +128,7 @@ export const wallStrategy = {
       event.node.id,
       x,
       y,
-      ctx.asset.dimensions ?? DEFAULT_DIMENSIONS,
+      ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS),
       attachTo,
       side,
       [],
@@ -179,7 +179,7 @@ export const wallStrategy = {
       event.node.id,
       snappedX,
       snappedY,
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       side,
       [ctx.draftItem.id],
@@ -219,7 +219,7 @@ export const wallStrategy = {
       ctx.state.wallId as WallNode['id'],
       ctx.gridPosition.x,
       ctx.gridPosition.y,
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       ctx.draftItem.side,
       [ctx.draftItem.id],
@@ -281,7 +281,7 @@ export const ceilingStrategy = {
     const ceilingLevelId = resolveLevelId(event.node, nodes)
     if (ctx.levelId !== ceilingLevelId) return null
 
-    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const dims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const [dimX, , dimZ] = dims
     const itemHeight = dims[1]
 
@@ -308,7 +308,7 @@ export const ceilingStrategy = {
     if (ctx.state.surface !== 'ceiling') return null
     if (!ctx.draftItem) return null
 
-    const dims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const dims = getScaledDimensions(ctx.draftItem)
     const [dimX, , dimZ] = dims
     const itemHeight = dims[1]
 
@@ -341,7 +341,7 @@ export const ceilingStrategy = {
     const valid = validators.canPlaceOnCeiling(
       ctx.state.ceilingId as CeilingNode['id'],
       pos,
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
@@ -399,8 +399,8 @@ export const itemSurfaceStrategy = {
     if (!surfaceItem.asset.surface) return null
 
     // Size check: our footprint must fit on surface item's footprint
-    const ourDims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
-    const surfDims = surfaceItem.asset.dimensions
+    const ourDims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const surfDims = getScaledDimensions(surfaceItem)
     if (ourDims[0] > surfDims[0] || ourDims[2] > surfDims[2]) return null
 
     const surfaceMesh = sceneRegistry.nodes.get(surfaceItem.id)
@@ -411,7 +411,7 @@ export const itemSurfaceStrategy = {
 
     const x = snapToGrid(localPos.x, ourDims[0])
     const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceItem.asset.surface.height
+    const y = surfaceItem.asset.surface.height * surfaceItem.scale[1]
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
 
@@ -439,13 +439,13 @@ export const itemSurfaceStrategy = {
     const surfaceMesh = sceneRegistry.nodes.get(ctx.state.surfaceItemId)
     if (!surfaceMesh) return null
 
-    const ourDims = ctx.asset.dimensions ?? DEFAULT_DIMENSIONS
+    const ourDims = getScaledDimensions(ctx.draftItem)
     const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
     const localPos = surfaceMesh.worldToLocal(worldPos)
 
     const x = snapToGrid(localPos.x, ourDims[0])
     const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceItem.asset.surface.height
+    const y = surfaceItem.asset.surface.height * surfaceItem.scale[1]
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
 
@@ -501,7 +501,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
     return validators.canPlaceOnCeiling(
       ctx.state.ceilingId as CeilingNode['id'],
       [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
@@ -514,7 +514,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
       ctx.state.wallId as WallNode['id'],
       ctx.gridPosition.x,
       ctx.gridPosition.y,
-      ctx.draftItem.asset.dimensions,
+      getScaledDimensions(ctx.draftItem),
       attachTo,
       ctx.draftItem.side,
       [ctx.draftItem.id],
@@ -525,7 +525,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   return validators.canPlaceOnFloor(
     ctx.levelId,
     [ctx.gridPosition.x, 0, ctx.gridPosition.z],
-    ctx.draftItem.asset.dimensions,
+    getScaledDimensions(ctx.draftItem),
     [0, 0, 0],
     [ctx.draftItem.id],
   ).valid

@@ -68,13 +68,21 @@ const useScene: UseSceneStore = create<SceneState>()(
         },
 
         setScene: (nodes, rootNodeIds) => {
+          // Backward compat: add default scale to item nodes loaded from external sources
+          // (pascal_local_projects, Supabase) saved before scale was added to ItemNode
+          const patchedNodes = { ...nodes }
+          for (const [id, node] of Object.entries(patchedNodes)) {
+            if (node.type === 'item' && !('scale' in node)) {
+              patchedNodes[id as AnyNodeId] = { ...(node as object), scale: [1, 1, 1] } as AnyNode
+            }
+          }
           set({
-            nodes,
+            nodes: patchedNodes,
             rootNodeIds,
             dirtyNodes: new Set<AnyNodeId>(),
           })
           // Mark all nodes as dirty to trigger re-validation
-          Object.values(nodes).forEach((node) => {
+          Object.values(patchedNodes).forEach((node) => {
             get().markDirty(node.id)
           })
         },
@@ -146,6 +154,7 @@ const useScene: UseSceneStore = create<SceneState>()(
     ),
     {
       name: 'editor-storage',
+      version: 1,
       partialize: (state) => ({
         nodes: Object.fromEntries(
           Object.entries(state.nodes).filter(([_, node]) => {
@@ -157,6 +166,19 @@ const useScene: UseSceneStore = create<SceneState>()(
         ),
         rootNodeIds: state.rootNodeIds,
       }),
+      merge: (persistedState, currentState) => {
+        console.log('merge calling...', persistedState, currentState)
+        const persisted = persistedState as Partial<SceneState>
+        // Backward compat: add default scale to item nodes saved before scale was added
+        if (persisted.nodes) {
+          for (const [id, node] of Object.entries(persisted.nodes)) {
+            if (node.type === 'item' && !('scale' in node)) {
+              persisted.nodes[id as AnyNodeId] = { ...(node as object), scale: [1, 1, 1] } as AnyNode
+            }
+          }
+        }
+        return { ...currentState, ...persisted }
+      },
       onRehydrateStorage: (state) => {
         console.log('hydrating...')
 
