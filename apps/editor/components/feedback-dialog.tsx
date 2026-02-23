@@ -198,7 +198,7 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
 
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent
-          className="sm:max-w-[460px] relative"
+          className="sm:max-w-[460px]"
           onDragEnter={onDragEnter}
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
