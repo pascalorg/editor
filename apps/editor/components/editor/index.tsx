@@ -62,7 +62,7 @@ export default function Editor({ projectId }: EditorProps) {
           <PascalRadio />
         </div>
         <div className="pointer-events-auto">
-          <FeedbackDialog />
+          <FeedbackDialog projectId={projectId} />
         </div>
       </div>
 
