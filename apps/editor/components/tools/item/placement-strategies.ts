@@ -411,7 +411,7 @@ export const itemSurfaceStrategy = {
 
     const x = snapToGrid(localPos.x, ourDims[0])
     const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceItem.asset.surface.height
+    const y = surfaceItem.asset.surface.height * surfaceItem.scale[1]
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
 
@@ -445,7 +445,7 @@ export const itemSurfaceStrategy = {
 
     const x = snapToGrid(localPos.x, ourDims[0])
     const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceItem.asset.surface.height
+    const y = surfaceItem.asset.surface.height * surfaceItem.scale[1]
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
 

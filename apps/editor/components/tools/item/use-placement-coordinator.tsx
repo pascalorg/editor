@@ -66,6 +66,8 @@ export interface PlacementCoordinatorConfig {
   onCommitted: () => boolean
   onCancel?: () => void
   initialState?: PlacementState
+  /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
+  defaultScale?: [number, number, number]
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -140,7 +142,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       cursorGroupRef.current.position.set(...result.cursorPosition)
       cursorGroupRef.current.rotation.y = result.cursorRotationY
 
-      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0])
+      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0], configRef.current.defaultScale)
 
       const draft = draftNode.current
       if (draft) {
