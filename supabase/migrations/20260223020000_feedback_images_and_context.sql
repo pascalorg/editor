@@ -1,7 +1,5 @@
--- Add image upload, user context, project context, and scene graph to feedback
+-- Add image upload, project context, and scene graph to feedback
 ALTER TABLE feedback
-  ADD COLUMN IF NOT EXISTS user_email text,
-  ADD COLUMN IF NOT EXISTS user_name text,
   ADD COLUMN IF NOT EXISTS project_id text,
   ADD COLUMN IF NOT EXISTS images jsonb,
   ADD COLUMN IF NOT EXISTS scene_graph jsonb;

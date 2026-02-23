@@ -50,8 +50,6 @@ export async function submitFeedback(
     const { error } = await (supabase as any).from('feedback').insert({
       id: createId('feedback'),
       user_id: session?.user?.id ?? null,
-      user_email: session?.user?.email ?? null,
-      user_name: session?.user?.name ?? null,
       project_id: projectId,
       message,
       images: imagePaths.length > 0 ? imagePaths : null,
