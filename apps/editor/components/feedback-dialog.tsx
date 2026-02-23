@@ -68,7 +68,8 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
 
   const removeImage = (index: number) => {
     setImages((prev) => {
-      URL.revokeObjectURL(prev[index].url)
+      const img = prev[index]
+      if (img) URL.revokeObjectURL(img.url)
       return prev.filter((_, i) => i !== index)
     })
   }
