@@ -4,7 +4,10 @@ import { ImageIcon, MessageSquare, X } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useScene } from '@pascal-app/core'
-import { submitFeedback } from '@/features/community/lib/feedback/actions'
+import {
+  createImageUploadUrls,
+  submitFeedback,
+} from '@/features/community/lib/feedback/actions'
 import {
   Dialog,
   DialogContent,
@@ -123,15 +126,54 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
         // Scene store may not be available (e.g. on non-editor pages)
       }
 
-      const formData = new FormData()
-      formData.set('message', message)
-      if (projectId) formData.set('projectId', projectId)
-      if (sceneGraph) formData.set('sceneGraph', JSON.stringify(sceneGraph))
-      for (const img of images) {
-        formData.append('images', img.file)
+      // Upload images directly to Supabase Storage via signed URLs
+      let imagePaths: string[] = []
+
+      if (images.length > 0) {
+        const urlResult = await createImageUploadUrls(
+          images.map((img) => ({ name: img.file.name, type: img.file.type })),
+        )
+
+        if (!urlResult.success) {
+          setError(urlResult.error)
+          return
+        }
+
+        // Upload each file directly to Supabase (bypasses Vercel size limit)
+        const uploadResults = await Promise.allSettled(
+          urlResult.uploads.map(async ({ path, signedUrl }, i) => {
+            const file = images[i]?.file
+            if (!file) return null
+
+            const res = await fetch(signedUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': file.type },
+              body: file,
+            })
+
+            if (!res.ok) {
+              console.error(`Upload failed for ${file.name}: ${res.status}`)
+              return null
+            }
+
+            return path
+          }),
+        )
+
+        imagePaths = uploadResults
+          .filter(
+            (r): r is PromiseFulfilledResult<string> =>
+              r.status === 'fulfilled' && r.value !== null,
+          )
+          .map((r) => r.value)
       }
 
-      const result = await submitFeedback(formData)
+      const result = await submitFeedback({
+        message,
+        projectId,
+        sceneGraph,
+        imagePaths,
+      })
 
       if (result.success) {
         setSent(true)
