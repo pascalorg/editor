@@ -1,7 +1,7 @@
 import { type CeilingNode, useRegistry } from '@pascal-app/core'
 import { useRef } from 'react'
 import { faceDirection, float, mix, positionWorld, smoothstep, step } from 'three/tsl'
-import { DoubleSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
 
@@ -10,7 +10,6 @@ import { NodeRenderer } from '../node-renderer'
 // - Front face (looking down at ceiling from above): 30% opacity
 const ceilingMaterial = new MeshBasicNodeMaterial({
   color: 0x999999,
-  side: DoubleSide,
   transparent: true,
   depthWrite: false,
 })
@@ -30,8 +29,8 @@ const lineY = smoothstep(lineWidth, 0, gridY).add(smoothstep(1.0 - lineWidth, 1.
 // Combine: if either X or Y is a line, show the line
 const gridPattern = lineX.max(lineY)
 
-// Grid lines at 0.8 opacity, spaces at 0.1 opacity
-const gridOpacity = mix(float(0.1), float(0.8), gridPattern)
+// Grid lines at 0.5 opacity, spaces at 0 opacity
+const gridOpacity = mix(float(0.0), float(0.5), gridPattern)
 
 // faceDirection is 1.0 for front face, -1.0 for back face
 // Front face (top, looking down): grid pattern, Back face (bottom, looking up): solid

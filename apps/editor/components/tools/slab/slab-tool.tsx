@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
+import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_OFFSET = 0.02
 
@@ -236,10 +237,7 @@ export const SlabTool: React.FC = () => {
   return (
     <group>
       {/* Cursor */}
-      <mesh ref={cursorRef}>
-        <sphereGeometry args={[0.1, 16, 16]} />
-        <meshBasicMaterial color="#a3a3a3" depthTest={false} depthWrite={false} />
-      </mesh>
+      <CursorSphere ref={cursorRef} />
 
       {/* Preview fill */}
       {previewShape && (
@@ -282,14 +280,7 @@ export const SlabTool: React.FC = () => {
 
       {/* Point markers */}
       {points.map(([x, z], index) => (
-        <mesh key={index} position={[x, levelY + Y_OFFSET + 0.01, z]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshBasicMaterial
-            color={index === 0 ? '#22c55e' : '#a3a3a3'}
-            depthTest={false}
-            depthWrite={false}
-          />
-        </mesh>
+        <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color={index === 0 ? '#22c55e' : undefined} />
       ))}
     </group>
   )

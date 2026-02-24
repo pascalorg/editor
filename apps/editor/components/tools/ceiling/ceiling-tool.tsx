@@ -2,8 +2,9 @@ import { CeilingNode, emitter, type GridEvent, type LevelNode, useScene } from '
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
-import useEditor from '@/store/use-editor'
 import { sfxEmitter } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
+import { CursorSphere } from '../shared/cursor-sphere'
 
 const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
@@ -97,12 +98,19 @@ export const CeilingTool: React.FC = () => {
 
       // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = points[points.length - 1]
-      const displayPoint = (shiftPressed.current || !lastPoint) ? gridPosition : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint =
+        shiftPressed.current || !lastPoint
+          ? gridPosition
+          : calculateSnapPoint(lastPoint, gridPosition)
       setSnappedCursorPosition(displayPoint)
 
       // Play snap sound when the snapped position actually changes (only when drawing)
-      if (points.length > 0 && previousSnappedPointRef.current &&
-          (displayPoint[0] !== previousSnappedPointRef.current[0] || displayPoint[1] !== previousSnappedPointRef.current[1])) {
+      if (
+        points.length > 0 &&
+        previousSnappedPointRef.current &&
+        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
+          displayPoint[1] !== previousSnappedPointRef.current[1])
+      ) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -150,8 +158,12 @@ export const CeilingTool: React.FC = () => {
       setPoints([])
     }
 
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = true }
-    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = false }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = true
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = false
+    }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
 
@@ -242,15 +254,12 @@ export const CeilingTool: React.FC = () => {
   return (
     <group>
       {/* Cursor at ceiling height */}
-      <mesh ref={cursorRef}>
-        <sphereGeometry args={[0.1, 16, 16]} />
-        <meshBasicMaterial color="#d4d4d4" depthTest={false} depthWrite={false} />
-      </mesh>
+      <CursorSphere ref={cursorRef} />
 
       {/* Grid-level cursor indicator */}
-      <mesh ref={gridCursorRef} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={gridCursorRef} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <ringGeometry args={[0.15, 0.2, 32]} />
-        <meshBasicMaterial color="#a3a3a3" side={DoubleSide} depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#a3a3a3" side={DoubleSide} depthTest={false} depthWrite={true} />
       </mesh>
 
       {/* Preview fill */}
@@ -294,14 +303,11 @@ export const CeilingTool: React.FC = () => {
 
       {/* Point markers */}
       {points.map(([x, z], index) => (
-        <mesh key={index} position={[x, levelY + CEILING_HEIGHT + 0.01, z]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshBasicMaterial
-            color={index === 0 ? '#22c55e' : '#d4d4d4'}
-            depthTest={false}
-            depthWrite={false}
-          />
-        </mesh>
+        <CursorSphere
+          key={index}
+          position={[x, levelY + CEILING_HEIGHT + 0.01, z]}
+          color={index === 0 ? '#22c55e' : undefined}
+        />
       ))}
     </group>
   )
