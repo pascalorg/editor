@@ -1,13 +1,14 @@
+import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
 import type { Mesh } from 'three'
 
-interface CursorSphereProps extends Omit<JSX.IntrinsicElements['mesh'], 'ref'> {
+interface CursorSphereProps extends Omit<ThreeElements['mesh'], 'ref'> {
   color?: string
   depthWrite?: boolean
 }
 
 export const CursorSphere = forwardRef<Mesh, CursorSphereProps>(function CursorSphere(
-  { color = '#f1c066',  ...props },
+  { color = '#f1c066', ...props },
   ref,
 ) {
   return (
