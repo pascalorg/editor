@@ -177,7 +177,9 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   }
 
   return (
-    <group ref={ref} {...handlers}>
+    <group ref={ref} {...handlers} userData={{
+      labelPosition: [centroid[0], 1, centroid[1]]
+    }}>
       <Html name="label" position={[centroid[0], 1, centroid[1]]} style={{
         pointerEvents: 'none'
       }}
