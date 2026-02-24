@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
+import { CursorSphere } from '../shared/cursor-sphere'
 
 const WALL_HEIGHT = 2.5
 const WALL_THICKNESS = 0.15
@@ -183,10 +184,7 @@ export const WallTool: React.FC = () => {
   return (
     <group>
       {/* Cursor indicator */}
-      <mesh ref={cursorRef}>
-        <sphereGeometry args={[0.1, 16, 16]} />
-        <meshBasicMaterial color="#a3a3a3" depthTest={false} depthWrite={false} />
-      </mesh>
+      <CursorSphere ref={cursorRef}  />
 
       {/* Wall preview */}
       <mesh ref={wallPreviewRef} visible={false} renderOrder={1}>

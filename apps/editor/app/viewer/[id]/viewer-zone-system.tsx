@@ -1,6 +1,6 @@
 'use client'
 
-import { type ZoneNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 
@@ -28,7 +28,13 @@ export const ViewerZoneSystem = () => {
       // Also hide the label
       const label = obj.getObjectByName('label')
       if (label) {
-        label.position.y = shouldShow ? 1 : -1000
+        // Hide label if zone layer is off OR if in solo mode on a different level
+        const labelPosition = obj.userData.labelPosition as [number, number, number] | undefined
+        if (shouldShow && labelPosition) {
+          label.position.set(...labelPosition)
+        } else {
+          label.position.set(-9999, -9999, -9999)
+        }
       }
     })
   })

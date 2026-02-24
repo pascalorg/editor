@@ -170,7 +170,6 @@ const useScene: UseSceneStore = create<SceneState>()(
         rootNodeIds: state.rootNodeIds,
       }),
       merge: (persistedState, currentState) => {
-        console.log('merge calling...', persistedState, currentState)
         const persisted = persistedState as Partial<SceneState>
         // Backward compat: add default scale to item nodes saved before scale was added
         if (persisted.nodes) {

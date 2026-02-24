@@ -3,7 +3,7 @@ import type * as THREE from 'three'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import { getScaledDimensions, type AnyNodeId, type ItemNode, type WallNode } from '../../schema'
+import { type AnyNodeId, getScaledDimensions, type ItemNode, type WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
 // ============================================================================
@@ -32,7 +32,7 @@ export const ItemSystem = () => {
         if (parentWall && parentWall.type === 'wall') {
           const wallThickness = (parentWall as WallNode).thickness ?? 0.1
           const side = item.side === 'front' ? 1 : -1
-          mesh.position.z = (wallThickness / 2) * side;
+          mesh.position.z = (wallThickness / 2) * side
         }
       } else if (!item.asset.attachTo) {
         // If parented to another item (surface placement), R3F handles positioning via the hierarchy
@@ -51,8 +51,8 @@ export const ItemSystem = () => {
       }
 
       clearDirty(id as AnyNodeId)
-    }, 2)
-  })
+    })
+  }, 2)
 
   return null
 }
