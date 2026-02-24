@@ -155,6 +155,9 @@ const useScene: UseSceneStore = create<SceneState>()(
     {
       name: 'editor-storage',
       version: 1,
+      // Keep existing local scenes when the persist version changes.
+      migrate: (persistedState) =>
+        persistedState as Pick<SceneState, 'nodes' | 'rootNodeIds'>,
       partialize: (state) => ({
         nodes: Object.fromEntries(
           Object.entries(state.nodes).filter(([_, node]) => {
