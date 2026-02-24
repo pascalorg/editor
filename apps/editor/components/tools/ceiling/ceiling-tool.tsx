@@ -3,7 +3,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
-import useEditor from '@/store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const CEILING_HEIGHT = 2.52
@@ -46,9 +45,9 @@ const calculateSnapPoint = (
 }
 
 /**
- * Creates a ceiling with the given polygon points
+ * Creates a ceiling with the given polygon points and returns its ID
  */
-const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
+const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>): string => {
   const { createNode, nodes } = useScene.getState()
 
   // Count existing ceilings for naming
@@ -62,6 +61,7 @@ const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<[number, n
 
   createNode(ceiling, levelId)
   sfxEmitter.emit('sfx:structure-build')
+  return ceiling.id
 }
 
 export const CeilingTool: React.FC = () => {
@@ -70,7 +70,7 @@ export const CeilingTool: React.FC = () => {
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
-  const setTool = useEditor((state) => state.setTool)
+  const setSelection = useViewer((state) => state.setSelection)
 
   const [points, setPoints] = useState<Array<[number, number]>>([])
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
@@ -133,10 +133,10 @@ export const CeilingTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        // Create the ceiling
-        commitCeilingDrawing(currentLevelId, points)
+        // Create the ceiling and select it
+        const ceilingId = commitCeilingDrawing(currentLevelId, points)
+        setSelection({ selectedIds: [ceilingId] })
         setPoints([])
-        setTool(null)
       } else {
         // Add point to polygon
         setPoints([...points, clickPoint])
@@ -148,9 +148,9 @@ export const CeilingTool: React.FC = () => {
 
       // Need at least 3 points to form a polygon
       if (points.length >= 3) {
-        commitCeilingDrawing(currentLevelId, points)
+        const ceilingId = commitCeilingDrawing(currentLevelId, points)
+        setSelection({ selectedIds: [ceilingId] })
         setPoints([])
-        setTool(null)
       }
     }
 
@@ -180,7 +180,7 @@ export const CeilingTool: React.FC = () => {
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [currentLevelId, points, cursorPosition, setTool])
+  }, [currentLevelId, points, cursorPosition, setSelection])
 
   // Update line geometries when points change
   useEffect(() => {

@@ -42,6 +42,12 @@ function updateCeilingGeometry(node: CeilingNode, mesh: THREE.Mesh) {
   mesh.geometry.dispose()
   mesh.geometry = newGeo
 
+  const gridMesh = mesh.getObjectByName('ceiling-grid') as THREE.Mesh
+  if (gridMesh) {
+    gridMesh.geometry.dispose()
+    gridMesh.geometry = newGeo
+  }
+
   // Position at the ceiling height
   mesh.position.y = (node.height ?? 2.5) - 0.01 // Slight offset to avoid z-fighting with upper-level slabs
 }
