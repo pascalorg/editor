@@ -1,0 +1,1 @@
+ALTER TABLE "auth_users" ADD COLUMN "youtube_url" text;

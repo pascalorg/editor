@@ -32,6 +32,7 @@ export default async function Settings() {
       currentUsername={profile?.username ?? null}
       currentGithubUrl={profile?.githubUrl ?? null}
       currentXUrl={profile?.xUrl ?? null}
+      currentYoutubeUrl={profile?.youtubeUrl ?? null}
       currentEmailNotifications={profile?.emailNotifications ?? true}
       connectedAccounts={connectedAccounts}
     />

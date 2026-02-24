@@ -40,6 +40,7 @@ interface SettingsPageProps {
   currentUsername: string | null
   currentGithubUrl: string | null
   currentXUrl: string | null
+  currentYoutubeUrl: string | null
   currentEmailNotifications: boolean
   connectedAccounts: { providerId: string; accountId: string }[]
 }
@@ -49,12 +50,14 @@ export function SettingsPage({
   currentUsername,
   currentGithubUrl,
   currentXUrl,
+  currentYoutubeUrl,
   currentEmailNotifications,
   connectedAccounts,
 }: SettingsPageProps) {
   const [username, setUsername] = useState(currentUsername ?? '')
   const [githubUrl, setGithubUrl] = useState(currentGithubUrl ?? '')
   const [xUrl, setXUrl] = useState(currentXUrl ?? '')
+  const [youtubeUrl, setYoutubeUrl] = useState(currentYoutubeUrl ?? '')
   const [avatarUrl, setAvatarUrl] = useState(user.image)
   const [isSavingUsername, setIsSavingUsername] = useState(false)
   const [isSavingSocial, setIsSavingSocial] = useState(false)
@@ -138,6 +141,7 @@ export function SettingsPage({
     const result = await updateProfile({
       githubUrl: githubUrl.trim() || null,
       xUrl: xUrl.trim() || null,
+      youtubeUrl: youtubeUrl.trim() || null,
     })
     setSocialMessage({
       type: result.success ? 'success' : 'error',
@@ -151,7 +155,8 @@ export function SettingsPage({
   const usernameChanged = username.trim() !== (currentUsername ?? '')
   const socialChanged =
     (githubUrl.trim() || '') !== (currentGithubUrl ?? '') ||
-    (xUrl.trim() || '') !== (currentXUrl ?? '')
+    (xUrl.trim() || '') !== (currentXUrl ?? '') ||
+    (youtubeUrl.trim() || '') !== (currentYoutubeUrl ?? '')
 
   const handleToggleEmailNotifications = async () => {
     const newValue = !emailNotifications
@@ -384,6 +389,24 @@ export function SettingsPage({
                     setSocialMessage(null)
                   }}
                   placeholder="https://x.com/yourusername"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isSavingSocial}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="youtube" className="font-medium text-sm">
+                  YouTube
+                </label>
+                <input
+                  id="youtube"
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => {
+                    setYoutubeUrl(e.target.value)
+                    setSocialMessage(null)
+                  }}
+                  placeholder="https://youtube.com/@yourchannel"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={isSavingSocial}
                 />
