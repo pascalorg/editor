@@ -85,7 +85,7 @@ export function initSpatialGridSync() {
           }
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
-        if (node.polygon !== prev.polygon || node.elevation !== prev.elevation) {
+        if (node.polygon !== prev.polygon || node.elevation !== prev.elevation || node.holes !== prev.holes) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
 

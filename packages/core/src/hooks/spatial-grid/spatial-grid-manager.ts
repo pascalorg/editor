@@ -201,6 +201,21 @@ export function wallOverlapsPolygon(
     const nz = (dz / len) * step
     if (pointInPolygon(start[0] + nx, start[1] + nz, polygon)) return true
     if (pointInPolygon(end[0] - nx, end[1] - nz, polygon)) return true
+
+    // Also nudge perpendicular to the wall (into the slab interior) for walls that
+    // lie exactly on the slab boundary. The along-wall nudge keeps points on the
+    // boundary where pointInPolygon is unreliable; a perpendicular inward nudge
+    // moves the point clearly inside (or outside) the polygon.
+    // Sample the wall at 1/4, 1/2, 3/4 positions with a perpendicular nudge.
+    const PERP_STEP = 1e-4
+    const pnx = (-nz / step) * PERP_STEP // perpendicular left
+    const pnz = (nx / step) * PERP_STEP
+    for (const t of [0.25, 0.5, 0.75]) {
+      const bx = start[0] + dx * t
+      const bz = start[1] + dz * t
+      if (pointInPolygon(bx + pnx, bz + pnz, polygon)) return true
+      if (pointInPolygon(bx - pnx, bz - pnz, polygon)) return true
+    }
   }
 
   // Check if midpoint is inside (catches walls crossing through)
@@ -557,25 +572,41 @@ export class SpatialGridManager {
     let maxElevation = -Infinity
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
-      if (wallOverlapsPolygon(start, end, slab.polygon)) {
-        // Check if wall midpoint is in a hole (if so, ignore this slab)
+      if (!wallOverlapsPolygon(start, end, slab.polygon)) continue
+
+      const holes = slab.holes || []
+      if (holes.length === 0) {
+        // No holes: wall is on this slab
+        const elevation = slab.elevation ?? 0.05
+        if (elevation > maxElevation) maxElevation = elevation
+        continue
+      }
+
+      // Sample multiple points along the wall to check whether any portion lies on
+      // solid slab (not inside any hole). Checking only the midpoint fails when the
+      // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
+      const dx = end[0] - start[0]
+      const dz = end[1] - start[1]
+      let hasValidPoint = false
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        const px = start[0] + dx * t
+        const pz = start[1] + dz * t
         let inHole = false
-        const midX = (start[0] + end[0]) / 2
-        const midZ = (start[1] + end[1]) / 2
-        const holes = slab.holes || []
         for (const hole of holes) {
-          if (hole.length >= 3 && pointInPolygon(midX, midZ, hole)) {
+          if (hole.length >= 3 && pointInPolygon(px, pz, hole)) {
             inHole = true
             break
           }
         }
-
         if (!inHole) {
-          const elevation = slab.elevation ?? 0.05
-          if (elevation > maxElevation) {
-            maxElevation = elevation
-          }
+          hasValidPoint = true
+          break
         }
+      }
+
+      if (hasValidPoint) {
+        const elevation = slab.elevation ?? 0.05
+        if (elevation > maxElevation) maxElevation = elevation
       }
     }
     return maxElevation === -Infinity ? 0 : maxElevation
