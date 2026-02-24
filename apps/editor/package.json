@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "test ! -f .env.local || (echo 'Use root .env only; .env.local is forbidden for this app.' && exit 1); set -a && . ../../.env 2>/dev/null; set +a; next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint",
@@ -37,6 +37,7 @@
     "@vercel/analytics": "^1.6.1",
     "@vercel/speed-insights": "^1.3.1",
     "@vercel/toolbar": "^0.2.2",
+    "@visual-json/react": "latest",
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

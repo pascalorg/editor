@@ -1,13 +1,160 @@
 import { emitter, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
+import { VisualJson, TreeView } from "@visual-json/react";
 import { Camera, Download, Save, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type SyntheticEvent,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/components/ui/primitives/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/primitives/dialog";
 import { Switch } from "@/components/ui/primitives/switch";
 import useEditor from "@/store/use-editor";
 import { AudioSettingsDialog } from "./audio-settings-dialog";
 import { useProjectStore } from "@/features/community/lib/projects/store";
 import { updateProjectVisibility } from "@/features/community/lib/projects/actions";
+
+type SceneNode = Record<string, unknown> & {
+  id?: unknown;
+  type?: unknown;
+  name?: unknown;
+  parentId?: unknown;
+  children?: unknown;
+};
+
+type SceneGraphNode = {
+  id: string;
+  type: string;
+  name: string | null;
+  parentId: string | null;
+  children: SceneGraphNode[];
+  missing?: true;
+  cycle?: true;
+};
+
+type SceneGraphValue = {
+  roots: SceneGraphNode[];
+  detachedNodes?: SceneGraphNode[];
+};
+
+const isSceneNode = (value: unknown): value is SceneNode => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof (value as { id: unknown }).id === "string"
+  );
+};
+
+const getChildIdsFromNode = (node: SceneNode): string[] => {
+  if (!Array.isArray(node.children)) {
+    return [];
+  }
+
+  const childIds = new Set<string>();
+
+  for (const child of node.children) {
+    if (typeof child === "string") {
+      childIds.add(child);
+      continue;
+    }
+
+    if (isSceneNode(child)) {
+      childIds.add(child.id as string);
+    }
+  }
+
+  return Array.from(childIds);
+};
+
+const buildSceneGraphValue = (
+  nodes: Record<string, SceneNode>,
+  rootNodeIds: string[],
+): SceneGraphValue => {
+  const childIdsByParent = new Map<string, Set<string>>();
+
+  for (const [id, node] of Object.entries(nodes)) {
+    const childIds = getChildIdsFromNode(node);
+    if (childIds.length > 0) {
+      childIdsByParent.set(id, new Set(childIds));
+    }
+  }
+
+  for (const [id, node] of Object.entries(nodes)) {
+    if (typeof node.parentId !== "string") {
+      continue;
+    }
+
+    const siblings = childIdsByParent.get(node.parentId) ?? new Set<string>();
+    siblings.add(id);
+    childIdsByParent.set(node.parentId, siblings);
+  }
+
+  const visited = new Set<string>();
+
+  const buildNode = (id: string, path: Set<string>): SceneGraphNode => {
+    const node = nodes[id];
+    if (!node) {
+      return {
+        id,
+        type: "missing",
+        name: null,
+        parentId: null,
+        missing: true,
+        children: [],
+      };
+    }
+
+    const nodeType = typeof node.type === "string" ? node.type : "unknown";
+    const nodeName = typeof node.name === "string" ? node.name : null;
+    const parentId = typeof node.parentId === "string" ? node.parentId : null;
+
+    if (path.has(id)) {
+      return {
+        id,
+        type: nodeType,
+        name: nodeName,
+        parentId,
+        cycle: true,
+        children: [],
+      };
+    }
+
+    visited.add(id);
+    const nextPath = new Set(path);
+    nextPath.add(id);
+
+    const childIds = Array.from(childIdsByParent.get(id) ?? []);
+    return {
+      id,
+      type: nodeType,
+      name: nodeName,
+      parentId,
+      children: childIds.map((childId) => buildNode(childId, nextPath)),
+    };
+  };
+
+  const roots = rootNodeIds.map((id) => buildNode(id, new Set()));
+  const detachedNodeIds = Object.keys(nodes).filter((id) => !visited.has(id));
+
+  if (detachedNodeIds.length === 0) {
+    return { roots };
+  }
+
+  return {
+    roots,
+    detachedNodes: detachedNodeIds.map((id) => buildNode(id, new Set())),
+  };
+};
 
 export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -20,6 +167,23 @@ export function SettingsPanel() {
   const setPhase = useEditor((state) => state.setPhase);
   const activeProject = useProjectStore((state) => state.activeProject);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const sceneGraphValue = useMemo(
+    () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
+    [nodes, rootNodeIds],
+  );
+  const blockSceneGraphMutations = useCallback((event: SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+  const blockSceneGraphDeletion = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    [],
+  );
 
   const projectId = activeProject?.id;
   const isLocalProject = false; // Store only contains cloud projects
@@ -229,6 +393,34 @@ export function SettingsPanel() {
           Audio
         </label>
         <AudioSettingsDialog />
+      </div>
+
+      {/* Scene Graph */}
+      <div className="space-y-1">
+        <label className="font-medium text-muted-foreground text-xs uppercase">
+          Scene Graph
+        </label>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="h-auto justify-start p-0 text-sm" variant="link">
+              Explore scene graph
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+            <DialogTitle className="sr-only">Scene Graph</DialogTitle>
+            <div
+              className="flex h-full w-full min-h-0 min-w-0 *:h-full *:w-full *:overflow-y-auto"
+              onContextMenuCapture={blockSceneGraphMutations}
+              onDragStartCapture={blockSceneGraphMutations}
+              onDropCapture={blockSceneGraphMutations}
+              onKeyDownCapture={blockSceneGraphDeletion}
+            >
+              <VisualJson value={sceneGraphValue}>
+                <TreeView showCounts />
+              </VisualJson>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Danger Zone */}
