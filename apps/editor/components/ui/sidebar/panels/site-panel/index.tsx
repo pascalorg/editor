@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   type BuildingNode,
   emitter,
   LevelNode,
@@ -225,20 +226,122 @@ function PropertyLineSection() {
 // SITE PHASE VIEW - Property line + building buttons
 // ============================================================================
 
+function CameraPopover({
+  nodeId,
+  hasCamera,
+  open,
+  onOpenChange,
+  buttonClassName,
+}: {
+  nodeId: AnyNodeId;
+  hasCamera: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  buttonClassName?: string;
+}) {
+  const updateNode = useScene((state) => state.updateNode);
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "relative w-6 h-6 flex items-center justify-center rounded cursor-pointer",
+            buttonClassName
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Camera snapshot"
+        >
+          <Camera className="w-3.5 h-3.5" />
+          {hasCamera && (
+            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        className="w-auto p-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-0.5">
+          {hasCamera && (
+            <button
+              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                emitter.emit("camera-controls:view", { nodeId });
+                onOpenChange(false);
+              }}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              View snapshot
+            </button>
+          )}
+          <button
+            className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              emitter.emit("camera-controls:capture", { nodeId });
+              onOpenChange(false);
+            }}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            {hasCamera ? "Update snapshot" : "Take snapshot"}
+          </button>
+          {hasCamera && (
+            <button
+              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                updateNode(nodeId, { camera: undefined });
+                onOpenChange(false);
+              }}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear snapshot
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function SitePhaseView() {
   const nodes = useScene((state) => state.nodes);
   const rootNodeIds = useScene((state) => state.rootNodeIds);
+  const updateNode = useScene((state) => state.updateNode);
   const selectedBuildingId = useViewer((state) => state.selection.buildingId);
   const setSelection = useViewer((state) => state.setSelection);
+  const [siteCameraOpen, setSiteCameraOpen] = useState(false);
+  const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null);
 
-  // Get site node and its building children
   const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
   const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => typeof child === 'string' ? nodes[child] : child)
+    .map((child) => {
+      const id = typeof child === 'string' ? child : child.id;
+      return nodes[id] as BuildingNode | undefined;
+    })
     .filter((node): node is BuildingNode => node?.type === "building");
 
   return (
     <div className="flex flex-col h-full">
+      {/* Site row */}
+      {siteNode && (
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
+          </div>
+          <CameraPopover
+            nodeId={siteNode.id as AnyNodeId}
+            hasCamera={!!siteNode.camera}
+            open={siteCameraOpen}
+            onOpenChange={setSiteCameraOpen}
+            buttonClassName="hover:bg-accent text-muted-foreground"
+          />
+        </div>
+      )}
       <PropertyLineSection />
       {buildings.length === 0 ? (
         <div className="px-3 py-4 text-sm text-muted-foreground">
@@ -247,19 +350,91 @@ function SitePhaseView() {
       ) : (
         <div className="flex flex-col gap-1 p-2">
           {buildings.map((building) => (
-            <button
+            <div
               key={building.id}
               className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer",
+                "group/building flex items-center rounded-md text-sm transition-colors",
                 selectedBuildingId === building.id
                   ? "bg-primary text-primary-foreground"
                   : "bg-accent/50 hover:bg-accent text-foreground"
               )}
-              onClick={() => setSelection({ buildingId: building.id })}
             >
-              <Building2 className="w-4 h-4 shrink-0" />
-              <span className="truncate">{building.name || "Building"}</span>
-            </button>
+              <button
+                className="flex-1 flex items-center gap-2 px-3 py-2 cursor-pointer min-w-0"
+                onClick={() => setSelection({ buildingId: building.id })}
+              >
+                <Building2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">{building.name || "Building"}</span>
+              </button>
+              <Popover
+                open={buildingCameraOpen === building.id}
+                onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
+              >
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      "relative opacity-0 group-hover/building:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded cursor-pointer shrink-0",
+                      selectedBuildingId === building.id
+                        ? "hover:bg-primary-foreground/20"
+                        : "hover:bg-accent-foreground/10"
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Camera snapshot"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    {building.camera && (
+                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="right"
+                  align="start"
+                  className="w-auto p-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    {building.camera && (
+                      <button
+                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          emitter.emit("camera-controls:view", { nodeId: building.id });
+                          setBuildingCameraOpen(null);
+                        }}
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        View snapshot
+                      </button>
+                    )}
+                    <button
+                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        emitter.emit("camera-controls:capture", { nodeId: building.id });
+                        setBuildingCameraOpen(null);
+                      }}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      {building.camera ? "Update snapshot" : "Take snapshot"}
+                    </button>
+                    {building.camera && (
+                      <button
+                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateNode(building.id, { camera: undefined });
+                          setBuildingCameraOpen(null);
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Clear snapshot
+                      </button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
           ))}
         </div>
       )}
@@ -280,7 +455,10 @@ function BuildingSelector() {
   // Get site node and its building children
   const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
   const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => typeof child === 'string' ? nodes[child] : child)
+    .map((child) => {
+      const id = typeof child === 'string' ? child : child.id;
+      return nodes[id] as BuildingNode | undefined;
+    })
     .filter((node): node is BuildingNode => node?.type === "building");
 
   const selectedBuilding = selectedBuildingId

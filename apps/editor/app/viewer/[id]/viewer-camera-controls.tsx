@@ -44,23 +44,33 @@ export const ViewerCameraControls = () => {
       controls.current.setLookAt(30, 30, 30, 0, 0, 0, false)
     }
 
-    if (!targetNodeId) return
 
-    const node = nodes[targetNodeId]
+    let node = targetNodeId ? nodes[targetNodeId] : null;
+    if (!targetNodeId) {
+      const site = Object.values(nodes).find((n) => n.type === 'site')
+      node = site || null
+    }
     if (!node) return
 
     // Check if node has a saved camera
     if (node.camera) {
+      
       const { position, target } = node.camera
-      controls.current.setLookAt(
-        position[0],
-        position[1],
-        position[2],
-        target[0],
-        target[1],
-        target[2],
-        true,
-      )
+      requestAnimationFrame(() => {
+        controls.current.setLookAt(
+          position[0],
+          position[1],
+          position[2],
+          target[0],
+          target[1],
+          target[2],
+          true,
+        )
+      })
+      return
+    }
+    if (!targetNodeId) {
+      // No selection and no site - do nothing
       return
     }
 
