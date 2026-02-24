@@ -75,6 +75,15 @@ export function PascalRadio() {
   // Calculate effective volume (masterVolume * radioVolume, both are 0-100)
   const effectiveVolume = (masterVolume / 100) * (radioVolume / 100)
 
+  // Keep a ref so the track-init effect can read current volume/muted/isPlaying
+  // without those values being part of its dependency array (which would restart the song).
+  const effectiveVolumeRef = useRef(effectiveVolume)
+  const mutedRef = useRef(muted)
+  const isPlayingRef = useRef(isPlaying)
+  effectiveVolumeRef.current = effectiveVolume
+  mutedRef.current = muted
+  isPlayingRef.current = isPlaying
+
   const handleNext = useCallback(() => {
     setCurrentTrackIndex((prev) => (prev + 1) % shuffledPlaylist.length)
   }, [shuffledPlaylist.length])
@@ -83,32 +92,29 @@ export function PascalRadio() {
     setCurrentTrackIndex((prev) => (prev - 1 + shuffledPlaylist.length) % shuffledPlaylist.length)
   }, [shuffledPlaylist.length])
 
-  // Initialize Howler when track changes
+  // Initialize Howler only when the track changes — not on volume/mute/play-state changes.
+  // Volume and mute are handled by the separate effect below.
   useEffect(() => {
-    // Clean up previous sound
     if (soundRef.current) {
       soundRef.current.unload()
     }
 
-    const wasPlaying = isPlaying
+    const wasPlaying = isPlayingRef.current
 
-    // Create new sound
     soundRef.current = new Howl({
       src: [currentTrack.file],
-      volume: muted ? 0 : effectiveVolume,
+      volume: mutedRef.current ? 0 : effectiveVolumeRef.current,
       onend: handleNext,
     })
 
-    // If was playing, play new track
-    if (wasPlaying && !muted) {
+    if (wasPlaying && !mutedRef.current) {
       soundRef.current?.play()
     }
 
     return () => {
       soundRef.current?.unload()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleNext, currentTrack.file, muted, isPlaying, effectiveVolume])
+  }, [handleNext, currentTrack.file])
 
   // Update volume when settings change
   useEffect(() => {
