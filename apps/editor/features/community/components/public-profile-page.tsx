@@ -23,6 +23,14 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
+function YouTubeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  )
+}
+
 interface PublicProfilePageProps {
   profile: {
     id: string
@@ -31,6 +39,7 @@ interface PublicProfilePageProps {
     username: string
     githubUrl: string | null
     xUrl: string | null
+    youtubeUrl: string | null
   }
   projects: Project[]
 }
@@ -88,7 +97,7 @@ export function PublicProfilePage({ profile, projects }: PublicProfilePageProps)
           <div className="space-y-1">
             <h1 className="text-2xl font-bold">{profile.name}</h1>
             <p className="text-muted-foreground">@{profile.username}</p>
-            {(profile.githubUrl || profile.xUrl) && (
+            {(profile.githubUrl || profile.xUrl || profile.youtubeUrl) && (
               <div className="flex items-center gap-3 pt-1">
                 {profile.githubUrl && (
                   <a
@@ -108,6 +117,16 @@ export function PublicProfilePage({ profile, projects }: PublicProfilePageProps)
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <XIcon className="h-5 w-5" />
+                  </a>
+                )}
+                {profile.youtubeUrl && (
+                  <a
+                    href={profile.youtubeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <YouTubeIcon className="h-5 w-5" />
                   </a>
                 )}
               </div>
