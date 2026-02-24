@@ -1,7 +1,7 @@
 import { type CeilingNode, useRegistry } from '@pascal-app/core'
 import { useRef } from 'react'
 import { faceDirection, float, mix, positionWorld, smoothstep, step } from 'three/tsl'
-import { type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { DoubleSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
 
@@ -12,6 +12,8 @@ const ceilingMaterial = new MeshBasicNodeMaterial({
   color: 0x999999,
   transparent: true,
   depthWrite: false,
+  side: DoubleSide,
+  alphaTestNode: float(0.4),
 })
 
 // Create grid pattern based on local position
