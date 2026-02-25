@@ -1,4 +1,4 @@
-import { useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import useEditor, { type StructureTool } from '@/store/use-editor'
@@ -25,7 +25,7 @@ export function useContextualTools() {
     // Get types of selected nodes
     const selectedTypes = new Set(
       selection.selectedIds
-        .map((id) => nodes[id]?.type)
+        .map((id) => nodes[id as AnyNodeId]?.type)
         .filter(Boolean)
     )
 

@@ -30,7 +30,7 @@ export function NumberInput({
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
   const startXRef = useRef(0)
   const startValueRef = useRef(0)
-  const labelRef = useRef<HTMLLabelElement>(null)
+  const labelRef = useRef<HTMLDivElement>(null)
 
   const clamp = useCallback(
     (val: number) => {
@@ -146,7 +146,7 @@ export function NumberInput({
       <div className={`flex items-center rounded-lg border shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] overflow-hidden transition-all focus-within:ring-1 focus-within:ring-primary focus-within:border-primary relative z-10 ${isDragging ? 'bg-transparent border-neutral-300 dark:border-border ring-1 ring-neutral-200/60 dark:ring-border/50' : 'bg-white dark:bg-accent/30 border-neutral-200/60 dark:border-border/50 hover:border-neutral-300 dark:hover:border-border/80'}`}>
         <div
           ref={labelRef}
-          className={`pl-2 pr-1 py-1.5 text-muted-foreground text-xs select-none font-medium truncate z-10 ${
+          className={`pl-2 pr-1 py-1.5 text-muted-foreground text-xs select-none font-barlow font-medium truncate z-10 ${
             isDragging ? 'cursor-ew-resize text-foreground' : 'hover:cursor-ew-resize hover:text-foreground'
           } transition-colors`}
           onMouseDown={handleLabelMouseDown}
@@ -157,7 +157,7 @@ export function NumberInput({
           <input
             autoFocus
             size={1}
-            className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-foreground text-sm font-medium outline-none text-right placeholder:text-muted-foreground/50 z-10"
+            className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-foreground text-sm font-mono font-medium outline-none text-right placeholder:text-muted-foreground/50 z-10"
             onBlur={handleInputBlur}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
@@ -166,7 +166,7 @@ export function NumberInput({
           />
         ) : (
           <div
-            className={`flex-1 px-2 py-1.5 text-sm font-medium cursor-text hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-right truncate z-10 text-foreground tabular-nums tracking-tight min-w-0`}
+            className={`flex-1 px-2 py-1.5 text-sm font-mono font-medium cursor-text hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-right truncate z-10 text-foreground tabular-nums tracking-tight min-w-0`}
             onClick={handleValueClick}
           >
             <NumberFlow

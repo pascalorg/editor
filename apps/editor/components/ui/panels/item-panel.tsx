@@ -93,7 +93,7 @@ export function ItemPanel() {
             height={16}
             className="shrink-0 object-contain"
           />
-          <h2 className="font-semibold text-foreground text-sm truncate">
+          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
             {node.name || node.asset.name}
           </h2>
         </div>
@@ -111,7 +111,7 @@ export function ItemPanel() {
         <div className="space-y-4">
           {/* Position */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Position
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -144,7 +144,7 @@ export function ItemPanel() {
 
           {/* Rotation */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Rotation
             </label>
             <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ export function ItemPanel() {
           {/* Scale */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
                 Scale
               </label>
               <button
@@ -251,10 +251,10 @@ export function ItemPanel() {
 
           {/* Dimensions (effective, read-only) */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Dimensions
             </label>
-            <div className="rounded-lg border border-neutral-200/60 dark:border-border/50 bg-white/50 dark:bg-accent/30 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-3 py-2 text-sm text-foreground">
+            <div className="rounded-lg border border-neutral-200/60 dark:border-border/50 bg-white/50 dark:bg-accent/30 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-3 py-2 text-sm font-mono text-foreground">
               {(() => {
                 const [w, h, d] = getScaledDimensions(node)
                 return `${Math.round(w * 100) / 100}m × ${Math.round(h * 100) / 100}m × ${Math.round(d * 100) / 100}m`
@@ -269,7 +269,7 @@ export function ItemPanel() {
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleMove}
           >
             <Move className="h-3.5 w-3.5" />
@@ -277,7 +277,7 @@ export function ItemPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDuplicate}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export function ItemPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDelete}
           >
             <Trash2 className="h-3.5 w-3.5" />

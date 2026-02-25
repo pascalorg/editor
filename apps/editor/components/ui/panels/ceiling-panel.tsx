@@ -122,7 +122,7 @@ export function CeilingPanel() {
       <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/ceiling.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
-          <h2 className="font-semibold text-foreground text-sm truncate">
+          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
             {node.name || `Ceiling (${area.toFixed(1)}m²)`}
           </h2>
         </div>
@@ -140,7 +140,7 @@ export function CeilingPanel() {
         <div className="space-y-4">
           {/* Height */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Height
             </label>
             <div className="flex items-center gap-2">
@@ -162,27 +162,27 @@ export function CeilingPanel() {
 
           {/* Quick preset buttons */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Presets
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => handleUpdate({ height: 2.4 })}
               >
                 Low (2.4m)
               </button>
               <button
                 type="button"
-                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => handleUpdate({ height: 2.5 })}
               >
                 Standard (2.5m)
               </button>
               <button
                 type="button"
-                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => handleUpdate({ height: 3.0 })}
               >
                 High (3m)
@@ -192,7 +192,7 @@ export function CeilingPanel() {
 
           {/* Area info */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Area
             </label>
             <div className="rounded-lg border border-neutral-200/60 dark:border-border/50 bg-white/50 dark:bg-accent/30 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-3 py-2 text-sm text-foreground">
@@ -203,7 +203,7 @@ export function CeilingPanel() {
           {/* Holes */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
                 Holes
               </label>
               {editingHole?.nodeId === selectedId ? (
@@ -217,7 +217,7 @@ export function CeilingPanel() {
               ) : (
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                   onClick={handleAddHole}
                 >
                   <Plus className="h-3 w-3" />

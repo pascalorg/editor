@@ -42,7 +42,7 @@ export function RoofPanel() {
       <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/roof.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
-          <h2 className="font-semibold text-foreground text-sm truncate">
+          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
             {node.name || 'Gable Roof'}
           </h2>
         </div>
@@ -60,7 +60,7 @@ export function RoofPanel() {
         <div className="space-y-4">
           {/* Length */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Length
             </label>
             <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ export function RoofPanel() {
 
           {/* Height */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Height
             </label>
             <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ export function RoofPanel() {
           {/* Slope Widths */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
                 Slope Widths
               </label>
               <span className="text-muted-foreground text-xs">
@@ -158,7 +158,7 @@ export function RoofPanel() {
 
           {/* Rotation */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Rotation
             </label>
             <div className="flex items-center gap-1.5">
@@ -178,7 +178,7 @@ export function RoofPanel() {
               <span className="text-muted-foreground text-xs shrink-0">&deg;</span>
               <button
                 type="button"
-                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => {
                   const newRotation = node.rotation - Math.PI / 2
                   handleUpdate({ rotation: newRotation })
@@ -188,7 +188,7 @@ export function RoofPanel() {
               </button>
               <button
                 type="button"
-                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => {
                   const newRotation = node.rotation + Math.PI / 2
                   handleUpdate({ rotation: newRotation })
@@ -201,7 +201,7 @@ export function RoofPanel() {
 
           {/* Position */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Position
             </label>
             <div className="grid grid-cols-3 gap-2">

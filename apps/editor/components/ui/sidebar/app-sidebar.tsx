@@ -30,8 +30,6 @@ export function AppSidebar() {
     switch (activePanel) {
       case "site":
         return "Site";
-      case "collections":
-        return "Collections";
       case "settings":
         return "Settings";
       default:

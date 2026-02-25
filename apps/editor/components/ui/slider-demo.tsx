@@ -14,7 +14,7 @@ export function SliderDemo() {
             Temperature
           </h2>
           <NumberFlow
-            value={value[0]}
+            value={value[0] ?? 50}
             className="text-xl font-medium text-black/45"
             format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
             suffix="%"

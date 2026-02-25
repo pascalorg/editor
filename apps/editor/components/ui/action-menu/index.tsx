@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 
 import { CameraActions } from "./camera-actions";
 import { ControlModes } from "./control-modes";
-import { PhaseSwitcher } from "./phase-switcher";
 import { StructureTools } from "./structure-tools";
 import useEditor from "@/store/use-editor";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -142,8 +141,6 @@ export function ActionMenu({ className }: { className?: string }) {
         </AnimatePresence>
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-          <PhaseSwitcher />
-          <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ControlModes />
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <ViewToggles />

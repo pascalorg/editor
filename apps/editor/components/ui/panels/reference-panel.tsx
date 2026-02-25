@@ -44,7 +44,7 @@ export function ReferencePanel() {
           ) : (
             <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <h2 className="font-semibold text-foreground text-sm truncate">
+          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
             {node.name || (isScan ? '3D Scan' : 'Guide Image')}
           </h2>
         </div>
@@ -61,7 +61,7 @@ export function ReferencePanel() {
         <div className="space-y-4">
           {/* Position */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Position
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -83,7 +83,7 @@ export function ReferencePanel() {
 
           {/* Rotation Y */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Rotation
             </label>
             <div className="flex items-center gap-1.5">
@@ -101,7 +101,7 @@ export function ReferencePanel() {
               />
               <span className="text-muted-foreground text-xs shrink-0">&deg;</span>
               <button
-                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], node.rotation[1] - Math.PI / 4, node.rotation[2]],
@@ -111,7 +111,7 @@ export function ReferencePanel() {
                 &minus;45
               </button>
               <button
-                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], node.rotation[1] + Math.PI / 4, node.rotation[2]],
@@ -125,7 +125,7 @@ export function ReferencePanel() {
 
           {/* Scale */}
           <div className="space-y-2">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Scale
             </label>
             <NumberInput
@@ -144,10 +144,10 @@ export function ReferencePanel() {
           {/* Opacity */}
           <div className="space-y-2">
             <div className="flex justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
                 Opacity
               </label>
-              <span className="text-muted-foreground text-xs">{node.opacity}%</span>
+              <span className="text-muted-foreground font-mono text-xs">{node.opacity}%</span>
             </div>
             <input
               className="w-full cursor-pointer"

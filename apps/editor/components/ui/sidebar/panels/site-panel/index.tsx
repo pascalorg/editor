@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  type AnyNode,
   type BuildingNode,
   emitter,
   LevelNode,
@@ -307,217 +308,6 @@ function CameraPopover({
   );
 }
 
-function SitePhaseView() {
-  const nodes = useScene((state) => state.nodes);
-  const rootNodeIds = useScene((state) => state.rootNodeIds);
-  const updateNode = useScene((state) => state.updateNode);
-  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
-  const setSelection = useViewer((state) => state.setSelection);
-  const [siteCameraOpen, setSiteCameraOpen] = useState(false);
-  const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null);
-
-  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
-  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => {
-      const id = typeof child === 'string' ? child : child.id;
-      return nodes[id] as BuildingNode | undefined;
-    })
-    .filter((node): node is BuildingNode => node?.type === "building");
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Site row */}
-      {siteNode && (
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
-          </div>
-          <CameraPopover
-            nodeId={siteNode.id as AnyNodeId}
-            hasCamera={!!siteNode.camera}
-            open={siteCameraOpen}
-            onOpenChange={setSiteCameraOpen}
-            buttonClassName="hover:bg-accent text-muted-foreground"
-          />
-        </div>
-      )}
-      <PropertyLineSection />
-      {buildings.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-muted-foreground">
-          No buildings yet
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 p-2">
-          {buildings.map((building) => (
-            <div
-              key={building.id}
-              className={cn(
-                "group/building flex items-center h-9 rounded-lg border transition-all duration-200 mx-1 mb-1",
-                selectedBuildingId === building.id
-                  ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
-                  : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
-              )}
-            >
-              <button
-                className="flex-1 flex items-center gap-2 px-3 py-2 cursor-pointer min-w-0"
-                onClick={() => setSelection({ buildingId: building.id })}
-              >
-                <Building2 className="w-4 h-4 shrink-0" />
-                <span className="truncate">{building.name || "Building"}</span>
-              </button>
-              <Popover
-                open={buildingCameraOpen === building.id}
-                onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    className={cn(
-                      "relative opacity-0 group-hover/building:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded-md cursor-pointer shrink-0 transition-colors",
-                      selectedBuildingId === building.id
-                        ? "hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                        : "hover:bg-accent text-muted-foreground hover:text-foreground"
-                    )}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Camera snapshot"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    {building.camera && (
-                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                    )}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="right"
-                  align="start"
-                  className="w-auto p-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex flex-col gap-0.5">
-                    {building.camera && (
-                      <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          emitter.emit("camera-controls:view", { nodeId: building.id });
-                          setBuildingCameraOpen(null);
-                        }}
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        View snapshot
-                      </button>
-                    )}
-                    <button
-                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        emitter.emit("camera-controls:capture", { nodeId: building.id });
-                        setBuildingCameraOpen(null);
-                      }}
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      {building.camera ? "Update snapshot" : "Take snapshot"}
-                    </button>
-                    {building.camera && (
-                      <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateNode(building.id, { camera: undefined });
-                          setBuildingCameraOpen(null);
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Clear snapshot
-                      </button>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// STRUCTURE/FURNISH PHASE VIEW - Building dropdown + Levels + Content
-// ============================================================================
-
-function BuildingSelector() {
-  const nodes = useScene((state) => state.nodes);
-  const rootNodeIds = useScene((state) => state.rootNodeIds);
-  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
-  const setSelection = useViewer((state) => state.setSelection);
-
-  // Get site node and its building children
-  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
-  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => {
-      const id = typeof child === 'string' ? child : child.id;
-      return nodes[id] as BuildingNode | undefined;
-    })
-    .filter((node): node is BuildingNode => node?.type === "building");
-
-  const selectedBuilding = selectedBuildingId
-    ? (nodes[selectedBuildingId] as BuildingNode)
-    : null;
-
-  if (buildings.length === 0) return null;
-
-  // If only one building, just show it as a header
-  if (buildings.length === 1) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-        <span className="text-sm font-medium truncate">
-          {buildings[0]?.name || "Building"}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button className="flex items-center justify-between w-full px-3 py-2 border-b border-border/50 hover:bg-accent/50 cursor-pointer transition-colors">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium truncate">
-              {selectedBuilding?.name || "Select Building"}
-            </span>
-          </div>
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 p-1">
-        {buildings.map((building) => (
-          <button
-            key={building.id}
-            className={cn(
-              "flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer mb-1 border",
-              selectedBuildingId === building.id
-                ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
-            )}
-            onClick={() => {
-              setSelection({ buildingId: building.id });
-              // Also select first level if available
-              if (building.children.length > 0) {
-                setSelection({ levelId: building.children[0] as LevelNode["id"] });
-              }
-            }}
-          >
-            <Building2 className="w-4 h-4 shrink-0" />
-            <span className="truncate">{building.name || "Building"}</span>
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 function LevelItem({
   level,
@@ -531,8 +321,8 @@ function LevelItem({
   selectedLevelId: string | null;
   setSelection: (selection: any) => void;
   setReferencesLevelId: (id: string | null) => void;
-  deleteNode: (id: string) => void;
-  updateNode: (id: string, data: any) => void;
+  deleteNode: (id: AnyNodeId) => void;
+  updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void;
 }) {
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -745,29 +535,65 @@ function LevelsSection() {
 function LayerToggle() {
   const structureLayer = useEditor((state) => state.structureLayer);
   const setStructureLayer = useEditor((state) => state.setStructureLayer);
+  const phase = useEditor((state) => state.phase);
+  const setPhase = useEditor((state) => state.setPhase);
 
   return (
-    <div className="flex items-center p-1 mx-3 my-2 bg-accent/50 rounded-lg">
+    <div className="flex items-center p-1 mx-3 my-2 bg-accent/50 rounded-lg gap-1">
       <button
         className={cn(
-          "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer",
-          structureLayer === "elements"
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "structure" && structureLayer === "elements"
             ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
             : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
-        onClick={() => setStructureLayer("elements")}
+        onClick={() => {
+          setPhase("structure");
+          setStructureLayer("elements");
+        }}
       >
-        Elements
+        <img
+          src="/icons/room.png"
+          alt="Structure"
+          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "elements") && "opacity-50 grayscale")}
+        />
+        Structure
       </button>
       <button
         className={cn(
-          "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer",
-          structureLayer === "zones"
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "furnish"
             ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
             : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
-        onClick={() => setStructureLayer("zones")}
+        onClick={() => {
+          setPhase("furnish");
+        }}
       >
+        <img
+          src="/icons/couch.png"
+          alt="Furnish"
+          className={cn("w-6 h-6 mb-1", phase !== "furnish" && "opacity-50 grayscale")}
+        />
+        Furnish
+      </button>
+      <button
+        className={cn(
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "structure" && structureLayer === "zones"
+            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
+        )}
+        onClick={() => {
+          setPhase("structure");
+          setStructureLayer("zones");
+        }}
+      >
+        <img
+          src="/icons/kitchen.png"
+          alt="Zones"
+          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "zones") && "opacity-50 grayscale")}
+        />
         Zones
       </button>
     </div>
@@ -1037,32 +863,181 @@ function ContentSection() {
   );
 }
 
-function StructurePhaseView() {
+export function SitePanel() {
+  const nodes = useScene((state) => state.nodes);
+  const rootNodeIds = useScene((state) => state.rootNodeIds);
+  const updateNode = useScene((state) => state.updateNode);
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
+  const setSelection = useViewer((state) => state.setSelection);
   const phase = useEditor((state) => state.phase);
+  const setPhase = useEditor((state) => state.setPhase);
+
+  const [siteCameraOpen, setSiteCameraOpen] = useState(false);
+  const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null);
+
+  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
+  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
+    .map((child) => {
+      const id = typeof child === 'string' ? child : child.id;
+      return nodes[id] as BuildingNode | undefined;
+    })
+    .filter((node): node is BuildingNode => node?.type === "building");
 
   return (
     <div className="flex flex-col h-full">
-      <BuildingSelector />
-      <LevelsSection />
-      {/* Only show layer toggle in structure phase, furnish is always elements */}
-      {phase === "structure" && <LayerToggle />}
-      <div className="flex-1 overflow-auto">
-        <ContentSection />
+      {/* Site Header */}
+      {siteNode && (
+        <div 
+          className={cn(
+            "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors",
+            phase === "site" ? "bg-accent/50 text-foreground" : "hover:bg-accent/30 text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => setPhase("site")}
+        >
+          <div className="flex items-center gap-2">
+            <img 
+              src="/icons/site.png" 
+              className={cn("w-5 h-5 object-contain transition-all", phase !== "site" && "opacity-60 grayscale")} 
+              alt="Site" 
+            />
+            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
+          </div>
+          <CameraPopover
+            nodeId={siteNode.id as AnyNodeId}
+            hasCamera={!!siteNode.camera}
+            open={siteCameraOpen}
+            onOpenChange={setSiteCameraOpen}
+            buttonClassName={cn("transition-colors", phase === "site" ? "hover:bg-black/5 dark:hover:bg-white/10" : "hover:bg-accent")}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto flex flex-col">
+        {/* When phase is site, show property line immediately under site header */}
+        {phase === "site" && <PropertyLineSection />}
+
+        {/* Buildings List */}
+        {buildings.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-muted-foreground">
+            No buildings yet
+          </div>
+        ) : (
+          <div className="flex flex-col py-2 gap-2">
+            {buildings.map((building) => {
+              const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
+
+              return (
+                <div key={building.id} className="flex flex-col">
+                  <div
+                    className={cn(
+                      "group/building flex items-center h-10 mx-2 rounded-lg border transition-all duration-200",
+                      isBuildingActive
+                        ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
+                        : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
+                    )}
+                  >
+                    <button
+                      className="flex-1 flex items-center gap-2 px-3 h-full cursor-pointer min-w-0"
+                      onClick={() => {
+                        setSelection({ buildingId: building.id });
+                        if (phase === "site") {
+                          setPhase("structure");
+                        }
+                      }}
+                    >
+                      <img 
+                        src="/icons/building.png" 
+                        className={cn("w-5 h-5 object-contain transition-all", !isBuildingActive && "opacity-60 grayscale")} 
+                        alt="Building" 
+                      />
+                      <span className="truncate font-medium text-sm">{building.name || "Building"}</span>
+                    </button>
+                    <Popover
+                      open={buildingCameraOpen === building.id}
+                      onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "relative opacity-0 group-hover/building:opacity-100 w-7 h-7 mr-1.5 flex items-center justify-center rounded-md cursor-pointer shrink-0 transition-colors",
+                            isBuildingActive
+                              ? "hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                              : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Camera snapshot"
+                        >
+                          <Camera className="w-4 h-4" />
+                          {building.camera && (
+                            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        align="start"
+                        className="w-auto p-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          {building.camera && (
+                            <button
+                              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                emitter.emit("camera-controls:view", { nodeId: building.id });
+                                setBuildingCameraOpen(null);
+                              }}
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              View snapshot
+                            </button>
+                          )}
+                          <button
+                            className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              emitter.emit("camera-controls:capture", { nodeId: building.id });
+                              setBuildingCameraOpen(null);
+                            }}
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            {building.camera ? "Update snapshot" : "Take snapshot"}
+                          </button>
+                          {building.camera && (
+                            <button
+                              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateNode(building.id, { camera: undefined });
+                                setBuildingCameraOpen(null);
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Clear snapshot
+                            </button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Tools and content for the active building */}
+                  {isBuildingActive && (
+                    <div className="flex flex-col mt-2 px-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <LevelsSection />
+                      <LayerToggle />
+                      <div className="mt-1">
+                        <ContentSection />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
-}
-
-// ============================================================================
-// MAIN SITE PANEL
-// ============================================================================
-
-export function SitePanel() {
-  const phase = useEditor((state) => state.phase);
-
-  if (phase === "site") {
-    return <SitePhaseView />;
-  }
-
-  return <StructurePhaseView />;
 }

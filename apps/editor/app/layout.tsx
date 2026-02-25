@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
+import { Barlow } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { VercelToolbar } from '@vercel/toolbar/next'
@@ -14,6 +15,13 @@ const geistSans = localFont({
 const geistMono = localFont({
   src: './fonts/GeistMonoVF.woff',
   variable: '--font-geist-mono',
+})
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-barlow',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -69,8 +77,8 @@ export default function RootLayout({
   const shouldShowToolbar = process.env.NODE_ENV === 'development'
 
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${barlow.variable}`}>
+      <body className="font-sans">
         <UsernameGate>{children}</UsernameGate>
         <Analytics />
         <SpeedInsights />
