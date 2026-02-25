@@ -143,6 +143,9 @@ export const WallTool: React.FC = () => {
         buildingState.current = 1
         wallPreviewRef.current.visible = true
       } else if (buildingState.current === 1) {
+        const dx = endingPoint.current.x - startingPoint.current.x
+        const dz = endingPoint.current.z - startingPoint.current.z
+        if (dx * dx + dz * dz < 0.01 * 0.01) return
         commitWallDrawing(
           [startingPoint.current.x, startingPoint.current.z],
           [endingPoint.current.x, endingPoint.current.z],
