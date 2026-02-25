@@ -2,26 +2,27 @@
 
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { Viewer } from '@pascal-app/viewer'
-import { useKeyboard } from '@/hooks/use-keyboard'
-import useEditor from '@/store/use-editor'
-import { useProjectScene } from '@/features/community/lib/models/hooks'
-import { useLocalProjectScene } from '@/features/community/lib/local-storage/hooks'
 import { useAuth } from '@/features/community/lib/auth/hooks'
+import { useLocalProjectScene } from '@/features/community/lib/local-storage/hooks'
+import { useProjectScene } from '@/features/community/lib/models/hooks'
+import { useKeyboard } from '@/hooks/use-keyboard'
+import { initSFXBus } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
+import { FeedbackDialog } from '../feedback-dialog'
+import { PascalRadio } from '../pascal-radio'
+import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
-import { FeedbackDialog } from '../feedback-dialog'
-import { PascalRadio } from '../pascal-radio'
-import { PanelManager } from '../ui/panels/panel-manager'
 import { HelperManager } from '../ui/helpers/helper-manager'
+import { PanelManager } from '../ui/panels/panel-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
-import { initSFXBus } from '@/lib/sfx-bus'
-import { ThumbnailGenerator } from '@/app/viewer/[id]/thumbnail-generator'
+import { ThumbnailGenerator } from './thumbnail-generator'
 
 // Load default scene initially (will be replaced when project loads)
 useScene.getState().loadScene()
@@ -74,6 +75,7 @@ export default function Editor({ projectId }: EditorProps) {
         <ExportManager />
         {/* Editor only system to toggle zone visibility */}
         <ZoneSystem />
+        <CeilingSystem />
         {/* <Stats /> */}
         <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
         <ToolManager />

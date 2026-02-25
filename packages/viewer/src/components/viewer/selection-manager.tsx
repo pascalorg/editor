@@ -29,6 +29,7 @@ type SelectableNodeType =
   | 'zone'
   | 'wall'
   | 'window'
+  | 'door'
   | 'item'
   | 'slab'
   | 'ceiling'
@@ -86,10 +87,17 @@ const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
   // Direct child of level
   if (node.parentId === levelId) return true
 
-  // Wall-attached items (windows/doors): check if parent wall is on the level
-  if (node.type === 'item' && node.parentId) {
+  // Wall-attached nodes (window/door/item): check if parent wall is on the level
+  if ((node.type === 'item' || node.type === 'window' || node.type === 'door') && node.parentId) {
     const parentNode = nodes[node.parentId as keyof typeof nodes]
     if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
+      return true
+    }
+    // Ceiling/slab/roof-attached items: check if parent structure is on the level
+    if (
+      (parentNode?.type === 'ceiling' || parentNode?.type === 'slab' || parentNode?.type === 'roof') &&
+      parentNode.parentId === levelId
+    ) {
       return true
     }
   }
@@ -193,9 +201,9 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows)
+  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows, doors)
   return {
-    types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window'],
+    types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window', 'door'],
     handleClick: (node) => {
       const { selectedIds } = useViewer.getState().selection
       // Toggle selection - if already selected, deselect; otherwise select
@@ -217,7 +225,7 @@ const getStrategy = (): SelectionStrategy | null => {
       }
     },
     isValid: (node) => {
-      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof', 'window']
+      const validTypes = ['wall', 'item', 'slab', 'ceiling', 'roof', 'window', 'door']
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
     },
@@ -270,6 +278,7 @@ export const SelectionManager = () => {
       'ceiling',
       'roof',
       'window',
+      'door',
     ]
     for (const type of allTypes) {
       emitter.on(`${type}:enter`, onEnter)

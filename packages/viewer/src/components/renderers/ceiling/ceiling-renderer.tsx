@@ -1,17 +1,26 @@
 import { type CeilingNode, useRegistry } from '@pascal-app/core'
 import { useRef } from 'react'
-import { faceDirection, float, mix, positionWorld, smoothstep, step } from 'three/tsl'
-import { type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { float, mix, positionWorld, smoothstep } from 'three/tsl'
+import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
 
 // TSL material that renders differently based on face direction:
 // - Back face (looking up at ceiling from below): solid
 // - Front face (looking down at ceiling from above): 30% opacity
-const ceilingMaterial = new MeshBasicNodeMaterial({
-  color: 0x999999,
+const ceilingTopMaterial = new MeshBasicNodeMaterial({
+  color: 0xb5a78d,
   transparent: true,
   depthWrite: false,
+  side: FrontSide,
+  // Disabled as we only show ceiling grid when needed
+  // alphaTestNode: float(0.4), // Discard pixels with alpha below 0.4 to create grid lines and not affect depth buffer
+})
+
+const ceilingBottomMaterial = new MeshBasicNodeMaterial({
+  color: 0x999999,
+  transparent: true,
+  side: BackSide,
 })
 
 // Create grid pattern based on local position
@@ -29,12 +38,12 @@ const lineY = smoothstep(lineWidth, 0, gridY).add(smoothstep(1.0 - lineWidth, 1.
 // Combine: if either X or Y is a line, show the line
 const gridPattern = lineX.max(lineY)
 
-// Grid lines at 0.5 opacity, spaces at 0 opacity
-const gridOpacity = mix(float(0.0), float(0.5), gridPattern)
+// Grid lines at 0.6 opacity, spaces at 0.2 opacity
+const gridOpacity = mix(float(0.2), float(0.6), gridPattern)
 
 // faceDirection is 1.0 for front face, -1.0 for back face
 // Front face (top, looking down): grid pattern, Back face (bottom, looking up): solid
-ceilingMaterial.opacityNode = mix(float(1.0), gridOpacity, step(float(0.0), float(faceDirection)))
+ceilingTopMaterial.opacityNode = gridOpacity
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -43,9 +52,12 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const handlers = useNodeEvents(node, 'ceiling')
 
   return (
-    <mesh ref={ref} material={ceilingMaterial} {...handlers}>
+    <mesh ref={ref} material={ceilingBottomMaterial}>
       {/* CeilingSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
+      <mesh name="ceiling-grid" material={ceilingTopMaterial} {...handlers} visible={false} scale={0}>
+        <boxGeometry args={[0, 0, 0]} />
+      </mesh>
       {node.children.map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}

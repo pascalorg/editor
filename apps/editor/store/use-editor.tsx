@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
   type BuildingNode,
+  type DoorNode,
   type ItemNode,
   type LevelNode,
   type Space,
@@ -29,6 +30,7 @@ export type StructureTool =
   | 'item'
   | 'zone'
   | 'window'
+  | 'door'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -64,8 +66,8 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode: ItemNode | WindowNode | null
-  setMovingNode: (node: ItemNode | WindowNode | null) => void
+  movingNode: ItemNode | WindowNode | DoorNode | null
+  setMovingNode: (node: ItemNode | WindowNode | DoorNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -194,7 +196,7 @@ const useEditor = create<EditorState>()((set, get) => ({
   setCatalogCategory: (category) => set({ catalogCategory: category }),
   selectedItem: null,
   setSelectedItem: (item) => set({ selectedItem: item }),
-  movingNode: null,
+  movingNode: null as ItemNode | WindowNode | DoorNode | null,
   setMovingNode: (node) => set({ movingNode: node }),
   selectedReferenceId: null,
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),

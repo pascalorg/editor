@@ -8,6 +8,7 @@ import { RoofNode } from './nodes/roof'
 import { ScanNode } from './nodes/scan'
 import { SiteNode } from './nodes/site'
 import { SlabNode } from './nodes/slab'
+import { DoorNode } from './nodes/door'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -25,6 +26,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   ScanNode,
   GuideNode,
   WindowNode,
+  DoorNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>

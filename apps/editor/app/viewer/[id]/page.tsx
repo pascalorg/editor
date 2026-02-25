@@ -1,16 +1,18 @@
 'use client'
 
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
-import { Viewer, useViewer } from '@pascal-app/viewer'
+import { useViewer, Viewer } from '@pascal-app/viewer'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import {
+  getProjectModelPublic,
+  incrementProjectViews,
+} from '@/features/community/lib/projects/actions'
+import type { ProjectOwner } from '@/features/community/lib/projects/types'
 import { ViewerCameraControls } from './viewer-camera-controls'
+import { ViewerGuestCTA } from './viewer-guest-cta'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
-import { ThumbnailGenerator } from './thumbnail-generator'
-import { ViewerGuestCTA } from './viewer-guest-cta'
-import { getProjectModelPublic, incrementProjectViews } from '@/features/community/lib/projects/actions'
-import type { ProjectOwner } from '@/features/community/lib/projects/types'
 
 export default function ViewerPage() {
   const params = useParams()
@@ -106,12 +108,16 @@ export default function ViewerPage() {
 
   return (
     <div className="relative h-screen w-full">
-      <ViewerOverlay projectName={projectName} owner={owner} canShowScans={canShowScans} canShowGuides={canShowGuides} />
+      <ViewerOverlay
+        projectName={projectName}
+        owner={owner}
+        canShowScans={canShowScans}
+        canShowGuides={canShowGuides}
+      />
       <ViewerGuestCTA />
       <Viewer>
         <ViewerCameraControls />
         <ViewerZoneSystem />
-        <ThumbnailGenerator projectId={projectId || undefined} />
       </Viewer>
     </div>
   )
