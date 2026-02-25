@@ -91,6 +91,23 @@ export function DoorPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
+  const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
+    const numSegs = node!.segments.length
+    const totalH = node!.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node!.segments.map(s => s.heightRatio / totalH)
+    const clamped = Math.max(0.05, Math.min(0.95, newVal))
+    const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
+    const delta = clamped - normH[segIdx]!
+    const neighborVal = Math.max(0.05, normH[neighborIdx]! - delta)
+    const newRatios = normH.map((v, i) => {
+      if (i === segIdx) return clamped
+      if (i === neighborIdx) return neighborVal
+      return v
+    })
+    const updated = node!.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
+    handleUpdate({ segments: updated })
+  }
+
   const setSegmentColumnRatio = (segIdx: number, colIdx: number, newVal: number) => {
     const seg = node!.segments[segIdx]!
     const normRatios = (() => {
@@ -114,6 +131,9 @@ export function DoorPanel() {
   }
 
   if (!node || node.type !== 'door' || selectedIds.length !== 1) return null
+
+  const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
+  const normHeights = node.segments.map(seg => seg.heightRatio / hSum)
 
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-82 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md max-h-[calc(100dvh-100px)]">
@@ -455,19 +475,16 @@ export function DoorPanel() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <NumberInput
-                    label="Height ratio"
-                    value={Math.round(seg.heightRatio * 100) / 100}
-                    onChange={(v) => {
-                      const updated = node.segments.map((s, idx) =>
-                        idx === i ? { ...s, heightRatio: Math.max(0.05, v) } : s,
-                      )
-                      handleUpdate({ segments: updated })
-                    }}
-                    min={0.05}
-                    precision={2}
-                    step={0.05}
+                    label="Height"
+                    value={Math.round(normHeights[i]! * 100 * 10) / 10}
+                    onChange={(v) => setSegmentHeightRatio(i, v / 100)}
+                    min={5}
+                    max={95}
+                    precision={1}
+                    step={1}
                     className="flex-1"
                   />
+                  <span className="text-muted-foreground text-xs shrink-0">%</span>
                 </div>
                 {/* Columns */}
                 <div className="space-y-1">

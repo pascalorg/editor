@@ -8,6 +8,7 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
 
   useRegistry(node.id, 'door', ref)
   const handlers = useNodeEvents(node, 'door')
+  const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
   return (
     <mesh
@@ -17,7 +18,7 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
       visible={node.visible}
       position={node.position}
       rotation={node.rotation}
-      {...handlers}
+      {...(isTransient ? {} : handlers)}
     >
       {/* DoorSystem replaces this geometry each time the node is dirty */}
       <boxGeometry args={[0, 0, 0]} />

@@ -8,6 +8,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
 
   useRegistry(node.id, 'window', ref)
   const handlers = useNodeEvents(node, 'window')
+  const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
   return (
     <mesh
@@ -17,7 +18,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
       visible={node.visible}
       position={node.position}
       rotation={node.rotation}
-      {...handlers}
+      {...(isTransient ? {} : handlers)}
     >
       {/* WindowSystem replaces this geometry each time the node is dirty */}
       <boxGeometry args={[0, 0, 0]} />
