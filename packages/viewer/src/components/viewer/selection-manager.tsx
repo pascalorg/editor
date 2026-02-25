@@ -92,6 +92,13 @@ const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
     if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
       return true
     }
+    // Ceiling/slab/roof-attached items: check if parent structure is on the level
+    if (
+      (parentNode?.type === 'ceiling' || parentNode?.type === 'slab' || parentNode?.type === 'roof') &&
+      parentNode.parentId === levelId
+    ) {
+      return true
+    }
   }
 
   return false
