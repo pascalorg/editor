@@ -10,15 +10,24 @@ export async function register() {
     const supabase = createClient(url, key)
 
     const { data: buckets } = await supabase.storage.listBuckets()
-    const exists = buckets?.some((b) => b.name === 'avatars')
+    const bucketNames = new Set(buckets?.map((b) => b.name))
 
-    if (!exists) {
+    if (!bucketNames.has('avatars')) {
       await supabase.storage.createBucket('avatars', {
         public: true,
         fileSizeLimit: 5 * 1024 * 1024, // 5MB
         allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
       })
       console.log('Created "avatars" storage bucket')
+    }
+
+    if (!bucketNames.has('project-thumbnails')) {
+      await supabase.storage.createBucket('project-thumbnails', {
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024, // 10MB (matches uploadProjectThumbnail validation)
+        allowedMimeTypes: ['image/png'],
+      })
+      console.log('Created "project-thumbnails" storage bucket')
     }
   }
 }
