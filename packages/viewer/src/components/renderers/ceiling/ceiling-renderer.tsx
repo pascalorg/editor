@@ -55,7 +55,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     <mesh ref={ref} material={ceilingBottomMaterial}>
       {/* CeilingSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
-      <mesh name="ceiling-grid" material={ceilingTopMaterial} {...handlers} visible={false}>
+      <mesh name="ceiling-grid" material={ceilingTopMaterial} {...handlers} visible={false} scale={0}>
         <boxGeometry args={[0, 0, 0]} />
       </mesh>
       {node.children.map((childId) => (
