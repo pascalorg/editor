@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  type AnyNode,
   type BuildingNode,
   emitter,
   LevelNode,
@@ -19,12 +20,12 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import { TreeNode } from "./tree-node";
 import { ReferencesDialog } from "./references-dialog";
-import { RenamePopover } from "./rename-popover";
+import { InlineRenameInput } from "./inline-rename-input";
 import {
   Popover,
   PopoverContent,
@@ -307,215 +308,159 @@ function CameraPopover({
   );
 }
 
-function SitePhaseView() {
-  const nodes = useScene((state) => state.nodes);
-  const rootNodeIds = useScene((state) => state.rootNodeIds);
-  const updateNode = useScene((state) => state.updateNode);
-  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
-  const setSelection = useViewer((state) => state.setSelection);
-  const [siteCameraOpen, setSiteCameraOpen] = useState(false);
-  const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null);
 
-  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
-  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => {
-      const id = typeof child === 'string' ? child : child.id;
-      return nodes[id] as BuildingNode | undefined;
-    })
-    .filter((node): node is BuildingNode => node?.type === "building");
+function LevelItem({
+  level,
+  selectedLevelId,
+  setSelection,
+  setReferencesLevelId,
+  deleteNode,
+  updateNode,
+}: {
+  level: LevelNode;
+  selectedLevelId: string | null;
+  setSelection: (selection: any) => void;
+  setReferencesLevelId: (id: string | null) => void;
+  deleteNode: (id: AnyNodeId) => void;
+  updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void;
+}) {
+  const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const itemRef = useRef<HTMLDivElement>(null);
+  const isSelected = selectedLevelId === level.id;
+
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isSelected]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Site row */}
-      {siteNode && (
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
-          </div>
-          <CameraPopover
-            nodeId={siteNode.id as AnyNodeId}
-            hasCamera={!!siteNode.camera}
-            open={siteCameraOpen}
-            onOpenChange={setSiteCameraOpen}
-            buttonClassName="hover:bg-accent text-muted-foreground"
-          />
-        </div>
+    <div
+      ref={itemRef}
+      className={cn(
+        "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200",
+        isSelected
+          ? "bg-accent/50 text-foreground"
+          : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
       )}
-      <PropertyLineSection />
-      {buildings.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-muted-foreground">
-          No buildings yet
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 p-2">
-          {buildings.map((building) => (
-            <div
-              key={building.id}
-              className={cn(
-                "group/building flex items-center rounded-md text-sm transition-colors",
-                selectedBuildingId === building.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-accent/50 hover:bg-accent text-foreground"
-              )}
-            >
-              <button
-                className="flex-1 flex items-center gap-2 px-3 py-2 cursor-pointer min-w-0"
-                onClick={() => setSelection({ buildingId: building.id })}
-              >
-                <Building2 className="w-4 h-4 shrink-0" />
-                <span className="truncate">{building.name || "Building"}</span>
-              </button>
-              <Popover
-                open={buildingCameraOpen === building.id}
-                onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    className={cn(
-                      "relative opacity-0 group-hover/building:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded cursor-pointer shrink-0",
-                      selectedBuildingId === building.id
-                        ? "hover:bg-primary-foreground/20"
-                        : "hover:bg-accent-foreground/10"
-                    )}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Camera snapshot"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    {building.camera && (
-                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                    )}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="right"
-                  align="start"
-                  className="w-auto p-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex flex-col gap-0.5">
-                    {building.camera && (
-                      <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          emitter.emit("camera-controls:view", { nodeId: building.id });
-                          setBuildingCameraOpen(null);
-                        }}
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        View snapshot
-                      </button>
-                    )}
-                    <button
-                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        emitter.emit("camera-controls:capture", { nodeId: building.id });
-                        setBuildingCameraOpen(null);
-                      }}
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      {building.camera ? "Update snapshot" : "Take snapshot"}
-                    </button>
-                    {building.camera && (
-                      <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateNode(building.id, { camera: undefined });
-                          setBuildingCameraOpen(null);
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Clear snapshot
-                      </button>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// STRUCTURE/FURNISH PHASE VIEW - Building dropdown + Levels + Content
-// ============================================================================
-
-function BuildingSelector() {
-  const nodes = useScene((state) => state.nodes);
-  const rootNodeIds = useScene((state) => state.rootNodeIds);
-  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
-  const setSelection = useViewer((state) => state.setSelection);
-
-  // Get site node and its building children
-  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
-  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => {
-      const id = typeof child === 'string' ? child : child.id;
-      return nodes[id] as BuildingNode | undefined;
-    })
-    .filter((node): node is BuildingNode => node?.type === "building");
-
-  const selectedBuilding = selectedBuildingId
-    ? (nodes[selectedBuildingId] as BuildingNode)
-    : null;
-
-  if (buildings.length === 0) return null;
-
-  // If only one building, just show it as a header
-  if (buildings.length === 1) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-        <span className="text-sm font-medium truncate">
-          {buildings[0]?.name || "Building"}
-        </span>
+    >
+      <div
+        className="flex-1 flex items-center gap-2 pl-3 py-2 text-sm cursor-pointer min-w-0"
+        onClick={() => setSelection({ levelId: level.id })}
+        onDoubleClick={() => setIsEditing(true)}
+      >
+        <Layers className={cn(
+          "w-3.5 h-3.5 shrink-0 transition-all duration-200",
+          !isSelected && "opacity-60 grayscale"
+        )} />
+        <InlineRenameInput
+          node={level}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={`Level ${level.level}`}
+        />
       </div>
-    );
-  }
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button className="flex items-center justify-between w-full px-3 py-2 border-b border-border/50 hover:bg-accent/50 cursor-pointer transition-colors">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium truncate">
-              {selectedBuilding?.name || "Select Building"}
-            </span>
-          </div>
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 p-1">
-        {buildings.map((building) => (
-          <button
-            key={building.id}
-            className={cn(
-              "flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors cursor-pointer",
-              selectedBuildingId === building.id
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-accent"
-            )}
-            onClick={() => {
-              setSelection({ buildingId: building.id });
-              // Also select first level if available
-              if (building.children.length > 0) {
-                setSelection({ levelId: building.children[0] as LevelNode["id"] });
-              }
-            }}
+        {/* Camera snapshot button */}
+        <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "relative opacity-0 group-hover/level:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded-md cursor-pointer shrink-0 transition-colors",
+                selectedLevelId === level.id
+                  ? "hover:bg-black/5 dark:hover:bg-white/10"
+                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={(e) => e.stopPropagation()}
+              title="Camera snapshot"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              {level.camera && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            className="w-auto p-1"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Building2 className="w-4 h-4 shrink-0" />
-            <span className="truncate">{building.name || "Building"}</span>
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
+            <div className="flex flex-col gap-0.5">
+              {level.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    emitter.emit("camera-controls:view", { nodeId: level.id });
+                    setCameraPopoverOpen(false);
+                  }}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  View snapshot
+                </button>
+              )}
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  emitter.emit("camera-controls:capture", { nodeId: level.id });
+                  setCameraPopoverOpen(false);
+                }}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                {level.camera ? "Update snapshot" : "Take snapshot"}
+              </button>
+              {level.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode(level.id, { camera: undefined });
+                    setCameraPopoverOpen(false);
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Clear snapshot
+                </button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "opacity-0 group-hover/level:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded-md cursor-pointer shrink-0 transition-colors",
+                selectedLevelId === level.id
+                  ? "hover:bg-black/5 dark:hover:bg-white/10"
+                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" side="right" className="w-40 p-1">
+            <button
+              className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent cursor-pointer"
+              onClick={() => setReferencesLevelId(level.id)}
+            >
+              References
+            </button>
+            {level.level !== 0 && (
+              <button
+                className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent hover:text-red-600 cursor-pointer"
+                onClick={() => deleteNode(level.id)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
+      </div>
   );
 }
 
@@ -529,7 +474,6 @@ function LevelsSection() {
   const setSelection = useViewer((state) => state.setSelection);
 
   const [referencesLevelId, setReferencesLevelId] = useState<string | null>(null);
-  const [cameraPopoverOpen, setCameraPopoverOpen] = useState<string | null>(null);
 
   const building = selectedBuildingId
     ? (nodes[selectedBuildingId] as BuildingNode)
@@ -552,9 +496,9 @@ function LevelsSection() {
   };
 
   return (
-    <div className="border-b border-border/50">
+    <div className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Levels
         </span>
@@ -567,123 +511,17 @@ function LevelsSection() {
       </div>
 
       {/* Level buttons */}
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
+      <div className="flex flex-col">
         {levels.map((level) => (
-          <div
+          <LevelItem
             key={level.id}
-            className={cn(
-              "flex items-center group/level rounded transition-colors",
-              selectedLevelId === level.id
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-accent/50 text-foreground"
-            )}
-          >
-            <button
-              className="flex-1 flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer min-w-0"
-              onClick={() => setSelection({ levelId: level.id })}
-            >
-              <Layers className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{level.name || `Level ${level.level}`}</span>
-            </button>
-            {/* Camera snapshot button */}
-            <Popover open={cameraPopoverOpen === level.id} onOpenChange={(open) => setCameraPopoverOpen(open ? level.id : null)}>
-              <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "relative opacity-0 group-hover/level:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded cursor-pointer shrink-0",
-                    selectedLevelId === level.id
-                      ? "hover:bg-primary-foreground/20"
-                      : "hover:bg-accent"
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                  title="Camera snapshot"
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  {level.camera && (
-                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="right"
-                align="start"
-                className="w-auto p-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex flex-col gap-0.5">
-                  {level.camera && (
-                    <button
-                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        emitter.emit("camera-controls:view", { nodeId: level.id });
-                        setCameraPopoverOpen(null);
-                      }}
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      View snapshot
-                    </button>
-                  )}
-                  <button
-                    className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      emitter.emit("camera-controls:capture", { nodeId: level.id });
-                      setCameraPopoverOpen(null);
-                    }}
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    {level.camera ? "Update snapshot" : "Take snapshot"}
-                  </button>
-                  {level.camera && (
-                    <button
-                      className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        updateNode(level.id, { camera: undefined });
-                        setCameraPopoverOpen(null);
-                      }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Clear snapshot
-                    </button>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "opacity-0 group-hover/level:opacity-100 w-6 h-6 mr-1 flex items-center justify-center rounded cursor-pointer shrink-0",
-                    selectedLevelId === level.id
-                      ? "hover:bg-primary-foreground/20"
-                      : "hover:bg-accent"
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" side="right" className="w-40 p-1">
-                <button
-                  className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent cursor-pointer"
-                  onClick={() => setReferencesLevelId(level.id)}
-                >
-                  References
-                </button>
-                {level.level !== 0 && (
-                  <button
-                    className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent hover:text-red-600 cursor-pointer"
-                    onClick={() => deleteNode(level.id)}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
-          </div>
+            level={level}
+            selectedLevelId={selectedLevelId}
+            setSelection={setSelection}
+            setReferencesLevelId={setReferencesLevelId}
+            deleteNode={deleteNode}
+            updateNode={updateNode}
+          />
         ))}
         {levels.length === 0 && (
           <div className="text-xs text-muted-foreground px-2 py-1">
@@ -709,29 +547,65 @@ function LevelsSection() {
 function LayerToggle() {
   const structureLayer = useEditor((state) => state.structureLayer);
   const setStructureLayer = useEditor((state) => state.setStructureLayer);
+  const phase = useEditor((state) => state.phase);
+  const setPhase = useEditor((state) => state.setPhase);
 
   return (
-    <div className="flex items-center gap-1 px-3 py-2 border-b border-border/50">
+    <div className="flex items-center p-1 bg-accent/20 gap-1 border-b border-border/50">
       <button
         className={cn(
-          "flex-1 px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer",
-          structureLayer === "elements"
-            ? "bg-primary text-primary-foreground"
-            : "bg-accent/50 hover:bg-accent text-muted-foreground"
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "structure" && structureLayer === "elements"
+            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
-        onClick={() => setStructureLayer("elements")}
+        onClick={() => {
+          setPhase("structure");
+          setStructureLayer("elements");
+        }}
       >
-        Elements
+        <img
+          src="/icons/room.png"
+          alt="Structure"
+          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "elements") && "opacity-50 grayscale")}
+        />
+        Structure
       </button>
       <button
         className={cn(
-          "flex-1 px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer",
-          structureLayer === "zones"
-            ? "bg-primary text-primary-foreground"
-            : "bg-accent/50 hover:bg-accent text-muted-foreground"
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "furnish"
+            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
-        onClick={() => setStructureLayer("zones")}
+        onClick={() => {
+          setPhase("furnish");
+        }}
       >
+        <img
+          src="/icons/couch.png"
+          alt="Furnish"
+          className={cn("w-6 h-6 mb-1", phase !== "furnish" && "opacity-50 grayscale")}
+        />
+        Furnish
+      </button>
+      <button
+        className={cn(
+          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          phase === "structure" && structureLayer === "zones"
+            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
+        )}
+        onClick={() => {
+          setPhase("structure");
+          setStructureLayer("zones");
+        }}
+      >
+        <img
+          src="/icons/kitchen.png"
+          alt="Zones"
+          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "zones") && "opacity-50 grayscale")}
+        />
         Zones
       </button>
     </div>
@@ -739,7 +613,7 @@ function LayerToggle() {
 }
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
   const deleteNode = useScene((state) => state.deleteNode);
   const updateNode = useScene((state) => state.updateNode);
@@ -753,6 +627,14 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   const isSelected = selectedZoneId === zone.id;
   const isHovered = hoveredId === zone.id;
 
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isSelected]);
+
   const area = calculatePolygonArea(zone.polygon).toFixed(1);
   const defaultName = `Zone (${area}m²)`;
 
@@ -763,7 +645,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   };
 
   const handleDoubleClick = () => {
-    setRenameOpen(true);
+    setIsEditing(true);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -779,124 +661,127 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   };
 
   return (
-    <RenamePopover
-      node={zone}
-      open={renameOpen}
-      onOpenChange={setRenameOpen}
-      defaultName={defaultName}
+    <div
+      ref={itemRef}
+      className={cn(
+        "flex items-center h-8 cursor-pointer group/row text-sm px-3 select-none border-b border-border/50 transition-all duration-200",
+        isSelected
+          ? "bg-accent/50 text-foreground"
+          : isHovered
+            ? "bg-accent/30 text-foreground"
+            : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+      )}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={() => setHoveredId(zone.id)}
+      onMouseLeave={() => setHoveredId(null)}
     >
-      <div
-        className={cn(
-          "flex items-center h-7 cursor-pointer group/row text-sm px-3 select-none",
-          isSelected
-            ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
-            : isHovered
-              ? "bg-accent/70 text-foreground"
-              : "text-muted-foreground hover:bg-accent/50"
-        )}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setHoveredId(zone.id)}
-        onMouseLeave={() => setHoveredId(null)}
-      >
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="mr-2 size-3 shrink-0 rounded-sm border border-border/50 transition-transform hover:scale-110 cursor-pointer"
-              onClick={(e) => e.stopPropagation()}
-              style={{ backgroundColor: zone.color }}
-            />
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-auto p-2"
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className={cn(
+              "mr-2 size-3 shrink-0 rounded-sm border border-border/50 transition-all hover:scale-110 cursor-pointer",
+              !isSelected && "opacity-60 grayscale"
+            )}
             onClick={(e) => e.stopPropagation()}
-          >
-            <div className="grid grid-cols-4 gap-1">
-              {PRESET_COLORS.map((color) => (
-                <button
-                  className={cn(
-                    "size-6 rounded-sm border transition-transform hover:scale-110 cursor-pointer",
-                    color === zone.color ? "ring-2 ring-primary ring-offset-1" : ""
-                  )}
-                  key={color}
-                  onClick={() => handleColorChange(color)}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <span className="truncate flex-1">{zone.name || defaultName}</span>
-        {/* Camera snapshot button */}
-        <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
-          <PopoverTrigger asChild>
-            <button
-              className="relative opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
-              onClick={(e) => e.stopPropagation()}
-              title="Camera snapshot"
-            >
-              <Camera className="w-3 h-3" />
-              {zone.camera && (
-                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            side="right"
-            align="start"
-            className="w-auto p-1"
+            style={{ backgroundColor: zone.color }}
+          />
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-auto p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="grid grid-cols-4 gap-1">
+            {PRESET_COLORS.map((color) => (
+              <button
+                className={cn(
+                  "size-6 rounded-sm border transition-transform hover:scale-110 cursor-pointer",
+                  color === zone.color ? "ring-2 ring-primary ring-offset-1" : ""
+                )}
+                key={color}
+                onClick={() => handleColorChange(color)}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <InlineRenameInput
+        node={zone}
+        isEditing={isEditing}
+        onStopEditing={() => setIsEditing(false)}
+        onStartEditing={() => setIsEditing(true)}
+        defaultName={defaultName}
+      />
+      {/* Camera snapshot button */}
+      <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className="relative opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             onClick={(e) => e.stopPropagation()}
+            title="Camera snapshot"
           >
-            <div className="flex flex-col gap-0.5">
-              {zone.camera && (
-                <button
-                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    emitter.emit("camera-controls:view", { nodeId: zone.id });
-                    setCameraPopoverOpen(false);
-                  }}
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  View snapshot
-                </button>
-              )}
+            <Camera className="w-3 h-3" />
+            {zone.camera && (
+              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="start"
+          className="w-auto p-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col gap-0.5">
+            {zone.camera && (
               <button
                 className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
                 onClick={(e) => {
                   e.stopPropagation();
-                  emitter.emit("camera-controls:capture", { nodeId: zone.id });
+                  emitter.emit("camera-controls:view", { nodeId: zone.id });
                   setCameraPopoverOpen(false);
                 }}
               >
                 <Camera className="w-3.5 h-3.5" />
-                {zone.camera ? "Update snapshot" : "Take snapshot"}
+                View snapshot
               </button>
-              {zone.camera && (
-                <button
-                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateNode(zone.id, { camera: undefined });
-                    setCameraPopoverOpen(false);
-                  }}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Clear snapshot
-                </button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <button
-          className="opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
-          onClick={handleDelete}
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
-    </RenamePopover>
+            )}
+            <button
+              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                emitter.emit("camera-controls:capture", { nodeId: zone.id });
+                setCameraPopoverOpen(false);
+              }}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              {zone.camera ? "Update snapshot" : "Take snapshot"}
+            </button>
+            {zone.camera && (
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateNode(zone.id, { camera: undefined });
+                  setCameraPopoverOpen(false);
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear snapshot
+              </button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <button
+        className="opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+        onClick={handleDelete}
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
   );
 }
 
@@ -947,7 +832,7 @@ function ContentSection() {
     }
 
     return (
-      <div className="py-1">
+      <div className="flex flex-col">
         {levelZones.map((zone) => (
           <ZoneItem key={zone.id} zone={zone} />
         ))}
@@ -994,7 +879,7 @@ function ContentSection() {
   }
 
   return (
-    <div className="py-1">
+    <div className="flex flex-col">
       {elementChildren.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={0} />
       ))}
@@ -1002,32 +887,214 @@ function ContentSection() {
   );
 }
 
-function StructurePhaseView() {
+function BuildingItem({
+  building,
+  isBuildingActive,
+  buildingCameraOpen,
+  setBuildingCameraOpen,
+}: {
+  building: BuildingNode;
+  isBuildingActive: boolean;
+  buildingCameraOpen: string | null;
+  setBuildingCameraOpen: (id: string | null) => void;
+}) {
+  const setSelection = useViewer((state) => state.setSelection);
   const phase = useEditor((state) => state.phase);
+  const setPhase = useEditor((state) => state.setPhase);
+  const updateNode = useScene((state) => state.updateNode);
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isBuildingActive && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isBuildingActive]);
 
   return (
-    <div className="flex flex-col h-full">
-      <BuildingSelector />
-      <LevelsSection />
-      {/* Only show layer toggle in structure phase, furnish is always elements */}
-      {phase === "structure" && <LayerToggle />}
-      <div className="flex-1 overflow-auto">
-        <ContentSection />
+    <div className="flex flex-col">
+      <div
+        ref={itemRef}
+        className={cn(
+          "group/building flex items-center h-10 border-b border-border/50 pr-2 transition-all duration-200",
+          isBuildingActive
+            ? "bg-accent/50 text-foreground"
+            : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+        )}
+      >
+        <button
+          className="flex-1 flex items-center gap-2 pl-3 py-2 h-full cursor-pointer min-w-0"
+          onClick={() => {
+            setSelection({ buildingId: building.id });
+            if (phase === "site") {
+              setPhase("structure");
+            }
+          }}
+        >
+          <img 
+            src="/icons/building.png" 
+            className={cn("w-5 h-5 object-contain transition-all", !isBuildingActive && "opacity-60 grayscale")} 
+            alt="Building" 
+          />
+          <span className="truncate font-medium text-sm">{building.name || "Building"}</span>
+        </button>
+        <Popover
+          open={buildingCameraOpen === building.id}
+          onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
+        >
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "relative opacity-0 group-hover/building:opacity-100 w-7 h-7 mr-1.5 flex items-center justify-center rounded-md cursor-pointer shrink-0 transition-colors",
+                isBuildingActive
+                  ? "hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={(e) => e.stopPropagation()}
+              title="Camera snapshot"
+            >
+              <Camera className="w-4 h-4" />
+              {building.camera && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            className="w-auto p-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-0.5">
+              {building.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    emitter.emit("camera-controls:view", { nodeId: building.id });
+                    setBuildingCameraOpen(null);
+                  }}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  View snapshot
+                </button>
+              )}
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  emitter.emit("camera-controls:capture", { nodeId: building.id });
+                  setBuildingCameraOpen(null);
+                }}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                {building.camera ? "Update snapshot" : "Take snapshot"}
+              </button>
+              {building.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode(building.id, { camera: undefined });
+                    setBuildingCameraOpen(null);
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Clear snapshot
+                </button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
+
+      {/* Tools and content for the active building */}
+      {isBuildingActive && (
+        <div className="flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+          <LevelsSection />
+          <LayerToggle />
+          <ContentSection />
+        </div>
+      )}
     </div>
   );
 }
 
-// ============================================================================
-// MAIN SITE PANEL
-// ============================================================================
-
 export function SitePanel() {
+  const nodes = useScene((state) => state.nodes);
+  const rootNodeIds = useScene((state) => state.rootNodeIds);
+  const updateNode = useScene((state) => state.updateNode);
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId);
+  const setSelection = useViewer((state) => state.setSelection);
   const phase = useEditor((state) => state.phase);
+  const setPhase = useEditor((state) => state.setPhase);
 
-  if (phase === "site") {
-    return <SitePhaseView />;
-  }
+  const [siteCameraOpen, setSiteCameraOpen] = useState(false);
+  const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null);
 
-  return <StructurePhaseView />;
+  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null;
+  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
+    .map((child) => {
+      const id = typeof child === 'string' ? child : child.id;
+      return nodes[id] as BuildingNode | undefined;
+    })
+    .filter((node): node is BuildingNode => node?.type === "building");
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Site Header */}
+      {siteNode && (
+        <div 
+          className={cn(
+            "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors",
+            phase === "site" ? "bg-accent/50 text-foreground" : "hover:bg-accent/30 text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => setPhase("site")}
+        >
+          <div className="flex items-center gap-2">
+            <img 
+              src="/icons/site.png" 
+              className={cn("w-5 h-5 object-contain transition-all", phase !== "site" && "opacity-60 grayscale")} 
+              alt="Site" 
+            />
+            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
+          </div>
+          <CameraPopover
+            nodeId={siteNode.id as AnyNodeId}
+            hasCamera={!!siteNode.camera}
+            open={siteCameraOpen}
+            onOpenChange={setSiteCameraOpen}
+            buttonClassName={cn("transition-colors", phase === "site" ? "hover:bg-black/5 dark:hover:bg-white/10" : "hover:bg-accent")}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto flex flex-col">
+        {/* When phase is site, show property line immediately under site header */}
+        {phase === "site" && <PropertyLineSection />}
+
+        {/* Buildings List */}
+        {buildings.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-muted-foreground">
+            No buildings yet
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {buildings.map((building) => {
+              const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
+
+              return (
+                <BuildingItem
+                  key={building.id}
+                  building={building}
+                  isBuildingActive={isBuildingActive}
+                  buildingCameraOpen={buildingCameraOpen}
+                  setBuildingCameraOpen={setBuildingCameraOpen}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

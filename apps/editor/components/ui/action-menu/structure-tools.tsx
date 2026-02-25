@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, } from '@/components/ui/primit
 
 import { cn } from '@/lib/utils'
 import useEditor, { CatalogCategory, StructureTool, Tool } from '@/store/use-editor'
+import { useContextualTools } from '@/hooks/use-contextual-tools'
 
 export type ToolConfig = {
    id: StructureTool; iconSrc: string; label: string; catalogCategory?: CatalogCategory }
@@ -28,28 +29,39 @@ export function StructureTools() {
   const structureLayer = useEditor((state) => state.structureLayer)
   const setTool   = useEditor((state) => state.setTool)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
+  
+  const contextualTools = useContextualTools()
 
   // Filter tools based on structureLayer
   const visibleTools = structureLayer === 'zones'
     ? tools.filter((t) => t.id === 'zone')
     : tools.filter((t) => t.id !== 'zone')
 
+  const hasActiveTool = visibleTools.some((t) => 
+    activeTool === t.id && 
+    (t.catalogCategory ? catalogCategory === t.catalogCategory : true)
+  )
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 px-1">
       {visibleTools.map((tool, index) => {
         // For item tools with catalog category, check both tool and category match
         const isActive =
           activeTool === tool.id &&
           (tool.catalogCategory ? catalogCategory === tool.catalogCategory : true)
+          
+        const isContextual = contextualTools.includes(tool.id)
 
         return (
           <Tooltip key={`${tool.id}-${tool.catalogCategory ?? index}`}>
             <TooltipTrigger asChild>
               <Button
                 className={cn(
-                  'size-11 rounded-lg transition-all',
-                  isActive && 'bg-primary shadow-md shadow-primary/20',
-                  !isActive && 'hover:bg-white/10',
+                  'size-11 rounded-lg transition-all duration-300',
+                  isActive && 'bg-primary shadow-lg shadow-primary/40 ring-2 ring-primary ring-offset-2 ring-offset-zinc-950 scale-110 z-10',
+                  !isActive && hasActiveTool && 'opacity-30 hover:opacity-60 scale-95 grayscale',
+                  !isActive && !hasActiveTool && isContextual && 'bg-white/5 hover:bg-white/10 hover:scale-105',
+                  !isActive && !hasActiveTool && !isContextual && 'opacity-60 hover:opacity-100 hover:bg-white/10 hover:scale-105',
                 )}
                 onClick={() => {
                   if (isActive) {
@@ -58,6 +70,11 @@ export function StructureTools() {
                   } else {
                     setTool(tool.id)
                     setCatalogCategory(tool.catalogCategory ?? null)
+                    
+                    // Automatically switch to build mode if we select a tool
+                    if (useEditor.getState().mode !== 'build') {
+                      useEditor.getState().setMode('build')
+                    }
                   }
                 }}
                 size="icon"

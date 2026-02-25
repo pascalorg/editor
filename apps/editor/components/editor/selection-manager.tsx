@@ -123,32 +123,16 @@ export const SelectionManager = () => {
     const strategy = SELECTION_STRATEGIES[phase];
     if (!strategy) return;
 
-    const onEnter = (event: NodeEvent) => {
-      if (strategy.isValid(event.node)) {
-        event.stopPropagation();
-        useViewer.setState({ hoveredId: event.node.id });
-      }
-    };
-
-    const onLeave = (event: NodeEvent) => {
-      if (strategy.isValid(event.node)) {
-        event.stopPropagation();
-        useViewer.setState({ hoveredId: null });
-      }
-    };
-
     const onClick = (event: NodeEvent) => {
       if (!strategy.isValid(event.node)) return;
 
       event.stopPropagation();
       const isShift = event.nativeEvent?.shiftKey;
-      strategy.handleSelect(event.node, isShift);
+      strategy.handleSelect(event.node, isShift ?? false);
     };
 
     // Bind listeners for all potential types this strategy might care about
     strategy.types.forEach((type) => {
-      emitter.on(`${type}:enter`, onEnter);
-      emitter.on(`${type}:leave`, onLeave);
       emitter.on(`${type}:click`, onClick);
     });
 
@@ -157,13 +141,117 @@ export const SelectionManager = () => {
 
     return () => {
       strategy.types.forEach((type) => {
-        emitter.off(`${type}:enter`, onEnter);
-        emitter.off(`${type}:leave`, onLeave);
         emitter.off(`${type}:click`, onClick);
       });
       emitter.off("grid:click", onGridClick);
     };
   }, [phase, mode, movingNode]);
+
+  // Global double-click handler for auto-switching phases and cross-phase hover
+  useEffect(() => {
+    if (mode !== "select") return;
+    if (movingNode) return;
+
+    const onEnter = (event: NodeEvent) => {
+      const node = event.node;
+      const currentPhase = useEditor.getState().phase;
+
+      // Ignore site/building if we are already inside a building
+      if (node.type === "building" || node.type === "site") {
+        if (currentPhase === "structure" || currentPhase === "furnish") {
+          return;
+        }
+      }
+
+      // Ignore zones unless specifically in zones layer
+      if (node.type === "zone") {
+        if (currentPhase !== "structure" || useEditor.getState().structureLayer !== "zones") {
+          return;
+        }
+      }
+
+      // Check level constraint for interior nodes
+      if (currentPhase === "structure" || currentPhase === "furnish") {
+        if (!isNodeInCurrentLevel(node)) return;
+      }
+
+      event.stopPropagation();
+      useViewer.setState({ hoveredId: node.id });
+    };
+
+    const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().hoveredId === event.node.id) {
+        useViewer.setState({ hoveredId: null });
+      }
+    };
+
+    const onDoubleClick = (event: NodeEvent) => {
+      const node = event.node;
+      const currentPhase = useEditor.getState().phase;
+      
+      let targetPhase: "site" | "structure" | "furnish" | null = null;
+
+      if (node.type === "building" || node.type === "site") {
+        if (currentPhase === "structure" || currentPhase === "furnish") {
+          return; // Ignore building/site double clicks if we are already inside a building
+        }
+        if (node.type === "building") {
+          targetPhase = "structure";
+        }
+      } else if (
+        node.type === "wall" || 
+        node.type === "slab" || 
+        node.type === "ceiling" || 
+        node.type === "roof" || 
+        node.type === "window" || 
+        node.type === "door"
+      ) {
+        targetPhase = "structure";
+      } else if (node.type === "item") {
+        const item = node as ItemNode;
+        if (item.asset.category === "door" || item.asset.category === "window") {
+          targetPhase = "structure";
+        } else {
+          targetPhase = "furnish";
+        }
+      }
+
+      if (node.type === "zone") {
+        return;
+      }
+
+      if (targetPhase && targetPhase !== useEditor.getState().phase) {
+        event.stopPropagation();
+        
+        useEditor.getState().setPhase(targetPhase);
+        
+        if (targetPhase === "structure" && useEditor.getState().structureLayer === "zones") {
+          useEditor.getState().setStructureLayer("elements");
+        }
+
+        const strategy = SELECTION_STRATEGIES[targetPhase];
+        if (strategy) {
+          const isShift = event.nativeEvent?.shiftKey;
+          strategy.handleSelect(node, isShift ?? false);
+        }
+      }
+    };
+
+    const allTypes = ["wall", "item", "building", "slab", "ceiling", "roof", "window", "door", "zone", "site"];
+    allTypes.forEach((type) => {
+      emitter.on(`${type}:enter` as any, onEnter as any);
+      emitter.on(`${type}:leave` as any, onLeave as any);
+      emitter.on(`${type}:double-click` as any, onDoubleClick as any);
+    });
+
+    return () => {
+      allTypes.forEach((type) => {
+        emitter.off(`${type}:enter` as any, onEnter as any);
+        emitter.off(`${type}:leave` as any, onLeave as any);
+        emitter.off(`${type}:double-click` as any, onDoubleClick as any);
+      });
+    };
+  }, [mode, movingNode]);
 
   return <EditorOutlinerSync />;
 };

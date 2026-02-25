@@ -50,10 +50,10 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   return (
     <div
       className={cn(
-        "flex items-center h-7 cursor-pointer group/row text-sm px-3",
+        "flex items-center h-8 cursor-pointer group/row text-sm px-2 mx-1 mb-0.5 select-none rounded-lg border transition-all duration-200",
         isSelected
-          ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
-          : "text-muted-foreground hover:bg-accent/50"
+          ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
+          : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
       )}
       onClick={handleClick}
     >
@@ -91,7 +91,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
         <PopoverTrigger asChild>
           <button
-            className="relative opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
+            className="relative opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             onClick={(e) => e.stopPropagation()}
             title="Camera snapshot"
           >
@@ -149,7 +149,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
         </PopoverContent>
       </Popover>
       <button
-        className="opacity-0 group-hover/row:opacity-100 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
+        className="opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
         onClick={handleDelete}
       >
         <Trash2 className="w-3 h-3" />

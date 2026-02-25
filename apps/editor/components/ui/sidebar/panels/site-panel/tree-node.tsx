@@ -1,6 +1,6 @@
 import { AnyNodeId, useScene } from "@pascal-app/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { BuildingTreeNode } from "./building-tree-node";
 import { CeilingTreeNode } from "./ceiling-tree-node";
@@ -51,7 +51,7 @@ export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
 
 interface TreeNodeWrapperProps {
   icon: React.ReactNode;
-  label: string;
+  label: React.ReactNode;
   depth: number;
   hasChildren: boolean;
   expanded: boolean;
@@ -88,19 +88,28 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     },
     ref
   ) {
+    const rowRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      if (isSelected && rowRef.current) {
+        rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, [isSelected]);
+
     return (
       <div ref={ref}>
         <div
+          ref={rowRef}
           className={cn(
-            "flex items-center h-7 cursor-pointer group/row text-sm select-none",
+            "flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
             isSelected
-              ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
+              ? "bg-accent/50 text-foreground"
               : isHovered
-                ? "bg-accent/70 text-foreground"
-                : "text-muted-foreground hover:bg-accent/50",
+                ? "bg-accent/30 text-foreground"
+                : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
             !isVisible && "opacity-50"
           )}
-          style={{ paddingLeft: depth * 12 + 4 }}
+          style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
         >
@@ -124,10 +133,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             onClick={onClick}
             onDoubleClick={onDoubleClick}
           >
-            <span className="w-4 h-4 flex items-center justify-center shrink-0">
+            <span className={cn(
+              "w-4 h-4 flex items-center justify-center shrink-0 transition-all duration-200",
+              !isSelected && "opacity-60 grayscale"
+            )}>
               {icon}
             </span>
-            <span className="truncate">{label}</span>
+            <div className="flex-1 min-w-0 truncate">
+              {label}
+            </div>
           </div>
           {actions && (
             <div className="opacity-0 group-hover/row:opacity-100 pr-1">

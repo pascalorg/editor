@@ -138,16 +138,16 @@ export function DoorPanel() {
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-82 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md max-h-[calc(100dvh-100px)]">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b p-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/door.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
-          <h2 className="font-semibold text-foreground text-sm truncate">
+          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
             {node.name || `Door (${node.width}×${node.height}m)`}
           </h2>
         </div>
         <button
           type="button"
-          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground cursor-pointer"
           onClick={handleClose}
         >
           <X className="h-4 w-4" />
@@ -159,7 +159,7 @@ export function DoorPanel() {
 
         {/* Position */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Position
           </label>
           <div className="grid grid-cols-1 gap-2">
@@ -172,7 +172,7 @@ export function DoorPanel() {
           </div>
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="w-full flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleFlip}
           >
             <FlipHorizontal2 className="h-3.5 w-3.5" />
@@ -182,7 +182,7 @@ export function DoorPanel() {
 
         {/* Dimensions */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Dimensions
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -213,7 +213,7 @@ export function DoorPanel() {
 
         {/* Frame */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Frame
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -246,7 +246,7 @@ export function DoorPanel() {
 
         {/* Content Padding */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Content Padding
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -279,22 +279,22 @@ export function DoorPanel() {
 
         {/* Swing */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Swing
           </label>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">Hinges</span>
-              <div className="flex gap-1">
+              <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
                 {(['left', 'right'] as const).map((side) => (
                   <button
                     key={side}
                     type="button"
                     onClick={() => handleUpdate({ hingesSide: side })}
-                    className={`flex-1 rounded border px-2 py-1 text-xs cursor-pointer transition-colors ${
+                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium cursor-pointer transition-all duration-200 ${
                       node.hingesSide === side
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border hover:bg-accent'
+                        ? 'bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50'
                     }`}
                   >
                     {side.charAt(0).toUpperCase() + side.slice(1)}
@@ -304,7 +304,7 @@ export function DoorPanel() {
             </div>
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">Direction</span>
-              <div className="flex gap-1">
+              <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
                 {(['inward', 'outward'] as const).map((dir) => (
                   <button
                     key={dir}
@@ -327,7 +327,7 @@ export function DoorPanel() {
         {/* Threshold */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Threshold
             </label>
             <Switch
@@ -354,7 +354,7 @@ export function DoorPanel() {
         {/* Handle */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
               Handle
             </label>
             <Switch
@@ -379,7 +379,7 @@ export function DoorPanel() {
               </div>
               <div className="space-y-1">
                 <span className="text-xs text-muted-foreground">Side</span>
-                <div className="flex gap-1">
+                <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
                   {(['left', 'right'] as const).map((side) => (
                     <button
                       key={side}
@@ -402,7 +402,7 @@ export function DoorPanel() {
 
         {/* Hardware */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Hardware
           </label>
           <div className="space-y-2">
@@ -440,7 +440,7 @@ export function DoorPanel() {
 
         {/* Segments */}
         <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
             Leaf segments (top → bottom)
           </label>
           {node.segments.map((seg, i) => {
@@ -451,7 +451,7 @@ export function DoorPanel() {
               <div key={i} className="rounded border border-border p-2 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-muted-foreground">Segment {i + 1}</span>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
                     {(['panel', 'glass', 'empty'] as const).map((t) => (
                       <button
                         key={t}
@@ -584,7 +584,7 @@ export function DoorPanel() {
           <div className="flex gap-2">
             <button
               type="button"
-              className="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+              className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
               onClick={() => {
                 const updated = [
                   ...node.segments,
@@ -598,7 +598,7 @@ export function DoorPanel() {
             {node.segments.length > 1 && (
               <button
                 type="button"
-                className="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => {
                   handleUpdate({ segments: node.segments.slice(0, -1) })
                 }}
@@ -611,11 +611,11 @@ export function DoorPanel() {
       </div>
 
       {/* Action Buttons */}
-      <div className="border-t p-3">
+      <div className="border-t border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleMove}
           >
             <Move className="h-3.5 w-3.5" />
@@ -623,7 +623,7 @@ export function DoorPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDuplicate}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -631,7 +631,7 @@ export function DoorPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDelete}
           >
             <Trash2 className="h-3.5 w-3.5" />

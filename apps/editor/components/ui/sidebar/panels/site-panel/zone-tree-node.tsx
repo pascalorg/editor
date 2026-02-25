@@ -1,7 +1,7 @@
 import { ZoneNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useState } from "react";
-import { RenamePopover } from "./rename-popover";
+import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
@@ -11,7 +11,7 @@ interface ZoneTreeNodeProps {
 }
 
 export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.zoneId === node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -22,7 +22,7 @@ export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
   };
 
   const handleDoubleClick = () => {
-    setRenameOpen(true);
+    setIsEditing(true);
   };
 
   const handleMouseEnter = () => {
@@ -38,33 +38,34 @@ export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
   const defaultName = `Zone (${area}m²)`;
 
   return (
-    <RenamePopover
-      node={node}
-      open={renameOpen}
-      onOpenChange={setRenameOpen}
-      defaultName={defaultName}
-    >
-      <TreeNodeWrapper
-        icon={
-          <div
-            className="w-3 h-3 rounded-sm border border-border/50"
-            style={{ backgroundColor: node.color }}
-          />
-        }
-        label={node.name || defaultName}
-        depth={depth}
-        hasChildren={false}
-        expanded={false}
-        onToggle={() => {}}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        isSelected={isSelected}
-        isHovered={isHovered}
-        actions={<TreeNodeActions node={node} />}
-      />
-    </RenamePopover>
+    <TreeNodeWrapper
+      icon={
+        <div
+          className="w-3 h-3 rounded-sm border border-border/50"
+          style={{ backgroundColor: node.color }}
+        />
+      }
+      label={
+        <InlineRenameInput
+          node={node}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={defaultName}
+        />
+      }
+      depth={depth}
+      hasChildren={false}
+      expanded={false}
+      onToggle={() => {}}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      isSelected={isSelected}
+      isHovered={isHovered}
+      actions={<TreeNodeActions node={node} />}
+    />
   );
 }
 

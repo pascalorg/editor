@@ -1,7 +1,7 @@
 import { CeilingNode, emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
+import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -66,10 +66,12 @@ const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<[number, n
 }
 
 export const CeilingTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null)
-  const gridCursorRef = useRef<Mesh>(null)
+  const cursorRef = useRef<Group>(null)
+  const gridCursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
+  const groundMainLineRef = useRef<Line>(null!)
+  const groundClosingLineRef = useRef<Line>(null!)
   const verticalLineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -217,13 +219,22 @@ export const CeilingTool: React.FC = () => {
     const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, ceilingY, z))
     linePoints.push(new Vector3(snappedCursor[0], ceilingY, snappedCursor[1]))
 
+    const gridY = levelY + GRID_OFFSET
+    const groundLinePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, gridY, z))
+    groundLinePoints.push(new Vector3(snappedCursor[0], gridY, snappedCursor[1]))
+
     // Update main line
     if (linePoints.length >= 2) {
       mainLineRef.current.geometry.dispose()
       mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints)
       mainLineRef.current.visible = true
+
+      groundMainLineRef.current.geometry.dispose()
+      groundMainLineRef.current.geometry = new BufferGeometry().setFromPoints(groundLinePoints)
+      groundMainLineRef.current.visible = true
     } else {
       mainLineRef.current.visible = false
+      groundMainLineRef.current.visible = false
     }
 
     // Update closing line (from cursor back to first point)
@@ -236,8 +247,17 @@ export const CeilingTool: React.FC = () => {
       closingLineRef.current.geometry.dispose()
       closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
       closingLineRef.current.visible = true
+
+      const groundClosingPoints = [
+        new Vector3(snappedCursor[0], gridY, snappedCursor[1]),
+        new Vector3(firstPoint[0], gridY, firstPoint[1]),
+      ]
+      groundClosingLineRef.current.geometry.dispose()
+      groundClosingLineRef.current.geometry = new BufferGeometry().setFromPoints(groundClosingPoints)
+      groundClosingLineRef.current.visible = true
     } else {
       closingLineRef.current.visible = false
+      groundClosingLineRef.current.visible = false
     }
   }, [points, snappedCursorPosition, levelY])
 
@@ -277,16 +297,16 @@ export const CeilingTool: React.FC = () => {
       {/* Grid-level cursor indicator */}
       <mesh ref={gridCursorRef} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <ringGeometry args={[0.15, 0.2, 32]} />
-        <meshBasicMaterial color="#a3a3a3" side={DoubleSide} depthTest={false} depthWrite={true} />
+        <meshBasicMaterial color="#818cf8" side={DoubleSide} depthTest={false} depthWrite={true} opacity={0.5} transparent />
       </mesh>
 
       {/* Vertical connector: local y=0 at grid, y=H at ceiling; position.y set to gridY on move */}
       {/* @ts-ignore */}
       <line ref={verticalLineRef} geometry={verticalGeo} renderOrder={1}>
-        <lineBasicNodeMaterial color="#a3a3a3" opacityNode={gradientOpacityNode} depthTest={false} depthWrite={false} transparent />
+        <lineBasicNodeMaterial color="#818cf8" opacityNode={gradientOpacityNode} depthTest={false} depthWrite={false} transparent />
       </line>
 
-      {/* Preview fill */}
+      {/* Preview fill (Top) */}
       {previewShape && (
         <mesh
           frustumCulled={false}
@@ -295,9 +315,27 @@ export const CeilingTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#d4d4d4"
+            color="#818cf8"
             depthTest={false}
-            opacity={0.3}
+            opacity={0.15}
+            side={DoubleSide}
+            transparent
+          />
+        </mesh>
+      )}
+
+      {/* Preview fill (Ground) */}
+      {previewShape && (
+        <mesh
+          frustumCulled={false}
+          position={[0, levelY + GRID_OFFSET, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <shapeGeometry args={[previewShape]} />
+          <meshBasicMaterial
+            color="#818cf8"
+            depthTest={false}
+            opacity={0.1}
             side={DoubleSide}
             transparent
           />
@@ -308,7 +346,7 @@ export const CeilingTool: React.FC = () => {
       {/* @ts-ignore */}
       <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#a3a3a3" linewidth={3} depthTest={false} depthWrite={false} />
+        <lineBasicNodeMaterial color="#818cf8" linewidth={3} depthTest={false} depthWrite={false} />
       </line>
 
       {/* Closing line */}
@@ -316,11 +354,32 @@ export const CeilingTool: React.FC = () => {
       <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#a3a3a3"
+          color="#818cf8"
           linewidth={2}
           depthTest={false}
           depthWrite={false}
           opacity={0.5}
+          transparent
+        />
+      </line>
+
+      {/* Ground main line */}
+      {/* @ts-ignore */}
+      <line ref={groundMainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
+        <bufferGeometry />
+        <lineBasicNodeMaterial color="#818cf8" linewidth={3} depthTest={false} depthWrite={false} opacity={0.3} transparent />
+      </line>
+
+      {/* Ground closing line */}
+      {/* @ts-ignore */}
+      <line ref={groundClosingLineRef} frustumCulled={false} renderOrder={1} visible={false}>
+        <bufferGeometry />
+        <lineBasicNodeMaterial
+          color="#818cf8"
+          linewidth={2}
+          depthTest={false}
+          depthWrite={false}
+          opacity={0.15}
           transparent
         />
       </line>
@@ -330,7 +389,8 @@ export const CeilingTool: React.FC = () => {
         <CursorSphere
           key={index}
           position={[x, levelY + CEILING_HEIGHT + 0.01, z]}
-          color={index === 0 ? '#22c55e' : undefined}
+          color="#818cf8"
+          showTooltip={false}
         />
       ))}
     </group>

@@ -2,7 +2,7 @@ import { RoofNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState } from "react";
-import { RenamePopover } from "./rename-popover";
+import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
@@ -12,7 +12,7 @@ interface RoofTreeNodeProps {
 }
 
 export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -23,7 +23,7 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
   };
 
   const handleDoubleClick = () => {
-    setRenameOpen(true);
+    setIsEditing(true);
   };
 
   const handleMouseEnter = () => {
@@ -40,28 +40,29 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
   const defaultName = `Roof (${sizeLabel})`;
 
   return (
-    <RenamePopover
-      node={node}
-      open={renameOpen}
-      onOpenChange={setRenameOpen}
-      defaultName={defaultName}
-    >
-      <TreeNodeWrapper
-        icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain" />}
-        label={node.name || defaultName}
-        depth={depth}
-        hasChildren={false}
-        expanded={false}
-        onToggle={() => {}}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        isSelected={isSelected}
-        isHovered={isHovered}
-        isVisible={node.visible !== false}
-        actions={<TreeNodeActions node={node} />}
-      />
-    </RenamePopover>
+    <TreeNodeWrapper
+      icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain" />}
+      label={
+        <InlineRenameInput
+          node={node}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={defaultName}
+        />
+      }
+      depth={depth}
+      hasChildren={false}
+      expanded={false}
+      onToggle={() => {}}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      isSelected={isSelected}
+      isHovered={isHovered}
+      isVisible={node.visible !== false}
+      actions={<TreeNodeActions node={node} />}
+    />
   );
 }

@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { DoubleSide, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
+import { DoubleSide, type Mesh, type Group, Shape, ShapeGeometry, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -94,7 +94,7 @@ const commitWallDrawing = (start: [number, number], end: [number, number]) => {
 }
 
 export const WallTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null)
+  const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
@@ -110,7 +110,6 @@ export const WallTool: React.FC = () => {
 
       gridPosition = [Math.round(event.position[0] * 2) / 2, Math.round(event.position[2] * 2) / 2]
       const cursorPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
-      cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
 
       if (buildingState.current === 1) {
         // Snap to 45° angles only if shift is not pressed
@@ -118,6 +117,9 @@ export const WallTool: React.FC = () => {
           ? cursorPosition
           : snapTo45Degrees(startingPoint.current, cursorPosition)
         endingPoint.current.copy(snapped)
+
+        // Position the cursor at the end of the wall being drawn
+        cursorRef.current.position.set(snapped.x, snapped.y, snapped.z)
 
         // Play snap sound only when the actual wall end position changes
         const currentWallEnd: [number, number] = [endingPoint.current.x, endingPoint.current.z]
@@ -129,6 +131,9 @@ export const WallTool: React.FC = () => {
 
         // Update wall preview geometry
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
+      } else {
+        // Not drawing a wall, just follow the grid position
+        cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
       }
     }
 
@@ -190,7 +195,7 @@ export const WallTool: React.FC = () => {
       <mesh ref={wallPreviewRef} visible={false} renderOrder={1}>
         <shapeGeometry />
         <meshBasicMaterial
-          color="#3b82f6"
+          color="#818cf8"
           transparent
           opacity={0.5}
           side={DoubleSide}
