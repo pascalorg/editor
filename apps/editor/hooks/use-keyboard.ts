@@ -15,6 +15,12 @@ export const useKeyboard = () => {
       if (e.key === 'Escape') {
         e.preventDefault()
         emitter.emit('tool:cancel')
+
+        // If in build mode, switch back to select mode
+        const { mode } = useEditor.getState()
+        if (mode === 'build') {
+          useEditor.getState().setMode('select')
+        }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
