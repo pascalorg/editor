@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "test ! -f .env.local || (echo 'Use root .env only; .env.local is forbidden for this app.' && exit 1); set -a && . ../../.env 2>/dev/null; set +a; next dev",
+    "dev": "set -a && . ../../.env 2>/dev/null; set +a; next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint",
