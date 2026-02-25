@@ -37,8 +37,13 @@ export function StructureTools() {
     ? tools.filter((t) => t.id === 'zone')
     : tools.filter((t) => t.id !== 'zone')
 
+  const hasActiveTool = visibleTools.some((t) => 
+    activeTool === t.id && 
+    (t.catalogCategory ? catalogCategory === t.catalogCategory : true)
+  )
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 px-1">
       {visibleTools.map((tool, index) => {
         // For item tools with catalog category, check both tool and category match
         const isActive =
@@ -52,10 +57,11 @@ export function StructureTools() {
             <TooltipTrigger asChild>
               <Button
                 className={cn(
-                  'size-11 rounded-lg transition-all',
-                  isActive && 'bg-primary shadow-md shadow-primary/20',
-                  !isActive && isContextual && 'bg-white/5 hover:bg-white/10',
-                  !isActive && !isContextual && 'opacity-40 hover:opacity-100 hover:bg-white/10',
+                  'size-11 rounded-lg transition-all duration-300',
+                  isActive && 'bg-primary shadow-lg shadow-primary/40 ring-2 ring-primary ring-offset-2 ring-offset-zinc-950 scale-110 z-10',
+                  !isActive && hasActiveTool && 'opacity-30 hover:opacity-60 scale-95 grayscale',
+                  !isActive && !hasActiveTool && isContextual && 'bg-white/5 hover:bg-white/10 hover:scale-105',
+                  !isActive && !hasActiveTool && !isContextual && 'opacity-60 hover:opacity-100 hover:bg-white/10 hover:scale-105',
                 )}
                 onClick={() => {
                   if (isActive) {

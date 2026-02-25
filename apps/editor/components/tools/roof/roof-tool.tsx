@@ -165,10 +165,6 @@ export const RoofTool: React.FC = () => {
         // Reset state
         corner1Ref.current = null
         outlineRef.current.visible = false
-
-        // Switch to select mode and deactivate tool
-        setMode('select')
-        setTool(null)
       }
     }
 

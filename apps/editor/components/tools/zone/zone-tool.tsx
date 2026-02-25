@@ -241,9 +241,6 @@ export const ZoneTool: React.FC = () => {
         setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
-
-        // Deactivate tool
-        setTool(null);
       } else {
         // Add point to polygon
         pointsRef.current = [...pointsRef.current, clickPoint];
@@ -263,9 +260,6 @@ export const ZoneTool: React.FC = () => {
         setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current });
         mainLineRef.current.visible = false;
         closingLineRef.current.visible = false;
-
-        // Deactivate tool
-        setTool(null);
       }
     };
 
