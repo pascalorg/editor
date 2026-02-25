@@ -336,7 +336,7 @@ function LevelItem({
           : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
       )}
     >
-      <button
+      <div
         className="flex-1 flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer min-w-0"
         onClick={() => setSelection({ levelId: level.id })}
         onDoubleClick={() => setIsEditing(true)}
@@ -349,7 +349,7 @@ function LevelItem({
           onStartEditing={() => setIsEditing(true)}
           defaultName={`Level ${level.level}`}
         />
-      </button>
+      </div>
         {/* Camera snapshot button */}
         <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
           <PopoverTrigger asChild>
