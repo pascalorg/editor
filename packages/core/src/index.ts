@@ -4,6 +4,7 @@ export type {
   BuildingEvent,
   CameraControlEvent,
   CeilingEvent,
+  DoorEvent,
   EventSuffix,
   GridEvent,
   ItemEvent,
@@ -43,6 +44,7 @@ export * from './schema'
 export { default as useScene } from './store/use-scene'
 // Systems
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
+export { DoorSystem } from './systems/door/door-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'

@@ -4,6 +4,7 @@ import useEditor, { type Phase, type Tool } from '@/store/use-editor'
 import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
+import { DoorTool } from './door/door-tool'
 import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -25,6 +26,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     slab: SlabTool,
     ceiling: CeilingTool,
     roof: RoofTool,
+    door: DoorTool,
     item: ItemTool,
     zone: ZoneTool,
     window: WindowTool,

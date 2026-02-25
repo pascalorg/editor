@@ -2,10 +2,6 @@ import { type AnyNodeId, type DoorNode, getScaledDimensions, type ItemNode, useS
 
 /**
  * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
- * Wall XZ uses level-local coordinates (levels only offset in Y, not XZ).
- * Pass levelYOffset (the level group's current world Y) and slabElevation (the
- * wall mesh's Y within the level group) so the cursor lands at the correct world
- * height — matching how WallSystem positions the wall mesh at slabElevation.
  */
 export function wallLocalToWorld(
   wallNode: WallNode,
@@ -26,30 +22,27 @@ export function wallLocalToWorld(
 }
 
 /**
- * Clamps window center position so it stays fully within wall bounds.
+ * Clamps door center X so it stays fully within wall bounds.
+ * Y is always height/2 — doors sit at floor level.
  */
 export function clampToWall(
   wallNode: WallNode,
   localX: number,
-  localY: number,
   width: number,
   height: number,
 ): { clampedX: number; clampedY: number } {
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
   const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallHeight = wallNode.height ?? 2.5
 
   const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
-  const clampedY = Math.max(height / 2, Math.min(wallHeight - height / 2, localY))
+  const clampedY = height / 2  // Doors always sit at floor level
   return { clampedX, clampedY }
 }
 
 /**
- * Directly checks the wall's children for bounding-box overlap with a proposed window.
- * Works for both `item` type (position[1] = bottom) and `window` type (position[1] = center).
- * The spatial grid only tracks `item` nodes, so windows must be checked this way.
- * Reads the wall's latest children from the store (not the event node) to avoid stale data.
+ * Checks if a proposed door position overlaps any existing wall children.
+ * Handles item, window, and door types.
  */
 export function hasWallChildOverlap(
   wallId: string,
@@ -61,7 +54,7 @@ export function hasWallChildOverlap(
 ): boolean {
   const nodes = useScene.getState().nodes
   const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
-  if (!wallNode) return true // Block if wall not found
+  if (!wallNode) return true
   const halfW = width / 2
   const halfH = height / 2
   const newBottom = clampedY - halfH
@@ -82,19 +75,19 @@ export function hasWallChildOverlap(
       const [w, h] = getScaledDimensions(item)
       childLeft = item.position[0] - w / 2
       childRight = item.position[0] + w / 2
-      childBottom = item.position[1]       // items store bottom Y
+      childBottom = item.position[1]
       childTop = item.position[1] + h
     } else if (child.type === 'window') {
       const win = child as WindowNode
       childLeft = win.position[0] - win.width / 2
       childRight = win.position[0] + win.width / 2
-      childBottom = win.position[1] - win.height / 2  // windows store center Y
+      childBottom = win.position[1] - win.height / 2
       childTop = win.position[1] + win.height / 2
     } else if (child.type === 'door') {
       const door = child as DoorNode
       childLeft = door.position[0] - door.width / 2
       childRight = door.position[0] + door.width / 2
-      childBottom = door.position[1] - door.height / 2  // doors store center Y
+      childBottom = door.position[1] - door.height / 2
       childTop = door.position[1] + door.height / 2
     } else {
       continue

@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 import { BuildingTreeNode } from "./building-tree-node";
 import { CeilingTreeNode } from "./ceiling-tree-node";
+import { DoorTreeNode } from "./door-tree-node";
 import { ItemTreeNode } from "./item-tree-node";
 import { LevelTreeNode } from "./level-tree-node";
 import { RoofTreeNode } from "./roof-tree-node";
@@ -37,6 +38,8 @@ export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
       return <RoofTreeNode node={node} depth={depth} />;
     case "item":
       return <ItemTreeNode node={node} depth={depth} />;
+    case "door":
+      return <DoorTreeNode node={node} depth={depth} />;
     case "window":
       return <WindowTreeNode node={node} depth={depth} />;
     case "zone":

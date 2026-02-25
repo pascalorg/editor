@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
-import type { BuildingNode, CeilingNode, ItemNode, LevelNode, RoofNode, SiteNode, SlabNode, WallNode, WindowNode, ZoneNode } from '../schema'
+import type { BuildingNode, CeilingNode, DoorNode, ItemNode, LevelNode, RoofNode, SiteNode, SlabNode, WallNode, WindowNode, ZoneNode } from '../schema'
 import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
@@ -28,6 +28,7 @@ export type SlabEvent = NodeEvent<SlabNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type WindowEvent = NodeEvent<WindowNode>
+export type DoorEvent = NodeEvent<DoorNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -83,6 +84,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'window', WindowEvent> &
+  NodeEvents<'door', DoorEvent> &
   CameraControlEvents &
   ToolEvents
 
