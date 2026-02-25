@@ -51,6 +51,9 @@ export const DoorNode = BaseNode.extend({
   handleHeight: z.number().default(1.05),
   handleSide: z.enum(['left', 'right']).default('right'),
 
+  // Leaf inner margin — space between leaf edge and segment content area [x, y]
+  contentPadding: z.tuple([z.number(), z.number()]).default([0.04, 0.04]),
+
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),

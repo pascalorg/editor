@@ -91,6 +91,28 @@ export function DoorPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
+  const setSegmentColumnRatio = (segIdx: number, colIdx: number, newVal: number) => {
+    const seg = node!.segments[segIdx]!
+    const normRatios = (() => {
+      const sum = seg.columnRatios.reduce((a, b) => a + b, 0)
+      return seg.columnRatios.map(r => r / sum)
+    })()
+    const numCols = normRatios.length
+    const clamped = Math.max(0.05, Math.min(0.95, newVal))
+    const neighborIdx = colIdx < numCols - 1 ? colIdx + 1 : colIdx - 1
+    const delta = clamped - normRatios[colIdx]!
+    const neighborVal = Math.max(0.05, normRatios[neighborIdx]! - delta)
+    const newRatios = normRatios.map((v, i) => {
+      if (i === colIdx) return clamped
+      if (i === neighborIdx) return neighborVal
+      return v
+    })
+    const updated = node!.segments.map((s, idx) =>
+      idx === segIdx ? { ...s, columnRatios: newRatios } : s,
+    )
+    handleUpdate({ segments: updated })
+  }
+
   if (!node || node.type !== 'door' || selectedIds.length !== 1) return null
 
   return (
@@ -159,7 +181,7 @@ export function DoorPanel() {
               <NumberInput
                 label="Height"
                 value={Math.round(node.height * 100) / 100}
-                onChange={(v) => handleUpdate({ height: v })}
+                onChange={(v) => handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })}
                 min={1.0}
                 precision={2}
                 className="flex-1"
@@ -195,6 +217,39 @@ export function DoorPanel() {
                 min={0.01}
                 precision={3}
                 step={0.01}
+                className="flex-1"
+              />
+              <span className="text-muted-foreground text-xs shrink-0">m</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Padding */}
+        <div className="space-y-2">
+          <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            Content Padding
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-1.5">
+              <NumberInput
+                label="Horizontal"
+                value={Math.round(node.contentPadding[0] * 1000) / 1000}
+                onChange={(v) => handleUpdate({ contentPadding: [v, node.contentPadding[1]] })}
+                min={0}
+                precision={3}
+                step={0.005}
+                className="flex-1"
+              />
+              <span className="text-muted-foreground text-xs shrink-0">m</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <NumberInput
+                label="Vertical"
+                value={Math.round(node.contentPadding[1] * 1000) / 1000}
+                onChange={(v) => handleUpdate({ contentPadding: [node.contentPadding[0], v] })}
+                min={0}
+                precision={3}
+                step={0.005}
                 className="flex-1"
               />
               <span className="text-muted-foreground text-xs shrink-0">m</span>
@@ -368,87 +423,150 @@ export function DoorPanel() {
           <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
             Leaf segments (top → bottom)
           </label>
-          {node.segments.map((seg, i) => (
-            <div key={i} className="rounded border border-border p-2 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">Segment {i + 1}</span>
-                <div className="flex gap-1">
-                  {(['panel', 'glass', 'empty'] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, type: t } : s,
-                        )
-                        handleUpdate({ segments: updated })
-                      }}
-                      className={`rounded border px-1.5 py-0.5 text-xs cursor-pointer transition-colors ${
-                        seg.type === t
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:bg-accent'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <NumberInput
-                  label="Height ratio"
-                  value={Math.round(seg.heightRatio * 100) / 100}
-                  onChange={(v) => {
-                    const updated = node.segments.map((s, idx) =>
-                      idx === i ? { ...s, heightRatio: Math.max(0.05, v) } : s,
-                    )
-                    handleUpdate({ segments: updated })
-                  }}
-                  min={0.05}
-                  precision={2}
-                  step={0.05}
-                  className="flex-1"
-                />
-              </div>
-              {seg.type === 'panel' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <NumberInput
-                      label="Inset"
-                      value={Math.round(seg.panelInset * 1000) / 1000}
-                      onChange={(v) => {
-                        const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, panelInset: v } : s,
-                        )
-                        handleUpdate({ segments: updated })
-                      }}
-                      min={0.005}
-                      precision={3}
-                      step={0.005}
-                      className="flex-1"
-                    />
-                    <span className="text-muted-foreground text-xs shrink-0">m</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <NumberInput
-                      label="Depth"
-                      value={Math.round(seg.panelDepth * 1000) / 1000}
-                      onChange={(v) => {
-                        const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, panelDepth: v } : s,
-                        )
-                        handleUpdate({ segments: updated })
-                      }}
-                      precision={3}
-                      step={0.005}
-                      className="flex-1"
-                    />
-                    <span className="text-muted-foreground text-xs shrink-0">m</span>
+          {node.segments.map((seg, i) => {
+            const numCols = seg.columnRatios.length
+            const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
+            const normCols = seg.columnRatios.map(r => r / colSum)
+            return (
+              <div key={i} className="rounded border border-border p-2 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Segment {i + 1}</span>
+                  <div className="flex gap-1">
+                    {(['panel', 'glass', 'empty'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          const updated = node.segments.map((s, idx) =>
+                            idx === i ? { ...s, type: t } : s,
+                          )
+                          handleUpdate({ segments: updated })
+                        }}
+                        className={`rounded border px-1.5 py-0.5 text-xs cursor-pointer transition-colors ${
+                          seg.type === t
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border hover:bg-accent'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="flex items-center gap-1.5">
+                  <NumberInput
+                    label="Height ratio"
+                    value={Math.round(seg.heightRatio * 100) / 100}
+                    onChange={(v) => {
+                      const updated = node.segments.map((s, idx) =>
+                        idx === i ? { ...s, heightRatio: Math.max(0.05, v) } : s,
+                      )
+                      handleUpdate({ segments: updated })
+                    }}
+                    min={0.05}
+                    precision={2}
+                    step={0.05}
+                    className="flex-1"
+                  />
+                </div>
+                {/* Columns */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Columns</span>
+                    <NumberInput
+                      label=""
+                      value={numCols}
+                      onChange={(v) => {
+                        const n = Math.max(1, Math.min(8, Math.round(v)))
+                        const updated = node.segments.map((s, idx) =>
+                          idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
+                        )
+                        handleUpdate({ segments: updated })
+                      }}
+                      min={1}
+                      max={8}
+                      precision={0}
+                      step={1}
+                      className="w-16"
+                    />
+                  </div>
+                  {numCols > 1 && (
+                    <div className="space-y-1 pl-1">
+                      {normCols.map((ratio, ci) => (
+                        <div key={ci} className="flex items-center gap-1.5">
+                          <NumberInput
+                            label={`C${ci + 1}`}
+                            value={Math.round(ratio * 100 * 10) / 10}
+                            onChange={(v) => setSegmentColumnRatio(i, ci, v / 100)}
+                            min={5}
+                            max={95}
+                            precision={1}
+                            step={1}
+                            className="flex-1"
+                          />
+                          <span className="text-muted-foreground text-xs shrink-0">%</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-1.5">
+                        <NumberInput
+                          label="Divider"
+                          value={Math.round(seg.dividerThickness * 1000) / 1000}
+                          onChange={(v) => {
+                            const updated = node.segments.map((s, idx) =>
+                              idx === i ? { ...s, dividerThickness: v } : s,
+                            )
+                            handleUpdate({ segments: updated })
+                          }}
+                          min={0.005}
+                          precision={3}
+                          step={0.005}
+                          className="flex-1"
+                        />
+                        <span className="text-muted-foreground text-xs shrink-0">m</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {seg.type === 'panel' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <NumberInput
+                        label="Inset"
+                        value={Math.round(seg.panelInset * 1000) / 1000}
+                        onChange={(v) => {
+                          const updated = node.segments.map((s, idx) =>
+                            idx === i ? { ...s, panelInset: v } : s,
+                          )
+                          handleUpdate({ segments: updated })
+                        }}
+                        min={0.005}
+                        precision={3}
+                        step={0.005}
+                        className="flex-1"
+                      />
+                      <span className="text-muted-foreground text-xs shrink-0">m</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <NumberInput
+                        label="Depth"
+                        value={Math.round(seg.panelDepth * 1000) / 1000}
+                        onChange={(v) => {
+                          const updated = node.segments.map((s, idx) =>
+                            idx === i ? { ...s, panelDepth: v } : s,
+                          )
+                          handleUpdate({ segments: updated })
+                        }}
+                        precision={3}
+                        step={0.005}
+                        className="flex-1"
+                      />
+                      <span className="text-muted-foreground text-xs shrink-0">m</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
           <div className="flex gap-2">
             <button
               type="button"
