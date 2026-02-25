@@ -37,7 +37,7 @@ export function ReferencePanel() {
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-72 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b p-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           {isScan ? (
             <Box className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -49,7 +49,7 @@ export function ReferencePanel() {
           </h2>
         </div>
         <button
-          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground cursor-pointer"
           onClick={handleClose}
         >
           <X className="h-4 w-4" />
@@ -101,7 +101,7 @@ export function ReferencePanel() {
               />
               <span className="text-muted-foreground text-xs shrink-0">&deg;</span>
               <button
-                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs hover:bg-accent cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], node.rotation[1] - Math.PI / 4, node.rotation[2]],
@@ -111,7 +111,7 @@ export function ReferencePanel() {
                 &minus;45
               </button>
               <button
-                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs hover:bg-accent cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], node.rotation[1] + Math.PI / 4, node.rotation[2]],

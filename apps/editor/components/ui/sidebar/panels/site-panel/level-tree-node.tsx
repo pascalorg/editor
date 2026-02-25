@@ -2,7 +2,7 @@ import { LevelNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { Layers } from "lucide-react";
 import { useState } from "react";
-import { RenamePopover } from "./rename-popover";
+import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
@@ -13,7 +13,7 @@ interface LevelTreeNodeProps {
 
 export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.levelId === node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -23,35 +23,36 @@ export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
   };
 
   const handleDoubleClick = () => {
-    setRenameOpen(true);
+    setIsEditing(true);
   };
 
   const defaultName = `Level ${node.level}`;
 
   return (
-    <RenamePopover
-      node={node}
-      open={renameOpen}
-      onOpenChange={setRenameOpen}
-      defaultName={defaultName}
+    <TreeNodeWrapper
+      icon={<Layers className="w-3.5 h-3.5" />}
+      label={
+        <InlineRenameInput
+          node={node}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={defaultName}
+        />
+      }
+      depth={depth}
+      hasChildren={node.children.length > 0}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      isSelected={isSelected}
+      isHovered={isHovered}
+      actions={<TreeNodeActions node={node} />}
     >
-      <TreeNodeWrapper
-        icon={<Layers className="w-3.5 h-3.5" />}
-        label={node.name || defaultName}
-        depth={depth}
-        hasChildren={node.children.length > 0}
-        expanded={expanded}
-        onToggle={() => setExpanded(!expanded)}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        isSelected={isSelected}
-        isHovered={isHovered}
-        actions={<TreeNodeActions node={node} />}
-      >
-        {node.children.map((childId) => (
-          <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
-        ))}
-      </TreeNodeWrapper>
-    </RenamePopover>
+      {node.children.map((childId) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      ))}
+    </TreeNodeWrapper>
   );
 }

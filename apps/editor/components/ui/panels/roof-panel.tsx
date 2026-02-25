@@ -39,7 +39,7 @@ export function RoofPanel() {
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-72 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b p-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/roof.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold text-foreground text-sm truncate">
@@ -48,7 +48,7 @@ export function RoofPanel() {
         </div>
         <button
           type="button"
-          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground cursor-pointer"
           onClick={handleClose}
         >
           <X className="h-4 w-4" />
@@ -65,7 +65,7 @@ export function RoofPanel() {
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 min="0.5"
                 onChange={(e) => {
                   const value = Number.parseFloat(e.target.value)
@@ -88,7 +88,7 @@ export function RoofPanel() {
             </label>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 min="0.1"
                 onChange={(e) => {
                   const value = Number.parseFloat(e.target.value)
@@ -119,7 +119,7 @@ export function RoofPanel() {
                 <label className="text-muted-foreground text-xs">Left</label>
                 <div className="flex items-center gap-1">
                   <input
-                    className="w-full rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                    className="w-full rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                     min="0.1"
                     onChange={(e) => {
                       const value = Number.parseFloat(e.target.value)
@@ -138,7 +138,7 @@ export function RoofPanel() {
                 <label className="text-muted-foreground text-xs">Right</label>
                 <div className="flex items-center gap-1">
                   <input
-                    className="w-full rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                    className="w-full rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                     min="0.1"
                     onChange={(e) => {
                       const value = Number.parseFloat(e.target.value)
@@ -163,7 +163,7 @@ export function RoofPanel() {
             </label>
             <div className="flex items-center gap-1.5">
               <input
-                className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                className="min-w-0 flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 onChange={(e) => {
                   const degrees = Number.parseFloat(e.target.value)
                   if (!Number.isNaN(degrees)) {
@@ -178,7 +178,7 @@ export function RoofPanel() {
               <span className="text-muted-foreground text-xs shrink-0">&deg;</span>
               <button
                 type="button"
-                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs hover:bg-accent cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => {
                   const newRotation = node.rotation - Math.PI / 2
                   handleUpdate({ rotation: newRotation })
@@ -188,7 +188,7 @@ export function RoofPanel() {
               </button>
               <button
                 type="button"
-                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs hover:bg-accent cursor-pointer"
+                className="shrink-0 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-1.5 py-1 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => {
                   const newRotation = node.rotation + Math.PI / 2
                   handleUpdate({ rotation: newRotation })
@@ -209,7 +209,7 @@ export function RoofPanel() {
                 <div key={i} className="space-y-1">
                   <label className="text-muted-foreground text-xs">{['X', 'Y', 'Z'][i]}</label>
                   <input
-                    className="w-full rounded border border-input bg-background px-2 py-1 text-foreground text-sm outline-none focus:border-primary"
+                    className="w-full rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1 text-foreground text-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                     onChange={(e) => {
                       const value = Number.parseFloat(e.target.value)
                       if (!Number.isNaN(value)) {

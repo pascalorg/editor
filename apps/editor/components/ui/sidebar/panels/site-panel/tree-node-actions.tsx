@@ -42,7 +42,7 @@ export function TreeNodeActions({ node }: TreeNodeActionsProps) {
   return (
     <div className="flex items-center gap-0.5">
       <button
-        className="w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
+        className="w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
         onClick={toggleVisibility}
         title={isVisible ? "Hide" : "Show"}
       >
@@ -56,7 +56,7 @@ export function TreeNodeActions({ node }: TreeNodeActionsProps) {
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
-            className="relative w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:bg-primary-foreground/20"
+            className="relative w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             onClick={(e) => e.stopPropagation()}
             title="Camera snapshot"
           >

@@ -84,7 +84,7 @@ export function ItemPanel() {
   return (
     <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-72 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b p-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex items-center gap-2 min-w-0">
           <Image
             src={node.asset.thumbnail || '/icons/furniture.png'}
@@ -99,7 +99,7 @@ export function ItemPanel() {
         </div>
         <button
           type="button"
-          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground cursor-pointer"
           onClick={handleClose}
         >
           <X className="h-4 w-4" />
@@ -254,7 +254,7 @@ export function ItemPanel() {
             <label className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
               Dimensions
             </label>
-            <div className="rounded border border-border bg-muted/50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-neutral-200/60 dark:border-border/50 bg-white/50 dark:bg-accent/30 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-3 py-2 text-sm text-foreground">
               {(() => {
                 const [w, h, d] = getScaledDimensions(node)
                 return `${Math.round(w * 100) / 100}m × ${Math.round(h * 100) / 100}m × ${Math.round(d * 100) / 100}m`
@@ -265,11 +265,11 @@ export function ItemPanel() {
       </div>
 
       {/* Action Buttons */}
-      <div className="border-t p-3">
+      <div className="border-t border-border/50 p-3 bg-white/50 dark:bg-transparent">
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleMove}
           >
             <Move className="h-3.5 w-3.5" />
@@ -277,7 +277,7 @@ export function ItemPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDuplicate}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export function ItemPanel() {
           </button>
           <button
             type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-xs hover:bg-accent cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
             onClick={handleDelete}
           >
             <Trash2 className="h-3.5 w-3.5" />

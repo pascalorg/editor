@@ -2,7 +2,7 @@ import { type AnyNodeId, ItemNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState } from "react";
-import { RenamePopover } from "./rename-popover";
+import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
@@ -22,7 +22,7 @@ interface ItemTreeNodeProps {
 }
 
 export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const iconSrc = CATEGORY_ICONS[node.asset.category] || "/icons/couch.png";
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
@@ -35,7 +35,7 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
   };
 
   const handleDoubleClick = () => {
-    setRenameOpen(true);
+    setIsEditing(true);
   };
 
   const handleMouseEnter = () => {
@@ -50,32 +50,33 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0;
 
   return (
-    <RenamePopover
-      node={node}
-      open={renameOpen}
-      onOpenChange={setRenameOpen}
-      defaultName={defaultName}
+    <TreeNodeWrapper
+      icon={<Image src={iconSrc} alt="" width={14} height={14} className="object-contain" />}
+      label={
+        <InlineRenameInput
+          node={node}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={defaultName}
+        />
+      }
+      depth={depth}
+      hasChildren={hasChildren}
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      isSelected={isSelected}
+      isHovered={isHovered}
+      isVisible={node.visible !== false}
+      actions={<TreeNodeActions node={node} />}
     >
-      <TreeNodeWrapper
-        icon={<Image src={iconSrc} alt="" width={14} height={14} className="object-contain" />}
-        label={node.name || defaultName}
-        depth={depth}
-        hasChildren={hasChildren}
-        expanded={expanded}
-        onToggle={() => setExpanded(!expanded)}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        isSelected={isSelected}
-        isHovered={isHovered}
-        isVisible={node.visible !== false}
-        actions={<TreeNodeActions node={node} />}
-      >
-        {hasChildren && node.children.map((childId) => (
-          <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
-        ))}
-      </TreeNodeWrapper>
-    </RenamePopover>
+      {hasChildren && node.children.map((childId) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      ))}
+    </TreeNodeWrapper>
   );
 }

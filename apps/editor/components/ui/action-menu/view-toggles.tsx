@@ -133,8 +133,8 @@ export function ViewToggles() {
             className={cn(
               'h-8 w-8 text-zinc-400 transition-all p-0',
               wallMode !== 'cutaway'
-                ? 'bg-emerald-500/20 text-emerald-400'
-                : 'hover:bg-zinc-800',
+                ? 'bg-white/10'
+                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
             )}
             onClick={cycleWallMode}
             size="icon"
@@ -156,16 +156,16 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-8 w-8 text-zinc-400 transition-all p-0',
               showScans
-                ? 'bg-cyan-500/20 text-cyan-400'
-                : 'hover:bg-zinc-800',
+                ? 'bg-white/10'
+                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
             )}
             onClick={() => setShowScans(!showScans)}
             size="icon"
             variant="ghost"
           >
-            <Box className="h-4 w-4" />
+            <img alt="Scans" className="h-5 w-5 object-contain" src="/icons/mesh.png" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -178,16 +178,16 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-8 w-8 text-zinc-400 transition-all p-0',
               showGuides
-                ? 'bg-purple-500/20 text-purple-400'
-                : 'hover:bg-zinc-800',
+                ? 'bg-white/10'
+                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
             )}
             onClick={() => setShowGuides(!showGuides)}
             size="icon"
             variant="ghost"
           >
-            <Image className="h-4 w-4" />
+            <img alt="Guides" className="h-5 w-5 object-contain" src="/icons/floorplan.png" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>

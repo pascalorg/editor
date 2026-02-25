@@ -51,7 +51,7 @@ export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
 
 interface TreeNodeWrapperProps {
   icon: React.ReactNode;
-  label: string;
+  label: React.ReactNode;
   depth: number;
   hasChildren: boolean;
   expanded: boolean;
@@ -92,15 +92,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       <div ref={ref}>
         <div
           className={cn(
-            "flex items-center h-7 cursor-pointer group/row text-sm select-none",
+            "flex items-center h-8 cursor-pointer group/row text-sm select-none rounded-lg border transition-all duration-200 mx-1 mb-0.5",
             isSelected
-              ? "text-primary-foreground bg-primary/80 hover:bg-primary/90"
+              ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
               : isHovered
-                ? "bg-accent/70 text-foreground"
-                : "text-muted-foreground hover:bg-accent/50",
+                ? "bg-white/40 dark:bg-accent/30 border-neutral-200/50 dark:border-border/40 text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground",
             !isVisible && "opacity-50"
           )}
-          style={{ paddingLeft: depth * 12 + 4 }}
+          style={{ paddingLeft: depth * 12 + 4, paddingRight: 4 }}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
         >
@@ -127,7 +127,9 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             <span className="w-4 h-4 flex items-center justify-center shrink-0">
               {icon}
             </span>
-            <span className="truncate">{label}</span>
+            <div className="flex-1 min-w-0 truncate">
+              {label}
+            </div>
           </div>
           {actions && (
             <div className="opacity-0 group-hover/row:opacity-100 pr-1">

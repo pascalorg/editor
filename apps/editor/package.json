@@ -11,6 +11,7 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@number-flow/react": "^0.5.14",
     "@pascal-app/auth": "*",
     "@pascal-app/core": "*",
     "@pascal-app/db": "*",
