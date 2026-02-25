@@ -25,6 +25,7 @@ export const CeilingSystem = () => {
         const ceilingGrid = mesh.getObjectByName('ceiling-grid')
         if (ceilingGrid) {
           ceilingGrid.visible = shouldShowGrid
+          ceilingGrid.scale.setScalar(shouldShowGrid ? 1 : 0.0) // Scale down to zero to prevent event interference when grid is hidden
         }
       }
     })
