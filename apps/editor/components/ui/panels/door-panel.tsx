@@ -488,25 +488,21 @@ export function DoorPanel() {
                 </div>
                 {/* Columns */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Columns</span>
-                    <NumberInput
-                      label=""
-                      value={numCols}
-                      onChange={(v) => {
-                        const n = Math.max(1, Math.min(8, Math.round(v)))
-                        const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
-                        )
-                        handleUpdate({ segments: updated })
-                      }}
-                      min={1}
-                      max={8}
-                      precision={0}
-                      step={1}
-                      className="w-16"
-                    />
-                  </div>
+                  <NumberInput
+                    label="Columns"
+                    value={numCols}
+                    onChange={(v) => {
+                      const n = Math.max(1, Math.min(8, Math.round(v)))
+                      const updated = node.segments.map((s, idx) =>
+                        idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
+                      )
+                      handleUpdate({ segments: updated })
+                    }}
+                    min={1}
+                    max={8}
+                    precision={0}
+                    step={1}
+                  />
                   {numCols > 1 && (
                     <div className="space-y-1 pl-1">
                       {normCols.map((ratio, ci) => (
@@ -556,7 +552,7 @@ export function DoorPanel() {
                           )
                           handleUpdate({ segments: updated })
                         }}
-                        min={0.005}
+                        min={0}
                         precision={3}
                         step={0.005}
                         className="flex-1"
@@ -573,6 +569,7 @@ export function DoorPanel() {
                           )
                           handleUpdate({ segments: updated })
                         }}
+                        min={0}
                         precision={3}
                         step={0.005}
                         className="flex-1"
