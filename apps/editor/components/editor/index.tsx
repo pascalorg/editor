@@ -2,7 +2,6 @@
 
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { Viewer } from '@pascal-app/viewer'
-import { ThumbnailGenerator } from '@/app/viewer/[id]/thumbnail-generator'
 import { useAuth } from '@/features/community/lib/auth/hooks'
 import { useLocalProjectScene } from '@/features/community/lib/local-storage/hooks'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
@@ -23,6 +22,7 @@ import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
+import { ThumbnailGenerator } from './thumbnail-generator'
 
 // Load default scene initially (will be replaced when project loads)
 useScene.getState().loadScene()
