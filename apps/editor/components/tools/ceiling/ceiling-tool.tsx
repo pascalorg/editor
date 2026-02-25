@@ -2,6 +2,7 @@ import { CeilingNode, emitter, type GridEvent, type LevelNode, useScene } from '
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
+import { mix, positionLocal } from 'three/tsl'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -69,6 +70,7 @@ export const CeilingTool: React.FC = () => {
   const gridCursorRef = useRef<Mesh>(null)
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
+  const verticalLineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
 
@@ -78,6 +80,18 @@ export const CeilingTool: React.FC = () => {
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const shiftPressed = useRef(false)
+
+  // Static geometry: local y goes 0 (grid) → H (ceiling), mesh is positioned at gridY
+  const verticalGeo = useMemo(
+    () => new BufferGeometry().setFromPoints([new Vector3(0, 0, 0), new Vector3(0, CEILING_HEIGHT - GRID_OFFSET, 0)]),
+    [],
+  )
+
+  // opacityNode: positionLocal.y is 0 at grid, H at ceiling → fade from 0.6 to 0
+  const gradientOpacityNode = useMemo(
+    () => mix(0.6, 0.0, positionLocal.y.div(CEILING_HEIGHT - GRID_OFFSET).clamp()),
+    [],
+  )
 
   // Update cursor position and lines on grid move
   useEffect(() => {
@@ -117,6 +131,10 @@ export const CeilingTool: React.FC = () => {
       previousSnappedPointRef.current = displayPoint
       cursorRef.current.position.set(displayPoint[0], ceilingY, displayPoint[1])
       gridCursorRef.current.position.set(displayPoint[0], gridY, displayPoint[1])
+
+      if (verticalLineRef.current) {
+        verticalLineRef.current.position.set(displayPoint[0], gridY, displayPoint[1])
+      }
     }
 
     const onGridClick = (_event: GridEvent) => {
@@ -261,6 +279,12 @@ export const CeilingTool: React.FC = () => {
         <ringGeometry args={[0.15, 0.2, 32]} />
         <meshBasicMaterial color="#a3a3a3" side={DoubleSide} depthTest={false} depthWrite={true} />
       </mesh>
+
+      {/* Vertical connector: local y=0 at grid, y=H at ceiling; position.y set to gridY on move */}
+      {/* @ts-ignore */}
+      <line ref={verticalLineRef} geometry={verticalGeo} renderOrder={1}>
+        <lineBasicNodeMaterial color="#a3a3a3" opacityNode={gradientOpacityNode} depthTest={false} depthWrite={false} transparent />
+      </line>
 
       {/* Preview fill */}
       {previewShape && (
