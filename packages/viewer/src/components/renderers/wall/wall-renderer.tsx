@@ -12,10 +12,11 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
   const handlers = useNodeEvents(node, 'wall')
 
   return (
-    <mesh ref={ref} castShadow receiveShadow visible={node.visible}>
+    <mesh ref={ref} castShadow receiveShadow visible={node.visible} {...handlers}>
       {/* WallSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
-      <mesh name="collision-mesh" {...handlers} visible={false}>
+      {/* Collision mesh: full-wall geometry (no cutouts) for WallSystem, no event handlers */}
+      <mesh name="collision-mesh" visible={false}>
         <boxGeometry args={[0, 0, 0]} />
       </mesh>
 

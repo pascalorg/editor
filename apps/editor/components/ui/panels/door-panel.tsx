@@ -116,7 +116,7 @@ export function DoorPanel() {
   if (!node || node.type !== 'door' || selectedIds.length !== 1) return null
 
   return (
-    <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-82 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md">
+    <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-82 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md max-h-[calc(100dvh-100px)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 border-b p-3">
         <div className="flex items-center gap-2 min-w-0">
