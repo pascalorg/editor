@@ -330,14 +330,14 @@ function LevelItem({
   return (
     <div
       className={cn(
-        "flex items-center group/level rounded-lg border transition-all duration-200 mx-1 mb-0.5",
+        "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200",
         selectedLevelId === level.id
-          ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
+          ? "bg-accent/50 text-foreground"
+          : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
       )}
     >
       <div
-        className="flex-1 flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer min-w-0"
+        className="flex-1 flex items-center gap-2 pl-3 py-2 text-sm cursor-pointer min-w-0"
         onClick={() => setSelection({ levelId: level.id })}
         onDoubleClick={() => setIsEditing(true)}
       >
@@ -484,9 +484,9 @@ function LevelsSection() {
   };
 
   return (
-    <div className="border-b border-border/50">
+    <div className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Levels
         </span>
@@ -499,7 +499,7 @@ function LevelsSection() {
       </div>
 
       {/* Level buttons */}
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
+      <div className="flex flex-col">
         {levels.map((level) => (
           <LevelItem
             key={level.id}
@@ -539,7 +539,7 @@ function LayerToggle() {
   const setPhase = useEditor((state) => state.setPhase);
 
   return (
-    <div className="flex items-center p-1 mx-3 my-2 bg-accent/50 rounded-lg gap-1">
+    <div className="flex items-center p-1 bg-accent/20 gap-1 border-b border-border/50">
       <button
         className={cn(
           "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
@@ -643,12 +643,12 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
   return (
     <div
       className={cn(
-        "flex items-center h-8 cursor-pointer group/row text-sm px-2 mx-1 mb-0.5 select-none rounded-lg border transition-all duration-200",
+        "flex items-center h-8 cursor-pointer group/row text-sm px-3 select-none border-b border-border/50 transition-all duration-200",
         isSelected
-          ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
+          ? "bg-accent/50 text-foreground"
           : isHovered
-            ? "bg-white/40 dark:bg-accent/30 border-neutral-200/50 dark:border-border/40 text-foreground"
-            : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
+            ? "bg-accent/30 text-foreground"
+            : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
@@ -808,7 +808,7 @@ function ContentSection() {
     }
 
     return (
-      <div className="py-1">
+      <div className="flex flex-col">
         {levelZones.map((zone) => (
           <ZoneItem key={zone.id} zone={zone} />
         ))}
@@ -855,7 +855,7 @@ function ContentSection() {
   }
 
   return (
-    <div className="py-1">
+    <div className="flex flex-col">
       {elementChildren.map((childId) => (
         <TreeNode key={childId} nodeId={childId} depth={0} />
       ))}
@@ -922,7 +922,7 @@ export function SitePanel() {
             No buildings yet
           </div>
         ) : (
-          <div className="flex flex-col py-2 gap-2">
+          <div className="flex flex-col">
             {buildings.map((building) => {
               const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
 
@@ -930,14 +930,14 @@ export function SitePanel() {
                 <div key={building.id} className="flex flex-col">
                   <div
                     className={cn(
-                      "group/building flex items-center h-10 mx-2 rounded-lg border transition-all duration-200",
+                      "group/building flex items-center h-10 border-b border-border/50 pr-2 transition-all duration-200",
                       isBuildingActive
-                        ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
-                        : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground"
+                        ? "bg-accent/50 text-foreground"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
                     )}
                   >
                     <button
-                      className="flex-1 flex items-center gap-2 px-3 h-full cursor-pointer min-w-0"
+                      className="flex-1 flex items-center gap-2 pl-3 py-2 h-full cursor-pointer min-w-0"
                       onClick={() => {
                         setSelection({ buildingId: building.id });
                         if (phase === "site") {
@@ -1024,12 +1024,10 @@ export function SitePanel() {
 
                   {/* Tools and content for the active building */}
                   {isBuildingActive && (
-                    <div className="flex flex-col mt-2 px-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
                       <LevelsSection />
                       <LayerToggle />
-                      <div className="mt-1">
-                        <ContentSection />
-                      </div>
+                      <ContentSection />
                     </div>
                   )}
                 </div>

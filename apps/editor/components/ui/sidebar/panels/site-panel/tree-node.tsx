@@ -92,15 +92,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       <div ref={ref}>
         <div
           className={cn(
-            "flex items-center h-8 cursor-pointer group/row text-sm select-none rounded-lg border transition-all duration-200 mx-1 mb-0.5",
+            "flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
             isSelected
-              ? "bg-white dark:bg-accent/50 border-neutral-200/60 dark:border-border/50 shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 dark:ring-white/10 ring-inset text-foreground"
+              ? "bg-accent/50 text-foreground"
               : isHovered
-                ? "bg-white/40 dark:bg-accent/30 border-neutral-200/50 dark:border-border/40 text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-white/40 dark:hover:bg-accent/30 hover:border-neutral-200/50 dark:hover:border-border/40 hover:text-foreground",
+                ? "bg-accent/30 text-foreground"
+                : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
             !isVisible && "opacity-50"
           )}
-          style={{ paddingLeft: depth * 12 + 4, paddingRight: 4 }}
+          style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
         >
