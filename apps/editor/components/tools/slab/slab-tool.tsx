@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, type LevelNode, SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from 'three'
+import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -64,7 +64,7 @@ const commitSlabDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 }
 
 export const SlabTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null)
+  const cursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
@@ -248,9 +248,9 @@ export const SlabTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#a3a3a3"
+            color="#818cf8"
             depthTest={false}
-            opacity={0.3}
+            opacity={0.15}
             side={DoubleSide}
             transparent
           />
@@ -261,7 +261,7 @@ export const SlabTool: React.FC = () => {
       {/* @ts-ignore */}
       <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#737373" linewidth={3} depthTest={false} depthWrite={false} />
+        <lineBasicNodeMaterial color="#818cf8" linewidth={3} depthTest={false} depthWrite={false} />
       </line>
 
       {/* Closing line */}
@@ -269,7 +269,7 @@ export const SlabTool: React.FC = () => {
       <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#737373"
+          color="#818cf8"
           linewidth={2}
           depthTest={false}
           depthWrite={false}
@@ -280,7 +280,7 @@ export const SlabTool: React.FC = () => {
 
       {/* Point markers */}
       {points.map(([x, z], index) => (
-        <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color={index === 0 ? '#22c55e' : undefined} />
+        <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color="#818cf8" showTooltip={false} height={0} />
       ))}
     </group>
   )

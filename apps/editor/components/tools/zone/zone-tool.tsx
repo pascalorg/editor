@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, useScene, ZoneNode, type LevelNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BufferGeometry, DoubleSide, type Line, type Mesh, Shape, Vector3 } from "three";
+import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } from "three";
 import useEditor from "@/store/use-editor";
 import { CursorSphere } from "../shared/cursor-sphere";
 
@@ -101,7 +101,7 @@ const isValidPoint = (
 };
 
 export const ZoneTool: React.FC = () => {
-  const cursorRef = useRef<Mesh>(null);
+  const cursorRef = useRef<Group>(null);
   const mainLineRef = useRef<Line>(null!);
   const closingLineRef = useRef<Line>(null!);
   const pointsRef = useRef<Array<[number, number]>>([]);
@@ -318,7 +318,7 @@ export const ZoneTool: React.FC = () => {
   return (
     <group>
       {/* Cursor */}
-      <CursorSphere ref={cursorRef} color="#3b82f6" />
+      <CursorSphere ref={cursorRef} />
 
       {/* Preview fill */}
       {previewShape && (
@@ -329,7 +329,7 @@ export const ZoneTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#3b82f6"
+            color="#818cf8"
             depthTest={false}
             opacity={0.15}
             side={DoubleSide}
@@ -343,7 +343,7 @@ export const ZoneTool: React.FC = () => {
       <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#3b82f6"
+          color="#818cf8"
           linewidth={3}
           depthTest={false}
           depthWrite={false}
@@ -355,7 +355,7 @@ export const ZoneTool: React.FC = () => {
       <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#3b82f6"
+          color="#818cf8"
           linewidth={2}
           depthTest={false}
           depthWrite={false}
@@ -367,7 +367,7 @@ export const ZoneTool: React.FC = () => {
       {/* Point markers */}
       {points.map(([x, z], index) =>
         isValidPoint([x, z]) ? (
-          <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color={index === 0 ? "#22c55e" : "#3b82f6"} />
+          <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color="#818cf8" showTooltip={false} height={0} />
         ) : null
       )}
     </group>

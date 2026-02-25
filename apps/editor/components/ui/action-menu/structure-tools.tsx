@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, } from '@/components/ui/primit
 
 import { cn } from '@/lib/utils'
 import useEditor, { CatalogCategory, StructureTool, Tool } from '@/store/use-editor'
+import { useContextualTools } from '@/hooks/use-contextual-tools'
 
 export type ToolConfig = {
    id: StructureTool; iconSrc: string; label: string; catalogCategory?: CatalogCategory }
@@ -28,6 +29,8 @@ export function StructureTools() {
   const structureLayer = useEditor((state) => state.structureLayer)
   const setTool   = useEditor((state) => state.setTool)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
+  
+  const contextualTools = useContextualTools()
 
   // Filter tools based on structureLayer
   const visibleTools = structureLayer === 'zones'
@@ -41,6 +44,8 @@ export function StructureTools() {
         const isActive =
           activeTool === tool.id &&
           (tool.catalogCategory ? catalogCategory === tool.catalogCategory : true)
+          
+        const isContextual = contextualTools.includes(tool.id)
 
         return (
           <Tooltip key={`${tool.id}-${tool.catalogCategory ?? index}`}>
@@ -49,7 +54,8 @@ export function StructureTools() {
                 className={cn(
                   'size-11 rounded-lg transition-all',
                   isActive && 'bg-primary shadow-md shadow-primary/20',
-                  !isActive && 'hover:bg-white/10',
+                  !isActive && isContextual && 'bg-white/5 hover:bg-white/10',
+                  !isActive && !isContextual && 'opacity-40 hover:opacity-100 hover:bg-white/10',
                 )}
                 onClick={() => {
                   if (isActive) {
@@ -58,6 +64,11 @@ export function StructureTools() {
                   } else {
                     setTool(tool.id)
                     setCatalogCategory(tool.catalogCategory ?? null)
+                    
+                    // Automatically switch to build mode if we select a tool
+                    if (useEditor.getState().mode !== 'build') {
+                      useEditor.getState().setMode('build')
+                    }
                   }
                 }}
                 size="icon"

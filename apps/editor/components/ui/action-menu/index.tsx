@@ -68,7 +68,7 @@ export function ActionMenu({ className }: { className?: string }) {
         </AnimatePresence>
 
         <AnimatePresence>
-          {phase === "furnish" && mode === "build" && (
+          {phase === "furnish" && (
             <motion.div
               className={cn(
                 "overflow-hidden border-zinc-800",
@@ -106,7 +106,7 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Structure Tools Row - Animated */}
         <AnimatePresence>
-          {phase === "structure" && mode === "build" && (
+          {phase === "structure" && (
             <motion.div
               className={cn(
                 "overflow-hidden border-zinc-800 max-h-20 border-b px-2 py-2",

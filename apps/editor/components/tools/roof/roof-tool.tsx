@@ -8,13 +8,15 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, type Line, Vector3 } from 'three'
+import { BufferGeometry, DoubleSide, type Line, type Group, Vector3 } from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
+import { CursorSphere } from '../shared/cursor-sphere'
 
 // Default roof dimensions
 const DEFAULT_HEIGHT = 1.5
-const PREVIEW_LINE_HEIGHT = 0.03 // Very thin preview
+const CEILING_HEIGHT = 2.52
+const GRID_OFFSET = 0.02
 
 /**
  * Creates a roof with the given corners
@@ -61,6 +63,7 @@ type PreviewState = {
 }
 
 export const RoofTool: React.FC = () => {
+  const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -85,26 +88,35 @@ export const RoofTool: React.FC = () => {
       corner1: [number, number, number],
       corner2: [number, number, number],
     ) => {
-      const y = corner1[1] + PREVIEW_LINE_HEIGHT
-      const points = [
-        new Vector3(corner1[0], y, corner1[2]),
-        new Vector3(corner2[0], y, corner1[2]),
-        new Vector3(corner2[0], y, corner2[2]),
-        new Vector3(corner1[0], y, corner2[2]),
-        new Vector3(corner1[0], y, corner1[2]), // Close the loop
+      const gridY = corner1[1] + GRID_OFFSET
+      
+      const groundPoints = [
+        new Vector3(corner1[0], gridY, corner1[2]),
+        new Vector3(corner2[0], gridY, corner1[2]),
+        new Vector3(corner2[0], gridY, corner2[2]),
+        new Vector3(corner1[0], gridY, corner2[2]),
+        new Vector3(corner1[0], gridY, corner1[2]), // Close the loop
       ]
+      
       outlineRef.current.geometry.dispose()
-      outlineRef.current.geometry = new BufferGeometry().setFromPoints(points)
+      outlineRef.current.geometry = new BufferGeometry().setFromPoints(groundPoints)
       outlineRef.current.visible = true
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (!cursorRef.current) return
+
       // Snap to 0.5 grid
       const gridX = Math.round(event.position[0] * 2) / 2
       const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
+
+      // Update cursors
+      const gridY = y + GRID_OFFSET
+      
+      cursorRef.current.position.set(gridX, gridY, gridZ)
 
       // Play snap sound when grid position changes (only when placing)
       if (
@@ -197,41 +209,35 @@ export const RoofTool: React.FC = () => {
 
   return (
     <group>
-      {/* Outline showing rectangle being drawn */}
+      {/* Cursor at ground height */}
+      <CursorSphere ref={cursorRef} />
+
+      {/* Outline showing rectangle being drawn (Ground) */}
       {/* @ts-ignore */}
       <line ref={outlineRef} frustumCulled={false} renderOrder={1} visible={false}>
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#8b4513" linewidth={2} depthTest={false} depthWrite={false} />
+        <lineBasicNodeMaterial color="#818cf8" linewidth={2} depthTest={false} depthWrite={false} opacity={0.3} transparent />
       </line>
 
       {/* First corner marker */}
       {corner1 && (
-        <mesh position={[corner1[0], levelY + 0.02, corner1[2]]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
-          <ringGeometry args={[0.1, 0.15, 32]} />
-          <meshBasicMaterial color="#22c55e" depthTest={false} depthWrite={true} />
-        </mesh>
+        <CursorSphere 
+          position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]} 
+          color="#818cf8" 
+          showTooltip={false}
+        />
       )}
 
-      {/* Cursor marker on ground */}
-      <mesh
-        position={[cursorPosition[0], cursorPosition[1] + 0.02, cursorPosition[2]]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        renderOrder={2}
-      >
-        <ringGeometry args={[0.1, 0.15, 32]} />
-        <meshBasicMaterial color="#8b4513" depthTest={false} depthWrite={true} />
-      </mesh>
-
-      {/* Thin preview fill when drawing */}
+      {/* Thin preview fill when drawing (Ground) */}
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
         <mesh
-          position={[previewDimensions.centerX, levelY + 0.01, previewDimensions.centerZ]}
+          position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
           <meshBasicMaterial
-            color="#8b4513"
-            opacity={0.2}
+            color="#818cf8"
+            opacity={0.1}
             transparent
             side={DoubleSide}
             depthTest={false}

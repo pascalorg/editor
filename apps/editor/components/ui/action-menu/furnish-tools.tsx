@@ -56,6 +56,7 @@ export function FurnishTools() {
   const mode = useEditor((state) => state.mode);
   const activeTool = useEditor((state) => state.tool);
   const setActiveTool = useEditor((state) => state.setTool);
+  const setMode = useEditor((state) => state.setMode);
   const catalogCategory = useEditor((state) => state.catalogCategory);
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory);
 
@@ -78,8 +79,17 @@ export function FurnishTools() {
                   !isActive && "hover:bg-white/10",
                 )}
                 onClick={() => {
-                  setCatalogCategory(tool.catalogCategory);
-                  setActiveTool("item");
+                  if (isActive) {
+                    setActiveTool(null);
+                    setCatalogCategory(null);
+                    setMode("select");
+                  } else {
+                    setCatalogCategory(tool.catalogCategory);
+                    setActiveTool("item");
+                    if (mode !== "build") {
+                      setMode("build");
+                    }
+                  }
                 }}
                 size="icon"
                 variant={isActive ? "default" : "ghost"}
