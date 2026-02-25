@@ -1,6 +1,6 @@
 import { AnyNodeId, useScene } from "@pascal-app/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { BuildingTreeNode } from "./building-tree-node";
 import { CeilingTreeNode } from "./ceiling-tree-node";
@@ -88,9 +88,18 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     },
     ref
   ) {
+    const rowRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      if (isSelected && rowRef.current) {
+        rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, [isSelected]);
+
     return (
       <div ref={ref}>
         <div
+          ref={rowRef}
           className={cn(
             "flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
             isSelected
@@ -124,7 +133,10 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             onClick={onClick}
             onDoubleClick={onDoubleClick}
           >
-            <span className="w-4 h-4 flex items-center justify-center shrink-0">
+            <span className={cn(
+              "w-4 h-4 flex items-center justify-center shrink-0 transition-all duration-200",
+              !isSelected && "opacity-60 grayscale"
+            )}>
               {icon}
             </span>
             <div className="flex-1 min-w-0 truncate">
