@@ -931,11 +931,11 @@ function BuildingItem({
   }, [isBuildingActive]);
 
   return (
-    <div className="flex flex-col">
+    <div className={cn("flex flex-col", isBuildingActive && "flex-1 min-h-0")}>
       <div
         ref={itemRef}
         className={cn(
-          "group/building flex items-center h-10 border-b border-border/50 pr-2 transition-all duration-200",
+          "group/building flex items-center h-10 border-b border-border/50 pr-2 transition-all duration-200 shrink-0",
           isBuildingActive
             ? "bg-accent/50 text-foreground"
             : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
@@ -1029,10 +1029,14 @@ function BuildingItem({
 
       {/* Tools and content for the active building */}
       {isBuildingActive && (
-        <div className="flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-          <LevelsSection />
-          <LayerToggle />
-          <ContentSection />
+        <div className="flex flex-col flex-1 min-h-0 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="shrink-0 flex flex-col">
+            <LevelsSection />
+            <LayerToggle />
+          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+            <ContentSection />
+          </div>
         </div>
       )}
     </div>
@@ -1065,7 +1069,7 @@ export function SitePanel() {
       {siteNode && (
         <div 
           className={cn(
-            "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors",
+            "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors shrink-0",
             phase === "site" ? "bg-accent/50 text-foreground" : "hover:bg-accent/30 text-muted-foreground hover:text-foreground"
           )}
           onClick={() => setPhase("site")}
@@ -1088,9 +1092,9 @@ export function SitePanel() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto flex flex-col">
+      <div className={cn("flex-1 flex flex-col min-h-0", phase === "site" && "overflow-y-auto")}>
         {/* When phase is site, show property line immediately under site header */}
-        {phase === "site" && <PropertyLineSection />}
+        {phase === "site" && <div className="shrink-0"><PropertyLineSection /></div>}
 
         {/* Buildings List */}
         {buildings.length === 0 ? (
@@ -1098,7 +1102,7 @@ export function SitePanel() {
             No buildings yet
           </div>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1 min-h-0">
             {buildings.map((building) => {
               const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
 
