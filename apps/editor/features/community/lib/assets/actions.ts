@@ -130,29 +130,29 @@ export async function deleteProjectAssetByUrl(
       return { success: false, error: 'Not authorized' }
     }
 
-    // Look up the asset row by url + projectId
-    const { data: asset, error: fetchError } = await (supabase.from('project_assets') as any)
-      .select('id, storage_key')
-      .eq('project_id', projectId)
-      .eq('url', url)
-      .maybeSingle()
+    // Derive storage_key from the public URL
+    // URL format: https://<project>.supabase.co/storage/v1/object/public/project-assets/<storageKey>
+    const storageKeyFromUrl = url.split(`/${BUCKET}/`)[1]?.split('?')[0]
 
-    if (fetchError) {
-      return { success: false, error: fetchError.message }
+    if (!storageKeyFromUrl) {
+      return { success: false, error: 'Could not derive storage key from URL' }
     }
 
-    if (!asset) {
-      // Nothing to delete — treat as success
-      return { success: true }
+    // Delete from storage directly — remove() is a no-op if the file doesn't exist
+    const { error: storageError } = await supabase.storage.from(BUCKET).remove([storageKeyFromUrl])
+    if (storageError) {
+      return { success: false, error: `Storage delete failed: ${storageError.message}` }
     }
 
-    // Remove from storage
-    await supabase.storage.from(BUCKET).remove([(asset as any).storage_key])
-
-    // Delete row
-    await (supabase.from('project_assets') as any)
+    // Delete DB row by storage_key scoped to this project
+    const { error: dbError } = await (supabase.from('project_assets') as any)
       .delete()
-      .eq('id', (asset as any).id)
+      .eq('project_id', projectId)
+      .eq('storage_key', storageKeyFromUrl)
+
+    if (dbError) {
+      return { success: false, error: `DB delete failed: ${dbError.message}` }
+    }
 
     return { success: true }
   } catch (error) {

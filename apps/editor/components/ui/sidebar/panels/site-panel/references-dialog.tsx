@@ -1,3 +1,5 @@
+'use client'
+
 import {
   type AnyNodeId,
   type GuideNode,
@@ -133,19 +135,25 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
   )
 
   const handleDelete = useCallback(
-    (nodeId: string) => {
+    async (nodeId: string) => {
       const refNode = nodes[nodeId as AnyNodeId] as ScanNode | GuideNode | undefined
-      deleteNode(nodeId as AnyNodeId)
-      // Fire-and-forget storage cleanup for Supabase-hosted assets
       const projectId = activeProject?.id
+
+      // Delete storage asset first (before removing from scene)
       if (
         projectId &&
         !projectId.startsWith('local_') &&
         refNode?.url &&
-        refNode.url.startsWith('https://')
+        (refNode.url.startsWith('http://') || refNode.url.startsWith('https://'))
       ) {
-        deleteProjectAssetByUrl(projectId, refNode.url).catch(console.error)
+        const result = await deleteProjectAssetByUrl(projectId, refNode.url)
+        if (!result.success) {
+          setUploadError(`Failed to delete asset: ${result.error}`)
+          return
+        }
       }
+
+      deleteNode(nodeId as AnyNodeId)
     },
     [deleteNode, nodes, activeProject],
   )
