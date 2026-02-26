@@ -20,7 +20,7 @@ export function WindowTreeNode({ node, depth }: WindowTreeNodeProps) {
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const defaultName = `Window (${node.width}×${node.height}m)`
+  const defaultName = "Window"
 
   return (
     <TreeNodeWrapper

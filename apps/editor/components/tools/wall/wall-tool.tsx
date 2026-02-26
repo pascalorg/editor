@@ -83,11 +83,14 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
 
 const commitWallDrawing = (start: [number, number], end: [number, number]) => {
   const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode } = useScene.getState()
+  const { createNode, nodes } = useScene.getState()
 
   if (!currentLevelId) return
 
-  const wall = WallNode.parse({ start, end })
+  const wallCount = Object.values(nodes).filter((n) => n.type === 'wall').length
+  const name = `Wall ${wallCount + 1}`
+
+  const wall = WallNode.parse({ name, start, end })
 
   createNode(wall, currentLevelId)
   sfxEmitter.emit('sfx:structure-build')

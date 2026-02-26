@@ -25,6 +25,9 @@ type Outliner = {
 };
 
 type ViewerState = {
+  isEditor: boolean
+  setIsEditor: (isEditor: boolean) => void
+
   selection: SelectionPath
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
@@ -61,6 +64,8 @@ type ViewerState = {
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
+      isEditor: false,
+      setIsEditor: (isEditor) => set({ isEditor }),
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       hoveredId: null,
       setHoveredId: (id) => set({ hoveredId: id }),

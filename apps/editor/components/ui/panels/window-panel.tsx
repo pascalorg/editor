@@ -131,7 +131,7 @@ export function WindowPanel() {
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/window.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
-            {node.name || `Window (${node.width}×${node.height}m)`}
+            {node.name || "Window"}
           </h2>
         </div>
         <button

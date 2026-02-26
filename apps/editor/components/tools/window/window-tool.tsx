@@ -196,7 +196,17 @@ export const WindowTool: React.FC = () => {
       // Resume → create permanent node (single undoable action)
       useScene.temporal.getState().resume()
 
+      const levelId = getLevelId()
+      const state = useScene.getState()
+      const windowCount = Object.values(state.nodes).filter((n) => {
+        if (n.type !== 'window') return false
+        const wall = state.nodes[n.parentId ?? '']
+        return wall?.parentId === levelId
+      }).length
+      const name = `Window ${windowCount + 1}`
+
       const node = WindowNode.parse({
+        name,
         position: [clampedX, clampedY, 0],
         rotation: [0, itemRotation, 0],
         side,

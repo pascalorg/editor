@@ -322,6 +322,7 @@ function LevelItem({
   setReferencesLevelId,
   deleteNode,
   updateNode,
+  isLast,
 }: {
   level: LevelNode;
   selectedLevelId: string | null;
@@ -329,6 +330,7 @@ function LevelItem({
   setReferencesLevelId: (id: string | null) => void;
   deleteNode: (id: AnyNodeId) => void;
   updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void;
+  isLast?: boolean;
 }) {
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -352,7 +354,7 @@ function LevelItem({
       )}
     >
       {/* Vertical tree line */}
-      <div className="absolute left-[21px] top-0 bottom-0 w-px bg-border/50 pointer-events-none" />
+      <div className={cn("absolute left-[21px] top-0 w-px bg-border/50 pointer-events-none", isLast ? "bottom-1/2" : "bottom-0")} />
       {/* Horizontal branch line */}
       <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
 
@@ -510,17 +512,17 @@ function LevelsSection() {
     <div className="flex flex-col relative">
       {/* Level buttons */}
       <div className="flex flex-col">
-        {levels.map((level) => (
-          <LevelItem
-            key={level.id}
-            level={level}
-            selectedLevelId={selectedLevelId}
-            setSelection={setSelection}
-            setReferencesLevelId={setReferencesLevelId}
-            deleteNode={deleteNode}
-            updateNode={updateNode}
-          />
-        ))}
+        <button
+          className="flex items-center gap-2 pl-10 py-2 text-sm text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-all duration-200 border-b border-border/50 relative"
+          onClick={handleAddLevel}
+        >
+          {/* Vertical tree line */}
+          <div className="absolute left-[21px] top-0 bottom-0 w-px bg-border/50 pointer-events-none" />
+          {/* Horizontal branch line */}
+          <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
+          <Plus className="w-3.5 h-3.5" />
+          Add level
+        </button>
         {levels.length === 0 && (
           <div className="text-xs text-muted-foreground pl-10 pr-2 py-2 relative border-b border-border/50">
             {/* Vertical tree line */}
@@ -530,17 +532,18 @@ function LevelsSection() {
             No levels yet
           </div>
         )}
-        <button
-          className="flex items-center gap-2 pl-10 py-2 text-sm text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-all duration-200 border-b border-border/50 relative"
-          onClick={handleAddLevel}
-        >
-          {/* Vertical tree line */}
-          <div className="absolute left-[21px] top-0 bottom-1/2 w-px bg-border/50 pointer-events-none" />
-          {/* Horizontal branch line */}
-          <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
-          <Plus className="w-3.5 h-3.5" />
-          Add level
-        </button>
+        {[...levels].reverse().map((level, index) => (
+          <LevelItem
+            key={level.id}
+            level={level}
+            selectedLevelId={selectedLevelId}
+            setSelection={setSelection}
+            setReferencesLevelId={setReferencesLevelId}
+            deleteNode={deleteNode}
+            updateNode={updateNode}
+            isLast={index === levels.length - 1}
+          />
+        ))}
       </div>
 
       {/* References dialog */}
@@ -720,80 +723,84 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
           </div>
         </PopoverContent>
       </Popover>
-      <InlineRenameInput
-        node={zone}
-        isEditing={isEditing}
-        onStopEditing={() => setIsEditing(false)}
-        onStartEditing={() => setIsEditing(true)}
-        defaultName={defaultName}
-      />
-      {/* Camera snapshot button */}
-      <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            className="relative opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+      <div className="flex-1 min-w-0 pr-1">
+        <InlineRenameInput
+          node={zone}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={defaultName}
+        />
+      </div>
+      <div className="flex items-center gap-0.5">
+        {/* Camera snapshot button */}
+        <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className="relative opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => e.stopPropagation()}
+              title="Camera snapshot"
+            >
+              <Camera className="w-3 h-3" />
+              {zone.camera && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            className="w-auto p-1"
             onClick={(e) => e.stopPropagation()}
-            title="Camera snapshot"
           >
-            <Camera className="w-3 h-3" />
-            {zone.camera && (
-              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          side="right"
-          align="start"
-          className="w-auto p-1"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex flex-col gap-0.5">
-            {zone.camera && (
+            <div className="flex flex-col gap-0.5">
+              {zone.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    emitter.emit("camera-controls:view", { nodeId: zone.id });
+                    setCameraPopoverOpen(false);
+                  }}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  View snapshot
+                </button>
+              )}
               <button
                 className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
                 onClick={(e) => {
                   e.stopPropagation();
-                  emitter.emit("camera-controls:view", { nodeId: zone.id });
+                  emitter.emit("camera-controls:capture", { nodeId: zone.id });
                   setCameraPopoverOpen(false);
                 }}
               >
                 <Camera className="w-3.5 h-3.5" />
-                View snapshot
+                {zone.camera ? "Update snapshot" : "Take snapshot"}
               </button>
-            )}
-            <button
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
-              onClick={(e) => {
-                e.stopPropagation();
-                emitter.emit("camera-controls:capture", { nodeId: zone.id });
-                setCameraPopoverOpen(false);
-              }}
-            >
-              <Camera className="w-3.5 h-3.5" />
-              {zone.camera ? "Update snapshot" : "Take snapshot"}
-            </button>
-            {zone.camera && (
-              <button
-                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateNode(zone.id, { camera: undefined });
-                  setCameraPopoverOpen(false);
-                }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Clear snapshot
-              </button>
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
-      <button
-        className="opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
-        onClick={handleDelete}
-      >
-        <Trash2 className="w-3 h-3" />
-      </button>
+              {zone.camera && (
+                <button
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode(zone.id, { camera: undefined });
+                    setCameraPopoverOpen(false);
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Clear snapshot
+                </button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <button
+          className="opacity-0 group-hover/row:opacity-100 w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+          onClick={handleDelete}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   );
 }

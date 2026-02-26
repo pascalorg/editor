@@ -43,7 +43,7 @@ export function RoofPanel() {
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/roof.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
-            {node.name || 'Gable Roof'}
+            {node.name || "Roof"}
           </h2>
         </div>
         <button

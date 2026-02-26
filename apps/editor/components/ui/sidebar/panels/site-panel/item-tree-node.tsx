@@ -1,7 +1,7 @@
-import { type AnyNodeId, ItemNode } from "@pascal-app/core";
+import { type AnyNodeId, ItemNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -25,10 +25,31 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const iconSrc = CATEGORY_ICONS[node.asset.category] || "/icons/couch.png";
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
+  const isSelected = selectedIds.includes(node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) return;
+    const nodes = useScene.getState().nodes;
+    let isDescendant = false;
+    for (const id of selectedIds) {
+      let current = nodes[id];
+      while (current && current.parentId) {
+        if (current.parentId === node.id) {
+          isDescendant = true;
+          break;
+        }
+        current = nodes[current.parentId];
+      }
+      if (isDescendant) break;
+    }
+    if (isDescendant) {
+      setExpanded(true);
+    }
+  }, [selectedIds, node.id]);
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });

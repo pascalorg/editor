@@ -58,8 +58,7 @@ export function StructureTools() {
               <Button
                 className={cn(
                   'size-11 rounded-lg transition-all duration-300',
-                  isActive && 'bg-primary shadow-lg shadow-primary/40 ring-2 ring-primary ring-offset-2 ring-offset-zinc-950 scale-110 z-10',
-                  !isActive && 'opacity-40 hover:opacity-80 scale-95 grayscale',
+                  isActive ? 'bg-black/40 hover:bg-black/40 scale-110 z-10' : 'bg-transparent opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-black/20 scale-95',
                 )}
                 onClick={() => {
                   if (!isActive) {
@@ -73,7 +72,7 @@ export function StructureTools() {
                   }
                 }}
                 size="icon"
-                variant={isActive ? 'default' : 'ghost'}
+                variant="ghost"
               >
                 <NextImage
                   alt={tool.label}

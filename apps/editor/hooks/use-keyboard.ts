@@ -37,6 +37,9 @@ export const useKeyboard = () => {
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
+      } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        useEditor.getState().setMode('build')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         useScene.temporal.getState().undo()

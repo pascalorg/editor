@@ -57,7 +57,7 @@ export default function Editor({ projectId }: EditorProps) {
       <SidebarProvider className="fixed z-20">
         <AppSidebar />
       </SidebarProvider>
-      <Viewer selectionManager="custom">
+      <Viewer selectionManager="custom" isEditor={true}>
         <SelectionManager />
         <ExportManager />
         {/* Editor only system to toggle zone visibility */}
