@@ -19,9 +19,10 @@ const CATEGORY_ICONS: Record<string, string> = {
 interface ItemTreeNodeProps {
   node: ItemNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
+export function ItemTreeNode({ node, depth, isLast }: ItemTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const iconSrc = CATEGORY_ICONS[node.asset.category] || "/icons/couch.png";
@@ -93,10 +94,11 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     >
-      {hasChildren && node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {hasChildren && node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );

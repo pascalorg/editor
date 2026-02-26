@@ -30,17 +30,17 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "portless": "^0.4.2",
-    "three": "^0.183.0",
+    "three": "^0.183.1",
     "three-bvh-csg": "^0.0.17",
     "three-mesh-bvh": "^0.9.8",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.2",
+    "@biomejs/biome": "^2.4.4",
     "supabase": "2.75.3",
-    "turbo": "^2.8.10",
+    "turbo": "^2.8.11",
     "typescript": "5.9.2",
-    "ultracite": "^7.2.3"
+    "ultracite": "^7.2.4"
   },
   "engines": {
     "node": ">=18"

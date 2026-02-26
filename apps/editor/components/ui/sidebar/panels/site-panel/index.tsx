@@ -628,7 +628,7 @@ function LayerToggle() {
   );
 }
 
-function ZoneItem({ zone }: { zone: ZoneNode }) {
+function ZoneItem({ zone, isLast }: { zone: ZoneNode, isLast?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
   const deleteNode = useScene((state) => state.deleteNode);
@@ -680,7 +680,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
     <div
       ref={itemRef}
       className={cn(
-        "flex items-center h-8 cursor-pointer group/row text-sm px-3 select-none border-b border-border/50 transition-all duration-200",
+        "relative flex items-center h-8 cursor-pointer group/row text-sm px-3 select-none border-b border-border/50 transition-all duration-200",
         isSelected
           ? "bg-accent/50 text-foreground"
           : isHovered
@@ -692,6 +692,11 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       onMouseEnter={() => setHoveredId(zone.id)}
       onMouseLeave={() => setHoveredId(null)}
     >
+      {/* Vertical tree line */}
+      <div className={cn("absolute w-px bg-border/50 pointer-events-none", isLast ? "top-0 bottom-1/2" : "top-0 bottom-0")} style={{ left: 8 }} />
+      {/* Horizontal branch line */}
+      <div className="absolute top-1/2 h-px bg-border/50 pointer-events-none" style={{ left: 8, width: 4 }} />
+
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -853,8 +858,8 @@ function ContentSection() {
 
     return (
       <div className="flex flex-col">
-        {levelZones.map((zone) => (
-          <ZoneItem key={zone.id} zone={zone} />
+        {levelZones.map((zone, index) => (
+          <ZoneItem key={zone.id} zone={zone} isLast={index === levelZones.length - 1} />
         ))}
       </div>
     );
@@ -900,8 +905,8 @@ function ContentSection() {
 
   return (
     <div className="flex flex-col">
-      {elementChildren.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={0} />
+      {elementChildren.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={0} isLast={index === elementChildren.length - 1} />
       ))}
     </div>
   );

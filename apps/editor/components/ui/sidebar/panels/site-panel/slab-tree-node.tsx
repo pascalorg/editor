@@ -9,9 +9,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface SlabTreeNodeProps {
   node: SlabNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
+export function SlabTreeNode({ node, depth, isLast }: SlabTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
@@ -61,6 +62,7 @@ export function SlabTreeNode({ node, depth }: SlabTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     />
   );

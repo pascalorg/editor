@@ -9,9 +9,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface CeilingTreeNodeProps {
   node: CeilingNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
+export function CeilingTreeNode({ node, depth, isLast }: CeilingTreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const selectedIds = useViewer((state) => state.selection.selectedIds);
@@ -83,10 +84,11 @@ export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     >
-      {node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );

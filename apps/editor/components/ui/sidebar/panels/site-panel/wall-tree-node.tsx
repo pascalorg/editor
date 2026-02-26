@@ -9,9 +9,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface WallTreeNodeProps {
   node: WallNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
+export function WallTreeNode({ node, depth, isLast }: WallTreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const selectedIds = useViewer((state) => state.selection.selectedIds);
@@ -81,10 +82,11 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     >
-      {node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );

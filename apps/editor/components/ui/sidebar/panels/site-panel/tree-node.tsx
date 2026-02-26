@@ -16,34 +16,35 @@ import { ZoneTreeNode } from "./zone-tree-node";
 interface TreeNodeProps {
   nodeId: AnyNodeId;
   depth?: number;
+  isLast?: boolean;
 }
 
-export function TreeNode({ nodeId, depth = 0 }: TreeNodeProps) {
+export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
   const node = useScene((state) => state.nodes[nodeId]);
 
   if (!node) return null;
 
   switch (node.type) {
     case "building":
-      return <BuildingTreeNode node={node} depth={depth} />;
+      return <BuildingTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "ceiling":
-      return <CeilingTreeNode node={node} depth={depth} />;
+      return <CeilingTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "level":
-      return <LevelTreeNode node={node} depth={depth} />;
+      return <LevelTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "slab":
-      return <SlabTreeNode node={node} depth={depth} />;
+      return <SlabTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "wall":
-      return <WallTreeNode node={node} depth={depth} />;
+      return <WallTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "roof":
-      return <RoofTreeNode node={node} depth={depth} />;
+      return <RoofTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "item":
-      return <ItemTreeNode node={node} depth={depth} />;
+      return <ItemTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "door":
-      return <DoorTreeNode node={node} depth={depth} />;
+      return <DoorTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "window":
-      return <WindowTreeNode node={node} depth={depth} />;
+      return <WindowTreeNode node={node as any} depth={depth} isLast={isLast} />;
     case "zone":
-      return <ZoneTreeNode node={node} depth={depth} />;
+      return <ZoneTreeNode node={node as any} depth={depth} isLast={isLast} />;
     default:
       return null;
   }
@@ -65,56 +66,79 @@ interface TreeNodeWrapperProps {
   isSelected?: boolean;
   isHovered?: boolean;
   isVisible?: boolean;
+  isLast?: boolean;
 }
 
 export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
-  function TreeNodeWrapper(
-    {
-      icon,
-      label,
-      depth,
-      hasChildren,
-      expanded,
-      onToggle,
-      onClick,
-      onDoubleClick,
-      onMouseEnter,
-      onMouseLeave,
-      actions,
-      children,
-      isSelected,
-      isHovered,
-      isVisible = true,
-    },
-    ref
-  ) {
-    const rowRef = useRef<HTMLDivElement>(null);
+    function TreeNodeWrapper(
+      {
+        icon,
+        label,
+        depth,
+        hasChildren,
+        expanded,
+        onToggle,
+        onClick,
+        onDoubleClick,
+        onMouseEnter,
+        onMouseLeave,
+        actions,
+        children,
+        isSelected,
+        isHovered,
+        isVisible = true,
+        isLast,
+      },
+      ref
+    ) {
+      const rowRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      if (isSelected && rowRef.current) {
-        rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    }, [isSelected]);
+      useEffect(() => {
+        if (isSelected && rowRef.current) {
+          rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, [isSelected]);
 
-    return (
-      <div ref={ref}>
-        <div
-          ref={rowRef}
-          className={cn(
-            "flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
-            isSelected
-              ? "bg-accent/50 text-foreground"
-              : isHovered
-                ? "bg-accent/30 text-foreground"
-                : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
-            !isVisible && "opacity-50"
-          )}
-          style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
-          onMouseEnter={onMouseEnter}
-          onMouseLeave={onMouseLeave}
-        >
-          <button
-            className="w-4 h-4 flex items-center justify-center shrink-0"
+      return (
+        <div ref={ref}>
+          <div
+            ref={rowRef}
+            className={cn(
+              "relative flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
+              isSelected
+                ? "bg-accent/50 text-foreground"
+                : isHovered
+                  ? "bg-accent/30 text-foreground"
+                  : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
+              !isVisible && "opacity-50"
+            )}
+            style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+          >
+            {/* Vertical tree line */}
+            <div
+              className={cn(
+                "absolute w-px bg-border/50 pointer-events-none",
+                isLast ? "top-0 bottom-1/2" : "top-0 bottom-0"
+              )}
+              style={{ left: (depth - 1) * 12 + 20 }}
+            />
+            {/* Horizontal branch line */}
+            <div
+              className="absolute top-1/2 h-px bg-border/50 pointer-events-none"
+              style={{ left: (depth - 1) * 12 + 20, width: 4 }}
+            />
+            {/* Line down to children */}
+            {hasChildren && expanded && (
+              <div
+                className="absolute top-1/2 bottom-0 w-px bg-border/50 pointer-events-none"
+                style={{ left: depth * 12 + 20 }}
+              />
+            )}
+
+            <button
+              className="w-4 h-4 flex items-center justify-center shrink-0 z-10 bg-inherit"
             onClick={(e) => {
               e.stopPropagation();
               onToggle();

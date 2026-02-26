@@ -9,9 +9,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface RoofTreeNodeProps {
   node: RoofNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
+export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
   const isHovered = useViewer((state) => state.hoveredId === node.id);
@@ -62,6 +63,7 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     />
   );

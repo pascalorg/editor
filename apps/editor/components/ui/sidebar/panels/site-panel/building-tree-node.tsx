@@ -13,9 +13,10 @@ import {
 interface BuildingTreeNodeProps {
   node: BuildingNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
+export function BuildingTreeNode({ node, depth, isLast }: BuildingTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const createNode = useScene((state) => state.createNode);
   const isSelected = useViewer((state) => state.selection.buildingId === node.id);
@@ -47,6 +48,7 @@ export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
       onClick={handleClick}
       isSelected={isSelected}
       isHovered={isHovered}
+      isLast={isLast}
       actions={
         <div className="flex items-center gap-0.5">
           <TreeNodeActions node={node} />
@@ -64,8 +66,8 @@ export function BuildingTreeNode({ node, depth }: BuildingTreeNodeProps) {
         </div>
       }
     >
-      {node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );
