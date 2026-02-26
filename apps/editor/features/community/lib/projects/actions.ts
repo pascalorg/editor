@@ -911,7 +911,17 @@ export async function deleteProject(projectId: string): Promise<ActionResult> {
       }
     }
 
-    // Delete the project (cascade will delete related records)
+    // Delete project asset files from storage before deleting the project
+    const { data: assets } = await (supabase.from('project_assets') as any)
+      .select('storage_key')
+      .eq('project_id', projectId)
+
+    if (assets && assets.length > 0) {
+      const storageKeys = (assets as { storage_key: string }[]).map((a) => a.storage_key)
+      await supabase.storage.from('project-assets').remove(storageKeys)
+    }
+
+    // Delete the project (cascade will delete related records including project_assets rows)
     const { error } = await supabase.from('projects').delete().eq('id', projectId)
 
     if (error) {

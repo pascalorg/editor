@@ -5,12 +5,13 @@ import {
   type LevelNode,
   type ScanNode,
   ScanNode as ScanNodeSchema,
-  saveAsset,
   useScene,
 } from '@pascal-app/core'
 import { Box, Image, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import useEditor from '@/store/use-editor'
+import { deleteProjectAssetByUrl, uploadProjectAsset } from '@/features/community/lib/assets/actions'
+import { useProjectStore } from '@/features/community/lib/projects/store'
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,8 @@ import {
   PopoverTrigger,
 } from '@/components/ui/primitives/popover'
 
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB — matches server action bodySizeLimit
+
 interface ReferencesDialogProps {
   levelId: string
   open: boolean
@@ -34,6 +37,9 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
   const createNode = useScene((s) => s.createNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
+  const activeProject = useProjectStore((s) => s.activeProject)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   const scanInputRef = useRef<HTMLInputElement>(null)
   const guideInputRef = useRef<HTMLInputElement>(null)
@@ -42,38 +48,80 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
-      const url = await saveAsset(file)
+      e.target.value = ''
+
+      const projectId = activeProject?.id
+      if (!projectId || projectId.startsWith('local_')) {
+        setUploadError('Save your project to the cloud first to add references.')
+        return
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadError(`File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB.`)
+        return
+      }
+
+      setUploadError(null)
+      setUploading(true)
+      const result = await uploadProjectAsset(projectId, file, 'scan')
+      setUploading(false)
+
+      if (!result.success) {
+        setUploadError(result.error)
+        return
+      }
+
       const node = ScanNodeSchema.parse({
-        url,
+        url: result.url,
         name: file.name,
         parentId: levelId,
       })
       createNode(node, levelId as AnyNodeId)
-      e.target.value = ''
       // Auto-select and close dialog
       setSelectedReferenceId(node.id)
       onOpenChange(false)
     },
-    [levelId, createNode, setSelectedReferenceId, onOpenChange],
+    [levelId, createNode, setSelectedReferenceId, onOpenChange, activeProject],
   )
 
   const handleAddGuide = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
-      const url = await saveAsset(file)
+      e.target.value = ''
+
+      const projectId = activeProject?.id
+      if (!projectId || projectId.startsWith('local_')) {
+        setUploadError('Save your project to the cloud first to add references.')
+        return
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadError(`File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB.`)
+        return
+      }
+
+      setUploadError(null)
+      setUploading(true)
+      const result = await uploadProjectAsset(projectId, file, 'guide')
+      setUploading(false)
+
+      if (!result.success) {
+        setUploadError(result.error)
+        return
+      }
+
       const node = GuideNodeSchema.parse({
-        url,
+        url: result.url,
         name: file.name,
         parentId: levelId,
       })
       createNode(node, levelId as AnyNodeId)
-      e.target.value = ''
       // Auto-select and close dialog
       setSelectedReferenceId(node.id)
       onOpenChange(false)
     },
-    [levelId, createNode, setSelectedReferenceId, onOpenChange],
+    [levelId, createNode, setSelectedReferenceId, onOpenChange, activeProject],
   )
 
   const handleEdit = useCallback(
@@ -86,9 +134,20 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
 
   const handleDelete = useCallback(
     (nodeId: string) => {
+      const refNode = nodes[nodeId as AnyNodeId] as ScanNode | GuideNode | undefined
       deleteNode(nodeId as AnyNodeId)
+      // Fire-and-forget storage cleanup for Supabase-hosted assets
+      const projectId = activeProject?.id
+      if (
+        projectId &&
+        !projectId.startsWith('local_') &&
+        refNode?.url &&
+        refNode.url.startsWith('https://')
+      ) {
+        deleteProjectAssetByUrl(projectId, refNode.url).catch(console.error)
+      }
     },
-    [deleteNode],
+    [deleteNode, nodes, activeProject],
   )
 
   const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
@@ -145,6 +204,10 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
           ))}
         </div>
 
+        {uploadError && (
+          <p className="text-xs text-destructive px-1 pb-1">{uploadError}</p>
+        )}
+
         <div className="flex justify-end pt-2 border-t border-border/50">
           <input
             ref={scanInputRef}
@@ -163,9 +226,12 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
 
           <Popover>
             <PopoverTrigger asChild>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer">
+              <button
+                disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Plus className="w-3.5 h-3.5" />
-                Add
+                {uploading ? 'Uploading…' : 'Add'}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-44 p-1">
