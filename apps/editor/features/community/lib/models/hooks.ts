@@ -69,23 +69,55 @@ export function useProjectScene() {
           // Load the scene graph into the store
           const { nodes, rootNodeIds } = result.data.scene_graph
           useScene.getState().setScene(nodes, rootNodeIds)
+
+          // Auto-select the first building + level after store is updated
+          const sceneNodes = useScene.getState().nodes as Record<string, any>
+          const sceneRootIds = useScene.getState().rootNodeIds
+          const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
+          const resolve = (child: any) =>
+            typeof child === 'string' ? sceneNodes[child] : child
+          const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+          const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+
+          if (firstBuilding && firstLevel) {
+            useViewer.getState().setSelection({
+              buildingId: firstBuilding.id,
+              levelId: firstLevel.id,
+              selectedIds: [],
+              zoneId: null,
+            })
+            useEditor.getState().setPhase('structure')
+          } else {
+            useEditor.getState().setPhase('site')
+            useViewer.getState().setSelection({
+              buildingId: null,
+              levelId: null,
+              selectedIds: [],
+              zoneId: null,
+            })
+          }
         } else {
           // No scene found - clear the scene
           useScene.getState().clearScene()
+          useEditor.getState().setPhase('site')
+          useViewer.getState().setSelection({
+            buildingId: null,
+            levelId: null,
+            selectedIds: [],
+            zoneId: null,
+          })
         }
       } catch (error) {
         // Fall back to clear scene
         useScene.getState().clearScene()
+        useEditor.getState().setPhase('site')
+        useViewer.getState().setSelection({
+          buildingId: null,
+          levelId: null,
+          selectedIds: [],
+          zoneId: null,
+        })
       }
-
-      // Reset editor state after loading/clearing scene
-      useEditor.getState().setPhase('site')
-      useViewer.getState().setSelection({
-        buildingId: null,
-        levelId: null,
-        selectedIds: [],
-        zoneId: null,
-      })
 
       // Allow auto-save again after a tick (let the store update propagate)
       requestAnimationFrame(() => {
