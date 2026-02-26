@@ -19,15 +19,19 @@ export function ActionMenu({ className }: { className?: string }) {
   const tool = useEditor((state) => state.tool);
   const catalogCategory = useEditor((state) => state.catalogCategory);
   const reducedMotion = useReducedMotion();
-  const transition = reducedMotion ? { duration: 0 } : undefined;
+  const transition = reducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, bounce: 0.2, duration: 0.4 };
 
   return (
     <TooltipProvider>
-      <div
+      <motion.div
+        layout
+        transition={transition}
         className={cn(
           "-translate-x-1/2 fixed bottom-6 left-1/2 z-50",
           "rounded-2xl border border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-md",
-          "transition-all duration-200 ease-out",
+          "transition-colors duration-200 ease-out",
           className,
         )}
       >
@@ -67,7 +71,7 @@ export function ActionMenu({ className }: { className?: string }) {
         </AnimatePresence>
 
         <AnimatePresence>
-          {phase === "furnish" && (
+          {phase === "furnish" && mode === "build" && (
             <motion.div
               className={cn(
                 "overflow-hidden border-zinc-800",
@@ -105,7 +109,7 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Structure Tools Row - Animated */}
         <AnimatePresence>
-          {phase === "structure" && (
+          {phase === "structure" && mode === "build" && (
             <motion.div
               className={cn(
                 "overflow-hidden border-zinc-800 max-h-20 border-b px-2 py-2",
@@ -147,7 +151,7 @@ export function ActionMenu({ className }: { className?: string }) {
           <div className="mx-1 h-5 w-px bg-zinc-700" />
           <CameraActions />
         </div>
-      </div>
+      </motion.div>
     </TooltipProvider>
   );
 }

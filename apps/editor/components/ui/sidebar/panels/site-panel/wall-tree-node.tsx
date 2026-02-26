@@ -1,7 +1,7 @@
-import { WallNode } from "@pascal-app/core";
+import { type AnyNodeId, WallNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -14,10 +14,31 @@ interface WallTreeNodeProps {
 export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
+  const isSelected = selectedIds.includes(node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) return;
+    const nodes = useScene.getState().nodes;
+    let isDescendant = false;
+    for (const id of selectedIds) {
+      let current = nodes[id as AnyNodeId];
+      while (current && current.parentId) {
+        if (current.parentId === node.id) {
+          isDescendant = true;
+          break;
+        }
+        current = nodes[current.parentId as AnyNodeId];
+      }
+      if (isDescendant) break;
+    }
+    if (isDescendant) {
+      setExpanded(true);
+    }
+  }, [selectedIds, node.id]);
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
@@ -35,12 +56,7 @@ export function WallTreeNode({ node, depth }: WallTreeNodeProps) {
     setHoveredId(null);
   };
 
-  const wallLength = Math.sqrt(
-    Math.pow(node.end[0] - node.start[0], 2) +
-      Math.pow(node.end[1] - node.start[1], 2),
-  ).toFixed(1);
-
-  const defaultName = `Wall (${wallLength}m/${node.height || 2.5}m)`;
+  const defaultName = "Wall";
 
   return (
     <TreeNodeWrapper

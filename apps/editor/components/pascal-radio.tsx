@@ -1,10 +1,9 @@
 'use client'
 
 import { Howl } from 'howler'
-import { Disc3, Pause, Play, Settings2, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import { Disc3, Settings2, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
-import { Switch } from '@/components/ui/primitives/switch'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 import useAudio from '@/store/use-audio'
@@ -64,25 +63,23 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export function PascalRadio() {
   const [shuffledPlaylist] = useState(() => shuffleArray(PLAYLIST))
-  const [isPlaying, setIsPlaying] = useState(false)
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0)
-  const { masterVolume, radioVolume, muted, autoplay, setAutoplay } = useAudio()
+  const { masterVolume, radioVolume, muted, isRadioPlaying, setRadioPlaying } = useAudio()
   const soundRef = useRef<Howl | null>(null)
-  const hasAutoplayedRef = useRef(false)
 
   const currentTrack = shuffledPlaylist[currentTrackIndex]!
 
   // Calculate effective volume (masterVolume * radioVolume, both are 0-100)
   const effectiveVolume = (masterVolume / 100) * (radioVolume / 100)
 
-  // Keep a ref so the track-init effect can read current volume/muted/isPlaying
+  // Keep a ref so the track-init effect can read current volume/muted/isRadioPlaying
   // without those values being part of its dependency array (which would restart the song).
   const effectiveVolumeRef = useRef(effectiveVolume)
   const mutedRef = useRef(muted)
-  const isPlayingRef = useRef(isPlaying)
+  const isPlayingRef = useRef(isRadioPlaying)
   effectiveVolumeRef.current = effectiveVolume
   mutedRef.current = muted
-  isPlayingRef.current = isPlaying
+  isPlayingRef.current = isRadioPlaying
 
   const handleNext = useCallback(() => {
     setCurrentTrackIndex((prev) => (prev + 1) % shuffledPlaylist.length)
@@ -122,44 +119,25 @@ export function PascalRadio() {
       soundRef.current.volume(muted ? 0 : effectiveVolume)
 
       // Pause if muted, resume if unmuted and was playing
-      if (muted && isPlaying) {
+      if (muted && isRadioPlaying) {
         soundRef.current.pause()
-      } else if (!muted && isPlaying && !soundRef.current.playing()) {
+      } else if (!muted && isRadioPlaying && !soundRef.current.playing()) {
         soundRef.current.play()
+      } else if (!isRadioPlaying && soundRef.current.playing()) {
+        soundRef.current.pause()
       }
     }
-  }, [effectiveVolume, muted, isPlaying])
-
-  // Autoplay on first user click
-  useEffect(() => {
-    if (!autoplay || hasAutoplayedRef.current || muted) return
-
-    const handleFirstClick = () => {
-      if (!soundRef.current || hasAutoplayedRef.current) return
-
-      hasAutoplayedRef.current = true
-      soundRef.current.play()
-      setIsPlaying(true)
-
-      // Remove listener after first click
-      document.removeEventListener('click', handleFirstClick)
-    }
-
-    document.addEventListener('click', handleFirstClick)
-    return () => {
-      document.removeEventListener('click', handleFirstClick)
-    }
-  }, [autoplay, muted])
+  }, [effectiveVolume, muted, isRadioPlaying])
 
   const handlePlayPause = () => {
     if (!soundRef.current || muted) return
 
-    if (isPlaying) {
+    if (isRadioPlaying) {
       soundRef.current.pause()
     } else {
       soundRef.current.play()
     }
-    setIsPlaying(!isPlaying)
+    setRadioPlaying(!isRadioPlaying)
   }
 
   const handleVolumeChange = (value: number[]) => {
@@ -168,14 +146,14 @@ export function PascalRadio() {
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md">
-      <Disc3 className={cn('h-4 w-4', isPlaying && 'animate-spin')} />
+      <Disc3 className={cn('h-4 w-4', isRadioPlaying && 'animate-spin')} />
       <span className="hidden sm:inline">Radio Pascal</span>
       <div
         onClick={handlePlayPause}
         className="rounded-sm p-1 transition-all cursor-pointer bg-accent/30 hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
         role="button"
         tabIndex={0}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-label={isRadioPlaying ? 'Pause' : 'Play'}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
@@ -183,7 +161,7 @@ export function PascalRadio() {
           }
         }}
       >
-        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {isRadioPlaying ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
       </div>
       <Popover>
         <PopoverTrigger asChild>
@@ -230,18 +208,6 @@ export function PascalRadio() {
                 aria-label="Radio Volume"
               />
               <span className="w-8 text-right text-xs text-muted-foreground">{radioVolume}%</span>
-            </div>
-
-            {/* Autoplay setting */}
-            <div className="flex items-center justify-between pt-2 border-t">
-              <label htmlFor="autoplay" className="text-sm font-medium cursor-pointer">
-                Autoplay
-              </label>
-              <Switch
-                id="autoplay"
-                checked={autoplay}
-                onCheckedChange={setAutoplay}
-              />
             </div>
           </div>
         </PopoverContent>

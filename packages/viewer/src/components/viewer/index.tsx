@@ -15,6 +15,9 @@ import PostProcessing from './post-processing'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
+import { useEffect } from 'react'
+import useViewer from '../../store/use-viewer'
+
 declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
 }
@@ -24,9 +27,16 @@ extend(THREE as any)
 interface ViewerProps {
   children?: React.ReactNode
   selectionManager?: 'default' | 'custom'
+  isEditor?: boolean
 }
 
-const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
+const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default', isEditor = false }) => {
+  const setIsEditor = useViewer((state) => state.setIsEditor)
+
+  useEffect(() => {
+    setIsEditor(isEditor)
+  }, [isEditor, setIsEditor])
+
   return (
     <Canvas
       dpr={[1, 1.5]}

@@ -183,7 +183,17 @@ export const DoorTool: React.FC = () => {
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 
+      const levelId = getLevelId()
+      const state = useScene.getState()
+      const doorCount = Object.values(state.nodes).filter((n) => {
+        if (n.type !== 'door') return false
+        const wall = n.parentId ? state.nodes[n.parentId as AnyNodeId] : undefined
+        return wall?.parentId === levelId
+      }).length
+      const name = `Door ${doorCount + 1}`
+
       const node = DoorNode.parse({
+        name,
         position: [clampedX, clampedY, 0],
         rotation: [0, itemRotation, 0],
         side,

@@ -3,6 +3,7 @@ import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 
 const Y_OFFSET = 0.01
@@ -61,8 +62,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return createBoundaryLineGeometry(node.polygon.points)
   }, [node?.polygon?.points])
 
+  const isEditor = useViewer((state) => state.isEditor)
+
   // Edge distances for labels
   const edges = useMemo(() => {
+    if (!isEditor) return []
     const polygon = node?.polygon?.points ?? []
     if (polygon.length < 2) return []
     return polygon.map(([x1, z1], i) => {
@@ -72,7 +76,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       const dist = Math.sqrt((x2 - x1!) ** 2 + (z2 - z1!) ** 2)
       return { midX, midZ, dist }
     })
-  }, [node?.polygon?.points])
+  }, [node?.polygon?.points, isEditor])
 
   const handlers = useNodeEvents(node, 'site')
 
@@ -103,7 +107,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       </line>
 
       {/* Edge distance labels */}
-      {edges.map((edge, i) => (
+      {isEditor && edges.map((edge, i) => (
         <Html
           center
           key={`edge-${i}`}

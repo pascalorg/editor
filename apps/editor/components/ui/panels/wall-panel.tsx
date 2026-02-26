@@ -47,7 +47,7 @@ export function WallPanel() {
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/wall.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
-            {node.name || `Wall (${length.toFixed(2)}m)`}
+            {node.name || "Wall"}
           </h2>
         </div>
         <button

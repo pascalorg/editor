@@ -123,7 +123,7 @@ export function CeilingPanel() {
         <div className="flex items-center gap-2 min-w-0">
           <Image src="/icons/ceiling.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
           <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
-            {node.name || `Ceiling (${area.toFixed(1)}m²)`}
+            {node.name || "Ceiling"}
           </h2>
         </div>
         <button

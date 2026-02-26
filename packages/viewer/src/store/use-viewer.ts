@@ -25,6 +25,9 @@ type Outliner = {
 };
 
 type ViewerState = {
+  isEditor: boolean
+  setIsEditor: (isEditor: boolean) => void
+
   selection: SelectionPath
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
@@ -61,6 +64,8 @@ type ViewerState = {
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
+      isEditor: false,
+      setIsEditor: (isEditor) => set({ isEditor }),
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       hoveredId: null,
       setHoveredId: (id) => set({ hoveredId: id }),
@@ -84,16 +89,18 @@ const useViewer = create<ViewerState>()(
         set((state) => {
           const newSelection = { ...state.selection, ...updates };
 
-          // Hierarchy Guard: If we change a high-level parent, reset the children
+          // Hierarchy Guard: If we change a high-level parent, reset the children unless explicitly provided
           if (updates.buildingId !== undefined) {
-            newSelection.levelId = null;
-            newSelection.zoneId = null;
-            newSelection.selectedIds = [];
-          } else if (updates.levelId !== undefined) {
-            newSelection.zoneId = null;
-            newSelection.selectedIds = [];
-          } else if (updates.zoneId !== undefined) {
-            newSelection.selectedIds = [];
+            if (updates.levelId === undefined) newSelection.levelId = null;
+            if (updates.zoneId === undefined) newSelection.zoneId = null;
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+          }
+          if (updates.levelId !== undefined) {
+            if (updates.zoneId === undefined) newSelection.zoneId = null;
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+          }
+          if (updates.zoneId !== undefined) {
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
           }
 
           return { selection: newSelection };

@@ -40,14 +40,14 @@ export function IconRail({
         <TooltipTrigger asChild>
           <Link
             href="/"
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 mb-1"
+            className="flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:bg-accent"
           >
             <Image
               src="/pascal-logo-shape.svg"
               alt="Pascal"
-              width={16}
-              height={16}
-              className="h-4 w-4"
+              width={24}
+              height={24}
+              className="h-6 w-6 dark:invert"
             />
           </Link>
         </TooltipTrigger>

@@ -1,7 +1,7 @@
-import { CeilingNode } from "@pascal-app/core";
+import { type AnyNodeId, CeilingNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -14,10 +14,31 @@ interface CeilingTreeNodeProps {
 export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
+  const isSelected = selectedIds.includes(node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) return;
+    const nodes = useScene.getState().nodes;
+    let isDescendant = false;
+    for (const id of selectedIds) {
+      let current = nodes[id as AnyNodeId];
+      while (current && current.parentId) {
+        if (current.parentId === node.id) {
+          isDescendant = true;
+          break;
+        }
+        current = nodes[current.parentId as AnyNodeId];
+      }
+      if (isDescendant) break;
+    }
+    if (isDescendant) {
+      setExpanded(true);
+    }
+  }, [selectedIds, node.id]);
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
