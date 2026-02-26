@@ -118,7 +118,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   return (
     <Clone
       object={scene}
-      scale={multiplyScales(node.asset.scale, node.scale)}
+      scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
       position={node.asset.offset}
       rotation={node.asset.rotation}
       {...handlers}
