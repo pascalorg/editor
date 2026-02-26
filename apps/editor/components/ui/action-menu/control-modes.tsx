@@ -105,7 +105,7 @@ export function ControlModes() {
               <Button
                 className={cn(
                   "h-8 w-8 transition-all",
-                  "text-zinc-400",
+                  "text-muted-foreground",
                   !isActive && m.color,
                   isActive && m.activeColor
                 )}

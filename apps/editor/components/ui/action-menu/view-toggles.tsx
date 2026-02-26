@@ -85,7 +85,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-8 w-8 text-muted-foreground transition-all',
               cameraMode === 'orthographic'
                 ? 'bg-violet-500/20 text-violet-400'
                 : 'hover:text-violet-400',
@@ -107,7 +107,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-8 w-8 text-muted-foreground transition-all',
               levelMode !== 'stacked'
                 ? 'bg-amber-500/20 text-amber-400'
                 : 'hover:text-amber-400',
@@ -131,7 +131,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-8 w-8 text-muted-foreground transition-all p-0',
               wallMode !== 'cutaway'
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
@@ -156,7 +156,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-8 w-8 text-muted-foreground transition-all p-0',
               showScans
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
@@ -178,7 +178,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-8 w-8 text-muted-foreground transition-all p-0',
               showGuides
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',

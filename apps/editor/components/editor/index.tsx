@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { Viewer } from '@pascal-app/viewer'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
@@ -38,8 +39,15 @@ export default function Editor({ projectId }: EditorProps) {
   useKeyboard()
   useProjectScene()
 
+  useEffect(() => {
+    document.body.classList.add('dark')
+    return () => {
+      document.body.classList.remove('dark')
+    }
+  }, [])
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full dark text-foreground">
       <ActionMenu />
       <PanelManager />
       <HelperManager />

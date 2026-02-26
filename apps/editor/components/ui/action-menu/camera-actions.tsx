@@ -28,7 +28,7 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="h-8 w-8 text-muted-foreground transition-all hover:text-foreground"
             onClick={orbitCCW}
             size="icon"
             variant="ghost"
@@ -45,7 +45,7 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="h-8 w-8 text-muted-foreground transition-all hover:text-foreground"
             onClick={orbitCW}
             size="icon"
             variant="ghost"
@@ -62,7 +62,7 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="h-8 w-8 text-muted-foreground transition-all hover:text-foreground"
             onClick={goToTopView}
             size="icon"
             variant="ghost"
