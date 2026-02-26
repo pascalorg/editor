@@ -1,24 +1,33 @@
 'use client'
 
 import Editor from '@/components/editor'
-import { useParams } from 'next/navigation'
-import { useEffect, useLayoutEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useLayoutEffect } from 'react'
 import { useProjectStore } from '@/features/community/lib/projects/store'
 import { useAuth } from '@/features/community/lib/auth/hooks'
 
 export default function EditorPage() {
   const params = useParams()
   const projectId = params.projectId as string
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
   const setActiveProject = useProjectStore((state) => state.setActiveProject)
+  const router = useRouter()
 
   // Use layoutEffect to set active project BEFORE the editor renders and hooks run
   useLayoutEffect(() => {
-    // For authenticated users with cloud projects, set the active project from URL
-    if (isAuthenticated && projectId && !projectId.startsWith('local_')) {
+    if (isLoading) return
+    if (!isAuthenticated) {
+      router.replace('/')
+      return
+    }
+    if (projectId) {
       setActiveProject(projectId)
     }
-  }, [projectId, isAuthenticated, setActiveProject])
+  }, [projectId, isAuthenticated, isLoading, setActiveProject, router])
+
+  if (isLoading || !isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="flex h-screen w-full max-w-screen">

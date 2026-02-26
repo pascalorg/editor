@@ -3,34 +3,25 @@
 import { Eye, Heart, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import type { Project } from '../lib/projects/types'
-import type { LocalProject } from '../lib/local-storage/project-store'
-import { ProjectSettingsDialog } from './project-settings-dialog'
-import { getUserProjectLikes, toggleProjectLike } from '../lib/projects/actions'
 import { useAuth } from '../lib/auth/hooks'
+import { getUserProjectLikes, toggleProjectLike } from '../lib/projects/actions'
+import type { Project } from '../lib/projects/types'
+import { ProjectSettingsDialog } from './project-settings-dialog'
 
 interface ProjectGridProps {
-  projects: (Project | LocalProject)[]
+  projects: Project[]
   onProjectClick: (id: string) => void
   onViewClick?: (id: string) => void
-  onSaveToCloud?: (project: LocalProject) => void
   showOwner: boolean
-  isLocal?: boolean
   canEdit?: boolean
   onUpdate?: () => void
-}
-
-function isLocalProject(prop: Project | LocalProject): prop is LocalProject {
-  return 'is_local' in prop && prop.is_local === true
 }
 
 export function ProjectGrid({
   projects,
   onProjectClick,
   onViewClick,
-  onSaveToCloud,
   showOwner,
-  isLocal = false,
   canEdit = false,
   onUpdate,
 }: ProjectGridProps) {
@@ -39,28 +30,21 @@ export function ProjectGrid({
   const [userLikes, setUserLikes] = useState<Record<string, boolean>>({})
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({})
 
-  // Initialize like counts from projects
   useEffect(() => {
     const counts: Record<string, number> = {}
     projects.forEach((proj) => {
-      if (!isLocalProject(proj)) {
-        counts[proj.id] = proj.likes
-      }
+      counts[proj.id] = proj.likes
     })
     setLikeCounts(counts)
   }, [projects])
 
-  // Fetch which projects the user has liked
   useEffect(() => {
     if (!isAuthenticated) {
       setUserLikes({})
       return
     }
 
-    const projectIds = projects
-      .filter((p) => !isLocalProject(p))
-      .map((p) => p.id)
-
+    const projectIds = projects.map((p) => p.id)
     if (projectIds.length === 0) return
 
     getUserProjectLikes(projectIds).then((result) => {
@@ -70,11 +54,9 @@ export function ProjectGrid({
     })
   }, [projects, isAuthenticated])
 
-  const handleSettingsClick = (e: React.MouseEvent, project: Project | LocalProject) => {
+  const handleSettingsClick = (e: React.MouseEvent, project: Project) => {
     e.stopPropagation()
-    if (!isLocalProject(project)) {
-      setSettingsProject(project)
-    }
+    setSettingsProject(project)
   }
 
   const handleViewClick = (e: React.MouseEvent, projectId: string) => {
@@ -85,31 +67,24 @@ export function ProjectGrid({
   const handleLikeClick = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation()
 
-    if (!isAuthenticated) {
-      // Could show a sign-in prompt here
-      return
-    }
+    if (!isAuthenticated) return
 
-    // Optimistic update
     const wasLiked = userLikes[projectId] || false
     const currentCount = likeCounts[projectId] || 0
 
     setUserLikes((prev) => ({ ...prev, [projectId]: !wasLiked }))
     setLikeCounts((prev) => ({
       ...prev,
-      [projectId]: wasLiked ? currentCount - 1 : currentCount + 1
+      [projectId]: wasLiked ? currentCount - 1 : currentCount + 1,
     }))
 
-    // Call server action
     const result = await toggleProjectLike(projectId)
 
     if (result.success && result.data) {
-      // Update with actual values from server
       const data = result.data
       setUserLikes((prev) => ({ ...prev, [projectId]: data.liked }))
       setLikeCounts((prev) => ({ ...prev, [projectId]: data.likes }))
     } else {
-      // Revert on error
       setUserLikes((prev) => ({ ...prev, [projectId]: wasLiked }))
       setLikeCounts((prev) => ({ ...prev, [projectId]: currentCount }))
     }
@@ -119,7 +94,7 @@ export function ProjectGrid({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
         {projects.map((project) => {
-          const owner = !isLocalProject(project) ? project.owner : null
+          const owner = project.owner
 
           return (
             <div
@@ -129,7 +104,7 @@ export function ProjectGrid({
             >
               {/* Thumbnail card */}
               <div className="relative aspect-[4/3] rounded-xl rounded-smooth-xl bg-neutral-50 overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] transition-shadow group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]">
-                {!isLocalProject(project) && project.thumbnail_url ? (
+                {project.thumbnail_url ? (
                   <img
                     src={project.thumbnail_url}
                     alt={project.name}
@@ -140,27 +115,7 @@ export function ProjectGrid({
                     No preview
                   </div>
                 )}
-                {isLocalProject(project) && (
-                  <div className="absolute top-3 right-3">
-                    {isAuthenticated && onSaveToCloud ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onSaveToCloud(project)
-                        }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2.5 py-1 rounded-md transition-colors"
-                        title="Save to cloud"
-                      >
-                        Save to cloud
-                      </button>
-                    ) : (
-                      <div className="bg-blue-500 text-white text-xs px-2.5 py-1 rounded-md">
-                        Local
-                      </div>
-                    )}
-                  </div>
-                )}
-                {canEdit && !isLocalProject(project) && (
+                {canEdit && (
                   <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {onViewClick && (
                       <button
@@ -186,7 +141,6 @@ export function ProjectGrid({
 
               {/* Info row below the card */}
               <div className="flex items-center gap-3 mt-3">
-                {/* Avatar */}
                 {showOwner && owner ? (
                   <Link
                     href={owner.username ? `/u/${owner.username}` : '#'}
@@ -207,7 +161,6 @@ export function ProjectGrid({
                   </Link>
                 ) : null}
 
-                {/* Name + stats */}
                 <div className="min-w-0 flex-1">
                   <h3 className="font-medium text-sm truncate">{project.name}</h3>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
@@ -220,35 +173,26 @@ export function ProjectGrid({
                         >
                           {owner.username || owner.name}
                         </Link>
-                        {!isLocalProject(project) && <span className="shrink-0">·</span>}
-                      </>
-                    )}
-                    {!isLocalProject(project) && (
-                      <>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{project.views}</span>
-                        </div>
                         <span className="shrink-0">·</span>
-                        <button
-                          onClick={(e) => handleLikeClick(e, project.id)}
-                          className="flex items-center gap-0.5 shrink-0 hover:text-red-500 transition-colors"
-                          disabled={!isAuthenticated}
-                        >
-                          <Heart
-                            className={`w-3.5 h-3.5 ${
-                              userLikes[project.id]
-                                ? 'fill-red-500 text-red-500'
-                                : ''
-                            }`}
-                          />
-                          <span>{likeCounts[project.id] ?? project.likes}</span>
-                        </button>
                       </>
                     )}
-                    {isLocalProject(project) && (
-                      <span>{new Date(project.updated_at).toLocaleDateString()}</span>
-                    )}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>{project.views}</span>
+                    </div>
+                    <span className="shrink-0">·</span>
+                    <button
+                      onClick={(e) => handleLikeClick(e, project.id)}
+                      className="flex items-center gap-0.5 shrink-0 hover:text-red-500 transition-colors"
+                      disabled={!isAuthenticated}
+                    >
+                      <Heart
+                        className={`w-3.5 h-3.5 ${
+                          userLikes[project.id] ? 'fill-red-500 text-red-500' : ''
+                        }`}
+                      />
+                      <span>{likeCounts[project.id] ?? project.likes}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -257,7 +201,6 @@ export function ProjectGrid({
         })}
       </div>
 
-      {/* Settings Dialog */}
       {settingsProject && (
         <ProjectSettingsDialog
           project={settingsProject}

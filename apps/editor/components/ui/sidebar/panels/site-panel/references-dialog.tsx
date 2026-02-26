@@ -53,8 +53,8 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       e.target.value = ''
 
       const projectId = activeProject?.id
-      if (!projectId || projectId.startsWith('local_')) {
-        setUploadError('Save your project to the cloud first to add references.')
+      if (!projectId) {
+        setUploadError('No active project. Please open a project first.')
         return
       }
 
@@ -93,8 +93,8 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       e.target.value = ''
 
       const projectId = activeProject?.id
-      if (!projectId || projectId.startsWith('local_')) {
-        setUploadError('Save your project to the cloud first to add references.')
+      if (!projectId) {
+        setUploadError('No active project. Please open a project first.')
         return
       }
 
@@ -142,7 +142,6 @@ export function ReferencesDialog({ levelId, open, onOpenChange }: ReferencesDial
       // Delete storage asset first (before removing from scene)
       if (
         projectId &&
-        !projectId.startsWith('local_') &&
         refNode?.url &&
         (refNode.url.startsWith('http://') || refNode.url.startsWith('https://'))
       ) {
