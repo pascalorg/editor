@@ -61,8 +61,12 @@ export function useProjectScene() {
     async function loadScene() {
       // Suppress auto-save for the store update caused by setScene/clearScene
       isLoadingSceneRef.current = true
+      
+      useProjectStore.getState().setIsSceneLoading(true)
 
       try {
+        useScene.getState().clearScene()
+        
         const result = await getProjectModel(projectId || '')
 
         if (result.success && result.data?.scene_graph) {
@@ -91,6 +95,13 @@ export function useProjectScene() {
             zoneId: null,
           })
           useEditor.getState().setPhase('structure')
+          useEditor.getState().setStructureLayer('elements')
+          
+          // Auto-select the wall tool if the level is empty (e.g., brand new project)
+          if (!firstLevel.children || firstLevel.children.length === 0) {
+            useEditor.getState().setMode('build')
+            useEditor.getState().setTool('wall')
+          }
         } else {
           useEditor.getState().setPhase('site')
           useViewer.getState().setSelection({
@@ -121,6 +132,13 @@ export function useProjectScene() {
             zoneId: null,
           })
           useEditor.getState().setPhase('structure')
+          useEditor.getState().setStructureLayer('elements')
+          
+          // Auto-select the wall tool if the level is empty (e.g., brand new project)
+          if (!firstLevel.children || firstLevel.children.length === 0) {
+            useEditor.getState().setMode('build')
+            useEditor.getState().setTool('wall')
+          }
         } else {
           useEditor.getState().setPhase('site')
           useViewer.getState().setSelection({
@@ -130,6 +148,8 @@ export function useProjectScene() {
             zoneId: null,
           })
         }
+      } finally {
+        useProjectStore.getState().setIsSceneLoading(false)
       }
 
       // Allow auto-save again after a tick (let the store update propagate)

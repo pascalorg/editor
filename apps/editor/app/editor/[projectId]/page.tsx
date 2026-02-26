@@ -2,9 +2,10 @@
 
 import Editor from '@/components/editor'
 import { useParams, useRouter } from 'next/navigation'
-import { useLayoutEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useProjectStore } from '@/features/community/lib/projects/store'
 import { useAuth } from '@/features/community/lib/auth/hooks'
+import { SceneLoader } from '@/components/ui/scene-loader'
 
 export default function EditorPage() {
   const params = useParams()
@@ -12,9 +13,14 @@ export default function EditorPage() {
   const { isAuthenticated, isLoading } = useAuth()
   const setActiveProject = useProjectStore((state) => state.setActiveProject)
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Use layoutEffect to set active project BEFORE the editor renders and hooks run
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (isLoading) return
     if (!isAuthenticated) {
       router.replace('/')
@@ -25,7 +31,11 @@ export default function EditorPage() {
     }
   }, [projectId, isAuthenticated, isLoading, setActiveProject, router])
 
-  if (isLoading || !isAuthenticated) {
+  if (!mounted || isLoading) {
+    return <SceneLoader fullScreen />
+  }
+
+  if (!isAuthenticated) {
     return null
   }
 

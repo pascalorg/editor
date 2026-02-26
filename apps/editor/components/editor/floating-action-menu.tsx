@@ -46,7 +46,9 @@ export function FloatingActionMenu() {
     e.stopPropagation()
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    setMovingNode(node)
+    if (node.type === 'item' || node.type === 'window' || node.type === 'door') {
+      setMovingNode(node as any)
+    }
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
@@ -56,7 +58,8 @@ export function FloatingActionMenu() {
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
     
-    let duplicateInfo = structuredClone(node)
+    let duplicateInfo = structuredClone(node) as any
+    delete duplicateInfo.id
     duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
     
     let duplicate: AnyNode | null = null
@@ -77,7 +80,9 @@ export function FloatingActionMenu() {
       if (duplicate.type === 'door' || duplicate.type === 'window') {
         useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
       }
-      setMovingNode(duplicate)
+      if (duplicate.type === 'item' || duplicate.type === 'window' || duplicate.type === 'door') {
+        setMovingNode(duplicate as any)
+      }
       setSelection({ selectedIds: [] })
     }
   }, [node, setMovingNode, setSelection])

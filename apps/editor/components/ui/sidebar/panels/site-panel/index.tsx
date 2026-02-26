@@ -31,6 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/primitives/popover";
+import { motion } from "motion/react";
 
 // Preset colors for zones
 const PRESET_COLORS = [
@@ -566,13 +567,18 @@ function LayerToggle() {
   const phase = useEditor((state) => state.phase);
   const setPhase = useEditor((state) => state.setPhase);
 
+  const activeTab = 
+    phase === "structure" && structureLayer === "elements" ? "structure" :
+    phase === "furnish" ? "furnish" :
+    phase === "structure" && structureLayer === "zones" ? "zones" : "none";
+
   return (
-    <div className="flex items-center p-1 bg-accent/20 gap-1 border-b border-border/50">
+    <div className="flex items-center p-1 bg-accent/20 gap-1 border-b border-border/50 relative">
       <button
         className={cn(
-          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
-          phase === "structure" && structureLayer === "elements"
-            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+          "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          activeTab === "structure"
+            ? "text-foreground"
             : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
         onClick={() => {
@@ -580,36 +586,56 @@ function LayerToggle() {
           setStructureLayer("elements");
         }}
       >
-        <img
-          src="/icons/room.png"
-          alt="Structure"
-          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "elements") && "opacity-50 grayscale")}
-        />
-        Structure
+        {activeTab === "structure" && (
+          <motion.div
+            layoutId="layerToggleActiveBg"
+            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col items-center">
+          <img
+            src="/icons/room.png"
+            alt="Structure"
+            className={cn("w-6 h-6 mb-1 transition-all", activeTab !== "structure" && "opacity-50 grayscale")}
+          />
+          Structure
+        </div>
       </button>
+
       <button
         className={cn(
-          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
-          phase === "furnish"
-            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+          "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          activeTab === "furnish"
+            ? "text-foreground"
             : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
         onClick={() => {
           setPhase("furnish");
         }}
       >
-        <img
-          src="/icons/couch.png"
-          alt="Furnish"
-          className={cn("w-6 h-6 mb-1", phase !== "furnish" && "opacity-50 grayscale")}
-        />
-        Furnish
+        {activeTab === "furnish" && (
+          <motion.div
+            layoutId="layerToggleActiveBg"
+            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col items-center">
+          <img
+            src="/icons/couch.png"
+            alt="Furnish"
+            className={cn("w-6 h-6 mb-1 transition-all", activeTab !== "furnish" && "opacity-50 grayscale")}
+          />
+          Furnish
+        </div>
       </button>
+
       <button
         className={cn(
-          "flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
-          phase === "structure" && structureLayer === "zones"
-            ? "bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground"
+          "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
+          activeTab === "zones"
+            ? "text-foreground"
             : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
         )}
         onClick={() => {
@@ -617,12 +643,21 @@ function LayerToggle() {
           setStructureLayer("zones");
         }}
       >
-        <img
-          src="/icons/kitchen.png"
-          alt="Zones"
-          className={cn("w-6 h-6 mb-1", !(phase === "structure" && structureLayer === "zones") && "opacity-50 grayscale")}
-        />
-        Zones
+        {activeTab === "zones" && (
+          <motion.div
+            layoutId="layerToggleActiveBg"
+            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col items-center">
+          <img
+            src="/icons/kitchen.png"
+            alt="Zones"
+            className={cn("w-6 h-6 mb-1 transition-all", activeTab !== "zones" && "opacity-50 grayscale")}
+          />
+          Zones
+        </div>
       </button>
     </div>
   );

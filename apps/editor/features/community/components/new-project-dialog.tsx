@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/primitives/dialog'
 import { Switch } from '@/components/ui/primitives/switch'
+import { useScene } from '@pascal-app/core'
 import { createProject } from '../lib/projects/actions'
 
 interface NewProjectDialogProps {
@@ -30,7 +31,12 @@ export function NewProjectDialog({ open, onOpenChange, onSuccess }: NewProjectDi
     setIsCreating(true)
 
     try {
-      const result = await createProject({ name, isPrivate })
+      // Get the default scene graph
+      useScene.getState().clearScene()
+      const { nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { nodes, rootNodeIds }
+      
+      const result = await createProject({ name, isPrivate, sceneGraph })
 
       if (result.success && result.data) {
         onOpenChange(false)
