@@ -2,26 +2,21 @@
 
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { createProject } from '../lib/projects/actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/primitives/dialog'
 import { Switch } from '@/components/ui/primitives/switch'
+import { createProject } from '../lib/projects/actions'
 
 interface NewProjectDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: (projectId: string) => void
-  localProjectData?: {
-    id: string
-    name: string
-    sceneGraph: any
-  }
 }
 
 /**
- * NewProjectDialog - Dialog for creating a new project with optional Google Maps address search
+ * NewProjectDialog - Dialog for creating a new project
  */
-export function NewProjectDialog({ open, onOpenChange, onSuccess, localProjectData }: NewProjectDialogProps) {
-  const [projectName, setProjectName] = useState(localProjectData?.name || '')
+export function NewProjectDialog({ open, onOpenChange, onSuccess }: NewProjectDialogProps) {
+  const [projectName, setProjectName] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,19 +27,10 @@ export function NewProjectDialog({ open, onOpenChange, onSuccess, localProjectDa
 
     const name = projectName.trim() || 'Untitled Project'
 
-    if (!name) {
-      setError('Please enter a project name')
-      return
-    }
-
     setIsCreating(true)
 
     try {
-      const result = await createProject({
-        name,
-        isPrivate,
-        sceneGraph: localProjectData?.sceneGraph,
-      })
+      const result = await createProject({ name, isPrivate })
 
       if (result.success && result.data) {
         onOpenChange(false)
@@ -73,7 +59,7 @@ export function NewProjectDialog({ open, onOpenChange, onSuccess, localProjectDa
   return (
     <Dialog open={open} onOpenChange={handleClose} modal={false}>
       <DialogContent
-        className="sm:max-w-[500px]"
+        className="sm:max-w-125"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -119,17 +105,6 @@ export function NewProjectDialog({ open, onOpenChange, onSuccess, localProjectDa
               <Switch checked={!isPrivate} onCheckedChange={(checked) => setIsPrivate(!checked)} />
             </div>
           </div>
-
-          {localProjectData && (
-            <div className="rounded-md border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
-              <p className="font-medium text-blue-700 dark:text-blue-300">
-                Saving local project: {localProjectData.name}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Your building data will be preserved
-              </p>
-            </div>
-          )}
 
           {error && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">

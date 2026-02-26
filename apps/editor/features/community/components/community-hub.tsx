@@ -4,8 +4,6 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth/hooks'
-import type { LocalProject } from '../lib/local-storage/project-store'
-import { createLocalProject, getLocalProjects } from '../lib/local-storage/project-store'
 import { getPublicProjects, getUserProjects } from '../lib/projects/actions'
 import type { Project } from '../lib/projects/types'
 import { CreateProjectButton } from './create-project-button'
@@ -16,36 +14,29 @@ import { ProjectGrid } from './project-grid'
 import { SignInDialog } from './sign-in-dialog'
 
 export default function CommunityHub() {
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const router = useRouter()
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false)
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false)
-  const [localProjectToSave, setLocalProjectToSave] = useState<LocalProject | null>(null)
   const [publicProjects, setPublicProjects] = useState<Project[]>([])
   const [userProjects, setUserProjects] = useState<Project[]>([])
-  const [localProjects, setLocalProjects] = useState<LocalProject[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadProjects() {
       setLoading(true)
 
-      // Load public projects (always)
       const publicResult = await getPublicProjects()
       if (publicResult.success) {
         setPublicProjects(publicResult.data || [])
       }
 
-      // Load user projects if authenticated
       if (isAuthenticated) {
         const userResult = await getUserProjects()
         if (userResult.success) {
           setUserProjects(userResult.data || [])
         }
       }
-
-      // Always load local projects
-      setLocalProjects(getLocalProjects())
 
       setLoading(false)
     }
@@ -55,37 +46,12 @@ export default function CommunityHub() {
     }
   }, [isAuthenticated, authLoading])
 
-  const handleCreateProject = async () => {
-    if (!isAuthenticated) {
-      // Create local project for guest
-      const project = createLocalProject('Untitled Project')
-      router.push(`/editor/${project.id}`)
-    } else {
-      // Open project creation dialog for authenticated users
-      setIsNewProjectDialogOpen(true)
-    }
-  }
-
   const handleProjectCreated = async (projectId: string) => {
-    // If this was a local project being saved, delete it from localStorage
-    if (localProjectToSave) {
-      const { deleteLocalProject } = await import('../lib/local-storage/project-store')
-      deleteLocalProject(localProjectToSave.id)
-      setLocalProjects(getLocalProjects())
-      setLocalProjectToSave(null)
-    }
-
-    // Reload projects and navigate to the new project
     const result = await getUserProjects()
     if (result.success) {
       setUserProjects(result.data || [])
     }
     router.push(`/editor/${projectId}`)
-  }
-
-  const handleSaveLocalToCloud = (localProject: LocalProject) => {
-    setLocalProjectToSave(localProject)
-    setIsNewProjectDialogOpen(true)
   }
 
   const handleProjectClick = (projectId: string) => {
@@ -153,18 +119,17 @@ export default function CommunityHub() {
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold">My Projects</h2>
-              <CreateProjectButton onCreateProject={handleCreateProject} />
+              <CreateProjectButton onCreateProject={() => setIsNewProjectDialogOpen(true)} />
             </div>
-            {userProjects.length === 0 && localProjects.length === 0 ? (
+            {userProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
                 <p className="text-muted-foreground">You don&apos;t have any projects yet.</p>
               </div>
             ) : (
               <ProjectGrid
-                projects={[...userProjects, ...localProjects]}
+                projects={userProjects}
                 onProjectClick={handleProjectClick}
                 onViewClick={handleViewProject}
-                onSaveToCloud={handleSaveLocalToCloud}
                 showOwner={false}
                 canEdit
                 onUpdate={() => {
@@ -181,30 +146,19 @@ export default function CommunityHub() {
           </section>
         )}
 
-        {/* Local Projects Section (Guest Users) */}
-        {!isAuthenticated && localProjects.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold">My Local Projects</h2>
-              <CreateProjectButton onCreateProject={handleCreateProject} />
-            </div>
-            <ProjectGrid
-              projects={localProjects}
-              onProjectClick={handleProjectClick}
-              showOwner={false}
-              isLocal
-            />
-          </section>
-        )}
-
-        {/* Create First Project CTA */}
-        {!isAuthenticated && localProjects.length === 0 && (
-          <section className="text-center py-12">
-            <h2 className="text-2xl font-semibold mb-4">Get Started</h2>
-            <p className="text-muted-foreground mb-6">
-              Create your first project to start designing
+        {/* Sign-in CTA for unauthenticated users */}
+        {!isAuthenticated && (
+          <section className="rounded-2xl border border-border bg-neutral-50 dark:bg-neutral-900/50 px-8 py-12 text-center">
+            <h2 className="text-2xl font-semibold mb-2">Build with Pascal</h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Create and share 3D architectural projects. Sign in to get started.
             </p>
-            <CreateProjectButton onCreateProject={handleCreateProject} />
+            <button
+              onClick={() => setIsSignInDialogOpen(true)}
+              className="rounded-lg bg-primary px-6 py-2.5 text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+            >
+              Sign in to create a project
+            </button>
           </section>
         )}
 
@@ -230,15 +184,6 @@ export default function CommunityHub() {
         open={isNewProjectDialogOpen}
         onOpenChange={setIsNewProjectDialogOpen}
         onSuccess={handleProjectCreated}
-        localProjectData={
-          localProjectToSave
-            ? {
-                id: localProjectToSave.id,
-                name: localProjectToSave.name,
-                sceneGraph: localProjectToSave.scene_graph,
-              }
-            : undefined
-        }
       />
     </div>
   )

@@ -2,8 +2,6 @@
 
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { Viewer } from '@pascal-app/viewer'
-import { useAuth } from '@/features/community/lib/auth/hooks'
-import { useLocalProjectScene } from '@/features/community/lib/local-storage/hooks'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { initSFXBus } from '@/lib/sfx-bus'
@@ -38,18 +36,7 @@ interface EditorProps {
 
 export default function Editor({ projectId }: EditorProps) {
   useKeyboard()
-  const { isAuthenticated } = useAuth()
-
-  // Determine which mode to use
-  const isLocalProject = projectId?.startsWith('local_')
-  const shouldUseCloud = isAuthenticated && !isLocalProject
-  const shouldUseLocal = !shouldUseCloud && !!projectId
-
-  // Call hooks unconditionally (hooks internally check if they should activate)
-  // Cloud hook activates when there's an activeProject in the store
   useProjectScene()
-  // Local hook activates when projectId is provided and starts with 'local_'
-  useLocalProjectScene(shouldUseLocal ? projectId : undefined)
 
   return (
     <div className="w-full h-full">

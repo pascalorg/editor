@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['three', '@pascal-app/viewer', '@pascal-app/core'],
   experimental: {
     serverActions: {
-      bodySizeLimit: '10mb',
+      bodySizeLimit: '100mb',
     },
   },
   images: {

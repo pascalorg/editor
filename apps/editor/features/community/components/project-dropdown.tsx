@@ -1,6 +1,7 @@
 'use client'
 
 import { Check, ChevronDown, Home, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
   DropdownMenu,
@@ -18,6 +19,8 @@ import { NewProjectDialog } from './new-project-dialog'
  * Having it in both places caused duplicate subscriptions and 2x server action calls.
  */
 export function ProjectDropdown() {
+  const router = useRouter()
+
   // Use project store
   const projects = useProjectStore((state) => state.projects)
   const activeProject = useProjectStore((state) => state.activeProject)
@@ -35,9 +38,8 @@ export function ProjectDropdown() {
     setIsNewProjectDialogOpen(true)
   }
 
-  const handleProjectCreated = async (projectId: string) => {
-    // Set the newly created project as active (this will also fetch projects)
-    await setActiveProject(projectId)
+  const handleProjectCreated = (projectId: string) => {
+    router.push(`/editor/${projectId}`)
   }
 
   return (

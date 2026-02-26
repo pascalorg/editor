@@ -29,5 +29,13 @@ export async function register() {
       })
       console.log('Created "project-thumbnails" storage bucket')
     }
+
+    if (!bucketNames.has('project-assets')) {
+      await supabase.storage.createBucket('project-assets', {
+        public: true,
+        fileSizeLimit: 500 * 1024 * 1024, // 500MB for GLB/GLTF scans
+      })
+      console.log('Created "project-assets" storage bucket')
+    }
   }
 }

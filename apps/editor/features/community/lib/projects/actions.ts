@@ -804,76 +804,6 @@ export async function updateProjectAddress(
 }
 
 /**
- * Migrate a local project to the cloud
- * Creates a new project with the local project's data
- */
-export async function migrateLocalProject(
-  localProject: {
-    name: string
-    scene_graph: any
-  },
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    const session = await getSession()
-
-    if (!session?.user) {
-      return {
-        success: false,
-        error: 'Not authenticated',
-      }
-    }
-
-    const supabase = await createServerSupabaseClient()
-
-    // Create the project without an address (user can add one later via settings)
-    const projectId = createId('project')
-    const { error: projectError } = await (supabase.from('projects') as any).insert({
-      id: projectId,
-      name: localProject.name,
-      owner_id: session.user.id,
-      address_id: null,
-      is_private: true, // Default to private
-    })
-
-    if (projectError) {
-      return {
-        success: false,
-        error: projectError.message,
-      }
-    }
-
-    // Create the model with the scene graph
-    if (localProject.scene_graph) {
-      const modelId = createId('model')
-      const { error: modelError } = await (supabase.from('projects_models') as any).insert({
-        id: modelId,
-        project_id: projectId,
-        version: 1,
-        scene_graph: localProject.scene_graph,
-      })
-
-      if (modelError) {
-        return {
-          success: false,
-          error: modelError.message,
-        }
-      }
-    }
-
-    return {
-      success: true,
-      data: { id: projectId },
-      message: 'Project migrated successfully',
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to migrate project',
-    }
-  }
-}
-
-/**
  * Delete a project
  * Only the owner can delete their project
  */
@@ -911,7 +841,17 @@ export async function deleteProject(projectId: string): Promise<ActionResult> {
       }
     }
 
-    // Delete the project (cascade will delete related records)
+    // Delete project asset files from storage before deleting the project
+    const { data: assets } = await (supabase.from('project_assets') as any)
+      .select('storage_key')
+      .eq('project_id', projectId)
+
+    if (assets && assets.length > 0) {
+      const storageKeys = (assets as { storage_key: string }[]).map((a) => a.storage_key)
+      await supabase.storage.from('project-assets').remove(storageKeys)
+    }
+
+    // Delete the project (cascade will delete related records including project_assets rows)
     const { error } = await supabase.from('projects').delete().eq('id', projectId)
 
     if (error) {
