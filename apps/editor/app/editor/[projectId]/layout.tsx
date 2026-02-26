@@ -14,5 +14,9 @@ export default function EditorProjectLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return children
+  return (
+    <div style={{ cursor: "url('/cursor.svg') 4 2, default" }}>
+      {children}
+    </div>
+  )
 }

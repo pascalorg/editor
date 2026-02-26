@@ -2,6 +2,7 @@ import { SlabNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState } from "react";
+import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -21,6 +22,9 @@ export function SlabTreeNode({ node, depth, isLast }: SlabTreeNodeProps) {
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
+    if (useEditor.getState().phase === "furnish") {
+      useEditor.getState().setPhase("structure");
+    }
   };
 
   const handleDoubleClick = () => {

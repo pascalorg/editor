@@ -2,6 +2,7 @@ import { type AnyNodeId, ItemNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNode, TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -54,6 +55,9 @@ export function ItemTreeNode({ node, depth, isLast }: ItemTreeNodeProps) {
 
   const handleClick = () => {
     setSelection({ selectedIds: [node.id] });
+    if (useEditor.getState().phase === "structure") {
+      useEditor.getState().setPhase("furnish");
+    }
   };
 
   const handleDoubleClick = () => {

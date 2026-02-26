@@ -19,6 +19,7 @@ import { SidebarProvider } from '../ui/primitives/sidebar'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
+import { FloatingActionMenu } from './floating-action-menu'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 import { ThumbnailGenerator } from './thumbnail-generator'
@@ -27,6 +28,29 @@ import { ThumbnailGenerator } from './thumbnail-generator'
 useScene.getState().loadScene()
 initSpatialGridSync()
 initSpaceDetectionSync(useScene, useEditor)
+
+// Auto-select the first building and level for the default scene
+const sceneState = useScene.getState()
+const siteNodeId = sceneState.rootNodeIds[0]
+const siteNode = siteNodeId ? sceneState.nodes[siteNodeId] : null
+if (siteNode && siteNode.type === 'site') {
+  const firstBuildingId = siteNode.children.find(id => sceneState.nodes[id]?.type === 'building')
+  if (firstBuildingId) {
+    const buildingNode = sceneState.nodes[firstBuildingId]
+    if (buildingNode && buildingNode.type === 'building') {
+      const firstLevelId = buildingNode.children.find(id => sceneState.nodes[id]?.type === 'level')
+      if (firstLevelId) {
+        useViewer.getState().setSelection({
+          buildingId: firstBuildingId,
+          levelId: firstLevelId,
+          selectedIds: [],
+          zoneId: null,
+        })
+        useEditor.getState().setPhase('structure')
+      }
+    }
+  }
+}
 
 // Initialize SFX bus to connect events to sound effects
 initSFXBus()
@@ -67,6 +91,7 @@ export default function Editor({ projectId }: EditorProps) {
       </SidebarProvider>
       <Viewer selectionManager="custom" isEditor={true}>
         <SelectionManager />
+        <FloatingActionMenu />
         <ExportManager />
         {/* Editor only system to toggle zone visibility */}
         <ZoneSystem />

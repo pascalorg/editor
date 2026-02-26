@@ -29,6 +29,15 @@ interface SelectionStrategy {
   isValid: (node: AnyNode) => boolean;
 }
 
+export const resolveBuildingId = (levelId: string, nodes: Record<string, AnyNode>): string | null => {
+  const level = nodes[levelId];
+  if (!level) return null;
+  if (level.parentId && nodes[level.parentId]?.type === "building") {
+    return level.parentId;
+  }
+  return null;
+};
+
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   site: {
     types: ["building"],
@@ -47,15 +56,32 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
     types: ["wall", "item", "zone", "slab", "ceiling", "roof", "window", "door"],
     handleSelect: (node, isShift) => {
       const { selection, setSelection } = useViewer.getState();
+      const nodes = useScene.getState().nodes;
+      const nodeLevelId = resolveLevelId(node, nodes);
+      const buildingId = resolveBuildingId(nodeLevelId, nodes);
+
+      const updates: any = {};
+      if (nodeLevelId !== "default" && nodeLevelId !== selection.levelId) {
+        updates.levelId = nodeLevelId;
+      }
+      if (buildingId && buildingId !== selection.buildingId) {
+        updates.buildingId = buildingId;
+      }
+
       if (node.type === 'zone') {
-        setSelection({ zoneId: node.id });
+        updates.zoneId = node.id;
+        // Don't reset selectedIds in structure phase for zone, but if we changed level, it might reset them via hierarchy guard.
+        // Wait, the hierarchy guard resets zoneId if levelId changes. That's fine since we provide zoneId.
+        setSelection(updates);
       } else {
-      const nextIds = isShift
-        ? selection.selectedIds.includes(node.id)
-          ? selection.selectedIds.filter((id) => id !== node.id)
-          : [...selection.selectedIds, node.id]
-        : [node.id];
-      setSelection({ selectedIds: nextIds });
+        const nextIds = isShift
+          ? selection.selectedIds.includes(node.id)
+            ? selection.selectedIds.filter((id) => id !== node.id)
+            : [...selection.selectedIds, node.id]
+          : [node.id];
+        
+        updates.selectedIds = nextIds;
+        setSelection(updates);
       }
     },
     handleDeselect: () => {
@@ -91,12 +117,26 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
     types: ["item"],
     handleSelect: (node, isShift) => {
       const { selection, setSelection } = useViewer.getState();
+      const nodes = useScene.getState().nodes;
+      const nodeLevelId = resolveLevelId(node, nodes);
+      const buildingId = resolveBuildingId(nodeLevelId, nodes);
+
+      const updates: any = {};
+      if (nodeLevelId !== "default" && nodeLevelId !== selection.levelId) {
+        updates.levelId = nodeLevelId;
+      }
+      if (buildingId && buildingId !== selection.buildingId) {
+        updates.buildingId = buildingId;
+      }
+
       const nextIds = isShift
         ? selection.selectedIds.includes(node.id)
           ? selection.selectedIds.filter((id) => id !== node.id)
           : [...selection.selectedIds, node.id]
         : [node.id];
-      setSelection({ selectedIds: nextIds });
+      
+      updates.selectedIds = nextIds;
+      setSelection(updates);
     },
     handleDeselect: () => {
       useViewer.getState().setSelection({ selectedIds: [] });
@@ -120,32 +160,68 @@ export const SelectionManager = () => {
     if (mode !== "select") return;
     if (movingNode) return;
 
-    const strategy = SELECTION_STRATEGIES[phase];
-    if (!strategy) return;
-
     const onClick = (event: NodeEvent) => {
-      if (!strategy.isValid(event.node)) return;
+      const node = event.node;
+      let currentPhase = useEditor.getState().phase;
+      let targetPhase = currentPhase;
 
-      event.stopPropagation();
-      const isShift = event.nativeEvent?.shiftKey;
-      strategy.handleSelect(event.node, isShift ?? false);
+      // Auto-switch between structure and furnish phases when clicking elements on the same level
+      if (currentPhase === "structure" || currentPhase === "furnish") {
+        if (isNodeInCurrentLevel(node)) {
+          if (
+            node.type === "wall" || 
+            node.type === "slab" || 
+            node.type === "ceiling" || 
+            node.type === "roof" || 
+            node.type === "window" || 
+            node.type === "door"
+          ) {
+            targetPhase = "structure";
+          } else if (node.type === "item") {
+            const item = node as ItemNode;
+            if (item.asset.category === "door" || item.asset.category === "window") {
+              targetPhase = "structure";
+            } else {
+              targetPhase = "furnish";
+            }
+          }
+          
+          if (targetPhase !== currentPhase) {
+            useEditor.getState().setPhase(targetPhase);
+            if (targetPhase === "structure" && useEditor.getState().structureLayer === "zones") {
+              useEditor.getState().setStructureLayer("elements");
+            }
+            currentPhase = targetPhase;
+          }
+        }
+      }
+
+      const activeStrategy = SELECTION_STRATEGIES[currentPhase];
+      if (activeStrategy && activeStrategy.isValid(node)) {
+        event.stopPropagation();
+        const isShift = event.nativeEvent?.shiftKey;
+        activeStrategy.handleSelect(node, isShift ?? false);
+      }
     };
 
-    // Bind listeners for all potential types this strategy might care about
-    strategy.types.forEach((type) => {
-      emitter.on(`${type}:click`, onClick);
+    const allTypes = ["wall", "item", "building", "zone", "slab", "ceiling", "roof", "window", "door"];
+    allTypes.forEach((type) => {
+      emitter.on(`${type}:click` as any, onClick as any);
     });
 
-    const onGridClick = () => strategy.handleDeselect();
+    const onGridClick = () => {
+      const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase];
+      if (activeStrategy) activeStrategy.handleDeselect();
+    };
     emitter.on("grid:click", onGridClick);
 
     return () => {
-      strategy.types.forEach((type) => {
-        emitter.off(`${type}:click`, onClick);
+      allTypes.forEach((type) => {
+        emitter.off(`${type}:click` as any, onClick as any);
       });
       emitter.off("grid:click", onGridClick);
     };
-  }, [phase, mode, movingNode]);
+  }, [mode, movingNode]);
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {

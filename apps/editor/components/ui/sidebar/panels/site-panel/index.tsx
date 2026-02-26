@@ -870,28 +870,9 @@ function ContentSection() {
     const childNode = nodes[childId];
     if (!childNode || childNode.type === "zone") return false;
 
-    // In structure mode, show structural elements (walls, slabs, etc.) and doors/windows
-    if (phase === "structure") {
-      if (childNode.type === "item") {
-        const category = childNode.asset?.category?.toLowerCase() || "";
-        // Only show doors and windows in structure mode
-        return category === "door" || category === "window";
-      }
-      // Show all other structural elements (walls, slabs, ceiling, roof)
-      return true;
-    }
-
-    // In furnish mode, only show items that are NOT doors or windows
-    if (phase === "furnish") {
-      if (childNode.type === "item") {
-        const category = childNode.asset?.category?.toLowerCase() || "";
-        // Hide doors and windows in furnish mode
-        return category !== "door" && category !== "window";
-      }
-      // Hide structural elements in furnish mode
-      return false;
-    }
-
+    // We no longer filter out structural nodes in furnish mode or furnish nodes in structure mode
+    // This allows nested items (like lights in a ceiling or cabinetry on a wall) to remain visible
+    // and selectable in both modes, ensuring seamless transition in the tree view.
     return true;
   });
 
