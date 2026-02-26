@@ -86,8 +86,8 @@ const useEditor = create<EditorState>()((set, get) => ({
 
     set({ phase })
 
-    // Clear tool and catalog when switching phases
-    set({ tool: null, catalogCategory: null })
+    // Reset to select mode and clear tool/catalog when switching phases
+    set({ mode: 'select', tool: null, catalogCategory: null })
 
     const viewer = useViewer.getState()
     const scene = useScene.getState()
@@ -156,10 +156,17 @@ const useEditor = create<EditorState>()((set, get) => ({
         selectedIds: [],
         zoneId: null,
       })
-    }
-    // When entering build mode in structure phase with zones layer, activate zone tool
-    if (mode === 'build' && phase === 'structure' && structureLayer === 'zones') {
-      set({ tool: 'zone' })
+      
+      // Ensure a tool is selected in build mode
+      if (!tool) {
+        if (phase === 'structure' && structureLayer === 'zones') {
+          set({ tool: 'zone' })
+        } else if (phase === 'structure' && structureLayer === 'elements') {
+          set({ tool: 'wall' })
+        } else if (phase === 'furnish') {
+          set({ tool: 'item', catalogCategory: 'furniture' })
+        }
+      }
     }
     // When leaving build mode, clear tool
     else if (mode !== 'build' && tool) {
@@ -170,27 +177,13 @@ const useEditor = create<EditorState>()((set, get) => ({
   setTool: (tool) => set({ tool }),
   structureLayer: 'elements',
   setStructureLayer: (layer) => {
-    const { mode, tool } = get()
-    set({ structureLayer: layer })
+    set({ structureLayer: layer, mode: 'select', tool: null })
 
     const viewer = useViewer.getState()
     viewer.setSelection({
       selectedIds: [],
       zoneId: null,
     })
-
-    // Handle tool changes based on layer
-    if (layer === 'zones') {
-      // In zones layer with build mode, activate zone tool
-      if (mode === 'build') {
-        set({ tool: 'zone' })
-      }
-    } else {
-      // In elements layer, clear zone tool if it was active
-      if (tool === 'zone') {
-        set({ tool: null })
-      }
-    }
   },
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),

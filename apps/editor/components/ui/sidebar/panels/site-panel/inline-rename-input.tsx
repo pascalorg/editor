@@ -57,7 +57,7 @@ export function InlineRenameInput({
 
   if (!isEditing) {
     return (
-      <div className="flex items-center gap-1 group/rename min-w-0">
+      <div className="flex items-center gap-1 group/rename min-w-0 h-5">
         <span 
           className={cn("truncate border-b border-transparent", className)}
         >
@@ -88,7 +88,7 @@ export function InlineRenameInput({
       onBlur={handleSave}
       placeholder={defaultName}
       className={cn(
-        "flex-1 w-full bg-transparent text-foreground outline-none border-b border-primary/50 focus:border-primary rounded-none px-0 py-0 m-0 h-auto text-sm leading-none",
+        "flex-1 w-full bg-transparent text-foreground outline-none border-b border-primary/50 focus:border-primary rounded-none px-0 py-0 m-0 h-5 text-sm",
         className
       )}
       onClick={(e) => e.stopPropagation()}

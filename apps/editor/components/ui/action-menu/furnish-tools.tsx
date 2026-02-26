@@ -82,15 +82,10 @@ export function FurnishTools() {
                 className={cn(
                   "size-11 rounded-lg transition-all duration-300",
                   isActive && "bg-primary shadow-lg shadow-primary/40 ring-2 ring-primary ring-offset-2 ring-offset-zinc-950 scale-110 z-10",
-                  !isActive && hasActiveTool && "opacity-30 hover:opacity-60 scale-95 grayscale",
-                  !isActive && !hasActiveTool && "opacity-60 hover:opacity-100 hover:bg-white/10 hover:scale-105",
+                  !isActive && "opacity-40 hover:opacity-80 scale-95 grayscale",
                 )}
                 onClick={() => {
-                  if (isActive) {
-                    setActiveTool(null);
-                    setCatalogCategory(null);
-                    setMode("select");
-                  } else {
+                  if (!isActive) {
                     setCatalogCategory(tool.catalogCategory);
                     setActiveTool("item");
                     if (mode !== "build") {
@@ -113,7 +108,6 @@ export function FurnishTools() {
             <TooltipContent>
               <p>
                 {tool.label}
-                {isActive && " (Click to deselect)"}
               </p>
             </TooltipContent>
           </Tooltip>

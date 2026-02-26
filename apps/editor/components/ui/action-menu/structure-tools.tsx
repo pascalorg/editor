@@ -59,15 +59,10 @@ export function StructureTools() {
                 className={cn(
                   'size-11 rounded-lg transition-all duration-300',
                   isActive && 'bg-primary shadow-lg shadow-primary/40 ring-2 ring-primary ring-offset-2 ring-offset-zinc-950 scale-110 z-10',
-                  !isActive && hasActiveTool && 'opacity-30 hover:opacity-60 scale-95 grayscale',
-                  !isActive && !hasActiveTool && isContextual && 'bg-white/5 hover:bg-white/10 hover:scale-105',
-                  !isActive && !hasActiveTool && !isContextual && 'opacity-60 hover:opacity-100 hover:bg-white/10 hover:scale-105',
+                  !isActive && 'opacity-40 hover:opacity-80 scale-95 grayscale',
                 )}
                 onClick={() => {
-                  if (isActive) {
-                    setTool(null)
-                    setCatalogCategory(null)
-                  } else {
+                  if (!isActive) {
                     setTool(tool.id)
                     setCatalogCategory(tool.catalogCategory ?? null)
                     
@@ -92,7 +87,6 @@ export function StructureTools() {
             <TooltipContent>
               <p>
                 {tool.label}
-                {isActive && ' (Click to deselect)'}
               </p>
             </TooltipContent>
           </Tooltip>

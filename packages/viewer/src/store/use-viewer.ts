@@ -84,16 +84,18 @@ const useViewer = create<ViewerState>()(
         set((state) => {
           const newSelection = { ...state.selection, ...updates };
 
-          // Hierarchy Guard: If we change a high-level parent, reset the children
+          // Hierarchy Guard: If we change a high-level parent, reset the children unless explicitly provided
           if (updates.buildingId !== undefined) {
-            newSelection.levelId = null;
-            newSelection.zoneId = null;
-            newSelection.selectedIds = [];
-          } else if (updates.levelId !== undefined) {
-            newSelection.zoneId = null;
-            newSelection.selectedIds = [];
-          } else if (updates.zoneId !== undefined) {
-            newSelection.selectedIds = [];
+            if (updates.levelId === undefined) newSelection.levelId = null;
+            if (updates.zoneId === undefined) newSelection.zoneId = null;
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+          }
+          if (updates.levelId !== undefined) {
+            if (updates.zoneId === undefined) newSelection.zoneId = null;
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+          }
+          if (updates.zoneId !== undefined) {
+            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
           }
 
           return { selection: newSelection };

@@ -14,7 +14,7 @@ import {
   Camera,
   ChevronDown,
   Layers,
-  MapPin,
+  Pentagon,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -132,11 +132,17 @@ function PropertyLineSection() {
   };
 
   return (
-    <div className="border-b border-border/50">
+    <div className="border-b border-border/50 relative">
+      {/* Vertical tree line */}
+      <div className="absolute left-[21px] top-0 bottom-0 w-px bg-border/50" />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between pl-10 pr-3 py-2 relative">
+        {/* Horizontal branch line */}
+        <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50" />
+        
         <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-muted-foreground" />
+          <Pentagon className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium">Property Line</span>
         </div>
         <button
@@ -153,7 +159,7 @@ function PropertyLineSection() {
       </div>
 
       {/* Measurements */}
-      <div className="flex gap-3 px-3 pb-2">
+      <div className="flex gap-3 pl-10 pr-3 pb-2 relative">
         <div className="text-xs text-muted-foreground">
           Area: <span className="text-foreground">{area.toFixed(1)} m²</span>
         </div>
@@ -165,7 +171,7 @@ function PropertyLineSection() {
 
       {/* Vertex list (shown when editing) */}
       {isEditing && (
-        <div className="px-3 pb-2">
+        <div className="pl-10 pr-3 pb-2 relative">
           <div className="flex flex-col gap-1">
             {points.map((point, index) => (
               <div
@@ -339,14 +345,19 @@ function LevelItem({
     <div
       ref={itemRef}
       className={cn(
-        "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200",
+        "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200 relative",
         isSelected
           ? "bg-accent/50 text-foreground"
           : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
       )}
     >
+      {/* Vertical tree line */}
+      <div className="absolute left-[21px] top-0 bottom-0 w-px bg-border/50 pointer-events-none" />
+      {/* Horizontal branch line */}
+      <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
+
       <div
-        className="flex-1 flex items-center gap-2 pl-3 py-2 text-sm cursor-pointer min-w-0"
+        className="flex-1 flex items-center gap-2 pl-10 py-2 text-sm cursor-pointer min-w-0"
         onClick={() => setSelection({ levelId: level.id })}
         onDoubleClick={() => setIsEditing(true)}
       >
@@ -496,20 +507,7 @@ function LevelsSection() {
   };
 
   return (
-    <div className="flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Levels
-        </span>
-        <button
-          className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent cursor-pointer"
-          onClick={handleAddLevel}
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
+    <div className="flex flex-col relative">
       {/* Level buttons */}
       <div className="flex flex-col">
         {levels.map((level) => (
@@ -524,10 +522,25 @@ function LevelsSection() {
           />
         ))}
         {levels.length === 0 && (
-          <div className="text-xs text-muted-foreground px-2 py-1">
+          <div className="text-xs text-muted-foreground pl-10 pr-2 py-2 relative border-b border-border/50">
+            {/* Vertical tree line */}
+            <div className="absolute left-[21px] top-0 bottom-1/2 w-px bg-border/50 pointer-events-none" />
+            {/* Horizontal branch line */}
+            <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
             No levels yet
           </div>
         )}
+        <button
+          className="flex items-center gap-2 pl-10 py-2 text-sm text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-all duration-200 border-b border-border/50 relative"
+          onClick={handleAddLevel}
+        >
+          {/* Vertical tree line */}
+          <div className="absolute left-[21px] top-0 bottom-1/2 w-px bg-border/50 pointer-events-none" />
+          {/* Horizontal branch line */}
+          <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
+          <Plus className="w-3.5 h-3.5" />
+          Add level
+        </button>
       </div>
 
       {/* References dialog */}
