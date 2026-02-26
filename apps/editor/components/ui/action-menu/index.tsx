@@ -21,7 +21,7 @@ export function ActionMenu({ className }: { className?: string }) {
   const reducedMotion = useReducedMotion();
   const transition = reducedMotion
     ? { duration: 0 }
-    : { type: "spring", bounce: 0.2, duration: 0.4 };
+    : { type: "spring" as const, bounce: 0.2, duration: 0.4 };
 
   return (
     <TooltipProvider>

@@ -1,4 +1,4 @@
-import { CeilingNode, useScene } from "@pascal-app/core";
+import { type AnyNodeId, CeilingNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState, useEffect } from "react";
@@ -25,13 +25,13 @@ export function CeilingTreeNode({ node, depth }: CeilingTreeNodeProps) {
     const nodes = useScene.getState().nodes;
     let isDescendant = false;
     for (const id of selectedIds) {
-      let current = nodes[id];
+      let current = nodes[id as AnyNodeId];
       while (current && current.parentId) {
         if (current.parentId === node.id) {
           isDescendant = true;
           break;
         }
-        current = nodes[current.parentId];
+        current = nodes[current.parentId as AnyNodeId];
       }
       if (isDescendant) break;
     }

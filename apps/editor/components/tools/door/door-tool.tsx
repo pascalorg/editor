@@ -187,7 +187,7 @@ export const DoorTool: React.FC = () => {
       const state = useScene.getState()
       const doorCount = Object.values(state.nodes).filter((n) => {
         if (n.type !== 'door') return false
-        const wall = state.nodes[n.parentId ?? '']
+        const wall = n.parentId ? state.nodes[n.parentId as AnyNodeId] : undefined
         return wall?.parentId === levelId
       }).length
       const name = `Door ${doorCount + 1}`

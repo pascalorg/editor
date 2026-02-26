@@ -36,13 +36,13 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
     const nodes = useScene.getState().nodes;
     let isDescendant = false;
     for (const id of selectedIds) {
-      let current = nodes[id];
+      let current = nodes[id as AnyNodeId];
       while (current && current.parentId) {
         if (current.parentId === node.id) {
           isDescendant = true;
           break;
         }
-        current = nodes[current.parentId];
+        current = nodes[current.parentId as AnyNodeId];
       }
       if (isDescendant) break;
     }

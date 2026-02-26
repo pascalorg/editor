@@ -200,7 +200,7 @@ export const WindowTool: React.FC = () => {
       const state = useScene.getState()
       const windowCount = Object.values(state.nodes).filter((n) => {
         if (n.type !== 'window') return false
-        const wall = state.nodes[n.parentId ?? '']
+        const wall = n.parentId ? state.nodes[n.parentId as AnyNodeId] : undefined
         return wall?.parentId === levelId
       }).length
       const name = `Window ${windowCount + 1}`

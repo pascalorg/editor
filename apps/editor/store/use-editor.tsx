@@ -169,7 +169,7 @@ const useEditor = create<EditorState>()((set, get) => ({
       }
     }
     // When leaving build mode, clear tool
-    else if (mode !== 'build' && tool) {
+    else if (tool) {
       set({ tool: null })
     }
   },
