@@ -8,7 +8,8 @@
 import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
-import type { CreateProjectParams, Project, Database } from './types'
+import { isSceneGraphEmpty } from '../models/scene-graph-utils'
+import type { CreateProjectParams, Project } from './types'
 
 export type ActionResult<T = unknown> = {
   success: boolean
@@ -250,6 +251,9 @@ export async function createProject(params: CreateProjectParams): Promise<Action
       }
     }
 
+    // Determine if scene graph is empty
+    const isEmpty = params.sceneGraph ? isSceneGraphEmpty(params.sceneGraph) : true
+
     // Create the project
     const projectData = {
       id: projectId,
@@ -257,6 +261,7 @@ export async function createProject(params: CreateProjectParams): Promise<Action
       address_id: addressId,
       owner_id: session.user.id,
       is_private: params.isPrivate !== undefined ? params.isPrivate : true,
+      is_empty: isEmpty,
       details_json: params.center
         ? {
             coordinates: params.center,
@@ -401,6 +406,7 @@ export async function getPublicProjects(): Promise<ActionResult<Project[]>> {
         owner:auth_users!owner_id(id, name, username, image)
       `)
       .eq('is_private', false)
+      .eq('is_empty', false)
       .order('views', { ascending: false })
       .limit(50)
 

@@ -20,6 +20,7 @@ export const projects = pgTable(
     metadata: t.jsonb('metadata'),
     // Community features
     isPrivate: t.boolean('is_private').notNull().default(true),
+    isEmpty: t.boolean('is_empty').notNull().default(true),
     showScansPublic: t.boolean('show_scans_public').notNull().default(true),
     showGuidesPublic: t.boolean('show_guides_public').notNull().default(true),
     views: t.integer('views').notNull().default(0),

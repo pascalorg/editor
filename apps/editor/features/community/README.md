@@ -162,7 +162,7 @@ This feature requires:
   - `properties` - Property records
   - `properties_addresses` - Property addresses
   - `properties_models` - Scene graph models
-- Database migrations are managed in `packages/db/supabase/migrations/`
+- Database migrations are managed in `supabase/migrations/`
 
 ## Development
 
