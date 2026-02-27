@@ -1,12 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Button } from "@/components/ui/primitives/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/primitives/tooltip";
+import { ActionButton } from "./action-button";
 import { Pencil, Trash2, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -103,44 +98,37 @@ export function ControlModes() {
         const isImageMode = Boolean(m.imageSrc);
 
         return (
-          <Tooltip key={m.id}>
-            <TooltipTrigger asChild>
-              <Button
+          <ActionButton
+            key={m.id}
+            label={m.label}
+            shortcut={m.shortcut}
+            className={cn(
+              "text-muted-foreground",
+              !isImageMode && !isActive && m.color,
+              !isImageMode && isActive && m.activeColor,
+              isImageMode && isActive && "bg-white/10 hover:bg-white/10",
+              isImageMode && !isActive && "hover:bg-white/5"
+            )}
+            onClick={() => handleModeClick(m.id)}
+            size="icon"
+            variant="ghost"
+          >
+            {m.imageSrc ? (
+              <Image
+                alt={m.label}
                 className={cn(
-                  "h-9 w-9 transition-all",
-                  "text-muted-foreground",
-                  !isImageMode && !isActive && m.color,
-                  !isImageMode && isActive && m.activeColor,
-                  isImageMode && isActive && "bg-white/10 hover:bg-white/10",
-                  isImageMode && !isActive && "hover:bg-white/5"
+                  "h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200",
+                  !isActive && "opacity-60 grayscale",
+                  isActive && "opacity-100 grayscale-0"
                 )}
-                onClick={() => handleModeClick(m.id)}
-                size="icon"
-                variant="ghost"
-              >
-                {m.imageSrc ? (
-                  <Image
-                    alt={m.label}
-                    className={cn(
-                      "h-[26px] w-[26px] object-contain transition-[opacity,filter] duration-200",
-                      !isActive && "opacity-60 grayscale",
-                      isActive && "opacity-100 grayscale-0"
-                    )}
-                    height={26}
-                    src={m.imageSrc}
-                    width={26}
-                  />
-                ) : (
-                  Icon && <Icon className="h-5 w-5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
-                {m.label} ({m.shortcut})
-              </p>
-            </TooltipContent>
-          </Tooltip>
+                height={28}
+                src={m.imageSrc}
+                width={28}
+              />
+            ) : (
+              Icon && <Icon className="h-5 w-5" />
+            )}
+          </ActionButton>
         );
       })}
     </div>

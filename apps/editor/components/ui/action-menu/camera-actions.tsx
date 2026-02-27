@@ -2,12 +2,7 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
-import { Button } from '@/components/ui/primitives/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/primitives/tooltip'
+import { ActionButton } from "./action-button";
 
 export function CameraActions() {
   const goToTopView = () => {
@@ -25,73 +20,55 @@ export function CameraActions() {
   return (
     <div className="flex items-center gap-1">
       {/* Orbit CCW */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
-            onClick={orbitCCW}
-            size="icon"
-            variant="ghost"
-          >
-            <Image
-              alt="Orbit Left"
-              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100 -scale-x-100"
-              height={30}
-              src="/icons/rotate.png"
-              width={30}
-            />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Orbit Left</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label="Orbit Left"
+        className="group hover:bg-white/5"
+        onClick={orbitCCW}
+        size="icon"
+        variant="ghost"
+      >
+        <Image
+          alt="Orbit Left"
+          className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100 -scale-x-100"
+          height={28}
+          src="/icons/rotate.png"
+          width={28}
+        />
+      </ActionButton>
 
       {/* Orbit CW */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
-            onClick={orbitCW}
-            size="icon"
-            variant="ghost"
-          >
-            <Image
-              alt="Orbit Right"
-              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-              height={30}
-              src="/icons/rotate.png"
-              width={30}
-            />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Orbit Right</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label="Orbit Right"
+        className="group hover:bg-white/5"
+        onClick={orbitCW}
+        size="icon"
+        variant="ghost"
+      >
+        <Image
+          alt="Orbit Right"
+          className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+          height={28}
+          src="/icons/rotate.png"
+          width={28}
+        />
+      </ActionButton>
 
       {/* Top View */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
-            onClick={goToTopView}
-            size="icon"
-            variant="ghost"
-          >
-            <Image
-              alt="Top View"
-              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-              height={30}
-              src="/icons/topview.png"
-              width={30}
-            />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Top View</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label="Top View"
+        className="group hover:bg-white/5"
+        onClick={goToTopView}
+        size="icon"
+        variant="ghost"
+      >
+        <Image
+          alt="Top View"
+          className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+          height={28}
+          src="/icons/topview.png"
+          width={28}
+        />
+      </ActionButton>
     </div>
   )
 }

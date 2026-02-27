@@ -817,6 +817,11 @@ function LayerToggle() {
           />
           Structure
         </div>
+        <div className="absolute bottom-1 right-1.5 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md z-10">
+          <span className="block font-mono text-[9px] font-medium leading-none text-muted-foreground/70">
+            S
+          </span>
+        </div>
       </button>
 
       <button
@@ -844,6 +849,11 @@ function LayerToggle() {
             className={cn("w-6 h-6 mb-1 transition-all", activeTab !== "furnish" && "opacity-50 grayscale")}
           />
           Furnish
+        </div>
+        <div className="absolute bottom-1 right-1.5 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md z-10">
+          <span className="block font-mono text-[9px] font-medium leading-none text-muted-foreground/70">
+            F
+          </span>
         </div>
       </button>
 
@@ -873,6 +883,11 @@ function LayerToggle() {
             className={cn("w-6 h-6 mb-1 transition-all", activeTab !== "zones" && "opacity-50 grayscale")}
           />
           Zones
+        </div>
+        <div className="absolute bottom-1 right-1.5 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md z-10">
+          <span className="block font-mono text-[9px] font-medium leading-none text-muted-foreground/70">
+            Z
+          </span>
         </div>
       </button>
     </div>

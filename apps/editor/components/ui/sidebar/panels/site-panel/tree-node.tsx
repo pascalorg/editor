@@ -212,12 +212,18 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             )}>
               {icon}
             </span>
-            <div className="flex-1 min-w-0 truncate">
+            <div className={cn(
+              "flex-1 min-w-0 truncate",
+              !isVisible && "line-through text-muted-foreground"
+            )}>
               {label}
             </div>
           </div>
           {actions && (
-            <div className="opacity-0 group-hover/row:opacity-100 pr-1">
+            <div className={cn(
+              "opacity-0 group-hover/row:opacity-100 pr-1 transition-opacity duration-200",
+              !isVisible && "opacity-100"
+            )}>
               {actions}
             </div>
           )}

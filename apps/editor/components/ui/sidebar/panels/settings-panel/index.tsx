@@ -20,6 +20,7 @@ import {
 import { Switch } from "@/components/ui/primitives/switch";
 import useEditor from "@/store/use-editor";
 import { AudioSettingsDialog } from "./audio-settings-dialog";
+import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { useProjectStore } from "@/features/community/lib/projects/store";
 import { updateProjectVisibility } from "@/features/community/lib/projects/actions";
 
@@ -393,6 +394,14 @@ export function SettingsPanel() {
           Audio
         </label>
         <AudioSettingsDialog />
+      </div>
+
+      {/* Keyboard Section */}
+      <div className="space-y-2">
+        <label className="font-medium text-muted-foreground text-xs uppercase">
+          Keyboard
+        </label>
+        <KeyboardShortcutsDialog />
       </div>
 
       {/* Scene Graph */}

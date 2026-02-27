@@ -1,8 +1,7 @@
 'use client'
 
 import NextImage from 'next/image'
-import { Button } from '@/components/ui/primitives/button'
-import { Tooltip, TooltipContent, TooltipTrigger, } from '@/components/ui/primitives/tooltip'
+import { ActionButton } from "./action-button";
 
 import { cn } from '@/lib/utils'
 import useEditor, { CatalogCategory, StructureTool, Tool } from '@/store/use-editor'
@@ -53,42 +52,35 @@ export function StructureTools() {
         const isContextual = contextualTools.includes(tool.id)
 
         return (
-          <Tooltip key={`${tool.id}-${tool.catalogCategory ?? index}`}>
-            <TooltipTrigger asChild>
-              <Button
-                className={cn(
-                  'size-11 rounded-lg transition-all duration-300',
-                  isActive ? 'bg-black/40 hover:bg-black/40 scale-110 z-10' : 'bg-transparent opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-black/20 scale-95',
-                )}
-                onClick={() => {
-                  if (!isActive) {
-                    setTool(tool.id)
-                    setCatalogCategory(tool.catalogCategory ?? null)
-                    
-                    // Automatically switch to build mode if we select a tool
-                    if (useEditor.getState().mode !== 'build') {
-                      useEditor.getState().setMode('build')
-                    }
-                  }
-                }}
-                size="icon"
-                variant="ghost"
-              >
-                <NextImage
-                  alt={tool.label}
-                  className="size-full object-contain"
-                  height={28}
-                  src={tool.iconSrc}
-                  width={28}
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
-                {tool.label}
-              </p>
-            </TooltipContent>
-          </Tooltip>
+          <ActionButton
+            key={`${tool.id}-${tool.catalogCategory ?? index}`}
+            label={tool.label}
+            className={cn(
+              'rounded-lg duration-300',
+              isActive ? 'bg-black/40 hover:bg-black/40 scale-110 z-10' : 'bg-transparent opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-black/20 scale-95',
+            )}
+            onClick={() => {
+              if (!isActive) {
+                setTool(tool.id)
+                setCatalogCategory(tool.catalogCategory ?? null)
+                
+                // Automatically switch to build mode if we select a tool
+                if (useEditor.getState().mode !== 'build') {
+                  useEditor.getState().setMode('build')
+                }
+              }
+            }}
+            size="icon"
+            variant="ghost"
+          >
+            <NextImage
+              alt={tool.label}
+              className="size-full object-contain"
+              height={28}
+              src={tool.iconSrc}
+              width={28}
+            />
+          </ActionButton>
         )
       })}
     </div>

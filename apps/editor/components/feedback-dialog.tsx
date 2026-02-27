@@ -1,13 +1,10 @@
 'use client'
 
-import { ImageIcon, MessageSquare, X } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
 import { useScene } from '@pascal-app/core'
-import {
-  createImageUploadUrls,
-  submitFeedback,
-} from '@/features/community/lib/feedback/actions'
+import { ImageIcon, MessageSquare, X } from 'lucide-react'
+import { useParams } from 'next/navigation'
+import { useCallback, useRef, useState } from 'react'
+import { Button } from '@/components/ui/primitives/button'
 import {
   Dialog,
   DialogContent,
@@ -15,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/primitives/dialog'
-import { Button } from '@/components/ui/primitives/button'
+import { createImageUploadUrls, submitFeedback } from '@/features/community/lib/feedback/actions'
 
 const MAX_IMAGES = 5
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
@@ -49,25 +46,24 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
   const handleClose = () => {
     if (isSubmitting) return
     setOpen(false)
-    images.forEach((img) => URL.revokeObjectURL(img.url))
+    images.forEach((img) => {
+      URL.revokeObjectURL(img.url)
+    })
   }
 
-  const addFiles = useCallback(
-    (files: FileList | File[]) => {
-      const incoming = Array.from(files).filter(
-        (f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE,
-      )
-      setImages((prev) => {
-        const remaining = MAX_IMAGES - prev.length
-        const added = incoming.slice(0, remaining).map((file) => ({
-          file,
-          url: URL.createObjectURL(file),
-        }))
-        return [...prev, ...added]
-      })
-    },
-    [],
-  )
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const incoming = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE,
+    )
+    setImages((prev) => {
+      const remaining = MAX_IMAGES - prev.length
+      const added = incoming.slice(0, remaining).map((file) => ({
+        file,
+        url: URL.createObjectURL(file),
+      }))
+      return [...prev, ...added]
+    })
+  }, [])
 
   const removeImage = (index: number) => {
     setImages((prev) => {
@@ -190,7 +186,7 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
     <>
       <button
         onClick={handleOpen}
-        className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent/50 transition-colors"
+        className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent/90 transition-colors"
       >
         <MessageSquare className="h-4 w-4" />
         Feedback
@@ -249,11 +245,7 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
                       key={img.url}
                       className="group relative h-14 w-14 overflow-hidden rounded-md border border-border"
                     >
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={img.url} alt="" className="h-full w-full object-cover" />
                       <button
                         type="button"
                         onClick={() => removeImage(i)}
@@ -277,9 +269,7 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
                 >
                   <ImageIcon className="h-3.5 w-3.5" />
-                  {images.length > 0
-                    ? `${images.length}/${MAX_IMAGES}`
-                    : 'Attach'}
+                  {images.length > 0 ? `${images.length}/${MAX_IMAGES}` : 'Attach'}
                 </button>
                 <input
                   ref={fileInputRef}
@@ -294,7 +284,12 @@ export function FeedbackDialog({ projectId: projectIdProp }: { projectId?: strin
                 />
 
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClose}
+                    disabled={isSubmitting}
+                  >
                     Cancel
                   </Button>
                   <Button type="submit" disabled={isSubmitting || !message.trim()}>

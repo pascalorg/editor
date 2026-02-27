@@ -2,12 +2,7 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { Box, Camera, Diamond, Image, Layers, Layers2 } from 'lucide-react'
-import { Button } from '@/components/ui/primitives/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/primitives/tooltip'
+import { ActionButton } from "./action-button";
 import { cn } from '@/lib/utils'
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
@@ -81,119 +76,87 @@ export function ViewToggles() {
   return (
     <div className="flex items-center gap-1">
       {/* Camera Mode */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 w-9 text-muted-foreground transition-all',
-              cameraMode === 'orthographic'
-                ? 'bg-violet-500/20 text-violet-400'
-                : 'hover:text-violet-400',
-            )}
-            onClick={toggleCameraMode}
-            size="icon"
-            variant="ghost"
-          >
-            <Camera className="h-5 w-5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Camera: {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
+        className={cn(
+          cameraMode === 'orthographic'
+            ? 'bg-violet-500/20 text-violet-400'
+            : 'hover:text-violet-400',
+        )}
+        onClick={toggleCameraMode}
+        size="icon"
+        variant="ghost"
+      >
+        <Camera className="h-6 w-6" />
+      </ActionButton>
 
       {/* Level Mode */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 w-9 text-muted-foreground transition-all',
-              levelMode !== 'stacked'
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'hover:text-amber-400',
-            )}
-            onClick={cycleLevelMode}
-            size="icon"
-            variant="ghost"
-          >
-            {levelMode === 'solo' && <Diamond className="h-5 w-5" />}
-            {levelMode === 'exploded' && <Layers2 className="h-5 w-5" />}
-            {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-5 w-5" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Levels: {levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
+        className={cn(
+          levelMode !== 'stacked'
+            ? 'bg-amber-500/20 text-amber-400'
+            : 'hover:text-amber-400',
+        )}
+        onClick={cycleLevelMode}
+        size="icon"
+        variant="ghost"
+      >
+        {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
+        {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
+        {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-6 w-6" />}
+      </ActionButton>
 
       {/* Wall Mode */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 w-9 text-muted-foreground transition-all p-0',
-              wallMode !== 'cutaway'
-                ? 'bg-white/10'
-                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
-            )}
-            onClick={cycleWallMode}
-            size="icon"
-            variant="ghost"
-          >
-            {(() => {
-              const Icon = wallModeConfig[wallMode].icon
-              return <Icon className="h-[26px] w-[26px]" />
-            })()}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Walls: {wallModeConfig[wallMode].label}</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label={`Walls: ${wallModeConfig[wallMode].label}`}
+        className={cn(
+          'p-0',
+          wallMode !== 'cutaway'
+            ? 'bg-white/10'
+            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+        )}
+        onClick={cycleWallMode}
+        size="icon"
+        variant="ghost"
+      >
+        {(() => {
+          const Icon = wallModeConfig[wallMode].icon
+          return <Icon className="h-[28px] w-[28px]" />
+        })()}
+      </ActionButton>
 
       {/* Show Scans */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 w-9 text-muted-foreground transition-all p-0',
-              showScans
-                ? 'bg-white/10'
-                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
-            )}
-            onClick={() => setShowScans(!showScans)}
-            size="icon"
-            variant="ghost"
-          >
-            <img alt="Scans" className="h-[26px] w-[26px] object-contain" src="/icons/mesh.png" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Scans: {showScans ? 'Visible' : 'Hidden'}</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
+        className={cn(
+          'p-0',
+          showScans
+            ? 'bg-white/10'
+            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+        )}
+        onClick={() => setShowScans(!showScans)}
+        size="icon"
+        variant="ghost"
+      >
+        <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+      </ActionButton>
 
       {/* Show Guides */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn(
-              'h-9 w-9 text-muted-foreground transition-all p-0',
-              showGuides
-                ? 'bg-white/10'
-                : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
-            )}
-            onClick={() => setShowGuides(!showGuides)}
-            size="icon"
-            variant="ghost"
-          >
-            <img alt="Guides" className="h-[26px] w-[26px] object-contain" src="/icons/floorplan.png" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Guides: {showGuides ? 'Visible' : 'Hidden'}</p>
-        </TooltipContent>
-      </Tooltip>
+      <ActionButton
+        label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
+        className={cn(
+          'p-0',
+          showGuides
+            ? 'bg-white/10'
+            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+        )}
+        onClick={() => setShowGuides(!showGuides)}
+        size="icon"
+        variant="ghost"
+      >
+        <img alt="Guides" className="h-[28px] w-[28px] object-contain" src="/icons/floorplan.png" />
+      </ActionButton>
     </div>
   )
 }

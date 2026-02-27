@@ -1,12 +1,12 @@
 'use client'
 
+import { AnimatePresence, motion } from 'framer-motion'
 import { Howl } from 'howler'
 import { Disc3, Settings2, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 import useAudio from '@/store/use-audio'
-import { motion, AnimatePresence } from 'framer-motion'
 
 const PLAYLIST = [
   {
@@ -170,8 +170,8 @@ export function PascalRadio() {
       }}
       transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
       className={cn(
-        "flex flex-col rounded-lg border border-border bg-background/95 shadow-lg backdrop-blur-md overflow-hidden",
-        !isOpen && "cursor-pointer hover:bg-accent/30 transition-colors"
+        'flex flex-col rounded-lg border border-border bg-background/95 shadow-lg backdrop-blur-md overflow-hidden',
+        !isOpen && 'cursor-pointer hover:bg-accent/90 transition-colors',
       )}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium">
@@ -197,7 +197,11 @@ export function PascalRadio() {
               }
             }}
           >
-            {isRadioPlaying ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            {isRadioPlaying ? (
+              <Volume2 className="h-3.5 w-3.5" />
+            ) : (
+              <VolumeX className="h-3.5 w-3.5" />
+            )}
           </div>
           <button
             onClick={(e) => {
@@ -205,8 +209,8 @@ export function PascalRadio() {
               setIsOpen(!isOpen)
             }}
             className={cn(
-              "rounded-sm p-1 transition-all cursor-pointer hover:bg-accent hover:text-accent-foreground",
-              isOpen && "bg-accent text-accent-foreground"
+              'rounded-sm p-1 transition-all cursor-pointer hover:bg-accent hover:text-accent-foreground',
+              isOpen && 'bg-accent text-accent-foreground',
             )}
             aria-label="Radio Settings"
           >
@@ -236,7 +240,10 @@ export function PascalRadio() {
                   >
                     <SkipBack className="h-4 w-4" />
                   </button>
-                  <p className="text-sm font-medium text-center flex-1 truncate" title={currentTrack.title}>
+                  <p
+                    className="text-sm font-medium text-center flex-1 truncate"
+                    title={currentTrack.title}
+                  >
                     {currentTrack.title}
                   </p>
                   <button
@@ -260,7 +267,9 @@ export function PascalRadio() {
                   className="flex-1"
                   aria-label="Radio Volume"
                 />
-                <span className="w-8 text-right text-xs text-muted-foreground shrink-0">{radioVolume}%</span>
+                <span className="w-8 text-right text-xs text-muted-foreground shrink-0">
+                  {radioVolume}%
+                </span>
               </div>
             </div>
           </motion.div>

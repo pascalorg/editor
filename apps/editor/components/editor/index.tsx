@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
-import { Viewer, useViewer } from '@pascal-app/viewer'
+import { useViewer, Viewer } from '@pascal-app/viewer'
+import { useEffect } from 'react'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
+import { useProjectStore } from '@/features/community/lib/projects/store'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { initSFXBus } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
@@ -16,6 +17,7 @@ import { ActionMenu } from '../ui/action-menu'
 import { HelperManager } from '../ui/helpers/helper-manager'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { SidebarProvider } from '../ui/primitives/sidebar'
+import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
@@ -23,8 +25,6 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 import { ThumbnailGenerator } from './thumbnail-generator'
-import { useProjectStore } from '@/features/community/lib/projects/store'
-import { SceneLoader } from '../ui/scene-loader'
 
 // Load default scene initially (will be replaced when project loads)
 useScene.getState().loadScene()
@@ -35,7 +35,7 @@ initSpaceDetectionSync(useScene, useEditor)
 const sceneNodes = useScene.getState().nodes as Record<string, any>
 const sceneRootIds = useScene.getState().rootNodeIds
 const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-const resolve = (child: any) => typeof child === 'string' ? sceneNodes[child] : child
+const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
 const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
 const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
 
@@ -48,7 +48,7 @@ if (firstBuilding && firstLevel) {
   })
   useEditor.getState().setPhase('structure')
   useEditor.getState().setStructureLayer('elements')
-  
+
   // Auto-select the wall tool if the level is empty
   if (!firstLevel.children || firstLevel.children.length === 0) {
     useEditor.getState().setMode('build')

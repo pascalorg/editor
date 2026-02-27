@@ -1,4 +1,5 @@
-import { type AnyNode, emitter, useScene } from "@pascal-app/core";
+import { type AnyNode, type AnyNodeId, emitter, useScene } from "@pascal-app/core";
+import { useViewer } from "@pascal-app/viewer";
 import { Camera, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -14,12 +15,24 @@ interface TreeNodeActionsProps {
 export function TreeNodeActions({ node }: TreeNodeActionsProps) {
   const [open, setOpen] = useState(false);
   const updateNode = useScene((state) => state.updateNode);
+  const updateNodes = useScene((state) => state.updateNodes);
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
   const hasCamera = !!node.camera;
   const isVisible = node.visible !== false;
 
   const toggleVisibility = (e: React.MouseEvent) => {
     e.stopPropagation();
-    updateNode(node.id, { visible: !isVisible });
+    const newVisibility = !isVisible;
+    if (selectedIds && selectedIds.includes(node.id)) {
+      updateNodes(
+        selectedIds.map((id) => ({
+          id: id as AnyNodeId,
+          data: { visible: newVisibility },
+        }))
+      );
+    } else {
+      updateNode(node.id, { visible: newVisibility });
+    }
   };
 
   const handleCaptureCamera = (e: React.MouseEvent) => {
