@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
-import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNode, TreeNodeWrapper, handleTreeSelection } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
 interface CeilingTreeNodeProps {
@@ -42,9 +42,10 @@ export function CeilingTreeNode({ node, depth, isLast }: CeilingTreeNodeProps) {
     }
   }, [selectedIds, node.id]);
 
-  const handleClick = () => {
-    setSelection({ selectedIds: [node.id] });
-    if (useEditor.getState().phase === "furnish") {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection);
+    if (!handled && useEditor.getState().phase === "furnish") {
       useEditor.getState().setPhase("structure");
     }
   };
@@ -67,6 +68,7 @@ export function CeilingTreeNode({ node, depth, isLast }: CeilingTreeNodeProps) {
 
   return (
     <TreeNodeWrapper
+      nodeId={node.id}
       icon={<Image src="/icons/ceiling.png" alt="" width={14} height={14} className="object-contain" />}
       label={
         <InlineRenameInput

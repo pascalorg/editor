@@ -7,31 +7,40 @@ import {
   type SiteNode,
   useScene,
   type ZoneNode,
+  type ScanNode,
+  type GuideNode,
+  ScanNode as ScanNodeSchema,
+  GuideNode as GuideNodeSchema,
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import {
+  Box,
   Building2,
   Camera,
   ChevronDown,
+  Image as ImageIcon,
   Layers,
+  Loader2,
   Pentagon,
   MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
+  X,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
 import { TreeNode } from "./tree-node";
-import { ReferencesDialog } from "./references-dialog";
 import { InlineRenameInput } from "./inline-rename-input";
+import { useProjectStore } from '@/features/community/lib/projects/store';
+import { deleteProjectAssetByUrl, uploadProjectAsset } from '@/features/community/lib/assets/actions';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/primitives/popover";
-import { motion } from "motion/react";
+import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 
 // Preset colors for zones
 const PRESET_COLORS = [
@@ -316,11 +325,188 @@ function CameraPopover({
 }
 
 
+function ReferenceItem({ refNode, isLastRow, setSelectedReferenceId, handleDelete }: {
+  refNode: ScanNode | GuideNode;
+  isLastRow: boolean;
+  setSelectedReferenceId: (id: string) => void;
+  handleDelete: (id: string, e: React.MouseEvent) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  return (
+    <div className="relative group/ref flex items-center border-b border-border/50 text-xs pr-2 transition-colors hover:bg-accent/30 h-8 select-none">
+      <div className={cn("absolute w-px bg-border/50 pointer-events-none z-10", isLastRow ? "top-0 bottom-1/2" : "top-0 bottom-0")} style={{ left: 45 }} />
+      <div className="absolute top-1/2 h-px bg-border/50 pointer-events-none z-10" style={{ left: 45, width: 8 }} />
+      
+      <div 
+        className="flex-1 flex items-center gap-2 pl-[60px] py-0 h-8 text-muted-foreground group-hover/ref:text-foreground cursor-pointer min-w-0" 
+        onClick={() => setSelectedReferenceId(refNode.id)}
+        onDoubleClick={() => setIsEditing(true)}
+      >
+        {refNode.type === 'scan' ? <img src="/icons/mesh.png" alt="Scan" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70 group-hover/ref:opacity-100 transition-opacity" /> : <img src="/icons/floorplan.png" alt="Guide" className="w-3.5 h-3.5 shrink-0 object-contain opacity-70 group-hover/ref:opacity-100 transition-opacity" />}
+        <InlineRenameInput
+          node={refNode}
+          isEditing={isEditing}
+          onStopEditing={() => setIsEditing(false)}
+          onStartEditing={() => setIsEditing(true)}
+          defaultName={refNode.type === 'scan' ? '3D Scan' : 'Guide Image'}
+        />
+      </div>
+      
+      <button
+        className="opacity-0 group-hover/ref:opacity-100 w-5 h-5 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0 z-20"
+        onClick={(e) => handleDelete(refNode.id, e)}
+        title="Delete"
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+
+function LevelReferences({ levelId, isLastLevel }: { levelId: string, isLastLevel?: boolean }) {
+  const nodes = useScene((s) => s.nodes);
+  const createNode = useScene((s) => s.createNode);
+  const deleteNode = useScene((s) => s.deleteNode);
+  const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId);
+  const activeProject = useProjectStore((s) => s.activeProject);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadingType, setUploadingType] = useState<'scan'|'guide'|null>(null);
+
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
+  const references = Object.values(nodes).filter(
+    (node): node is ScanNode | GuideNode =>
+      (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
+  );
+
+  const handleAddAsset = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const projectId = activeProject?.id;
+    if (!projectId) {
+      setUploadError('No active project. Please open a project first.');
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError(`File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB.`);
+      return;
+    }
+
+    // Auto-detect type based on file extension/mime type
+    const isScan = file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf');
+    const isImage = file.type.startsWith('image/');
+    
+    if (!isScan && !isImage) {
+      setUploadError('Invalid file type. Please upload a .glb/.gltf scan or an image.');
+      return;
+    }
+
+    const type = isScan ? 'scan' : 'guide';
+
+    setUploadError(null);
+    setUploading(true);
+    setUploadingType(type);
+    const result = await uploadProjectAsset(projectId, file, type);
+    setUploading(false);
+    setUploadingType(null);
+
+    if (!result.success) {
+      setUploadError(result.error);
+      return;
+    }
+
+    const Schema = type === 'scan' ? ScanNodeSchema : GuideNodeSchema;
+    const node = Schema.parse({
+      url: result.url,
+      name: file.name,
+      parentId: levelId,
+    });
+    createNode(node, levelId as AnyNodeId);
+    setSelectedReferenceId(node.id);
+  };
+
+  const handleDelete = async (nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const refNode = nodes[nodeId as AnyNodeId] as ScanNode | GuideNode | undefined;
+    const projectId = activeProject?.id;
+
+    if (
+      projectId &&
+      refNode?.url &&
+      (refNode.url.startsWith('http://') || refNode.url.startsWith('https://'))
+    ) {
+      deleteProjectAssetByUrl(projectId, refNode.url);
+    }
+    deleteNode(nodeId as AnyNodeId);
+  };
+
+  const rows = [
+    { type: 'upload' as const },
+    ...references.map(ref => ({ type: 'ref' as const, data: ref }))
+  ];
+
+  return (
+    <div className="flex flex-col relative">
+      {!isLastLevel && (
+        <div className="absolute top-0 bottom-0 w-px bg-border/50 pointer-events-none z-10" style={{ left: 21 }} />
+      )}
+
+      {rows.map((row, i) => {
+        const isLastRow = i === rows.length - 1;
+
+        if (row.type === 'upload') {
+          return (
+            <div key="upload" className="relative group/ref border-b border-border/50">
+              <div className={cn("absolute w-px bg-border/50 pointer-events-none z-10", isLastRow ? "top-0 bottom-1/2" : "top-0 bottom-0")} style={{ left: 45 }} />
+              <div className="absolute top-1/2 h-px bg-border/50 pointer-events-none z-10" style={{ left: 45, width: 8 }} />
+              
+              <button 
+                className="flex items-center gap-2 w-full pl-[60px] pr-2 py-0 h-8 text-xs text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed select-none" 
+                disabled={uploading}
+                onClick={() => scanInputRef.current?.click()}
+              >
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                {uploading ? `Uploading ${uploadingType}...` : "Upload scan/floorplan"}
+              </button>
+
+              <input ref={scanInputRef} type="file" accept=".glb,.gltf,image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAddAsset} />
+            </div>
+          );
+        }
+
+        const ref = row.data as ScanNode | GuideNode;
+        return (
+          <ReferenceItem
+            key={ref.id}
+            refNode={ref}
+            isLastRow={isLastRow}
+            setSelectedReferenceId={setSelectedReferenceId}
+            handleDelete={handleDelete}
+          />
+        );
+      })}
+
+      {uploadError && (
+        <div className="relative pl-[60px] pr-2 py-1 text-[10px] text-destructive border-b border-border/50 bg-destructive/5 select-none min-h-8 flex items-center">
+          <div className="absolute top-0 bottom-0 w-px bg-border/50 pointer-events-none z-10" style={{ left: 45 }} />
+          {uploadError}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LevelItem({
   level,
   selectedLevelId,
   setSelection,
-  setReferencesLevelId,
   deleteNode,
   updateNode,
   isLast,
@@ -328,7 +514,6 @@ function LevelItem({
   level: LevelNode;
   selectedLevelId: string | null;
   setSelection: (selection: any) => void;
-  setReferencesLevelId: (id: string | null) => void;
   deleteNode: (id: AnyNodeId) => void;
   updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void;
   isLast?: boolean;
@@ -337,6 +522,11 @@ function LevelItem({
   const [isEditing, setIsEditing] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   const isSelected = selectedLevelId === level.id;
+  const [isExpanded, setIsExpanded] = useState(isSelected);
+
+  useEffect(() => {
+    setIsExpanded(isSelected);
+  }, [isSelected]);
 
   useEffect(() => {
     if (isSelected && itemRef.current) {
@@ -345,37 +535,66 @@ function LevelItem({
   }, [isSelected]);
 
   return (
-    <div
-      ref={itemRef}
-      className={cn(
-        "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200 relative",
-        isSelected
-          ? "bg-accent/50 text-foreground"
-          : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
-      )}
-    >
-      {/* Vertical tree line */}
-      <div className={cn("absolute left-[21px] top-0 w-px bg-border/50 pointer-events-none", isLast ? "bottom-1/2" : "bottom-0")} />
-      {/* Horizontal branch line */}
-      <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
-
+    <div className="flex flex-col relative">
       <div
-        className="flex-1 flex items-center gap-2 pl-10 py-2 text-sm cursor-pointer min-w-0"
-        onClick={() => setSelection({ levelId: level.id })}
-        onDoubleClick={() => setIsEditing(true)}
+        ref={itemRef}
+        className={cn(
+          "flex items-center group/level border-b border-border/50 pr-2 transition-all duration-200 relative h-8 select-none",
+          isSelected
+            ? "bg-accent/50 text-foreground"
+            : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+        )}
       >
-        <Layers className={cn(
-          "w-3.5 h-3.5 shrink-0 transition-all duration-200",
-          !isSelected && "opacity-60 grayscale"
+        {/* Vertical tree line */}
+        <div className={cn("absolute left-[21px] w-px bg-border/50 pointer-events-none z-10", isLast && !isExpanded ? "top-0 bottom-1/2" : "top-0 bottom-0")} />
+        {/* Horizontal branch line */}
+        <div className="absolute left-[21px] top-1/2 w-[11px] h-px bg-border/50 pointer-events-none z-10" />
+        <div className={cn(
+          "absolute left-[32px] top-[10px] w-4 h-[12px] pointer-events-none z-10 transition-colors duration-200",
+          isSelected ? "bg-accent/50" : "bg-background group-hover/level:bg-accent/30"
         )} />
-        <InlineRenameInput
-          node={level}
-          isEditing={isEditing}
-          onStopEditing={() => setIsEditing(false)}
-          onStartEditing={() => setIsEditing(true)}
-          defaultName={`Level ${level.level}`}
-        />
-      </div>
+        {/* Line down to children */}
+        {isExpanded && (
+          <div className="absolute left-[45px] top-[16px] bottom-0 w-px bg-border/50 pointer-events-none z-10" />
+        )}
+
+          <div className="flex items-center pl-[28px] pr-1 z-20 relative h-8">
+          <button
+            className="w-4 h-4 flex items-center justify-center shrink-0 z-20 bg-inherit cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isSelected) {
+                setSelection({ levelId: level.id });
+              } else {
+                setIsExpanded(!isExpanded);
+              }
+            }}
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-3 h-3 -rotate-90 text-muted-foreground" />
+            )}
+          </button>
+        </div>
+
+          <div className="flex-1 flex items-center gap-2 py-0 text-sm cursor-pointer min-w-0 h-8 pl-0.5"
+            onClick={() => setSelection({ levelId: level.id })}
+            onDoubleClick={() => setIsEditing(true)}
+          >
+            <img 
+              src="/icons/level.png" 
+              className={cn("w-4 h-4 object-contain shrink-0 transition-all duration-200", !isSelected && "opacity-60 grayscale")} 
+              alt="Level" 
+            />
+            <InlineRenameInput
+              node={level}
+              isEditing={isEditing}
+              onStopEditing={() => setIsEditing(false)}
+              onStartEditing={() => setIsEditing(true)}
+              defaultName={`Level ${level.level}`}
+            />
+          </div>
         {/* Camera snapshot button */}
         <Popover open={cameraPopoverOpen} onOpenChange={setCameraPopoverOpen}>
           <PopoverTrigger asChild>
@@ -457,12 +676,6 @@ function LevelItem({
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" side="right" className="w-40 p-1">
-            <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent cursor-pointer"
-              onClick={() => setReferencesLevelId(level.id)}
-            >
-              References
-            </button>
             {level.level !== 0 && (
               <button
                 className="flex items-center gap-2 w-full px-3 py-1.5 rounded text-sm hover:bg-accent hover:text-red-600 cursor-pointer"
@@ -475,6 +688,20 @@ function LevelItem({
           </PopoverContent>
         </Popover>
       </div>
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <LevelReferences levelId={level.id} isLastLevel={isLast} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -486,8 +713,6 @@ function LevelsSection() {
   const selectedBuildingId = useViewer((state) => state.selection.buildingId);
   const selectedLevelId = useViewer((state) => state.selection.levelId);
   const setSelection = useViewer((state) => state.setSelection);
-
-  const [referencesLevelId, setReferencesLevelId] = useState<string | null>(null);
 
   const building = selectedBuildingId
     ? (nodes[selectedBuildingId] as BuildingNode)
@@ -512,24 +737,27 @@ function LevelsSection() {
   return (
     <div className="flex flex-col relative">
       {/* Level buttons */}
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-h-0">
         <button
-          className="flex items-center gap-2 pl-10 py-2 text-sm text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-all duration-200 border-b border-border/50 relative"
+          className="flex items-center gap-2 pl-0 py-0 text-sm text-muted-foreground hover:bg-accent/30 hover:text-foreground cursor-pointer transition-all duration-200 border-b border-border/50 relative h-8 select-none"
           onClick={handleAddLevel}
         >
           {/* Vertical tree line */}
           <div className="absolute left-[21px] top-0 bottom-0 w-px bg-border/50 pointer-events-none" />
           {/* Horizontal branch line */}
-          <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
-          <Plus className="w-3.5 h-3.5" />
-          Add level
+          <div className="absolute left-[21px] top-1/2 w-[11px] h-px bg-border/50 pointer-events-none z-10" />
+          
+          <div className="flex items-center pl-[38px] pr-1 z-10 relative">
+            <Plus className="w-3.5 h-3.5" />
+          </div>
+          <span className="truncate">Add level</span>
         </button>
         {levels.length === 0 && (
-          <div className="text-xs text-muted-foreground pl-10 pr-2 py-2 relative border-b border-border/50">
+          <div className="text-xs text-muted-foreground pl-[38px] pr-2 py-0 relative border-b border-border/50 h-8 flex items-center select-none">
             {/* Vertical tree line */}
             <div className="absolute left-[21px] top-0 bottom-1/2 w-px bg-border/50 pointer-events-none" />
             {/* Horizontal branch line */}
-            <div className="absolute left-[21px] top-1/2 w-4 h-px bg-border/50 pointer-events-none" />
+            <div className="absolute left-[21px] top-1/2 w-[11px] h-px bg-border/50 pointer-events-none" />
             No levels yet
           </div>
         )}
@@ -539,24 +767,12 @@ function LevelsSection() {
             level={level}
             selectedLevelId={selectedLevelId}
             setSelection={setSelection}
-            setReferencesLevelId={setReferencesLevelId}
             deleteNode={deleteNode}
             updateNode={updateNode}
             isLast={index === levels.length - 1}
           />
         ))}
       </div>
-
-      {/* References dialog */}
-      {referencesLevelId && (
-        <ReferencesDialog
-          levelId={referencesLevelId}
-          open={!!referencesLevelId}
-          onOpenChange={(open) => {
-            if (!open) setReferencesLevelId(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -845,6 +1061,28 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode, isLast?: boolean }) {
   );
 }
 
+function MultiSelectionBadge() {
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
+  const setSelection = useViewer((state) => state.setSelection);
+
+  if (selectedIds.length <= 1) return null;
+
+  return (
+    <div className="sticky top-4 z-50 pointer-events-none flex justify-center w-full h-0 overflow-visible">
+      <div className="pointer-events-auto flex items-center gap-2.5 px-0.5 pl-2 py-4 bg-primary text-primary-foreground text-xs font-medium rounded-full shadow-lg shadow-black/10 border border-primary/20 backdrop-blur-md">
+        <span>{selectedIds.length} objects selected</span>
+        <button
+          onClick={() => setSelection({ selectedIds: [] })}
+          className="hover:bg-primary-foreground/20 p-1.5 rounded-full transition-colors cursor-pointer"
+          title="Clear selection"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ContentSection() {
   const nodes = useScene((state) => state.nodes);
   const selectedLevelId = useViewer((state) => state.selection.levelId);
@@ -952,8 +1190,13 @@ function BuildingItem({
   }, [isBuildingActive]);
 
   return (
-    <div className={cn("flex flex-col", isBuildingActive && "flex-1 min-h-0")}>
-      <div
+    <motion.div 
+      layout
+      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+      className={cn("flex flex-col shrink-0 overflow-hidden", isBuildingActive && "flex-1 min-h-0")}
+    >
+      <motion.div
+        layout="position"
         ref={itemRef}
         className={cn(
           "group/building flex items-center h-10 border-b border-border/50 pr-2 transition-all duration-200 shrink-0",
@@ -1046,21 +1289,32 @@ function BuildingItem({
             </div>
           </PopoverContent>
         </Popover>
-      </div>
+      </motion.div>
 
       {/* Tools and content for the active building */}
-      {isBuildingActive && (
-        <div className="flex flex-col flex-1 min-h-0 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="shrink-0 flex flex-col">
-            <LevelsSection />
-            <LayerToggle />
-          </div>
-          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-            <ContentSection />
-          </div>
-        </div>
-      )}
-    </div>
+      <AnimatePresence initial={false}>
+        {isBuildingActive && (
+          <motion.div
+            initial={{ opacity: 0, flex: 0 }}
+            animate={{ opacity: 1, flex: "1 1 0%" }}
+            exit={{ opacity: 0, flex: "0 0 0px" }}
+            transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+            className="flex flex-col w-full overflow-hidden"
+          >
+            <div className="flex flex-col flex-1 min-h-0 w-full">
+              <div className="shrink-0 flex flex-col">
+                <LevelsSection />
+                <LayerToggle />
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative">
+                <MultiSelectionBadge />
+                <ContentSection />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -1085,61 +1339,77 @@ export function SitePanel() {
     .filter((node): node is BuildingNode => node?.type === "building");
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Site Header */}
-      {siteNode && (
-        <div 
-          className={cn(
-            "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors shrink-0",
-            phase === "site" ? "bg-accent/50 text-foreground" : "hover:bg-accent/30 text-muted-foreground hover:text-foreground"
-          )}
-          onClick={() => setPhase("site")}
-        >
-          <div className="flex items-center gap-2">
-            <img 
-              src="/icons/site.png" 
-              className={cn("w-5 h-5 object-contain transition-all", phase !== "site" && "opacity-60 grayscale")} 
-              alt="Site" 
+    <LayoutGroup>
+      <div className="flex flex-col h-full">
+        {/* Site Header */}
+        {siteNode && (
+          <motion.div 
+            layout="position"
+            className={cn(
+              "flex items-center justify-between px-3 py-3 border-b border-border/50 cursor-pointer transition-colors shrink-0",
+              phase === "site" ? "bg-accent/50 text-foreground" : "hover:bg-accent/30 text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setPhase("site")}
+          >
+            <div className="flex items-center gap-2">
+              <img 
+                src="/icons/site.png" 
+                className={cn("w-5 h-5 object-contain transition-all", phase !== "site" && "opacity-60 grayscale")} 
+                alt="Site" 
+              />
+              <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
+            </div>
+            <CameraPopover
+              nodeId={siteNode.id as AnyNodeId}
+              hasCamera={!!siteNode.camera}
+              open={siteCameraOpen}
+              onOpenChange={setSiteCameraOpen}
+              buttonClassName={cn("transition-colors", phase === "site" ? "hover:bg-black/5 dark:hover:bg-white/10" : "hover:bg-accent")}
             />
-            <span className="text-sm font-medium">{siteNode.name || "Site"}</span>
-          </div>
-          <CameraPopover
-            nodeId={siteNode.id as AnyNodeId}
-            hasCamera={!!siteNode.camera}
-            open={siteCameraOpen}
-            onOpenChange={setSiteCameraOpen}
-            buttonClassName={cn("transition-colors", phase === "site" ? "hover:bg-black/5 dark:hover:bg-white/10" : "hover:bg-accent")}
-          />
-        </div>
-      )}
-
-      <div className={cn("flex-1 flex flex-col min-h-0", phase === "site" && "overflow-y-auto")}>
-        {/* When phase is site, show property line immediately under site header */}
-        {phase === "site" && <div className="shrink-0"><PropertyLineSection /></div>}
-
-        {/* Buildings List */}
-        {buildings.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-muted-foreground">
-            No buildings yet
-          </div>
-        ) : (
-          <div className="flex flex-col flex-1 min-h-0">
-            {buildings.map((building) => {
-              const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
-
-              return (
-                <BuildingItem
-                  key={building.id}
-                  building={building}
-                  isBuildingActive={isBuildingActive}
-                  buildingCameraOpen={buildingCameraOpen}
-                  setBuildingCameraOpen={setBuildingCameraOpen}
-                />
-              );
-            })}
-          </div>
+          </motion.div>
         )}
+
+        <motion.div layout className={cn("flex-1 flex flex-col min-h-0", phase === "site" && "overflow-y-auto")}>
+          {/* When phase is site, show property line immediately under site header */}
+          <AnimatePresence initial={false}>
+            {phase === "site" && (
+              <motion.div
+                layout="position"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                className="shrink-0 overflow-hidden"
+              >
+                <PropertyLineSection />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Buildings List */}
+          {buildings.length === 0 ? (
+            <motion.div layout="position" className="px-3 py-4 text-sm text-muted-foreground">
+              No buildings yet
+            </motion.div>
+          ) : (
+            <motion.div layout className="flex flex-col flex-1 min-h-0">
+              {buildings.map((building) => {
+                const isBuildingActive = (phase === "structure" || phase === "furnish") && selectedBuildingId === building.id;
+
+                return (
+                  <BuildingItem
+                    key={building.id}
+                    building={building}
+                    isBuildingActive={isBuildingActive}
+                    buildingCameraOpen={buildingCameraOpen}
+                    setBuildingCameraOpen={setBuildingCameraOpen}
+                  />
+                );
+              })}
+            </motion.div>
+          )}
+        </motion.div>
       </div>
-    </div>
+    </LayoutGroup>
   );
 }

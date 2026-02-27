@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
-import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNode, TreeNodeWrapper, handleTreeSelection } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -53,9 +53,10 @@ export function ItemTreeNode({ node, depth, isLast }: ItemTreeNodeProps) {
     }
   }, [selectedIds, node.id]);
 
-  const handleClick = () => {
-    setSelection({ selectedIds: [node.id] });
-    if (useEditor.getState().phase === "structure") {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection);
+    if (!handled && useEditor.getState().phase === "structure") {
       useEditor.getState().setPhase("furnish");
     }
   };
@@ -77,6 +78,7 @@ export function ItemTreeNode({ node, depth, isLast }: ItemTreeNodeProps) {
 
   return (
     <TreeNodeWrapper
+      nodeId={node.id}
       icon={<Image src={iconSrc} alt="" width={14} height={14} className="object-contain" />}
       label={
         <InlineRenameInput

@@ -2,6 +2,53 @@ import { AnyNodeId, useScene } from "@pascal-app/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { forwardRef, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
+
+export function handleTreeSelection(
+  e: React.MouseEvent,
+  nodeId: string,
+  selectedIds: string[],
+  setSelection: (s: any) => void
+) {
+  if (e.metaKey || e.ctrlKey) {
+    if (selectedIds.includes(nodeId)) {
+      setSelection({ selectedIds: selectedIds.filter((id) => id !== nodeId) });
+    } else {
+      setSelection({ selectedIds: [...selectedIds, nodeId] });
+    }
+    return true;
+  }
+  
+  if (e.shiftKey && selectedIds.length > 0) {
+    const lastSelectedId = selectedIds[selectedIds.length - 1];
+    if (lastSelectedId) {
+      const nodes = Array.from(document.querySelectorAll('[data-treenode-id]'));
+      const nodeIds = nodes.map(n => n.getAttribute('data-treenode-id') as string);
+      
+      const startIndex = nodeIds.indexOf(lastSelectedId);
+      const endIndex = nodeIds.indexOf(nodeId);
+      
+      if (startIndex !== -1 && endIndex !== -1) {
+        const start = Math.min(startIndex, endIndex);
+        const end = Math.max(startIndex, endIndex);
+        const range = nodeIds.slice(start, end + 1);
+        
+        // We can keep the previous selections that were outside the range if we want, 
+        // but standard file system shift-click replaces the selection with the range.
+        setSelection({ selectedIds: range });
+        return true;
+      }
+    }
+    // Fallback: if range selection fails (e.g. node not visible in tree), just add to selection
+    if (!selectedIds.includes(nodeId)) {
+      setSelection({ selectedIds: [...selectedIds, nodeId] });
+      return true;
+    }
+  }
+
+  setSelection({ selectedIds: [nodeId] });
+  return false;
+}
 import { BuildingTreeNode } from "./building-tree-node";
 import { CeilingTreeNode } from "./ceiling-tree-node";
 import { DoorTreeNode } from "./door-tree-node";
@@ -51,13 +98,14 @@ export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
 }
 
 interface TreeNodeWrapperProps {
+  nodeId?: string;
   icon: React.ReactNode;
   label: React.ReactNode;
   depth: number;
   hasChildren: boolean;
   expanded: boolean;
   onToggle: () => void;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   onDoubleClick?: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -72,6 +120,7 @@ interface TreeNodeWrapperProps {
 export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     function TreeNodeWrapper(
       {
+        nodeId,
         icon,
         label,
         depth,
@@ -100,13 +149,13 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       }, [isSelected]);
 
       return (
-        <div ref={ref}>
+        <div ref={ref} data-treenode-id={nodeId}>
           <div
             ref={rowRef}
             className={cn(
-              "relative flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-border/50 transition-all duration-200",
+              "relative flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-r border-border/50 border-r-transparent transition-all duration-200",
               isSelected
-                ? "bg-accent/50 text-foreground"
+                ? "bg-accent/50 text-foreground border-r-white border-r-3"
                 : isHovered
                   ? "bg-accent/30 text-foreground"
                   : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
@@ -173,7 +222,19 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             </div>
           )}
         </div>
-        {expanded && children}
+        <AnimatePresence initial={false}>
+          {expanded && children && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+              className="overflow-hidden"
+            >
+              {children}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }

@@ -10,7 +10,7 @@ import {
 } from "@pascal-app/core";
 
 import { useViewer } from "@pascal-app/viewer";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import useEditor from "@/store/use-editor";
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -22,9 +22,14 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
 
 type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling' | 'roof' | 'window' | 'door';
 
+type ModifierKeys = {
+  meta: boolean;
+  ctrl: boolean;
+};
+
 interface SelectionStrategy {
   types: SelectableNodeType[];
-  handleSelect: (node: AnyNode, isShift: boolean) => void;
+  handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void;
   handleDeselect: () => void;
   isValid: (node: AnyNode) => boolean;
 }
@@ -36,6 +41,37 @@ export const resolveBuildingId = (levelId: string, nodes: Record<string, AnyNode
     return level.parentId;
   }
   return null;
+};
+
+const computeNextIds = (
+  node: AnyNode,
+  selectedIds: string[],
+  event?: any,
+  modifierKeys?: ModifierKeys
+): string[] => {
+  const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta || false;
+  const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl || false;
+
+  console.log("computeNextIds:", {
+    nodeId: node.id,
+    selectedIds,
+    isMeta,
+    isCtrl,
+    eventMeta: event?.metaKey,
+    nativeMeta: event?.nativeEvent?.metaKey,
+    modMeta: modifierKeys?.meta
+  });
+
+  if (isMeta || isCtrl) {
+    if (selectedIds.includes(node.id)) {
+      return selectedIds.filter((id) => id !== node.id);
+    } else {
+      return [...selectedIds, node.id];
+    }
+  }
+
+  // Not holding modifiers: select only this node
+  return [node.id];
 };
 
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
@@ -54,7 +90,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   structure: {
     types: ["wall", "item", "zone", "slab", "ceiling", "roof", "window", "door"],
-    handleSelect: (node, isShift) => {
+    handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState();
       const nodes = useScene.getState().nodes;
       const nodeLevelId = resolveLevelId(node, nodes);
@@ -74,13 +110,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         // Wait, the hierarchy guard resets zoneId if levelId changes. That's fine since we provide zoneId.
         setSelection(updates);
       } else {
-        const nextIds = isShift
-          ? selection.selectedIds.includes(node.id)
-            ? selection.selectedIds.filter((id) => id !== node.id)
-            : [...selection.selectedIds, node.id]
-          : [node.id];
-        
-        updates.selectedIds = nextIds;
+        updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys);
         setSelection(updates);
       }
     },
@@ -115,7 +145,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   furnish: {
     types: ["item"],
-    handleSelect: (node, isShift) => {
+    handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState();
       const nodes = useScene.getState().nodes;
       const nodeLevelId = resolveLevelId(node, nodes);
@@ -129,13 +159,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         updates.buildingId = buildingId;
       }
 
-      const nextIds = isShift
-        ? selection.selectedIds.includes(node.id)
-          ? selection.selectedIds.filter((id) => id !== node.id)
-          : [...selection.selectedIds, node.id]
-        : [node.id];
-      
-      updates.selectedIds = nextIds;
+      updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys);
       setSelection(updates);
     },
     handleDeselect: () => {
@@ -153,8 +177,40 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase);
   const mode = useEditor((s) => s.mode);
+  const modifierKeysRef = useRef<ModifierKeys>({
+    meta: false,
+    ctrl: false,
+  });
+  const clickHandledRef = useRef(false);
 
   const movingNode = useEditor((s) => s.movingNode);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Meta") modifierKeysRef.current.meta = true;
+      if (event.key === "Control") modifierKeysRef.current.ctrl = true;
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Meta") modifierKeysRef.current.meta = false;
+      if (event.key === "Control") modifierKeysRef.current.ctrl = false;
+    };
+
+    const clearModifiers = () => {
+      modifierKeysRef.current.meta = false;
+      modifierKeysRef.current.ctrl = false;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", clearModifiers);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", clearModifiers);
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "select") return;
@@ -197,10 +253,17 @@ export const SelectionManager = () => {
       }
 
       const activeStrategy = SELECTION_STRATEGIES[currentPhase];
-      if (activeStrategy && activeStrategy.isValid(node)) {
+      if (activeStrategy?.isValid(node)) {
         event.stopPropagation();
-        const isShift = event.nativeEvent?.shiftKey;
-        activeStrategy.handleSelect(node, isShift ?? false);
+        clickHandledRef.current = true;
+        
+        console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", modifierKeysRef.current.shift, event.nativeEvent.shiftKey);
+        activeStrategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
+
+        // Reset the handled flag after a short delay to allow grid:click to be ignored
+        setTimeout(() => {
+          clickHandledRef.current = false;
+        }, 50);
       }
     };
 
@@ -210,6 +273,8 @@ export const SelectionManager = () => {
     });
 
     const onGridClick = () => {
+      if (clickHandledRef.current) return;
+      console.log("onGridClick triggered! Deselecting.");
       const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase];
       if (activeStrategy) activeStrategy.handleDeselect();
     };
@@ -307,8 +372,7 @@ export const SelectionManager = () => {
 
         const strategy = SELECTION_STRATEGIES[targetPhase];
         if (strategy) {
-          const isShift = event.nativeEvent?.shiftKey;
-          strategy.handleSelect(node, isShift ?? false);
+          strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
         }
       }
     };

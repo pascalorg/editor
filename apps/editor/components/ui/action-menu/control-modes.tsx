@@ -1,19 +1,21 @@
 "use client";
 
+import Image from "next/image";
 import { Button } from "@/components/ui/primitives/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/primitives/tooltip";
-import { Hammer, MousePointer2, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import useEditor, { Mode, Phase } from "@/store/use-editor";
 
 type ModeConfig = {
   id: Mode;
-  icon: typeof MousePointer2;
+  icon?: LucideIcon;
+  imageSrc?: string;
   label: string;
   shortcut: string;
   color: string;
@@ -24,7 +26,7 @@ type ModeConfig = {
 const allModes: ModeConfig[] = [
   {
     id: "select",
-    icon: MousePointer2,
+    imageSrc: "/icons/select.png",
     label: "Select",
     shortcut: "V",
     color: "hover:bg-blue-500/20 hover:text-blue-400",
@@ -40,7 +42,7 @@ const allModes: ModeConfig[] = [
   },
   {
     id: "build",
-    icon: Hammer,
+    imageSrc: "/icons/build.png",
     label: "Build",
     shortcut: "B",
     color: "hover:bg-green-500/20 hover:text-green-400",
@@ -98,22 +100,39 @@ export function ControlModes() {
       {availableModes.map((m) => {
         const Icon = m.icon;
         const isActive = mode === m.id;
+        const isImageMode = Boolean(m.imageSrc);
 
         return (
           <Tooltip key={m.id}>
             <TooltipTrigger asChild>
               <Button
                 className={cn(
-                  "h-8 w-8 transition-all",
+                  "h-9 w-9 transition-all",
                   "text-muted-foreground",
-                  !isActive && m.color,
-                  isActive && m.activeColor
+                  !isImageMode && !isActive && m.color,
+                  !isImageMode && isActive && m.activeColor,
+                  isImageMode && isActive && "bg-white/10 hover:bg-white/10",
+                  isImageMode && !isActive && "hover:bg-white/5"
                 )}
                 onClick={() => handleModeClick(m.id)}
                 size="icon"
                 variant="ghost"
               >
-                <Icon className="h-4 w-4" />
+                {m.imageSrc ? (
+                  <Image
+                    alt={m.label}
+                    className={cn(
+                      "h-[26px] w-[26px] object-contain transition-[opacity,filter] duration-200",
+                      !isActive && "opacity-60 grayscale",
+                      isActive && "opacity-100 grayscale-0"
+                    )}
+                    height={26}
+                    src={m.imageSrc}
+                    width={26}
+                  />
+                ) : (
+                  Icon && <Icon className="h-5 w-5" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>

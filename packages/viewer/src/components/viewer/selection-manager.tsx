@@ -75,7 +75,7 @@ const pointInPolygonWithTolerance = (
 
 interface SelectionStrategy {
   types: SelectableNodeType[]
-  handleClick: (node: AnyNode) => void
+  handleClick: (node: AnyNode, nativeEvent?: MouseEvent) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
 }
@@ -159,6 +159,21 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
 const getStrategy = (): SelectionStrategy | null => {
   const { buildingId, levelId, zoneId } = useViewer.getState().selection
 
+  const computeNextIds = (node: AnyNode, selectedIds: string[], event?: any): string[] => {
+    const isMeta = event?.metaKey || event?.nativeEvent?.metaKey;
+    const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey;
+
+    if (isMeta || isCtrl) {
+      if (selectedIds.includes(node.id)) {
+        return selectedIds.filter((id) => id !== node.id);
+      } else {
+        return [...selectedIds, node.id];
+      }
+    }
+
+    return [node.id];
+  };
+
   // No building selected -> can select buildings
   if (!buildingId) {
     return {
@@ -204,16 +219,9 @@ const getStrategy = (): SelectionStrategy | null => {
   // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows, doors)
   return {
     types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window', 'door'],
-    handleClick: (node) => {
+    handleClick: (node, nativeEvent) => {
       const { selectedIds } = useViewer.getState().selection
-      // Toggle selection - if already selected, deselect; otherwise select
-      if (selectedIds.includes(node.id)) {
-        useViewer
-          .getState()
-          .setSelection({ selectedIds: selectedIds.filter((id) => id !== node.id) })
-      } else {
-        useViewer.getState().setSelection({ selectedIds: [node.id] })
-      }
+      useViewer.getState().setSelection({ selectedIds: computeNextIds(node, selectedIds, nativeEvent) })
     },
     handleDeselect: () => {
       const { selectedIds } = useViewer.getState().selection
@@ -262,7 +270,7 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
       clickHandledRef.current = true
-      strategy.handleClick(event.node)
+      strategy.handleClick(event.node, event.nativeEvent as unknown as MouseEvent)
       // Clear hover immediately after clicking on building/level/zone
       useViewer.setState({ hoveredId: null })
     }

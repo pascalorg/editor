@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useState } from "react"
 import useEditor from "@/store/use-editor"
 import { InlineRenameInput } from "./inline-rename-input"
-import { TreeNodeWrapper } from "./tree-node"
+import { TreeNodeWrapper, handleTreeSelection } from "./tree-node"
 import { TreeNodeActions } from "./tree-node-actions"
 
 interface DoorTreeNodeProps {
@@ -17,7 +17,8 @@ interface DoorTreeNodeProps {
 
 export function DoorTreeNode({ node, depth, isLast }: DoorTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id))
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const isSelected = selectedIds.includes(node.id)
   const isHovered = useViewer((state) => state.hoveredId === node.id)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
@@ -26,6 +27,7 @@ export function DoorTreeNode({ node, depth, isLast }: DoorTreeNodeProps) {
 
   return (
     <TreeNodeWrapper
+      nodeId={node.id}
       icon={<Image src="/icons/door.png" alt="" width={14} height={14} className="object-contain" />}
       label={
         <InlineRenameInput
@@ -40,9 +42,10 @@ export function DoorTreeNode({ node, depth, isLast }: DoorTreeNodeProps) {
       hasChildren={false}
       expanded={false}
       onToggle={() => {}}
-      onClick={() => {
-        setSelection({ selectedIds: [node.id] })
-        if (useEditor.getState().phase === "furnish") {
+      onClick={(e: React.MouseEvent) => {
+        e.stopPropagation()
+        const handled = handleTreeSelection(e, node.id, selectedIds, setSelection)
+        if (!handled && useEditor.getState().phase === "furnish") {
           useEditor.getState().setPhase("structure")
         }
       }}

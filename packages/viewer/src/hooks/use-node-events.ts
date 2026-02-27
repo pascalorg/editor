@@ -69,11 +69,13 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerup', e)
+      // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick
+      // which often fails if the mouse moves even 1 pixel.
+      emit('click', e)
     },
     onClick: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
-      if (e.button !== 0) return
-      emit('click', e)
+      // Disable default R3F click since we synthesize it on pointerup
+      // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
       if (useViewer.getState().cameraDragging) return
