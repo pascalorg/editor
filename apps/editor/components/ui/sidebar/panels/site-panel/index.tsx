@@ -9,8 +9,6 @@ import {
   type ZoneNode,
   type ScanNode,
   type GuideNode,
-  ScanNode as ScanNodeSchema,
-  GuideNode as GuideNodeSchema,
 } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import {
@@ -34,7 +32,9 @@ import useEditor from "@/store/use-editor";
 import { TreeNode } from "./tree-node";
 import { InlineRenameInput } from "./inline-rename-input";
 import { useProjectStore } from '@/features/community/lib/projects/store';
-import { deleteProjectAssetByUrl, uploadProjectAsset } from '@/features/community/lib/assets/actions';
+import { deleteProjectAssetByUrl } from '@/features/community/lib/assets/actions';
+import { useUploadStore } from '@/store/use-upload';
+import { uploadAssetWithProgress } from '@/lib/upload-asset';
 import {
   Popover,
   PopoverContent,
@@ -364,17 +364,22 @@ function ReferenceItem({ refNode, isLastRow, setSelectedReferenceId, handleDelet
   );
 }
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
 
 function LevelReferences({ levelId, isLastLevel }: { levelId: string, isLastLevel?: boolean }) {
   const nodes = useScene((s) => s.nodes);
-  const createNode = useScene((s) => s.createNode);
   const deleteNode = useScene((s) => s.deleteNode);
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId);
   const activeProject = useProjectStore((s) => s.activeProject);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingType, setUploadingType] = useState<'scan'|'guide'|null>(null);
+  const uploadState = useUploadStore((s) => s.uploads[levelId]);
+  const clearUpload = useUploadStore((s) => s.clearUpload);
+
+  const uploading = uploadState?.status === 'preparing' ||
+    uploadState?.status === 'uploading' ||
+    uploadState?.status === 'confirming';
+  const uploadingType = uploadState?.assetType ?? null;
+  const uploadError = uploadState?.error ?? null;
+  const progress = uploadState?.progress ?? 0;
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -383,53 +388,38 @@ function LevelReferences({ levelId, isLastLevel }: { levelId: string, isLastLeve
       (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
   );
 
-  const handleAddAsset = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddAsset = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
 
     const projectId = activeProject?.id;
     if (!projectId) {
-      setUploadError('No active project. Please open a project first.');
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name);
+      useUploadStore.getState().setError(levelId, 'No active project. Please open a project first.');
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      setUploadError(`File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB.`);
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name);
+      useUploadStore.getState().setError(levelId, `File is too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 200 MB.`);
       return;
     }
 
     // Auto-detect type based on file extension/mime type
     const isScan = file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf');
     const isImage = file.type.startsWith('image/');
-    
+
     if (!isScan && !isImage) {
-      setUploadError('Invalid file type. Please upload a .glb/.gltf scan or an image.');
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name);
+      useUploadStore.getState().setError(levelId, 'Invalid file type. Please upload a .glb/.gltf scan or an image.');
       return;
     }
 
     const type = isScan ? 'scan' : 'guide';
 
-    setUploadError(null);
-    setUploading(true);
-    setUploadingType(type);
-    const result = await uploadProjectAsset(projectId, file, type);
-    setUploading(false);
-    setUploadingType(null);
-
-    if (!result.success) {
-      setUploadError(result.error);
-      return;
-    }
-
-    const Schema = type === 'scan' ? ScanNodeSchema : GuideNodeSchema;
-    const node = Schema.parse({
-      url: result.url,
-      name: file.name,
-      parentId: levelId,
-    });
-    createNode(node, levelId as AnyNodeId);
-    setSelectedReferenceId(node.id);
+    clearUpload(levelId);
+    uploadAssetWithProgress(projectId, levelId, file, type);
   };
 
   const handleDelete = async (nodeId: string, e: React.MouseEvent) => {
@@ -473,7 +463,7 @@ function LevelReferences({ levelId, isLastLevel }: { levelId: string, isLastLeve
                 onClick={() => scanInputRef.current?.click()}
               >
                 {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                {uploading ? `Uploading ${uploadingType}...` : "Upload scan/floorplan"}
+                {uploading ? `Uploading ${uploadingType}... ${progress}%` : "Upload scan/floorplan"}
               </button>
 
               <input ref={scanInputRef} type="file" accept=".glb,.gltf,image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAddAsset} />

@@ -1,5 +1,6 @@
 'use server'
 
+import type { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
@@ -9,6 +10,14 @@ const BUCKET = 'project-assets'
 export type AssetType = 'scan' | 'guide'
 
 export type UploadAssetResult =
+  | { success: true; url: string }
+  | { success: false; error: string }
+
+export type CreateUploadUrlResult =
+  | { success: true; signedUrl: string; storageKey: string; assetId: string }
+  | { success: false; error: string }
+
+export type ConfirmUploadResult =
   | { success: true; url: string }
   | { success: false; error: string }
 
@@ -95,6 +104,125 @@ export async function uploadProjectAsset(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to upload asset',
+    }
+  }
+}
+
+/**
+ * Create a signed upload URL so the client can upload directly to Supabase Storage.
+ * Bypasses Next.js body-size limits — supports files up to the bucket limit (500 MB).
+ */
+export async function createAssetUploadUrl(
+  projectId: string,
+  fileName: string,
+  contentType: string,
+  type: AssetType,
+): Promise<CreateUploadUrlResult> {
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !project) {
+      return { success: false, error: 'Project not found' }
+    }
+
+    if ((project as any).owner_id !== session.user.id) {
+      return { success: false, error: 'Not authorized to upload to this project' }
+    }
+
+    const ext = fileName.includes('.') ? fileName.split('.').pop()! : ''
+    const assetId = createId('asset')
+    const storageKey = ext ? `${projectId}/${assetId}.${ext}` : `${projectId}/${assetId}`
+
+    const { data, error } = await (
+      supabase as ReturnType<typeof createClient>
+    ).storage
+      .from(BUCKET)
+      .createSignedUploadUrl(storageKey)
+
+    if (error || !data) {
+      return { success: false, error: `Failed to create upload URL: ${error?.message}` }
+    }
+
+    return { success: true, signedUrl: data.signedUrl, storageKey, assetId }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create upload URL',
+    }
+  }
+}
+
+/**
+ * Record a successfully uploaded asset in the project_assets table.
+ * Called after the client uploads the file directly to Supabase Storage.
+ */
+export async function confirmAssetUpload(
+  projectId: string,
+  assetId: string,
+  storageKey: string,
+  originalName: string,
+  mimeType: string | null,
+  type: AssetType,
+): Promise<ConfirmUploadResult> {
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !project) {
+      return { success: false, error: 'Project not found' }
+    }
+
+    if ((project as any).owner_id !== session.user.id) {
+      return { success: false, error: 'Not authorized' }
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(storageKey)
+
+    const url = urlData.publicUrl
+
+    const { error: insertError } = await (supabase.from('project_assets') as any).insert({
+      id: assetId,
+      project_id: projectId,
+      storage_key: storageKey,
+      url,
+      type,
+      original_name: originalName,
+      mime_type: mimeType,
+    })
+
+    if (insertError) {
+      await supabase.storage.from(BUCKET).remove([storageKey])
+      return { success: false, error: `Failed to record asset: ${insertError.message}` }
+    }
+
+    return { success: true, url }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to confirm upload',
     }
   }
 }
