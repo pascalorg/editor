@@ -85,7 +85,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-9 w-9 text-muted-foreground transition-all',
               cameraMode === 'orthographic'
                 ? 'bg-violet-500/20 text-violet-400'
                 : 'hover:text-violet-400',
@@ -94,7 +94,7 @@ export function ViewToggles() {
             size="icon"
             variant="ghost"
           >
-            <Camera className="h-4 w-4" />
+            <Camera className="h-5 w-5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -107,7 +107,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all',
+              'h-9 w-9 text-muted-foreground transition-all',
               levelMode !== 'stacked'
                 ? 'bg-amber-500/20 text-amber-400'
                 : 'hover:text-amber-400',
@@ -116,9 +116,9 @@ export function ViewToggles() {
             size="icon"
             variant="ghost"
           >
-            {levelMode === 'solo' && <Diamond className="h-4 w-4" />}
-            {levelMode === 'exploded' && <Layers2 className="h-4 w-4" />}
-            {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-4 w-4" />}
+            {levelMode === 'solo' && <Diamond className="h-5 w-5" />}
+            {levelMode === 'exploded' && <Layers2 className="h-5 w-5" />}
+            {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-5 w-5" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -131,7 +131,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-9 w-9 text-muted-foreground transition-all p-0',
               wallMode !== 'cutaway'
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
@@ -142,7 +142,7 @@ export function ViewToggles() {
           >
             {(() => {
               const Icon = wallModeConfig[wallMode].icon
-              return <Icon className="h-5 w-5" />
+              return <Icon className="h-[26px] w-[26px]" />
             })()}
           </Button>
         </TooltipTrigger>
@@ -156,7 +156,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-9 w-9 text-muted-foreground transition-all p-0',
               showScans
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
@@ -165,7 +165,7 @@ export function ViewToggles() {
             size="icon"
             variant="ghost"
           >
-            <img alt="Scans" className="h-5 w-5 object-contain" src="/icons/mesh.png" />
+            <img alt="Scans" className="h-[26px] w-[26px] object-contain" src="/icons/mesh.png" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -178,7 +178,7 @@ export function ViewToggles() {
         <TooltipTrigger asChild>
           <Button
             className={cn(
-              'h-8 w-8 text-zinc-400 transition-all p-0',
+              'h-9 w-9 text-muted-foreground transition-all p-0',
               showGuides
                 ? 'bg-white/10'
                 : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
@@ -187,7 +187,7 @@ export function ViewToggles() {
             size="icon"
             variant="ghost"
           >
-            <img alt="Guides" className="h-5 w-5 object-contain" src="/icons/floorplan.png" />
+            <img alt="Guides" className="h-[26px] w-[26px] object-contain" src="/icons/floorplan.png" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>

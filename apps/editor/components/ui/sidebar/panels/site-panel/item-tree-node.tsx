@@ -2,8 +2,9 @@ import { type AnyNodeId, ItemNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
-import { TreeNode, TreeNodeWrapper } from "./tree-node";
+import { TreeNode, TreeNodeWrapper, handleTreeSelection } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -19,9 +20,10 @@ const CATEGORY_ICONS: Record<string, string> = {
 interface ItemTreeNodeProps {
   node: ItemNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
+export function ItemTreeNode({ node, depth, isLast }: ItemTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const iconSrc = CATEGORY_ICONS[node.asset.category] || "/icons/couch.png";
@@ -51,8 +53,12 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
     }
   }, [selectedIds, node.id]);
 
-  const handleClick = () => {
-    setSelection({ selectedIds: [node.id] });
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection);
+    if (!handled && useEditor.getState().phase === "structure") {
+      useEditor.getState().setPhase("furnish");
+    }
   };
 
   const handleDoubleClick = () => {
@@ -72,6 +78,7 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
 
   return (
     <TreeNodeWrapper
+      nodeId={node.id}
       icon={<Image src={iconSrc} alt="" width={14} height={14} className="object-contain" />}
       label={
         <InlineRenameInput
@@ -93,10 +100,11 @@ export function ItemTreeNode({ node, depth }: ItemTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     >
-      {hasChildren && node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {hasChildren && node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );

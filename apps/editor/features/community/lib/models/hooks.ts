@@ -61,44 +61,48 @@ export function useProjectScene() {
     async function loadScene() {
       // Suppress auto-save for the store update caused by setScene/clearScene
       isLoadingSceneRef.current = true
+      
+      useProjectStore.getState().setIsSceneLoading(true)
 
       try {
+        useScene.getState().clearScene()
+        
         const result = await getProjectModel(projectId || '')
 
         if (result.success && result.data?.scene_graph) {
           // Load the scene graph into the store
           const { nodes, rootNodeIds } = result.data.scene_graph
           useScene.getState().setScene(nodes, rootNodeIds)
-
-          // Auto-select the first building + level after store is updated
-          const sceneNodes = useScene.getState().nodes as Record<string, any>
-          const sceneRootIds = useScene.getState().rootNodeIds
-          const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-          const resolve = (child: any) =>
-            typeof child === 'string' ? sceneNodes[child] : child
-          const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
-          const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-
-          if (firstBuilding && firstLevel) {
-            useViewer.getState().setSelection({
-              buildingId: firstBuilding.id,
-              levelId: firstLevel.id,
-              selectedIds: [],
-              zoneId: null,
-            })
-            useEditor.getState().setPhase('structure')
-          } else {
-            useEditor.getState().setPhase('site')
-            useViewer.getState().setSelection({
-              buildingId: null,
-              levelId: null,
-              selectedIds: [],
-              zoneId: null,
-            })
-          }
         } else {
           // No scene found - clear the scene
           useScene.getState().clearScene()
+        }
+
+        // Auto-select the first building + level after store is updated
+        const sceneNodes = useScene.getState().nodes as Record<string, any>
+        const sceneRootIds = useScene.getState().rootNodeIds
+        const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
+        const resolve = (child: any) =>
+          typeof child === 'string' ? sceneNodes[child] : child
+        const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+        const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+
+        if (firstBuilding && firstLevel) {
+          useViewer.getState().setSelection({
+            buildingId: firstBuilding.id,
+            levelId: firstLevel.id,
+            selectedIds: [],
+            zoneId: null,
+          })
+          useEditor.getState().setPhase('structure')
+          useEditor.getState().setStructureLayer('elements')
+          
+          // Auto-select the wall tool if the level is empty (e.g., brand new project)
+          if (!firstLevel.children || firstLevel.children.length === 0) {
+            useEditor.getState().setMode('build')
+            useEditor.getState().setTool('wall')
+          }
+        } else {
           useEditor.getState().setPhase('site')
           useViewer.getState().setSelection({
             buildingId: null,
@@ -110,13 +114,42 @@ export function useProjectScene() {
       } catch (error) {
         // Fall back to clear scene
         useScene.getState().clearScene()
-        useEditor.getState().setPhase('site')
-        useViewer.getState().setSelection({
-          buildingId: null,
-          levelId: null,
-          selectedIds: [],
-          zoneId: null,
-        })
+        
+        // Auto-select the first building + level from the cleared scene
+        const sceneNodes = useScene.getState().nodes as Record<string, any>
+        const sceneRootIds = useScene.getState().rootNodeIds
+        const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
+        const resolve = (child: any) =>
+          typeof child === 'string' ? sceneNodes[child] : child
+        const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+        const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+
+        if (firstBuilding && firstLevel) {
+          useViewer.getState().setSelection({
+            buildingId: firstBuilding.id,
+            levelId: firstLevel.id,
+            selectedIds: [],
+            zoneId: null,
+          })
+          useEditor.getState().setPhase('structure')
+          useEditor.getState().setStructureLayer('elements')
+          
+          // Auto-select the wall tool if the level is empty (e.g., brand new project)
+          if (!firstLevel.children || firstLevel.children.length === 0) {
+            useEditor.getState().setMode('build')
+            useEditor.getState().setTool('wall')
+          }
+        } else {
+          useEditor.getState().setPhase('site')
+          useViewer.getState().setSelection({
+            buildingId: null,
+            levelId: null,
+            selectedIds: [],
+            zoneId: null,
+          })
+        }
+      } finally {
+        useProjectStore.getState().setIsSceneLoading(false)
       }
 
       // Allow auto-save again after a tick (let the store update propagate)

@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
-import { RotateCcw, RotateCw, Rotate3D } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/primitives/button'
 import {
   Tooltip,
@@ -28,12 +28,18 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
             onClick={orbitCCW}
             size="icon"
             variant="ghost"
           >
-            <RotateCcw className="h-4 w-4" />
+            <Image
+              alt="Orbit Left"
+              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100 -scale-x-100"
+              height={30}
+              src="/icons/rotate.png"
+              width={30}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -45,12 +51,18 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
             onClick={orbitCW}
             size="icon"
             variant="ghost"
           >
-            <RotateCw className="h-4 w-4" />
+            <Image
+              alt="Orbit Right"
+              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+              height={30}
+              src="/icons/rotate.png"
+              width={30}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -62,12 +74,18 @@ export function CameraActions() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="h-8 w-8 text-zinc-400 transition-all hover:text-sky-400"
+            className="group h-9 w-9 text-muted-foreground transition-all hover:bg-white/5"
             onClick={goToTopView}
             size="icon"
             variant="ghost"
           >
-            <Rotate3D className="h-4 w-4 -rotate-90" />
+            <Image
+              alt="Top View"
+              className="h-[30px] w-[30px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+              height={30}
+              src="/icons/topview.png"
+              width={30}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent>

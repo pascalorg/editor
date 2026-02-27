@@ -8,9 +8,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface ZoneTreeNodeProps {
   node: ZoneNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
+export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.zoneId === node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
@@ -64,6 +65,7 @@ export function ZoneTreeNode({ node, depth }: ZoneTreeNodeProps) {
       onMouseLeave={handleMouseLeave}
       isSelected={isSelected}
       isHovered={isHovered}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     />
   );

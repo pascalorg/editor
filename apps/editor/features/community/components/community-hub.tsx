@@ -46,11 +46,7 @@ export default function CommunityHub() {
     }
   }, [isAuthenticated, authLoading])
 
-  const handleProjectCreated = async (projectId: string) => {
-    const result = await getUserProjects()
-    if (result.success) {
-      setUserProjects(result.data || [])
-    }
+  const handleProjectCreated = (projectId: string) => {
     router.push(`/editor/${projectId}`)
   }
 

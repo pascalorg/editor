@@ -2,24 +2,31 @@ import { RoofNode } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
 import { useState } from "react";
+import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
-import { TreeNodeWrapper } from "./tree-node";
+import { TreeNodeWrapper, handleTreeSelection } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
 
 interface RoofTreeNodeProps {
   node: RoofNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
+export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id));
+  const selectedIds = useViewer((state) => state.selection.selectedIds);
+  const isSelected = selectedIds.includes(node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
 
-  const handleClick = () => {
-    setSelection({ selectedIds: [node.id] });
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection);
+    if (!handled && useEditor.getState().phase === "furnish") {
+      useEditor.getState().setPhase("structure");
+    }
   };
 
   const handleDoubleClick = () => {
@@ -41,6 +48,7 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
 
   return (
     <TreeNodeWrapper
+      nodeId={node.id}
       icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain" />}
       label={
         <InlineRenameInput
@@ -62,6 +70,7 @@ export function RoofTreeNode({ node, depth }: RoofTreeNodeProps) {
       isSelected={isSelected}
       isHovered={isHovered}
       isVisible={node.visible !== false}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     />
   );

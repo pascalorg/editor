@@ -32,7 +32,7 @@
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
-    "three-bvh-csg": "^0.0.17",
+    "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "^0.9.8",
     "zod": "^4.3.5",
     "zundo": "^2.3.0",
@@ -41,7 +41,7 @@
   "devDependencies": {
     "@repo/typescript-config": "*",
     "@types/react": "^19.2.2",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "@types/three": "^0.183.0"
   },
   "keywords": [

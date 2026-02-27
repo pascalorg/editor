@@ -85,7 +85,7 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.205 0 0); /* ~171717 */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -97,7 +97,7 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --accent: oklch(0.235 0 0); /* slightly lighter than background (0.205) but darker than previous (0.269) */
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
@@ -112,7 +112,7 @@
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.235 0 0); /* matching accent */
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
@@ -160,4 +160,96 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Loaders */
+.pascal-loader-1 {
+  width: 45px;
+  aspect-ratio: 1;
+  --c:no-repeat linear-gradient(currentColor 0 0);
+  background: var(--c), var(--c), var(--c);
+  animation: 
+    pascal-l1-1 1s infinite,
+    pascal-l1-2 1s infinite;
+}
+@keyframes pascal-l1-1 {
+ 0%,100% {background-size:20% 100%}
+ 33%,66% {background-size:20% 20%}
+}
+@keyframes pascal-l1-2 {
+ 0%,33%   {background-position: 0    0,50% 50%,100% 100%}
+ 66%,100% {background-position: 100% 0,50% 50%,0    100%}
+}
+
+.pascal-loader-2 {
+  width: 45px;
+  aspect-ratio: .75;
+  --c: no-repeat linear-gradient(currentColor 0 0);
+  background: 
+    var(--c) 0%   50%,
+    var(--c) 50%  50%,
+    var(--c) 100% 50%;
+  background-size: 20% 50%;
+  animation: pascal-l2 1s infinite linear;
+}
+@keyframes pascal-l2 {
+  20% {background-position: 0% 0%  ,50% 50% ,100% 50% }
+  40% {background-position: 0% 100%,50% 0%  ,100% 50% }
+  60% {background-position: 0% 50% ,50% 100%,100% 0%  }
+  80% {background-position: 0% 50% ,50% 50% ,100% 100%}
+}
+
+.pascal-loader-3 {
+  width: 45px;
+  aspect-ratio: .75;
+  --c:no-repeat linear-gradient(currentColor 0 0);
+  background: 
+    var(--c) 0%   100%,
+    var(--c) 50%  100%,
+    var(--c) 100% 100%;
+  background-size: 20% 65%;
+  animation: pascal-l3 1s infinite linear;
+}
+@keyframes pascal-l3 {
+  16.67% {background-position: 0% 0%  ,50% 100%,100% 100%}
+  33.33% {background-position: 0% 0%  ,50% 0%  ,100% 100%}
+  50%    {background-position: 0% 0%  ,50% 0%  ,100% 0%  }
+  66.67% {background-position: 0% 100%,50% 0%  ,100% 0%  }
+  83.33% {background-position: 0% 100%,50% 100%,100% 0%  }
+}
+
+.pascal-loader-4 {
+  width: 45px;
+  aspect-ratio: 1;
+  --c:no-repeat linear-gradient(currentColor 0 0);
+  background: var(--c), var(--c), var(--c);
+  animation: 
+    pascal-l4-1 1s infinite,
+    pascal-l4-2 1s infinite;
+}
+@keyframes pascal-l4-1 {
+ 0%,100% {background-size:20% 100%}
+ 33%,66% {background-size:20% 40%}
+}
+@keyframes pascal-l4-2 {
+ 0%,33%   {background-position: 0    0,50% 100%,100% 100%}
+ 66%,100% {background-position: 100% 0,0   100%,50%  100%}
+}
+
+.pascal-loader-5 {
+  width: 45px;
+  aspect-ratio: 1;
+  --c:no-repeat linear-gradient(currentColor 0 0);
+  background: var(--c), var(--c), var(--c);
+  animation: 
+    pascal-l5-1 1s infinite,
+    pascal-l5-2 1s infinite;
+}
+@keyframes pascal-l5-1 {
+ 0%,100% {background-size:20% 100%}
+ 33%,66% {background-size:20% 40%}
+}
+@keyframes pascal-l5-2 {
+ 0%,33%   {background-position: 0 0   ,50% 100%,100% 0}
+ 66%,100% {background-position: 0 100%,50% 0   ,100% 100%}
 }

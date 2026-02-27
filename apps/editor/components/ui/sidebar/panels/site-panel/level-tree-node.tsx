@@ -9,9 +9,10 @@ import { TreeNodeActions } from "./tree-node-actions";
 interface LevelTreeNodeProps {
   node: LevelNode;
   depth: number;
+  isLast?: boolean;
 }
 
-export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
+export function LevelTreeNode({ node, depth, isLast }: LevelTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const isSelected = useViewer((state) => state.selection.levelId === node.id);
@@ -48,10 +49,11 @@ export function LevelTreeNode({ node, depth }: LevelTreeNodeProps) {
       onDoubleClick={handleDoubleClick}
       isSelected={isSelected}
       isHovered={isHovered}
+      isLast={isLast}
       actions={<TreeNodeActions node={node} />}
     >
-      {node.children.map((childId) => (
-        <TreeNode key={childId} nodeId={childId} depth={depth + 1} />
+      {node.children.map((childId, index) => (
+        <TreeNode key={childId} nodeId={childId} depth={depth + 1} isLast={index === node.children.length - 1} />
       ))}
     </TreeNodeWrapper>
   );

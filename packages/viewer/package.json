@@ -34,7 +34,7 @@
   "devDependencies": {
     "@repo/typescript-config": "*",
     "@types/react": "^19.2.2",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "@types/three": "^0.183.0"
   },
   "keywords": [

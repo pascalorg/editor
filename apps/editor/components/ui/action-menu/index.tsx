@@ -30,7 +30,7 @@ export function ActionMenu({ className }: { className?: string }) {
         transition={transition}
         className={cn(
           "-translate-x-1/2 fixed bottom-6 left-1/2 z-50",
-          "rounded-2xl border border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-md",
+          "rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md",
           "transition-colors duration-200 ease-out",
           className,
         )}
@@ -40,7 +40,7 @@ export function ActionMenu({ className }: { className?: string }) {
           {mode === "build" && tool === "item" && catalogCategory && (
             <motion.div
               className={cn(
-                "overflow-hidden border-zinc-800 border-b px-2 py-2",
+                "overflow-hidden border-border border-b px-2 py-2",
               )}
               initial={{
                 opacity: 0,
@@ -74,7 +74,7 @@ export function ActionMenu({ className }: { className?: string }) {
           {phase === "furnish" && mode === "build" && (
             <motion.div
               className={cn(
-                "overflow-hidden border-zinc-800",
+                "overflow-hidden border-border",
                 "max-h-20 border-b px-2 py-2 opacity-100",
               )}
               initial={{
@@ -112,7 +112,7 @@ export function ActionMenu({ className }: { className?: string }) {
           {phase === "structure" && mode === "build" && (
             <motion.div
               className={cn(
-                "overflow-hidden border-zinc-800 max-h-20 border-b px-2 py-2",
+                "overflow-hidden border-border max-h-20 border-b px-2 py-2",
               )}
               initial={{
                 opacity: 0,
@@ -146,9 +146,9 @@ export function ActionMenu({ className }: { className?: string }) {
         {/* Control Mode Row - Always visible, centered */}
         <div className="flex items-center justify-center gap-1 px-2 py-1.5">
           <ControlModes />
-          <div className="mx-1 h-5 w-px bg-zinc-700" />
+          <div className="mx-1 h-5 w-px bg-border" />
           <ViewToggles />
-          <div className="mx-1 h-5 w-px bg-zinc-700" />
+          <div className="mx-1 h-5 w-px bg-border" />
           <CameraActions />
         </div>
       </motion.div>

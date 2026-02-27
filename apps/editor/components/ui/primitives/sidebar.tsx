@@ -4,6 +4,8 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 import * as React from "react";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { Button } from "@/components/ui/primitives/button";
 import { Input } from "@/components/ui/primitives/input";
 import { Separator } from "@/components/ui/primitives/separator";
@@ -30,6 +32,28 @@ const SIDEBAR_WIDTH = "18rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+
+type SidebarStore = {
+  width: number;
+  setWidth: (width: number) => void;
+  isDragging: boolean;
+  setIsDragging: (isDragging: boolean) => void;
+};
+
+export const useSidebarStore = create<SidebarStore>()(
+  persist(
+    (set) => ({
+      width: 288, // 18rem = 288px
+      setWidth: (width) => set({ width: Math.max(288, Math.min(width, 800)) }),
+      isDragging: false,
+      setIsDragging: (isDragging) => set({ isDragging }),
+    }),
+    {
+      name: "sidebar-preferences",
+      partialize: (state) => ({ width: state.width }), // Only persist width
+    }
+  )
+);
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -67,6 +91,8 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
+  const sidebarWidth = useSidebarStore((state) => state.width);
+  const isDragging = useSidebarStore((state) => state.isDragging);
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -136,9 +162,10 @@ function SidebarProvider({
             className,
           )}
           data-slot="sidebar-wrapper"
+          data-dragging={isDragging}
           style={
             {
-              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width": `${sidebarWidth}px`,
               "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
               ...style,
             } as React.CSSProperties
@@ -149,6 +176,52 @@ function SidebarProvider({
         </div>
       </TooltipProvider>
     </SidebarContext.Provider>
+  );
+}
+
+function SidebarResizer({ side }: { side: "left" | "right" }) {
+  const setWidth = useSidebarStore((state) => state.setWidth);
+  const setIsDragging = useSidebarStore((state) => state.setIsDragging);
+  const isResizing = React.useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    isResizing.current = true;
+    setIsDragging(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  React.useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = side === "left" ? e.clientX : window.innerWidth - e.clientX;
+      setWidth(Math.max(288, Math.min(newWidth, 800)));
+    };
+
+    const handlePointerUp = () => {
+      isResizing.current = false;
+      setIsDragging(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [setWidth, side]);
+
+  return (
+    <div
+      onPointerDown={handlePointerDown}
+      className={cn(
+        "absolute top-0 bottom-0 w-2 cursor-col-resize z-50 hover:bg-primary/50 transition-colors",
+        side === "left" ? "-right-1" : "-left-1"
+      )}
+    />
   );
 }
 
@@ -219,6 +292,7 @@ function Sidebar({
       <div
         className={cn(
           "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          "group-data-[dragging=true]/sidebar-wrapper:transition-none",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
@@ -230,6 +304,7 @@ function Sidebar({
       <div
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex pointer-events-auto",
+          "group-data-[dragging=true]/sidebar-wrapper:transition-none",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -243,11 +318,12 @@ function Sidebar({
         {...props}
       >
         <div
-          className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm pointer-events-auto"
+          className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm pointer-events-auto relative"
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
         >
           {children}
+          <SidebarResizer side={side} />
         </div>
       </div>
     </div>

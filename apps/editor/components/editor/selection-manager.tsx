@@ -10,7 +10,7 @@ import {
 } from "@pascal-app/core";
 
 import { useViewer } from "@pascal-app/viewer";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import useEditor from "@/store/use-editor";
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -22,12 +22,57 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
 
 type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling' | 'roof' | 'window' | 'door';
 
+type ModifierKeys = {
+  meta: boolean;
+  ctrl: boolean;
+};
+
 interface SelectionStrategy {
   types: SelectableNodeType[];
-  handleSelect: (node: AnyNode, isShift: boolean) => void;
+  handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void;
   handleDeselect: () => void;
   isValid: (node: AnyNode) => boolean;
 }
+
+export const resolveBuildingId = (levelId: string, nodes: Record<string, AnyNode>): string | null => {
+  const level = nodes[levelId];
+  if (!level) return null;
+  if (level.parentId && nodes[level.parentId]?.type === "building") {
+    return level.parentId;
+  }
+  return null;
+};
+
+const computeNextIds = (
+  node: AnyNode,
+  selectedIds: string[],
+  event?: any,
+  modifierKeys?: ModifierKeys
+): string[] => {
+  const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta || false;
+  const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl || false;
+
+  console.log("computeNextIds:", {
+    nodeId: node.id,
+    selectedIds,
+    isMeta,
+    isCtrl,
+    eventMeta: event?.metaKey,
+    nativeMeta: event?.nativeEvent?.metaKey,
+    modMeta: modifierKeys?.meta
+  });
+
+  if (isMeta || isCtrl) {
+    if (selectedIds.includes(node.id)) {
+      return selectedIds.filter((id) => id !== node.id);
+    } else {
+      return [...selectedIds, node.id];
+    }
+  }
+
+  // Not holding modifiers: select only this node
+  return [node.id];
+};
 
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   site: {
@@ -45,17 +90,28 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   structure: {
     types: ["wall", "item", "zone", "slab", "ceiling", "roof", "window", "door"],
-    handleSelect: (node, isShift) => {
+    handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState();
+      const nodes = useScene.getState().nodes;
+      const nodeLevelId = resolveLevelId(node, nodes);
+      const buildingId = resolveBuildingId(nodeLevelId, nodes);
+
+      const updates: any = {};
+      if (nodeLevelId !== "default" && nodeLevelId !== selection.levelId) {
+        updates.levelId = nodeLevelId;
+      }
+      if (buildingId && buildingId !== selection.buildingId) {
+        updates.buildingId = buildingId;
+      }
+
       if (node.type === 'zone') {
-        setSelection({ zoneId: node.id });
+        updates.zoneId = node.id;
+        // Don't reset selectedIds in structure phase for zone, but if we changed level, it might reset them via hierarchy guard.
+        // Wait, the hierarchy guard resets zoneId if levelId changes. That's fine since we provide zoneId.
+        setSelection(updates);
       } else {
-      const nextIds = isShift
-        ? selection.selectedIds.includes(node.id)
-          ? selection.selectedIds.filter((id) => id !== node.id)
-          : [...selection.selectedIds, node.id]
-        : [node.id];
-      setSelection({ selectedIds: nextIds });
+        updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys);
+        setSelection(updates);
       }
     },
     handleDeselect: () => {
@@ -89,14 +145,22 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   furnish: {
     types: ["item"],
-    handleSelect: (node, isShift) => {
+    handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState();
-      const nextIds = isShift
-        ? selection.selectedIds.includes(node.id)
-          ? selection.selectedIds.filter((id) => id !== node.id)
-          : [...selection.selectedIds, node.id]
-        : [node.id];
-      setSelection({ selectedIds: nextIds });
+      const nodes = useScene.getState().nodes;
+      const nodeLevelId = resolveLevelId(node, nodes);
+      const buildingId = resolveBuildingId(nodeLevelId, nodes);
+
+      const updates: any = {};
+      if (nodeLevelId !== "default" && nodeLevelId !== selection.levelId) {
+        updates.levelId = nodeLevelId;
+      }
+      if (buildingId && buildingId !== selection.buildingId) {
+        updates.buildingId = buildingId;
+      }
+
+      updates.selectedIds = computeNextIds(node, selection.selectedIds, nativeEvent, modifierKeys);
+      setSelection(updates);
     },
     handleDeselect: () => {
       useViewer.getState().setSelection({ selectedIds: [] });
@@ -113,39 +177,116 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase);
   const mode = useEditor((s) => s.mode);
+  const modifierKeysRef = useRef<ModifierKeys>({
+    meta: false,
+    ctrl: false,
+  });
+  const clickHandledRef = useRef(false);
 
   const movingNode = useEditor((s) => s.movingNode);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Meta") modifierKeysRef.current.meta = true;
+      if (event.key === "Control") modifierKeysRef.current.ctrl = true;
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Meta") modifierKeysRef.current.meta = false;
+      if (event.key === "Control") modifierKeysRef.current.ctrl = false;
+    };
+
+    const clearModifiers = () => {
+      modifierKeysRef.current.meta = false;
+      modifierKeysRef.current.ctrl = false;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", clearModifiers);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", clearModifiers);
+    };
+  }, []);
 
   useEffect(() => {
     if (mode !== "select") return;
     if (movingNode) return;
 
-    const strategy = SELECTION_STRATEGIES[phase];
-    if (!strategy) return;
-
     const onClick = (event: NodeEvent) => {
-      if (!strategy.isValid(event.node)) return;
+      const node = event.node;
+      let currentPhase = useEditor.getState().phase;
+      let targetPhase = currentPhase;
 
-      event.stopPropagation();
-      const isShift = event.nativeEvent?.shiftKey;
-      strategy.handleSelect(event.node, isShift ?? false);
+      // Auto-switch between structure and furnish phases when clicking elements on the same level
+      if (currentPhase === "structure" || currentPhase === "furnish") {
+        if (isNodeInCurrentLevel(node)) {
+          if (
+            node.type === "wall" || 
+            node.type === "slab" || 
+            node.type === "ceiling" || 
+            node.type === "roof" || 
+            node.type === "window" || 
+            node.type === "door"
+          ) {
+            targetPhase = "structure";
+          } else if (node.type === "item") {
+            const item = node as ItemNode;
+            if (item.asset.category === "door" || item.asset.category === "window") {
+              targetPhase = "structure";
+            } else {
+              targetPhase = "furnish";
+            }
+          }
+          
+          if (targetPhase !== currentPhase) {
+            useEditor.getState().setPhase(targetPhase);
+            if (targetPhase === "structure" && useEditor.getState().structureLayer === "zones") {
+              useEditor.getState().setStructureLayer("elements");
+            }
+            currentPhase = targetPhase;
+          }
+        }
+      }
+
+      const activeStrategy = SELECTION_STRATEGIES[currentPhase];
+      if (activeStrategy?.isValid(node)) {
+        event.stopPropagation();
+        clickHandledRef.current = true;
+        
+        console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", event.nativeEvent.shiftKey);
+        activeStrategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
+
+        // Reset the handled flag after a short delay to allow grid:click to be ignored
+        setTimeout(() => {
+          clickHandledRef.current = false;
+        }, 50);
+      }
     };
 
-    // Bind listeners for all potential types this strategy might care about
-    strategy.types.forEach((type) => {
-      emitter.on(`${type}:click`, onClick);
+    const allTypes = ["wall", "item", "building", "zone", "slab", "ceiling", "roof", "window", "door"];
+    allTypes.forEach((type) => {
+      emitter.on(`${type}:click` as any, onClick as any);
     });
 
-    const onGridClick = () => strategy.handleDeselect();
+    const onGridClick = () => {
+      if (clickHandledRef.current) return;
+      console.log("onGridClick triggered! Deselecting.");
+      const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase];
+      if (activeStrategy) activeStrategy.handleDeselect();
+    };
     emitter.on("grid:click", onGridClick);
 
     return () => {
-      strategy.types.forEach((type) => {
-        emitter.off(`${type}:click`, onClick);
+      allTypes.forEach((type) => {
+        emitter.off(`${type}:click` as any, onClick as any);
       });
       emitter.off("grid:click", onGridClick);
     };
-  }, [phase, mode, movingNode]);
+  }, [mode, movingNode]);
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
@@ -231,8 +372,7 @@ export const SelectionManager = () => {
 
         const strategy = SELECTION_STRATEGIES[targetPhase];
         if (strategy) {
-          const isShift = event.nativeEvent?.shiftKey;
-          strategy.handleSelect(node, isShift ?? false);
+          strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
         }
       }
     };

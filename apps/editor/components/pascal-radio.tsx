@@ -3,10 +3,10 @@
 import { Howl } from 'howler'
 import { Disc3, Settings2, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 import useAudio from '@/store/use-audio'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const PLAYLIST = [
   {
@@ -66,6 +66,8 @@ export function PascalRadio() {
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0)
   const { masterVolume, radioVolume, muted, isRadioPlaying, setRadioPlaying } = useAudio()
   const soundRef = useRef<Howl | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const currentTrack = shuffledPlaylist[currentTrackIndex]!
 
@@ -144,74 +146,126 @@ export function PascalRadio() {
     useAudio.setState({ radioVolume: value[0] })
   }
 
+  // Handle click outside to close
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-lg backdrop-blur-md">
-      <Disc3 className={cn('h-4 w-4', isRadioPlaying && 'animate-spin')} />
-      <span className="hidden sm:inline">Radio Pascal</span>
-      <div
-        onClick={handlePlayPause}
-        className="rounded-sm p-1 transition-all cursor-pointer bg-accent/30 hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
-        role="button"
-        tabIndex={0}
-        aria-label={isRadioPlaying ? 'Pause' : 'Play'}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            handlePlayPause()
-          }
-        }}
-      >
-        {isRadioPlaying ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-      </div>
-      <Popover>
-        <PopoverTrigger asChild>
+    <motion.div
+      ref={containerRef}
+      layout
+      onClick={() => {
+        if (!isOpen) setIsOpen(true)
+      }}
+      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+      className={cn(
+        "flex flex-col rounded-lg border border-border bg-background/95 shadow-lg backdrop-blur-md overflow-hidden",
+        !isOpen && "cursor-pointer hover:bg-accent/30 transition-colors"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium">
+        <div className="flex items-center gap-2">
+          <Disc3 className={cn('h-4 w-4 shrink-0', isRadioPlaying && 'animate-spin')} />
+          <span className="hidden sm:inline whitespace-nowrap">Radio Pascal</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              handlePlayPause()
+            }}
+            className="rounded-sm p-1 transition-all cursor-pointer bg-accent/30 hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
+            role="button"
+            tabIndex={0}
+            aria-label={isRadioPlaying ? 'Pause' : 'Play'}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                handlePlayPause()
+              }
+            }}
+          >
+            {isRadioPlaying ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </div>
           <button
-            className="rounded-sm p-1 transition-all cursor-pointer hover:bg-accent hover:text-accent-foreground"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsOpen(!isOpen)
+            }}
+            className={cn(
+              "rounded-sm p-1 transition-all cursor-pointer hover:bg-accent hover:text-accent-foreground",
+              isOpen && "bg-accent text-accent-foreground"
+            )}
             aria-label="Radio Settings"
           >
             <Settings2 className="h-3.5 w-3.5" />
           </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64" align="end">
-          <div className="space-y-3">
-            {/* Current song info with prev/next */}
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">Now Playing</p>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  onClick={handlePrevious}
-                  className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
-                  aria-label="Previous"
-                >
-                  <SkipBack className="h-4 w-4" />
-                </button>
-                <p className="text-sm font-medium text-center flex-1 truncate">{currentTrack.title}</p>
-                <button
-                  onClick={handleNext}
-                  className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
-                  aria-label="Next"
-                >
-                  <SkipForward className="h-4 w-4" />
-                </button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+          >
+            <div className="px-3 pb-3 space-y-3 w-[16rem]">
+              <div className="h-px w-full bg-border/50 mb-3" />
+              {/* Current song info with prev/next */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Now Playing</p>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={handlePrevious}
+                    className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
+                    aria-label="Previous"
+                  >
+                    <SkipBack className="h-4 w-4" />
+                  </button>
+                  <p className="text-sm font-medium text-center flex-1 truncate" title={currentTrack.title}>
+                    {currentTrack.title}
+                  </p>
+                  <button
+                    onClick={handleNext}
+                    className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
+                    aria-label="Next"
+                  >
+                    <SkipForward className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Volume control */}
+              <div className="flex items-center gap-2">
+                <Volume2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <Slider
+                  value={[radioVolume]}
+                  onValueChange={handleVolumeChange}
+                  max={100}
+                  step={1}
+                  className="flex-1"
+                  aria-label="Radio Volume"
+                />
+                <span className="w-8 text-right text-xs text-muted-foreground shrink-0">{radioVolume}%</span>
               </div>
             </div>
-
-            {/* Volume control */}
-            <div className="flex items-center gap-2">
-              <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
-              <Slider
-                value={[radioVolume]}
-                onValueChange={handleVolumeChange}
-                max={100}
-                step={1}
-                className="flex-1"
-                aria-label="Radio Volume"
-              />
-              <span className="w-8 text-right text-xs text-muted-foreground">{radioVolume}%</span>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

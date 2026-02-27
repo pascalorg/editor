@@ -15,12 +15,14 @@ interface ProjectStore {
   activeProject: Project | null
   projects: Project[]
   isLoading: boolean
+  isSceneLoading: boolean
   error: string | null
 
   // Actions
   fetchProjects: () => Promise<void>
   fetchActiveProject: () => Promise<void>
   setActiveProject: (projectId: string) => Promise<void>
+  setIsSceneLoading: (loading: boolean) => void
   initialize: () => Promise<void>
   updateActiveThumbnail: (thumbnailUrl: string) => void
 }
@@ -30,6 +32,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   activeProject: null,
   projects: [],
   isLoading: true,
+  isSceneLoading: false,
   error: null,
 
   // Fetch all projects
@@ -77,6 +80,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     } else {
       set({ isLoading: false, error: result.error || 'Project not found' })
     }
+  },
+
+  setIsSceneLoading: (loading: boolean) => {
+    set({ isSceneLoading: loading })
   },
 
   // Patch the active project's thumbnail URL in place (no refetch)

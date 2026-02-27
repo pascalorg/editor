@@ -14,6 +14,8 @@ import { ViewerGuestCTA } from './viewer-guest-cta'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
 
+import { SceneLoader } from '@/components/ui/scene-loader'
+
 export default function ViewerPage() {
   const params = useParams()
   const id = params.id as string
@@ -90,14 +92,6 @@ export default function ViewerPage() {
     loadContent()
   }, [id, setScene])
 
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-neutral-100">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    )
-  }
-
   if (error) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-neutral-100">
@@ -108,13 +102,20 @@ export default function ViewerPage() {
 
   return (
     <div className="relative h-screen w-full">
-      <ViewerOverlay
-        projectName={projectName}
-        owner={owner}
-        canShowScans={canShowScans}
-        canShowGuides={canShowGuides}
-      />
-      <ViewerGuestCTA />
+      {loading && <SceneLoader fullScreen />}
+      
+      {!loading && (
+        <>
+          <ViewerOverlay
+            projectName={projectName}
+            owner={owner}
+            canShowScans={canShowScans}
+            canShowGuides={canShowGuides}
+          />
+          <ViewerGuestCTA />
+        </>
+      )}
+      
       <Viewer>
         <ViewerCameraControls />
         <ViewerZoneSystem />

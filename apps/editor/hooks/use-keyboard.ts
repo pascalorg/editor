@@ -16,6 +16,10 @@ export const useKeyboard = () => {
         e.preventDefault()
         emitter.emit('tool:cancel')
 
+        // Clear selections to close UI panels, but KEEP the active building and level context
+        useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        useEditor.getState().setSelectedReferenceId(null)
+
         // If in build mode, switch back to select mode
         const { mode } = useEditor.getState()
         if (mode === 'build') {
@@ -46,6 +50,36 @@ export const useKeyboard = () => {
       } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         useScene.temporal.getState().redo()
+      } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        const { buildingId, levelId } = useViewer.getState().selection
+        if (buildingId) {
+          const building = useScene.getState().nodes[buildingId]
+          if (building && building.type === 'building' && building.children.length > 0) {
+            const currentIdx = levelId ? building.children.indexOf(levelId as any) : -1
+            const nextIdx = currentIdx < building.children.length - 1 ? currentIdx + 1 : currentIdx
+            if (nextIdx !== -1 && nextIdx !== currentIdx) {
+              useViewer.getState().setSelection({ levelId: building.children[nextIdx] as any })
+            } else if (currentIdx === -1) {
+              useViewer.getState().setSelection({ levelId: building.children[0] as any })
+            }
+          }
+        }
+      } else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        const { buildingId, levelId } = useViewer.getState().selection
+        if (buildingId) {
+          const building = useScene.getState().nodes[buildingId]
+          if (building && building.type === 'building' && building.children.length > 0) {
+            const currentIdx = levelId ? building.children.indexOf(levelId as any) : -1
+            const prevIdx = currentIdx > 0 ? currentIdx - 1 : currentIdx
+            if (prevIdx !== -1 && prevIdx !== currentIdx) {
+              useViewer.getState().setSelection({ levelId: building.children[prevIdx] as any })
+            } else if (currentIdx === -1) {
+              useViewer.getState().setSelection({ levelId: building.children[building.children.length - 1] as any })
+            }
+          }
+        }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
 
