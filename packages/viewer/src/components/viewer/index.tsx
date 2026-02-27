@@ -41,9 +41,8 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default',
     <Canvas
       dpr={[1, 1.5]}
       className={'bg-[#fafafa]'}
-      gl={async (props) => {
+      gl={(props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
-        await renderer.init()
         renderer.toneMapping = THREE.ACESFilmicToneMapping
         renderer.toneMappingExposure = 0.9
         return renderer

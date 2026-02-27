@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Color, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
@@ -43,9 +43,26 @@ export const SSGI_PARAMS = {
 const PostProcessingPasses = () => {
   const { gl: renderer, scene, camera } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
-    if (!renderer || !scene || !camera) {
+    let mounted = true
+    const initRenderer = async () => {
+      if (renderer && (renderer as any).init) {
+        await (renderer as any).init()
+      }
+      if (mounted) {
+        setIsInitialized(true)
+      }
+    }
+    initRenderer()
+    return () => {
+      mounted = false
+    }
+  }, [renderer])
+
+  useEffect(() => {
+    if (!renderer || !scene || !camera || !isInitialized) {
       return
     }
 
@@ -173,7 +190,7 @@ const PostProcessingPasses = () => {
       }
       renderPipelineRef.current = null
     }
-  }, [renderer, scene, camera])
+  }, [renderer, scene, camera, isInitialized])
 
   useFrame(() => {
     if (renderPipelineRef.current) {
