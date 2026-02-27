@@ -257,7 +257,7 @@ export const SelectionManager = () => {
         event.stopPropagation();
         clickHandledRef.current = true;
         
-        console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", modifierKeysRef.current.shift, event.nativeEvent.shiftKey);
+        console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", event.nativeEvent.shiftKey);
         activeStrategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
 
         // Reset the handled flag after a short delay to allow grid:click to be ignored

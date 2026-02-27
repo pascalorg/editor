@@ -21,7 +21,7 @@ export function SceneLoader({ className, fullScreen = false }: SceneLoaderProps)
 
   useEffect(() => {
     // Pick a random loader on mount
-    setLoaderClass(LOADERS[Math.floor(Math.random() * LOADERS.length)])
+    setLoaderClass(LOADERS[Math.floor(Math.random() * LOADERS.length)] ?? LOADERS[0]!)
   }, [])
 
   if (!loaderClass) return null
