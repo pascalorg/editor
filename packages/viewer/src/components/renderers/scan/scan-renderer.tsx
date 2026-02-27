@@ -3,8 +3,10 @@ import { Suspense, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 import { useAssetUrl } from '../../../hooks/use-asset-url'
 import { useGLTFKTX2 } from '../../../hooks/use-gltf-ktx2'
+import useViewer from '../../../store/use-viewer'
 
 export const ScanRenderer = ({ node }: { node: ScanNode }) => {
+  const showScans = useViewer((s) => s.showScans)
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'scan', ref)
 
@@ -13,6 +15,7 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
   return (
     <group
       ref={ref}
+      visible={showScans}
       position={node.position}
       rotation={node.rotation}
       scale={[node.scale, node.scale, node.scale]}

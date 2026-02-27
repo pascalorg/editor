@@ -29,6 +29,10 @@ export default function ViewerPage() {
   const setScene = useScene((state) => state.setScene)
 
   useEffect(() => {
+    useViewer.getState().setProjectId(projectId)
+  }, [projectId])
+
+  useEffect(() => {
     const loadContent = async () => {
       try {
         // Check if it's a demo file (starts with 'demo_')

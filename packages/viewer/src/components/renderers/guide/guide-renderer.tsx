@@ -5,15 +5,17 @@ import { DoubleSide, type Group, type Texture, TextureLoader } from 'three'
 import { float, texture } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useAssetUrl } from '../../../hooks/use-asset-url'
+import useViewer from '../../../store/use-viewer'
 
 export const GuideRenderer = ({ node }: { node: GuideNode }) => {
+  const showGuides = useViewer((s) => s.showGuides)
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'guide', ref)
 
   const resolvedUrl = useAssetUrl(node.url)
 
   return (
-    <group ref={ref} position={node.position} rotation={[0, node.rotation[1], 0]}>
+    <group ref={ref} visible={showGuides} position={node.position} rotation={[0, node.rotation[1], 0]}>
       {resolvedUrl && (
         <Suspense>
           <GuidePlane url={resolvedUrl} scale={node.scale} opacity={node.opacity} />

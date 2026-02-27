@@ -72,6 +72,14 @@ export default function Editor({ projectId }: EditorProps) {
   const isLoading = isProjectLoading || isSceneLoading
 
   useEffect(() => {
+    if (projectId) {
+      useViewer.getState().setProjectId(projectId)
+    } else {
+      useViewer.getState().setProjectId(null)
+    }
+  }, [projectId])
+
+  useEffect(() => {
     document.body.classList.add('dark')
     return () => {
       document.body.classList.remove('dark')

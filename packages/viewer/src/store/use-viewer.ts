@@ -47,6 +47,10 @@ type ViewerState = {
   showGuides: boolean
   setShowGuides: (show: boolean) => void
 
+  projectId: string | null
+  setProjectId: (id: string | null) => void
+  projectPreferences: Record<string, { showScans?: boolean, showGuides?: boolean }>
+
   // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void
   resetSelection: () => void
@@ -80,10 +84,43 @@ const useViewer = create<ViewerState>()(
       setWallMode: (mode) => set({ wallMode: mode }),
 
       showScans: true,
-      setShowScans: (show) => set({ showScans: show }),
+      setShowScans: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) };
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showScans: show,
+            };
+          }
+          return { showScans: show, projectPreferences };
+        }),
 
       showGuides: true,
-      setShowGuides: (show) => set({ showGuides: show }),
+      setShowGuides: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) };
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showGuides: show,
+            };
+          }
+          return { showGuides: show, projectPreferences };
+        }),
+
+      projectId: null,
+      setProjectId: (id) =>
+        set((state) => {
+          if (!id) return { projectId: id };
+          const prefs = state.projectPreferences?.[id] || {};
+          return {
+            projectId: id,
+            showScans: prefs.showScans ?? true,
+            showGuides: prefs.showGuides ?? true,
+          };
+        }),
+      projectPreferences: {},
 
       setSelection: (updates) =>
         set((state) => {
@@ -130,8 +167,7 @@ const useViewer = create<ViewerState>()(
         cameraMode: state.cameraMode,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
-        showScans: state.showScans,
-        showGuides: state.showGuides,
+        projectPreferences: state.projectPreferences,
       }),
     },
   ),
