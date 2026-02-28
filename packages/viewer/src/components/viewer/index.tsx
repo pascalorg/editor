@@ -15,8 +15,38 @@ import PostProcessing from './post-processing'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
-import { useEffect } from 'react'
+import { GroundOccluder } from './ground-occluder'
+
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import useViewer from '../../store/use-viewer'
+
+function AnimatedBackground({ isDark }: { isDark: boolean }) {
+  const targetColor = useMemo(() => new THREE.Color(), [])
+  const initialized = useRef(false)
+
+  useFrame(({ scene }, delta) => {
+    const dt = Math.min(delta, 0.1) * 4
+    const targetHex = isDark ? '#12151e' : '#fafafa'
+    
+    if (!scene.background || !(scene.background instanceof THREE.Color)) {
+      scene.background = new THREE.Color(targetHex)
+      initialized.current = true
+      return
+    }
+
+    if (!initialized.current) {
+      scene.background.set(targetHex)
+      initialized.current = true
+      return
+    }
+
+    targetColor.set(targetHex)
+    scene.background.lerp(targetColor, dt)
+  })
+
+  return null
+}
 
 declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -43,7 +73,7 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default',
   return (
     <Canvas
       dpr={[1, 1.5]}
-      className={theme === 'dark' ? 'bg-[#12151e]' : 'bg-[#fafafa]'}
+      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#12151e]' : 'bg-[#fafafa]'}`}
       gl={(props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
         renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -56,7 +86,8 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default',
       }}
       camera={{ position: [50, 50, 50], fov: 50 }}
     >
-      <color attach="background" args={[bgColor]} />
+      <AnimatedBackground isDark={theme === 'dark'} />
+      <GroundOccluder />
       <ViewerCamera />
 
       {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow

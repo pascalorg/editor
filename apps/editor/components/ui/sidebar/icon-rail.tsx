@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Settings, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -20,9 +20,9 @@ interface IconRailProps {
   className?: string;
 }
 
-const panels: { id: PanelId; icon: typeof Building2; label: string }[] = [
-  { id: "site", icon: Building2, label: "Site" },
-  { id: "settings", icon: Settings, label: "Settings" },
+const panels: { id: PanelId; iconSrc: string; label: string }[] = [
+  { id: "site", iconSrc: "/icons/level.png", label: "Site" },
+  { id: "settings", iconSrc: "/icons/settings.png", label: "Settings" },
 ];
 
 export function IconRail({
@@ -68,7 +68,6 @@ export function IconRail({
       <div className="w-8 h-px bg-border/50 mb-1" />
 
       {panels.map((panel) => {
-        const Icon = panel.icon;
         const isActive = activePanel === panel.id;
         return (
           <Tooltip key={panel.id}>
@@ -77,13 +76,20 @@ export function IconRail({
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-all",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    ? "bg-accent"
+                    : "hover:bg-accent",
                 )}
                 onClick={() => onPanelChange(panel.id)}
                 type="button"
               >
-                <Icon className="h-4 w-4" />
+                <img 
+                  src={panel.iconSrc} 
+                  alt={panel.label} 
+                  className={cn(
+                    "h-6 w-6 transition-all object-contain", 
+                    !isActive && "opacity-50 saturate-0"
+                  )} 
+                />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">{panel.label}</TooltipContent>

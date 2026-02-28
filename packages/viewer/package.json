@@ -29,6 +29,7 @@
     "three": "^0.183"
   },
   "dependencies": {
+    "polygon-clipping": "^0.15.7",
     "zustand": "^5"
   },
   "devDependencies": {
