@@ -6,7 +6,7 @@ import polygonClipping from 'polygon-clipping'
 
 export const GroundOccluder = () => {
   const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#12151e' : '#fafafa'
+  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
   
   const nodes = useScene((state) => state.nodes)
 

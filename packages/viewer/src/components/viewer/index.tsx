@@ -1,25 +1,30 @@
 'use client'
 
-import { CeilingSystem, DoorSystem, ItemSystem, RoofSystem, SlabSystem, WallSystem, WindowSystem } from '@pascal-app/core'
+import {
+  CeilingSystem,
+  DoorSystem,
+  ItemSystem,
+  RoofSystem,
+  SlabSystem,
+  WallSystem,
+  WindowSystem,
+} from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
-import { Canvas, extend, type ThreeToJSXElements } from '@react-three/fiber'
+import { Canvas, extend, type ThreeToJSXElements, useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
 import { ZoneSystem } from '../../systems/zone/zone-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
+import { GroundOccluder } from './ground-occluder'
 import { Lights } from './lights'
 import PostProcessing from './post-processing'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
-
-import { GroundOccluder } from './ground-occluder'
-
-import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import useViewer from '../../store/use-viewer'
 
 function AnimatedBackground({ isDark }: { isDark: boolean }) {
   const targetColor = useMemo(() => new THREE.Color(), [])
@@ -27,8 +32,8 @@ function AnimatedBackground({ isDark }: { isDark: boolean }) {
 
   useFrame(({ scene }, delta) => {
     const dt = Math.min(delta, 0.1) * 4
-    const targetHex = isDark ? '#12151e' : '#fafafa'
-    
+    const targetHex = isDark ? '#1f2433' : '#ffffff'
+
     if (!scene.background || !(scene.background instanceof THREE.Color)) {
       scene.background = new THREE.Color(targetHex)
       initialized.current = true
@@ -60,11 +65,15 @@ interface ViewerProps {
   isEditor?: boolean
 }
 
-const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default', isEditor = false }) => {
+const Viewer: React.FC<ViewerProps> = ({
+  children,
+  selectionManager = 'default',
+  isEditor = false,
+}) => {
   const setIsEditor = useViewer((state) => state.setIsEditor)
   const theme = useViewer((state) => state.theme)
 
-  const bgColor = theme === 'dark' ? '#12151e' : '#fafafa'
+  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
 
   useEffect(() => {
     setIsEditor(isEditor)
@@ -73,7 +82,7 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default',
   return (
     <Canvas
       dpr={[1, 1.5]}
-      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#12151e]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       gl={(props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
         renderer.toneMapping = THREE.ACESFilmicToneMapping
