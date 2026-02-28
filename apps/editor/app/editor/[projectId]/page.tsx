@@ -1,11 +1,11 @@
 'use client'
 
-import Editor from '@/components/editor'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useProjectStore } from '@/features/community/lib/projects/store'
-import { useAuth } from '@/features/community/lib/auth/hooks'
+import Editor from '@/components/editor'
 import { SceneLoader } from '@/components/ui/scene-loader'
+import { useAuth } from '@/features/community/lib/auth/hooks'
+import { useProjectStore } from '@/features/community/lib/projects/store'
 
 export default function EditorPage() {
   const params = useParams()

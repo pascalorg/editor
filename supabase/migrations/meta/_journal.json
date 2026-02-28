@@ -50,6 +50,20 @@
       "when": 1772216042000,
       "tag": "20260227173402_create_missing_storage_buckets",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772222557281,
+      "tag": "20260227200237_brown_quasimodo",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1772225008787,
+      "tag": "20260227204328_backfill_empty_projects",
+      "breakpoints": true
     }
   ]
 }

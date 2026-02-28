@@ -35,6 +35,9 @@ type ViewerState = {
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
+  theme: 'light' | 'dark'
+  setTheme: (theme: 'light' | 'dark') => void
+
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
@@ -47,9 +50,12 @@ type ViewerState = {
   showGuides: boolean
   setShowGuides: (show: boolean) => void
 
+  showGrid: boolean
+  setShowGrid: (show: boolean) => void
+
   projectId: string | null
   setProjectId: (id: string | null) => void
-  projectPreferences: Record<string, { showScans?: boolean, showGuides?: boolean }>
+  projectPreferences: Record<string, { showScans?: boolean, showGuides?: boolean, showGrid?: boolean }>
 
   // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void
@@ -76,6 +82,9 @@ const useViewer = create<ViewerState>()(
 
       cameraMode: "perspective",
       setCameraMode: (mode) => set({ cameraMode: mode }),
+
+      theme: "light",
+      setTheme: (theme) => set({ theme }),
 
       levelMode: "stacked",
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -109,6 +118,19 @@ const useViewer = create<ViewerState>()(
           return { showGuides: show, projectPreferences };
         }),
 
+      showGrid: true,
+      setShowGrid: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) };
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showGrid: show,
+            };
+          }
+          return { showGrid: show, projectPreferences };
+        }),
+
       projectId: null,
       setProjectId: (id) =>
         set((state) => {
@@ -118,6 +140,7 @@ const useViewer = create<ViewerState>()(
             projectId: id,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
+            showGrid: prefs.showGrid ?? true,
           };
         }),
       projectPreferences: {},
@@ -165,6 +188,7 @@ const useViewer = create<ViewerState>()(
       name: 'viewer-preferences',
       partialize: (state) => ({
         cameraMode: state.cameraMode,
+        theme: state.theme,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,

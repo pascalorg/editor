@@ -309,6 +309,18 @@ export function SettingsPanel() {
               onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
             />
           </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Show Grid</div>
+              <div className="text-xs text-muted-foreground">
+                Visible only in the editor
+              </div>
+            </div>
+            <Switch
+              checked={useViewer((state) => state.showGrid)}
+              onCheckedChange={(checked) => useViewer.getState().setShowGrid(checked)}
+            />
+          </div>
         </div>
       )}
 

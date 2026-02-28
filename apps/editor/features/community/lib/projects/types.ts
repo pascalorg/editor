@@ -13,6 +13,7 @@ export type DbProject = {
   created_at: string
   updated_at: string
   is_private: boolean
+  is_empty: boolean
   show_scans_public: boolean
   show_guides_public: boolean
   views: number
@@ -106,6 +107,7 @@ export type Project = {
   updated_at: string
   // Community features
   is_private: boolean
+  is_empty: boolean
   show_scans_public: boolean
   show_guides_public: boolean
   views: number

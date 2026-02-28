@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "is_empty" boolean DEFAULT true NOT NULL;

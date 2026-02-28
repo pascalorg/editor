@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
 import type { ActionResult } from '../projects/actions'
+import { isSceneGraphEmpty } from './scene-graph-utils'
 
 export interface SceneGraph {
   nodes: Record<AnyNodeId, AnyNode>
@@ -165,6 +166,14 @@ export async function saveProjectModel(
         error: 'Unauthorized',
       }
     }
+
+    // Determine if scene graph is empty
+    const isEmpty = isSceneGraphEmpty(sceneGraph)
+
+    // Update the project's is_empty flag
+    await (supabase.from('projects') as any)
+      .update({ is_empty: isEmpty })
+      .eq('id', projectId)
 
     // Check if a model already exists
     const { data: existingModel } = await supabase
