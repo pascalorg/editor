@@ -11,17 +11,46 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import {
   ArrowLeft,
-  Box,
+  Camera,
   ChevronRight,
   Diamond,
-  Eye,
-  EyeOff,
-  Image,
   Layers,
   Layers2,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import type { ProjectOwner } from '@/features/community/lib/projects/types'
+import { ActionButton } from '@/components/ui/action-menu/action-button'
+import { TooltipProvider } from '@/components/ui/primitives/tooltip'
+import { emitter } from '@pascal-app/core'
+
+const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
+  stacked: 'Stacked',
+  exploded: 'Exploded',
+  solo: 'Solo',
+}
+
+const wallModeConfig = {
+  up: {
+    icon: (props: any) => (
+      <img alt="Full Height" height={28} src="/icons/room.png" width={28} {...props} />
+    ),
+    label: 'Full Height',
+  },
+  cutaway: {
+    icon: (props: any) => (
+      <img alt="Cutaway" height={28} src="/icons/wallcut.png" width={28} {...props} />
+    ),
+    label: 'Cutaway',
+  },
+  down: {
+    icon: (props: any) => <img alt="Low" height={28} src="/icons/walllow.png" width={28} {...props} />,
+    label: 'Low',
+  },
+}
 
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
@@ -53,6 +82,7 @@ export const ViewerOverlay = ({
   const cameraMode = useViewer((s) => s.cameraMode)
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
+  const theme = useViewer((s) => s.theme)
 
   const building = selection.buildingId
     ? (nodes[selection.buildingId] as BuildingNode | undefined)
@@ -95,24 +125,24 @@ export const ViewerOverlay = ({
   return (
     <>
       {/* Unified top-left card */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col gap-3">
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg rounded-smooth shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)] overflow-hidden">
+      <div className="absolute top-4 left-4 z-20 flex flex-col gap-3 dark text-foreground">
+        <div className="pointer-events-auto flex flex-col rounded-2xl border border-border/40 bg-background/95 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out overflow-hidden min-w-[200px]">
           {/* Project info + back */}
-          <div className="flex items-center gap-3 px-3 py-2">
+          <div className="flex items-center gap-3 px-3 py-2.5">
             <Link
               href="/"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-neutral-100 transition-colors"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-white/10 transition-colors"
             >
-              <ArrowLeft className="h-4 w-4 text-neutral-500" />
+              <ArrowLeft className="h-4 w-4 text-muted-foreground" />
             </Link>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-neutral-800 truncate">
+              <div className="text-sm font-medium text-foreground truncate">
                 {projectName || 'Untitled'}
               </div>
               {owner?.username && (
                 <Link
                   href={`/u/${owner.username}`}
-                  className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   @{owner.username}
                 </Link>
@@ -122,21 +152,21 @@ export const ViewerOverlay = ({
 
           {/* Breadcrumb — only shown when navigated into a building */}
           {building && (
-            <div className="border-t border-neutral-100 px-3 py-1.5">
-              <div className="flex items-center gap-1 text-xs">
+            <div className="border-t border-border/40 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-xs">
                 <button
                   onClick={() => handleBreadcrumbClick('root')}
-                  className="text-neutral-500 hover:text-neutral-800 transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Site
                 </button>
 
                 {building && (
                   <>
-                    <ChevronRight className="w-3 h-3 text-neutral-400" />
+                    <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
                     <button
                       onClick={() => handleBreadcrumbClick('building')}
-                      className={`transition-colors truncate ${level ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
+                      className={`transition-colors truncate ${level ? 'text-muted-foreground hover:text-foreground' : 'text-foreground font-medium'}`}
                     >
                       {building.name || 'Building'}
                     </button>
@@ -145,10 +175,10 @@ export const ViewerOverlay = ({
 
                 {level && (
                   <>
-                    <ChevronRight className="w-3 h-3 text-neutral-400" />
+                    <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
                     <button
                       onClick={() => handleBreadcrumbClick('level')}
-                      className={`transition-colors truncate ${zone ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-800 font-medium'}`}
+                      className={`transition-colors truncate ${zone ? 'text-muted-foreground hover:text-foreground' : 'text-foreground font-medium'}`}
                     >
                       {level.name || `Level ${level.level}`}
                     </button>
@@ -157,9 +187,9 @@ export const ViewerOverlay = ({
 
                 {zone && (
                   <>
-                    <ChevronRight className="w-3 h-3 text-neutral-400" />
+                    <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
                     <span
-                      className={`transition-colors truncate ${selectedNode ? 'text-neutral-500' : 'text-neutral-800 font-medium'}`}
+                      className={`transition-colors truncate ${selectedNode ? 'text-muted-foreground' : 'text-foreground font-medium'}`}
                     >
                       {zone.name}
                     </span>
@@ -168,8 +198,8 @@ export const ViewerOverlay = ({
 
                 {selectedNode && zone && (
                   <>
-                    <ChevronRight className="w-3 h-3 text-neutral-400" />
-                    <span className="text-neutral-800 font-medium truncate">
+                    <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                    <span className="text-foreground font-medium truncate">
                       {getNodeName(selectedNode)}
                     </span>
                   </>
@@ -181,161 +211,212 @@ export const ViewerOverlay = ({
 
         {/* Level List (only when building is selected) */}
         {building && levels.length > 0 && (
-          <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)] w-40">
-            <span className="text-xs text-neutral-500 px-2 pb-1">Levels</span>
-            {levels.map((lvl) => (
-              <button
-                key={lvl.id}
-                onClick={() => handleLevelClick(lvl.id)}
-                className={`text-left px-2 py-1 rounded text-sm transition-colors ${
-                  lvl.id === selection.levelId
-                    ? 'bg-blue-500 text-white'
-                    : 'text-neutral-700 hover:bg-neutral-100'
-                }`}
-              >
-                {lvl.name || `Level ${lvl.level}`}
-              </button>
-            ))}
+          <div className="pointer-events-auto flex flex-col rounded-2xl border border-border/40 bg-background/95 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out overflow-hidden w-48 py-1">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-3 py-2">Levels</span>
+            <div className="flex flex-col">
+              {levels.map((lvl) => {
+                const isSelected = lvl.id === selection.levelId;
+                return (
+                  <button
+                    key={lvl.id}
+                    onClick={() => handleLevelClick(lvl.id)}
+                    className={cn(
+                      "relative flex items-center h-8 w-full cursor-pointer group/row text-sm select-none border-b border-r border-border/50 border-r-transparent transition-all duration-200 px-3",
+                      isSelected
+                        ? "bg-accent/50 text-foreground border-r-white border-r-3"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className={cn(
+                        "w-4 h-4 flex items-center justify-center shrink-0 transition-all duration-200",
+                        !isSelected && "opacity-60 grayscale"
+                      )}>
+                        <Layers className="w-3.5 h-3.5" />
+                      </span>
+                      <div className="flex-1 min-w-0 truncate text-left">
+                        {lvl.name || `Level ${lvl.level}`}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Controls Panel - Top Right */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-        {/* Visibility Controls */}
-        {(canShowScans || canShowGuides) && (
-          <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
-            <span className="text-xs text-neutral-500 px-2 pb-1">Visibility</span>
+      {/* Controls Panel - Bottom Center */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 dark text-foreground">
+        <TooltipProvider delayDuration={0}>
+          <div className="pointer-events-auto flex flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out h-14">
+            {/* Theme Toggle */}
+            <button
+              className="shrink-0 flex items-center bg-accent/50 rounded-full p-1 border border-border/50 cursor-pointer h-[36px]"
+              onClick={() => useViewer.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}
+              type="button"
+              aria-label="Toggle theme"
+            >
+              <div className="relative flex">
+                {/* Sliding Background */}
+                <motion.div
+                  className="absolute inset-0 bg-white shadow-sm rounded-full dark:bg-white/20"
+                  initial={false}
+                  animate={{
+                    x: theme === "light" ? "100%" : "0%",
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 500,
+                    damping: 35,
+                  }}
+                  style={{ width: "50%" }}
+                />
+
+                {/* Dark Mode Icon */}
+                <div
+                  className={cn(
+                    "relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
+                    theme === "dark"
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Moon className="h-4 w-4" />
+                </div>
+
+                {/* Light Mode Icon */}
+                <div
+                  className={cn(
+                    "relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
+                    theme === "light"
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Sun className="h-4 w-4" />
+                </div>
+              </div>
+            </button>
+            
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* Scans and Guides Visibility */}
             {canShowScans && (
-              <button
+              <ActionButton
+                label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
+                tooltipSide="top"
+                className={showScans ? 'bg-white/10' : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5'}
                 onClick={() => useViewer.getState().setShowScans(!showScans)}
-                className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-                  showScans ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
-                }`}
+                size="icon"
+                variant="ghost"
               >
-                <Box className="w-4 h-4" />
-                3D Scans
-              </button>
+                <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+              </ActionButton>
             )}
+
             {canShowGuides && (
-              <button
+              <ActionButton
+                label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
+                tooltipSide="top"
+                className={showGuides ? 'bg-white/10' : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5'}
                 onClick={() => useViewer.getState().setShowGuides(!showGuides)}
-                className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-                  showGuides ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
-                }`}
+                size="icon"
+                variant="ghost"
               >
-                <Image className="w-4 h-4" />
-                Guides
-              </button>
+                <img alt="Guides" className="h-[28px] w-[28px] object-contain" src="/icons/floorplan.png" />
+              </ActionButton>
             )}
+
+            {(canShowScans || canShowGuides) && <div className="mx-1 h-5 w-px bg-border/40" />}
+
+            {/* Camera Mode */}
+            <ActionButton
+              label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
+              tooltipSide="top"
+              className={cameraMode === 'orthographic' ? 'bg-violet-500/20 text-violet-400' : 'hover:text-violet-400 hover:bg-white/5'}
+              onClick={() => useViewer.getState().setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
+              size="icon"
+              variant="ghost"
+            >
+              <Camera className="h-6 w-6" />
+            </ActionButton>
+
+            {/* Level Mode */}
+            <ActionButton
+              label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
+              tooltipSide="top"
+              className={levelMode !== 'stacked' ? 'bg-amber-500/20 text-amber-400' : 'hover:text-amber-400 hover:bg-white/5'}
+              onClick={() => {
+                if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
+                const modes: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
+                const nextIndex = (modes.indexOf(levelMode as any) + 1) % modes.length
+                useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
+              }}
+              size="icon"
+              variant="ghost"
+            >
+              {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
+              {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
+              {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-6 w-6" />}
+            </ActionButton>
+
+            {/* Wall Mode */}
+            <ActionButton
+              label={`Walls: ${wallModeConfig[wallMode as keyof typeof wallModeConfig].label}`}
+              tooltipSide="top"
+              className={wallMode !== 'cutaway' ? 'bg-white/10' : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5'}
+              onClick={() => {
+                const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
+                const nextIndex = (modes.indexOf(wallMode as any) + 1) % modes.length
+                useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
+              }}
+              size="icon"
+              variant="ghost"
+            >
+              {(() => {
+                const Icon = wallModeConfig[wallMode as keyof typeof wallModeConfig].icon
+                return <Icon className="h-[28px] w-[28px]" />
+              })()}
+            </ActionButton>
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* Camera Actions */}
+            <ActionButton
+              label="Orbit Left"
+              tooltipSide="top"
+              className="group hover:bg-white/5 hidden sm:inline-flex"
+              onClick={() => emitter.emit('camera-controls:orbit-ccw')}
+              size="icon"
+              variant="ghost"
+            >
+              <img alt="Orbit Left" className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100 -scale-x-100" src="/icons/rotate.png" />
+            </ActionButton>
+
+            <ActionButton
+              label="Orbit Right"
+              tooltipSide="top"
+              className="group hover:bg-white/5 hidden sm:inline-flex"
+              onClick={() => emitter.emit('camera-controls:orbit-cw')}
+              size="icon"
+              variant="ghost"
+            >
+              <img alt="Orbit Right" className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100" src="/icons/rotate.png" />
+            </ActionButton>
+
+            <ActionButton
+              label="Top View"
+              tooltipSide="top"
+              className="group hover:bg-white/5"
+              onClick={() => emitter.emit('camera-controls:top-view')}
+              size="icon"
+              variant="ghost"
+            >
+              <img alt="Top View" className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100" src="/icons/topview.png" />
+            </ActionButton>
           </div>
-        )}
-
-        {/* Camera Mode */}
-        <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
-          <span className="text-xs text-neutral-500 px-2 pb-1">Camera</span>
-          <button
-            onClick={() =>
-              useViewer
-                .getState()
-                .setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
-            }
-            className="flex items-center gap-2 px-2 py-1 rounded text-sm text-neutral-700 hover:bg-neutral-100 transition-colors"
-          >
-            {cameraMode === 'perspective' ? (
-              <Eye className="w-4 h-4" />
-            ) : (
-              <EyeOff className="w-4 h-4" />
-            )}
-            {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
-          </button>
-        </div>
-
-        {/* Level Mode */}
-        <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
-          <span className="text-xs text-neutral-500 px-2 pb-1">Level Mode</span>
-          <button
-            onClick={() => useViewer.getState().setLevelMode('stacked')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              levelMode === 'stacked'
-                ? 'bg-blue-500 text-white'
-                : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            Stacked
-          </button>
-          <button
-            onClick={() => useViewer.getState().setLevelMode('exploded')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              levelMode === 'exploded'
-                ? 'bg-blue-500 text-white'
-                : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <Layers2 className="w-4 h-4" />
-            Exploded
-          </button>
-          <button
-            onClick={() => useViewer.getState().setLevelMode('solo')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              levelMode === 'solo'
-                ? 'bg-blue-500 text-white'
-                : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <Diamond className="w-4 h-4" />
-            Solo
-          </button>
-        </div>
-
-        {/* Wall Mode */}
-        <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-lg p-2 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.03)]">
-          <span className="text-xs text-neutral-500 px-2 pb-1">Wall Mode</span>
-          <button
-            onClick={() => useViewer.getState().setWallMode('cutaway')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              wallMode === 'cutaway'
-                ? 'bg-blue-500 text-white'
-                : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <img
-              alt="Cutaway"
-              height={16}
-              src="/icons/wallcut.png"
-              width={16}
-              className="w-4 h-4"
-            />
-            Cutaway
-          </button>
-          <button
-            onClick={() => useViewer.getState().setWallMode('up')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              wallMode === 'up' ? 'bg-blue-500 text-white' : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <img
-              alt="Full Height"
-              height={16}
-              src="/icons/room.png"
-              width={16}
-              className="w-4 h-4"
-            />
-            Full Height
-          </button>
-          <button
-            onClick={() => useViewer.getState().setWallMode('down')}
-            className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors ${
-              wallMode === 'down'
-                ? 'bg-blue-500 text-white'
-                : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-          >
-            <img alt="Low" height={16} src="/icons/walllow.png" width={16} className="w-4 h-4" />
-            Low
-          </button>
-        </div>
+        </TooltipProvider>
       </div>
     </>
   )

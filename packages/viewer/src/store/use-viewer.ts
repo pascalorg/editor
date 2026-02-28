@@ -89,7 +89,7 @@ const useViewer = create<ViewerState>()(
       levelMode: "stacked",
       setLevelMode: (mode) => set({ levelMode: mode }),
 
-      wallMode: 'cutaway',
+      wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
 
       showScans: true,

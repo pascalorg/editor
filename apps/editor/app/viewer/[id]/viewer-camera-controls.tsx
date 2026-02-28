@@ -1,6 +1,6 @@
 'use client'
 
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -104,6 +104,54 @@ export const ViewerCameraControls = () => {
       true,
     )
   }, [targetNodeId, nodes])
+
+  useEffect(() => {
+    const handleTopView = () => {
+      if (!controls.current) return
+
+      const currentPolarAngle = controls.current.polarAngle
+
+      // Toggle: if already near top view (< 0.1 radians ≈ 5.7°), go back to 45°
+      // Otherwise, go to top view (0°)
+      const targetAngle = currentPolarAngle < 0.1 ? Math.PI / 4 : 0
+
+      controls.current.rotatePolarTo(targetAngle, true)
+    }
+
+    const handleOrbitCW = () => {
+      if (!controls.current) return
+
+      const currentAzimuth = controls.current.azimuthAngle
+      const currentPolar = controls.current.polarAngle
+      // Round to nearest 90° increment, then rotate 90° clockwise
+      const rounded = Math.round(currentAzimuth / (Math.PI / 2)) * (Math.PI / 2)
+      const target = rounded - Math.PI / 2
+
+      controls.current.rotateTo(target, currentPolar, true)
+    }
+
+    const handleOrbitCCW = () => {
+      if (!controls.current) return
+
+      const currentAzimuth = controls.current.azimuthAngle
+      const currentPolar = controls.current.polarAngle
+      // Round to nearest 90° increment, then rotate 90° counter-clockwise
+      const rounded = Math.round(currentAzimuth / (Math.PI / 2)) * (Math.PI / 2)
+      const target = rounded + Math.PI / 2
+
+      controls.current.rotateTo(target, currentPolar, true)
+    }
+
+    emitter.on('camera-controls:top-view', handleTopView)
+    emitter.on('camera-controls:orbit-cw', handleOrbitCW)
+    emitter.on('camera-controls:orbit-ccw', handleOrbitCCW)
+
+    return () => {
+      emitter.off('camera-controls:top-view', handleTopView)
+      emitter.off('camera-controls:orbit-cw', handleOrbitCW)
+      emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
+    }
+  }, [])
 
   const onTransitionStart = useCallback(() => {
     useViewer.getState().setCameraDragging(true)
