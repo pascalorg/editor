@@ -12,7 +12,7 @@ export const GroundOccluder = () => {
 
   const shape = useMemo(() => {
     const s = new THREE.Shape()
-    const size = 100000
+    const size = 1000
     // Create outer infinite plane
     s.moveTo(-size, -size)
     s.lineTo(size, -size)
@@ -64,7 +64,13 @@ export const GroundOccluder = () => {
   return (
     <mesh rotation-x={-Math.PI / 2} position-y={-0.05}>
       <shapeGeometry args={[shape]} />
-      <meshBasicMaterial color={bgColor} depthWrite={true} />
+      <meshBasicMaterial 
+        color={bgColor} 
+        depthWrite={true}
+        polygonOffset={true}
+        polygonOffsetFactor={1}
+        polygonOffsetUnits={1}
+      />
     </mesh>
   )
 }
