@@ -19,6 +19,7 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef4444,
@@ -219,6 +220,7 @@ export const DoorTool: React.FC = () => {
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
+      sfxEmitter.emit('sfx:item-place')
 
       event.stopPropagation()
     }

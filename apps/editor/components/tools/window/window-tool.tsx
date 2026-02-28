@@ -19,6 +19,7 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 
 // Shared edge material — reuse across renders, just toggle color
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -228,6 +229,7 @@ export const WindowTool: React.FC = () => {
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
+      sfxEmitter.emit('sfx:item-place')
 
       event.stopPropagation()
     }
