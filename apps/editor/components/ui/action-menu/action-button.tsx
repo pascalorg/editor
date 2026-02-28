@@ -12,11 +12,12 @@ interface ActionButtonProps extends React.ComponentProps<typeof Button> {
   shortcut?: string;
   isActive?: boolean;
   tooltipContent?: React.ReactNode;
+  tooltipSide?: "top" | "right" | "bottom" | "left";
 }
 
 export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   (
-    { className, children, label, shortcut, isActive, tooltipContent, ...props },
+    { className, children, label, shortcut, isActive, tooltipContent, tooltipSide, ...props },
     ref
   ) => {
     return (
@@ -47,7 +48,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent side={tooltipSide}>
           {tooltipContent || (
             <p>
               {label} {shortcut && `(${shortcut})`}
