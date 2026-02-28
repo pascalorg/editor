@@ -1,14 +1,16 @@
 "use client";
 
-import { Building2, Settings } from "lucide-react";
+import { Building2, Settings, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/primitives/tooltip";
 import { cn } from "@/lib/utils";
+import { useViewer } from "@pascal-app/viewer";
 
 export type PanelId = "site" | "settings";
 
@@ -28,10 +30,18 @@ export function IconRail({
   onPanelChange,
   className,
 }: IconRailProps) {
+  const theme = useViewer((state) => state.theme);
+  const setTheme = useViewer((state) => state.setTheme);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div
       className={cn(
-        "flex w-11 flex-col items-center gap-1 border-border/50 border-r py-2",
+        "flex h-full w-11 flex-col items-center gap-1 border-border/50 border-r py-2",
         className,
       )}
     >
@@ -80,6 +90,25 @@ export function IconRail({
           </Tooltip>
         );
       })}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Theme Toggle */}
+      {mounted && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-lg transition-all text-muted-foreground hover:bg-accent hover:text-accent-foreground mb-2"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              type="button"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Toggle theme</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
