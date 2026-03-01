@@ -779,13 +779,13 @@ function LayerToggle() {
     phase === "structure" && structureLayer === "zones" ? "zones" : "none";
 
   return (
-    <div className="flex items-center p-1 bg-accent/20 gap-1 border-b border-border/50 relative">
+    <div className="flex items-center p-1 bg-[#2C2C2E] gap-1 border-b border-border/50 relative">
       <button
         className={cn(
           "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
           activeTab === "structure"
             ? "text-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
         )}
         onClick={() => {
           setPhase("structure");
@@ -795,7 +795,7 @@ function LayerToggle() {
         {activeTab === "structure" && (
           <motion.div
             layoutId="layerToggleActiveBg"
-            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            className="absolute inset-0 bg-[#3e3e3e] shadow-sm ring-1 ring-border/50 rounded-md"
             transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
           />
         )}
@@ -819,7 +819,7 @@ function LayerToggle() {
           "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
           activeTab === "furnish"
             ? "text-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
         )}
         onClick={() => {
           setPhase("furnish");
@@ -828,7 +828,7 @@ function LayerToggle() {
         {activeTab === "furnish" && (
           <motion.div
             layoutId="layerToggleActiveBg"
-            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            className="absolute inset-0 bg-[#3e3e3e] shadow-sm ring-1 ring-border/50 rounded-md"
             transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
           />
         )}
@@ -852,7 +852,7 @@ function LayerToggle() {
           "relative flex-1 flex flex-col items-center justify-center py-2 rounded-md text-[10px] font-medium transition-all duration-200 cursor-pointer",
           activeTab === "zones"
             ? "text-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50"
+            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
         )}
         onClick={() => {
           setPhase("structure");
@@ -862,7 +862,7 @@ function LayerToggle() {
         {activeTab === "zones" && (
           <motion.div
             layoutId="layerToggleActiveBg"
-            className="absolute inset-0 bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 rounded-md"
+            className="absolute inset-0 bg-[#3e3e3e] shadow-sm ring-1 ring-border/50 rounded-md"
             transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
           />
         )}

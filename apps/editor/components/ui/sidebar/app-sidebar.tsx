@@ -131,7 +131,7 @@ export function AppSidebar() {
               
               {mounted && (
                 <button
-                  className="shrink-0 flex items-center bg-accent/50 rounded-full p-1 border border-border/50 cursor-pointer"
+                  className="shrink-0 flex items-center bg-black/20 rounded-full p-1 border border-border/50 cursor-pointer"
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                   type="button"
                   aria-label="Toggle theme"
@@ -139,7 +139,7 @@ export function AppSidebar() {
                   <div className="relative flex">
                     {/* Sliding Background */}
                     <motion.div
-                      className="absolute inset-0 bg-white shadow-sm rounded-full dark:bg-white/20"
+                      className="absolute inset-0 bg-[#3A3A3C] shadow-sm rounded-full"
                       initial={false}
                       animate={{
                         x: theme === "light" ? "100%" : "0%",
