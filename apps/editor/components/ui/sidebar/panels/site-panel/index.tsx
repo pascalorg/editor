@@ -958,7 +958,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode, isLast?: boolean }) {
           <button
             className={cn(
               "mr-2 size-3 shrink-0 rounded-sm border border-border/50 transition-all hover:scale-110 cursor-pointer",
-              !isSelected && "opacity-60 grayscale"
+              !isSelected && "opacity-40"
             )}
             onClick={(e) => e.stopPropagation()}
             style={{ backgroundColor: zone.color }}

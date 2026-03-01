@@ -11,7 +11,7 @@ import {
 } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -62,22 +62,13 @@ extend(THREE as any)
 interface ViewerProps {
   children?: React.ReactNode
   selectionManager?: 'default' | 'custom'
-  isEditor?: boolean
 }
 
 const Viewer: React.FC<ViewerProps> = ({
   children,
   selectionManager = 'default',
-  isEditor = false,
 }) => {
-  const setIsEditor = useViewer((state) => state.setIsEditor)
   const theme = useViewer((state) => state.theme)
-
-  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
-
-  useEffect(() => {
-    setIsEditor(isEditor)
-  }, [isEditor, setIsEditor])
 
   return (
     <Canvas

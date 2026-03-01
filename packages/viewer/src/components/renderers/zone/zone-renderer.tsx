@@ -1,11 +1,10 @@
-import { useRegistry, type ZoneNode, useScene } from '@pascal-app/core'
+import { useRegistry, type ZoneNode } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import useViewer from '../../../store/use-viewer'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -105,43 +104,6 @@ const createWallGeometry = (polygon: Array<[number, number]>): BufferGeometry =>
 
 export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const ref = useRef<Group>(null!)
-  const updateNode = useScene((s) => s.updateNode)
-  const isEditor = useViewer((state) => state.isEditor)
-
-  const [isEditing, setIsEditing] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const [editValue, setEditValue] = useState(node.name || '')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (isEditing) {
-      setEditValue(node.name || '')
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus()
-          inputRef.current.select()
-        }
-      }, 0)
-    }
-  }, [isEditing, node.name])
-
-  const handleSave = () => {
-    const trimmed = editValue.trim()
-    if (trimmed !== node.name) {
-      updateNode(node.id, { name: trimmed || 'Zone' })
-    }
-    setIsEditing(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSave()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setIsEditing(false)
-    }
-  }
 
   useRegistry(node.id, 'zone', ref)
 
@@ -215,71 +177,20 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   }
 
   return (
-    <group ref={ref} {...handlers} userData={{
-      labelPosition: [centroid[0], 1, centroid[1]]
-    }}>
-      <Html name="label" position={[centroid[0], 1, centroid[1]]} style={{
-        pointerEvents: isEditor ? 'auto' : 'none'
-      }}
-          zIndexRange={[10, 0]}>
+    <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
+      <Html
+        name="label"
+        position={[centroid[0], 1, centroid[1]]}
+        style={{ pointerEvents: 'none' }}
+        zIndexRange={[10, 0]}
+      >
         <div style={{
           transform: 'translate3d(-50%, -50%, 0)',
           width: 'max-content',
           color: 'white',
           textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'center',
-          cursor: isEditor && !isEditing ? 'text' : 'default',
-        }}
-        onMouseEnter={() => isEditor && setIsHovered(true)}
-        onMouseLeave={() => isEditor && setIsHovered(false)}
-        onClick={(e) => {
-          if (isEditor && !isEditing) {
-            e.stopPropagation()
-            setIsEditing(true)
-          }
         }}>
-          {isEditing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={handleSave}
-              placeholder="Zone"
-              style={{
-                background: 'transparent',
-                color: 'white',
-                textShadow: 'inherit',
-                border: 'none',
-                borderBottom: '1px solid white',
-                outline: 'none',
-                padding: 0,
-                margin: 0,
-                fontSize: 'inherit',
-                fontFamily: 'inherit',
-                width: `${Math.max(editValue.length, 4) + 1}ch`,
-                minWidth: '50px',
-                textAlign: 'center'
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <>
-              <span>{node.name}</span>
-              {isEditor && (
-                <div style={{ opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                    <path d="m15 5 4 4"/>
-                  </svg>
-                </div>
-              )}
-            </>
-          )}
+          <span>{node.name}</span>
         </div>
       </Html>
       {/* Floor fill */}

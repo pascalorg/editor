@@ -1,13 +1,10 @@
 import { type SiteNode, useRegistry } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 
 const Y_OFFSET = 0.01
-const LINE_HEIGHT = 0.5
 
 /**
  * Creates simple line geometry for site boundary
@@ -62,22 +59,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return createBoundaryLineGeometry(node.polygon.points)
   }, [node?.polygon?.points])
 
-  const isEditor = useViewer((state) => state.isEditor)
-
-  // Edge distances for labels
-  const edges = useMemo(() => {
-    if (!isEditor) return []
-    const polygon = node?.polygon?.points ?? []
-    if (polygon.length < 2) return []
-    return polygon.map(([x1, z1], i) => {
-      const [x2, z2] = polygon[(i + 1) % polygon.length]!
-      const midX = (x1! + x2) / 2
-      const midZ = (z1! + z2) / 2
-      const dist = Math.sqrt((x2 - x1!) ** 2 + (z2 - z1!) ** 2)
-      return { midX, midZ, dist }
-    })
-  }, [node?.polygon?.points, isEditor])
-
   const handlers = useNodeEvents(node, 'site')
 
   if (!node || !floorShape || !lineGeometry) {
@@ -106,21 +87,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <lineBasicMaterial color="#f59e0b" linewidth={2} transparent opacity={0.6} />
       </line>
 
-      {/* Edge distance labels */}
-      {isEditor && edges.map((edge, i) => (
-        <Html
-          center
-          key={`edge-${i}`}
-          position={[edge.midX, 0.5, edge.midZ]}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-          zIndexRange={[10, 0]}
-          occlude
-        >
-          <div className="whitespace-nowrap rounded bg-black/75 px-1.5 py-0.5 font-mono text-white text-xs backdrop-blur-sm">
-            {edge.dist.toFixed(2)}m
-          </div>
-        </Html>
-      ))}
     </group>
   )
 }

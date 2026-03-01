@@ -1,6 +1,14 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, ItemNode, WindowNode, DoorNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  DoorNode,
+  ItemNode,
+  sceneRegistry,
+  useScene,
+  WindowNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
@@ -18,7 +26,6 @@ export function FloatingActionMenu() {
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
-  const isEditor = useViewer((state) => state.isEditor)
 
   const groupRef = useRef<THREE.Group>(null)
 
@@ -42,61 +49,70 @@ export function FloatingActionMenu() {
     }
   })
 
-  const handleMove = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!node) return
-    sfxEmitter.emit('sfx:item-pick')
-    if (node.type === 'item' || node.type === 'window' || node.type === 'door') {
-      setMovingNode(node as any)
-    }
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
-
-  const handleDuplicate = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!node || !node.parentId) return
-    sfxEmitter.emit('sfx:item-pick')
-    useScene.temporal.getState().pause()
-    
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-    
-    let duplicate: AnyNode | null = null
-    try {
-      if (node.type === 'door') {
-        duplicate = DoorNode.parse(duplicateInfo)
-      } else if (node.type === 'window') {
-        duplicate = WindowNode.parse(duplicateInfo)
-      } else if (node.type === 'item') {
-        duplicate = ItemNode.parse(duplicateInfo)
-      }
-    } catch (error) {
-      console.error('Failed to parse duplicate', error)
-      return
-    }
-    
-    if (duplicate) {
-      if (duplicate.type === 'door' || duplicate.type === 'window') {
-        useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-      }
-      if (duplicate.type === 'item' || duplicate.type === 'window' || duplicate.type === 'door') {
-        setMovingNode(duplicate as any)
+  const handleMove = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node) return
+      sfxEmitter.emit('sfx:item-pick')
+      if (node.type === 'item' || node.type === 'window' || node.type === 'door') {
+        setMovingNode(node as any)
       }
       setSelection({ selectedIds: [] })
-    }
-  }, [node, setMovingNode, setSelection])
+    },
+    [node, setMovingNode, setSelection],
+  )
 
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!selectedId || !node) return
-    sfxEmitter.emit('sfx:item-delete')
-    deleteNode(selectedId as AnyNodeId)
-    if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, node, deleteNode, setSelection])
+  const handleDuplicate = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node || !node.parentId) return
+      sfxEmitter.emit('sfx:item-pick')
+      useScene.temporal.getState().pause()
 
-  if (!isEditor || !selectedId || !node || !isValidType) return null
+      let duplicateInfo = structuredClone(node) as any
+      delete duplicateInfo.id
+      duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+
+      let duplicate: AnyNode | null = null
+      try {
+        if (node.type === 'door') {
+          duplicate = DoorNode.parse(duplicateInfo)
+        } else if (node.type === 'window') {
+          duplicate = WindowNode.parse(duplicateInfo)
+        } else if (node.type === 'item') {
+          duplicate = ItemNode.parse(duplicateInfo)
+        }
+      } catch (error) {
+        console.error('Failed to parse duplicate', error)
+        return
+      }
+
+      if (duplicate) {
+        if (duplicate.type === 'door' || duplicate.type === 'window') {
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+        }
+        if (duplicate.type === 'item' || duplicate.type === 'window' || duplicate.type === 'door') {
+          setMovingNode(duplicate as any)
+        }
+        setSelection({ selectedIds: [] })
+      }
+    },
+    [node, setMovingNode, setSelection],
+  )
+
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!selectedId || !node) return
+      sfxEmitter.emit('sfx:item-delete')
+      deleteNode(selectedId as AnyNodeId)
+      if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedId, node, deleteNode, setSelection],
+  )
+
+  if (!selectedId || !node || !isValidType) return null
 
   return (
     <group ref={groupRef}>
@@ -105,10 +121,10 @@ export function FloatingActionMenu() {
         zIndexRange={[100, 0]}
         style={{
           pointerEvents: 'auto',
-          touchAction: 'none'
+          touchAction: 'none',
         }}
       >
-        <div 
+        <div
           className="flex items-center gap-1 p-1 rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
