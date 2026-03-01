@@ -2,13 +2,18 @@
 
 import { type AnyNode, type AnyNodeId, DoorNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, FlipHorizontal2, Move, Trash2, X } from 'lucide-react'
-import Image from 'next/image'
+import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
-import { NumberInput } from '@/components/ui/primitives/number-input'
-import { Switch } from '@/components/ui/primitives/switch'
+
+import { PanelWrapper } from './panel-wrapper'
+import { PanelSection } from '../controls/panel-section'
+import { SliderControl } from '../controls/slider-control'
+import { MetricControl } from '../controls/metric-control'
+import { ToggleControl } from '../controls/toggle-control'
+import { SegmentedControl } from '../controls/segmented-control'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 
 export function DoorPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -136,509 +141,366 @@ export function DoorPanel() {
   const normHeights = node.segments.map(seg => seg.heightRatio / hSum)
 
   return (
-    <div className="pointer-events-auto fixed top-20 right-4 z-50 flex w-82 flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md max-h-[calc(100dvh-100px)]">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border/50 p-3 bg-white/50 dark:bg-transparent">
-        <div className="flex items-center gap-2 min-w-0">
-          <Image src="/icons/door.png" alt="" width={16} height={16} className="shrink-0 object-contain" />
-          <h2 className="font-semibold font-barlow text-foreground text-sm truncate">
-            {node.name || "Door"}
-          </h2>
+    <PanelWrapper
+      title={node.name || "Door"}
+      icon="/icons/door.png"
+      onClose={handleClose}
+      width={320}
+    >
+      <PanelSection title="Position">
+        <SliderControl
+          label={<>X<sub className="text-[11px] ml-[1px] opacity-70">wall</sub></>}
+          value={Math.round(node.position[0] * 100) / 100}
+          onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
+          min={-10}
+          max={10}
+          precision={2}
+          step={0.1}
+          unit="m"
+        />
+        <div className="pt-2 pb-1 px-1">
+          <ActionButton 
+            icon={<FlipHorizontal2 className="h-4 w-4" />} 
+            label="Flip Side" 
+            onClick={handleFlip} 
+            className="w-full"
+          />
         </div>
-        <button
-          type="button"
-          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground cursor-pointer"
-          onClick={handleClose}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+      </PanelSection>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
+      <PanelSection title="Dimensions">
+        <SliderControl
+          label="Width"
+          value={Math.round(node.width * 100) / 100}
+          onChange={(v) => handleUpdate({ width: v })}
+          min={0.5}
+          max={3}
+          precision={2}
+          step={0.05}
+          unit="m"
+        />
+        <SliderControl
+          label="Height"
+          value={Math.round(node.height * 100) / 100}
+          onChange={(v) => handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })}
+          min={1.0}
+          max={4}
+          precision={2}
+          step={0.05}
+          unit="m"
+        />
+      </PanelSection>
 
-        {/* Position */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Position
-          </label>
-          <div className="grid grid-cols-1 gap-2">
-            <NumberInput
-              label="X along wall"
-              value={Math.round(node.position[0] * 100) / 100}
-              onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
+      <PanelSection title="Frame">
+        <SliderControl
+          label="Thickness"
+          value={Math.round(node.frameThickness * 1000) / 1000}
+          onChange={(v) => handleUpdate({ frameThickness: v })}
+          min={0.01}
+          max={0.2}
+          precision={3}
+          step={0.01}
+          unit="m"
+        />
+        <SliderControl
+          label="Depth"
+          value={Math.round(node.frameDepth * 1000) / 1000}
+          onChange={(v) => handleUpdate({ frameDepth: v })}
+          min={0.01}
+          max={0.3}
+          precision={3}
+          step={0.01}
+          unit="m"
+        />
+      </PanelSection>
+
+      <PanelSection title="Content Padding">
+        <SliderControl
+          label="Horizontal"
+          value={Math.round(node.contentPadding[0] * 1000) / 1000}
+          onChange={(v) => handleUpdate({ contentPadding: [v, node.contentPadding[1]] })}
+          min={0}
+          max={0.2}
+          precision={3}
+          step={0.005}
+          unit="m"
+        />
+        <SliderControl
+          label="Vertical"
+          value={Math.round(node.contentPadding[1] * 1000) / 1000}
+          onChange={(v) => handleUpdate({ contentPadding: [node.contentPadding[0], v] })}
+          min={0}
+          max={0.2}
+          precision={3}
+          step={0.005}
+          unit="m"
+        />
+      </PanelSection>
+
+      <PanelSection title="Swing">
+        <div className="flex flex-col gap-2 px-1 pb-1">
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">Hinges Side</span>
+            <SegmentedControl
+              value={node.hingesSide}
+              onChange={(v) => handleUpdate({ hingesSide: v })}
+              options={[
+                { label: 'Left', value: 'left' },
+                { label: 'Right', value: 'right' },
+              ]}
+            />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">Direction</span>
+            <SegmentedControl
+              value={node.swingDirection}
+              onChange={(v) => handleUpdate({ swingDirection: v })}
+              options={[
+                { label: 'Inward', value: 'inward' },
+                { label: 'Outward', value: 'outward' },
+              ]}
+            />
+          </div>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Threshold">
+        <ToggleControl
+          label="Enable Threshold"
+          checked={node.threshold}
+          onChange={(checked) => handleUpdate({ threshold: checked })}
+        />
+        {node.threshold && (
+          <div className="mt-1 flex flex-col gap-1">
+            <SliderControl
+              label="Height"
+              value={Math.round(node.thresholdHeight * 1000) / 1000}
+              onChange={(v) => handleUpdate({ thresholdHeight: v })}
+              min={0.005}
+              max={0.1}
+              precision={3}
+              step={0.005}
+              unit="m"
+            />
+          </div>
+        )}
+      </PanelSection>
+
+      <PanelSection title="Handle">
+        <ToggleControl
+          label="Enable Handle"
+          checked={node.handle}
+          onChange={(checked) => handleUpdate({ handle: checked })}
+        />
+        {node.handle && (
+          <div className="mt-1 flex flex-col gap-1">
+            <SliderControl
+              label="Height"
+              value={Math.round(node.handleHeight * 100) / 100}
+              onChange={(v) => handleUpdate({ handleHeight: v })}
+              min={0.5}
+              max={node.height - 0.1}
               precision={2}
+              step={0.05}
+              unit="m"
             />
-          </div>
-          <button
-            type="button"
-            className="w-full flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            onClick={handleFlip}
-          >
-            <FlipHorizontal2 className="h-3.5 w-3.5" />
-            Flip Side
-          </button>
-        </div>
-
-        {/* Dimensions */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Dimensions
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Width"
-                value={Math.round(node.width * 100) / 100}
-                onChange={(v) => handleUpdate({ width: v })}
-                min={0.5}
-                precision={2}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Height"
-                value={Math.round(node.height * 100) / 100}
-                onChange={(v) => handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })}
-                min={1.0}
-                precision={2}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Frame */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Frame
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Thickness"
-                value={Math.round(node.frameThickness * 1000) / 1000}
-                onChange={(v) => handleUpdate({ frameThickness: v })}
-                min={0.01}
-                precision={3}
-                step={0.01}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Depth"
-                value={Math.round(node.frameDepth * 1000) / 1000}
-                onChange={(v) => handleUpdate({ frameDepth: v })}
-                min={0.01}
-                precision={3}
-                step={0.01}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Padding */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Content Padding
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Horizontal"
-                value={Math.round(node.contentPadding[0] * 1000) / 1000}
-                onChange={(v) => handleUpdate({ contentPadding: [v, node.contentPadding[1]] })}
-                min={0}
-                precision={3}
-                step={0.005}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Vertical"
-                value={Math.round(node.contentPadding[1] * 1000) / 1000}
-                onChange={(v) => handleUpdate({ contentPadding: [node.contentPadding[0], v] })}
-                min={0}
-                precision={3}
-                step={0.005}
-                className="flex-1"
-              />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Swing */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Swing
-          </label>
-          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <span className="text-xs text-muted-foreground">Hinges</span>
-              <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
-                {(['left', 'right'] as const).map((side) => (
-                  <button
-                    key={side}
-                    type="button"
-                    onClick={() => handleUpdate({ hingesSide: side })}
-                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium cursor-pointer transition-all duration-200 ${
-                      node.hingesSide === side
-                        ? 'bg-white dark:bg-background shadow-sm ring-1 ring-black/5 dark:ring-white/10 text-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-accent/50'
-                    }`}
-                  >
-                    {side.charAt(0).toUpperCase() + side.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-muted-foreground">Direction</span>
-              <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
-                {(['inward', 'outward'] as const).map((dir) => (
-                  <button
-                    key={dir}
-                    type="button"
-                    onClick={() => handleUpdate({ swingDirection: dir })}
-                    className={`flex-1 rounded border px-2 py-1 text-xs cursor-pointer transition-colors ${
-                      node.swingDirection === dir
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border hover:bg-accent'
-                    }`}
-                  >
-                    {dir.charAt(0).toUpperCase() + dir.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Threshold */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-              Threshold
-            </label>
-            <Switch
-              checked={node.threshold}
-              onCheckedChange={(checked) => handleUpdate({ threshold: checked })}
-            />
-          </div>
-          {node.threshold && (
-            <div className="flex items-center gap-1.5">
-              <NumberInput
-                label="Height"
-                value={Math.round(node.thresholdHeight * 1000) / 1000}
-                onChange={(v) => handleUpdate({ thresholdHeight: v })}
-                min={0.005}
-                precision={3}
-                step={0.005}
-                className="flex-1"
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">Handle Side</span>
+              <SegmentedControl
+                value={node.handleSide}
+                onChange={(v) => handleUpdate({ handleSide: v })}
+                options={[
+                  { label: 'Left', value: 'left' },
+                  { label: 'Right', value: 'right' },
+                ]}
               />
-              <span className="text-muted-foreground text-xs shrink-0">m</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </PanelSection>
 
-        {/* Handle */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-              Handle
-            </label>
-            <Switch
-              checked={node.handle}
-              onCheckedChange={(checked) => handleUpdate({ handle: checked })}
+      <PanelSection title="Hardware">
+        <ToggleControl
+          label="Door Closer"
+          checked={node.doorCloser}
+          onChange={(checked) => handleUpdate({ doorCloser: checked })}
+        />
+        <ToggleControl
+          label="Panic Bar"
+          checked={node.panicBar}
+          onChange={(checked) => handleUpdate({ panicBar: checked })}
+        />
+        {node.panicBar && (
+          <div className="mt-1 flex flex-col gap-1">
+            <SliderControl
+              label="Bar Height"
+              value={Math.round(node.panicBarHeight * 100) / 100}
+              onChange={(v) => handleUpdate({ panicBarHeight: v })}
+              min={0.5}
+              max={node.height - 0.1}
+              precision={2}
+              step={0.05}
+              unit="m"
             />
           </div>
-          {node.handle && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-1.5">
-                <NumberInput
-                  label="Height"
-                  value={Math.round(node.handleHeight * 100) / 100}
-                  onChange={(v) => handleUpdate({ handleHeight: v })}
-                  min={0.5}
-                  max={node.height - 0.1}
-                  precision={2}
-                  step={0.05}
-                  className="flex-1"
-                />
-                <span className="text-muted-foreground text-xs shrink-0">m</span>
+        )}
+      </PanelSection>
+
+      <PanelSection title="Segments">
+        {node.segments.map((seg, i) => {
+          const numCols = seg.columnRatios.length
+          const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
+          const normCols = seg.columnRatios.map(r => r / colSum)
+          return (
+            <div key={i} className="mb-2 flex flex-col gap-1">
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-xs font-medium text-white/80">Segment {i + 1}</span>
               </div>
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground">Side</span>
-                <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
-                  {(['left', 'right'] as const).map((side) => (
-                    <button
-                      key={side}
-                      type="button"
-                      onClick={() => handleUpdate({ handleSide: side })}
-                      className={`flex-1 rounded border px-2 py-1 text-xs cursor-pointer transition-colors ${
-                        node.handleSide === side
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:bg-accent'
-                      }`}
-                    >
-                      {side.charAt(0).toUpperCase() + side.slice(1)}
-                    </button>
+              
+              <SegmentedControl
+                value={seg.type}
+                onChange={(t) => {
+                  const updated = node.segments.map((s, idx) => idx === i ? { ...s, type: t } : s)
+                  handleUpdate({ segments: updated })
+                }}
+                options={[
+                  { label: 'Panel', value: 'panel' },
+                  { label: 'Glass', value: 'glass' },
+                  { label: 'Empty', value: 'empty' },
+                ]}
+              />
+
+              <SliderControl
+                label="Height"
+                value={Math.round(normHeights[i]! * 100 * 10) / 10}
+                onChange={(v) => setSegmentHeightRatio(i, v / 100)}
+                min={5}
+                max={95}
+                precision={1}
+                step={1}
+                unit="%"
+              />
+
+              <SliderControl
+                label="Columns"
+                value={numCols}
+                onChange={(v) => {
+                  const n = Math.max(1, Math.min(8, Math.round(v)))
+                  const updated = node.segments.map((s, idx) =>
+                    idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
+                  )
+                  handleUpdate({ segments: updated })
+                }}
+                min={1}
+                max={8}
+                precision={0}
+                step={1}
+              />
+
+              {numCols > 1 && (
+                <div className="mt-1 border-t border-border/50 pt-1">
+                  {normCols.map((ratio, ci) => (
+                    <SliderControl
+                      key={`c-${ci}`}
+                      label={`C${ci + 1}`}
+                      value={Math.round(ratio * 100 * 10) / 10}
+                      onChange={(v) => setSegmentColumnRatio(i, ci, v / 100)}
+                      min={5}
+                      max={95}
+                      precision={1}
+                      step={1}
+                      unit="%"
+                    />
                   ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Hardware */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Hardware
-          </label>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">Door Closer</span>
-              <Switch
-                checked={node.doorCloser}
-                onCheckedChange={(checked) => handleUpdate({ doorCloser: checked })}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">Panic Bar</span>
-              <Switch
-                checked={node.panicBar}
-                onCheckedChange={(checked) => handleUpdate({ panicBar: checked })}
-              />
-            </div>
-            {node.panicBar && (
-              <div className="flex items-center gap-1.5">
-                <NumberInput
-                  label="Bar height"
-                  value={Math.round(node.panicBarHeight * 100) / 100}
-                  onChange={(v) => handleUpdate({ panicBarHeight: v })}
-                  min={0.5}
-                  max={node.height - 0.1}
-                  precision={2}
-                  step={0.05}
-                  className="flex-1"
-                />
-                <span className="text-muted-foreground text-xs shrink-0">m</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Segments */}
-        <div className="space-y-2">
-          <label className="font-medium font-barlow text-muted-foreground text-xs uppercase tracking-wide">
-            Leaf segments (top → bottom)
-          </label>
-          {node.segments.map((seg, i) => {
-            const numCols = seg.columnRatios.length
-            const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
-            const normCols = seg.columnRatios.map(r => r / colSum)
-            return (
-              <div key={i} className="rounded border border-border p-2 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Segment {i + 1}</span>
-                  <div className="flex gap-1 p-1 bg-accent/50 rounded-lg">
-                    {(['panel', 'glass', 'empty'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => {
-                          const updated = node.segments.map((s, idx) =>
-                            idx === i ? { ...s, type: t } : s,
-                          )
-                          handleUpdate({ segments: updated })
-                        }}
-                        className={`rounded border px-1.5 py-0.5 text-xs cursor-pointer transition-colors ${
-                          seg.type === t
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border hover:bg-accent'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <NumberInput
-                    label="Height"
-                    value={Math.round(normHeights[i]! * 100 * 10) / 10}
-                    onChange={(v) => setSegmentHeightRatio(i, v / 100)}
-                    min={5}
-                    max={95}
-                    precision={1}
-                    step={1}
-                    className="flex-1"
-                  />
-                  <span className="text-muted-foreground text-xs shrink-0">%</span>
-                </div>
-                {/* Columns */}
-                <div className="space-y-1">
-                  <NumberInput
-                    label="Columns"
-                    value={numCols}
+                  <SliderControl
+                    label="Divider"
+                    value={Math.round(seg.dividerThickness * 1000) / 1000}
                     onChange={(v) => {
-                      const n = Math.max(1, Math.min(8, Math.round(v)))
                       const updated = node.segments.map((s, idx) =>
-                        idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
+                        idx === i ? { ...s, dividerThickness: v } : s,
                       )
                       handleUpdate({ segments: updated })
                     }}
-                    min={1}
-                    max={8}
-                    precision={0}
-                    step={1}
+                    min={0.005}
+                    max={0.1}
+                    precision={3}
+                    step={0.005}
+                    unit="m"
                   />
-                  {numCols > 1 && (
-                    <div className="space-y-1 pl-1">
-                      {normCols.map((ratio, ci) => (
-                        <div key={ci} className="flex items-center gap-1.5">
-                          <NumberInput
-                            label={`C${ci + 1}`}
-                            value={Math.round(ratio * 100 * 10) / 10}
-                            onChange={(v) => setSegmentColumnRatio(i, ci, v / 100)}
-                            min={5}
-                            max={95}
-                            precision={1}
-                            step={1}
-                            className="flex-1"
-                          />
-                          <span className="text-muted-foreground text-xs shrink-0">%</span>
-                        </div>
-                      ))}
-                      <div className="flex items-center gap-1.5">
-                        <NumberInput
-                          label="Divider"
-                          value={Math.round(seg.dividerThickness * 1000) / 1000}
-                          onChange={(v) => {
-                            const updated = node.segments.map((s, idx) =>
-                              idx === i ? { ...s, dividerThickness: v } : s,
-                            )
-                            handleUpdate({ segments: updated })
-                          }}
-                          min={0.005}
-                          precision={3}
-                          step={0.005}
-                          className="flex-1"
-                        />
-                        <span className="text-muted-foreground text-xs shrink-0">m</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
-                {seg.type === 'panel' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <NumberInput
-                        label="Inset"
-                        value={Math.round(seg.panelInset * 1000) / 1000}
-                        onChange={(v) => {
-                          const updated = node.segments.map((s, idx) =>
-                            idx === i ? { ...s, panelInset: v } : s,
-                          )
-                          handleUpdate({ segments: updated })
-                        }}
-                        min={0}
-                        precision={3}
-                        step={0.005}
-                        className="flex-1"
-                      />
-                      <span className="text-muted-foreground text-xs shrink-0">m</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <NumberInput
-                        label="Depth"
-                        value={Math.round(seg.panelDepth * 1000) / 1000}
-                        onChange={(v) => {
-                          const updated = node.segments.map((s, idx) =>
-                            idx === i ? { ...s, panelDepth: v } : s,
-                          )
-                          handleUpdate({ segments: updated })
-                        }}
-                        min={0}
-                        precision={3}
-                        step={0.005}
-                        className="flex-1"
-                      />
-                      <span className="text-muted-foreground text-xs shrink-0">m</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-              onClick={() => {
-                const updated = [
-                  ...node.segments,
-                  { type: 'panel' as const, heightRatio: 1, columnRatios: [1], dividerThickness: 0.03, panelDepth: 0.01, panelInset: 0.04 },
-                ]
-                handleUpdate({ segments: updated })
-              }}
-            >
-              + Add segment
-            </button>
-            {node.segments.length > 1 && (
-              <button
-                type="button"
-                className="flex-1 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                onClick={() => {
-                  handleUpdate({ segments: node.segments.slice(0, -1) })
-                }}
-              >
-                − Remove last
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+              )}
 
-      {/* Action Buttons */}
-      <div className="border-t border-border/50 p-3 bg-white/50 dark:bg-transparent">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            onClick={handleMove}
-          >
-            <Move className="h-3.5 w-3.5" />
-            <span>Move</span>
-          </button>
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            onClick={handleDuplicate}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            <span>Duplicate</span>
-          </button>
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md border border-neutral-200/60 dark:border-border/50 bg-white dark:bg-background shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] px-2 py-1.5 text-xs font-medium font-barlow text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete</span>
-          </button>
+              {seg.type === 'panel' && (
+                <div className="mt-1 border-t border-border/50 pt-1">
+                  <SliderControl
+                    label="Inset"
+                    value={Math.round(seg.panelInset * 1000) / 1000}
+                    onChange={(v) => {
+                      const updated = node.segments.map((s, idx) =>
+                        idx === i ? { ...s, panelInset: v } : s,
+                      )
+                      handleUpdate({ segments: updated })
+                    }}
+                    min={0}
+                    max={0.1}
+                    precision={3}
+                    step={0.005}
+                    unit="m"
+                  />
+                  <SliderControl
+                    label="Depth"
+                    value={Math.round(seg.panelDepth * 1000) / 1000}
+                    onChange={(v) => {
+                      const updated = node.segments.map((s, idx) =>
+                        idx === i ? { ...s, panelDepth: v } : s,
+                      )
+                      handleUpdate({ segments: updated })
+                    }}
+                    min={0}
+                    max={0.1}
+                    precision={3}
+                    step={0.005}
+                    unit="m"
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        <div className="flex gap-1.5 px-1 pt-1">
+          <ActionButton 
+            label="+ Add Segment" 
+            onClick={() => {
+              const updated = [
+                ...node.segments,
+                { type: 'panel' as const, heightRatio: 1, columnRatios: [1], dividerThickness: 0.03, panelDepth: 0.01, panelInset: 0.04 },
+              ]
+              handleUpdate({ segments: updated })
+            }}
+          />
+          {node.segments.length > 1 && (
+            <ActionButton 
+              label="- Remove" 
+              onClick={() => handleUpdate({ segments: node.segments.slice(0, -1) })}
+              className="text-white/60 hover:text-white"
+            />
+          )}
         </div>
-      </div>
-    </div>
+      </PanelSection>
+
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={handleDuplicate} />
+          <ActionButton 
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />} 
+            label="Delete" 
+            onClick={handleDelete} 
+            className="hover:bg-red-500/20"
+          />
+        </ActionGroup>
+      </PanelSection>
+    </PanelWrapper>
   )
 }
