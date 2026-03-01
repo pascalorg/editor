@@ -24,6 +24,7 @@ import { ExportManager } from './export-manager'
 import { FloatingActionMenu } from './floating-action-menu'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
+import { SiteEdgeLabels } from './site-edge-labels'
 import { ThumbnailGenerator } from './thumbnail-generator'
 
 // Load default scene initially (will be replaced when project loads)
@@ -118,6 +119,7 @@ export default function Editor({ projectId }: EditorProps) {
         <ToolManager />
         <CustomCameraControls />
         <ThumbnailGenerator projectId={projectId} />
+        <SiteEdgeLabels />
       </Viewer>
     </div>
   )
