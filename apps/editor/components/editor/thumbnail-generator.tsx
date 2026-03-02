@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, useScene } from '@pascal-app/core'
+import { emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { snapLevelsToTruePositions } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -58,8 +58,26 @@ export const ThumbnailGenerator = ({ projectId: propProjectId }: ThumbnailGenera
       // Snap levels to true stacked positions so the thumbnail always shows a clean view,
       // regardless of the current levelMode (exploded, solo, etc.)
       const restoreLevels = snapLevelsToTruePositions()
+
+      // Hide guides and scans — they are reference overlays, not part of the architectural model
+      const visibilitySnapshot = new Map<string, boolean>()
+      for (const type of ['scan', 'guide'] as const) {
+        sceneRegistry.byType[type].forEach((id) => {
+          const obj = sceneRegistry.nodes.get(id)
+          if (obj) {
+            visibilitySnapshot.set(id, obj.visible)
+            obj.visible = false
+          }
+        })
+      }
+
       gl.render(scene, thumbnailCamera)
+
       restoreLevels()
+      visibilitySnapshot.forEach((wasVisible, id) => {
+        const obj = sceneRegistry.nodes.get(id)
+        if (obj) obj.visible = wasVisible
+      })
 
       // Center-crop the canvas to the thumbnail aspect ratio, then scale — avoids deformation
       const srcAspect = width / height
