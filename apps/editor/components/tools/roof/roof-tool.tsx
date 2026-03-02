@@ -9,6 +9,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Group, Vector3 } from 'three'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -210,7 +211,7 @@ export const RoofTool: React.FC = () => {
 
       {/* Outline showing rectangle being drawn (Ground) */}
       {/* @ts-ignore */}
-      <line ref={outlineRef} frustumCulled={false} renderOrder={1} visible={false}>
+      <line ref={outlineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
         <bufferGeometry />
         <lineBasicNodeMaterial color="#818cf8" linewidth={2} depthTest={false} depthWrite={false} opacity={0.3} transparent />
       </line>
@@ -227,6 +228,7 @@ export const RoofTool: React.FC = () => {
       {/* Thin preview fill when drawing (Ground) */}
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
         <mesh
+          layers={EDITOR_LAYER}
           position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
           rotation={[-Math.PI / 2, 0, 0]}
         >

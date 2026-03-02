@@ -11,6 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import {
@@ -204,27 +205,15 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
         useScene.getState().deleteNode(movingDoorNode.id)
         useScene.temporal.getState().resume()
 
+        const cloned = structuredClone(movingDoorNode) as any
+        delete cloned.id
         const node = DoorNode.parse({
+          ...cloned,
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
           wallId: event.node.id,
           parentId: event.node.id,
-          width: movingDoorNode.width,
-          height: movingDoorNode.height,
-          frameThickness: movingDoorNode.frameThickness,
-          frameDepth: movingDoorNode.frameDepth,
-          threshold: movingDoorNode.threshold,
-          thresholdHeight: movingDoorNode.thresholdHeight,
-          hingesSide: movingDoorNode.hingesSide,
-          swingDirection: movingDoorNode.swingDirection,
-          segments: movingDoorNode.segments,
-          handle: movingDoorNode.handle,
-          handleHeight: movingDoorNode.handleHeight,
-          handleSide: movingDoorNode.handleSide,
-          doorCloser: movingDoorNode.doorCloser,
-          panicBar: movingDoorNode.panicBar,
-          panicBarHeight: movingDoorNode.panicBarHeight,
         })
         useScene.getState().createNode(node, event.node.id as AnyNodeId)
         placedId = node.id
@@ -348,7 +337,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments geometry={edgesGeo} material={edgeMaterial} />
+      <lineSegments geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
     </group>
   )
 }

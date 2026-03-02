@@ -2,14 +2,13 @@
 
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, Vector2 } from 'three'
-
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '@/hooks/use-grid-events'
+import { EDITOR_LAYER } from '@/lib/constants'
 
 export const Grid = ({
   cellSize = 0.5,
@@ -103,16 +102,15 @@ export const Grid = ({
       depthWrite: false,
     })
   }, [
-    cellSize,
-    cellThickness,
-    effectiveCellColor,
-    sectionSize,
-    sectionThickness,
-    effectiveSectionColor,
-    fadeDistance,
-    fadeStrength,
-    revealRadius,
-    theme,
+    cellSize, 
+    cellThickness, 
+    effectiveCellColor, 
+    sectionSize, 
+    sectionThickness, 
+    effectiveSectionColor, 
+    fadeDistance, 
+    fadeStrength, 
+    revealRadius
   ])
 
   const gridRef = useRef<Mesh>(null!)
@@ -150,7 +148,7 @@ export const Grid = ({
   const showGrid = useViewer((state) => state.showGrid)
 
   return (
-    <mesh rotation-x={-Math.PI / 2} material={material} ref={gridRef} visible={showGrid}>
+    <mesh rotation-x={-Math.PI / 2} material={material} ref={gridRef} visible={showGrid} layers={EDITOR_LAYER}>
       <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
     </mesh>
   )

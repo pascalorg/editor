@@ -68,29 +68,10 @@ export function DoorPanel() {
     if (!node || !node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
-    const duplicate = DoorNode.parse({
-      position: [...node.position] as [number, number, number],
-      rotation: [...node.rotation] as [number, number, number],
-      side: node.side,
-      wallId: node.wallId,
-      parentId: node.parentId,
-      width: node.width,
-      height: node.height,
-      frameThickness: node.frameThickness,
-      frameDepth: node.frameDepth,
-      threshold: node.threshold,
-      thresholdHeight: node.thresholdHeight,
-      hingesSide: node.hingesSide,
-      swingDirection: node.swingDirection,
-      segments: node.segments.map(s => ({ ...s, columnRatios: [...s.columnRatios] })),
-      handle: node.handle,
-      handleHeight: node.handleHeight,
-      handleSide: node.handleSide,
-      doorCloser: node.doorCloser,
-      panicBar: node.panicBar,
-      panicBarHeight: node.panicBarHeight,
-      metadata: { isNew: true },
-    })
+    const cloned = structuredClone(node) as any
+    delete cloned.id
+    cloned.metadata = { ...cloned.metadata, isNew: true }
+    const duplicate = DoorNode.parse(cloned)
     useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
     setMovingNode(duplicate)
     setSelection({ selectedIds: [] })

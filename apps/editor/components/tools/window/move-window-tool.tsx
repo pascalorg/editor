@@ -11,6 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import {
@@ -370,7 +371,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments geometry={edgesGeo} material={edgeMaterial} />
+      <lineSegments geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
     </group>
   )
 }

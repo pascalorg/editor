@@ -2,6 +2,7 @@ import { emitter, type GridEvent, useScene, ZoneNode, type LevelNode } from "@pa
 import { useViewer } from "@pascal-app/viewer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } from "three";
+import { EDITOR_LAYER } from "@/lib/constants";
 import useEditor from "@/store/use-editor";
 import { CursorSphere } from "../shared/cursor-sphere";
 
@@ -318,6 +319,7 @@ export const ZoneTool: React.FC = () => {
       {previewShape && (
         <mesh
           frustumCulled={false}
+          layers={EDITOR_LAYER}
           position={[0, levelY + Y_OFFSET, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
@@ -334,7 +336,7 @@ export const ZoneTool: React.FC = () => {
 
       {/* Main line - uses native line element with TSL-compatible material */}
       {/* @ts-ignore */}
-      <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false}>
+      <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
         <bufferGeometry />
         <lineBasicNodeMaterial
           color="#818cf8"
@@ -346,7 +348,7 @@ export const ZoneTool: React.FC = () => {
 
       {/* Closing line - uses native line element with TSL-compatible material */}
       {/* @ts-ignore */}
-      <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false}>
+      <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
         <bufferGeometry />
         <lineBasicNodeMaterial
           color="#818cf8"

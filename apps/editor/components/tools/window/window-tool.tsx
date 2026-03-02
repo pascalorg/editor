@@ -19,6 +19,7 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 
 // Shared edge material — reuse across renders, just toggle color
@@ -269,7 +270,7 @@ export const WindowTool: React.FC = () => {
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} />
+      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
     </group>
   )
 }
