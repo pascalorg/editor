@@ -2,6 +2,7 @@ import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Mesh, type Group, Shape, ShapeGeometry, Vector3 } from 'three'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -198,7 +199,7 @@ export const WallTool: React.FC = () => {
       <CursorSphere ref={cursorRef}  />
 
       {/* Wall preview */}
-      <mesh ref={wallPreviewRef} visible={false} renderOrder={1}>
+      <mesh ref={wallPreviewRef} visible={false} renderOrder={1} layers={EDITOR_LAYER}>
         <shapeGeometry />
         <meshBasicMaterial
           color="#818cf8"

@@ -19,6 +19,7 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -260,7 +261,7 @@ export const DoorTool: React.FC = () => {
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} />
+      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
     </group>
   )
 }

@@ -2,6 +2,7 @@ import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
 import type { Group } from 'three'
 import { Html } from '@react-three/drei'
+import { EDITOR_LAYER } from '@/lib/constants'
 import useEditor from '@/store/use-editor'
 import { tools } from '@/components/ui/action-menu/structure-tools'
 import { furnishTools } from '@/components/ui/action-menu/furnish-tools'
@@ -36,13 +37,13 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       {/* Flat marker on the ground */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Center dot */}
-        <mesh renderOrder={2}>
+        <mesh renderOrder={2} layers={EDITOR_LAYER}>
           <circleGeometry args={[0.06, 32]} />
           <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.9} />
         </mesh>
         
         {/* Outer ring / glow */}
-        <mesh renderOrder={2}>
+        <mesh renderOrder={2} layers={EDITOR_LAYER}>
           <circleGeometry args={[0.2, 32]} />
           <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.25} />
         </mesh>
@@ -50,7 +51,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
 
       {/* Vertical line */}
       {height > 0 && (
-        <mesh position={[0, height / 2, 0]} renderOrder={2}>
+        <mesh position={[0, height / 2, 0]} renderOrder={2} layers={EDITOR_LAYER}>
           <cylinderGeometry args={[0.01, 0.01, height, 8]} />
           <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.7} />
         </mesh>

@@ -30,6 +30,7 @@ import {
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import { ceilingStrategy, checkCanPlace, floorStrategy, itemSurfaceStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
@@ -759,10 +760,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
   return (
     <group ref={cursorGroupRef}>
-      <lineSegments ref={edgesRef} material={edgeMaterial}>
+      <lineSegments ref={edgesRef} material={edgeMaterial} layers={EDITOR_LAYER}>
         <edgesGeometry args={[initialBoxGeometry]} />
       </lineSegments>
-      <mesh ref={basePlaneRef} geometry={basePlaneGeometry} material={basePlaneMaterial} />
+      <mesh ref={basePlaneRef} geometry={basePlaneGeometry} material={basePlaneMaterial} layers={EDITOR_LAYER} />
     </group>
   )
 }
