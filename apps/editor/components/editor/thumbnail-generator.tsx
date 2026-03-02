@@ -1,11 +1,13 @@
 'use client'
 
 import { emitter, useScene } from '@pascal-app/core'
+import { snapLevelsToTruePositions } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { uploadProjectThumbnail } from '@/features/community/lib/projects/actions'
 import { useProjectStore } from '@/features/community/lib/projects/store'
+import { EDITOR_LAYER } from '@/lib/constants'
 
 const THUMBNAIL_WIDTH = 1920
 const THUMBNAIL_HEIGHT = 1080
@@ -46,14 +48,18 @@ export const ThumbnailGenerator = ({ projectId: propProjectId }: ThumbnailGenera
         thumbnailCamera.position.set(8, 8, 8)
         thumbnailCamera.lookAt(0, 0, 0)
       }
+      thumbnailCamera.layers.disable(EDITOR_LAYER) // Render only default layer to exclude helper visuals
 
       // Match camera aspect to current canvas so the render looks correct
       const { width, height } = gl.domElement
       thumbnailCamera.aspect = width / height
       thumbnailCamera.updateProjectionMatrix()
 
-      // Render with thumbnail camera — main canvas is never resized
+      // Snap levels to true stacked positions so the thumbnail always shows a clean view,
+      // regardless of the current levelMode (exploded, solo, etc.)
+      const restoreLevels = snapLevelsToTruePositions()
       gl.render(scene, thumbnailCamera)
+      restoreLevels()
 
       // Center-crop the canvas to the thumbnail aspect ratio, then scale — avoids deformation
       const srcAspect = width / height

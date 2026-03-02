@@ -2,6 +2,7 @@ import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
+import { EDITOR_LAYER } from '@/lib/constants'
 import { sfxEmitter } from '@/lib/sfx-bus'
 
 const Y_OFFSET = 0.02
@@ -212,10 +213,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const canDelete = displayPolygon.length > minVertices
 
   const editorContent = (
-    <group>
+    <group >
       {/* Border line */}
       {/* @ts-ignore */}
-      <line ref={lineRef} frustumCulled={false} renderOrder={10} raycast={() => {}}>
+      <line ref={lineRef} frustumCulled={false} renderOrder={10} raycast={() => {}} layers={EDITOR_LAYER}>
         <bufferGeometry />
         <lineBasicNodeMaterial
           color={color}
@@ -236,6 +237,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
         return (
           <mesh
+            layers={EDITOR_LAYER}
             key={`vertex-${index}`}
             position={[x!, editY + height / 2, z!]}
             castShadow
@@ -286,6 +288,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <mesh
+              layers={EDITOR_LAYER}
               key={`midpoint-${index}`}
               position={[x!, editY + height / 2, z!]}
               onPointerEnter={(e) => {

@@ -3,8 +3,10 @@
 import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
+import { EDITOR_LAYER } from '@/lib/constants'
 
 const currentTarget = new Vector3()
 
@@ -12,6 +14,11 @@ export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const firstLoad = useRef(true)
+
+  const camera = useThree((state) => state.camera)
+  useEffect(() => {
+    camera.layers.enable(EDITOR_LAYER)
+  }, [camera])
 
   useEffect(() => {
     let targetY = 0
