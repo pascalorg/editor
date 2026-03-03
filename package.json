@@ -32,7 +32,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
     "supabase": "2.76.15",
-    "turbo": "^2.8.11",
+    "turbo": "^2.8.12",
     "typescript": "5.9.3",
     "ultracite": "^7.2.4"
   },

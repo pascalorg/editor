@@ -147,12 +147,26 @@ export function SliderControl({
         }
         
         setIsDragging(false)
+        const startVal = dragStartValue
+        const finalVal = valueRef.current
+
         setDragStartValue(null)
         setDragMin(null)
         setDragMax(null)
         document.removeEventListener('pointermove', handlePointerMove)
         document.removeEventListener('pointerup', handlePointerUp)
-        useScene.temporal.getState().resume()
+
+        if (startVal !== null && startVal !== finalVal) {
+          // Revert to start value while paused so the undo baseline is clean
+          onChange(startVal)
+          
+          useScene.temporal.getState().resume()
+          
+          // Apply final value while recording
+          onChange(finalVal)
+        } else {
+          useScene.temporal.getState().resume()
+        }
       }
 
       document.addEventListener('pointermove', handlePointerMove)

@@ -16,9 +16,11 @@ export const CustomCameraControls = () => {
   const firstLoad = useRef(true)
 
   const camera = useThree((state) => state.camera)
+  const raycaster = useThree((state) => state.raycaster)
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
-  }, [camera])
+    raycaster.layers.enable(EDITOR_LAYER)
+  }, [camera, raycaster])
 
   useEffect(() => {
     let targetY = 0

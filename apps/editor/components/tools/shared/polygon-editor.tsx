@@ -1,4 +1,5 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
@@ -49,6 +50,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
+  const previewPolygonRef = useRef<Array<[number, number]> | null>(null)
+
+  // Keep ref in sync
+  useEffect(() => {
+    previewPolygonRef.current = previewPolygon
+  }, [previewPolygon])
+
   const [hoveredVertex, setHoveredVertex] = useState<number | null>(null)
   const [hoveredMidpoint, setHoveredMidpoint] = useState<number | null>(null)
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
@@ -80,23 +88,25 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   // Update vertex position using grid cursor position
   const handleVertexDrag = useCallback(
-    (vertexIndex: number) => {
-      const basePolygon = previewPolygon ?? polygon
-      const newPolygon = [...basePolygon]
-      newPolygon[vertexIndex] = cursorPosition
-      setPreviewPolygon(newPolygon)
+    (vertexIndex: number, position: [number, number]) => {
+      setPreviewPolygon((prev) => {
+        const basePolygon = prev ?? polygon
+        const newPolygon = [...basePolygon]
+        newPolygon[vertexIndex] = position
+        return newPolygon
+      })
     },
-    [cursorPosition, previewPolygon, polygon],
+    [polygon],
   )
 
   // Commit polygon changes
   const commitPolygonChange = useCallback(() => {
-    if (previewPolygon) {
-      onPolygonChange(previewPolygon)
+    if (previewPolygonRef.current) {
+      onPolygonChange(previewPolygonRef.current)
     }
     setPreviewPolygon(null)
     setDragState(null)
-  }, [previewPolygon, onPolygonChange])
+  }, [onPolygonChange])
 
   // Handle adding a new vertex at midpoint
   const handleAddVertex = useCallback(
@@ -145,7 +155,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
       // Update vertex position during drag
       if (dragState?.isDragging) {
-        handleVertexDrag(dragState.vertexIndex)
+        handleVertexDrag(dragState.vertexIndex, newPosition)
       }
     }
 
@@ -159,9 +169,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   useEffect(() => {
     if (!dragState?.isDragging) return
 
-    const handlePointerUp = (e: PointerEvent) => {
-      // Only handle the specific pointer that started the drag
-      if (e.pointerId !== dragState.pointerId) return
+    const handlePointerUp = (e: PointerEvent | MouseEvent) => {
+      // Only handle the specific pointer that started the drag, if it's a PointerEvent
+      if ('pointerId' in e && dragState.pointerId !== undefined && e.pointerId !== dragState.pointerId) return
 
       // Stop the event from propagating to prevent grid click
       e.stopImmediatePropagation()
@@ -183,9 +193,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       commitPolygonChange()
     }
 
-    window.addEventListener('pointerup', handlePointerUp, true)
+    window.addEventListener('pointerup', handlePointerUp as EventListener, true)
+    window.addEventListener('pointercancel', handlePointerUp as EventListener, true)
     return () => {
-      window.removeEventListener('pointerup', handlePointerUp, true)
+      window.removeEventListener('pointerup', handlePointerUp as EventListener, true)
+      window.removeEventListener('pointercancel', handlePointerUp as EventListener, true)
     }
   }, [dragState, commitPolygonChange])
 
@@ -256,7 +268,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 isDragging: true,
                 vertexIndex: index,
                 initialPosition: [x!, z!],
-                pointerId: e.nativeEvent.pointerId,
+                pointerId: e.pointerId,
               })
             }}
             onClick={(e) => {
@@ -308,7 +320,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                     isDragging: true,
                     vertexIndex: newVertexIndex,
                     initialPosition: [x!, z!],
-                    pointerId: e.nativeEvent.pointerId,
+                    pointerId: e.pointerId,
                   })
                   setHoveredMidpoint(null)
                 }

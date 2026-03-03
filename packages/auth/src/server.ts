@@ -32,7 +32,7 @@ export interface AuthConfig {
  * - Custom session with activePropertyId
  * - Session cookie caching
  */
-export function createAuth(config: AuthConfig): ReturnType<typeof betterAuth> {
+export function createAuth(config: AuthConfig) {
   return betterAuth({
     appName: config.appName,
     baseURL: config.baseURL,

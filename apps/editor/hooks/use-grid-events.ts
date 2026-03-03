@@ -72,7 +72,7 @@ export function useGridEvents(gridY: number) {
     }
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (useViewer.getState().cameraDragging) return
+      // Emit move even if camera is dragging, so tools like PolygonEditor still work
       emit('move', e)
     }
 
