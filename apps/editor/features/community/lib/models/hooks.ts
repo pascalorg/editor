@@ -69,9 +69,9 @@ export function useProjectScene() {
         
         const result = await getProjectModel(projectId || '')
 
-        if (result.success && result.data?.scene_graph) {
+        if (result.success && result.data?.model?.scene_graph) {
           // Load the scene graph into the store
-          const { nodes, rootNodeIds } = result.data.scene_graph
+          const { nodes, rootNodeIds } = result.data.model.scene_graph
           useScene.getState().setScene(nodes, rootNodeIds)
         } else {
           // No scene found - clear the scene

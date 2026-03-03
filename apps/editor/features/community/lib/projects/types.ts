@@ -19,6 +19,7 @@ export type DbProject = {
   views: number
   likes: number
   thumbnail_url: string | null
+  published_model_version: number | null
 }
 
 export type DbProjectAddress = {
@@ -58,7 +59,7 @@ export type Database = {
     Tables: {
       projects: {
         Row: DbProject
-        Insert: Omit<DbProject, 'created_at' | 'updated_at' | 'views' | 'likes' | 'show_scans_public' | 'show_guides_public'> & { show_scans_public?: boolean; show_guides_public?: boolean }
+        Insert: Omit<DbProject, 'created_at' | 'updated_at' | 'views' | 'likes' | 'show_scans_public' | 'show_guides_public' | 'published_model_version'> & { show_scans_public?: boolean; show_guides_public?: boolean; published_model_version?: number | null }
         Update: Partial<Omit<DbProject, 'id' | 'created_at' | 'updated_at'>>
       }
       projects_addresses: {
@@ -113,6 +114,7 @@ export type Project = {
   views: number
   likes: number
   thumbnail_url: string | null
+  published_model_version: number | null
   address: {
     id: string
     street_number?: string

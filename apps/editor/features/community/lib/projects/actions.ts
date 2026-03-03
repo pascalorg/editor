@@ -506,15 +506,50 @@ export async function getProjectModelPublic(projectId: string): Promise<
       }
     }
 
-    // Get the model
-    const { data: model } = await supabase
-      .from('projects_models')
-      .select('*')
-      .eq('project_id', projectId)
-      .is('deleted_at', null)
-      .order('version', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const publishedVersion = projectData.published_model_version as number | null
+    let model: any | null = null
+
+    if (publishedVersion !== null) {
+      const { data: publishedModel } = await supabase
+        .from('projects_models')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('version', publishedVersion)
+        .eq('draft', false)
+        .is('deleted_at', null)
+        .limit(1)
+        .maybeSingle()
+
+      model = publishedModel ?? null
+    }
+
+    // Legacy fallback for projects created before version publishing was added.
+    if (!model) {
+      const { data: latestPublishedModel } = await supabase
+        .from('projects_models')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('draft', false)
+        .is('deleted_at', null)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (latestPublishedModel) {
+        model = latestPublishedModel
+      } else {
+        const { data: latestModel } = await supabase
+          .from('projects_models')
+          .select('*')
+          .eq('project_id', projectId)
+          .is('deleted_at', null)
+          .order('version', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        model = latestModel ?? null
+      }
+    }
 
     return {
       success: true,
