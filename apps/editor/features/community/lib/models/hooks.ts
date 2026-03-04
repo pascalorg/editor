@@ -9,10 +9,56 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import useEditor from '@/store/use-editor'
 import { useProjectStore } from '../projects/store'
-import { getProjectModel, saveProjectModel } from './actions'
+import { getProjectModel, saveProjectModel, type SceneGraph } from './actions'
 
 /** Debounce interval for cloud auto-save (ms). */
-const AUTOSAVE_DEBOUNCE_MS = 10_000
+const AUTOSAVE_DEBOUNCE_MS = 1_000
+
+function syncEditorSelectionFromCurrentScene() {
+  const sceneNodes = useScene.getState().nodes as Record<string, any>
+  const sceneRootIds = useScene.getState().rootNodeIds
+  const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
+  const resolve = (child: any) =>
+    typeof child === 'string' ? sceneNodes[child] : child
+  const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+  const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+
+  if (firstBuilding && firstLevel) {
+    useViewer.getState().setSelection({
+      buildingId: firstBuilding.id,
+      levelId: firstLevel.id,
+      selectedIds: [],
+      zoneId: null,
+    })
+    useEditor.getState().setPhase('structure')
+    useEditor.getState().setStructureLayer('elements')
+
+    // Auto-select the wall tool if the level is empty (e.g., brand new project)
+    if (!firstLevel.children || firstLevel.children.length === 0) {
+      useEditor.getState().setMode('build')
+      useEditor.getState().setTool('wall')
+    }
+  } else {
+    useEditor.getState().setPhase('site')
+    useViewer.getState().setSelection({
+      buildingId: null,
+      levelId: null,
+      selectedIds: [],
+      zoneId: null,
+    })
+  }
+}
+
+export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
+  if (sceneGraph?.nodes && sceneGraph.rootNodeIds) {
+    const { nodes, rootNodeIds } = sceneGraph
+    useScene.getState().setScene(nodes, rootNodeIds)
+  } else {
+    useScene.getState().clearScene()
+  }
+
+  syncEditorSelectionFromCurrentScene()
+}
 
 /**
  * Load the scene when a project becomes active.
@@ -25,6 +71,8 @@ export function useProjectScene() {
   // Subscribe to project store
   const activeProject = useProjectStore((state) => state.activeProject)
   const isLoadingProject = useProjectStore((state) => state.isLoading)
+  const isVersionPreviewMode = useProjectStore((state) => state.isVersionPreviewMode)
+  const setAutosaveStatus = useProjectStore((state) => state.setAutosaveStatus)
 
   const lastProjectIdRef = useRef<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -36,6 +84,7 @@ export function useProjectScene() {
   // Track whether there are pending changes that arrived while a save was
   // in-flight so we can coalesce them into one follow-up save.
   const pendingSaveRef = useRef(false)
+  const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
 
   // Extract project ID for dependency tracking
   const projectId = activeProject?.id ?? null
@@ -47,6 +96,8 @@ export function useProjectScene() {
     }
 
     if (!projectId) {
+      useProjectStore.getState().setIsVersionPreviewMode(false)
+      setAutosaveStatus('idle')
       return
     }
 
@@ -61,93 +112,18 @@ export function useProjectScene() {
     async function loadScene() {
       // Suppress auto-save for the store update caused by setScene/clearScene
       isLoadingSceneRef.current = true
+      useProjectStore.getState().setIsVersionPreviewMode(false)
+      setAutosaveStatus('idle')
       
       useProjectStore.getState().setIsSceneLoading(true)
 
       try {
-        useScene.getState().clearScene()
-        
         const result = await getProjectModel(projectId || '')
 
-        if (result.success && result.data?.scene_graph) {
-          // Load the scene graph into the store
-          const { nodes, rootNodeIds } = result.data.scene_graph
-          useScene.getState().setScene(nodes, rootNodeIds)
-        } else {
-          // No scene found - clear the scene
-          useScene.getState().clearScene()
-        }
-
-        // Auto-select the first building + level after store is updated
-        const sceneNodes = useScene.getState().nodes as Record<string, any>
-        const sceneRootIds = useScene.getState().rootNodeIds
-        const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-        const resolve = (child: any) =>
-          typeof child === 'string' ? sceneNodes[child] : child
-        const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
-        const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-
-        if (firstBuilding && firstLevel) {
-          useViewer.getState().setSelection({
-            buildingId: firstBuilding.id,
-            levelId: firstLevel.id,
-            selectedIds: [],
-            zoneId: null,
-          })
-          useEditor.getState().setPhase('structure')
-          useEditor.getState().setStructureLayer('elements')
-          
-          // Auto-select the wall tool if the level is empty (e.g., brand new project)
-          if (!firstLevel.children || firstLevel.children.length === 0) {
-            useEditor.getState().setMode('build')
-            useEditor.getState().setTool('wall')
-          }
-        } else {
-          useEditor.getState().setPhase('site')
-          useViewer.getState().setSelection({
-            buildingId: null,
-            levelId: null,
-            selectedIds: [],
-            zoneId: null,
-          })
-        }
+        applySceneGraphToEditor(result.success ? result.data?.model?.scene_graph ?? null : null)
       } catch (error) {
-        // Fall back to clear scene
-        useScene.getState().clearScene()
-        
-        // Auto-select the first building + level from the cleared scene
-        const sceneNodes = useScene.getState().nodes as Record<string, any>
-        const sceneRootIds = useScene.getState().rootNodeIds
-        const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-        const resolve = (child: any) =>
-          typeof child === 'string' ? sceneNodes[child] : child
-        const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
-        const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-
-        if (firstBuilding && firstLevel) {
-          useViewer.getState().setSelection({
-            buildingId: firstBuilding.id,
-            levelId: firstLevel.id,
-            selectedIds: [],
-            zoneId: null,
-          })
-          useEditor.getState().setPhase('structure')
-          useEditor.getState().setStructureLayer('elements')
-          
-          // Auto-select the wall tool if the level is empty (e.g., brand new project)
-          if (!firstLevel.children || firstLevel.children.length === 0) {
-            useEditor.getState().setMode('build')
-            useEditor.getState().setTool('wall')
-          }
-        } else {
-          useEditor.getState().setPhase('site')
-          useViewer.getState().setSelection({
-            buildingId: null,
-            levelId: null,
-            selectedIds: [],
-            zoneId: null,
-          })
-        }
+        // Fall back to an empty scene while preserving editor selection sync.
+        applySceneGraphToEditor(null)
       } finally {
         useProjectStore.getState().setIsSceneLoading(false)
       }
@@ -155,11 +131,12 @@ export function useProjectScene() {
       // Allow auto-save again after a tick (let the store update propagate)
       requestAnimationFrame(() => {
         isLoadingSceneRef.current = false
+        setAutosaveStatus('saved')
       })
     }
 
     loadScene()
-  }, [projectId, isLoadingProject])
+  }, [projectId, isLoadingProject, setAutosaveStatus])
 
   // Track whether there are unsaved changes (dirty flag for flush-on-exit).
   const hasDirtyChangesRef = useRef(false)
@@ -168,6 +145,8 @@ export function useProjectScene() {
   useEffect(() => {
     if (!projectId) {
       currentProjectIdRef.current = null
+      executeSaveRef.current = null
+      setAutosaveStatus('idle')
       return
     }
 
@@ -184,6 +163,14 @@ export function useProjectScene() {
         return
       }
 
+      if (useProjectStore.getState().isVersionPreviewMode) {
+        // Do not autosave preview scenes. Keep snapshot aligned so returning to
+        // latest does not schedule a false-positive save.
+        setAutosaveStatus('paused')
+        lastNodesSnapshot = JSON.stringify(state.nodes)
+        return
+      }
+
       const currentNodesSnapshot = JSON.stringify(state.nodes)
 
       // Only trigger save if nodes actually changed
@@ -193,6 +180,7 @@ export function useProjectScene() {
 
       lastNodesSnapshot = currentNodesSnapshot
       hasDirtyChangesRef.current = true
+      setAutosaveStatus('pending')
 
       // If a save is in-flight, mark pending so we do one follow-up save
       // instead of queuing unlimited concurrent saves.
@@ -208,6 +196,7 @@ export function useProjectScene() {
 
       // Debounce save
       saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
         executeSave()
       }, AUTOSAVE_DEBOUNCE_MS)
     })
@@ -216,27 +205,39 @@ export function useProjectScene() {
       const currentProjectId = currentProjectIdRef.current
       if (!currentProjectId) return
 
+      if (isLoadingSceneRef.current || useProjectStore.getState().isVersionPreviewMode) {
+        // Save is paused while previewing older versions.
+        pendingSaveRef.current = true
+        setAutosaveStatus('paused')
+        return
+      }
+
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds }
 
       isSavingRef.current = true
       pendingSaveRef.current = false
+      setAutosaveStatus('saving')
 
       try {
         await saveProjectModel(currentProjectId, sceneGraph)
         hasDirtyChangesRef.current = false
+        setAutosaveStatus('saved')
       } finally {
         isSavingRef.current = false
 
         // If changes arrived while we were saving, schedule one more save
         if (pendingSaveRef.current) {
           pendingSaveRef.current = false
+          setAutosaveStatus('pending')
           saveTimeoutRef.current = setTimeout(() => {
+            saveTimeoutRef.current = undefined
             executeSave()
           }, AUTOSAVE_DEBOUNCE_MS)
         }
       }
     }
+    executeSaveRef.current = executeSave
 
     // Flush unsaved changes when the user leaves the page / closes the tab.
     // Uses sendBeacon via keepalive fetch so the request survives page unload.
@@ -258,6 +259,7 @@ export function useProjectScene() {
     window.addEventListener('beforeunload', flushOnExit)
 
     return () => {
+      executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
 
       if (saveTimeoutRef.current) {
@@ -269,5 +271,38 @@ export function useProjectScene() {
 
       unsubscribe()
     }
-  }, [projectId])
+  }, [projectId, setAutosaveStatus])
+
+  useEffect(() => {
+    if (!projectId) return
+
+    if (isVersionPreviewMode) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
+      }
+      if (hasDirtyChangesRef.current) {
+        pendingSaveRef.current = true
+      }
+      setAutosaveStatus('paused')
+      return
+    }
+
+    if (isSavingRef.current) {
+      return
+    }
+
+    if (hasDirtyChangesRef.current) {
+      setAutosaveStatus('pending')
+      if (!saveTimeoutRef.current) {
+        saveTimeoutRef.current = setTimeout(() => {
+          saveTimeoutRef.current = undefined
+          executeSaveRef.current?.()
+        }, AUTOSAVE_DEBOUNCE_MS)
+      }
+      return
+    }
+
+    setAutosaveStatus('saved')
+  }, [isVersionPreviewMode, projectId, setAutosaveStatus])
 }
