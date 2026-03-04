@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { BookMarked, Check, Globe, GlobeLock, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
+import { BookMarked, Check, Globe, GlobeLock, MoreHorizontal, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
 import { emitter } from '@pascal-app/core'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/primitives/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/primitives/tooltip'
 import { useAuth } from '@/features/community/lib/auth/hooks'
 import { cn } from '@/lib/utils'
 
@@ -390,7 +390,7 @@ function PresetRow({
   return (
     <li className="group flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
       {/* Thumbnail */}
-      <div className="h-8 w-8 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
+      <div className="h-12 w-12 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
         {preset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preset.thumbnail_url} alt={preset.name} className="h-full w-full object-cover" />
@@ -407,7 +407,8 @@ function PresetRow({
           <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">
             {preset.name}
           </span>
-          {preset.is_community && (
+          {/* Only show globe in "My presets" — in community tab it's redundant */}
+          {isMine && preset.is_community && (
             <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
           )}
         </span>
@@ -416,73 +417,41 @@ function PresetRow({
         </span>
       </button>
 
-      {/* Actions — only shown on hover for "My presets" */}
+      {/* Actions — 3-dot dropdown, only in "My presets" */}
       {isMine && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          {/* Save into (overwrite) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onOverwrite}
-                className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
-                  justOverwritten
-                    ? 'text-green-400 bg-green-500/10'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
-                )}
-              >
-                {justOverwritten ? <Check className="h-3 w-3" /> : <Save className="h-3 w-3" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Save current config here</TooltipContent>
-          </Tooltip>
-
-          {/* Community toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onToggleCommunity}
-                className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
-                  preset.is_community
-                    ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/10'
-                    : 'text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10',
-                )}
-              >
-                {preset.is_community ? <Globe className="h-3 w-3" /> : <GlobeLock className="h-3 w-3" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {preset.is_community ? 'Remove from community' : 'Share with community'}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Rename */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onStartRename}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Rename</TooltipContent>
-          </Tooltip>
-
-          {/* Delete */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onDeleteRequest}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Delete</TooltipContent>
-          </Tooltip>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors opacity-0 group-hover:opacity-100',
+                justOverwritten
+                  ? 'text-green-400 bg-green-500/10 opacity-100'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
+              )}
+            >
+              {justOverwritten ? <Check className="h-3 w-3" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="left" align="start" className="min-w-44">
+            <DropdownMenuItem onClick={onOverwrite}>
+              <Save className="h-3.5 w-3.5" />
+              Update with current
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onToggleCommunity}>
+              {preset.is_community
+                ? <><GlobeLock className="h-3.5 w-3.5" />Remove from community</>
+                : <><Globe className="h-3.5 w-3.5" />Share with community</>}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onStartRename}>
+              <Pencil className="h-3.5 w-3.5" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={onDeleteRequest}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </li>
   )
