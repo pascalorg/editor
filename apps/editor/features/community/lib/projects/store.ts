@@ -11,6 +11,9 @@ import {
 } from './actions'
 
 interface ProjectStore {
+  // Autosave lifecycle for the latest draft scene
+  autosaveStatus: 'idle' | 'pending' | 'saving' | 'saved' | 'paused'
+
   // State
   activeProject: Project | null
   projects: Project[]
@@ -25,12 +28,14 @@ interface ProjectStore {
   setActiveProject: (projectId: string) => Promise<void>
   setIsSceneLoading: (loading: boolean) => void
   setIsVersionPreviewMode: (preview: boolean) => void
+  setAutosaveStatus: (status: ProjectStore['autosaveStatus']) => void
   initialize: () => Promise<void>
   updateActiveThumbnail: (thumbnailUrl: string) => void
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   // Initial state
+  autosaveStatus: 'idle',
   activeProject: null,
   projects: [],
   isLoading: true,
@@ -91,6 +96,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   setIsVersionPreviewMode: (preview: boolean) => {
     set({ isVersionPreviewMode: preview })
+  },
+
+  setAutosaveStatus: (status) => {
+    set({ autosaveStatus: status })
   },
 
   // Patch the active project's thumbnail URL in place (no refetch)

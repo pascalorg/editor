@@ -12,7 +12,7 @@ import { useProjectStore } from '../projects/store'
 import { getProjectModel, saveProjectModel, type SceneGraph } from './actions'
 
 /** Debounce interval for cloud auto-save (ms). */
-const AUTOSAVE_DEBOUNCE_MS = 10_000
+const AUTOSAVE_DEBOUNCE_MS = 1_000
 
 function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
@@ -71,6 +71,8 @@ export function useProjectScene() {
   // Subscribe to project store
   const activeProject = useProjectStore((state) => state.activeProject)
   const isLoadingProject = useProjectStore((state) => state.isLoading)
+  const isVersionPreviewMode = useProjectStore((state) => state.isVersionPreviewMode)
+  const setAutosaveStatus = useProjectStore((state) => state.setAutosaveStatus)
 
   const lastProjectIdRef = useRef<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -82,6 +84,7 @@ export function useProjectScene() {
   // Track whether there are pending changes that arrived while a save was
   // in-flight so we can coalesce them into one follow-up save.
   const pendingSaveRef = useRef(false)
+  const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
 
   // Extract project ID for dependency tracking
   const projectId = activeProject?.id ?? null
@@ -94,6 +97,7 @@ export function useProjectScene() {
 
     if (!projectId) {
       useProjectStore.getState().setIsVersionPreviewMode(false)
+      setAutosaveStatus('idle')
       return
     }
 
@@ -109,6 +113,7 @@ export function useProjectScene() {
       // Suppress auto-save for the store update caused by setScene/clearScene
       isLoadingSceneRef.current = true
       useProjectStore.getState().setIsVersionPreviewMode(false)
+      setAutosaveStatus('idle')
       
       useProjectStore.getState().setIsSceneLoading(true)
 
@@ -126,11 +131,12 @@ export function useProjectScene() {
       // Allow auto-save again after a tick (let the store update propagate)
       requestAnimationFrame(() => {
         isLoadingSceneRef.current = false
+        setAutosaveStatus('saved')
       })
     }
 
     loadScene()
-  }, [projectId, isLoadingProject])
+  }, [projectId, isLoadingProject, setAutosaveStatus])
 
   // Track whether there are unsaved changes (dirty flag for flush-on-exit).
   const hasDirtyChangesRef = useRef(false)
@@ -139,6 +145,8 @@ export function useProjectScene() {
   useEffect(() => {
     if (!projectId) {
       currentProjectIdRef.current = null
+      executeSaveRef.current = null
+      setAutosaveStatus('idle')
       return
     }
 
@@ -149,8 +157,16 @@ export function useProjectScene() {
 
     const unsubscribe = useScene.subscribe((state) => {
       // Skip saves triggered by loading a scene from the server
-      if (isLoadingSceneRef.current || useProjectStore.getState().isVersionPreviewMode) {
+      if (isLoadingSceneRef.current) {
         // Update the snapshot so the next real edit is compared correctly
+        lastNodesSnapshot = JSON.stringify(state.nodes)
+        return
+      }
+
+      if (useProjectStore.getState().isVersionPreviewMode) {
+        // Do not autosave preview scenes. Keep snapshot aligned so returning to
+        // latest does not schedule a false-positive save.
+        setAutosaveStatus('paused')
         lastNodesSnapshot = JSON.stringify(state.nodes)
         return
       }
@@ -164,6 +180,7 @@ export function useProjectScene() {
 
       lastNodesSnapshot = currentNodesSnapshot
       hasDirtyChangesRef.current = true
+      setAutosaveStatus('pending')
 
       // If a save is in-flight, mark pending so we do one follow-up save
       // instead of queuing unlimited concurrent saves.
@@ -179,6 +196,7 @@ export function useProjectScene() {
 
       // Debounce save
       saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
         executeSave()
       }, AUTOSAVE_DEBOUNCE_MS)
     })
@@ -187,27 +205,39 @@ export function useProjectScene() {
       const currentProjectId = currentProjectIdRef.current
       if (!currentProjectId) return
 
+      if (isLoadingSceneRef.current || useProjectStore.getState().isVersionPreviewMode) {
+        // Save is paused while previewing older versions.
+        pendingSaveRef.current = true
+        setAutosaveStatus('paused')
+        return
+      }
+
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds }
 
       isSavingRef.current = true
       pendingSaveRef.current = false
+      setAutosaveStatus('saving')
 
       try {
         await saveProjectModel(currentProjectId, sceneGraph)
         hasDirtyChangesRef.current = false
+        setAutosaveStatus('saved')
       } finally {
         isSavingRef.current = false
 
         // If changes arrived while we were saving, schedule one more save
         if (pendingSaveRef.current) {
           pendingSaveRef.current = false
+          setAutosaveStatus('pending')
           saveTimeoutRef.current = setTimeout(() => {
+            saveTimeoutRef.current = undefined
             executeSave()
           }, AUTOSAVE_DEBOUNCE_MS)
         }
       }
     }
+    executeSaveRef.current = executeSave
 
     // Flush unsaved changes when the user leaves the page / closes the tab.
     // Uses sendBeacon via keepalive fetch so the request survives page unload.
@@ -229,6 +259,7 @@ export function useProjectScene() {
     window.addEventListener('beforeunload', flushOnExit)
 
     return () => {
+      executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
 
       if (saveTimeoutRef.current) {
@@ -240,5 +271,38 @@ export function useProjectScene() {
 
       unsubscribe()
     }
-  }, [projectId])
+  }, [projectId, setAutosaveStatus])
+
+  useEffect(() => {
+    if (!projectId) return
+
+    if (isVersionPreviewMode) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
+      }
+      if (hasDirtyChangesRef.current) {
+        pendingSaveRef.current = true
+      }
+      setAutosaveStatus('paused')
+      return
+    }
+
+    if (isSavingRef.current) {
+      return
+    }
+
+    if (hasDirtyChangesRef.current) {
+      setAutosaveStatus('pending')
+      if (!saveTimeoutRef.current) {
+        saveTimeoutRef.current = setTimeout(() => {
+          saveTimeoutRef.current = undefined
+          executeSaveRef.current?.()
+        }, AUTOSAVE_DEBOUNCE_MS)
+      }
+      return
+    }
+
+    setAutosaveStatus('saved')
+  }, [isVersionPreviewMode, projectId, setAutosaveStatus])
 }

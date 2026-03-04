@@ -9,7 +9,7 @@ import {
   Moon,
   Pencil,
   RotateCcw,
-  Search,
+  Save,
   Sun,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -35,12 +35,13 @@ import { SettingsPanel } from "./panels/settings-panel";
 import { SitePanel } from "./panels/site-panel";
 import {
   getProjectModel,
-  getProjectVersionByNumber,
+  getProjectVersionById,
   getProjectVersionList,
   getProjectVersionStatus,
   publishProjectModel,
   saveProjectModel,
   saveProjectVersion,
+  type SceneGraph,
   type ProjectVersionListItem,
   type ProjectVersionStatus,
 } from "@/features/community/lib/models/actions";
@@ -81,6 +82,7 @@ export function AppSidebar() {
   const isVersionPreviewMode = useProjectStore((s) => s.isVersionPreviewMode);
   const setIsVersionPreviewMode = useProjectStore((s) => s.setIsVersionPreviewMode);
   const setIsSceneLoading = useProjectStore((s) => s.setIsSceneLoading);
+  const setAutosaveStatus = useProjectStore((s) => s.setAutosaveStatus);
   const theme = useViewer((state) => state.theme);
   const setTheme = useViewer((state) => state.setTheme);
   const [mounted, setMounted] = useState(false);
@@ -92,13 +94,16 @@ export function AppSidebar() {
   const [versionList, setVersionList] = useState<ProjectVersionListItem[]>([]);
   const [isVersionsOpen, setIsVersionsOpen] = useState(false);
   const [isVersionListLoading, setIsVersionListLoading] = useState(false);
-  const [versionSearch, setVersionSearch] = useState("");
-  const [previewVersion, setPreviewVersion] = useState<number | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<{
+    id: string;
+    version: number;
+  } | null>(null);
   const [activeVersionAction, setActiveVersionAction] = useState<VersionAction | null>(null);
   const [activeVersionItemAction, setActiveVersionItemAction] = useState<{
     version: number;
     action: VersionItemAction;
   } | null>(null);
+  const latestSceneSnapshotRef = useRef<SceneGraph | null>(null);
   const activeProjectId = activeProject?.id ?? null;
 
   useEffect(() => {
@@ -220,15 +225,15 @@ export function AppSidebar() {
     if (!activeProjectId) {
       setVersionList([]);
       setPreviewVersion(null);
-      setVersionSearch("");
       setIsVersionPreviewMode(false);
+      latestSceneSnapshotRef.current = null;
       return;
     }
 
     loadVersionList();
     setPreviewVersion(null);
-    setVersionSearch("");
     setIsVersionPreviewMode(false);
+    latestSceneSnapshotRef.current = null;
   }, [activeProjectId, loadVersionList, setIsVersionPreviewMode]);
 
   useEffect(() => {
@@ -248,24 +253,40 @@ export function AppSidebar() {
     [setIsVersionPreviewMode],
   );
 
+  const snapshotCurrentSceneGraph = useCallback((): SceneGraph => {
+    const { nodes, rootNodeIds } = useScene.getState();
+    // Keep a local latest snapshot so preview toggles never drop unsaved work.
+    return JSON.parse(JSON.stringify({ nodes, rootNodeIds })) as SceneGraph;
+  }, []);
+
   const handlePreviewVersion = useCallback(
-    async (version: number) => {
+    async (modelId: string, version: number) => {
       if (!activeProjectId) return;
+
+      if (!isVersionPreviewMode) {
+        latestSceneSnapshotRef.current = snapshotCurrentSceneGraph();
+      }
 
       setIsSceneLoading(true);
       try {
-        const result = await getProjectVersionByNumber(activeProjectId, version);
+        const result = await getProjectVersionById(activeProjectId, modelId);
         if (!result.success || !result.data?.scene_graph) {
           return;
         }
 
         applySceneWithoutAutosave(result.data.scene_graph, true);
-        setPreviewVersion(version);
+        setPreviewVersion({ id: modelId, version });
       } finally {
         setIsSceneLoading(false);
       }
     },
-    [activeProjectId, applySceneWithoutAutosave, setIsSceneLoading],
+    [
+      activeProjectId,
+      applySceneWithoutAutosave,
+      isVersionPreviewMode,
+      setIsSceneLoading,
+      snapshotCurrentSceneGraph,
+    ],
   );
 
   const handleBackToLatest = useCallback(async () => {
@@ -273,28 +294,58 @@ export function AppSidebar() {
 
     setIsSceneLoading(true);
     try {
+      const latestSceneSnapshot = latestSceneSnapshotRef.current;
+      if (latestSceneSnapshot) {
+        applySceneWithoutAutosave(latestSceneSnapshot, false);
+        setPreviewVersion(null);
+        latestSceneSnapshotRef.current = null;
+
+        setAutosaveStatus("saving");
+        const saveResult = await saveProjectModel(activeProjectId, latestSceneSnapshot);
+        if (saveResult.success) {
+          if (saveResult.data) {
+            applyVersionStatus(saveResult.data);
+          }
+          setAutosaveStatus("saved");
+          await loadVersionList();
+        } else {
+          setAutosaveStatus("pending");
+        }
+        return;
+      }
+
       const result = await getProjectModel(activeProjectId);
       const sceneGraph = result.success ? result.data?.model?.scene_graph ?? null : null;
       applySceneWithoutAutosave(sceneGraph, false);
       setPreviewVersion(null);
+      setAutosaveStatus("saved");
     } finally {
       setIsSceneLoading(false);
     }
-  }, [activeProjectId, applySceneWithoutAutosave, setIsSceneLoading]);
+  }, [
+    activeProjectId,
+    applySceneWithoutAutosave,
+    applyVersionStatus,
+    loadVersionList,
+    setAutosaveStatus,
+    setIsSceneLoading,
+  ]);
 
   const handleRestoreVersion = useCallback(
-    async (version: number) => {
+    async (modelId: string, version: number) => {
       if (!activeProjectId || activeVersionItemAction) return;
 
       setActiveVersionItemAction({ version, action: "restore" });
       setIsSceneLoading(true);
       try {
-        const versionResult = await getProjectVersionByNumber(activeProjectId, version);
+        const versionResult = await getProjectVersionById(activeProjectId, modelId);
         if (!versionResult.success || !versionResult.data?.scene_graph) {
           return;
         }
 
-        const saveResult = await saveProjectModel(activeProjectId, versionResult.data.scene_graph);
+        const saveResult = await saveProjectModel(activeProjectId, versionResult.data.scene_graph, {
+          restoredFromVersion: version,
+        });
         if (!saveResult.success) {
           console.error("Failed to restore version:", saveResult.error);
           return;
@@ -306,6 +357,8 @@ export function AppSidebar() {
 
         applySceneWithoutAutosave(versionResult.data.scene_graph, false);
         setPreviewVersion(null);
+        latestSceneSnapshotRef.current = null;
+        setAutosaveStatus("saved");
         await loadVersionList();
       } finally {
         setIsSceneLoading(false);
@@ -320,6 +373,7 @@ export function AppSidebar() {
       applyVersionStatus,
       loadVersionList,
       refreshVersionStatus,
+      setAutosaveStatus,
       setIsSceneLoading,
     ],
   );
@@ -404,65 +458,33 @@ export function AppSidebar() {
   );
 
   const isVersionActionRunning = activeVersionAction !== null;
-  const hasUnsavedDraftChanges = !!versionStatus?.hasUnsavedDraftChanges;
-  const hasPublishableVersion = !!versionStatus?.hasPublishableVersion;
   const isVersionActionsDisabled = isVersionActionRunning || isVersionPreviewMode;
+  const isQuickSaveDisabled = isVersionActionsDisabled;
+  const quickSaveLabel = activeVersionAction === "save" ? "Saving..." : "Save";
+  const quickSaveDescription = isVersionPreviewMode
+    ? "Back to latest to save"
+    : "Save a new version";
 
-  const filteredVersions = useMemo(() => {
-    const query = versionSearch.trim().toLowerCase();
-    if (!query) {
-      return versionList;
-    }
-
-    return versionList.filter((item) => {
-      return (
-        `version ${item.version}`.includes(query) ||
-        formatRelativeTime(item.createdAt).toLowerCase().includes(query)
-      );
-    });
-  }, [versionList, versionSearch]);
-
-  const currentVersionLabel = useMemo(() => {
+  const triggerVersionLabel = useMemo(() => {
     if (isVersionPreviewMode && previewVersion !== null) {
-      return `Preview v${previewVersion}`;
+      return `v${previewVersion.version}`;
     }
 
     if (versionStatus?.draftVersion !== null && versionStatus?.draftVersion !== undefined) {
-      return `Draft v${versionStatus.draftVersion}`;
+      return "Latest";
     }
 
-    return "Latest";
-  }, [isVersionPreviewMode, previewVersion, versionStatus?.draftVersion]);
+    if (versionStatus?.latestSavedVersion !== null && versionStatus?.latestSavedVersion !== undefined) {
+      return "Latest";
+    }
 
-  const publishedVersionLabel = useMemo(() => {
-    if (!versionStatus) return "Version status unavailable";
-    if (versionStatus.publishedVersion === null) return "Not published yet";
-    return `Published v${versionStatus.publishedVersion}`;
-  }, [versionStatus]);
-
-  const publishStateLabel = useMemo(() => {
-    if (!activeProjectId) return "No active project";
-    if (!versionStatus) return "Checking status...";
-    if (isVersionPreviewMode && previewVersion !== null) {
-      return `Previewing v${previewVersion}`;
-    }
-    if (versionStatus.hasUnsavedDraftChanges) {
-      if (versionStatus.draftVersion !== null) {
-        return `Draft v${versionStatus.draftVersion} has version changes`;
-      }
-      return "Draft has version changes";
-    }
-    if (versionStatus.hasPublishableVersion) {
-      if (versionStatus.latestSavedVersion !== null) {
-        return `Saved v${versionStatus.latestSavedVersion} is ready to publish`;
-      }
-      return "A saved version is ready to publish";
-    }
-    if (versionStatus.draftVersion !== null) {
-      return `Editing draft v${versionStatus.draftVersion}`;
-    }
-    return "No draft version yet";
-  }, [activeProjectId, isVersionPreviewMode, previewVersion, versionStatus]);
+    return "Versions";
+  }, [
+    isVersionPreviewMode,
+    previewVersion,
+    versionStatus?.draftVersion,
+    versionStatus?.latestSavedVersion,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -530,195 +552,136 @@ export function AppSidebar() {
                   </div>
                 )}
               </div>
-              
-              {mounted && (
-                <button
-                  className="shrink-0 flex items-center bg-black/20 rounded-full p-1 border border-border/50 cursor-pointer"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  type="button"
-                  aria-label="Toggle theme"
-                >
-                  <div className="relative flex">
-                    {/* Sliding Background */}
-                    <motion.div
-                      className="absolute inset-0 bg-[#3A3A3C] shadow-sm rounded-full"
-                      initial={false}
-                      animate={{
-                        x: theme === "light" ? "100%" : "0%",
-                      }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 500,
-                        damping: 35,
-                      }}
-                      style={{ width: "50%" }}
-                    />
-
-                    {/* Dark Mode Icon */}
-                    <div
-                      className={cn(
-                        "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                        theme === "dark"
-                          ? "text-foreground"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      <Moon className="h-3.5 w-3.5" />
-                    </div>
-
-                    {/* Light Mode Icon */}
-                    <div
-                      className={cn(
-                        "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                        theme === "light"
-                          ? "text-foreground"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      <Sun className="h-3.5 w-3.5" />
-                    </div>
-                  </div>
-                </button>
-              )}
-            </div>
-            
-            {activeProjectId && (
-              <div className="mt-1 flex w-full items-start justify-between gap-2">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                    {publishedVersionLabel}
-                  </div>
-                  <div
-                    className={cn(
-                      "text-[10px] truncate",
-                      hasUnsavedDraftChanges
-                        ? "text-amber-400"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {publishStateLabel}
-                  </div>
-
+              <div className={cn("shrink-0 flex items-center gap-1 transition-all duration-200", isEditingTitle && "hidden")}>
+                {activeProjectId && (
                   <Popover open={isVersionsOpen} onOpenChange={setIsVersionsOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="mt-0.5 inline-flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-muted/40"
-                      >
-                        <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-medium">Versions</span>
-                        <span className="text-muted-foreground">{currentVersionLabel}</span>
-                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      className="w-[290px] p-0 overflow-hidden"
-                      sideOffset={8}
-                    >
-                      <div className="border-b border-border/60 p-2">
+                    <div className="inline-flex h-8 overflow-hidden rounded-full border border-border/50 bg-black/20">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => runVersionAction("save")}
+                            disabled={isQuickSaveDisabled}
+                            className={cn(
+                              "group/save-trigger relative inline-flex h-full min-w-0 items-center border-r border-border/50 px-1.5 text-[10px] transition-colors",
+                              isQuickSaveDisabled
+                                ? "cursor-not-allowed opacity-50"
+                                : "hover:bg-black/30",
+                            )}
+                            style={{
+                              width: "clamp(48px, calc(var(--sidebar-width) - 16.5rem), 80px)",
+                            }}
+                          >
+                            <span className="pointer-events-none inline-flex min-w-0 items-center gap-1 transition-opacity group-hover/save-trigger:opacity-0">
+                              <Clock3 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <span className="min-w-0 truncate text-left text-muted-foreground">
+                                {triggerVersionLabel}
+                              </span>
+                            </span>
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover/save-trigger:opacity-100">
+                              <Save className="h-3 w-3 shrink-0 text-foreground" />
+                              <span className="font-medium text-foreground">{quickSaveLabel}</span>
+                            </span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{quickSaveDescription}</TooltipContent>
+                      </Tooltip>
+
+                      <PopoverTrigger asChild>
                         <button
                           type="button"
-                          onClick={handleBackToLatest}
-                          disabled={!isVersionPreviewMode}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                            isVersionPreviewMode
-                              ? "border-primary/60 bg-primary/10 text-primary hover:bg-primary/20"
-                              : "border-border/60 bg-muted/20 text-muted-foreground"
-                          )}
+                          className="inline-flex h-full w-6 items-center justify-center text-muted-foreground transition-colors hover:bg-black/30 hover:text-foreground data-[state=open]:bg-black/35"
                         >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          Back to latest
+                          <ChevronDown className="h-3 w-3 shrink-0" />
                         </button>
-                        <div className="relative mt-2">
-                          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <input
-                            value={versionSearch}
-                            onChange={(event) => setVersionSearch(event.target.value)}
-                            placeholder="Search versions..."
-                            className="h-8 w-full rounded-md border border-border/60 bg-transparent pl-7 pr-2 text-xs outline-none focus:border-primary/60"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="max-h-[280px] overflow-y-auto p-1">
+                      </PopoverTrigger>
+                    </div>
+                    <PopoverContent
+                      align="end"
+                      className="w-[min(320px,calc(var(--sidebar-width)-3rem),calc(100vw-2rem))] min-w-[230px] p-2"
+                      sideOffset={8}
+                    >
+                      <div className="max-h-[280px] overflow-y-auto">
                         {isVersionListLoading ? (
                           <div className="px-2 py-3 text-xs text-muted-foreground">
                             Loading versions...
                           </div>
-                        ) : filteredVersions.length === 0 ? (
+                        ) : versionList.length === 0 ? (
                           <div className="px-2 py-3 text-xs text-muted-foreground">
                             No versions found
                           </div>
                         ) : (
-                          filteredVersions.map((item) => {
+                          versionList.map((item) => {
                             const isPublished = item.isPublished;
-                            const isPreviewed = isVersionPreviewMode && previewVersion === item.version;
-                            const isActionPending =
-                              activeVersionItemAction?.version === item.version;
+                            const isCurrentlyViewed = isVersionPreviewMode
+                              ? previewVersion?.id === item.id
+                              : item.isDraft;
+                            const isActionPending = activeVersionItemAction?.version === item.version;
 
                             return (
                               <div
                                 key={item.id}
                                 className={cn(
-                                  "group/version-item relative mb-1 rounded-md border",
-                                  isPublished
-                                    ? "border-primary/40 bg-primary/5"
-                                    : "border-transparent hover:border-border/70 hover:bg-muted/20",
-                                  isPreviewed && "border-amber-400/70 bg-amber-500/10"
+                                  "group/version-item relative mb-0.5 flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors",
+                                  isCurrentlyViewed ? "bg-accent/25" : "hover:bg-accent/20"
                                 )}
                               >
+                                {isCurrentlyViewed && (
+                                  <span className="pointer-events-none absolute right-0 top-1 bottom-1 w-0.5 rounded-full bg-primary/70" />
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => handlePreviewVersion(item.version)}
-                                  className="w-full px-2 py-1.5 text-left"
+                                  onClick={() =>
+                                    item.isDraft
+                                      ? handleBackToLatest()
+                                      : handlePreviewVersion(item.id, item.version)
+                                  }
+                                  className="min-w-0 flex-1 text-left"
                                 >
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-medium leading-none">
-                                      Version {item.version}
+                                    <span className="truncate text-sm font-medium leading-none">
+                                      {item.isDraft
+                                        ? "Latest"
+                                        : `Version ${item.version}`}
                                     </span>
-                                    {isPublished && (
-                                      <span className="rounded bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary">
-                                        Published
-                                      </span>
-                                    )}
-                                    {isPreviewed && (
-                                      <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-medium text-amber-300">
-                                        Preview
+                                    {item.isDraft && item.restoredFromVersion !== null && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        restored from v{item.restoredFromVersion}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="mt-1 text-xs text-muted-foreground">
+                                  <div className="mt-0.5 text-[11px] text-muted-foreground">
                                     {formatRelativeTime(item.updatedAt)}
                                   </div>
                                 </button>
 
-                                <div className="absolute right-1.5 top-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover/version-item:opacity-100">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          handleRestoreVersion(item.version);
-                                        }}
-                                        disabled={!!activeVersionItemAction}
-                                        className={cn(
-                                          "flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/90 text-muted-foreground transition-colors hover:text-foreground",
-                                          isActionPending &&
-                                            activeVersionItemAction?.action === "restore" &&
-                                            "border-primary/60 text-primary"
-                                        )}
-                                      >
-                                        <RotateCcw className="h-3.5 w-3.5" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">Restore to draft</TooltipContent>
-                                  </Tooltip>
+                                {!item.isDraft && (
+                                  <div className="absolute right-1 top-1 flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleRestoreVersion(item.id, item.version);
+                                      }}
+                                      disabled={!!activeVersionItemAction}
+                                      className={cn(
+                                        "group/restore pointer-events-none inline-flex h-6 items-center rounded-md border border-border/50 bg-background/80 px-1.5 text-muted-foreground opacity-0 transition-all duration-150 group-hover/version-item:pointer-events-auto group-hover/version-item:opacity-100 hover:border-border hover:bg-accent/20 hover:text-foreground",
+                                        isActionPending &&
+                                          activeVersionItemAction?.action === "restore" &&
+                                          "border-primary/40 text-primary"
+                                      )}
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="max-w-0 overflow-hidden whitespace-nowrap text-[10px] opacity-0 transition-all duration-150 group-hover/restore:ml-1 group-hover/restore:max-w-14 group-hover/restore:opacity-100">
+                                        Restore
+                                      </span>
+                                    </button>
 
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
+                                    {isPublished ? (
+                                      <span className="inline-flex h-6 items-center rounded-md bg-emerald-500/15 px-2 text-[10px] font-medium text-emerald-400">
+                                        Published
+                                      </span>
+                                    ) : (
                                       <button
                                         type="button"
                                         onClick={(event) => {
@@ -727,18 +690,20 @@ export function AppSidebar() {
                                         }}
                                         disabled={!!activeVersionItemAction}
                                         className={cn(
-                                          "flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/90 text-muted-foreground transition-colors hover:text-foreground",
+                                          "group/publish pointer-events-none inline-flex h-6 items-center rounded-md border border-sky-500/35 bg-sky-500/10 px-1.5 text-sky-300 opacity-0 transition-all duration-150 group-hover/version-item:pointer-events-auto group-hover/version-item:opacity-100 hover:border-sky-400/50 hover:bg-sky-500/20 hover:text-sky-200",
                                           isActionPending &&
                                             activeVersionItemAction?.action === "publish" &&
-                                            "border-primary/60 text-primary"
+                                            "border-sky-300/60 text-sky-200"
                                         )}
                                       >
-                                        <ArrowUpCircle className="h-3.5 w-3.5" />
+                                        <ArrowUpCircle className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="max-w-0 overflow-hidden whitespace-nowrap text-[10px] opacity-0 transition-all duration-150 group-hover/publish:ml-1 group-hover/publish:max-w-14 group-hover/publish:opacity-100">
+                                          Publish
+                                        </span>
                                       </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">Publish this version</TooltipContent>
-                                  </Tooltip>
-                                </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })
@@ -746,64 +711,59 @@ export function AppSidebar() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                </div>
-                <div className="shrink-0 flex items-center gap-1">
-                  {hasUnsavedDraftChanges ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => runVersionAction("save")}
-                        disabled={isVersionActionsDisabled}
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                          isVersionActionsDisabled
-                            ? "border-border/60 bg-muted/20 text-muted-foreground"
-                            : "border-border/60 bg-muted/40 text-foreground hover:bg-muted/60"
-                        )}
-                      >
-                        {activeVersionAction === "save" ? "Saving..." : "Save version"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => runVersionAction("savePublish")}
-                        disabled={isVersionActionsDisabled}
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                          isVersionActionsDisabled
-                            ? "border-border/60 bg-muted/20 text-muted-foreground"
-                            : "border-primary/60 bg-primary/10 text-primary hover:bg-primary/20"
-                        )}
-                      >
-                        {activeVersionAction === "savePublish" ? "Publishing..." : "Save & publish"}
-                      </button>
-                    </>
-                  ) : hasPublishableVersion ? (
-                    <button
-                      type="button"
-                      onClick={() => runVersionAction("publish")}
-                      disabled={isVersionActionsDisabled}
-                      className={cn(
-                        "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                        isVersionActionsDisabled
-                          ? "border-border/60 bg-muted/20 text-muted-foreground"
-                          : "border-primary/60 bg-primary/10 text-primary hover:bg-primary/20"
-                      )}
-                    >
-                      {activeVersionAction === "publish" ? "Publishing..." : "Publish"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      className="rounded-md border border-border/60 bg-muted/20 px-2 py-1 text-[11px] font-medium text-muted-foreground"
-                    >
-                      Published
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+                )}
 
+                {mounted && (
+                  <button
+                    className="shrink-0 flex items-center bg-black/20 rounded-full p-1 border border-border/50 cursor-pointer"
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    type="button"
+                    aria-label="Toggle theme"
+                  >
+                    <div className="relative flex">
+                      {/* Sliding Background */}
+                      <motion.div
+                        className="absolute inset-0 bg-[#3A3A3C] shadow-sm rounded-full"
+                        initial={false}
+                        animate={{
+                          x: theme === "light" ? "100%" : "0%",
+                        }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 35,
+                        }}
+                        style={{ width: "50%" }}
+                      />
+
+                      {/* Dark Mode Icon */}
+                      <div
+                        className={cn(
+                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
+                          theme === "dark"
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        <Moon className="h-3.5 w-3.5" />
+                      </div>
+
+                      {/* Light Mode Icon */}
+                      <div
+                        className={cn(
+                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
+                          theme === "light"
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        <Sun className="h-3.5 w-3.5" />
+                      </div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               {getPanelTitle()}
             </span>

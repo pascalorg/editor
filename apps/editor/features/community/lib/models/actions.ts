@@ -24,6 +24,7 @@ export interface ProjectModel {
   draft: boolean
   project_id: string
   scene_graph: SceneGraph | null
+  metadata: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -46,11 +47,15 @@ export interface ProjectVersionListItem {
   createdAt: string
   updatedAt: string
   isPublished: boolean
+  isDraft: boolean
+  restoredFromVersion: number | null
 }
 
 type ProjectVersionListRow = {
   id: string
   version: number
+  draft: boolean
+  metadata: unknown
   created_at: string
   updated_at: string
 }
@@ -72,6 +77,24 @@ function sceneGraphsEqual(
   right: SceneGraph | null | undefined,
 ): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
+}
+
+function parseModelMetadata(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+
+  return { ...(input as Record<string, unknown>) }
+}
+
+function readRestoredFromVersion(input: unknown): number | null {
+  const metadata = parseModelMetadata(input)
+  const restoredFromVersion = metadata.restoredFromVersion
+  if (typeof restoredFromVersion !== 'number' || !Number.isFinite(restoredFromVersion)) {
+    return null
+  }
+
+  return restoredFromVersion
 }
 
 function buildVersionStatus(params: {
@@ -240,7 +263,7 @@ export async function getProjectVersionStatus(
 }
 
 /**
- * List saved versions (non-draft), newest first.
+ * List all project versions (including current draft), newest first.
  */
 export async function getProjectVersionList(
   projectId: string,
@@ -258,9 +281,8 @@ export async function getProjectVersionList(
     const { supabase, project } = contextResult.data
     const { data: versions, error: versionsError } = await supabase
       .from('projects_models')
-      .select('id, version, created_at, updated_at')
+      .select('id, version, draft, metadata, created_at, updated_at')
       .eq('project_id', projectId)
-      .eq('draft', false)
       .is('deleted_at', null)
       .order('version', { ascending: false })
       .order('created_at', { ascending: false })
@@ -283,6 +305,8 @@ export async function getProjectVersionList(
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         isPublished: publishedVersion !== null && item.version === publishedVersion,
+        isDraft: item.draft,
+        restoredFromVersion: readRestoredFromVersion(item.metadata),
       })),
     }
   } catch (error) {
@@ -295,7 +319,7 @@ export async function getProjectVersionList(
 }
 
 /**
- * Fetch a single saved version for preview/restore.
+ * Fetch a single version by version number (saved or draft).
  */
 export async function getProjectVersionByNumber(
   projectId: string,
@@ -317,7 +341,54 @@ export async function getProjectVersionByNumber(
       .select('*')
       .eq('project_id', projectId)
       .eq('version', version)
-      .eq('draft', false)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle<ProjectModel>()
+
+    if (modelError) {
+      return {
+        success: false,
+        error: modelError.message,
+        data: null,
+      }
+    }
+
+    return {
+      success: true,
+      data: model ?? null,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch project version',
+      data: null,
+    }
+  }
+}
+
+/**
+ * Fetch a single version by model id.
+ */
+export async function getProjectVersionById(
+  projectId: string,
+  modelId: string,
+): Promise<ActionResult<ProjectModel | null>> {
+  try {
+    const contextResult = await getAuthenticatedProjectContext(projectId)
+    if (!contextResult.success || !contextResult.data) {
+      return {
+        success: false,
+        error: contextResult.error,
+        data: null,
+      }
+    }
+
+    const { supabase } = contextResult.data
+    const { data: model, error: modelError } = await supabase
+      .from('projects_models')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('id', modelId)
       .is('deleted_at', null)
       .limit(1)
       .maybeSingle<ProjectModel>()
@@ -443,9 +514,14 @@ export async function getProjectModel(projectId: string): Promise<ActionResult<P
 /**
  * Save or update the project's draft model scene graph.
  */
+export interface SaveProjectModelOptions {
+  restoredFromVersion?: number | null
+}
+
 export async function saveProjectModel(
   projectId: string,
   sceneGraph: SceneGraph,
+  options?: SaveProjectModelOptions,
 ): Promise<ActionResult<ProjectModelState>> {
   try {
     const contextResult = await getAuthenticatedProjectContext(projectId)
@@ -476,11 +552,29 @@ export async function saveProjectModel(
 
     const { draftModel: existingDraftModel, latestSavedModel } = versionModelsResult.data
     let savedModel: ProjectModel | null = null
+    const restoredFromVersionOption = options?.restoredFromVersion
+    const metadataOverride =
+      restoredFromVersionOption === undefined
+        ? undefined
+        : (() => {
+            const metadata = parseModelMetadata(existingDraftModel?.metadata ?? null)
+
+            if (typeof restoredFromVersionOption === 'number') {
+              metadata.restoredFromVersion = restoredFromVersionOption
+            } else {
+              delete metadata.restoredFromVersion
+            }
+
+            return Object.keys(metadata).length > 0 ? metadata : null
+          })()
 
     if (existingDraftModel) {
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         scene_graph: sceneGraph,
         updated_at: new Date().toISOString(),
+      }
+      if (metadataOverride !== undefined) {
+        updateData.metadata = metadataOverride
       }
       const { data: updatedModel, error: updateError } = (await (supabase
         .from('projects_models') as any)
@@ -542,6 +636,7 @@ export async function saveProjectModel(
         version: nextVersion,
         draft: true,
         scene_graph: sceneGraph,
+        ...(metadataOverride !== undefined ? { metadata: metadataOverride } : {}),
       }
       const { data: newModel, error: createError } = (await (supabase
         .from('projects_models') as any)
