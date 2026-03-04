@@ -25,16 +25,10 @@ export const ViewerZoneSystem = () => {
 
       obj.visible = shouldShow
 
-      // Also hide the label
-      const label = obj.getObjectByName('label')
-      if (label) {
-        // Hide label if zone layer is off OR if in solo mode on a different level
-        const labelPosition = obj.userData.labelPosition as [number, number, number] | undefined
-        if (shouldShow && labelPosition) {
-          label.position.set(...labelPosition)
-        } else {
-          label.position.set(-9999, -9999, -9999)
-        }
+      const targetOpacity = shouldShow ? '1' : '0'
+      const labelEl = document.getElementById(`${id}-label`)
+      if (labelEl && labelEl.style.opacity !== targetOpacity) {
+        labelEl.style.opacity = targetOpacity
       }
     })
   })

@@ -186,10 +186,12 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
         zIndexRange={[10, 0]}
       >
         <div id={`${node.id}-label`} style={{
-          display: 'flex', 
-          flexDirection: 'column', 
+          display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           transform: 'translate3d(-50%, -50%, 0)',
+          opacity: 0,
+          transition: 'opacity 0.3s ease-in-out',
         }}>
         <div
           style={{
