@@ -6,25 +6,56 @@ import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 
 const TRANSITION_DURATION = 400 // ms
+const EXIT_DEBOUNCE_MS = 50 // ignore rapid exit→re-enter within this window
 
 export const ZoneSystem = () => {
   const lastHighlightedZoneRef = useRef<string | null>(null)
   const lastChangeTimeRef = useRef(0)
   const isTransitioningRef = useRef(false)
+  // Debounce exit-to-null: track the raw pending value and when it last changed
+  const pendingZoneRef = useRef<string | null>(null)
+  const pendingZoneSinceRef = useRef(0)
 
   useFrame(({clock}, delta) => {
     const hoveredId = useViewer.getState().hoveredId
-    let highlightedZone: string | null = null
+    let rawZone: string | null = null
 
     if (hoveredId) {
       const hoveredNode = useScene.getState().nodes[hoveredId]
       if (hoveredNode?.type === 'zone') {
-        highlightedZone = hoveredId
+        rawZone = hoveredId
       }
     }
 
-    // Detect zone change
+    // Update pending zone when the raw value changes
+    if (rawZone !== pendingZoneRef.current) {
+      pendingZoneRef.current = rawZone
+      pendingZoneSinceRef.current = clock.elapsedTime * 1000
+    }
+
+    // Apply non-null immediately; debounce null to filter out brief exits
+    const age = clock.elapsedTime * 1000 - pendingZoneSinceRef.current
+    const highlightedZone = rawZone !== null
+      ? rawZone
+      : age >= EXIT_DEBOUNCE_MS ? null : lastHighlightedZoneRef.current
+
+    // Detect stable zone change
     if (highlightedZone !== lastHighlightedZoneRef.current) {
+      // Fade out previous zone label-pin
+      if (lastHighlightedZoneRef.current) {
+        const prevLabel = document.getElementById(`${lastHighlightedZoneRef.current}-label`)
+        const pin = prevLabel?.querySelector('.label-pin') as HTMLElement | null
+          if (pin) pin.style.opacity = '0'
+        console.log('setting opacity to 0 for', lastHighlightedZoneRef.current)
+      }
+      // Fade in new zone label-pin
+      if (highlightedZone) {
+        const label = document.getElementById(`${highlightedZone}-label`)
+        const pin = label?.querySelector('.label-pin') as HTMLElement | null
+        if (pin) pin.style.opacity = '1'
+        console.log('setting opacity to 1 for', highlightedZone)
+      }
+
       lastHighlightedZoneRef.current = highlightedZone
       lastChangeTimeRef.current = clock.elapsedTime * 1000
       isTransitioningRef.current = true
@@ -63,6 +94,7 @@ export const ZoneSystem = () => {
         const currentOpacity = material.userData.uOpacity.value
         material.userData.uOpacity.value = MathUtils.lerp(currentOpacity, targetOpacity, lerpSpeed)
       }
+
     })
   })
 

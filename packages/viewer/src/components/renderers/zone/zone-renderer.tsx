@@ -19,9 +19,9 @@ const createWallGradientMaterial = (zoneColor: string) => {
   // Use UV y coordinate for vertical gradient (0 at bottom, 1 at top)
   const gradientT = uv().y
 
-  const opacity = uniform(0);
+  const opacity = uniform(0)
   // Fade opacity from 0.6 at bottom to 0 at top
-  const finalOpacity = float(0.6).mul(float(1).sub(gradientT)).mul(opacity);
+  const finalOpacity = float(0.6).mul(float(1).sub(gradientT)).mul(opacity)
 
   return new MeshBasicNodeMaterial({
     transparent: true,
@@ -32,7 +32,7 @@ const createWallGradientMaterial = (zoneColor: string) => {
     depthTest: false,
     userData: {
       uOpacity: opacity,
-    }
+    },
   })
 }
 
@@ -49,7 +49,7 @@ const createFloorMaterial = (zoneColor: string) => {
     side: DoubleSide,
     depthWrite: false,
     depthTest: false,
-    userData: { uOpacity: opacity}
+    userData: { uOpacity: opacity },
   })
 }
 
@@ -176,25 +176,68 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     return null
   }
 
+
   return (
     <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
       <Html
         name="label"
         position={[centroid[0], 1, centroid[1]]}
-        style={{ pointerEvents: 'none' }}
+        style={{ pointerEvents: 'none', }}
         zIndexRange={[10, 0]}
       >
-        <div style={{
+        <div id={`${node.id}-label`} style={{
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
           transform: 'translate3d(-50%, -50%, 0)',
-          width: 'max-content',
-          color: 'white',
-          textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
         }}>
-          <span>{node.name}</span>
+        <div
+          style={{
+            width: 'max-content',
+            color: 'white',
+            textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+            textAlign: 'center',
+          }}
+        >
+          <span>{node.name}</span>  
+        </div>
+        <div 
+          className="label-pin"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            marginTop: '2px',
+            opacity: 0,
+            transition: 'opacity 0.5s ease-in-out',
+          }}
+          >
+        <div 
+          style={{
+          width: '2px',
+          height: '40px',
+          backgroundColor: node.color,
+        }}/>
+          <div
+            style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              backgroundColor: node.color,
+              border: `1px solid white`,
+            }}
+          />
+          </div>
         </div>
       </Html>
+
       {/* Floor fill */}
-      <mesh position={[0, Y_OFFSET, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMaterial} name="floor">
+      <mesh
+        position={[0, Y_OFFSET, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        material={floorMaterial}
+        name="floor"
+      >
         <shapeGeometry args={[floorShape]} />
       </mesh>
 
