@@ -40,6 +40,21 @@ export interface ProjectModelState extends ProjectVersionStatus {
   model: ProjectModel | null
 }
 
+export interface ProjectVersionListItem {
+  id: string
+  version: number
+  createdAt: string
+  updatedAt: string
+  isPublished: boolean
+}
+
+type ProjectVersionListRow = {
+  id: string
+  version: number
+  created_at: string
+  updated_at: string
+}
+
 interface ProjectOwnershipRow {
   id: string
   owner_id: string
@@ -220,6 +235,110 @@ export async function getProjectVersionStatus(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch project version status',
+    }
+  }
+}
+
+/**
+ * List saved versions (non-draft), newest first.
+ */
+export async function getProjectVersionList(
+  projectId: string,
+): Promise<ActionResult<ProjectVersionListItem[]>> {
+  try {
+    const contextResult = await getAuthenticatedProjectContext(projectId)
+    if (!contextResult.success || !contextResult.data) {
+      return {
+        success: false,
+        error: contextResult.error,
+        data: [],
+      }
+    }
+
+    const { supabase, project } = contextResult.data
+    const { data: versions, error: versionsError } = await supabase
+      .from('projects_models')
+      .select('id, version, created_at, updated_at')
+      .eq('project_id', projectId)
+      .eq('draft', false)
+      .is('deleted_at', null)
+      .order('version', { ascending: false })
+      .order('created_at', { ascending: false })
+      .returns<ProjectVersionListRow[]>()
+
+    if (versionsError) {
+      return {
+        success: false,
+        error: versionsError.message,
+        data: [],
+      }
+    }
+
+    const publishedVersion = project.published_model_version ?? null
+    return {
+      success: true,
+      data: (versions ?? []).map((item) => ({
+        id: item.id,
+        version: item.version,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        isPublished: publishedVersion !== null && item.version === publishedVersion,
+      })),
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch project version list',
+      data: [],
+    }
+  }
+}
+
+/**
+ * Fetch a single saved version for preview/restore.
+ */
+export async function getProjectVersionByNumber(
+  projectId: string,
+  version: number,
+): Promise<ActionResult<ProjectModel | null>> {
+  try {
+    const contextResult = await getAuthenticatedProjectContext(projectId)
+    if (!contextResult.success || !contextResult.data) {
+      return {
+        success: false,
+        error: contextResult.error,
+        data: null,
+      }
+    }
+
+    const { supabase } = contextResult.data
+    const { data: model, error: modelError } = await supabase
+      .from('projects_models')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('version', version)
+      .eq('draft', false)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle<ProjectModel>()
+
+    if (modelError) {
+      return {
+        success: false,
+        error: modelError.message,
+        data: null,
+      }
+    }
+
+    return {
+      success: true,
+      data: model ?? null,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch project version',
+      data: null,
     }
   }
 }

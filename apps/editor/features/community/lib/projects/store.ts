@@ -16,6 +16,7 @@ interface ProjectStore {
   projects: Project[]
   isLoading: boolean
   isSceneLoading: boolean
+  isVersionPreviewMode: boolean
   error: string | null
 
   // Actions
@@ -23,6 +24,7 @@ interface ProjectStore {
   fetchActiveProject: () => Promise<void>
   setActiveProject: (projectId: string) => Promise<void>
   setIsSceneLoading: (loading: boolean) => void
+  setIsVersionPreviewMode: (preview: boolean) => void
   initialize: () => Promise<void>
   updateActiveThumbnail: (thumbnailUrl: string) => void
 }
@@ -33,6 +35,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   isLoading: true,
   isSceneLoading: false,
+  isVersionPreviewMode: false,
   error: null,
 
   // Fetch all projects
@@ -84,6 +87,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   setIsSceneLoading: (loading: boolean) => {
     set({ isSceneLoading: loading })
+  },
+
+  setIsVersionPreviewMode: (preview: boolean) => {
+    set({ isVersionPreviewMode: preview })
   },
 
   // Patch the active project's thumbnail URL in place (no refetch)
