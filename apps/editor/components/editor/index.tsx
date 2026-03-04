@@ -25,6 +25,7 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { Grid } from './grid'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
+import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { ThumbnailGenerator } from './thumbnail-generator'
 
 
@@ -120,6 +121,7 @@ export default function Editor({ projectId }: EditorProps) {
         <ToolManager />
         <CustomCameraControls />
         <ThumbnailGenerator projectId={projectId} />
+        <PresetThumbnailGenerator />
         <SiteEdgeLabels />
       </Viewer>
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, WindowNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, WindowNode, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -111,23 +111,29 @@ export function WindowPanel() {
 
   const handleSavePreset = useCallback(async (name: string) => {
     const data = getWindowPresetData()
-    if (!data) return
-    await fetch('/api/presets', {
+    if (!data || !selectedId) return
+    const res = await fetch('/api/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'window', name, data }),
     })
-  }, [getWindowPresetData])
+    if (res.ok) {
+      const json = await res.json()
+      const presetId = json.preset?.id
+      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
+    }
+  }, [getWindowPresetData, selectedId])
 
   const handleOverwritePreset = useCallback(async (id: string) => {
     const data = getWindowPresetData()
-    if (!data) return
-    await fetch(`/api/presets/${id}`, {
+    if (!data || !selectedId) return
+    const res = await fetch(`/api/presets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data }),
     })
-  }, [getWindowPresetData])
+    if (res.ok) emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
+  }, [getWindowPresetData, selectedId])
 
   const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
     handleUpdate(data as Partial<WindowNode>)

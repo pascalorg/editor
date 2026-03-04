@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, DoorNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -141,23 +141,29 @@ export function DoorPanel() {
 
   const handleSavePreset = useCallback(async (name: string) => {
     const data = getDoorPresetData()
-    if (!data) return
-    await fetch('/api/presets', {
+    if (!data || !selectedId) return
+    const res = await fetch('/api/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'door', name, data }),
     })
-  }, [getDoorPresetData])
+    if (res.ok) {
+      const json = await res.json()
+      const presetId = json.preset?.id
+      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
+    }
+  }, [getDoorPresetData, selectedId])
 
   const handleOverwritePreset = useCallback(async (id: string) => {
     const data = getDoorPresetData()
-    if (!data) return
-    await fetch(`/api/presets/${id}`, {
+    if (!data || !selectedId) return
+    const res = await fetch(`/api/presets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data }),
     })
-  }, [getDoorPresetData])
+    if (res.ok) emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
+  }, [getDoorPresetData, selectedId])
 
   const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
     handleUpdate(data as Partial<DoorNode>)
