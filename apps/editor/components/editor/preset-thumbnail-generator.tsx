@@ -103,7 +103,10 @@ export const PresetThumbnailGenerator = () => {
           body: blob,
           headers: { 'Content-Type': 'image/png' },
         })
-        if (!res.ok) {
+        if (res.ok) {
+          const json = await res.json()
+          emitter.emit('preset:thumbnail-updated', { presetId, thumbnailUrl: json.thumbnail_url })
+        } else {
           console.error('❌ PresetThumbnail: upload failed', await res.text())
         }
       }, 'image/png')

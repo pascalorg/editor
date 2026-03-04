@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { BookMarked, Check, Globe, GlobeLock, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
+import { emitter } from '@pascal-app/core'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/primitives/tooltip'
 import { useAuth } from '@/features/community/lib/auth/hooks'
@@ -75,6 +76,16 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children }:
   useEffect(() => {
     if (!isAuthenticated && tab === 'mine') setTab('community')
   }, [isAuthenticated, tab])
+
+  useEffect(() => {
+    const handler = ({ presetId, thumbnailUrl }: { presetId: string; thumbnailUrl: string }) => {
+      setPresets((prev) =>
+        prev.map((p) => (p.id === presetId ? { ...p, thumbnail_url: thumbnailUrl } : p)),
+      )
+    }
+    emitter.on('preset:thumbnail-updated', handler)
+    return () => emitter.off('preset:thumbnail-updated', handler)
+  }, [])
 
   const handleSaveNew = async () => {
     if (!saveName.trim()) return
