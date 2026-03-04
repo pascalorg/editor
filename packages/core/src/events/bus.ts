@@ -73,6 +73,11 @@ type ToolEvents = {
   'tool:cancel': undefined
 }
 
+type PresetEvents = {
+  'preset:generate-thumbnail': { presetId: string; nodeId: string }
+  'preset:thumbnail-updated': { presetId: string; thumbnailUrl: string }
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'item', ItemEvent> &
@@ -86,6 +91,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   CameraControlEvents &
-  ToolEvents
+  ToolEvents &
+  PresetEvents
 
 export const emitter = mitt<EditorEvents>()

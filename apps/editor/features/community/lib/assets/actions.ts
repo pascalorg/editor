@@ -1,6 +1,5 @@
 'use server'
 
-import type { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '../database/server'
 import { getSession } from '../auth/server'
 import { createId } from '../utils/id-generator'
@@ -83,7 +82,7 @@ export async function uploadProjectAsset(
     const url = urlData.publicUrl
 
     // Record in project_assets table
-    const { error: insertError } = await (supabase.from('project_assets') as any).insert({
+    const { error: insertError } = await (supabase as any).from('project_assets').insert({
       id: assetId,
       project_id: projectId,
       storage_key: storageKey,
@@ -144,9 +143,7 @@ export async function createAssetUploadUrl(
     const assetId = createId('asset')
     const storageKey = ext ? `${projectId}/${assetId}.${ext}` : `${projectId}/${assetId}`
 
-    const { data, error } = await (
-      supabase as ReturnType<typeof createClient>
-    ).storage
+    const { data, error } = await supabase.storage
       .from(BUCKET)
       .createSignedUploadUrl(storageKey)
 
@@ -203,7 +200,7 @@ export async function confirmAssetUpload(
 
     const url = urlData.publicUrl
 
-    const { error: insertError } = await (supabase.from('project_assets') as any).insert({
+    const { error: insertError } = await (supabase as any).from('project_assets').insert({
       id: assetId,
       project_id: projectId,
       storage_key: storageKey,
@@ -273,7 +270,7 @@ export async function deleteProjectAssetByUrl(
     }
 
     // Delete DB row by storage_key scoped to this project
-    const { error: dbError } = await (supabase.from('project_assets') as any)
+    const { error: dbError } = await (supabase as any).from('project_assets')
       .delete()
       .eq('project_id', projectId)
       .eq('storage_key', storageKeyFromUrl)

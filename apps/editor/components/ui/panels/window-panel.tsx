@@ -1,8 +1,8 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, WindowNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, WindowNode, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
+import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
@@ -13,6 +13,7 @@ import { SliderControl } from '../controls/slider-control'
 import { MetricControl } from '../controls/metric-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { PresetsPopover } from './presets/presets-popover'
 
 export function WindowPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -91,6 +92,53 @@ export function WindowPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
+  const getWindowPresetData = useCallback(() => {
+    if (!node) return null
+    return {
+      width: node.width,
+      height: node.height,
+      frameThickness: node.frameThickness,
+      frameDepth: node.frameDepth,
+      columnRatios: node.columnRatios,
+      rowRatios: node.rowRatios,
+      columnDividerThickness: node.columnDividerThickness,
+      rowDividerThickness: node.rowDividerThickness,
+      sill: node.sill,
+      sillDepth: node.sillDepth,
+      sillThickness: node.sillThickness,
+    }
+  }, [node])
+
+  const handleSavePreset = useCallback(async (name: string) => {
+    const data = getWindowPresetData()
+    if (!data || !selectedId) return
+    const res = await fetch('/api/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'window', name, data }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      const presetId = json.preset?.id
+      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
+    }
+  }, [getWindowPresetData, selectedId])
+
+  const handleOverwritePreset = useCallback(async (id: string) => {
+    const data = getWindowPresetData()
+    if (!data || !selectedId) return
+    const res = await fetch(`/api/presets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    })
+    if (res.ok) emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
+  }, [getWindowPresetData, selectedId])
+
+  const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
+    handleUpdate(data as Partial<WindowNode>)
+  }, [handleUpdate])
+
   if (!node || node.type !== 'window' || selectedIds.length !== 1) return null
 
   const numCols = node.columnRatios.length
@@ -134,6 +182,16 @@ export function WindowPanel() {
       onClose={handleClose}
       width={320}
     >
+      {/* Presets strip */}
+      <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
+        <PresetsPopover type="window" onApply={handleApplyPreset} onSave={handleSavePreset} onOverwrite={handleOverwritePreset}>
+          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
+            <BookMarked className="h-3.5 w-3.5 shrink-0" />
+            <span>Presets</span>
+          </button>
+        </PresetsPopover>
+      </div>
+
       <PanelSection title="Position">
         <SliderControl
           label={<>X<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}

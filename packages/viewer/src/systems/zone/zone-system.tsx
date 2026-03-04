@@ -46,14 +46,12 @@ export const ZoneSystem = () => {
         const prevLabel = document.getElementById(`${lastHighlightedZoneRef.current}-label`)
         const pin = prevLabel?.querySelector('.label-pin') as HTMLElement | null
           if (pin) pin.style.opacity = '0'
-        console.log('setting opacity to 0 for', lastHighlightedZoneRef.current)
       }
       // Fade in new zone label-pin
       if (highlightedZone) {
         const label = document.getElementById(`${highlightedZone}-label`)
         const pin = label?.querySelector('.label-pin') as HTMLElement | null
         if (pin) pin.style.opacity = '1'
-        console.log('setting opacity to 1 for', highlightedZone)
       }
 
       lastHighlightedZoneRef.current = highlightedZone

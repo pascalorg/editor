@@ -19,12 +19,6 @@ export const useKeyboard = () => {
         // Clear selections to close UI panels, but KEEP the active building and level context
         useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         useEditor.getState().setSelectedReferenceId(null)
-
-        // If in build mode, switch back to select mode
-        const { mode } = useEditor.getState()
-        if (mode === 'build') {
-          useEditor.getState().setMode('select')
-        }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')

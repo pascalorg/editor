@@ -14,3 +14,6 @@ export * from './projects/assets'
 export * from './projects/likes'
 export * from './projects/models'
 export * from './projects/projects'
+
+// Presets table
+export * from './presets/presets'
