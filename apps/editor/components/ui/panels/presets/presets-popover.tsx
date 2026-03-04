@@ -390,7 +390,7 @@ function PresetRow({
   return (
     <li className="group flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
       {/* Thumbnail */}
-      <div className="h-8 w-12 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
+      <div className="h-8 w-8 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
         {preset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preset.thumbnail_url} alt={preset.name} className="h-full w-full object-cover" />
