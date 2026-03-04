@@ -26,21 +26,13 @@ export const ZoneSystem = () => {
       if (obj.visible !== visible) {
         obj.visible = visible
       }
-      
-      const label = obj.getObjectByName('label')
-      if (label) {
-        // Hide label if zone layer is off OR if in solo mode on a different level
-        const showLabel = visible && !hideInSoloMode;
-        const labelPosition = obj.userData.labelPosition as [number, number, number] | undefined
-        
-        const targetX = showLabel && labelPosition ? labelPosition[0] : -9999
-        if (label.position.x !== targetX) {
-          if (showLabel && labelPosition) {
-            label.position.set(...labelPosition)
-          } else {
-            label.position.set(-9999, -9999, -9999)
-          }
-        }
+
+      // Hide label if zone layer is off OR if in solo mode on a different level
+      const showLabel = visible && !hideInSoloMode
+      const targetOpacity = showLabel ? '1' : '0'
+      const labelEl = document.getElementById(`${zoneId}-label`)
+      if (labelEl && labelEl.style.opacity !== targetOpacity) {
+        labelEl.style.opacity = targetOpacity
       }
     })
   })
