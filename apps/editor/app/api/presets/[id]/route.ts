@@ -22,11 +22,12 @@ export async function PUT(
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
-  const { data: existing } = await supabaseAdmin
+  const existingResult = await supabaseAdmin
     .from('presets')
     .select('user_id')
     .eq('id', id)
     .single()
+  const existing = existingResult.data as { user_id: string | null } | null
 
   if (!existing || existing.user_id !== session.user.id) {
     return NextResponse.json({ error: 'Not found or forbidden' }, { status: 403 })
@@ -37,7 +38,8 @@ export async function PUT(
   if (data !== undefined) updates.data = data
   if (is_community !== undefined) updates.is_community = is_community
 
-  const { data: preset, error } = await supabaseAdmin
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: preset, error } = await (supabaseAdmin as any)
     .from('presets')
     .update(updates)
     .eq('id', id)
@@ -60,11 +62,12 @@ export async function DELETE(
 
   const { id } = await params
 
-  const { data: existing } = await supabaseAdmin
+  const existingResult = await supabaseAdmin
     .from('presets')
     .select('user_id, thumbnail_url')
     .eq('id', id)
     .single()
+  const existing = existingResult.data as { user_id: string | null; thumbnail_url: string | null } | null
 
   if (!existing || existing.user_id !== session.user.id) {
     return NextResponse.json({ error: 'Not found or forbidden' }, { status: 403 })

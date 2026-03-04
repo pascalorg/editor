@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
   }
 
-  const { data: preset, error } = await supabaseAdmin
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: preset, error } = await (supabaseAdmin as any)
     .from('presets')
     .insert({
       id: createId('preset'),

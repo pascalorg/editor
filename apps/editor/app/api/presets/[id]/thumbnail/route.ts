@@ -16,11 +16,12 @@ export async function POST(
 
   const { id } = await params
 
-  const { data: existing } = await supabaseAdmin
+  const existingResult = await supabaseAdmin
     .from('presets')
     .select('user_id')
     .eq('id', id)
     .single()
+  const existing = existingResult.data as { user_id: string | null } | null
 
   if (!existing || existing.user_id !== session.user.id) {
     return NextResponse.json({ error: 'Not found or forbidden' }, { status: 403 })
@@ -46,7 +47,8 @@ export async function POST(
 
   const thumbnailUrl = `${urlData.publicUrl}?t=${Date.now()}`
 
-  const { error: updateError } = await supabaseAdmin
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updateError } = await (supabaseAdmin as any)
     .from('presets')
     .update({ thumbnail_url: thumbnailUrl })
     .eq('id', id)

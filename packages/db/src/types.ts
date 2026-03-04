@@ -150,6 +150,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
     }
     Views: {}
