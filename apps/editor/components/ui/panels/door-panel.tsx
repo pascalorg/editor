@@ -2,7 +2,7 @@
 
 import { type AnyNode, type AnyNodeId, DoorNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
+import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
@@ -14,6 +14,7 @@ import { MetricControl } from '../controls/metric-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { SegmentedControl } from '../controls/segmented-control'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { PresetsPopover } from './presets/presets-popover'
 
 export function DoorPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -116,6 +117,37 @@ export function DoorPanel() {
     handleUpdate({ segments: updated })
   }
 
+  const handleSavePreset = useCallback(async (name: string) => {
+    if (!node) return
+    const data = {
+      width: node.width,
+      height: node.height,
+      frameThickness: node.frameThickness,
+      frameDepth: node.frameDepth,
+      contentPadding: node.contentPadding,
+      hingesSide: node.hingesSide,
+      swingDirection: node.swingDirection,
+      threshold: node.threshold,
+      thresholdHeight: node.thresholdHeight,
+      handle: node.handle,
+      handleHeight: node.handleHeight,
+      handleSide: node.handleSide,
+      doorCloser: node.doorCloser,
+      panicBar: node.panicBar,
+      panicBarHeight: node.panicBarHeight,
+      segments: node.segments,
+    }
+    await fetch('/api/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'door', name, data }),
+    })
+  }, [node])
+
+  const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
+    handleUpdate(data as Partial<DoorNode>)
+  }, [handleUpdate])
+
   if (!node || node.type !== 'door' || selectedIds.length !== 1) return null
 
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
@@ -128,6 +160,16 @@ export function DoorPanel() {
       onClose={handleClose}
       width={320}
     >
+      {/* Presets strip */}
+      <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
+        <PresetsPopover type="door" onApply={handleApplyPreset} onSave={handleSavePreset}>
+          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
+            <BookMarked className="h-3.5 w-3.5 shrink-0" />
+            <span>Presets</span>
+          </button>
+        </PresetsPopover>
+      </div>
+
       <PanelSection title="Position">
         <SliderControl
           label={<>X<sub className="text-[11px] ml-[1px] opacity-70">wall</sub></>}

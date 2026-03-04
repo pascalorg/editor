@@ -116,6 +116,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      presets: {
+        Row: {
+          id: string
+          type: string
+          name: string
+          data: Json
+          thumbnail_url: string | null
+          user_id: string | null
+          is_community: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          type: string
+          name: string
+          data: Json
+          thumbnail_url?: string | null
+          user_id?: string | null
+          is_community?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          type?: string
+          name?: string
+          data?: Json
+          thumbnail_url?: string | null
+          user_id?: string | null
+          is_community?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {}
     Functions: {}

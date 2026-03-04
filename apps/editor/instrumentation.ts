@@ -37,5 +37,14 @@ export async function register() {
       })
       console.log('Created "project-assets" storage bucket')
     }
+
+    if (!bucketNames.has('preset-thumbnails')) {
+      await supabase.storage.createBucket('preset-thumbnails', {
+        public: true,
+        fileSizeLimit: 5 * 1024 * 1024, // 5MB
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+      })
+      console.log('Created "preset-thumbnails" storage bucket')
+    }
   }
 }
