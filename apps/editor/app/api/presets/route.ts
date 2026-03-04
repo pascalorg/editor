@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('type', type)
       .eq('user_id', session.user.id)
-      .eq('is_community', false)
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

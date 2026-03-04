@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase/server'
 
 // PUT /api/presets/[id]
+// Accepts any subset of: name, data, is_community
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -15,25 +16,30 @@ export async function PUT(
 
   const { id } = await params
   const body = await req.json()
-  const { name } = body
+  const { name, data, is_community } = body
 
-  if (!name) {
-    return NextResponse.json({ error: 'Missing name' }, { status: 400 })
+  if (name === undefined && data === undefined && is_community === undefined) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   const { data: existing } = await supabaseAdmin
     .from('presets')
-    .select('user_id, is_community')
+    .select('user_id')
     .eq('id', id)
     .single()
 
-  if (!existing || existing.user_id !== session.user.id || existing.is_community) {
+  if (!existing || existing.user_id !== session.user.id) {
     return NextResponse.json({ error: 'Not found or forbidden' }, { status: 403 })
   }
 
+  const updates: Record<string, unknown> = {}
+  if (name !== undefined) updates.name = name
+  if (data !== undefined) updates.data = data
+  if (is_community !== undefined) updates.is_community = is_community
+
   const { data: preset, error } = await supabaseAdmin
     .from('presets')
-    .update({ name })
+    .update(updates)
     .eq('id', id)
     .select()
     .single()
@@ -56,11 +62,11 @@ export async function DELETE(
 
   const { data: existing } = await supabaseAdmin
     .from('presets')
-    .select('user_id, is_community, thumbnail_url')
+    .select('user_id, thumbnail_url')
     .eq('id', id)
     .single()
 
-  if (!existing || existing.user_id !== session.user.id || existing.is_community) {
+  if (!existing || existing.user_id !== session.user.id) {
     return NextResponse.json({ error: 'Not found or forbidden' }, { status: 403 })
   }
 

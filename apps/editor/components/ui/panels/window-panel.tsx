@@ -92,9 +92,9 @@ export function WindowPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
-  const handleSavePreset = useCallback(async (name: string) => {
-    if (!node) return
-    const data = {
+  const getWindowPresetData = useCallback(() => {
+    if (!node) return null
+    return {
       width: node.width,
       height: node.height,
       frameThickness: node.frameThickness,
@@ -107,12 +107,27 @@ export function WindowPanel() {
       sillDepth: node.sillDepth,
       sillThickness: node.sillThickness,
     }
+  }, [node])
+
+  const handleSavePreset = useCallback(async (name: string) => {
+    const data = getWindowPresetData()
+    if (!data) return
     await fetch('/api/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'window', name, data }),
     })
-  }, [node])
+  }, [getWindowPresetData])
+
+  const handleOverwritePreset = useCallback(async (id: string) => {
+    const data = getWindowPresetData()
+    if (!data) return
+    await fetch(`/api/presets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    })
+  }, [getWindowPresetData])
 
   const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
     handleUpdate(data as Partial<WindowNode>)
@@ -163,7 +178,7 @@ export function WindowPanel() {
     >
       {/* Presets strip */}
       <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
-        <PresetsPopover type="window" onApply={handleApplyPreset} onSave={handleSavePreset}>
+        <PresetsPopover type="window" onApply={handleApplyPreset} onSave={handleSavePreset} onOverwrite={handleOverwritePreset}>
           <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
             <BookMarked className="h-3.5 w-3.5 shrink-0" />
             <span>Presets</span>

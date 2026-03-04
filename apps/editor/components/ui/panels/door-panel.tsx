@@ -117,9 +117,9 @@ export function DoorPanel() {
     handleUpdate({ segments: updated })
   }
 
-  const handleSavePreset = useCallback(async (name: string) => {
-    if (!node) return
-    const data = {
+  const getDoorPresetData = useCallback(() => {
+    if (!node) return null
+    return {
       width: node.width,
       height: node.height,
       frameThickness: node.frameThickness,
@@ -137,12 +137,27 @@ export function DoorPanel() {
       panicBarHeight: node.panicBarHeight,
       segments: node.segments,
     }
+  }, [node])
+
+  const handleSavePreset = useCallback(async (name: string) => {
+    const data = getDoorPresetData()
+    if (!data) return
     await fetch('/api/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'door', name, data }),
     })
-  }, [node])
+  }, [getDoorPresetData])
+
+  const handleOverwritePreset = useCallback(async (id: string) => {
+    const data = getDoorPresetData()
+    if (!data) return
+    await fetch(`/api/presets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    })
+  }, [getDoorPresetData])
 
   const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
     handleUpdate(data as Partial<DoorNode>)
@@ -162,7 +177,7 @@ export function DoorPanel() {
     >
       {/* Presets strip */}
       <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
-        <PresetsPopover type="door" onApply={handleApplyPreset} onSave={handleSavePreset}>
+        <PresetsPopover type="door" onApply={handleApplyPreset} onSave={handleSavePreset} onOverwrite={handleOverwritePreset}>
           <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
             <BookMarked className="h-3.5 w-3.5 shrink-0" />
             <span>Presets</span>

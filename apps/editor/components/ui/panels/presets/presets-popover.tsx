@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { BookMarked, Pencil, Plus, Trash2, Users, Check, X } from 'lucide-react'
+import { BookMarked, Check, Globe, GlobeLock, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/primitives/tooltip'
 import { useAuth } from '@/features/community/lib/auth/hooks'
 import { cn } from '@/lib/utils'
 
@@ -23,19 +24,23 @@ type Tab = 'community' | 'mine'
 
 interface PresetsPopoverProps {
   type: PresetType
+  /** Apply preset data to the current node */
   onApply: (data: Record<string, unknown>) => void
+  /** Save current node state as a new preset with the given name */
   onSave: (name: string) => Promise<void>
+  /** Overwrite an existing preset's data with the current node state */
+  onOverwrite: (id: string) => Promise<void>
   children: React.ReactNode
 }
 
-export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopoverProps) {
+export function PresetsPopover({ type, onApply, onSave, onOverwrite, children }: PresetsPopoverProps) {
   const { isAuthenticated } = useAuth()
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('community')
   const [presets, setPresets] = useState<PresetData[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Save dialog state
+  // New preset save state
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -46,6 +51,9 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Overwrite feedback (shows check icon briefly after overwrite)
+  const [overwrittenId, setOverwrittenId] = useState<string | null>(null)
 
   const fetchPresets = useCallback(async () => {
     setLoading(true)
@@ -64,12 +72,11 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
     if (open) fetchPresets()
   }, [open, fetchPresets])
 
-  // Switch tab to community if user signs out while on mine tab
   useEffect(() => {
     if (!isAuthenticated && tab === 'mine') setTab('community')
   }, [isAuthenticated, tab])
 
-  const handleSave = async () => {
+  const handleSaveNew = async () => {
     if (!saveName.trim()) return
     setSaving(true)
     try {
@@ -104,6 +111,23 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
     }
   }
 
+  const handleOverwrite = async (id: string) => {
+    await onOverwrite(id)
+    setOverwrittenId(id)
+    setTimeout(() => setOverwrittenId(null), 1500)
+  }
+
+  const handleToggleCommunity = async (id: string, current: boolean) => {
+    const res = await fetch(`/api/presets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_community: !current }),
+    })
+    if (res.ok) {
+      setPresets((prev) => prev.map((p) => (p.id === id ? { ...p, is_community: !current } : p)))
+    }
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
@@ -123,19 +147,16 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
           </div>
           {isAuthenticated && (
             <button
-              onClick={() => {
-                setShowSaveInput((v) => !v)
-                setSaveName('')
-              }}
+              onClick={() => { setShowSaveInput((v) => !v); setSaveName('') }}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
             >
               <Plus className="h-3 w-3" />
-              Save preset
+              Save new
             </button>
           )}
         </div>
 
-        {/* Save input */}
+        {/* New preset name input */}
         {showSaveInput && (
           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-white/5">
             <input
@@ -143,7 +164,7 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSave()
+                if (e.key === 'Enter') handleSaveNew()
                 if (e.key === 'Escape') { setShowSaveInput(false); setSaveName('') }
               }}
               placeholder="Preset name…"
@@ -151,7 +172,7 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
             />
             <button
               disabled={!saveName.trim() || saving}
-              onClick={handleSave}
+              onClick={handleSaveNew}
               className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary disabled:opacity-40 transition-colors"
             >
               <Check className="h-3.5 w-3.5" />
@@ -173,10 +194,7 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
           </TabButton>
           <TabButton
             active={tab === 'mine'}
-            onClick={() => {
-              if (!isAuthenticated) return
-              setTab('mine')
-            }}
+            onClick={() => { if (isAuthenticated) setTab('mine') }}
             disabled={!isAuthenticated}
           >
             <BookMarked className="h-3 w-3" />
@@ -202,7 +220,10 @@ export function PresetsPopover({ type, onApply, onSave, children }: PresetsPopov
                   renamingId={renamingId}
                   renameValue={renameValue}
                   deletingId={deletingId}
+                  overwrittenId={overwrittenId}
                   onApply={() => { onApply(preset.data); setOpen(false) }}
+                  onOverwrite={() => handleOverwrite(preset.id)}
+                  onToggleCommunity={() => handleToggleCommunity(preset.id, preset.is_community)}
                   onStartRename={() => { setRenamingId(preset.id); setRenameValue(preset.name) }}
                   onRenameChange={setRenameValue}
                   onRenameConfirm={() => handleRename(preset.id)}
@@ -256,7 +277,7 @@ function EmptyState({ tab, isAuthenticated }: { tab: Tab; isAuthenticated: boole
         {tab === 'community'
           ? 'No community presets yet.'
           : isAuthenticated
-            ? 'No presets saved yet. Use "Save preset" to save the current configuration.'
+            ? 'No presets saved yet. Use "Save new" to save the current configuration.'
             : 'Sign in to save and view your presets.'}
       </p>
     </div>
@@ -269,7 +290,10 @@ interface PresetRowProps {
   renamingId: string | null
   renameValue: string
   deletingId: string | null
+  overwrittenId: string | null
   onApply: () => void
+  onOverwrite: () => void
+  onToggleCommunity: () => void
   onStartRename: () => void
   onRenameChange: (v: string) => void
   onRenameConfirm: () => void
@@ -285,7 +309,10 @@ function PresetRow({
   renamingId,
   renameValue,
   deletingId,
+  overwrittenId,
   onApply,
+  onOverwrite,
+  onToggleCommunity,
   onStartRename,
   onRenameChange,
   onRenameConfirm,
@@ -296,6 +323,7 @@ function PresetRow({
 }: PresetRowProps) {
   const isRenaming = renamingId === preset.id
   const isDeleting = deletingId === preset.id
+  const justOverwritten = overwrittenId === preset.id
 
   if (isDeleting) {
     return (
@@ -350,7 +378,7 @@ function PresetRow({
 
   return (
     <li className="group flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-      {/* Thumbnail placeholder */}
+      {/* Thumbnail */}
       <div className="h-8 w-12 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
         {preset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -362,32 +390,87 @@ function PresetRow({
         )}
       </div>
 
-      <button
-        onClick={onApply}
-        className="flex-1 min-w-0 text-left"
-      >
-        <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">
-          {preset.name}
+      {/* Name + date — clicking applies */}
+      <button onClick={onApply} className="flex-1 min-w-0 text-left">
+        <span className="flex items-center gap-1.5">
+          <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">
+            {preset.name}
+          </span>
+          {preset.is_community && (
+            <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+          )}
         </span>
         <span className="block text-[10px] text-muted-foreground/60">
           {new Date(preset.created_at).toLocaleDateString()}
         </span>
       </button>
 
+      {/* Actions — only shown on hover for "My presets" */}
       {isMine && (
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <button
-            onClick={onStartRename}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-          <button
-            onClick={onDeleteRequest}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          {/* Save into (overwrite) */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onOverwrite}
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
+                  justOverwritten
+                    ? 'text-green-400 bg-green-500/10'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
+                )}
+              >
+                {justOverwritten ? <Check className="h-3 w-3" /> : <Save className="h-3 w-3" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Save current config here</TooltipContent>
+          </Tooltip>
+
+          {/* Community toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onToggleCommunity}
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
+                  preset.is_community
+                    ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/10'
+                    : 'text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10',
+                )}
+              >
+                {preset.is_community ? <Globe className="h-3 w-3" /> : <GlobeLock className="h-3 w-3" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {preset.is_community ? 'Remove from community' : 'Share with community'}
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Rename */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onStartRename}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Rename</TooltipContent>
+          </Tooltip>
+
+          {/* Delete */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onDeleteRequest}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Delete</TooltipContent>
+          </Tooltip>
         </div>
       )}
     </li>
