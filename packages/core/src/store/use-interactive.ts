@@ -1,7 +1,8 @@
 'use client'
 
 import { create } from 'zustand'
-import type { ItemNode } from '../schema/nodes/item'
+import type { Interactive } from '../schema/nodes/item'
+import type { AnyNodeId } from '../schema/types'
 
 // Runtime value for each control (matches discriminated union kinds)
 export type ControlValue = boolean | number
@@ -12,20 +13,20 @@ export type ItemInteractiveState = {
 }
 
 type InteractiveStore = {
-  items: Record<string, ItemInteractiveState>
+  items: Record<AnyNodeId, ItemInteractiveState>
 
-  /** Initialize an item's interactive state from its asset definition (idempotent) */
-  initItem: (node: ItemNode) => void
+  /** Initialize a node's interactive state from its asset definition (idempotent) */
+  initItem: (itemId: AnyNodeId, interactive: Interactive) => void
 
   /** Set a single control value */
-  setControlValue: (itemId: string, index: number, value: ControlValue) => void
+  setControlValue: (itemId: AnyNodeId, index: number, value: ControlValue) => void
 
-  /** Remove an item's state (e.g. on unmount) */
-  removeItem: (itemId: string) => void
+  /** Remove a node's state (e.g. on unmount) */
+  removeItem: (itemId: AnyNodeId) => void
 }
 
-const defaultControlValue = (node: ItemNode, index: number): ControlValue => {
-  const control = node.asset.interactive?.controls[index]
+const defaultControlValue = (interactive: Interactive, index: number): ControlValue => {
+  const control = interactive.controls[index]
   if (!control) return false
   switch (control.kind) {
     case 'toggle':
@@ -40,18 +41,18 @@ const defaultControlValue = (node: ItemNode, index: number): ControlValue => {
 export const useInteractive = create<InteractiveStore>((set, get) => ({
   items: {},
 
-  initItem: (node) => {
-    const controls = node.asset.interactive?.controls ?? []
+  initItem: (itemId, interactive) => {
+    const { controls } = interactive
     if (controls.length === 0) return
 
     // Don't overwrite existing state (idempotent)
-    if (get().items[node.id]) return
+    if (get().items[itemId]) return
 
     set((state) => ({
       items: {
         ...state.items,
-        [node.id]: {
-          controlValues: controls.map((_, i) => defaultControlValue(node, i)),
+        [itemId]: {
+          controlValues: controls.map((_, i) => defaultControlValue(interactive, i)),
         },
       },
     }))

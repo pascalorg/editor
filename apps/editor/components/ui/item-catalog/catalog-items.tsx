@@ -612,6 +612,21 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [1, 0.5, 1.5],
     attachTo: "ceiling",
+    interactive: {
+      effects: [
+        {
+          kind: 'animation',
+          clips: {
+            on: 'On',
+          },
+        }
+      ],
+      controls: [
+        {
+          kind: 'toggle',
+        }
+      ],
+    }
   },
 
   {

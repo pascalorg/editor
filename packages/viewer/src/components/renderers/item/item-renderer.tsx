@@ -1,8 +1,9 @@
-import { type AnyNodeId, type ItemNode, useRegistry, useScene } from '@pascal-app/core'
+import { type AnimationEffect, type AnyNodeId, type ItemNode, useInteractive, useRegistry, useScene } from '@pascal-app/core'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { Group, Material, Mesh } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
@@ -83,12 +84,34 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
+  // Freeze the interactive definition at mount — asset schemas don't change at runtime
+  const interactiveRef = useRef(node.asset.interactive)
+
+  // Subscribe only to this node's control values — useShallow prevents re-renders from other nodes' changes
+  const controlValues = useInteractive(
+    useShallow((state) => state.items[node.id]?.controlValues),
+  )
 
   useEffect(() => {
-    if (animations.length > 0) {
-      actions[animations[0]!.name]!.play()
+    const interactive = interactiveRef.current
+    const animEffect = interactive?.effects.find((e): e is AnimationEffect => e.kind === 'animation')
+
+    if (!animEffect) {
+      // Non-interactive: play first available animation as default
+      if (animations.length > 0) actions[animations[0]!.name]?.play()
+      return
     }
-  }, [actions, animations])
+
+    if (!controlValues) return
+
+    const toggleIndex = interactive!.controls.findIndex((c) => c.kind === 'toggle')
+    const isOn = toggleIndex >= 0 ? Boolean(controlValues[toggleIndex]) : false
+
+    for (const action of Object.values(actions)) action?.stop()
+
+    const clipName = isOn ? animEffect.clips.on : (animEffect.clips.off ?? animEffect.clips.loop)
+    if (clipName) actions[clipName]?.play()
+  }, [controlValues, actions, animations])
 
   if (nodes.cutout) {
     nodes.cutout.visible = false
@@ -100,6 +123,13 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     if (!node.parentId) return
     useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
   }, [node.parentId])
+
+  useEffect(() => {
+    const interactive = interactiveRef.current
+    if (!interactive) return
+    useInteractive.getState().initItem(node.id, interactive)
+    return () => useInteractive.getState().removeItem(node.id)
+  }, [node.id])
 
   useMemo(() => {
     scene.traverse((child) => {

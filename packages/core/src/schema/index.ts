@@ -2,7 +2,7 @@
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
-export type { AssetInput } from './nodes/item'
+export type { AnimationEffect, Asset, AssetInput, Control, Effect, Interactive, LightEffect, SliderControl, TemperatureControl, ToggleControl } from './nodes/item'
 export { getScaledDimensions, ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
 // Nodes
