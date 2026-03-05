@@ -1,4 +1,5 @@
 import { type AnyNodeId, type ItemNode, useRegistry, useScene } from '@pascal-app/core'
+import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
@@ -45,8 +46,8 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
         <ModelRenderer node={node} />
       </Suspense>
       {node.children?.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId } />
-        ))}
+        <NodeRenderer key={childId} nodeId={childId} />
+      ))}
     </group>
   )
 }
@@ -73,11 +74,21 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
-const multiplyScales = (a: [number, number, number], b: [number, number, number]): [number, number, number] => 
-  [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+const multiplyScales = (
+  a: [number, number, number],
+  b: [number, number, number],
+): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
-  const { scene, nodes } = useGLTF(resolveCdnUrl(node.asset.src) || '')
+  const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
+  const ref = useRef<Group>(null!)
+  const { actions } = useAnimations(animations, ref)
+
+  useEffect(() => {
+    if (animations.length > 0) {
+      actions[animations[0]!.name]!.play()
+    }
+  }, [actions, animations])
 
   if (nodes.cutout) {
     nodes.cutout.visible = false
@@ -117,6 +128,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
   return (
     <Clone
+      ref={ref}
       object={scene}
       scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
       position={node.asset.offset}
