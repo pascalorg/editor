@@ -1229,6 +1229,24 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [1, 1, 1],
     attachTo: "ceiling",
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial' 
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, -0.5, 0],
+        }
+      ]
+    }
   },
 
   {

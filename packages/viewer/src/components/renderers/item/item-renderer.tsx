@@ -1,7 +1,10 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
+  type Interactive,
   type ItemNode,
+  type LightEffect,
+  type SliderControl,
   useInteractive,
   useRegistry,
   useScene,
@@ -10,7 +13,9 @@ import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import type { Group, Material, Mesh } from 'three'
+import { useFrame } from '@react-three/fiber'
+import type { Group, Material, Mesh, PointLight } from 'three'
+import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
@@ -163,14 +168,69 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     })
   }, [scene])
 
+  const interactive = interactiveRef.current
+  const lightEffects = interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
+
   return (
-    <Clone
-      ref={ref}
-      object={scene}
-      scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
-      position={node.asset.offset}
-      rotation={node.asset.rotation}
-      {...handlers}
+    <>
+      <Clone
+        ref={ref}
+        object={scene}
+        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
+        position={node.asset.offset}
+        rotation={node.asset.rotation}
+        {...handlers}
+      />
+      {lightEffects.map((effect, i) => (
+        <ItemLight key={i} nodeId={node.id} effect={effect} interactive={interactive!} />
+      ))}
+    </>
+  )
+}
+
+const ItemLight = ({
+  nodeId,
+  effect,
+  interactive,
+}: {
+  nodeId: AnyNodeId
+  effect: LightEffect
+  interactive: Interactive
+}) => {
+  const lightRef = useRef<PointLight>(null!)
+  // Precompute stable indices — interactive is frozen at mount
+  const toggleIndex = interactive.controls.findIndex((c) => c.kind === 'toggle')
+  const sliderIndex = interactive.controls.findIndex((c) => c.kind === 'slider')
+  const sliderControl = sliderIndex >= 0 ? (interactive.controls[sliderIndex] as SliderControl) : null
+
+  useFrame((_, delta) => {
+    if (!lightRef.current) return
+    const values = useInteractive.getState().items[nodeId]?.controlValues
+
+    const isOn = toggleIndex >= 0 ? Boolean(values?.[toggleIndex]) : true
+
+    // Normalize slider to 0-1 (default full intensity if no slider)
+    let t = 1
+    if (sliderControl) {
+      const raw = (values?.[sliderIndex] as number) ?? sliderControl.min
+      t = (raw - sliderControl.min) / (sliderControl.max - sliderControl.min)
+    }
+
+    const target = isOn
+      ? MathUtils.lerp(effect.intensityRange[0], effect.intensityRange[1], t)
+      : effect.intensityRange[0]
+
+    lightRef.current.intensity = MathUtils.lerp(lightRef.current.intensity, target, Math.min(delta * 12, 1))
+  })
+
+  return (
+    <pointLight
+      ref={lightRef}
+      color={effect.color}
+      intensity={effect.intensityRange[0]}
+      distance={effect.distance ?? 0}
+      position={effect.offset}
+      castShadow={false}
     />
   )
 }

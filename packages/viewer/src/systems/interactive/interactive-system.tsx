@@ -141,6 +141,7 @@ const ControlWidget = ({
           step={control.step}
           value={value as number}
           onChange={(e) => onChange(Number(e.target.value))}
+          onPointerDown={(e) => e.stopPropagation()}
         />
       </label>
     )
@@ -159,6 +160,7 @@ const ControlWidget = ({
           step={1}
           value={value as number}
           onChange={(e) => onChange(Number(e.target.value))}
+          onPointerDown={(e) => e.stopPropagation()}
         />
       </label>
     )
