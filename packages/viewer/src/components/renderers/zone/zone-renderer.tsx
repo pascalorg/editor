@@ -1,10 +1,11 @@
-import { useRegistry, type ZoneNode } from '@pascal-app/core'
+import { useRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
-import { useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import useViewer from '../../../store/use-viewer'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -104,8 +105,74 @@ const createWallGeometry = (polygon: Array<[number, number]>): BufferGeometry =>
 
 export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const ref = useRef<Group>(null!)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const ignoreBlurSaveRef = useRef(false)
+  const updateNode = useScene((state) => state.updateNode)
+  const setSelection = useViewer((state) => state.setSelection)
+  const setHoveredId = useViewer((state) => state.setHoveredId)
+  const allowZoneLabelEditing = useViewer((state) => state.allowZoneLabelEditing)
+  const [isEditingLabel, setIsEditingLabel] = useState(false)
+  const [isLabelHovered, setIsLabelHovered] = useState(false)
+  const [labelValue, setLabelValue] = useState(node.name || '')
 
   useRegistry(node.id, 'zone', ref)
+
+  useEffect(() => {
+    if (!isEditingLabel) {
+      setLabelValue(node.name || '')
+    }
+  }, [isEditingLabel, node.name])
+
+  useEffect(() => {
+    if (!isEditingLabel || !inputRef.current) return
+    inputRef.current.focus()
+    inputRef.current.select()
+  }, [isEditingLabel])
+
+  const stopLabelEditing = useCallback(
+    (save: boolean) => {
+      if (save) {
+        const trimmed = labelValue.trim()
+        if (trimmed !== (node.name || '')) {
+          updateNode(node.id, { name: trimmed || undefined })
+        }
+      } else {
+        setLabelValue(node.name || '')
+      }
+      setIsEditingLabel(false)
+    },
+    [labelValue, node.id, node.name, updateNode],
+  )
+
+  const startLabelEditing = useCallback(
+    (event?: { stopPropagation: () => void; preventDefault: () => void }) => {
+      if (!allowZoneLabelEditing) return
+      event?.stopPropagation()
+      event?.preventDefault()
+      setSelection({ zoneId: node.id })
+      ignoreBlurSaveRef.current = false
+      setIsEditingLabel(true)
+      setLabelValue(node.name || '')
+    },
+    [allowZoneLabelEditing, node.id, node.name, setSelection],
+  )
+
+  useEffect(() => {
+    if (!isEditingLabel) return
+
+    const onPointerDownOutside = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (inputRef.current?.contains(target)) return
+      ignoreBlurSaveRef.current = true
+      stopLabelEditing(true)
+    }
+
+    window.addEventListener('pointerdown', onPointerDownOutside, true)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDownOutside, true)
+    }
+  }, [isEditingLabel, stopLabelEditing])
 
   // Create floor shape from polygon
   const floorShape = useMemo(() => {
@@ -176,13 +243,12 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     return null
   }
 
-
   return (
     <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
       <Html
         name="label"
         position={[centroid[0], 1, centroid[1]]}
-        style={{ pointerEvents: 'none', }}
+        style={{ pointerEvents: allowZoneLabelEditing ? 'auto' : 'none' }}
         zIndexRange={[10, 0]}
       >
         <div id={`${node.id}-label`} style={{
@@ -200,8 +266,112 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
             textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
             textAlign: 'center',
           }}
+          onMouseEnter={() => {
+            setHoveredId(node.id)
+            setIsLabelHovered(true)
+          }}
+          onMouseLeave={() => {
+            setHoveredId(null)
+            setIsLabelHovered(false)
+          }}
+          onMouseDown={(event) => {
+            if (allowZoneLabelEditing) {
+              event.stopPropagation()
+            }
+          }}
         >
-          <span>{node.name}</span>  
+          {allowZoneLabelEditing && isEditingLabel ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={labelValue}
+              onChange={(event) => setLabelValue(event.target.value)}
+              onBlur={() => {
+                if (ignoreBlurSaveRef.current) {
+                  ignoreBlurSaveRef.current = false
+                  return
+                }
+                stopLabelEditing(true)
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => {
+                event.stopPropagation()
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation()
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  ignoreBlurSaveRef.current = true
+                  stopLabelEditing(true)
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  ignoreBlurSaveRef.current = true
+                  stopLabelEditing(false)
+                }
+              }}
+              style={{
+                width: `${Math.max((labelValue || node.name || '').length + 1, 4)}ch`,
+                maxWidth: '220px',
+                border: 'none',
+                borderBottom: `1px solid ${node.color}`,
+                backgroundColor: 'transparent',
+                color: 'white',
+                textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+                outline: 'none',
+                padding: 0,
+                margin: 0,
+                fontSize: 'inherit',
+                lineHeight: 'inherit',
+                fontFamily: 'inherit',
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={startLabelEditing}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                border: 'none',
+                padding: '0',
+                background: 'none',
+                color: 'inherit',
+                cursor: allowZoneLabelEditing ? 'text' : 'default',
+              }}
+            >
+              <span>{node.name}</span>
+              {allowZoneLabelEditing && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '12px',
+                    height: '12px',
+                    opacity: isLabelHovered ? 1 : 0.55,
+                  }}
+                >
+                  <svg
+                    fill="none"
+                    height="12"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    width="12"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z" />
+                  </svg>
+                </span>
+              )}
+            </button>
+          )}
         </div>
         <div 
           className="label-pin"
@@ -212,6 +382,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
             marginTop: '2px',
             opacity: 0,
             transition: 'opacity 0.5s ease-in-out',
+            pointerEvents: 'none',
           }}
           >
         <div 

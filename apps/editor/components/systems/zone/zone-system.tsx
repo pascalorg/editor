@@ -30,9 +30,13 @@ export const ZoneSystem = () => {
       // Hide label if zone layer is off OR if in solo mode on a different level
       const showLabel = visible && !hideInSoloMode
       const targetOpacity = showLabel ? '1' : '0'
+      const targetPointerEvents = showLabel ? 'auto' : 'none'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {
         labelEl.style.opacity = targetOpacity
+      }
+      if (labelEl && labelEl.style.pointerEvents !== targetPointerEvents) {
+        labelEl.style.pointerEvents = targetPointerEvents
       }
     })
   })
