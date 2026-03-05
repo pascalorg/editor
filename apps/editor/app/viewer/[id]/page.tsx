@@ -2,8 +2,11 @@
 
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
 import { useViewer, Viewer } from '@pascal-app/viewer'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ErrorBoundary } from '@/components/ui/primitives/error-boundary'
+import { SceneLoader } from '@/components/ui/scene-loader'
 import {
   getProjectModelPublic,
   incrementProjectViews,
@@ -14,7 +17,34 @@ import { ViewerGuestCTA } from './viewer-guest-cta'
 import { ViewerOverlay } from './viewer-overlay'
 import { ViewerZoneSystem } from './viewer-zone-system'
 
-import { SceneLoader } from '@/components/ui/scene-loader'
+function ViewerSceneCrashFallback({ projectName }: { projectName?: string | null }) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/95 p-4 text-foreground">
+      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+        <h2 className="text-lg font-semibold">The 3D scene failed to render</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {projectName ? `"${projectName}" ` : ''}
+          hit a rendering error. The rest of the app is still available.
+        </p>
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            className="rounded-md border border-border bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+            onClick={() => window.location.reload()}
+            type="button"
+          >
+            Reload scene
+          </button>
+          <Link
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent/40"
+            href="/"
+          >
+            Back to home
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ViewerPage() {
   const params = useParams()
@@ -33,27 +63,46 @@ export default function ViewerPage() {
   }, [projectId])
 
   useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setProjectId(null)
+    setProjectName(null)
+    setOwner(null)
+    setCanShowScans(true)
+    setCanShowGuides(true)
+    useViewer.getState().setShowScans(true)
+    useViewer.getState().setShowGuides(true)
+
     const loadContent = async () => {
       try {
         // Check if it's a demo file (starts with 'demo_')
         if (id.startsWith('demo_')) {
           const response = await fetch(`/demos/${id}.json`)
+          if (cancelled) return
+
           if (!response.ok) {
             throw new Error(`Demo "${id}" not found`)
           }
+
           const data = await response.json()
+          if (cancelled) return
+
           if (data.nodes && data.rootNodeIds) {
             setScene(data.nodes, data.rootNodeIds)
             initSpatialGridSync()
           }
+
           setProjectName('Demo')
         } else {
           // Load from database (public project)
           const result = await getProjectModelPublic(id)
+          if (cancelled) return
 
           if (result.success && result.data) {
             const { project, model, isOwner } = result.data
             const projectData = project as any
+
             setProjectId(project.id)
             setProjectName(project.name)
             setOwner(projectData.owner ?? null)
@@ -81,19 +130,28 @@ export default function ViewerPage() {
 
             // Increment view count
             await incrementProjectViews(id)
+            if (cancelled) return
           } else {
             throw new Error(result.error || 'Project not found')
           }
         }
 
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load content')
-        setLoading(false)
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load content')
+          setLoading(false)
+        }
       }
     }
 
     loadContent()
+
+    return () => {
+      cancelled = true
+    }
   }, [id, setScene])
 
   if (error) {
@@ -107,7 +165,7 @@ export default function ViewerPage() {
   return (
     <div className="relative h-screen w-full">
       {loading && <SceneLoader fullScreen />}
-      
+
       {!loading && (
         <>
           <ViewerOverlay
@@ -117,13 +175,15 @@ export default function ViewerPage() {
             canShowGuides={canShowGuides}
           />
           <ViewerGuestCTA />
+
+          <ErrorBoundary key={id} fallback={<ViewerSceneCrashFallback projectName={projectName} />}>
+            <Viewer>
+              <ViewerCameraControls />
+              <ViewerZoneSystem />
+            </Viewer>
+          </ErrorBoundary>
         </>
       )}
-      
-      <Viewer>
-        <ViewerCameraControls />
-        <ViewerZoneSystem />
-      </Viewer>
     </div>
   )
 }

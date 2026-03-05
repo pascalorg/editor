@@ -64,20 +64,18 @@ interface ViewerProps {
   selectionManager?: 'default' | 'custom'
 }
 
-const Viewer: React.FC<ViewerProps> = ({
-  children,
-  selectionManager = 'default',
-}) => {
+const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
   const theme = useViewer((state) => state.theme)
 
   return (
     <Canvas
       dpr={[1, 1.5]}
       className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
-      gl={(props) => {
+      gl={async (props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
         renderer.toneMapping = THREE.ACESFilmicToneMapping
         renderer.toneMappingExposure = 0.9
+        await renderer.init()
         return renderer
       }}
       shadows={{
