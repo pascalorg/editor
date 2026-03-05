@@ -1,5 +1,7 @@
 // Base
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
+// Collections
+export { generateCollectionId, type Collection, type CollectionId } from './collections'
 // Camera
 export { CameraSchema } from './camera'
 export type { AnimationEffect, Asset, AssetInput, Control, Effect, Interactive, LightEffect, SliderControl, TemperatureControl, ToggleControl } from './nodes/item'

@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { CollectionId } from '../collections'
 
 // --- Control descriptors ---
 
@@ -109,6 +110,9 @@ export const ItemNode = BaseNode.extend({
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),
   wallT: z.number().optional(), // 0-1 parametric position along wall
+
+  // Denormalized references to collections this node belongs to
+  collectionIds: z.array(z.custom<CollectionId>()).optional(),
 
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building
