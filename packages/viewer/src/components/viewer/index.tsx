@@ -11,7 +11,7 @@ import {
 } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -62,10 +62,20 @@ extend(THREE as any)
 interface ViewerProps {
   children?: React.ReactNode
   selectionManager?: 'default' | 'custom'
+  allowZoneLabelEditing?: boolean
 }
 
-const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
+const Viewer: React.FC<ViewerProps> = ({
+  children,
+  selectionManager = 'default',
+  allowZoneLabelEditing = false,
+}) => {
   const theme = useViewer((state) => state.theme)
+  const setAllowZoneLabelEditing = useViewer((state) => state.setAllowZoneLabelEditing)
+
+  useEffect(() => {
+    setAllowZoneLabelEditing(allowZoneLabelEditing)
+  }, [allowZoneLabelEditing, setAllowZoneLabelEditing])
 
   return (
     <Canvas
