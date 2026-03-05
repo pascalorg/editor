@@ -1,12 +1,19 @@
-import { type AnimationEffect, type AnyNodeId, type ItemNode, useInteractive, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnimationEffect,
+  type AnyNodeId,
+  type ItemNode,
+  useInteractive,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import type { Group, Material, Mesh } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
+import { useShallow } from 'zustand/react/shallow'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { NodeRenderer } from '../node-renderer'
@@ -88,13 +95,13 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const interactiveRef = useRef(node.asset.interactive)
 
   // Subscribe only to this node's control values — useShallow prevents re-renders from other nodes' changes
-  const controlValues = useInteractive(
-    useShallow((state) => state.items[node.id]?.controlValues),
-  )
+  const controlValues = useInteractive(useShallow((state) => state.items[node.id]?.controlValues))
 
   useEffect(() => {
     const interactive = interactiveRef.current
-    const animEffect = interactive?.effects.find((e): e is AnimationEffect => e.kind === 'animation')
+    const animEffect = interactive?.effects.find(
+      (e): e is AnimationEffect => e.kind === 'animation',
+    )
 
     if (!animEffect) {
       // Non-interactive: play first available animation as default
