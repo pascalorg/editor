@@ -138,7 +138,7 @@ export default function Editor({ projectId }: EditorProps) {
         <AppSidebar />
       </SidebarProvider>
       <ErrorBoundary key={projectId} fallback={<EditorSceneCrashFallback />}>
-        <Viewer selectionManager="custom" allowZoneLabelEditing>
+        <Viewer selectionManager="custom">
           <SelectionManager />
           <FloatingActionMenu />
           <ExportManager />
