@@ -26,6 +26,7 @@ import type { ProjectOwner } from '@/features/community/lib/projects/types'
 import { ActionButton } from '@/components/ui/action-menu/action-button'
 import { TooltipProvider } from '@/components/ui/primitives/tooltip'
 import { emitter } from '@pascal-app/core'
+import { CollectionsPanel } from './collections-panel'
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
   stacked: 'Stacked',
@@ -244,6 +245,11 @@ export const ViewerOverlay = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Collections Panel - Top Right */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-3 dark text-foreground">
+        <CollectionsPanel />
       </div>
 
       {/* Controls Panel - Bottom Center */}
