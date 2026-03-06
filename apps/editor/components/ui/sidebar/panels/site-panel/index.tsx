@@ -41,18 +41,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/primitives/popover";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-
-// Preset colors for zones
-const PRESET_COLORS = [
-  "#3b82f6", // blue
-  "#22c55e", // green
-  "#eab308", // yellow
-  "#f97316", // orange
-  "#ef4444", // red
-  "#a855f7", // purple
-  "#ec4899", // pink
-  "#06b6d4", // cyan
-];
+import { ColorDot } from "@/components/ui/primitives/color-dot";
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -953,37 +942,9 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode, isLast?: boolean }) {
       {/* Horizontal branch line */}
       <div className="absolute top-1/2 h-px bg-border/50 pointer-events-none" style={{ left: 8, width: 4 }} />
 
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            className={cn(
-              "mr-2 size-3 shrink-0 rounded-sm border border-border/50 transition-all hover:scale-110 cursor-pointer",
-              !isSelected && "opacity-40"
-            )}
-            onClick={(e) => e.stopPropagation()}
-            style={{ backgroundColor: zone.color }}
-          />
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          className="w-auto p-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="grid grid-cols-4 gap-1">
-            {PRESET_COLORS.map((color) => (
-              <button
-                className={cn(
-                  "size-6 rounded-sm border transition-transform hover:scale-110 cursor-pointer",
-                  color === zone.color ? "ring-2 ring-primary ring-offset-1" : ""
-                )}
-                key={color}
-                onClick={() => handleColorChange(color)}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-        </PopoverContent>
-      </Popover>
+      <span className={cn("mr-2", !isSelected && "opacity-40")}>
+        <ColorDot color={zone.color} onChange={handleColorChange} />
+      </span>
       <div className="flex-1 min-w-0 pr-1">
         <InlineRenameInput
           node={zone}

@@ -1,6 +1,7 @@
-import { ZoneNode } from "@pascal-app/core";
+import { ZoneNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import { useState } from "react";
+import { ColorDot } from "@/components/ui/primitives/color-dot";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
@@ -13,6 +14,7 @@ interface ZoneTreeNodeProps {
 
 export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const updateNode = useScene((state) => state.updateNode);
   const isSelected = useViewer((state) => state.selection.zoneId === node.id);
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
@@ -41,9 +43,9 @@ export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   return (
     <TreeNodeWrapper
       icon={
-        <div
-          className="w-3 h-3 rounded-sm border border-border/50"
-          style={{ backgroundColor: node.color }}
+        <ColorDot
+          color={node.color}
+          onChange={(color) => updateNode(node.id, { color })}
         />
       }
       label={

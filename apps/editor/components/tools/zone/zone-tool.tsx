@@ -5,18 +5,7 @@ import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } fro
 import { EDITOR_LAYER } from "@/lib/constants";
 import useEditor from "@/store/use-editor";
 import { CursorSphere } from "../shared/cursor-sphere";
-
-// Zone colors for cycling through
-const ZONE_COLORS = [
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#06b6d4", // cyan
-  "#ec4899", // pink
-  "#84cc16", // lime
-];
+import { PALETTE_COLORS } from "@/components/ui/primitives/color-dot";
 
 const Y_OFFSET = 0.02;
 
@@ -73,7 +62,7 @@ const commitZoneDrawing = (
   const name = `Zone ${zoneCount + 1}`;
 
   // Cycle through colors
-  const color = ZONE_COLORS[zoneCount % ZONE_COLORS.length];
+  const color = PALETTE_COLORS[zoneCount % PALETTE_COLORS.length];
 
   const zone = ZoneNode.parse({
     name,

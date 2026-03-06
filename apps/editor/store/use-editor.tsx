@@ -86,8 +86,23 @@ const useEditor = create<EditorState>()((set, get) => ({
 
     set({ phase })
 
-    // Reset to select mode and clear tool/catalog when switching phases
-    set({ mode: 'select', tool: null, catalogCategory: null })
+    const { mode, structureLayer } = get()
+
+    if (mode === 'build') {
+      // Stay in build mode, select the first tool for the new phase
+      if (phase === 'site') {
+        set({ tool: 'property-line', catalogCategory: null })
+      } else if (phase === 'structure' && structureLayer === 'zones') {
+        set({ tool: 'zone', catalogCategory: null })
+      } else if (phase === 'structure') {
+        set({ tool: 'wall', catalogCategory: null })
+      } else if (phase === 'furnish') {
+        set({ tool: 'item', catalogCategory: 'furniture' })
+      }
+    } else {
+      // Reset to select mode and clear tool/catalog when switching phases
+      set({ mode: 'select', tool: null, catalogCategory: null })
+    }
 
     const viewer = useViewer.getState()
     const scene = useScene.getState()
@@ -177,7 +192,14 @@ const useEditor = create<EditorState>()((set, get) => ({
   setTool: (tool) => set({ tool }),
   structureLayer: 'elements',
   setStructureLayer: (layer) => {
-    set({ structureLayer: layer, mode: 'select', tool: null })
+    const { mode } = get()
+
+    if (mode === 'build') {
+      const tool = layer === 'zones' ? 'zone' : 'wall'
+      set({ structureLayer: layer, tool })
+    } else {
+      set({ structureLayer: layer, mode: 'select', tool: null })
+    }
 
     const viewer = useViewer.getState()
     viewer.setSelection({

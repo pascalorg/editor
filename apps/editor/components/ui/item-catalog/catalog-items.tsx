@@ -1,6 +1,63 @@
 import { AssetInput, ItemNode } from "@pascal-app/core";
 export const CATALOG_ITEMS: AssetInput[] = [
   {
+    "id": "tesla",
+    "category": "outdoor",
+    tags: ["floor", "garage"],
+    "name": "Tesla",
+    "thumbnail": "/items/tesla/thumbnail.webp",
+    "src": "/items/tesla/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      2,
+      1.7,
+      5
+    ]
+  },
+  {
+    "id": "ev-wall-charger",
+    "category": "appliance",
+    tags: ["wall", "garage"],
+    "name": "Ev-wall-charger",
+    "thumbnail": "/items/ev-wall-charger/thumbnail.webp",
+    "src": "/items/ev-wall-charger/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      -0.07,
+      0.4,
+      0.15
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      0.8,
+      0.5
+    ],
+    "attachTo": "wall"
+  },
+  {
     id: "pillar",
     category: "outdoor",
     tags: ["structure", "fencing"],
@@ -612,6 +669,21 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [1, 0.5, 1.5],
     attachTo: "ceiling",
+    interactive: {
+      effects: [
+        {
+          kind: 'animation',
+          clips: {
+            on: 'On',
+          },
+        }
+      ],
+      controls: [
+        {
+          kind: 'toggle',
+        }
+      ],
+    }
   },
 
   {
@@ -1143,19 +1215,19 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [1.5, 2.5, 3.5],
   },
 
-  {
-    id: "suspended-fireplace",
-    category: "furniture",
-    tags: ["ceiling", "decor"],
-    name: "Suspended Fireplace",
-    thumbnail: "/items/suspended-fireplace/thumbnail.webp",
-    src: "/items/suspended-fireplace/model.glb",
-    scale: [1, 1, 1],
-    offset: [0, 0.45, 0],
-    rotation: [0, 0, 0],
-    dimensions: [0.5, 0.5, 0.5],
-    attachTo: "ceiling",
-  },
+  // {
+  //   id: "suspended-fireplace",
+  //   category: "furniture",
+  //   tags: ["ceiling", "decor"],
+  //   name: "Suspended Fireplace",
+  //   thumbnail: "/items/suspended-fireplace/thumbnail.webp",
+  //   src: "/items/suspended-fireplace/model.glb",
+  //   scale: [1, 1, 1],
+  //   offset: [0, 0.45, 0],
+  //   rotation: [0, 0, 0],
+  //   dimensions: [0.5, 0.5, 0.5],
+  //   attachTo: "ceiling",
+  // },
 
   {
     id: "tv-stand",
@@ -1214,6 +1286,73 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [1, 1, 1],
     attachTo: "ceiling",
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
+          default: 100
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, -0.5, 0],
+        }
+      ]
+    }
+  },
+  {
+    "id": "recessed-light",
+    category: "furniture",
+    "tags": ["ceiling", "lighting"],
+    "name": "Recessed Light",
+    "thumbnail": "/items/recessed-light/thumbnail.webp",
+    "src": "/items/recessed-light/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.094,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      0.1,
+      0.5
+    ],
+    "attachTo": "ceiling",
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
+          default: 100
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, -0.1, 0],
+        }
+      ]
+    }
   },
 
   {
@@ -1227,6 +1366,25 @@ export const CATALOG_ITEMS: AssetInput[] = [
     offset: [0.04, 0, 0.02],
     rotation: [0, 0, 0],
     dimensions: [1, 1.9, 1],
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial' ,
+          default: 100
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, 1.4, 0],
+        }
+      ]
+    }
   },
 
   {

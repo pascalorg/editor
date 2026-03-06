@@ -1,7 +1,7 @@
 'use client'
 
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
-import { useViewer, Viewer } from '@pascal-app/viewer'
+import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -180,6 +180,7 @@ export default function ViewerPage() {
             <Viewer>
               <ViewerCameraControls />
               <ViewerZoneSystem />
+              <InteractiveSystem />
             </Viewer>
           </ErrorBoundary>
         </>

@@ -1,4 +1,5 @@
 import type { AnyNode, AnyNodeId } from '../../schema'
+import type { CollectionId } from '../../schema/collections'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -117,6 +118,7 @@ export const deleteNodesAction = (
 
   set((state) => {
     const nextNodes = { ...state.nodes }
+    const nextCollections = { ...state.collections }
     let nextRootIds = [...state.rootNodeIds]
 
     for (const id of ids) {
@@ -139,7 +141,17 @@ export const deleteNodesAction = (
       // 2. Remove from Root list
       nextRootIds = nextRootIds.filter((rid) => rid !== id)
 
-      // 3. Delete the node itself
+      // 3. Remove from any collections it belongs to
+      if ('collectionIds' in node && node.collectionIds) {
+        for (const cid of node.collectionIds as CollectionId[]) {
+          const col = nextCollections[cid]
+          if (col) {
+            nextCollections[cid] = { ...col, nodeIds: col.nodeIds.filter((nid) => nid !== id) }
+          }
+        }
+      }
+
+      // 4. Delete the node itself
       delete nextNodes[id]
 
       // Inside the deleteNodes loop
@@ -149,7 +161,7 @@ export const deleteNodesAction = (
       }
     }
 
-    return { nodes: nextNodes, rootNodeIds: nextRootIds }
+    return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })
 
   

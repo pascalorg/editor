@@ -1,6 +1,81 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { CollectionId } from '../collections'
+
+// --- Control descriptors ---
+
+const toggleControlSchema = z.object({
+  kind: z.literal('toggle'),
+  label: z.string().optional(),
+  default: z.boolean().optional(),
+})
+
+const sliderControlSchema = z.object({
+  kind: z.literal('slider'),
+  label: z.string(),
+  min: z.number(),
+  max: z.number(),
+  step: z.number().default(1),
+  unit: z.string().optional(),
+  displayMode: z.enum(['slider', 'stepper', 'dial']).default('slider'),
+  default: z.number().optional(),
+})
+
+const temperatureControlSchema = z.object({
+  kind: z.literal('temperature'),
+  label: z.string().default('Temperature'),
+  min: z.number().default(16),
+  max: z.number().default(30),
+  unit: z.enum(['C', 'F']).default('C'),
+  default: z.number().optional(),
+})
+
+const controlSchema = z.discriminatedUnion('kind', [
+  toggleControlSchema,
+  sliderControlSchema,
+  temperatureControlSchema,
+])
+
+// --- Effect descriptors ---
+
+const animationEffectSchema = z.object({
+  kind: z.literal('animation'),
+  clips: z.object({
+    on: z.string().optional(),
+    off: z.string().optional(),
+    loop: z.string().optional(),
+  }),
+})
+
+const lightEffectSchema = z.object({
+  kind: z.literal('light'),
+  color: z.string().default('#ffffff'),
+  intensityRange: z.tuple([z.number(), z.number()]),
+  distance: z.number().optional(),
+  offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+})
+
+const effectSchema = z.discriminatedUnion('kind', [
+  animationEffectSchema,
+  lightEffectSchema,
+])
+
+// --- Interactive descriptor ---
+
+const interactiveSchema = z.object({
+  controls: z.array(controlSchema).default([]),
+  effects: z.array(effectSchema).default([]),
+})
+
+export type ToggleControl = z.infer<typeof toggleControlSchema>
+export type SliderControl = z.infer<typeof sliderControlSchema>
+export type TemperatureControl = z.infer<typeof temperatureControlSchema>
+export type Control = z.infer<typeof controlSchema>
+export type AnimationEffect = z.infer<typeof animationEffectSchema>
+export type LightEffect = z.infer<typeof lightEffectSchema>
+export type Effect = z.infer<typeof effectSchema>
+export type Interactive = z.infer<typeof interactiveSchema>
 
 const assetSchema = z.object({
   id: z.string(),
@@ -17,9 +92,10 @@ const assetSchema = z.object({
   scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
   surface: z
     .object({
-      height: z.number(), // where things rest 
+      height: z.number(), // where things rest
     })
     .optional(), // undefined = can't place things on it
+  interactive: interactiveSchema.optional(),
 })
 
 export type AssetInput = z.input<typeof assetSchema>
@@ -37,6 +113,9 @@ export const ItemNode = BaseNode.extend({
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),
   wallT: z.number().optional(), // 0-1 parametric position along wall
+
+  // Denormalized references to collections this node belongs to
+  collectionIds: z.array(z.custom<CollectionId>()).optional(),
 
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building

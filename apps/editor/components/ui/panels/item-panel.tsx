@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils'
 import { PanelWrapper } from './panel-wrapper'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
-import { MetricControl } from '../controls/metric-control'
+
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { CollectionsPopover } from './collections/collections-popover'
 
 export function ItemPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -231,14 +232,22 @@ export function ItemPanel() {
         </div>
       </PanelSection>
 
+      <PanelSection title="Collections">
+        <ActionGroup>
+          <CollectionsPopover nodeId={selectedId as AnyNode['id']} collectionIds={node.collectionIds}>
+            <ActionButton label="Manage collections…" />
+          </CollectionsPopover>
+        </ActionGroup>
+      </PanelSection>
+
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
           <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={handleDuplicate} />
-          <ActionButton 
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />} 
-            label="Delete" 
-            onClick={handleDelete} 
+          <ActionButton
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            label="Delete"
+            onClick={handleDelete}
             className="hover:bg-red-500/20"
           />
         </ActionGroup>

@@ -5,6 +5,8 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BuildingNode } from '../schema'
+import type { Collection, CollectionId } from '../schema/collections'
+import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -20,6 +22,9 @@ export type SceneState = {
 
   // 3. The "Dirty" Set: For the Wall/Physics systems
   dirtyNodes: Set<AnyNodeId>
+
+  // 4. Relational metadata — not nodes
+  collections: Record<CollectionId, Collection>
 
   // Actions
   loadScene: () => void
@@ -37,12 +42,19 @@ export type SceneState = {
 
   deleteNode: (id: AnyNodeId) => void
   deleteNodes: (ids: AnyNodeId[]) => void
+
+  // Collection actions
+  createCollection: (name: string, nodeIds?: AnyNodeId[]) => CollectionId
+  deleteCollection: (id: CollectionId) => void
+  updateCollection: (id: CollectionId, data: Partial<Omit<Collection, 'id'>>) => void
+  addToCollection: (id: CollectionId, nodeId: AnyNodeId) => void
+  removeFromCollection: (id: CollectionId, nodeId: AnyNodeId) => void
 }
 
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
-  temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds'>>>
+  temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -58,11 +70,15 @@ const useScene: UseSceneStore = create<SceneState>()(
         // 3. Dirty set
         dirtyNodes: new Set<AnyNodeId>(),
 
+        // 4. Collections
+        collections: {} as Record<CollectionId, Collection>,
+
         clearScene: () => {
           set({
             nodes: {},
             rootNodeIds: [],
             dirtyNodes: new Set<AnyNodeId>(),
+            collections: {},
           })
           get().loadScene() // Default scene
         },
@@ -143,11 +159,98 @@ const useScene: UseSceneStore = create<SceneState>()(
         deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
 
         deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
+
+        // --- COLLECTIONS ---
+
+        createCollection: (name, nodeIds = []) => {
+          const id = generateCollectionId()
+          const collection: Collection = { id, name, nodeIds }
+          set((state) => {
+            const nextCollections = { ...state.collections, [id]: collection }
+            // Denormalize: stamp collectionId onto each node
+            const nextNodes = { ...state.nodes }
+            for (const nodeId of nodeIds) {
+              const node = nextNodes[nodeId]
+              if (!node) continue
+              const existing = ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
+              nextNodes[nodeId] = { ...node, collectionIds: [...existing, id] } as AnyNode
+            }
+            return { collections: nextCollections, nodes: nextNodes }
+          })
+          return id
+        },
+
+        deleteCollection: (id) => {
+          set((state) => {
+            const col = state.collections[id]
+            const nextCollections = { ...state.collections }
+            delete nextCollections[id]
+            // Remove collectionId from all member nodes
+            const nextNodes = { ...state.nodes }
+            for (const nodeId of col?.nodeIds ?? []) {
+              const node = nextNodes[nodeId]
+              if (!node || !('collectionIds' in node)) continue
+              nextNodes[nodeId] = {
+                ...node,
+                collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
+              } as AnyNode
+            }
+            return { collections: nextCollections, nodes: nextNodes }
+          })
+        },
+
+        updateCollection: (id, data) => {
+          set((state) => {
+            const col = state.collections[id]
+            if (!col) return state
+            return { collections: { ...state.collections, [id]: { ...col, ...data } } }
+          })
+        },
+
+        addToCollection: (id, nodeId) => {
+          set((state) => {
+            const col = state.collections[id]
+            if (!col || col.nodeIds.includes(nodeId)) return state
+            const nextCollections = {
+              ...state.collections,
+              [id]: { ...col, nodeIds: [...col.nodeIds, nodeId] },
+            }
+            const node = state.nodes[nodeId]
+            if (!node) return { collections: nextCollections }
+            const existing = ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
+            const nextNodes = {
+              ...state.nodes,
+              [nodeId]: { ...node, collectionIds: [...existing, id] } as AnyNode,
+            }
+            return { collections: nextCollections, nodes: nextNodes }
+          })
+        },
+
+        removeFromCollection: (id, nodeId) => {
+          set((state) => {
+            const col = state.collections[id]
+            if (!col) return state
+            const nextCollections = {
+              ...state.collections,
+              [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
+            }
+            const node = state.nodes[nodeId]
+            if (!node || !('collectionIds' in node)) return { collections: nextCollections }
+            const nextNodes = {
+              ...state.nodes,
+              [nodeId]: {
+                ...node,
+                collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
+              } as AnyNode,
+            }
+            return { collections: nextCollections, nodes: nextNodes }
+          })
+        },
       }),
       {
         partialize: (state) => {
-          const { nodes, rootNodeIds } = state // Only track nodes and rootNodeIds in history
-          return { nodes, rootNodeIds }
+          const { nodes, rootNodeIds, collections } = state
+          return { nodes, rootNodeIds, collections }
         },
         limit: 50, // Limit to last 50 actions
       },
@@ -157,7 +260,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       version: 1,
       // Keep existing local scenes when the persist version changes.
       migrate: (persistedState) =>
-        persistedState as Pick<SceneState, 'nodes' | 'rootNodeIds'>,
+        persistedState as Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>,
       partialize: (state) => ({
         nodes: Object.fromEntries(
           Object.entries(state.nodes).filter(([_, node]) => {
@@ -168,6 +271,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           }),
         ),
         rootNodeIds: state.rootNodeIds,
+        collections: state.collections,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<SceneState>
