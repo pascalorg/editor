@@ -30,11 +30,11 @@ const defaultControlValue = (interactive: Interactive, index: number): ControlVa
   if (!control) return false
   switch (control.kind) {
     case 'toggle':
-      return false
+      return control.default ?? false
     case 'slider':
-      return control.min
+      return control.default ?? control.min
     case 'temperature':
-      return control.min
+      return control.default ?? control.min
   }
 }
 

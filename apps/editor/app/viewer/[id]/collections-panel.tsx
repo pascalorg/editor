@@ -10,7 +10,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 
@@ -145,10 +145,10 @@ function CollectionRow({ collectionId }: { collectionId: CollectionId }) {
     ),
   )
 
-  const controlValuesByItem = useInteractive(
-    useShallow((s) =>
-      Object.fromEntries(interactiveItems.map((n) => [n.id, s.items[n.id]?.controlValues ?? []])),
-    ),
+  const allItems = useInteractive((s) => s.items)
+  const controlValuesByItem = useMemo(
+    () => Object.fromEntries(interactiveItems.map((n) => [n.id, allItems[n.id]?.controlValues ?? []])),
+    [allItems, interactiveItems],
   )
 
   const setControlValue = useInteractive((s) => s.setControlValue)

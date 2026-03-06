@@ -1235,7 +1235,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
           kind: 'toggle',
         }, 
         {
-          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial' 
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
+          default: 100
         }
       ],
       effects: [
@@ -1266,7 +1267,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
           kind: 'toggle',
         }, 
         {
-          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial' 
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial' ,
+          default: 100
         }
       ],
       effects: [

@@ -8,6 +8,7 @@ import type { CollectionId } from '../collections'
 const toggleControlSchema = z.object({
   kind: z.literal('toggle'),
   label: z.string().optional(),
+  default: z.boolean().optional(),
 })
 
 const sliderControlSchema = z.object({
@@ -18,6 +19,7 @@ const sliderControlSchema = z.object({
   step: z.number().default(1),
   unit: z.string().optional(),
   displayMode: z.enum(['slider', 'stepper', 'dial']).default('slider'),
+  default: z.number().optional(),
 })
 
 const temperatureControlSchema = z.object({
@@ -26,6 +28,7 @@ const temperatureControlSchema = z.object({
   min: z.number().default(16),
   max: z.number().default(30),
   unit: z.enum(['C', 'F']).default('C'),
+  default: z.number().optional(),
 })
 
 const controlSchema = z.discriminatedUnion('kind', [
