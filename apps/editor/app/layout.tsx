@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import localFont from 'next/font/local'
 import { Barlow } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
@@ -78,6 +79,22 @@ export default function RootLayout({
 
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${barlow.variable}`}>
+      <head>
+        {process.env.NODE_ENV === 'development' && (
+          <>
+            <Script
+              src="//unpkg.com/react-scan/dist/auto.global.js"
+              crossOrigin="anonymous"
+              strategy="beforeInteractive"
+            />
+            <Script
+              src="//unpkg.com/react-grab/dist/index.global.js"
+              crossOrigin="anonymous"
+              strategy="beforeInteractive"
+            />
+          </>
+        )}
+      </head>
       <body className="font-sans">
         <UsernameGate>{children}</UsernameGate>
         <Analytics />
