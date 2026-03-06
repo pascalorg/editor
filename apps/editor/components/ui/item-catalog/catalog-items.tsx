@@ -1,6 +1,111 @@
 import { AssetInput, ItemNode } from "@pascal-app/core";
 export const CATALOG_ITEMS: AssetInput[] = [
   {
+    "id": "tesla",
+    "category": "outdoor",
+    tags: ["floor", "garage"],
+    "name": "Tesla",
+    "thumbnail": "/items/tesla/thumbnail.webp",
+    "src": "/items/tesla/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      2,
+      1.7,
+      5
+    ]
+  },
+  {
+    "id": "recessed-light",
+    category: "furniture",
+    "tags": ["ceiling", "lighting"],
+    "name": "Recessed Light",
+    "thumbnail": "/items/recessed-light/thumbnail.webp",
+    "src": "/items/recessed-light/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.094,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      0.1,
+      0.5
+    ],
+    "attachTo": "ceiling",
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
+          default: 100
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, -0.1, 0],
+        }
+      ]
+    }
+  },
+  {
+    "id": "ev-wall-charger",
+    "category": "appliance",
+    tags: ["wall", "garage"],
+    "name": "Ev-wall-charger",
+    "thumbnail": "/items/ev-wall-charger/thumbnail.webp",
+    "src": "/items/ev-wall-charger/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      -0.07,
+      0.4,
+      0.15
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      0.8,
+      0.5
+    ],
+    "attachTo": "wall"
+  },
+  {
     id: "pillar",
     category: "outdoor",
     tags: ["structure", "fencing"],
