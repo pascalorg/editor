@@ -5,15 +5,20 @@ import {
   type Control,
   type ControlValue,
   type ItemNode,
+  pointInPolygon,
   sceneRegistry,
   useInteractive,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useState } from 'react'
-import type { Object3D } from 'three'
+import { type Object3D, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import useViewer from '../../store/use-viewer'
+
+const _tempVec = new Vector3()
 
 // ---- Parent: one overlay per interactive item ----
 
@@ -50,11 +55,26 @@ const ItemControlsOverlay = ({ nodeId }: { nodeId: AnyNodeId }) => {
   const controlValues = useInteractive(useShallow((state) => state.items[nodeId]?.controlValues))
   const setControlValue = useInteractive((state) => state.setControlValue)
 
+  const zoneId = useViewer((s) => s.selection.zoneId)
+  const zonePolygon = useScene((s) => {
+    if (!zoneId) return null
+    const z = s.nodes[zoneId] as ZoneNode | undefined
+    return z?.polygon ?? null
+  })
+
   if (!itemObj || !controlValues || !node?.asset.interactive) return null
 
   const { controls } = node.asset.interactive
   const [, height] = node.asset.dimensions
 
+  let opacity = 0
+  let pointerEvents: 'auto' | 'none' = 'none'
+  if (zoneId && zonePolygon?.length) {
+    itemObj.getWorldPosition(_tempVec)
+    const inside = pointInPolygon(_tempVec.x, _tempVec.z, zonePolygon)
+    opacity = inside ? 1 : 0.1
+    pointerEvents = inside ? 'auto' : 'none'
+  }
 
   return createPortal(
     <Html center position={[0, height + 0.3, 0]} zIndexRange={[20, 0]} occlude distanceFactor={8}>
@@ -68,8 +88,10 @@ const ItemControlsOverlay = ({ nodeId }: { nodeId: AnyNodeId }) => {
           borderRadius: 8,
           padding: '8px 12px',
           minWidth: 120,
-          pointerEvents: 'auto',
+          pointerEvents,
           userSelect: 'none',
+          opacity,
+          transition: 'opacity 0.3s ease',
         }}
       >
         {controls.map((control, i) => (
