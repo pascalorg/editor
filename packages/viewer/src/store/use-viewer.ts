@@ -28,8 +28,6 @@ type ViewerState = {
   selection: SelectionPath
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
-  allowZoneLabelEditing: boolean
-  setAllowZoneLabelEditing: (allow: boolean) => void
 
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
@@ -76,8 +74,6 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       hoveredId: null,
       setHoveredId: (id) => set({ hoveredId: id }),
-      allowZoneLabelEditing: false,
-      setAllowZoneLabelEditing: (allow) => set({ allowZoneLabelEditing: allow }),
 
       cameraMode: "perspective",
       setCameraMode: (mode) => set({ cameraMode: mode }),
