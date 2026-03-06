@@ -29,54 +29,6 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ]
   },
   {
-    "id": "recessed-light",
-    category: "furniture",
-    "tags": ["ceiling", "lighting"],
-    "name": "Recessed Light",
-    "thumbnail": "/items/recessed-light/thumbnail.webp",
-    "src": "/items/recessed-light/model.glb",
-    "scale": [
-      1,
-      1,
-      1
-    ],
-    "offset": [
-      0,
-      0.094,
-      0
-    ],
-    "rotation": [
-      0,
-      0,
-      0
-    ],
-    "dimensions": [
-      0.5,
-      0.1,
-      0.5
-    ],
-    "attachTo": "ceiling",
-    interactive: {
-      controls: [
-        {
-          kind: 'toggle',
-        }, 
-        {
-          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
-          default: 100
-        }
-      ],
-      effects: [
-        {
-          kind: 'light',
-          intensityRange: [0, 2],
-          color: '#ffffff',
-          offset: [0, -0.1, 0],
-        }
-      ]
-    }
-  },
-  {
     "id": "ev-wall-charger",
     "category": "appliance",
     tags: ["wall", "garage"],
@@ -1263,19 +1215,19 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [1.5, 2.5, 3.5],
   },
 
-  {
-    id: "suspended-fireplace",
-    category: "furniture",
-    tags: ["ceiling", "decor"],
-    name: "Suspended Fireplace",
-    thumbnail: "/items/suspended-fireplace/thumbnail.webp",
-    src: "/items/suspended-fireplace/model.glb",
-    scale: [1, 1, 1],
-    offset: [0, 0.45, 0],
-    rotation: [0, 0, 0],
-    dimensions: [0.5, 0.5, 0.5],
-    attachTo: "ceiling",
-  },
+  // {
+  //   id: "suspended-fireplace",
+  //   category: "furniture",
+  //   tags: ["ceiling", "decor"],
+  //   name: "Suspended Fireplace",
+  //   thumbnail: "/items/suspended-fireplace/thumbnail.webp",
+  //   src: "/items/suspended-fireplace/model.glb",
+  //   scale: [1, 1, 1],
+  //   offset: [0, 0.45, 0],
+  //   rotation: [0, 0, 0],
+  //   dimensions: [0.5, 0.5, 0.5],
+  //   attachTo: "ceiling",
+  // },
 
   {
     id: "tv-stand",
@@ -1350,6 +1302,54 @@ export const CATALOG_ITEMS: AssetInput[] = [
           intensityRange: [0, 2],
           color: '#ffffff',
           offset: [0, -0.5, 0],
+        }
+      ]
+    }
+  },
+  {
+    "id": "recessed-light",
+    category: "furniture",
+    "tags": ["ceiling", "lighting"],
+    "name": "Recessed Light",
+    "thumbnail": "/items/recessed-light/thumbnail.webp",
+    "src": "/items/recessed-light/model.glb",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "offset": [
+      0,
+      0.094,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0
+    ],
+    "dimensions": [
+      0.5,
+      0.1,
+      0.5
+    ],
+    "attachTo": "ceiling",
+    interactive: {
+      controls: [
+        {
+          kind: 'toggle',
+        }, 
+        {
+          kind: 'slider', label: 'Intensity', min: 0, max: 100, unit: '%', displayMode: 'dial',
+          default: 100
+        }
+      ],
+      effects: [
+        {
+          kind: 'light',
+          intensityRange: [0, 2],
+          color: '#ffffff',
+          offset: [0, -0.1, 0],
         }
       ]
     }
