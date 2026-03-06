@@ -11,6 +11,7 @@ import useEditor from '@/store/use-editor'
 import { FeedbackDialog } from '../feedback-dialog'
 import { PascalRadio } from '../pascal-radio'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
@@ -153,6 +154,7 @@ export default function Editor({ projectId }: EditorProps) {
           <PresetThumbnailGenerator />
           <SiteEdgeLabels />
         </Viewer>
+        <ZoneLabelEditorSystem />
       </ErrorBoundary>
     </div>
   )
