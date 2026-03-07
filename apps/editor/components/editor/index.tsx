@@ -1,15 +1,18 @@
 'use client'
 
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
-import { useViewer, Viewer } from '@pascal-app/viewer'
+import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
 import { useProjectStore } from '@/features/community/lib/projects/store'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { initSFXBus } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
+import { ViewerOverlay } from '@/app/viewer/[id]/viewer-overlay'
+import { ViewerZoneSystem } from '@/app/viewer/[id]/viewer-zone-system'
 import { FeedbackDialog } from '../feedback-dialog'
 import { PascalRadio } from '../pascal-radio'
+import { PreviewButton } from '../preview-button'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
@@ -102,6 +105,8 @@ export default function Editor({ projectId }: EditorProps) {
   const isProjectLoading = useProjectStore((state) => state.isLoading)
   const isSceneLoading = useProjectStore((state) => state.isSceneLoading)
   const isLoading = isProjectLoading || isSceneLoading
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const activeProject = useProjectStore((s) => s.activeProject)
 
   useEffect(() => {
     if (projectId) {
@@ -121,40 +126,56 @@ export default function Editor({ projectId }: EditorProps) {
   return (
     <div className="w-full h-full dark text-foreground">
       {isLoading && <SceneLoader />}
-      <ActionMenu />
-      <PanelManager />
-      <HelperManager />
 
-      {/* Top-right controls */}
-      <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">
-        <div className="pointer-events-auto">
-          <PascalRadio />
-        </div>
-        <div className="pointer-events-auto">
-          <FeedbackDialog projectId={projectId} />
-        </div>
-      </div>
+      {isPreviewMode ? (
+        <ViewerOverlay
+          projectName={activeProject?.name}
+          onBack={() => useEditor.getState().setPreviewMode(false)}
+        />
+      ) : (
+        <>
+          <ActionMenu />
+          <PanelManager />
+          <HelperManager />
 
-      <SidebarProvider className="fixed z-20">
-        <AppSidebar />
-      </SidebarProvider>
+          {/* Top-right controls */}
+          <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">
+            <div className="pointer-events-auto">
+              <PreviewButton />
+            </div>
+            <div className="pointer-events-auto">
+              <PascalRadio />
+            </div>
+            <div className="pointer-events-auto">
+              <FeedbackDialog projectId={projectId} />
+            </div>
+          </div>
+
+          <SidebarProvider className="fixed z-20">
+            <AppSidebar />
+          </SidebarProvider>
+        </>
+      )}
+
       <ErrorBoundary key={projectId} fallback={<EditorSceneCrashFallback />}>
-        <Viewer selectionManager="custom">
-          <SelectionManager />
-          <FloatingActionMenu />
+        <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
+          {!isPreviewMode && <SelectionManager />}
+          {!isPreviewMode && <FloatingActionMenu />}
           <ExportManager />
-          {/* Editor only system to toggle zone visibility */}
-          <ZoneSystem />
+          {/* Swap zone systems: viewer drill-down vs editor layer toggle */}
+          {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
           <CeilingSystem />
-          {/* <Stats /> */}
-          <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
-          <ToolManager />
+          {!isPreviewMode && (
+            <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
+          )}
+          {!isPreviewMode && <ToolManager />}
           <CustomCameraControls />
           <ThumbnailGenerator projectId={projectId} />
           <PresetThumbnailGenerator />
-          <SiteEdgeLabels />
+          {!isPreviewMode && <SiteEdgeLabels />}
+          {isPreviewMode && <InteractiveSystem />}
         </Viewer>
-        <ZoneLabelEditorSystem />
+        {!isPreviewMode && <ZoneLabelEditorSystem />}
       </ErrorBoundary>
     </div>
   )
