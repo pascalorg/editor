@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { IconRail, type PanelId } from "./icon-rail";
+import { CommandPalette } from "@/components/ui/command-palette";
 import {
   ArrowUpCircle,
   ChevronDown,
@@ -505,6 +506,7 @@ export function AppSidebar() {
   };
 
   return (
+    <>
     <Sidebar className={cn("dark text-white ")} variant="floating">
       <div className="flex h-full">
         {/* Icon Rail */}
@@ -704,5 +706,7 @@ export function AppSidebar() {
         </div>
       </div>
     </Sidebar>
+    <CommandPalette />
+    </>
   );
 }

@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useViewer } from "@pascal-app/viewer";
 import { useProjectStore } from "@/features/community/lib/projects/store";
+import { useCommandPalette } from "@/components/ui/command-palette";
 
 function OpenProjectModal({
   open,
@@ -176,7 +177,7 @@ export function IconRail({
             <button
               type="button"
               className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              onClick={() => setIsMenuOpen(false)}
+              onClick={() => { setIsMenuOpen(false); useCommandPalette.getState().setOpen(true); }}
             >
               <Search className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left">Actions...</span>
