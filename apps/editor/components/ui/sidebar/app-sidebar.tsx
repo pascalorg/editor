@@ -6,12 +6,9 @@ import {
   ArrowUpCircle,
   ChevronDown,
   Clock3,
-  Moon,
   RotateCcw,
   Save,
-  Sun,
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { useScene } from "@pascal-app/core";
 
 import {
@@ -47,7 +44,6 @@ import {
 } from "@/features/community/lib/models/actions";
 import { useProjectStore } from "@/features/community/lib/projects/store";
 import { updateProjectName } from "@/features/community/lib/projects/actions";
-import { useViewer } from "@pascal-app/viewer";
 import { applySceneGraphToEditor } from "@/features/community/lib/models/hooks";
 
 function formatRelativeTime(value: string): string {
@@ -83,9 +79,6 @@ export function AppSidebar() {
   const setIsVersionPreviewMode = useProjectStore((s) => s.setIsVersionPreviewMode);
   const setIsSceneLoading = useProjectStore((s) => s.setIsSceneLoading);
   const setAutosaveStatus = useProjectStore((s) => s.setAutosaveStatus);
-  const theme = useViewer((state) => state.theme);
-  const setTheme = useViewer((state) => state.setTheme);
-  const [mounted, setMounted] = useState(false);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState("");
@@ -107,7 +100,6 @@ export function AppSidebar() {
   const activeProjectId = activeProject?.id ?? null;
 
   useEffect(() => {
-    setMounted(true);
     // Widen default sidebar (288px → 432px) for better project title visibility
     const store = useSidebarStore.getState();
     if (store.width <= 288) {
@@ -699,56 +691,6 @@ export function AppSidebar() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                )}
-
-                {mounted && (
-                  <button
-                    className="shrink-0 flex items-center bg-black/20 rounded-full p-1 border border-border/50 cursor-pointer"
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    type="button"
-                    aria-label="Toggle theme"
-                  >
-                    <div className="relative flex">
-                      {/* Sliding Background */}
-                      <motion.div
-                        className="absolute inset-0 bg-[#3A3A3C] shadow-sm rounded-full"
-                        initial={false}
-                        animate={{
-                          x: theme === "light" ? "100%" : "0%",
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 35,
-                        }}
-                        style={{ width: "50%" }}
-                      />
-
-                      {/* Dark Mode Icon */}
-                      <div
-                        className={cn(
-                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                          theme === "dark"
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <Moon className="h-3.5 w-3.5" />
-                      </div>
-
-                      {/* Light Mode Icon */}
-                      <div
-                        className={cn(
-                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                          theme === "light"
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <Sun className="h-3.5 w-3.5" />
-                      </div>
-                    </div>
-                  </button>
                 )}
               </div>
             </div>

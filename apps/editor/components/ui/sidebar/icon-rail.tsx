@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Tooltip,
   TooltipContent,
@@ -226,11 +227,18 @@ export function IconRail({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                className="flex h-9 w-9 items-center justify-center rounded-lg transition-all text-muted-foreground hover:bg-accent hover:text-accent-foreground mb-2"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-accent/40 transition-all text-foreground hover:bg-accent mb-2"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 type="button"
               >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <motion.div
+                  key={theme}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </motion.div>
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">Toggle theme</TooltipContent>
