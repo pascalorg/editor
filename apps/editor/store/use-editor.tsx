@@ -79,6 +79,9 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
+  // Development-only camera debug flag for inspecting underside geometry
+  allowUndergroundCamera: boolean
+  setAllowUndergroundCamera: (enabled: boolean) => void
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -174,7 +177,7 @@ const useEditor = create<EditorState>()((set, get) => ({
         selectedIds: [],
         zoneId: null,
       })
-      
+
       // Ensure a tool is selected in build mode
       if (!tool) {
         if (phase === 'structure' && structureLayer === 'zones') {
@@ -232,6 +235,8 @@ const useEditor = create<EditorState>()((set, get) => ({
       set({ isPreviewMode: false })
     }
   },
+  allowUndergroundCamera: false,
+  setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
 }))
 
 export default useEditor

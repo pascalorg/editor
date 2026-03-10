@@ -35,7 +35,7 @@ import {
   Box,
   Grid3X3,
 } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/primitives/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/primitives/dialog";
 import useEditor from "@/store/use-editor";
 import type { StructureTool } from "@/store/use-editor";
 import { useViewer } from "@pascal-app/viewer";
@@ -399,6 +399,7 @@ export function CommandPalette() {
         showCloseButton={false}
         className="p-0 gap-0 max-w-lg overflow-hidden"
       >
+        <DialogTitle className="sr-only">Command Palette</DialogTitle>
         <Command
           shouldFilter={page !== "rename-level"}
           className="**:[[cmdk-group-heading]]:px-2.5 **:[[cmdk-group-heading]]:pb-1 **:[[cmdk-group-heading]]:pt-3 **:[[cmdk-group-heading]]:text-[10px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-wider **:[[cmdk-group-heading]]:text-muted-foreground"

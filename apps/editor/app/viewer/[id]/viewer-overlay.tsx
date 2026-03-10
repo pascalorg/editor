@@ -60,6 +60,7 @@ const getNodeName = (node: AnyNode): string => {
   if (node.type === 'slab') return 'Slab'
   if (node.type === 'ceiling') return 'Ceiling'
   if (node.type === 'roof') return 'Roof'
+  if (node.type === 'roof-segment') return 'Roof Segment'
   return node.type
 }
 

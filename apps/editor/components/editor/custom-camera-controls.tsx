@@ -13,13 +13,18 @@ const currentTarget = new Vector3()
 const tempBox = new Box3()
 const tempCenter = new Vector3()
 const tempSize = new Vector3()
+const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
+const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
+  const maxPolarAngle =
+    !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
   const raycaster = useThree((state) => state.raycaster)
@@ -50,6 +55,17 @@ export const CustomCameraControls = () => {
     )
   }, [currentLevelId, isPreviewMode])
 
+  useEffect(() => {
+    if (!controls.current) return
+
+    controls.current.maxPolarAngle = maxPolarAngle
+    controls.current.minPolarAngle = 0
+
+    if (controls.current.polarAngle > maxPolarAngle) {
+      controls.current.rotateTo(controls.current.azimuthAngle, maxPolarAngle, true)
+    }
+  }, [maxPolarAngle])
+
   // Configure mouse buttons based on control mode and camera mode
   const cameraMode = useViewer((state) => state.cameraMode)
   const mouseButtons = useMemo(() => {
@@ -60,9 +76,7 @@ export const CustomCameraControls = () => {
         : CameraControlsImpl.ACTION.DOLLY
 
     return {
-      left: isPreviewMode
-        ? CameraControlsImpl.ACTION.SCREEN_PAN
-        : CameraControlsImpl.ACTION.NONE,
+      left: isPreviewMode ? CameraControlsImpl.ACTION.SCREEN_PAN : CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
@@ -175,8 +189,12 @@ export const CustomCameraControls = () => {
       requestAnimationFrame(() => {
         if (!controls.current) return
         controls.current.setLookAt(
-          position[0], position[1], position[2],
-          target[0], target[1], target[2],
+          position[0],
+          position[1],
+          position[2],
+          target[0],
+          target[1],
+          target[2],
           true,
         )
       })
@@ -307,7 +325,7 @@ export const CustomCameraControls = () => {
     <CameraControls
       makeDefault
       maxDistance={100}
-      maxPolarAngle={Math.PI / 2 - 0.1}
+      maxPolarAngle={maxPolarAngle}
       minDistance={10}
       minPolarAngle={0}
       ref={controls}

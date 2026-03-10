@@ -11,6 +11,7 @@ export type {
   LevelEvent,
   NodeEvent,
   RoofEvent,
+  RoofSegmentEvent,
   SiteEvent,
   SlabEvent,
   WallEvent,

@@ -4,6 +4,7 @@ import {
   type GridEvent,
   type LevelNode,
   RoofNode,
+  RoofSegmentNode,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -14,45 +15,52 @@ import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-// Default roof dimensions
-const DEFAULT_HEIGHT = 1.5
-const CEILING_HEIGHT = 2.52
+const DEFAULT_WALL_HEIGHT = 4
+const DEFAULT_ROOF_HEIGHT = 3
 const GRID_OFFSET = 0.02
 
 /**
- * Creates a roof with the given corners
+ * Creates a roof group with one default gable segment
  */
 const commitRoofPlacement = (
   levelId: LevelNode['id'],
   corner1: [number, number, number],
   corner2: [number, number, number],
 ): RoofNode['id'] => {
-  const { createNode, nodes } = useScene.getState()
+  const { createNode, createNodes, nodes } = useScene.getState()
 
-  // Calculate center position and dimensions from corners
   const centerX = (corner1[0] + corner2[0]) / 2
   const centerZ = (corner1[2] + corner2[2]) / 2
 
-  const length = Math.abs(corner2[0] - corner1[0])
-  const width = Math.abs(corner2[2] - corner1[2])
-
-  // Split width evenly between left and right slopes
-  const slopeWidth = Math.max(width / 2, 0.5)
+  const width = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
+  const depth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
 
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
   const name = `Roof ${roofCount + 1}`
 
-  const roof = RoofNode.parse({
-    name,
-    position: [centerX, 0, centerZ], // Y is always 0
-    length: Math.max(length, 0.5),
-    height: DEFAULT_HEIGHT,
-    leftWidth: slopeWidth,
-    rightWidth: slopeWidth,
+  // Create the segment first
+  const segment = RoofSegmentNode.parse({
+    width,
+    depth,
+    wallHeight: DEFAULT_WALL_HEIGHT,
+    roofHeight: DEFAULT_ROOF_HEIGHT,
+    roofType: 'gable',
   })
 
-  createNode(roof, levelId)
+  // Create the roof container
+  const roof = RoofNode.parse({
+    name,
+    position: [centerX, 0, centerZ],
+    children: [segment.id],
+  })
+
+  // Create roof first (so segment can be parented to it), then segment
+  createNodes([
+    { node: roof, parentId: levelId },
+    { node: segment, parentId: roof.id },
+  ])
+
   sfxEmitter.emit('sfx:structure-build')
   return roof.id
 }
@@ -82,7 +90,6 @@ export const RoofTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
-    // Initialize outline geometry
     outlineRef.current.geometry = new BufferGeometry()
 
     const updateOutline = (
@@ -90,15 +97,15 @@ export const RoofTool: React.FC = () => {
       corner2: [number, number, number],
     ) => {
       const gridY = corner1[1] + GRID_OFFSET
-      
+
       const groundPoints = [
         new Vector3(corner1[0], gridY, corner1[2]),
         new Vector3(corner2[0], gridY, corner1[2]),
         new Vector3(corner2[0], gridY, corner2[2]),
         new Vector3(corner1[0], gridY, corner2[2]),
-        new Vector3(corner1[0], gridY, corner1[2]), // Close the loop
+        new Vector3(corner1[0], gridY, corner1[2]),
       ]
-      
+
       outlineRef.current.geometry.dispose()
       outlineRef.current.geometry = new BufferGeometry().setFromPoints(groundPoints)
       outlineRef.current.visible = true
@@ -107,19 +114,15 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      // Snap to 0.5 grid
       const gridX = Math.round(event.position[0] * 2) / 2
       const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
-
-      // Update cursors
       const gridY = y + GRID_OFFSET
-      
+
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
-      // Play snap sound when grid position changes (only when placing)
       if (
         corner1Ref.current &&
         previousGridPosRef.current &&
@@ -136,7 +139,6 @@ export const RoofTool: React.FC = () => {
         levelY: y,
       })
 
-      // Update outline if we have first corner
       if (corner1Ref.current) {
         updateOutline(corner1Ref.current, cursorPosition)
       }
@@ -150,20 +152,16 @@ export const RoofTool: React.FC = () => {
       const y = event.position[1]
 
       if (!corner1Ref.current) {
-        // First click - set corner 1
         corner1Ref.current = [gridX, y, gridZ]
         setPreview((prev) => ({
           ...prev,
           corner1: corner1Ref.current,
         }))
       } else {
-        // Second click - create the roof
         const roofId = commitRoofPlacement(currentLevelId, corner1Ref.current, [gridX, y, gridZ])
 
-        // Auto-select the newly created roof
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 
-        // Reset state
         corner1Ref.current = null
         outlineRef.current.visible = false
       }
@@ -177,7 +175,6 @@ export const RoofTool: React.FC = () => {
       }
     }
 
-    // Subscribe to events
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
@@ -187,14 +184,12 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
 
-      // Reset state on unmount
       corner1Ref.current = null
     }
   }, [currentLevelId, setTool, setSelection, setMode])
 
   const { corner1, cursorPosition, levelY } = preview
 
-  // Calculate preview dimensions for display
   const previewDimensions = useMemo(() => {
     if (!corner1) return null
     const length = Math.abs(cursorPosition[0] - corner1[0])
@@ -206,26 +201,22 @@ export const RoofTool: React.FC = () => {
 
   return (
     <group>
-      {/* Cursor at ground height */}
       <CursorSphere ref={cursorRef} />
 
-      {/* Outline showing rectangle being drawn (Ground) */}
       {/* @ts-ignore */}
       <line ref={outlineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
         <bufferGeometry />
         <lineBasicNodeMaterial color="#818cf8" linewidth={2} depthTest={false} depthWrite={false} opacity={0.3} transparent />
       </line>
 
-      {/* First corner marker */}
       {corner1 && (
-        <CursorSphere 
-          position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]} 
-          color="#818cf8" 
+        <CursorSphere
+          position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]}
+          color="#818cf8"
           showTooltip={false}
         />
       )}
 
-      {/* Thin preview fill when drawing (Ground) */}
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
         <mesh
           layers={EDITOR_LAYER}

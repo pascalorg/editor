@@ -3,13 +3,13 @@
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { ViewerOverlay } from '@/app/viewer/[id]/viewer-overlay'
+import { ViewerZoneSystem } from '@/app/viewer/[id]/viewer-zone-system'
 import { useProjectScene } from '@/features/community/lib/models/hooks'
 import { useProjectStore } from '@/features/community/lib/projects/store'
 import { useKeyboard } from '@/hooks/use-keyboard'
 import { initSFXBus } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
-import { ViewerOverlay } from '@/app/viewer/[id]/viewer-overlay'
-import { ViewerZoneSystem } from '@/app/viewer/[id]/viewer-zone-system'
 import { FeedbackDialog } from '../feedback-dialog'
 import { PascalRadio } from '../pascal-radio'
 import { PreviewButton } from '../preview-button'
@@ -25,6 +25,7 @@ import { SidebarProvider } from '../ui/primitives/sidebar'
 import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import { CustomCameraControls } from './custom-camera-controls'
+import { DevDebugMenu } from './dev-debug-menu'
 import { ExportManager } from './export-manager'
 import { FloatingActionMenu } from './floating-action-menu'
 import { Grid } from './grid'
@@ -72,7 +73,7 @@ interface EditorProps {
 
 function EditorSceneCrashFallback() {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-background/95 p-4 text-foreground">
+    <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
         <h2 className="text-lg font-semibold">The editor scene failed to render</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -137,6 +138,7 @@ export default function Editor({ projectId }: EditorProps) {
           <ActionMenu />
           <PanelManager />
           <HelperManager />
+          <DevDebugMenu />
 
           {/* Top-right controls */}
           <div className="pointer-events-none fixed top-4 right-4 z-50 flex items-start gap-2">
@@ -165,9 +167,7 @@ export default function Editor({ projectId }: EditorProps) {
           {/* Swap zone systems: viewer drill-down vs editor layer toggle */}
           {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
           <CeilingSystem />
-          {!isPreviewMode && (
-            <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
-          )}
+          {!isPreviewMode && <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />}
           {!isPreviewMode && <ToolManager />}
           <CustomCameraControls />
           <ThumbnailGenerator projectId={projectId} />

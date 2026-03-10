@@ -20,7 +20,7 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   return nodeLevelId === currentLevelId;
 };
 
-type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling' | 'roof' | 'window' | 'door';
+type SelectableNodeType = "wall" | "item" | "building" | "zone" | 'slab' | 'ceiling' | 'roof' | 'roof-segment' | 'window' | 'door';
 
 type ModifierKeys = {
   meta: boolean;
@@ -89,7 +89,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ["wall", "item", "zone", "slab", "ceiling", "roof", "window", "door"],
+    types: ["wall", "item", "zone", "slab", "ceiling", "roof", "roof-segment", "window", "door"],
     handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState();
       const nodes = useScene.getState().nodes;
@@ -129,7 +129,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         if (node.type === "zone") return true;
         return false;
       } else {
-        if (node.type === "wall" || node.type === "slab" || node.type === "ceiling" || node.type === "roof") return true;
+        if (node.type === "wall" || node.type === "slab" || node.type === "ceiling" || node.type === "roof" || node.type === "roof-segment") return true;
         if (node.type === "item") {
           return (
             (node as ItemNode).asset.category === "door" ||
@@ -228,8 +228,9 @@ export const SelectionManager = () => {
             node.type === "wall" || 
             node.type === "slab" || 
             node.type === "ceiling" || 
-            node.type === "roof" || 
-            node.type === "window" || 
+            node.type === "roof" ||
+            node.type === "roof-segment" ||
+            node.type === "window" ||
             node.type === "door"
           ) {
             targetPhase = "structure";
@@ -267,7 +268,7 @@ export const SelectionManager = () => {
       }
     };
 
-    const allTypes = ["wall", "item", "building", "zone", "slab", "ceiling", "roof", "window", "door"];
+    const allTypes = ["wall", "item", "building", "zone", "slab", "ceiling", "roof", "roof-segment", "window", "door"];
     allTypes.forEach((type) => {
       emitter.on(`${type}:click` as any, onClick as any);
     });
@@ -343,8 +344,9 @@ export const SelectionManager = () => {
         node.type === "wall" || 
         node.type === "slab" || 
         node.type === "ceiling" || 
-        node.type === "roof" || 
-        node.type === "window" || 
+        node.type === "roof" ||
+        node.type === "roof-segment" ||
+        node.type === "window" ||
         node.type === "door"
       ) {
         targetPhase = "structure";
@@ -377,7 +379,7 @@ export const SelectionManager = () => {
       }
     };
 
-    const allTypes = ["wall", "item", "building", "slab", "ceiling", "roof", "window", "door", "zone", "site"];
+    const allTypes = ["wall", "item", "building", "slab", "ceiling", "roof", "roof-segment", "window", "door", "zone", "site"];
     allTypes.forEach((type) => {
       emitter.on(`${type}:enter` as any, onEnter as any);
       emitter.on(`${type}:leave` as any, onLeave as any);

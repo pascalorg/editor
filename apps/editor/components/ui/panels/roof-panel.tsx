@@ -1,8 +1,16 @@
 'use client'
 
-import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  RoofSegmentNode as RoofSegmentNodeSchema,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
+import { Plus } from 'lucide-react'
 
 import { PanelWrapper } from './panel-wrapper'
 import { PanelSection } from '../controls/panel-section'
@@ -15,6 +23,7 @@ export function RoofPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
+  const createNode = useScene((s) => s.createNode)
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -33,96 +42,63 @@ export function RoofPanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
+  const handleAddSegment = useCallback(() => {
+    if (!node) return
+    const segment = RoofSegmentNodeSchema.parse({
+      width: 6,
+      depth: 6,
+      wallHeight: 4,
+      roofHeight: 3,
+      roofType: 'gable',
+      position: [2, 0, 2],
+    })
+    createNode(segment, node.id as AnyNodeId)
+  }, [node, createNode])
+
+  const handleSelectSegment = useCallback(
+    (segmentId: string) => {
+      setSelection({ selectedIds: [segmentId as AnyNode['id']] })
+    },
+    [setSelection],
+  )
+
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
-  const totalWidth = node.leftWidth + node.rightWidth
+  const segments = (node.children ?? [])
+    .map((childId) => nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
+    .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
 
   return (
     <PanelWrapper
-      title={node.name || "Roof"}
+      title={node.name || 'Roof'}
       icon="/icons/roof.png"
       onClose={handleClose}
       width={300}
     >
-      <PanelSection title="Dimensions">
-        <SliderControl
-          label="Length"
-          value={Math.round(node.length * 100) / 100}
-          onChange={(v) => handleUpdate({ length: v })}
-          min={0.5}
-          max={20}
-          precision={2}
-          step={0.5}
-          unit="m"
-        />
-        <SliderControl
-          label="Height"
-          value={Math.round(node.height * 100) / 100}
-          onChange={(v) => handleUpdate({ height: v })}
-          min={0.1}
-          max={10}
-          precision={2}
-          step={0.1}
-          unit="m"
-        />
-      </PanelSection>
-
-      <PanelSection title="Slope Widths">
-        <div className="flex items-center justify-between px-2 pb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-          <span>Widths</span>
-          <span>Total: {totalWidth.toFixed(1)}m</span>
+      <PanelSection title="Segments">
+        <div className="flex flex-col gap-1">
+          {segments.map((seg, i) => (
+            <button
+              key={seg.id}
+              type="button"
+              onClick={() => handleSelectSegment(seg.id)}
+              className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-sm text-foreground transition-colors hover:bg-[#3e3e3e]"
+            >
+              <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
+              <span className="text-xs text-muted-foreground capitalize">{seg.roofType}</span>
+            </button>
+          ))}
         </div>
-        <SliderControl
-          label="Left"
-          value={Math.round(node.leftWidth * 100) / 100}
-          onChange={(v) => handleUpdate({ leftWidth: v })}
-          min={0.1}
-          max={10}
-          precision={2}
-          step={0.1}
-          unit="m"
+        <ActionButton
+          icon={<Plus className="h-3.5 w-3.5" />}
+          label="Add Segment"
+          onClick={handleAddSegment}
         />
-        <SliderControl
-          label="Right"
-          value={Math.round(node.rightWidth * 100) / 100}
-          onChange={(v) => handleUpdate({ rightWidth: v })}
-          min={0.1}
-          max={10}
-          precision={2}
-          step={0.1}
-          unit="m"
-        />
-      </PanelSection>
-
-      <PanelSection title="Rotation">
-        <SliderControl
-          label={<>R<sub className="text-[11px] ml-[1px] opacity-70">rot</sub></>}
-          value={Math.round((node.rotation * 180) / Math.PI)}
-          onChange={(degrees) => {
-            const radians = (degrees * Math.PI) / 180
-            handleUpdate({ rotation: radians })
-          }}
-          min={-180}
-          max={180}
-          precision={0}
-          step={1}
-          unit="°"
-        />
-        <div className="flex gap-1.5 px-1 pt-2 pb-1">
-          <ActionButton 
-            label="-90°" 
-            onClick={() => handleUpdate({ rotation: node.rotation - Math.PI / 2 })} 
-          />
-          <ActionButton 
-            label="+90°" 
-            onClick={() => handleUpdate({ rotation: node.rotation + Math.PI / 2 })} 
-          />
-        </div>
       </PanelSection>
 
       <PanelSection title="Position">
-        <SliderControl
-          label={<>X<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}
+        <MetricControl
+          label="X"
           value={Math.round(node.position[0] * 100) / 100}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
@@ -132,11 +108,11 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.1}
+          step={0.5}
           unit="m"
         />
-        <SliderControl
-          label={<>Y<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}
+        <MetricControl
+          label="Y"
           value={Math.round(node.position[1] * 100) / 100}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
@@ -146,11 +122,11 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.1}
+          step={0.5}
           unit="m"
         />
-        <SliderControl
-          label={<>Z<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}
+        <MetricControl
+          label="Z"
           value={Math.round(node.position[2] * 100) / 100}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
@@ -160,8 +136,20 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.1}
+          step={0.5}
           unit="m"
+        />
+        <SliderControl
+          label="Rotation"
+          value={Math.round((node.rotation * 180) / Math.PI)}
+          onChange={(degrees) => {
+            handleUpdate({ rotation: (degrees * Math.PI) / 180 })
+          }}
+          min={-180}
+          max={180}
+          precision={0}
+          step={1}
+          unit="°"
         />
       </PanelSection>
     </PanelWrapper>
