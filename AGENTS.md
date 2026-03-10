@@ -75,9 +75,10 @@ User input (pointer/keyboard)
 
 - **Flat nodes** — All scene nodes live in a single flat record; hierarchy is expressed via `parentId`.
 - **System/renderer split** — Systems own logic; renderers own geometry and material. Never mix.
-- **Viewer isolation** — `@pascal-app/viewer` must remain editor-agnostic. See `viewer-isolation` rule.
+- **Viewer isolation** — `@pascal-app/viewer` must never import from `apps/editor`. Editor-specific behaviour (tools, systems, selection) is injected as children or props.
 - **Registry pattern** — `useRegistry()` maps node IDs to live THREE objects without tree traversal.
-- **Spatial grid** — 2D grid for fast wall/zone neighborhood queries; avoid brute-force iteration.
+- **Spatial grid** — 2D grid for fast wall/zone neighbourhood queries; avoid brute-force iteration.
+- **Node creation** — Always use `NodeType.parse({…})` then `createNode(node, parentId)`. Never construct raw node objects.
 
 ---
 
