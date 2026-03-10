@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import { Color, UnsignedByteType } from 'three'
+import { Color, Layers, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
@@ -9,6 +9,8 @@ import {
   colorToDirection,
   diffuseColor,
   directionToColor,
+  float,
+  mix,
   mrt,
   normalView,
   oscSine,
@@ -40,11 +42,23 @@ export const SSGI_PARAMS = {
   useTemporalFiltering: true,
 }
 
+const DARK_BG = '#1f2433'
+const LIGHT_BG = '#ffffff'
+
 const PostProcessingPasses = () => {
   const { gl: renderer, scene, camera } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
   const [isInitialized, setIsInitialized] = useState(false)
+
+  const theme = useViewer((s) => s.theme)
+
+  // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
+  // Initialised from the current theme so there's no flash on first render.
+  const initBg = theme === 'dark' ? DARK_BG : LIGHT_BG
+  const bgUniform = useRef(uniform(new Color(initBg)))
+  const bgCurrent = useRef(new Color(initBg))
+  const bgTarget = useRef(new Color())
 
   useEffect(() => {
     let mounted = true
@@ -111,6 +125,18 @@ const PostProcessingPasses = () => {
         return colorToDirection(scenePassNormal.sample(uv))
       })
 
+      // camera.layers.disable(0)
+      // camera.layers.disable(1)
+      // camera.layers.enable(2) // Enable layer 2 for zone rendering
+      const zonePass = pass(scene, camera)
+      // camera.layers.enable(0) // Disable layer 2 for main scene rendering
+      // camera.layers.enable(1) // Disable layer 2 for main scene rendering
+      // camera.layers.disable(2) // Disable layer 2 for main scene rendering
+
+      const layers: Layers = new Layers()
+      layers.enable(2) // Enable layer 2 for zone rendering
+      layers.disable(0)
+      zonePass.setLayers(layers)
       // SSGI Pass (cast to PerspectiveCamera for SSGI)
       const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
 
@@ -130,10 +156,17 @@ const PostProcessingPasses = () => {
       const gi = giPass.rgb
       const ao = giPass.a
 
+      // Background detection via alpha: renderer clears with alpha=0 (setClearAlpha(0) in useFrame),
+      // so background pixels have scenePassColor.a=0 while geometry pixels have output.a=1.
+      // WebGPU only applies clearColorValue to MRT attachment 0 (output), so scenePassColor.a
+      // is the reliable geometry mask — no normals, no flicker.
+      const hasGeometry = scenePassColor.a
+      const contentAlpha = hasGeometry.max(zonePass.a)
+
       // Composite: scene * AO + diffuse * GI
       const compositePass = vec4(
-        add(scenePassColor.rgb.mul(ao), scenePassDiffuse.rgb.mul(gi)),
-        scenePassColor.a,
+        add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
+        contentAlpha,
       )
 
       function generateSelectedOutlinePass() {
@@ -194,7 +227,17 @@ const PostProcessingPasses = () => {
         : vec4(add(scenePassColor.rgb, selectedOutlinePass.add(hoverOutlinePass)), scenePassColor.a)
 
       // TRAA (Temporal Reprojection Anti-Aliasing) - applied AFTER combining everything
-      const finalOutput = traa(compositeWithOutlines, scenePassDepth, scenePassVelocity, camera)
+      const traaOutput = traa(compositeWithOutlines, scenePassDepth, scenePassVelocity, camera)
+
+      // For zone-over-background pixels, scenePassDepth=1.0 (no scene geometry) causes TRAA
+      // to output black. Use hasGeometry to blend: geometry pixels use traaRgb, all others
+      // (zones over background, pure background) use compositePass.rgb directly.
+      const traaRgb = (traaOutput as any).rgb
+      const colorSource = mix(compositePass.rgb, traaRgb, hasGeometry)
+      const finalOutput = vec4(
+        mix(bgUniform.current, colorSource, contentAlpha),
+        float(1),
+      )
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput
@@ -219,12 +262,20 @@ const PostProcessingPasses = () => {
     }
   }, [renderer, scene, camera, isInitialized])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    // Animate background colour toward the current theme target (same lerp as AnimatedBackground)
+    bgTarget.current.set(theme === 'dark' ? DARK_BG : LIGHT_BG)
+    bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
+    bgUniform.current.value.copy(bgCurrent.current)
+
     if (hasPipelineErrorRef.current || !renderPipelineRef.current) {
       return
     }
 
     try {
+      // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
+      // making scenePassColor.a a reliable geometry mask (geometry pixels write a=1 via output node).
+      ;(renderer as any).setClearAlpha(0)
       renderPipelineRef.current.render()
     } catch (error) {
       hasPipelineErrorRef.current = true

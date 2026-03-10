@@ -28,7 +28,7 @@ const createWallGradientMaterial = (zoneColor: string) => {
     colorNode: baseColor,
     opacityNode: finalOpacity,
     side: DoubleSide,
-    depthWrite: false,
+    depthWrite: true,
     depthTest: false,
     userData: {
       uOpacity: opacity,
@@ -244,7 +244,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
       </mesh>
 
       {/* Wall borders with gradient */}
-      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" />
+      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" layers={2} />
     </group>
   )
 }

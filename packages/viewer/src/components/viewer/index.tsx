@@ -84,7 +84,7 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' 
       }}
       camera={{ position: [50, 50, 50], fov: 50 }}
     >
-      <AnimatedBackground isDark={theme === 'dark'} />
+      {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <GroundOccluder />
       <ViewerCamera />
 
