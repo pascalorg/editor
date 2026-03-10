@@ -30,11 +30,11 @@
     "portless": "^0.4.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.4",
+    "@biomejs/biome": "^2.4.6",
     "supabase": "2.76.15",
-    "turbo": "^2.8.12",
+    "turbo": "^2.8.15",
     "typescript": "5.9.3",
-    "ultracite": "^7.2.4"
+    "ultracite": "^7.2.5"
   },
   "engines": {
     "node": ">=18"
