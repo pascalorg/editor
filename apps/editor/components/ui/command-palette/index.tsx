@@ -192,7 +192,7 @@ export function CommandPalette() {
     activeLevelNode?.type === "level" && (activeLevelNode as LevelNode).level === 0;
 
   // Reactive snapshot status for the selected camera scope
-  const cameraScopeNode = useScene((s) => cameraScope ? s.nodes[cameraScope.nodeId] : null);
+  const cameraScopeNode = useScene((s) => cameraScope ? s.nodes[cameraScope.nodeId as AnyNodeId] : null);
   const hasScopeSnapshot = !!(cameraScopeNode as any)?.camera;
 
   const allLevels = useScene(
@@ -282,8 +282,9 @@ export function CommandPalette() {
     });
   };
 
-  const wallModeLabel: Record<string, string> = { cutaway: "Cutaway", up: "Up", down: "Down" };
-  const levelModeLabel: Record<string, string> = {
+  const wallModeLabel: Record<"cutaway" | "up" | "down", string> = { cutaway: "Cutaway", up: "Up", down: "Down" };
+  const levelModeLabel: Record<"manual" | "stacked" | "exploded" | "solo", string> = {
+    manual: "Manual",
     stacked: "Stacked",
     exploded: "Exploded",
     solo: "Solo",
@@ -319,7 +320,7 @@ export function CommandPalette() {
       const level0 = Object.values(nodes).find(
         (n) => n.type === "level" && (n as LevelNode).level === 0
       );
-      if (level0) useViewer.getState().setSelection({ levelId: level0.id });
+      if (level0) useViewer.getState().setSelection({ levelId: level0.id as `level_${string}` });
     });
   };
 
@@ -333,12 +334,12 @@ export function CommandPalette() {
   // Camera snapshot (scoped to the currently selected camera scope)
   const takeSnapshot = () => {
     if (!cameraScope) return;
-    run(() => emitter.emit("camera-controls:capture", { nodeId: cameraScope.nodeId }));
+    run(() => emitter.emit("camera-controls:capture", { nodeId: cameraScope.nodeId as AnyNodeId }));
   };
 
   const viewSnapshot = () => {
     if (!cameraScope || !hasScopeSnapshot) return;
-    run(() => emitter.emit("camera-controls:view", { nodeId: cameraScope.nodeId }));
+    run(() => emitter.emit("camera-controls:view", { nodeId: cameraScope.nodeId as AnyNodeId }));
   };
 
   const clearSnapshot = () => {
