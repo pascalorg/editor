@@ -2,17 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { IconRail, type PanelId } from "./icon-rail";
+import { CommandPalette } from "@/components/ui/command-palette";
 import {
   ArrowUpCircle,
   ChevronDown,
   Clock3,
-  Moon,
-  Pencil,
   RotateCcw,
   Save,
-  Sun,
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { useScene } from "@pascal-app/core";
 
 import {
@@ -48,7 +45,6 @@ import {
 } from "@/features/community/lib/models/actions";
 import { useProjectStore } from "@/features/community/lib/projects/store";
 import { updateProjectName } from "@/features/community/lib/projects/actions";
-import { useViewer } from "@pascal-app/viewer";
 import { applySceneGraphToEditor } from "@/features/community/lib/models/hooks";
 
 function formatRelativeTime(value: string): string {
@@ -84,9 +80,6 @@ export function AppSidebar() {
   const setIsVersionPreviewMode = useProjectStore((s) => s.setIsVersionPreviewMode);
   const setIsSceneLoading = useProjectStore((s) => s.setIsSceneLoading);
   const setAutosaveStatus = useProjectStore((s) => s.setAutosaveStatus);
-  const theme = useViewer((state) => state.theme);
-  const setTheme = useViewer((state) => state.setTheme);
-  const [mounted, setMounted] = useState(false);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState("");
@@ -108,7 +101,6 @@ export function AppSidebar() {
   const activeProjectId = activeProject?.id ?? null;
 
   useEffect(() => {
-    setMounted(true);
     // Widen default sidebar (288px → 432px) for better project title visibility
     const store = useSidebarStore.getState();
     if (store.width <= 288) {
@@ -513,18 +505,8 @@ export function AppSidebar() {
     }
   };
 
-  const getPanelTitle = () => {
-    switch (activePanel) {
-      case "site":
-        return "Site";
-      case "settings":
-        return "Settings";
-      default:
-        return "";
-    }
-  };
-
   return (
+    <>
     <Sidebar className={cn("dark text-white ")} variant="floating">
       <div className="flex h-full">
         {/* Icon Rail */}
@@ -547,15 +529,12 @@ export function AppSidebar() {
                     className="w-full bg-transparent text-foreground outline-none border-b border-primary/50 focus:border-primary rounded-none px-0 py-0 m-0 h-7 font-semibold text-lg"
                   />
                 ) : (
-                  <div 
-                    className="flex items-center gap-2 group/title cursor-pointer w-full h-7 border-b border-transparent"
+                  <h1
+                    className="font-semibold text-lg truncate cursor-text w-full h-7 border-b border-transparent hover:border-border/50 transition-colors leading-7"
                     onClick={() => setIsEditingTitle(true)}
                   >
-                    <h1 className="font-semibold text-lg truncate">
-                      {activeProject?.name || "Untitled Project"}
-                    </h1>
-                    <Pencil className="w-3.5 h-3.5 opacity-0 group-hover/title:opacity-100 transition-opacity text-muted-foreground shrink-0" />
-                  </div>
+                    {activeProject?.name || "Untitled Project"}
+                  </h1>
                 )}
               </div>
               <div className={cn("shrink-0 flex items-center gap-1 transition-all duration-200", isEditingTitle && "hidden")}>
@@ -569,14 +548,11 @@ export function AppSidebar() {
                             onClick={() => runVersionAction("save")}
                             disabled={isQuickSaveDisabled}
                             className={cn(
-                              "group/save-trigger relative inline-flex h-full min-w-0 items-center border-r border-border/50 px-1.5 text-[10px] transition-colors",
+                              "group/save-trigger relative inline-flex h-full w-16 items-center border-r border-border/50 px-1.5 text-[10px] transition-colors",
                               isQuickSaveDisabled
                                 ? "cursor-not-allowed opacity-50"
                                 : "hover:bg-black/30",
                             )}
-                            style={{
-                              width: "clamp(48px, calc(var(--sidebar-width) - 16.5rem), 80px)",
-                            }}
                           >
                             <span className="pointer-events-none inline-flex min-w-0 items-center gap-1 transition-opacity group-hover/save-trigger:opacity-0">
                               <Clock3 className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -718,61 +694,8 @@ export function AppSidebar() {
                     </PopoverContent>
                   </Popover>
                 )}
-
-                {mounted && (
-                  <button
-                    className="shrink-0 flex items-center bg-black/20 rounded-full p-1 border border-border/50 cursor-pointer"
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    type="button"
-                    aria-label="Toggle theme"
-                  >
-                    <div className="relative flex">
-                      {/* Sliding Background */}
-                      <motion.div
-                        className="absolute inset-0 bg-[#3A3A3C] shadow-sm rounded-full"
-                        initial={false}
-                        animate={{
-                          x: theme === "light" ? "100%" : "0%",
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 35,
-                        }}
-                        style={{ width: "50%" }}
-                      />
-
-                      {/* Dark Mode Icon */}
-                      <div
-                        className={cn(
-                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                          theme === "dark"
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <Moon className="h-3.5 w-3.5" />
-                      </div>
-
-                      {/* Light Mode Icon */}
-                      <div
-                        className={cn(
-                          "relative z-10 flex h-6 w-8 items-center justify-center rounded-full transition-colors duration-200 pointer-events-none",
-                          theme === "light"
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <Sun className="h-3.5 w-3.5" />
-                      </div>
-                    </div>
-                  </button>
-                )}
               </div>
             </div>
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              {getPanelTitle()}
-            </span>
           </SidebarHeader>
 
           <SidebarContent
@@ -783,5 +706,7 @@ export function AppSidebar() {
         </div>
       </div>
     </Sidebar>
+    <CommandPalette />
+    </>
   );
 }
