@@ -89,4 +89,4 @@ Core and viewer systems are mounted inside `<Viewer>` alongside renderers. See @
      </Viewer>
      ```
 
-4. If the system must run before renderers, place it earlier in the JSX tree.
+4. **Mount order matters.** Most viewer systems run *after* renderers in the JSX tree — they consume `sceneRegistry` data that renderers populate on mount. Only place a system before renderers if it explicitly does not read the registry.

@@ -26,7 +26,7 @@ Example keys: `wall:click`, `item:enter`, `door:double-click`, `grid:pointerdown
 'click' | 'move' | 'enter' | 'leave' | 'pointerdown' | 'pointerup' | 'context-menu' | 'double-click'
 ```
 
-The `grid:*` events fire when the user interacts with empty space (no node hit). See @apps/editor/hooks/use-grid-events.ts.
+The `grid:*` events fire when the user interacts with empty space (no node hit). They are **not** emitted by a mesh — `useGridEvents(gridY)` (@apps/editor/hooks/use-grid-events.ts) manually raycasts against a ground plane and calls `emitter.emit('grid:click', …)`. Mount it in any tool or editor component that needs empty-space interactions.
 
 ## NodeEvent Shape
 

@@ -40,10 +40,10 @@ import { useRegistry } from '@pascal-app/core'
 import { useNodeEvents } from '../../hooks/use-node-events'
 import { useScene } from '@pascal-app/core'
 
-export function MyNodeRenderer({ id }: { id: MyNodeId }) {
-  const node = useScene(s => s.nodes[id] as MyNode)
-  const { ref } = useRegistry(id)
-  const events = useNodeEvents(id)
+export function MyNodeRenderer({ node }: { node: MyNode }) {
+  const ref = useRef<Mesh>(null!)
+  useRegistry(node.id, 'my-node', ref)   // 3 args: id, type, ref — no return value
+  const events = useNodeEvents(node, 'my-node')
 
   return (
     <mesh ref={ref} {...events}>

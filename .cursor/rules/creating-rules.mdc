@@ -74,3 +74,5 @@ Concrete guidance with examples.
 | `scene-registry` | Global node ID → Object3D map and `useRegistry` |
 | `selection-managers` | Two-layer selection (viewer + editor), events, outliner |
 | `events` | Typed event bus — emitting and listening to node and grid events |
+| `node-schemas` | Zod schema pattern for node types, createNode, updateNode |
+| `spatial-queries` | Placement validation (canPlaceOnFloor/Wall/Ceiling) for tools |
