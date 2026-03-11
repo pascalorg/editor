@@ -259,7 +259,16 @@ export const SelectionManager = () => {
         clickHandledRef.current = true;
         
         console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", event.nativeEvent.shiftKey);
-        activeStrategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
+        
+        let nodeToSelect = node;
+        if (node.type === "roof-segment" && node.parentId) {
+          const parentNode = useScene.getState().nodes[node.parentId];
+          if (parentNode && parentNode.type === "roof") {
+            nodeToSelect = parentNode;
+          }
+        }
+        
+        activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current);
 
         // Reset the handled flag after a short delay to allow grid:click to be ignored
         setTimeout(() => {
@@ -332,6 +341,7 @@ export const SelectionManager = () => {
       const currentPhase = useEditor.getState().phase;
       
       let targetPhase: "site" | "structure" | "furnish" | null = null;
+      let forceSelect = false;
 
       if (node.type === "building" || node.type === "site") {
         if (currentPhase === "structure" || currentPhase === "furnish") {
@@ -350,6 +360,9 @@ export const SelectionManager = () => {
         node.type === "door"
       ) {
         targetPhase = "structure";
+        if (node.type === "roof-segment" && currentPhase === "structure") {
+          forceSelect = true; // allow double click to dive into roof-segment even if already in structure phase
+        }
       } else if (node.type === "item") {
         const item = node as ItemNode;
         if (item.asset.category === "door" || item.asset.category === "window") {
@@ -363,16 +376,18 @@ export const SelectionManager = () => {
         return;
       }
 
-      if (targetPhase && targetPhase !== useEditor.getState().phase) {
+      if ((targetPhase && targetPhase !== useEditor.getState().phase) || forceSelect) {
         event.stopPropagation();
         
-        useEditor.getState().setPhase(targetPhase);
+        if (targetPhase && targetPhase !== useEditor.getState().phase) {
+          useEditor.getState().setPhase(targetPhase);
+        }
         
         if (targetPhase === "structure" && useEditor.getState().structureLayer === "zones") {
           useEditor.getState().setStructureLayer("elements");
         }
 
-        const strategy = SELECTION_STRATEGIES[targetPhase];
+        const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase];
         if (strategy) {
           strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current);
         }

@@ -1,7 +1,7 @@
 import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper, handleTreeSelection } from "./tree-node";
@@ -47,6 +47,14 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
     .map((childId) => nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
     .filter((n): n is RoofSegmentNode => n?.type === "roof-segment");
 
+  const hasSelectedChild = segments.some((seg) => selectedIds.includes(seg.id));
+
+  useEffect(() => {
+    if (isSelected || hasSelectedChild) {
+      setExpanded(true);
+    }
+  }, [isSelected, hasSelectedChild]);
+
   const segmentCount = segments.length;
   const defaultName = `Roof (${segmentCount} segment${segmentCount !== 1 ? "s" : ""})`;
 
@@ -77,9 +85,8 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
         isVisible={node.visible !== false}
         isLast={isLast && !expanded}
         actions={<TreeNodeActions node={node} />}
-      />
-      {expanded &&
-        segments.map((seg, i) => (
+      >
+        {segments.map((seg, i) => (
           <RoofSegmentTreeNode
             key={seg.id}
             node={seg}
@@ -87,6 +94,7 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
             isLast={isLast && i === segments.length - 1}
           />
         ))}
+      </TreeNodeWrapper>
     </>
   );
 }

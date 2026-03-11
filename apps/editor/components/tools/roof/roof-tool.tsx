@@ -6,7 +6,9 @@ import {
   RoofNode,
   RoofSegmentNode,
   useScene,
+  sceneRegistry,
 } from '@pascal-app/core'
+import * as THREE from 'three'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Line, type Group, Vector3 } from 'three'
@@ -15,8 +17,8 @@ import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-const DEFAULT_WALL_HEIGHT = 4
-const DEFAULT_ROOF_HEIGHT = 3
+const DEFAULT_WALL_HEIGHT = 0.5
+const DEFAULT_ROOF_HEIGHT = 2.5
 const GRID_OFFSET = 0.02
 
 /**
@@ -26,6 +28,7 @@ const commitRoofPlacement = (
   levelId: LevelNode['id'],
   corner1: [number, number, number],
   corner2: [number, number, number],
+  selectedIds: string[]
 ): RoofNode['id'] => {
   const { createNode, createNodes, nodes } = useScene.getState()
 
@@ -35,17 +38,64 @@ const commitRoofPlacement = (
   const width = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
   const depth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
 
+  // Determine if there is an active roof node we should add to
+  let targetRoofId: string | null = null
+  if (selectedIds.length === 1) {
+    const selectedNode = nodes[selectedIds[0]]
+    if (selectedNode?.type === 'roof') {
+      targetRoofId = selectedNode.id
+    } else if (selectedNode?.type === 'roof-segment' && selectedNode.parentId) {
+      targetRoofId = selectedNode.parentId
+    }
+  }
+
+  if (targetRoofId) {
+    const targetRoof = nodes[targetRoofId] as RoofNode
+    let localX = centerX
+    let localZ = centerZ
+
+    // Convert world coordinates to the local space of the parent roof
+    const targetObj = sceneRegistry.nodes.get(targetRoofId)
+    if (targetObj) {
+      const worldVec = new THREE.Vector3(centerX, 0, centerZ)
+      targetObj.worldToLocal(worldVec)
+      localX = worldVec.x
+      localZ = worldVec.z
+    } else {
+      // Math fallback if mesh isn't ready
+      const dx = centerX - targetRoof.position[0]
+      const dz = centerZ - targetRoof.position[2]
+      const angle = -targetRoof.rotation
+      localX = dx * Math.cos(angle) - dz * Math.sin(angle)
+      localZ = dx * Math.sin(angle) + dz * Math.cos(angle)
+    }
+
+    const segment = RoofSegmentNode.parse({
+      width,
+      depth,
+      wallHeight: DEFAULT_WALL_HEIGHT,
+      roofHeight: DEFAULT_ROOF_HEIGHT,
+      roofType: 'gable',
+      position: [localX, 0, localZ],
+    })
+
+    createNode(segment, targetRoofId as AnyNode['id'])
+    sfxEmitter.emit('sfx:structure-build')
+    return segment.id // Returns segment ID so it can be selected immediately
+  }
+
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
   const name = `Roof ${roofCount + 1}`
 
-  // Create the segment first
+  // Create the segment first (centered in its new parent)
   const segment = RoofSegmentNode.parse({
     width,
     depth,
     wallHeight: DEFAULT_WALL_HEIGHT,
     roofHeight: DEFAULT_ROOF_HEIGHT,
     roofType: 'gable',
+    position: [0, 0, 0],
   })
 
   // Create the roof container
@@ -75,9 +125,15 @@ export const RoofTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const setTool = useEditor((state) => state.setTool)
   const setMode = useEditor((state) => state.setMode)
+
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds
+  }, [selectedIds])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -158,7 +214,7 @@ export const RoofTool: React.FC = () => {
           corner1: corner1Ref.current,
         }))
       } else {
-        const roofId = commitRoofPlacement(currentLevelId, corner1Ref.current, [gridX, y, gridZ])
+        const roofId = commitRoofPlacement(currentLevelId, corner1Ref.current, [gridX, y, gridZ], selectedIdsRef.current)
 
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 

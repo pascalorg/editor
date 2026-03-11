@@ -27,13 +27,13 @@ export const RoofSegmentNode = BaseNode.extend({
   width: z.number().default(8),
   depth: z.number().default(6),
   // Vertical dimensions
-  wallHeight: z.number().default(4),
-  roofHeight: z.number().default(3),
+  wallHeight: z.number().default(0.5),
+  roofHeight: z.number().default(2.5),
   // Structure thicknesses
-  wallThickness: z.number().default(0.4),
-  deckThickness: z.number().default(0.4),
-  overhang: z.number().default(0.6),
-  shingleThickness: z.number().default(0.15),
+  wallThickness: z.number().default(0.1),
+  deckThickness: z.number().default(0.1),
+  overhang: z.number().default(0.3),
+  shingleThickness: z.number().default(0.05),
 }).describe(
   dedent`
   Roof segment node - an individual roof module within a roof group.

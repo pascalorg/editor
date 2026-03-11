@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { X, RotateCcw, Moon } from 'lucide-react'
+import { X, RotateCcw, Moon, ChevronLeft } from 'lucide-react'
 import Image from 'next/image'
 
 interface PanelWrapperProps {
@@ -9,6 +9,7 @@ interface PanelWrapperProps {
   icon?: string
   onClose?: () => void
   onReset?: () => void
+  onBack?: () => void
   children: React.ReactNode
   className?: string
   width?: number | string
@@ -19,6 +20,7 @@ export function PanelWrapper({
   icon,
   onClose,
   onReset,
+  onBack,
   children,
   className,
   width = 320, // default width
@@ -34,6 +36,15 @@ export function PanelWrapper({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground mr-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
           {icon && (
             <Image 
               src={icon} 

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Brush, Evaluator, ADDITION, SUBTRACTION } from 'three-bvh-csg'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import type { AnyNodeId, RoofSegmentNode } from '../../schema'
+import type { AnyNode, AnyNodeId, RoofSegmentNode, RoofNode } from '../../schema'
 import type { RoofType } from '../../schema/nodes/roof-segment'
 import useScene from '../../store/use-scene'
 
@@ -23,15 +23,35 @@ export const RoofSystem = () => {
     if (dirtyNodes.size === 0) return
 
     const nodes = useScene.getState().nodes
+    const roofsToUpdate = new Set<AnyNodeId>()
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
-      if (!node || node.type !== 'roof-segment') return
+      if (!node) return
 
-      const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (mesh) {
-        updateRoofSegmentGeometry(node as RoofSegmentNode, mesh)
-        clearDirty(id as AnyNodeId)
+      if (node.type === 'roof-segment') {
+        const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
+        if (mesh) {
+          updateRoofSegmentGeometry(node as RoofSegmentNode, mesh)
+          clearDirty(id as AnyNodeId)
+        }
+        if (node.parentId) {
+          roofsToUpdate.add(node.parentId as AnyNodeId)
+        }
+      } else if (node.type === 'roof') {
+        roofsToUpdate.add(id as AnyNodeId)
+      }
+    })
+
+    roofsToUpdate.forEach((id) => {
+      const node = nodes[id]
+      if (!node || node.type !== 'roof') return
+      const group = sceneRegistry.nodes.get(id) as THREE.Group
+      if (group) {
+        updateMergedRoofGeometry(node as RoofNode, group, nodes)
+        if (dirtyNodes.has(id as AnyNodeId)) {
+          clearDirty(id as AnyNodeId)
+        }
       }
     })
   })
@@ -53,6 +73,131 @@ function updateRoofSegmentGeometry(node: RoofSegmentNode, mesh: THREE.Mesh) {
   mesh.rotation.y = node.rotation
 }
 
+function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes: Record<string, AnyNode>) {
+  const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
+  if (!mergedMesh) return
+
+  const children = (roofNode.children ?? [])
+    .map(id => nodes[id] as RoofSegmentNode)
+    .filter(Boolean)
+
+  if (children.length === 0) {
+    mergedMesh.geometry.dispose()
+    mergedMesh.geometry = new THREE.BufferGeometry()
+    return
+  }
+
+  let totalShinSlab: Brush | null = null
+  let totalDeckSlab: Brush | null = null
+  let totalWall: Brush | null = null
+  let totalInner: Brush | null = null
+
+  for (const child of children) {
+    const brushes = getRoofSegmentBrushes(child)
+    if (!brushes) continue
+
+    const matrix = new THREE.Matrix4().compose(
+      new THREE.Vector3(...child.position),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), child.rotation),
+      new THREE.Vector3(1, 1, 1)
+    )
+
+    const applyTransform = (brush: Brush) => {
+      brush.geometry.applyMatrix4(matrix)
+      brush.updateMatrixWorld()
+    }
+
+    applyTransform(brushes.shinSlab)
+    applyTransform(brushes.deckSlab)
+    applyTransform(brushes.wallBrush)
+    applyTransform(brushes.innerBrush)
+
+    if (totalShinSlab) {
+      const next = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION)
+      totalShinSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      totalShinSlab = next
+    } else {
+      totalShinSlab = brushes.shinSlab
+    }
+
+    if (totalDeckSlab) {
+      const next = csgEvaluator.evaluate(totalDeckSlab, brushes.deckSlab, ADDITION)
+      totalDeckSlab.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      totalDeckSlab = next
+    } else {
+      totalDeckSlab = brushes.deckSlab
+    }
+
+    if (totalWall) {
+      const next = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION)
+      totalWall.geometry.dispose()
+      brushes.wallBrush.geometry.dispose()
+      totalWall = next
+    } else {
+      totalWall = brushes.wallBrush
+    }
+
+    if (totalInner) {
+      const next = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION)
+      totalInner.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      totalInner = next
+    } else {
+      totalInner = brushes.innerBrush
+    }
+  }
+
+  if (totalShinSlab && totalDeckSlab && totalWall && totalInner) {
+    try {
+      const finalShinTrimmed = csgEvaluator.evaluate(totalShinSlab, totalInner, SUBTRACTION)
+      const finalDeckTrimmed = csgEvaluator.evaluate(totalDeckSlab, totalInner, SUBTRACTION)
+      const finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
+
+      const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
+      const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+
+      const resultGeo = combined.geometry
+
+      const resultMaterials: THREE.Material[] = Array.isArray(combined.material)
+        ? combined.material
+        : [combined.material]
+
+      const matToIndex = new Map<THREE.Material, number>([
+        [dummyMats[0], 0],
+        [dummyMats[1], 1],
+        [dummyMats[2], 2],
+        [dummyMats[3], 3],
+      ])
+
+      for (const g of resultGeo.groups) {
+        if (g.materialIndex === undefined) continue
+        const material = resultMaterials[g.materialIndex]
+        if (material) {
+          g.materialIndex = matToIndex.get(material) ?? 0
+        }
+      }
+      
+      resultGeo.computeVertexNormals()
+      mergedMesh.geometry.dispose()
+      mergedMesh.geometry = resultGeo
+
+      finalShinTrimmed.geometry.dispose()
+      finalDeckTrimmed.geometry.dispose()
+      finalWallTrimmed.geometry.dispose()
+      shinDeck.geometry.dispose()
+    } catch (e) {
+      console.error('Merged roof CSG failed:', e)
+    }
+
+    totalShinSlab.geometry.dispose()
+    totalDeckSlab.geometry.dispose()
+    totalWall.geometry.dispose()
+    totalInner.geometry.dispose()
+  }
+}
+
 const dummyMats: [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial, THREE.MeshBasicMaterial, THREE.MeshBasicMaterial] = [
   new THREE.MeshBasicMaterial(),
   new THREE.MeshBasicMaterial(),
@@ -68,12 +213,11 @@ const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
  * Generate complete hollow-shell geometry for a roof segment.
  * Ports the prototype's CSG approach using three-bvh-csg.
  */
-export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.BufferGeometry {
+export function getRoofSegmentBrushes(node: RoofSegmentNode): { deckSlab: Brush; shinSlab: Brush; wallBrush: Brush; innerBrush: Brush } | null {
   const { roofType, width, depth, wallHeight, roofHeight, wallThickness, deckThickness, overhang, shingleThickness } = node
 
   const activeRh = roofType === 'flat' ? 0 : roofHeight
 
-  // Calculate slope angle parameters
   let run = Math.min(width, depth) / 2
   let rise = activeRh
   if (roofType === 'shed') { run = depth; }
@@ -89,7 +233,6 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
   const baseI = Math.min(width, depth) * 0.25
 
-  // Helper to generate a volume for CSG operations
   const getVol = (wExt: number, vOffset: number, baseY: number, matIndex: number, isVoid: boolean) => {
     const wV = Math.max(0.01, width + 2 * wExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
@@ -189,8 +332,6 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   const shinBotGeo = createGeometryFromFaces(botFaces, 1)
   const shinTopGeo = createGeometryFromFaces(
     topFaces,
-    // Keep shingles on the weather-exposed roof skin only. Rake cuts and
-    // undersides should inherit the darker deck material instead of leaking green.
     (normal) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : 1),
   )
 
@@ -198,17 +339,15 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
     shinTopGeo.translate(0, 0, transZ)
   }
 
-  // CSG operations
   const toBrush = (geo: THREE.BufferGeometry): Brush | null => {
     if (!geo || !geo.attributes.position || geo.attributes.position.count === 0) return null
     if (!geo.index) return null
-
     const brush = new Brush(geo, dummyMats)
     brush.updateMatrixWorld()
     return brush
   }
 
-  const eps = 0.002 // 2mm oversize to ensure clean CSG cuts on coplanar faces
+  const eps = 0.002
 
   const wallBrush = toBrush(wallGeo)
   const innerBrush = toBrush(innerGeo)
@@ -237,61 +376,88 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
     shinBotBrush.updateMatrixWorld()
   }
 
-  let resultGeo = new THREE.BufferGeometry()
-
-  if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
-    try {
-      const deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
-      const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
-      const hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
-
-      const shinDeck = csgEvaluator.evaluate(shinSlab, deckSlab, ADDITION)
-      const combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
-
-      resultGeo = combined.geometry
-
-      // three-bvh-csg can renumber groups during the boolean ops, so map the
-      // result back to our canonical wall / deck / interior / shingle slots.
-      const resultMaterials: THREE.Material[] = Array.isArray(combined.material)
-        ? combined.material
-        : [combined.material]
-
-      const matToIndex = new Map<THREE.Material, number>([
-        [dummyMats[0], 0],
-        [dummyMats[1], 1],
-        [dummyMats[2], 2],
-        [dummyMats[3], 3],
-      ])
-
-      for (const group of resultGeo.groups) {
-        if (group.materialIndex === undefined) continue
-        const material = resultMaterials[group.materialIndex]
-        if (material) {
-          group.materialIndex = matToIndex.get(material) ?? 0
-        }
-      }
-
-      remapRoofShellFaces(resultGeo, node)
-
-      // Cleanup intermediate brushes
-      deckSlab.geometry.dispose()
-      shinSlab.geometry.dispose()
-      hollowWall.geometry.dispose()
-      shinDeck.geometry.dispose()
-    } catch (e) {
-      console.error('Roof CSG failed:', e)
-      // Fallback: just use the wall geometry if CSG fails
-      resultGeo = wallGeo.clone()
-    }
-  }
-
-  // Cleanup source geometries
   wallGeo.dispose()
   innerGeo.dispose()
   deckTopGeo.dispose()
   deckBotGeo.dispose()
   shinTopGeo.dispose()
   shinBotGeo.dispose()
+
+  if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
+    try {
+      const deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
+      const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
+      
+      deckTopBrush.geometry.dispose()
+      deckBotBrush.geometry.dispose()
+      shinTopBrush.geometry.dispose()
+      shinBotBrush.geometry.dispose()
+      
+      return { deckSlab, shinSlab, wallBrush, innerBrush }
+    } catch (e) {
+      console.error('CSG prep failed:', e)
+    }
+  }
+
+  if (deckTopBrush) deckTopBrush.geometry.dispose()
+  if (deckBotBrush) deckBotBrush.geometry.dispose()
+  if (shinTopBrush) shinTopBrush.geometry.dispose()
+  if (shinBotBrush) shinBotBrush.geometry.dispose()
+  if (wallBrush) wallBrush.geometry.dispose()
+  if (innerBrush) innerBrush.geometry.dispose()
+
+  return null
+}
+
+export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.BufferGeometry {
+  const brushes = getRoofSegmentBrushes(node)
+  if (!brushes) {
+    // Fallback: simple box
+    return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
+  }
+
+  const { deckSlab, shinSlab, wallBrush, innerBrush } = brushes
+  let resultGeo = new THREE.BufferGeometry()
+
+  try {
+    const hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
+    const shinDeck = csgEvaluator.evaluate(shinSlab, deckSlab, ADDITION)
+    const combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
+
+    resultGeo = combined.geometry
+
+    const resultMaterials: THREE.Material[] = Array.isArray(combined.material)
+      ? combined.material
+      : [combined.material]
+
+    const matToIndex = new Map<THREE.Material, number>([
+      [dummyMats[0], 0],
+      [dummyMats[1], 1],
+      [dummyMats[2], 2],
+      [dummyMats[3], 3],
+    ])
+
+    for (const group of resultGeo.groups) {
+      if (group.materialIndex === undefined) continue
+      const material = resultMaterials[group.materialIndex]
+      if (material) {
+        group.materialIndex = matToIndex.get(material) ?? 0
+      }
+    }
+
+    remapRoofShellFaces(resultGeo, node)
+
+    hollowWall.geometry.dispose()
+    shinDeck.geometry.dispose()
+  } catch (e) {
+    console.error('Roof CSG failed:', e)
+    resultGeo = wallBrush.geometry.clone()
+  }
+
+  deckSlab.geometry.dispose()
+  shinSlab.geometry.dispose()
+  wallBrush.geometry.dispose()
+  innerBrush.geometry.dispose()
 
   resultGeo.computeVertexNormals()
   return resultGeo

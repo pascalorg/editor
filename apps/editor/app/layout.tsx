@@ -5,6 +5,7 @@ import { Barlow } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { VercelToolbar } from '@vercel/toolbar/next'
+import { Agentation } from 'agentation'
 import { UsernameGate } from '@/features/community/components/username-gate'
 import { siteConfig } from './seo'
 import './globals.css'
@@ -81,18 +82,11 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${barlow.variable}`}>
       <head>
         {process.env.NODE_ENV === 'development' && (
-          <>
-            <Script
-              src="//unpkg.com/react-scan/dist/auto.global.js"
-              crossOrigin="anonymous"
-              strategy="beforeInteractive"
-            />
-            <Script
-              src="//unpkg.com/react-grab/dist/index.global.js"
-              crossOrigin="anonymous"
-              strategy="beforeInteractive"
-            />
-          </>
+          <Script
+            src="//unpkg.com/react-scan/dist/auto.global.js"
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
         )}
       </head>
       <body className="font-sans">
@@ -100,6 +94,7 @@ export default function RootLayout({
         <Analytics />
         <SpeedInsights />
         {shouldShowToolbar && <VercelToolbar />}
+        {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>
     </html>
   )

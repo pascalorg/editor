@@ -5,6 +5,8 @@ import {
   type AnyNodeId,
   DoorNode,
   ItemNode,
+  RoofNode,
+  RoofSegmentNode,
   sceneRegistry,
   useScene,
   WindowNode,
@@ -18,7 +20,7 @@ import * as THREE from 'three'
 import { sfxEmitter } from '@/lib/sfx-bus'
 import useEditor from '@/store/use-editor'
 
-const ALLOWED_TYPES = ['item', 'door', 'window']
+const ALLOWED_TYPES = ['item', 'door', 'window', 'roof', 'roof-segment']
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -54,7 +56,7 @@ export function FloatingActionMenu() {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      if (node.type === 'item' || node.type === 'window' || node.type === 'door') {
+      if (node.type === 'item' || node.type === 'window' || node.type === 'door' || node.type === 'roof' || node.type === 'roof-segment') {
         setMovingNode(node as any)
       }
       setSelection({ selectedIds: [] })
@@ -81,6 +83,10 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+        } else if (node.type === 'roof') {
+          duplicate = RoofNode.parse(duplicateInfo)
+        } else if (node.type === 'roof-segment') {
+          duplicate = RoofSegmentNode.parse(duplicateInfo)
         }
       } catch (error) {
         console.error('Failed to parse duplicate', error)
@@ -90,8 +96,37 @@ export function FloatingActionMenu() {
       if (duplicate) {
         if (duplicate.type === 'door' || duplicate.type === 'window') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+        } else if (duplicate.type === 'roof' || duplicate.type === 'roof-segment') {
+          // Add small offset to make it visible
+          if ('position' in duplicate) {
+            duplicate.position = [
+              duplicate.position[0] + 1,
+              duplicate.position[1],
+              duplicate.position[2] + 1
+            ]
+          }
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          
+          // Duplicate children for roof nodes
+          if (node.type === 'roof' && node.children) {
+            const nodesState = useScene.getState().nodes
+            for (const childId of node.children) {
+              const childNode = nodesState[childId]
+              if (childNode && childNode.type === 'roof-segment') {
+                let childDuplicateInfo = structuredClone(childNode) as any
+                delete childDuplicateInfo.id
+                childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
+                try {
+                  const childDuplicate = RoofSegmentNode.parse(childDuplicateInfo)
+                  useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
+                } catch (e) {
+                  console.error('Failed to duplicate roof segment', e)
+                }
+              }
+            }
+          }
         }
-        if (duplicate.type === 'item' || duplicate.type === 'window' || duplicate.type === 'door') {
+        if (duplicate.type === 'item' || duplicate.type === 'window' || duplicate.type === 'door' || duplicate.type === 'roof' || duplicate.type === 'roof-segment') {
           setMovingNode(duplicate as any)
         }
         setSelection({ selectedIds: [] })

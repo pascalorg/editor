@@ -194,11 +194,13 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             }}
           >
             {hasChildren ? (
-              expanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
+              <motion.div
+                initial={false}
+                animate={{ rotate: expanded ? 90 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
                 <ChevronRight className="w-3 h-3" />
-              )
+              </motion.div>
             ) : null}
           </button>
           <div

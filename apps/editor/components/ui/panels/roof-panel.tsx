@@ -5,18 +5,21 @@ import {
   type AnyNodeId,
   type RoofNode,
   type RoofSegmentNode,
+  RoofNode as RoofNodeSchema,
   RoofSegmentNode as RoofSegmentNodeSchema,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
-import { Plus } from 'lucide-react'
+import { Copy, Plus, Trash2, Move } from 'lucide-react'
+import { sfxEmitter } from '@/lib/sfx-bus'
+import useEditor from '@/store/use-editor'
 
 import { PanelWrapper } from './panel-wrapper'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { MetricControl } from '../controls/metric-control'
-import { ActionButton } from '../controls/action-button'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 
 export function RoofPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -24,6 +27,7 @@ export function RoofPanel() {
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -47,8 +51,8 @@ export function RoofPanel() {
     const segment = RoofSegmentNodeSchema.parse({
       width: 6,
       depth: 6,
-      wallHeight: 4,
-      roofHeight: 3,
+      wallHeight: 0.5,
+      roofHeight: 2.5,
       roofType: 'gable',
       position: [2, 0, 2],
     })
@@ -61,6 +65,65 @@ export function RoofPanel() {
     },
     [setSelection],
   )
+
+  const handleDuplicate = useCallback(() => {
+    if (!node || !node.parentId) return
+    sfxEmitter.emit('sfx:item-pick')
+    
+    let duplicateInfo = structuredClone(node) as any
+    delete duplicateInfo.id
+    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+    // Offset slightly so it's visible
+    duplicateInfo.position = [
+      duplicateInfo.position[0] + 1,
+      duplicateInfo.position[1],
+      duplicateInfo.position[2] + 1
+    ]
+
+    try {
+      const duplicate = RoofNodeSchema.parse(duplicateInfo)
+      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+      
+      // Also duplicate all child segments
+      const nodesState = useScene.getState().nodes
+      const children = node.children || []
+      
+      for (const childId of children) {
+        const childNode = nodesState[childId]
+        if (childNode && childNode.type === 'roof-segment') {
+          let childDuplicateInfo = structuredClone(childNode) as any
+          delete childDuplicateInfo.id
+          childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
+          const childDuplicate = RoofSegmentNodeSchema.parse(childDuplicateInfo)
+          useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
+        }
+      }
+      
+      setSelection({ selectedIds: [] })
+      setMovingNode(duplicate)
+    } catch (e) {
+      console.error('Failed to duplicate roof', e)
+    }
+  }, [node, setSelection, setMovingNode])
+
+  const handleMove = useCallback(() => {
+    if (node) {
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(node)
+      setSelection({ selectedIds: [] })
+    }
+  }, [node, setMovingNode, setSelection])
+
+  const handleDelete = useCallback(() => {
+    if (!selectedId || !node) return
+    sfxEmitter.emit('sfx:item-delete')
+    const parentId = node.parentId
+    useScene.getState().deleteNode(selectedId as AnyNodeId)
+    if (parentId) {
+      useScene.getState().dirtyNodes.add(parentId as AnyNodeId)
+    }
+    setSelection({ selectedIds: [] })
+  }, [selectedId, node, setSelection])
 
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
@@ -108,7 +171,7 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.5}
+          step={0.05}
           unit="m"
         />
         <MetricControl
@@ -122,7 +185,7 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.5}
+          step={0.05}
           unit="m"
         />
         <MetricControl
@@ -136,7 +199,7 @@ export function RoofPanel() {
           min={-50}
           max={50}
           precision={2}
-          step={0.5}
+          step={0.05}
           unit="m"
         />
         <SliderControl
@@ -151,6 +214,35 @@ export function RoofPanel() {
           step={1}
           unit="°"
         />
+        <div className="flex gap-1.5 px-1 pt-2 pb-1">
+          <ActionButton 
+            label="-45°" 
+            onClick={() => {
+              sfxEmitter.emit('sfx:item-rotate')
+              handleUpdate({ rotation: node.rotation - Math.PI / 4 })
+            }} 
+          />
+          <ActionButton 
+            label="+45°" 
+            onClick={() => {
+              sfxEmitter.emit('sfx:item-rotate')
+              handleUpdate({ rotation: node.rotation + Math.PI / 4 })
+            }} 
+          />
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={handleDuplicate} />
+          <ActionButton
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            label="Delete"
+            onClick={handleDelete}
+            className="hover:bg-red-500/20"
+          />
+        </ActionGroup>
       </PanelSection>
     </PanelWrapper>
   )
