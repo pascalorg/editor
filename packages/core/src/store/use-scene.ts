@@ -13,6 +13,49 @@ import type { AnyNode, AnyNodeId } from '../schema/types'
 import { isObject } from '../utils/types'
 import * as nodeActions from './actions/node-actions'
 
+function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
+  const patchedNodes = { ...nodes }
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    // 1. Item scale migration
+    if (node.type === 'item' && !('scale' in node)) {
+      patchedNodes[id] = { ...node, scale: [1, 1, 1] }
+    }
+    // 2. Old roof to new roof + segment migration
+    if (node.type === 'roof' && !('children' in node)) {
+      const oldRoof = node
+      const suffix = id.includes('_') ? id.split('_')[1] : Math.random().toString(36).slice(2)
+      const segmentId = `rseg_${suffix}`
+      
+      const segment = {
+        object: 'node',
+        id: segmentId,
+        type: 'roof-segment',
+        parentId: id,
+        visible: oldRoof.visible ?? true,
+        metadata: {},
+        position: [0, 0, 0],
+        rotation: 0,
+        roofType: 'gable',
+        width: oldRoof.length ?? 8,
+        depth: (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2),
+        wallHeight: 0,
+        roofHeight: oldRoof.height ?? 2.5,
+        wallThickness: 0.1,
+        deckThickness: 0.1,
+        overhang: 0.3,
+        shingleThickness: 0.05,
+      }
+      
+      patchedNodes[segmentId] = segment
+      patchedNodes[id] = {
+        ...oldRoof,
+        children: [segmentId],
+      }
+    }
+  }
+  return patchedNodes as Record<string, AnyNode>
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -84,14 +127,9 @@ const useScene: UseSceneStore = create<SceneState>()(
         },
 
         setScene: (nodes, rootNodeIds) => {
-          // Backward compat: add default scale to item nodes loaded from external sources
-          // (pascal_local_projects, Supabase) saved before scale was added to ItemNode
-          const patchedNodes = { ...nodes }
-          for (const [id, node] of Object.entries(patchedNodes)) {
-            if (node.type === 'item' && !('scale' in node)) {
-              patchedNodes[id as AnyNodeId] = { ...(node as object), scale: [1, 1, 1] } as AnyNode
-            }
-          }
+          // Apply backward compatibility migrations
+          const patchedNodes = migrateNodes(nodes)
+          
           set({
             nodes: patchedNodes,
             rootNodeIds,
@@ -275,13 +313,9 @@ const useScene: UseSceneStore = create<SceneState>()(
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<SceneState>
-        // Backward compat: add default scale to item nodes saved before scale was added
+        // Apply backward compatibility migrations
         if (persisted.nodes) {
-          for (const [id, node] of Object.entries(persisted.nodes)) {
-            if (node.type === 'item' && !('scale' in node)) {
-              persisted.nodes[id as AnyNodeId] = { ...(node as object), scale: [1, 1, 1] } as AnyNode
-            }
-          }
+          persisted.nodes = migrateNodes(persisted.nodes)
         }
         return { ...currentState, ...persisted }
       },

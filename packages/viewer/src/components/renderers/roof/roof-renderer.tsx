@@ -14,7 +14,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const handlers = useNodeEvents(node, 'roof')
 
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id) || node.children.some((childId) => selectedIds.includes(childId))
+  const isSelected = selectedIds.includes(node.id) || (node.children && node.children.some((childId) => selectedIds.includes(childId)))
 
   const materials = useMemo(
     () => [

@@ -83,7 +83,8 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
-    mergedMesh.geometry = new THREE.BufferGeometry()
+    // Keep a valid position attribute so Drei's BVH can index safely.
+    mergedMesh.geometry = new THREE.BoxGeometry(0, 0, 0)
     return
   }
 
@@ -113,7 +114,7 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
     applyTransform(brushes.innerBrush)
 
     if (totalShinSlab) {
-      const next = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION)
+      const next: Brush = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION) as Brush
       totalShinSlab.geometry.dispose()
       brushes.shinSlab.geometry.dispose()
       totalShinSlab = next
@@ -122,7 +123,7 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
     }
 
     if (totalDeckSlab) {
-      const next = csgEvaluator.evaluate(totalDeckSlab, brushes.deckSlab, ADDITION)
+      const next: Brush = csgEvaluator.evaluate(totalDeckSlab, brushes.deckSlab, ADDITION) as Brush
       totalDeckSlab.geometry.dispose()
       brushes.deckSlab.geometry.dispose()
       totalDeckSlab = next
@@ -131,7 +132,7 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
     }
 
     if (totalWall) {
-      const next = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION)
+      const next: Brush = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION) as Brush
       totalWall.geometry.dispose()
       brushes.wallBrush.geometry.dispose()
       totalWall = next
@@ -140,7 +141,7 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
     }
 
     if (totalInner) {
-      const next = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION)
+      const next: Brush = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION) as Brush
       totalInner.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
       totalInner = next
@@ -172,11 +173,7 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
       ])
 
       for (const g of resultGeo.groups) {
-        if (g.materialIndex === undefined) continue
-        const material = resultMaterials[g.materialIndex]
-        if (material) {
-          g.materialIndex = matToIndex.get(material) ?? 0
-        }
+        g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
       
       resultGeo.computeVertexNormals()
@@ -204,6 +201,25 @@ const dummyMats: [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial, THREE.MeshBa
   new THREE.MeshBasicMaterial(),
   new THREE.MeshBasicMaterial(),
 ]
+const ROOF_MATERIAL_SLOT_COUNT = 4
+
+function mapRoofGroupMaterialIndex(
+  groupMaterialIndex: number | undefined,
+  csgMaterials: THREE.Material[],
+  matToIndex: Map<THREE.Material, number>,
+): number {
+  if (groupMaterialIndex === undefined) return 0
+  const sourceMaterial = csgMaterials[groupMaterialIndex]
+  const mappedIndex = sourceMaterial ? matToIndex.get(sourceMaterial) : undefined
+  return mappedIndex ?? 0
+}
+
+function normalizeRoofMaterialIndex(materialIndex: number | undefined): number {
+  if (materialIndex === undefined || !Number.isFinite(materialIndex)) return 0
+  const normalized = Math.trunc(materialIndex)
+  if (normalized < 0 || normalized >= ROOF_MATERIAL_SLOT_COUNT) return 0
+  return normalized
+}
 
 const SHINGLE_SURFACE_EPSILON = 0.02
 const RAKE_FACE_NORMAL_EPSILON = 0.3
@@ -448,11 +464,7 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
     ])
 
     for (const group of resultGeo.groups) {
-      if (group.materialIndex === undefined) continue
-      const material = resultMaterials[group.materialIndex]
-      if (material) {
-        group.materialIndex = matToIndex.get(material) ?? 0
-      }
+      group.materialIndex = mapRoofGroupMaterialIndex(group.materialIndex, resultMaterials, matToIndex)
     }
 
     remapRoofShellFaces(resultGeo, node)
@@ -509,7 +521,7 @@ function remapRoofShellFaces(geometry: THREE.BufferGeometry, node: RoofSegmentNo
 
     for (let triangleIndex = startTriangle; triangleIndex < endTriangle; triangleIndex++) {
       const indexOffset = triangleIndex * 3
-      let materialIndex = group.materialIndex ?? 0
+      let materialIndex = normalizeRoofMaterialIndex(group.materialIndex)
 
       if (materialIndex === 1 || materialIndex === 3) {
         const ia = index.getX(indexOffset)
