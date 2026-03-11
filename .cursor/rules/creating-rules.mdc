@@ -1,6 +1,6 @@
 ---
 description: How to create and maintain project rules
-globs:
+globs: .cursor/rules/**
 alwaysApply: false
 ---
 
@@ -76,3 +76,4 @@ Concrete guidance with examples.
 | `events` | Typed event bus — emitting and listening to node and grid events |
 | `node-schemas` | Zod schema pattern for node types, createNode, updateNode |
 | `spatial-queries` | Placement validation (canPlaceOnFloor/Wall/Ceiling) for tools |
+| `layers` | Three.js layer constants, ownership, and rendering separation |
