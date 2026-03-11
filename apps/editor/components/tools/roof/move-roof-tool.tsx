@@ -175,7 +175,7 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
       sfxEmitter.emit('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()
-      event.stopPropagation()
+      event.nativeEvent?.stopPropagation?.()
     }
 
     const onCancel = () => {
