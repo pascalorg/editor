@@ -29,13 +29,11 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
     const el = document.getElementById(`${zoneId}-label`)
     if (!el) return
     setLabelEl(el)
-    el.style.pointerEvents = 'auto'
 
     const textEl = el.children[0] as HTMLElement | undefined
     if (textEl) textEl.style.display = 'none'
 
     return () => {
-      el.style.pointerEvents = ''
       if (textEl) textEl.style.display = ''
     }
   }, [zoneId])
@@ -79,6 +77,7 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
     fontSize: 14,
     fontFamily: 'sans-serif',
     userSelect: 'none',
+    pointerEvents: 'auto',
     display: 'inline-flex',
     alignItems: 'center',
     gap: 4,

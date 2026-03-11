@@ -26,6 +26,7 @@ export const CustomCameraControls = () => {
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     raycaster.layers.enable(EDITOR_LAYER)
+    raycaster.layers.enable(2)
   }, [camera, raycaster])
 
   useEffect(() => {

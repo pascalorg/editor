@@ -1,13 +1,13 @@
 import { useScene } from '@pascal-app/core'
+import polygonClipping from 'polygon-clipping'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import useViewer from '../../store/use-viewer'
-import polygonClipping from 'polygon-clipping'
 
 export const GroundOccluder = () => {
   const theme = useViewer((state) => state.theme)
   const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
-  
+
   const nodes = useScene((state) => state.nodes)
 
   const shape = useMemo(() => {
@@ -22,17 +22,17 @@ export const GroundOccluder = () => {
 
     // Collect all polygons for slabs and zones
     const polygons: [number, number][][] = []
-    
+
     Object.values(nodes).forEach((node) => {
-      if ((node.type === 'slab' || node.type === 'zone') && node.polygon && node.polygon.length >= 3) {
+      if (node.type === 'slab' && node.polygon && node.polygon.length >= 3) {
         polygons.push(node.polygon as [number, number][])
       }
     })
 
     if (polygons.length > 0) {
       // Format for polygon-clipping: [[[x, y], [x, y], ...]]
-      const multiPolygons = polygons.map(pts => {
-        const ring = pts.map(p => [p[0], -p[1]] as [number, number]) // Negate Y (which was Z)
+      const multiPolygons = polygons.map((pts) => {
+        const ring = pts.map((p) => [p[0], -p[1]] as [number, number]) // Negate Y (which was Z)
         return [ring]
       })
 
@@ -45,7 +45,7 @@ export const GroundOccluder = () => {
         if (geom.length > 0) {
           const ring = geom[0]!
           const hole = new THREE.Path()
-          
+
           if (ring.length > 0) {
             hole.moveTo(ring[0]![0], ring[0]![1])
             for (let i = 1; i < ring.length; i++) {
@@ -64,8 +64,8 @@ export const GroundOccluder = () => {
   return (
     <mesh rotation-x={-Math.PI / 2} position-y={-0.05}>
       <shapeGeometry args={[shape]} />
-      <meshBasicMaterial 
-        color={bgColor} 
+      <meshBasicMaterial
+        color={bgColor}
         depthWrite={true}
         polygonOffset={true}
         polygonOffsetFactor={1}
