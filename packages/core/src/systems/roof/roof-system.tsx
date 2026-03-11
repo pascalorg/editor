@@ -302,11 +302,21 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): { deckSlab: Brush;
     shinTopRh = shinBotRh + stSin * tanTheta
   }
 
-  const topBaseY = shinBotWh - 1.0
-  const botBaseY = shinBotWh - 2.0
+  const availableR = (Math.min(shinBotW, shinBotD) / 2) * 0.95
+  const maxDrop = tanTheta > 0.001 ? availableR / tanTheta : 2.0
+  const dropTop = Math.min(1.0, maxDrop * 0.4)
+  const dropBot = Math.min(2.0, maxDrop * 0.8)
 
-  const getInsets = (wh: number, bY: number, isVoid: boolean) => {
-    const inset = (wh - bY) * tanTheta
+  const topBaseY = shinBotWh - dropTop
+  const botBaseY = shinBotWh - dropBot
+
+  const getInsets = (wh: number, bY: number, isVoid: boolean, brushW: number, brushD: number) => {
+    let inset = (wh - bY) * tanTheta
+    const maxSafeInset = (Math.min(brushW, brushD) / 2) - 0.005
+    if (inset > maxSafeInset) {
+      inset = maxSafeInset
+    }
+
     let iF = 0, iB = 0, iL = 0, iR = 0
     if (['hip', 'mansard', 'dutch'].includes(roofType)) {
       iF = inset; iB = inset; iL = inset; iR = inset
@@ -323,8 +333,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): { deckSlab: Brush;
     return { iF, iB, iL, iR, dutchI: structuralI }
   }
 
-  const insetsBot = getInsets(shinBotWh, botBaseY, true)
-  const insetsTop = getInsets(shinTopWh, topBaseY, false)
+  const insetsBot = getInsets(shinBotWh, botBaseY, true, shinBotW, shinBotD)
+  const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
 
   const botFaces = getModuleFaces(roofType, shinBotW, shinBotD, shinBotWh, shinBotRh, botBaseY, insetsBot, width, depth, tanTheta)
   const topFaces = getModuleFaces(roofType, shinTopW, shinTopD, shinTopWh, shinTopRh, topBaseY, insetsTop, width, depth, tanTheta)
