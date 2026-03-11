@@ -14,6 +14,7 @@ import { MetricControl } from '../controls/metric-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PresetsPopover } from './presets/presets-popover'
+import { usePresetsAdapter } from '../../../contexts/presets-context'
 
 export function WindowPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -22,6 +23,8 @@ export function WindowPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+
+  const adapter = usePresetsAdapter()
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -112,28 +115,16 @@ export function WindowPanel() {
   const handleSavePreset = useCallback(async (name: string) => {
     const data = getWindowPresetData()
     if (!data || !selectedId) return
-    const res = await fetch('/api/presets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'window', name, data }),
-    })
-    if (res.ok) {
-      const json = await res.json()
-      const presetId = json.preset?.id
-      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
-    }
-  }, [getWindowPresetData, selectedId])
+    const presetId = await adapter.savePreset('window', name, data)
+    if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
+  }, [getWindowPresetData, selectedId, adapter])
 
   const handleOverwritePreset = useCallback(async (id: string) => {
     const data = getWindowPresetData()
     if (!data || !selectedId) return
-    const res = await fetch(`/api/presets/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data }),
-    })
-    if (res.ok) emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
-  }, [getWindowPresetData, selectedId])
+    await adapter.overwritePreset('window', id, data)
+    emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
+  }, [getWindowPresetData, selectedId, adapter])
 
   const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
     handleUpdate(data as Partial<WindowNode>)
@@ -184,7 +175,18 @@ export function WindowPanel() {
     >
       {/* Presets strip */}
       <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
-        <PresetsPopover type="window" onApply={handleApplyPreset} onSave={handleSavePreset} onOverwrite={handleOverwritePreset}>
+        <PresetsPopover
+          type="window"
+          onApply={handleApplyPreset}
+          onSave={handleSavePreset}
+          onOverwrite={handleOverwritePreset}
+          onFetchPresets={(tab) => adapter.fetchPresets('window', tab)}
+          onRename={(id, name) => adapter.renamePreset(id, name)}
+          onDelete={(id) => adapter.deletePreset(id)}
+          onToggleCommunity={adapter.togglePresetCommunity}
+          isAuthenticated={adapter.isAuthenticated}
+          tabs={adapter.tabs}
+        >
           <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
             <BookMarked className="h-3.5 w-3.5 shrink-0" />
             <span>Presets</span>

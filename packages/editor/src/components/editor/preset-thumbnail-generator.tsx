@@ -4,6 +4,7 @@ import { emitter, sceneRegistry } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import * as THREE from 'three'
+import { usePresetsAdapter } from '../../contexts/presets-context'
 
 const THUMBNAIL_SIZE = 1080
 const CAMERA_FOV = 45
@@ -11,6 +12,7 @@ const CAMERA_FOV = 45
 export const PresetThumbnailGenerator = () => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
+  const adapter = usePresetsAdapter()
 
   const generate = useCallback(
     async ({ presetId, nodeId }: { presetId: string; nodeId: string }) => {
@@ -98,20 +100,14 @@ export const PresetThumbnailGenerator = () => {
           console.error('❌ PresetThumbnail: failed to create blob')
           return
         }
-        const res = await fetch(`/api/presets/${presetId}/thumbnail`, {
-          method: 'POST',
-          body: blob,
-          headers: { 'Content-Type': 'image/png' },
-        })
-        if (res.ok) {
-          const json = await res.json()
-          emitter.emit('preset:thumbnail-updated', { presetId, thumbnailUrl: json.thumbnail_url })
-        } else {
-          console.error('❌ PresetThumbnail: upload failed', await res.text())
+        if (!adapter.uploadPresetThumbnail) return
+        const thumbnailUrl = await adapter.uploadPresetThumbnail(presetId, blob)
+        if (thumbnailUrl) {
+          emitter.emit('preset:thumbnail-updated', { presetId, thumbnailUrl })
         }
       }, 'image/png')
     },
-    [gl, scene],
+    [gl, scene, adapter],
   )
 
   useEffect(() => {

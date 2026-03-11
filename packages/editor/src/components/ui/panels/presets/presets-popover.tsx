@@ -6,6 +6,7 @@ import { emitter } from '@pascal-app/core'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../primitives/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popover'
 import { cn } from '../../../../lib/utils'
+import type { PresetsTab } from '../../../../contexts/presets-context'
 
 export type PresetType = 'door' | 'window'
 
@@ -20,61 +21,65 @@ export interface PresetData {
   created_at: string
 }
 
-type Tab = 'community' | 'mine'
-
 interface PresetsPopoverProps {
   type: PresetType
-  /** Apply preset data to the current node */
-  onApply: (data: Record<string, unknown>) => void
-  /** Save current node state as a new preset with the given name */
-  onSave: (name: string) => Promise<void>
-  /** Overwrite an existing preset's data with the current node state */
-  onOverwrite: (id: string) => Promise<void>
   children: React.ReactNode
   isAuthenticated?: boolean
+  tabs?: PresetsTab[]
+  onFetchPresets: (tab: PresetsTab) => Promise<PresetData[]>
+  onApply: (data: Record<string, unknown>) => void
+  onSave: (name: string) => Promise<void>
+  onOverwrite: (id: string) => Promise<void>
+  onRename: (id: string, name: string) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onToggleCommunity?: (id: string, current: boolean) => Promise<void>
 }
 
-export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, isAuthenticated = false }: PresetsPopoverProps) {
+export function PresetsPopover({
+  type,
+  onApply,
+  onSave,
+  onOverwrite,
+  onFetchPresets,
+  onRename,
+  onDelete,
+  onToggleCommunity,
+  children,
+  isAuthenticated = false,
+  tabs = ['community', 'mine'],
+}: PresetsPopoverProps) {
+  const defaultTab = tabs[0] ?? 'mine'
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<Tab>('community')
+  const [tab, setTab] = useState<PresetsTab>(defaultTab)
   const [presets, setPresets] = useState<PresetData[]>([])
   const [loading, setLoading] = useState(false)
 
-  // New preset save state
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Rename state
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-
-  // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  // Overwrite feedback (shows check icon briefly after overwrite)
   const [overwrittenId, setOverwrittenId] = useState<string | null>(null)
 
   const fetchPresets = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/presets?type=${type}&tab=${tab}`)
-      if (res.ok) {
-        const json = await res.json()
-        setPresets(json.presets ?? [])
-      }
+      const data = await onFetchPresets(tab)
+      setPresets(data)
     } finally {
       setLoading(false)
     }
-  }, [type, tab])
+  }, [onFetchPresets, tab])
 
   useEffect(() => {
     if (open) fetchPresets()
   }, [open, fetchPresets])
 
   useEffect(() => {
-    if (!isAuthenticated && tab === 'mine') setTab('community')
-  }, [isAuthenticated, tab])
+    if (!isAuthenticated && tab === 'mine') setTab(defaultTab)
+  }, [isAuthenticated, tab, defaultTab])
 
   useEffect(() => {
     const handler = ({ presetId, thumbnailUrl }: { presetId: string; thumbnailUrl: string }) => {
@@ -102,23 +107,15 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
 
   const handleRename = async (id: string) => {
     if (!renameValue.trim()) return
-    const res = await fetch(`/api/presets/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renameValue.trim() }),
-    })
-    if (res.ok) {
-      setPresets((prev) => prev.map((p) => (p.id === id ? { ...p, name: renameValue.trim() } : p)))
-      setRenamingId(null)
-    }
+    await onRename(id, renameValue.trim())
+    setPresets((prev) => prev.map((p) => (p.id === id ? { ...p, name: renameValue.trim() } : p)))
+    setRenamingId(null)
   }
 
   const handleDelete = async (id: string) => {
-    const res = await fetch(`/api/presets/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setPresets((prev) => prev.filter((p) => p.id !== id))
-      setDeletingId(null)
-    }
+    await onDelete(id)
+    setPresets((prev) => prev.filter((p) => p.id !== id))
+    setDeletingId(null)
   }
 
   const handleOverwrite = async (id: string) => {
@@ -128,15 +125,12 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
   }
 
   const handleToggleCommunity = async (id: string, current: boolean) => {
-    const res = await fetch(`/api/presets/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_community: !current }),
-    })
-    if (res.ok) {
-      setPresets((prev) => prev.map((p) => (p.id === id ? { ...p, is_community: !current } : p)))
-    }
+    if (!onToggleCommunity) return
+    await onToggleCommunity(id, current)
+    setPresets((prev) => prev.map((p) => (p.id === id ? { ...p, is_community: !current } : p)))
   }
+
+  const showTabs = tabs.length > 1
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -147,7 +141,6 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
         sideOffset={8}
         className="w-72 p-0 border-border/50 bg-sidebar/95 backdrop-blur-xl shadow-2xl rounded-xl overflow-hidden"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
           <div className="flex items-center gap-1.5">
             <BookMarked className="h-3.5 w-3.5 text-muted-foreground" />
@@ -157,6 +150,7 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
           </div>
           {isAuthenticated && (
             <button
+              type="button"
               onClick={() => { setShowSaveInput((v) => !v); setSaveName('') }}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
             >
@@ -166,7 +160,6 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
           )}
         </div>
 
-        {/* New preset name input */}
         {showSaveInput && (
           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-white/5">
             <input
@@ -181,6 +174,7 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
               className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
             />
             <button
+              type="button"
               disabled={!saveName.trim() || saving}
               onClick={handleSaveNew}
               className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary disabled:opacity-40 transition-colors"
@@ -188,6 +182,7 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
+              type="button"
               onClick={() => { setShowSaveInput(false); setSaveName('') }}
               className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"
             >
@@ -196,23 +191,27 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex border-b border-border/50">
-          <TabButton active={tab === 'community'} onClick={() => setTab('community')}>
-            <Users className="h-3 w-3" />
-            Community
-          </TabButton>
-          <TabButton
-            active={tab === 'mine'}
-            onClick={() => { if (isAuthenticated) setTab('mine') }}
-            disabled={!isAuthenticated}
-          >
-            <BookMarked className="h-3 w-3" />
-            My presets
-          </TabButton>
-        </div>
+        {showTabs && (
+          <div className="flex border-b border-border/50">
+            {tabs.includes('community') && (
+              <TabButton active={tab === 'community'} onClick={() => setTab('community')}>
+                <Users className="h-3 w-3" />
+                Community
+              </TabButton>
+            )}
+            {tabs.includes('mine') && (
+              <TabButton
+                active={tab === 'mine'}
+                onClick={() => { if (isAuthenticated) setTab('mine') }}
+                disabled={!isAuthenticated}
+              >
+                <BookMarked className="h-3 w-3" />
+                My presets
+              </TabButton>
+            )}
+          </div>
+        )}
 
-        {/* Content */}
         <div className="max-h-72 overflow-y-auto no-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center py-8">
@@ -227,6 +226,7 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
                   key={preset.id}
                   preset={preset}
                   isMine={tab === 'mine'}
+                  showCommunityToggle={!!onToggleCommunity}
                   renamingId={renamingId}
                   renameValue={renameValue}
                   deletingId={deletingId}
@@ -252,25 +252,18 @@ export function PresetsPopover({ type, onApply, onSave, onOverwrite, children, i
 }
 
 function TabButton({
-  active,
-  onClick,
-  disabled,
-  children,
+  active, onClick, disabled, children,
 }: {
-  active: boolean
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
+  active: boolean; onClick: () => void; disabled?: boolean; children: React.ReactNode
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(
         'flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors',
-        active
-          ? 'text-foreground border-b-2 border-primary -mb-px'
-          : 'text-muted-foreground hover:text-foreground',
+        active ? 'text-foreground border-b-2 border-primary -mb-px' : 'text-muted-foreground hover:text-foreground',
         disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
@@ -279,7 +272,7 @@ function TabButton({
   )
 }
 
-function EmptyState({ tab, isAuthenticated }: { tab: Tab; isAuthenticated: boolean }) {
+function EmptyState({ tab, isAuthenticated }: { tab: PresetsTab; isAuthenticated: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-8 text-center px-4">
       <BookMarked className="h-6 w-6 text-muted-foreground/40" />
@@ -297,6 +290,7 @@ function EmptyState({ tab, isAuthenticated }: { tab: Tab; isAuthenticated: boole
 interface PresetRowProps {
   preset: PresetData
   isMine: boolean
+  showCommunityToggle: boolean
   renamingId: string | null
   renameValue: string
   deletingId: string | null
@@ -314,22 +308,9 @@ interface PresetRowProps {
 }
 
 function PresetRow({
-  preset,
-  isMine,
-  renamingId,
-  renameValue,
-  deletingId,
-  overwrittenId,
-  onApply,
-  onOverwrite,
-  onToggleCommunity,
-  onStartRename,
-  onRenameChange,
-  onRenameConfirm,
-  onRenameCancel,
-  onDeleteRequest,
-  onDeleteConfirm,
-  onDeleteCancel,
+  preset, isMine, showCommunityToggle, renamingId, renameValue, deletingId, overwrittenId,
+  onApply, onOverwrite, onToggleCommunity, onStartRename, onRenameChange, onRenameConfirm,
+  onRenameCancel, onDeleteRequest, onDeleteConfirm, onDeleteCancel,
 }: PresetRowProps) {
   const isRenaming = renamingId === preset.id
   const isDeleting = deletingId === preset.id
@@ -340,18 +321,8 @@ function PresetRow({
       <li className="flex items-center justify-between gap-2 px-3 py-2.5 bg-red-500/10">
         <span className="text-xs text-foreground/80 truncate">Delete "{preset.name}"?</span>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onDeleteConfirm}
-            className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-          >
-            Delete
-          </button>
-          <button
-            onClick={onDeleteCancel}
-            className="rounded-md px-2 py-0.5 text-[11px] font-medium hover:bg-white/10 text-muted-foreground transition-colors"
-          >
-            Cancel
-          </button>
+          <button type="button" onClick={onDeleteConfirm} className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Delete</button>
+          <button type="button" onClick={onDeleteCancel} className="rounded-md px-2 py-0.5 text-[11px] font-medium hover:bg-white/10 text-muted-foreground transition-colors">Cancel</button>
         </div>
       </li>
     )
@@ -364,31 +335,17 @@ function PresetRow({
           autoFocus
           value={renameValue}
           onChange={(e) => onRenameChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onRenameConfirm()
-            if (e.key === 'Escape') onRenameCancel()
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') onRenameConfirm(); if (e.key === 'Escape') onRenameCancel() }}
           className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
         />
-        <button
-          onClick={onRenameConfirm}
-          className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary transition-colors"
-        >
-          <Check className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={onRenameCancel}
-          className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <button type="button" onClick={onRenameConfirm} className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary transition-colors"><Check className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={onRenameCancel} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"><X className="h-3.5 w-3.5" /></button>
       </li>
     )
   }
 
   return (
     <li className="group flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-      {/* Thumbnail */}
       <div className="h-12 w-12 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
         {preset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -399,56 +356,35 @@ function PresetRow({
           </div>
         )}
       </div>
-
-      {/* Name + date — clicking applies */}
-      <button onClick={onApply} className="flex-1 min-w-0 text-left">
+      <button type="button" onClick={onApply} className="flex-1 min-w-0 text-left">
         <span className="flex items-center gap-1.5">
-          <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">
-            {preset.name}
-          </span>
-          {/* Only show globe in "My presets" — in community tab it's redundant */}
-          {isMine && preset.is_community && (
-            <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
-          )}
+          <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">{preset.name}</span>
+          {isMine && preset.is_community && <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />}
         </span>
-        <span className="block text-[10px] text-muted-foreground/60">
-          {new Date(preset.created_at).toLocaleDateString()}
-        </span>
+        <span className="block text-[10px] text-muted-foreground/60">{new Date(preset.created_at).toLocaleDateString()}</span>
       </button>
-
-      {/* Actions — 3-dot dropdown, only in "My presets" */}
       {isMine && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              type="button"
               className={cn(
                 'flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors opacity-0 group-hover:opacity-100',
-                justOverwritten
-                  ? 'text-green-400 bg-green-500/10 opacity-100'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
+                justOverwritten ? 'text-green-400 bg-green-500/10 opacity-100' : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
               )}
             >
               {justOverwritten ? <Check className="h-3 w-3" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="left" align="start" className="min-w-44">
-            <DropdownMenuItem onClick={onOverwrite}>
-              <Save className="h-3.5 w-3.5" />
-              Update with current
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onToggleCommunity}>
-              {preset.is_community
-                ? <><GlobeLock className="h-3.5 w-3.5" />Remove from community</>
-                : <><Globe className="h-3.5 w-3.5" />Share with community</>}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onStartRename}>
-              <Pencil className="h-3.5 w-3.5" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={onDeleteRequest}>
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOverwrite}><Save className="h-3.5 w-3.5" />Update with current</DropdownMenuItem>
+            {showCommunityToggle && (
+              <DropdownMenuItem onClick={onToggleCommunity}>
+                {preset.is_community ? <><GlobeLock className="h-3.5 w-3.5" />Remove from community</> : <><Globe className="h-3.5 w-3.5" />Share with community</>}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={onStartRename}><Pencil className="h-3.5 w-3.5" />Rename</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={onDeleteRequest}><Trash2 className="h-3.5 w-3.5" />Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

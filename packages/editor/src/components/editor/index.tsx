@@ -23,6 +23,7 @@ import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import type { SitePanelProps } from '../ui/sidebar/panels/site-panel'
+import { PresetsProvider, type PresetsAdapter } from '../../contexts/presets-context'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
 import { FloatingActionMenu } from './floating-action-menu'
@@ -87,6 +88,9 @@ export interface EditorProps {
   // Panel config (passed through to sidebar panels)
   settingsPanelProps?: SettingsPanelProps
   sitePanelProps?: SitePanelProps
+
+  // Presets storage backend (defaults to localStorage)
+  presetsAdapter?: PresetsAdapter
 }
 
 function EditorSceneCrashFallback() {
@@ -130,6 +134,7 @@ export default function Editor({
   onThumbnailCapture,
   settingsPanelProps,
   sitePanelProps,
+  presetsAdapter,
 }: EditorProps) {
   useKeyboard()
 
@@ -190,6 +195,7 @@ export default function Editor({
   const showLoader = isLoading || isSceneLoading
 
   return (
+    <PresetsProvider adapter={presetsAdapter}>
     <div className="w-full h-full dark text-foreground">
       {showLoader && <SceneLoader />}
 
@@ -229,5 +235,6 @@ export default function Editor({
         {!isPreviewMode && <ZoneLabelEditorSystem />}
       </ErrorBoundary>
     </div>
+    </PresetsProvider>
   )
 }
