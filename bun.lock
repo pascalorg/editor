@@ -83,7 +83,7 @@
         "typescript": "5.9.3",
       },
     },
-    "packages/auth": {
+    "packages/community-auth": {
       "name": "@pascal-app/auth",
       "version": "0.0.0",
       "dependencies": {
@@ -93,6 +93,22 @@
       },
       "devDependencies": {
         "@repo/typescript-config": "*",
+        "typescript": "5.9.3",
+      },
+    },
+    "packages/community-db": {
+      "name": "@pascal-app/db",
+      "version": "0.0.0",
+      "dependencies": {
+        "@supabase/supabase-js": "^2.95.3",
+        "drizzle-orm": "^0.45.1",
+        "drizzle-zod": "^0.8.3",
+        "nanoid": "^5.0.9",
+        "postgres": "^3.4.5",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "*",
+        "drizzle-kit": "^0.31.9",
         "typescript": "5.9.3",
       },
     },
@@ -121,22 +137,6 @@
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "three": "^0.183",
-      },
-    },
-    "packages/db": {
-      "name": "@pascal-app/db",
-      "version": "0.0.0",
-      "dependencies": {
-        "@supabase/supabase-js": "^2.95.3",
-        "drizzle-orm": "^0.45.1",
-        "drizzle-zod": "^0.8.3",
-        "nanoid": "^5.0.9",
-        "postgres": "^3.4.5",
-      },
-      "devDependencies": {
-        "@repo/typescript-config": "*",
-        "drizzle-kit": "^0.31.9",
-        "typescript": "5.9.3",
       },
     },
     "packages/editor": {
@@ -554,11 +554,11 @@
 
     "@number-flow/react": ["@number-flow/react@0.5.14", "", { "dependencies": { "esm-env": "^1.1.4", "number-flow": "0.5.12" }, "peerDependencies": { "react": "^18 || ^19", "react-dom": "^18 || ^19" } }, "sha512-FGUqjh/P5/ukr0U0ySwb987M0SbRkrnZq70f0wQFncDbXa3SIib4L+FTr5ngvWwGAW8S6b391eTXcfhErZsw4w=="],
 
-    "@pascal-app/auth": ["@pascal-app/auth@workspace:packages/auth"],
+    "@pascal-app/auth": ["@pascal-app/auth@workspace:packages/community-auth"],
 
     "@pascal-app/core": ["@pascal-app/core@workspace:packages/core"],
 
-    "@pascal-app/db": ["@pascal-app/db@workspace:packages/db"],
+    "@pascal-app/db": ["@pascal-app/db@workspace:packages/community-db"],
 
     "@pascal-app/editor": ["@pascal-app/editor@workspace:packages/editor"],
 
