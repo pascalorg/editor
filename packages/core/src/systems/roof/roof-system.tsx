@@ -11,6 +11,18 @@ const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
 csgEvaluator.attributes = ['position', 'normal']
 
+// Pooled objects to avoid per-frame allocation in updateMergedRoofGeometry
+const _matrix = new THREE.Matrix4()
+const _position = new THREE.Vector3()
+const _quaternion = new THREE.Quaternion()
+const _scale = new THREE.Vector3(1, 1, 1)
+const _yAxis = new THREE.Vector3(0, 1, 0)
+
+// Pending merged-roof updates carried across frames (for throttling)
+const pendingRoofUpdates = new Set<AnyNodeId>()
+const MAX_ROOFS_PER_FRAME = 1
+const MAX_SEGMENTS_PER_FRAME = 3
+
 // ============================================================================
 // ROOF SYSTEM
 // ============================================================================
@@ -18,13 +30,21 @@ csgEvaluator.attributes = ['position', 'normal']
 export const RoofSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const rootNodeIds = useScene((state) => state.rootNodeIds)
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    // Clear stale pending updates when the scene is unloaded
+    if (rootNodeIds.length === 0) {
+      pendingRoofUpdates.clear()
+      return
+    }
+
+    if (dirtyNodes.size === 0 && pendingRoofUpdates.size === 0) return
 
     const nodes = useScene.getState().nodes
-    const roofsToUpdate = new Set<AnyNodeId>()
 
+    // --- Pass 1: Process dirty roof-segments (throttled) ---
+    let segmentsProcessed = 0
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node) return
@@ -32,29 +52,49 @@ export const RoofSystem = () => {
       if (node.type === 'roof-segment') {
         const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
         if (mesh) {
-          updateRoofSegmentGeometry(node as RoofSegmentNode, mesh)
+          // Only compute expensive individual CSG when the segment is actually rendered
+          // (its parent group is visible = the roof is selected for editing)
+          const isVisible = mesh.parent?.visible !== false
+          if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
+            updateRoofSegmentGeometry(node as RoofSegmentNode, mesh)
+            segmentsProcessed++
+          } else if (!isVisible) {
+            // Just sync transform, skip CSG — the merged roof handles visuals
+            mesh.position.set(node.position[0], node.position[1], node.position[2])
+            mesh.rotation.y = node.rotation
+          } else {
+            return // Over budget — keep dirty, process next frame
+          }
           clearDirty(id as AnyNodeId)
         }
+        // Queue the parent roof for a merged geometry update
         if (node.parentId) {
-          roofsToUpdate.add(node.parentId as AnyNodeId)
+          pendingRoofUpdates.add(node.parentId as AnyNodeId)
         }
       } else if (node.type === 'roof') {
-        roofsToUpdate.add(id as AnyNodeId)
+        pendingRoofUpdates.add(id as AnyNodeId)
+        clearDirty(id as AnyNodeId)
       }
     })
 
-    roofsToUpdate.forEach((id) => {
+    // --- Pass 2: Process pending merged-roof updates (max 1 per frame) ---
+    let roofsProcessed = 0
+    for (const id of pendingRoofUpdates) {
+      if (roofsProcessed >= MAX_ROOFS_PER_FRAME) break
+
       const node = nodes[id]
-      if (!node || node.type !== 'roof') return
+      if (!node || node.type !== 'roof') {
+        pendingRoofUpdates.delete(id)
+        continue
+      }
       const group = sceneRegistry.nodes.get(id) as THREE.Group
       if (group) {
         updateMergedRoofGeometry(node as RoofNode, group, nodes)
-        if (dirtyNodes.has(id as AnyNodeId)) {
-          clearDirty(id as AnyNodeId)
-        }
+        roofsProcessed++
       }
-    })
-  })
+      pendingRoofUpdates.delete(id)
+    }
+  }, 5) // Priority 5: run after all other systems have settled
 
   return null
 }
@@ -97,14 +137,14 @@ function updateMergedRoofGeometry(roofNode: RoofNode, group: THREE.Group, nodes:
     const brushes = getRoofSegmentBrushes(child)
     if (!brushes) continue
 
-    const matrix = new THREE.Matrix4().compose(
-      new THREE.Vector3(...child.position),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), child.rotation),
-      new THREE.Vector3(1, 1, 1)
+    _matrix.compose(
+      _position.set(child.position[0], child.position[1], child.position[2]),
+      _quaternion.setFromAxisAngle(_yAxis, child.rotation),
+      _scale
     )
 
     const applyTransform = (brush: Brush) => {
-      brush.geometry.applyMatrix4(matrix)
+      brush.geometry.applyMatrix4(_matrix)
       brush.updateMatrixWorld()
     }
 

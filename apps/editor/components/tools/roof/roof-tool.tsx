@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   emitter,
   type GridEvent,
   type LevelNode,
@@ -29,7 +30,7 @@ const commitRoofPlacement = (
   corner1: [number, number, number],
   corner2: [number, number, number],
   selectedIds: string[]
-): RoofNode['id'] => {
+): AnyNode['id'] => {
   const { createNode, createNodes, nodes } = useScene.getState()
 
   const centerX = (corner1[0] + corner2[0]) / 2
@@ -39,13 +40,14 @@ const commitRoofPlacement = (
   const depth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
 
   // Determine if there is an active roof node we should add to
-  let targetRoofId: string | null = null
-  if (selectedIds.length === 1) {
-    const selectedNode = nodes[selectedIds[0]]
+  let targetRoofId: RoofNode['id'] | null = null
+  const selectedId = selectedIds[0]
+  if (selectedIds.length === 1 && selectedId) {
+    const selectedNode = nodes[selectedId as AnyNodeId]
     if (selectedNode?.type === 'roof') {
       targetRoofId = selectedNode.id
     } else if (selectedNode?.type === 'roof-segment' && selectedNode.parentId) {
-      targetRoofId = selectedNode.parentId
+      targetRoofId = selectedNode.parentId as RoofNode['id']
     }
   }
 

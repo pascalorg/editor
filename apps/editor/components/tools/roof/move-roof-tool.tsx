@@ -30,7 +30,7 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
     }
     // Fallback if not registered (e.g. newly created duplicate without mesh yet)
     if (movingNode.type === 'roof-segment' && movingNode.parentId) {
-      const parentNode = useScene.getState().nodes[movingNode.parentId]
+      const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
       if (parentNode && 'position' in parentNode && 'rotation' in parentNode) {
         const parentAngle = parentNode.rotation as number
         const px = parentNode.position[0] as number
@@ -55,6 +55,16 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
       ? movingNode.metadata as Record<string, unknown>
       : {}
     const isNew = !!meta.isNew
+    const committedMeta: RoofNode['metadata'] = (() => {
+      if (typeof movingNode.metadata !== 'object' || movingNode.metadata === null || Array.isArray(movingNode.metadata)) {
+        return movingNode.metadata
+      }
+
+      const nextMeta = { ...movingNode.metadata } as Record<string, unknown>
+      delete nextMeta.isNew
+      delete nextMeta.isTransient
+      return nextMeta as RoofNode['metadata']
+    })()
 
     const original = {
       position: [...movingNode.position] as [number, number, number],
@@ -88,7 +98,7 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
       let localZ = gridZ
 
       if (movingNode.type === 'roof-segment' && movingNode.parentId) {
-        const parentNode = useScene.getState().nodes[movingNode.parentId]
+        const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
         if (parentNode && 'position' in parentNode && 'rotation' in parentNode) {
           const parentObj = sceneRegistry.nodes.get(movingNode.parentId)
           if (parentObj) {
@@ -120,7 +130,7 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
       let localZ = gridZ
 
       if (movingNode.type === 'roof-segment' && movingNode.parentId) {
-        const parentNode = useScene.getState().nodes[movingNode.parentId]
+        const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
         if (parentNode && 'position' in parentNode && 'rotation' in parentNode) {
           const parentObj = sceneRegistry.nodes.get(movingNode.parentId)
           if (parentObj) {
@@ -145,13 +155,14 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
         
         useScene.getState().updateNode(movingNode.id, {
           position: [localX, movingNode.position[1], localZ],
-          metadata: { ...meta, isNew: undefined, isTransient: undefined },
+          metadata: committedMeta,
         })
         
         placedId = movingNode.id
       } else {
         // Grab the current rotation that might have been modified during the move
-        const currentRotation = useScene.getState().nodes[movingNode.id]?.rotation
+        const currentNode = useScene.getState().nodes[movingNode.id] as RoofNode | RoofSegmentNode | undefined
+        const currentRotation = currentNode?.rotation
 
         // Revert to original, then apply the new position to record it properly in undo history
         useScene.getState().updateNode(movingNode.id, {
@@ -164,7 +175,7 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
         useScene.getState().updateNode(movingNode.id, {
           position: [localX, movingNode.position[1], localZ],
           rotation: currentRotation,
-          metadata: { ...meta, isTransient: undefined },
+          metadata: committedMeta,
         })
 
         placedId = movingNode.id
@@ -206,7 +217,8 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({ n
         event.preventDefault()
         sfxEmitter.emit('sfx:item-rotate')
         
-        const currentRotation = useScene.getState().nodes[movingNode.id]?.rotation as number || 0
+        const currentNode = useScene.getState().nodes[movingNode.id] as RoofNode | RoofSegmentNode | undefined
+        const currentRotation = currentNode?.rotation ?? 0
         const newRotationY = currentRotation + rotationDelta
         useScene.getState().updateNode(movingNode.id, { rotation: newRotationY })
       }

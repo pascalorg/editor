@@ -43,7 +43,7 @@ export {
 // Schema
 export * from './schema'
 export { useInteractive, type ControlValue, type ItemInteractiveState } from './store/use-interactive'
-export { default as useScene } from './store/use-scene'
+export { clearSceneHistory, default as useScene } from './store/use-scene'
 // Systems
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'

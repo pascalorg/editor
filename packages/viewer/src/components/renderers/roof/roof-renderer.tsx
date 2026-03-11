@@ -1,9 +1,10 @@
-import { type RoofNode, useRegistry } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import { useScene, type RoofNode, useRegistry } from '@pascal-app/core'
+import { useEffect, useRef } from 'react'
+import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
+import { roofMaterials } from './roof-materials'
 
 export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -14,17 +15,18 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const handlers = useNodeEvents(node, 'roof')
 
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id) || (node.children && node.children.some((childId) => selectedIds.includes(childId)))
+  const isSelected = selectedIds.includes(node.id) || node.children?.some((childId) => selectedIds.includes(childId))
 
-  const materials = useMemo(
-    () => [
-      new THREE.MeshStandardMaterial({ color: '#eaeaea', roughness: 0.8, side: THREE.DoubleSide }), // 0: Wall
-      new THREE.MeshStandardMaterial({ color: '#000000', roughness: 0.9, side: THREE.FrontSide }), // 1: Deck
-      new THREE.MeshStandardMaterial({ color: '#dddddd', roughness: 0.9, side: THREE.DoubleSide }), // 2: Interior
-      new THREE.MeshStandardMaterial({ color: '#4ade80', roughness: 0.9, side: THREE.FrontSide }), // 3: Shingle
-    ],
-    [],
-  )
+  useEffect(() => {
+    if (!isSelected || !node.children?.length) return
+
+    // Segment meshes stay mounted behind the merged roof; when we reveal them for editing,
+    // force a rebuild so we do not show the initial zero-sized placeholder geometry.
+    const { markDirty } = useScene.getState()
+    for (const childId of node.children) {
+      markDirty(childId)
+    }
+  }, [isSelected, node.children])
 
   return (
     <group
@@ -38,7 +40,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
         name="merged-roof"
         ref={mergedMeshRef}
         visible={!isSelected}
-        material={materials}
+        material={roofMaterials}
         castShadow
         receiveShadow
       >

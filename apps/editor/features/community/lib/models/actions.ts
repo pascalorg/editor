@@ -72,6 +72,10 @@ type AuthenticatedProjectContext = {
   project: ProjectOwnershipRow
 }
 
+function hasUsableSceneGraph(sceneGraph: SceneGraph | null | undefined): sceneGraph is SceneGraph {
+  return !!sceneGraph && Object.keys(sceneGraph.nodes ?? {}).length > 0 && (sceneGraph.rootNodeIds?.length ?? 0) > 0
+}
+
 function sceneGraphsEqual(
   left: SceneGraph | null | undefined,
   right: SceneGraph | null | undefined,
@@ -442,7 +446,7 @@ export async function getProjectModel(projectId: string): Promise<ActionResult<P
     }
 
     const { draftModel, latestSavedModel } = versionModelsResult.data
-    let modelToLoad = draftModel ?? null
+    let modelToLoad = draftModel && hasUsableSceneGraph(draftModel.scene_graph) ? draftModel : null
 
     if (!modelToLoad && publishedVersion !== null) {
       const { data: publishedModel, error: publishedModelError } = await supabase
@@ -462,10 +466,10 @@ export async function getProjectModel(projectId: string): Promise<ActionResult<P
         }
       }
 
-      modelToLoad = publishedModel ?? null
+      modelToLoad = publishedModel && hasUsableSceneGraph(publishedModel.scene_graph) ? publishedModel : null
     }
 
-    if (!modelToLoad && latestSavedModel) {
+    if (!modelToLoad && latestSavedModel && hasUsableSceneGraph(latestSavedModel.scene_graph)) {
       modelToLoad = latestSavedModel
     }
 
@@ -487,7 +491,7 @@ export async function getProjectModel(projectId: string): Promise<ActionResult<P
         }
       }
 
-      modelToLoad = latestModel ?? null
+      modelToLoad = latestModel && hasUsableSceneGraph(latestModel.scene_graph) ? latestModel : null
     }
 
     const status = buildVersionStatus({

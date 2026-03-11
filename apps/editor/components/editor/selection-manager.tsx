@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   type BuildingNode,
   emitter,
   type ItemNode,
@@ -51,16 +52,6 @@ const computeNextIds = (
 ): string[] => {
   const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta || false;
   const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl || false;
-
-  console.log("computeNextIds:", {
-    nodeId: node.id,
-    selectedIds,
-    isMeta,
-    isCtrl,
-    eventMeta: event?.metaKey,
-    nativeMeta: event?.nativeEvent?.metaKey,
-    modMeta: modifierKeys?.meta
-  });
 
   if (isMeta || isCtrl) {
     if (selectedIds.includes(node.id)) {
@@ -258,11 +249,9 @@ export const SelectionManager = () => {
         event.stopPropagation();
         clickHandledRef.current = true;
         
-        console.log("[SelectionManager] Valid click on:", node.type, node.id, "Shift:", event.nativeEvent.shiftKey);
-        
         let nodeToSelect = node;
         if (node.type === "roof-segment" && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId];
+          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId];
           if (parentNode && parentNode.type === "roof") {
             nodeToSelect = parentNode;
           }
@@ -284,7 +273,6 @@ export const SelectionManager = () => {
 
     const onGridClick = () => {
       if (clickHandledRef.current) return;
-      console.log("onGridClick triggered! Deselecting.");
       const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase];
       if (activeStrategy) activeStrategy.handleDeselect();
     };

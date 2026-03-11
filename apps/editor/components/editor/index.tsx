@@ -34,38 +34,17 @@ import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { ThumbnailGenerator } from './thumbnail-generator'
 
-// Load default scene initially (will be replaced when project loads)
-useScene.getState().loadScene()
-initSpatialGridSync()
-initSpaceDetectionSync(useScene, useEditor)
+let hasInitializedEditorRuntime = false
 
-// Auto-select the first building and level for the default scene
-const sceneNodes = useScene.getState().nodes as Record<string, any>
-const sceneRootIds = useScene.getState().rootNodeIds
-const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
-const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
-const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+function initializeEditorRuntime() {
+  if (hasInitializedEditorRuntime) return
 
-if (firstBuilding && firstLevel) {
-  useViewer.getState().setSelection({
-    buildingId: firstBuilding.id,
-    levelId: firstLevel.id,
-    selectedIds: [],
-    zoneId: null,
-  })
-  useEditor.getState().setPhase('structure')
-  useEditor.getState().setStructureLayer('elements')
+  initSpatialGridSync()
+  initSpaceDetectionSync(useScene, useEditor)
+  initSFXBus()
 
-  // Auto-select the wall tool if the level is empty
-  if (!firstLevel.children || firstLevel.children.length === 0) {
-    useEditor.getState().setMode('build')
-    useEditor.getState().setTool('wall')
-  }
+  hasInitializedEditorRuntime = true
 }
-
-// Initialize SFX bus to connect events to sound effects
-initSFXBus()
 
 interface EditorProps {
   projectId?: string
@@ -101,7 +80,7 @@ function EditorSceneCrashFallback() {
 
 export default function Editor({ projectId }: EditorProps) {
   useKeyboard()
-  useProjectScene()
+  useProjectScene(projectId)
 
   const isProjectLoading = useProjectStore((state) => state.isLoading)
   const isSceneLoading = useProjectStore((state) => state.isSceneLoading)
@@ -110,6 +89,11 @@ export default function Editor({ projectId }: EditorProps) {
   const activeProject = useProjectStore((s) => s.activeProject)
 
   useEffect(() => {
+    initializeEditorRuntime()
+  }, [])
+
+  useEffect(() => {
+    useViewer.getState().setHoveredId(null)
     if (projectId) {
       useViewer.getState().setProjectId(projectId)
     } else {
@@ -126,14 +110,13 @@ export default function Editor({ projectId }: EditorProps) {
 
   return (
     <div className="w-full h-full dark text-foreground">
-      {isLoading && <SceneLoader />}
+      {isLoading && (
+        <div className="fixed inset-0 z-60">
+          <SceneLoader fullScreen />
+        </div>
+      )}
 
-      {isPreviewMode ? (
-        <ViewerOverlay
-          projectName={activeProject?.name}
-          onBack={() => useEditor.getState().setPreviewMode(false)}
-        />
-      ) : (
+      {!isLoading && !isPreviewMode && (
         <>
           <ActionMenu />
           <PanelManager />
@@ -159,23 +142,30 @@ export default function Editor({ projectId }: EditorProps) {
         </>
       )}
 
-      <ErrorBoundary key={projectId} fallback={<EditorSceneCrashFallback />}>
-        <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
-          {!isPreviewMode && <SelectionManager />}
-          {!isPreviewMode && <FloatingActionMenu />}
+      {!isLoading && isPreviewMode && (
+        <ViewerOverlay
+          projectName={activeProject?.name}
+          onBack={() => useEditor.getState().setPreviewMode(false)}
+        />
+      )}
+
+      <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
+        <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'} perf={typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')}>
+          {!isPreviewMode && !isLoading && <SelectionManager />}
+          {!isPreviewMode && !isLoading && <FloatingActionMenu />}
           <ExportManager />
           {/* Swap zone systems: viewer drill-down vs editor layer toggle */}
           {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
           <CeilingSystem />
           {!isPreviewMode && <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />}
-          {!isPreviewMode && <ToolManager />}
+          {!isPreviewMode && !isLoading && <ToolManager />}
           <CustomCameraControls />
           <ThumbnailGenerator projectId={projectId} />
           <PresetThumbnailGenerator />
           {!isPreviewMode && <SiteEdgeLabels />}
           {isPreviewMode && <InteractiveSystem />}
         </Viewer>
-        {!isPreviewMode && <ZoneLabelEditorSystem />}
+        {!isPreviewMode && !isLoading && <ZoneLabelEditorSystem />}
       </ErrorBoundary>
     </div>
   )

@@ -10,8 +10,8 @@ import {
   WindowSystem,
 } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
-import { Canvas, extend, type ThreeToJSXElements, useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -23,6 +23,7 @@ import { SceneRenderer } from '../renderers/scene-renderer'
 import { GroundOccluder } from './ground-occluder'
 import { Lights } from './lights'
 import PostProcessing from './post-processing'
+import { PerfMonitor } from './perf-monitor'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
@@ -59,12 +60,40 @@ declare module '@react-three/fiber' {
 
 extend(THREE as any)
 
+/**
+ * Monitors the WebGPU device for loss events and logs them.
+ * WebGPU device loss can happen when:
+ *  - Tab is backgrounded and OS reclaims GPU
+ *  - Driver crash or GPU reset
+ *  - Browser security policy kills the context
+ */
+function GPUDeviceWatcher() {
+  const gl = useThree((s) => s.gl)
+
+  useEffect(() => {
+    const backend = (gl as any).backend
+    const device: GPUDevice | undefined = backend?.device
+
+    if (!device) return
+
+    device.lost.then((info) => {
+      console.error(
+        `[viewer] WebGPU device lost: reason="${info.reason}", message="${info.message}". ` +
+          'The page must be reloaded to recover the GPU context.',
+      )
+    })
+  }, [gl])
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   selectionManager?: 'default' | 'custom'
+  perf?: boolean
 }
 
-const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' }) => {
+const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default', perf = false }) => {
   const theme = useViewer((state) => state.theme)
 
   return (
@@ -110,8 +139,10 @@ const Viewer: React.FC<ViewerProps> = ({ children, selectionManager = 'default' 
       <WindowSystem />
       <ZoneSystem />
       <PostProcessing />
+      <GPUDeviceWatcher />
 
       {selectionManager === 'default' && <SelectionManager />}
+      {perf && <PerfMonitor />}
       {children}
     </Canvas>
   )

@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeId,
   type BuildingNode,
   emitter,
   type ItemNode,
@@ -221,14 +222,14 @@ const getStrategy = (): SelectionStrategy | null => {
   return {
     types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'roof-segment', 'window', 'door'],
     handleClick: (node, nativeEvent) => {
-      let nodeToSelect = node;
-      if (node.type === "roof-segment" && node.parentId) {
-        const parentNode = useScene.getState().nodes[node.parentId];
-        if (parentNode && parentNode.type === "roof") {
-          nodeToSelect = parentNode;
+      let nodeToSelect = node
+      if (node.type === 'roof-segment' && node.parentId) {
+        const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+        if (parentNode && parentNode.type === 'roof') {
+          nodeToSelect = parentNode
         }
       }
-      
+
       const { selectedIds } = useViewer.getState().selection
       useViewer.getState().setSelection({ selectedIds: computeNextIds(nodeToSelect, selectedIds, nativeEvent) })
     },

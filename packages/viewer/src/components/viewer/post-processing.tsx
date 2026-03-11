@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Color, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
@@ -40,12 +40,27 @@ export const SSGI_PARAMS = {
   useTemporalFiltering: true,
 }
 
+const MAX_PIPELINE_RETRIES = 3
+const RETRY_DELAY_MS = 500
+
 const PostProcessingPasses = () => {
   const { gl: renderer, scene, camera } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
+  const retryCountRef = useRef(0)
   const [isInitialized, setIsInitialized] = useState(false)
 
+  // Subscribe to projectId so the pipeline rebuilds on project switch
+  const projectId = useViewer((s) => s.projectId)
+
+  // Bump this to force a pipeline rebuild (used by retry logic)
+  const [pipelineVersion, setPipelineVersion] = useState(0)
+
+  const requestPipelineRebuild = useCallback(() => {
+    setPipelineVersion((v) => v + 1)
+  }, [])
+
+  // Renderer initialization
   useEffect(() => {
     let mounted = true
 
@@ -73,12 +88,24 @@ const PostProcessingPasses = () => {
     }
   }, [renderer])
 
+  // Reset retry count when project changes
+  useEffect(() => {
+    retryCountRef.current = 0
+  }, [projectId])
+
+  // Build / rebuild the post-processing pipeline
   useEffect(() => {
     if (!renderer || !scene || !camera || !isInitialized) {
       return
     }
 
     hasPipelineErrorRef.current = false
+
+    // Clear outliner arrays synchronously to prevent stale Object3D refs
+    // from the previous project leaking into the new pipeline's outline passes.
+    const outliner = useViewer.getState().outliner
+    outliner.selectedObjects.length = 0
+    outliner.hoveredObjects.length = 0
 
     try {
       // Scene pass with MRT for SSGI
@@ -217,7 +244,7 @@ const PostProcessingPasses = () => {
       }
       renderPipelineRef.current = null
     }
-  }, [renderer, scene, camera, isInitialized])
+  }, [renderer, scene, camera, isInitialized, projectId, pipelineVersion])
 
   useFrame(() => {
     if (hasPipelineErrorRef.current || !renderPipelineRef.current) {
@@ -229,11 +256,26 @@ const PostProcessingPasses = () => {
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error(
-        '[viewer] Post-processing render pass failed. Disabling post FX for this session.',
+        '[viewer] Post-processing render pass failed.',
         error,
       )
-      renderPipelineRef.current.dispose()
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
       renderPipelineRef.current = null
+
+      // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
+      if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
+        retryCountRef.current++
+        console.warn(
+          `[viewer] Scheduling post-processing rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
+        )
+        setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
+      } else {
+        console.error(
+          '[viewer] Post-processing retries exhausted. Rendering without post FX for this session.',
+        )
+      }
     }
   }, 1)
 

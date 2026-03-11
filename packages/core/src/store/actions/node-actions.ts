@@ -164,10 +164,15 @@ export const deleteNodesAction = (
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })
 
-  
-  // Trigger a full scene re-validation after deleting node (as deleting a slab can cause widespread changes to level elevations)
-  const currentNodes = get().nodes
-  Object.values(currentNodes).forEach((node) => {
-    get().markDirty(node.id)
+  // Mark affected nodes dirty: parents of deleted nodes and their remaining children
+  // (e.g. deleting a slab affects sibling walls via level elevation changes)
+  parentsToMarkDirty.forEach((parentId) => {
+    get().markDirty(parentId)
+    const parent = get().nodes[parentId]
+    if (parent && 'children' in parent && Array.isArray(parent.children)) {
+      for (const childId of parent.children) {
+        get().markDirty(childId as AnyNodeId)
+      }
+    }
   })
 }

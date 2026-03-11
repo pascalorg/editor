@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { clearSceneHistory, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import useEditor from '@/store/use-editor'
@@ -13,6 +13,10 @@ import { getProjectModel, saveProjectModel, type SceneGraph } from './actions'
 
 /** Debounce interval for cloud auto-save (ms). */
 const AUTOSAVE_DEBOUNCE_MS = 1_000
+
+function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is SceneGraph {
+  return !!sceneGraph && Object.keys(sceneGraph.nodes ?? {}).length > 0 && (sceneGraph.rootNodeIds?.length ?? 0) > 0
+}
 
 function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
@@ -49,8 +53,32 @@ function syncEditorSelectionFromCurrentScene() {
   }
 }
 
+function resetEditorInteractionState() {
+  useViewer.getState().setHoveredId(null)
+  useViewer.getState().resetSelection()
+  // Clear outliner arrays synchronously so stale Object3D refs from the old
+  // scene don't leak into the post-processing pipeline's outline passes.
+  const outliner = useViewer.getState().outliner
+  outliner.selectedObjects.length = 0
+  outliner.hoveredObjects.length = 0
+  sceneRegistry.clear()
+  useEditor.setState({
+    phase: 'site',
+    mode: 'select',
+    tool: null,
+    structureLayer: 'elements',
+    catalogCategory: null,
+    selectedItem: null,
+    movingNode: null,
+    selectedReferenceId: null,
+    spaces: {},
+    editingHole: null,
+    isPreviewMode: false,
+  })
+}
+
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  if (sceneGraph?.nodes && sceneGraph.rootNodeIds) {
+  if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds } = sceneGraph
     useScene.getState().setScene(nodes, rootNodeIds)
   } else {
@@ -67,14 +95,11 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
  * ⚠️  This hook must be mounted in exactly ONE component (the Editor).
  *     Mounting it in multiple components causes duplicate save calls.
  */
-export function useProjectScene() {
-  // Subscribe to project store
-  const activeProject = useProjectStore((state) => state.activeProject)
-  const isLoadingProject = useProjectStore((state) => state.isLoading)
+export function useProjectScene(projectId?: string | null) {
   const isVersionPreviewMode = useProjectStore((state) => state.isVersionPreviewMode)
   const setAutosaveStatus = useProjectStore((state) => state.setAutosaveStatus)
 
-  const lastProjectIdRef = useRef<string | null>(null)
+  const loadRequestIdRef = useRef(0)
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
   const currentProjectIdRef = useRef<string | null>(null)
@@ -86,57 +111,73 @@ export function useProjectScene() {
   const pendingSaveRef = useRef(false)
   const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
 
-  // Extract project ID for dependency tracking
-  const projectId = activeProject?.id ?? null
-
   // Load scene when active project changes
   useEffect(() => {
-    if (isLoadingProject) {
-      return
-    }
-
     if (!projectId) {
+      currentProjectIdRef.current = null
+      isLoadingSceneRef.current = false
+      useScene.temporal.getState().pause()
+      clearSceneHistory()
+      useScene.getState().unloadScene()
+      useScene.temporal.getState().resume()
+      resetEditorInteractionState()
       useProjectStore.getState().setIsVersionPreviewMode(false)
+      useProjectStore.getState().setIsSceneLoading(false)
       setAutosaveStatus('idle')
       return
     }
 
-    // Skip if same project
-    if (lastProjectIdRef.current === projectId) {
-      return
-    }
+    const requestId = ++loadRequestIdRef.current
+    const targetProjectId = projectId
+    let cancelled = false
 
-    lastProjectIdRef.current = projectId
+    // Suppress auto-save for the store update caused by setScene/clearScene.
+    isLoadingSceneRef.current = true
+    currentProjectIdRef.current = projectId
+    useProjectStore.getState().setIsVersionPreviewMode(false)
+    useProjectStore.getState().setIsSceneLoading(true)
+    setAutosaveStatus('idle')
 
-    // Load the project's scene
+    // Scene replacement is a project boundary, not an undoable edit.
+    useScene.temporal.getState().pause()
+    clearSceneHistory()
+    useScene.getState().unloadScene()
+    resetEditorInteractionState()
+
     async function loadScene() {
-      // Suppress auto-save for the store update caused by setScene/clearScene
-      isLoadingSceneRef.current = true
-      useProjectStore.getState().setIsVersionPreviewMode(false)
-      setAutosaveStatus('idle')
-      
-      useProjectStore.getState().setIsSceneLoading(true)
-
       try {
-        const result = await getProjectModel(projectId || '')
+        const result = await getProjectModel(targetProjectId)
+
+        if (cancelled || loadRequestIdRef.current !== requestId) return
 
         applySceneGraphToEditor(result.success ? result.data?.model?.scene_graph ?? null : null)
       } catch (error) {
+        if (cancelled || loadRequestIdRef.current !== requestId) return
+
         // Fall back to an empty scene while preserving editor selection sync.
         applySceneGraphToEditor(null)
       } finally {
-        useProjectStore.getState().setIsSceneLoading(false)
-      }
+        if (cancelled || loadRequestIdRef.current !== requestId) return
 
-      // Allow auto-save again after a tick (let the store update propagate)
-      requestAnimationFrame(() => {
-        isLoadingSceneRef.current = false
-        setAutosaveStatus('saved')
-      })
+        // Allow auto-save again after a tick so the new scene has fully propagated.
+        requestAnimationFrame(() => {
+          if (cancelled || loadRequestIdRef.current !== requestId) return
+
+          clearSceneHistory()
+          useScene.temporal.getState().resume()
+          isLoadingSceneRef.current = false
+          useProjectStore.getState().setIsSceneLoading(false)
+          setAutosaveStatus('saved')
+        })
+      }
     }
 
-    loadScene()
-  }, [projectId, isLoadingProject, setAutosaveStatus])
+    void loadScene()
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, setAutosaveStatus])
 
   // Track whether there are unsaved changes (dirty flag for flush-on-exit).
   const hasDirtyChangesRef = useRef(false)
@@ -152,33 +193,30 @@ export function useProjectScene() {
 
     currentProjectIdRef.current = projectId
 
-    // Use JSON stringification to detect node changes, not just count
-    let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+    // Track the nodes object reference. Zustand creates a new reference on
+    // every mutation so reference equality is a cheap way to detect changes
+    // without expensive JSON serialization on every store update.
+    let lastNodesRef = useScene.getState().nodes
 
     const unsubscribe = useScene.subscribe((state) => {
       // Skip saves triggered by loading a scene from the server
       if (isLoadingSceneRef.current) {
-        // Update the snapshot so the next real edit is compared correctly
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
         return
       }
 
       if (useProjectStore.getState().isVersionPreviewMode) {
-        // Do not autosave preview scenes. Keep snapshot aligned so returning to
-        // latest does not schedule a false-positive save.
         setAutosaveStatus('paused')
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
-
-      // Only trigger save if nodes actually changed
-      if (currentNodesSnapshot === lastNodesSnapshot) {
+      // Only trigger save if nodes reference changed (new object from set())
+      if (state.nodes === lastNodesRef) {
         return
       }
 
-      lastNodesSnapshot = currentNodesSnapshot
+      lastNodesRef = state.nodes
       hasDirtyChangesRef.current = true
       setAutosaveStatus('pending')
 
@@ -214,6 +252,7 @@ export function useProjectScene() {
 
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds }
+      if (!hasUsableSceneGraph(sceneGraph)) return
 
       isSavingRef.current = true
       pendingSaveRef.current = false
@@ -246,10 +285,10 @@ export function useProjectScene() {
 
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds }
+      if (!hasUsableSceneGraph(sceneGraph)) return
 
-      // Best-effort fire-and-forget save. We use the server action directly
-      // (it's just a POST to a Next.js endpoint). If the browser kills it,
-      // localStorage still has the data and will sync on next load.
+      // Best-effort fire-and-forget save. If the browser kills it, the last
+      // debounced autosave may still be the latest committed version.
       saveProjectModel(currentProjectIdRef.current, sceneGraph).catch(() => {
         // Swallow — nothing we can do during unload
       })
@@ -264,12 +303,20 @@ export function useProjectScene() {
 
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
       }
+
+      unsubscribe()
 
       // Flush on unmount (e.g. navigating away within the SPA)
       flushOnExit()
-
-      unsubscribe()
+      useScene.temporal.getState().pause()
+      clearSceneHistory()
+      useScene.getState().unloadScene()
+      useScene.temporal.getState().resume()
+      currentProjectIdRef.current = null
+      hasDirtyChangesRef.current = false
+      resetEditorInteractionState()
     }
   }, [projectId, setAutosaveStatus])
 
