@@ -5,6 +5,7 @@ import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, 
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { ZONE_LAYER } from '../../../lib/layers'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -239,13 +240,13 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
         rotation={[-Math.PI / 2, 0, 0]}
         material={floorMaterial}
         name="floor"
-        layers={2}
+        layers={ZONE_LAYER}
       >
         <shapeGeometry args={[floorShape]} />
       </mesh>
 
       {/* Wall borders with gradient */}
-      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" layers={2} />
+      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" layers={ZONE_LAYER} />
     </group>
   )
 }

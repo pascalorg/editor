@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Color, Layers, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
@@ -25,6 +25,7 @@ import {
 
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
+import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
@@ -51,14 +52,19 @@ const PostProcessingPasses = () => {
   const hasPipelineErrorRef = useRef(false)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  const theme = useViewer((s) => s.theme)
-
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current theme so there's no flash on first render.
-  const initBg = theme === 'dark' ? DARK_BG : LIGHT_BG
+  const initBg = useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
+
+  const zoneLayers = useMemo(() => {
+    const l = new Layers()
+    l.enable(ZONE_LAYER)
+    l.disable(SCENE_LAYER)
+    return l
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -125,18 +131,8 @@ const PostProcessingPasses = () => {
         return colorToDirection(scenePassNormal.sample(uv))
       })
 
-      // camera.layers.disable(0)
-      // camera.layers.disable(1)
-      // camera.layers.enable(2) // Enable layer 2 for zone rendering
       const zonePass = pass(scene, camera)
-      // camera.layers.enable(0) // Disable layer 2 for main scene rendering
-      // camera.layers.enable(1) // Disable layer 2 for main scene rendering
-      // camera.layers.disable(2) // Disable layer 2 for main scene rendering
-
-      const layers: Layers = new Layers()
-      layers.enable(2) // Enable layer 2 for zone rendering
-      layers.disable(0)
-      zonePass.setLayers(layers)
+      zonePass.setLayers(zoneLayers)
       // SSGI Pass (cast to PerspectiveCamera for SSGI)
       const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
 
@@ -260,11 +256,11 @@ const PostProcessingPasses = () => {
       }
       renderPipelineRef.current = null
     }
-  }, [renderer, scene, camera, isInitialized])
+  }, [renderer, scene, camera, isInitialized, zoneLayers])
 
   useFrame((_, delta) => {
     // Animate background colour toward the current theme target (same lerp as AnimatedBackground)
-    bgTarget.current.set(theme === 'dark' ? DARK_BG : LIGHT_BG)
+    bgTarget.current.set(useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
 
