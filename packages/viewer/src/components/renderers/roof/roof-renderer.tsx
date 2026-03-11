@@ -4,7 +4,7 @@ import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
-import { roofMaterials } from './roof-materials'
+import { roofDebugMaterials, roofMaterials } from './roof-materials'
 
 export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -15,6 +15,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const handlers = useNodeEvents(node, 'roof')
 
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const debugColors = useViewer((s) => s.debugColors)
   const isSelected = selectedIds.includes(node.id) || node.children?.some((childId) => selectedIds.includes(childId))
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
         name="merged-roof"
         ref={mergedMeshRef}
         visible={!isSelected}
-        material={roofMaterials}
+        material={debugColors ? roofDebugMaterials : roofMaterials}
         castShadow
         receiveShadow
       >

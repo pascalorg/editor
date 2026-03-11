@@ -1,5 +1,6 @@
 'use client'
 
+import { useViewer } from '@pascal-app/viewer'
 import {
   Bug,
   ChevronDown,
@@ -102,6 +103,8 @@ const readStoredState = (): StoredMenuState | null => {
 export function DevDebugMenu() {
   const allowUndergroundCamera = useEditor((state) => state.allowUndergroundCamera)
   const setAllowUndergroundCamera = useEditor((state) => state.setAllowUndergroundCamera)
+  const debugColors = useViewer((state) => state.debugColors)
+  const setDebugColors = useViewer((state) => state.setDebugColors)
 
   const menuRef = useRef<HTMLDivElement>(null)
   const dragStateRef = useRef<{
@@ -326,7 +329,7 @@ export function DevDebugMenu() {
   if (dockSide && notchStyle) {
     return (
       <button
-        aria-label={`Restore developer camera controls from the ${dockSide} edge`}
+        aria-label={`Restore developer debug controls from the ${dockSide} edge`}
         className={cn(
           'pointer-events-auto fixed z-70 flex items-center justify-center border border-amber-500/25 bg-background/92 text-amber-300 shadow-2xl backdrop-blur-xl transition-all hover:bg-background hover:text-amber-200',
           dockSide === 'left' &&
@@ -380,7 +383,7 @@ export function DevDebugMenu() {
             <Bug className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium">Developer Camera</div>
+            <div className="text-sm font-medium">Developer Debug</div>
             <div className="text-[11px] text-muted-foreground">Local-only debug controls</div>
           </div>
         </div>
@@ -404,6 +407,20 @@ export function DevDebugMenu() {
             aria-label="Allow underground orbit"
             checked={allowUndergroundCamera}
             onCheckedChange={setAllowUndergroundCamera}
+          />
+        </div>
+
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Debug colors</div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Show distinct colors per material group to help identify geometry surfaces.
+            </p>
+          </div>
+          <Switch
+            aria-label="Debug colors"
+            checked={debugColors}
+            onCheckedChange={setDebugColors}
           />
         </div>
 
