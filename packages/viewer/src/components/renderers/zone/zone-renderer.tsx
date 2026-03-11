@@ -239,6 +239,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
         rotation={[-Math.PI / 2, 0, 0]}
         material={floorMaterial}
         name="floor"
+        layers={2}
       >
         <shapeGeometry args={[floorShape]} />
       </mesh>
