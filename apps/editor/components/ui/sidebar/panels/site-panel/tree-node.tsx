@@ -109,12 +109,15 @@ interface TreeNodeWrapperProps {
   onDoubleClick?: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  onPointerDown?: (e: React.PointerEvent) => void;
   actions?: React.ReactNode;
   children?: React.ReactNode;
   isSelected?: boolean;
   isHovered?: boolean;
   isVisible?: boolean;
   isLast?: boolean;
+  isDraggable?: boolean;
+  isDropTarget?: boolean;
 }
 
 export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
@@ -131,12 +134,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
         onDoubleClick,
         onMouseEnter,
         onMouseLeave,
+        onPointerDown,
         actions,
         children,
         isSelected,
         isHovered,
         isVisible = true,
         isLast,
+        isDraggable,
+        isDropTarget,
       },
       ref
     ) {
@@ -156,14 +162,18 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               "relative flex items-center h-8 cursor-pointer group/row text-sm select-none border-b border-r border-border/50 border-r-transparent transition-all duration-200",
               isSelected
                 ? "bg-accent/50 text-foreground border-r-white border-r-3"
-                : isHovered
-                  ? "bg-accent/30 text-foreground"
-                  : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
-              !isVisible && "opacity-50"
+                : isDropTarget
+                  ? "bg-blue-500/15 text-foreground ring-1 ring-inset ring-blue-500/40"
+                  : isHovered
+                    ? "bg-accent/30 text-foreground"
+                    : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
+              !isVisible && "opacity-50",
+              isDraggable && "cursor-grab active:cursor-grabbing"
             )}
             style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
+            onPointerDown={onPointerDown}
           >
             {/* Vertical tree line */}
             <div

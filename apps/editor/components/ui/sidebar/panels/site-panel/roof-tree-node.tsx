@@ -1,11 +1,13 @@
 import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from "@pascal-app/core";
 import { useViewer } from "@pascal-app/viewer";
+import { AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import useEditor from "@/store/use-editor";
 import { InlineRenameInput } from "./inline-rename-input";
 import { TreeNodeWrapper, handleTreeSelection } from "./tree-node";
 import { TreeNodeActions } from "./tree-node-actions";
+import { DropIndicatorLine, useTreeNodeDrag } from "./tree-node-drag";
 
 interface RoofTreeNodeProps {
   node: RoofNode;
@@ -22,6 +24,7 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
   const nodes = useScene((state) => state.nodes);
+  const { drag, dropTarget } = useTreeNodeDrag();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -55,11 +58,26 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
     }
   }, [isSelected, hasSelectedChild]);
 
+  // Auto-expand when a segment is being dragged over this roof
+  const isDropTarget = drag !== null && dropTarget?.parentId === node.id;
+  useEffect(() => {
+    if (isDropTarget && !expanded) {
+      setExpanded(true);
+    }
+  }, [isDropTarget, expanded]);
+
   const segmentCount = segments.length;
   const defaultName = `Roof (${segmentCount} segment${segmentCount !== 1 ? "s" : ""})`;
 
+  // Hide the dragged segment from every roof while dragging
+  const visibleSegments = drag
+    ? segments.filter((seg) => seg.id !== drag.nodeId)
+    : segments;
+
+  const isValidDropTarget = drag !== null && drag.nodeId !== node.id;
+
   return (
-    <>
+    <div data-drop-target={node.id}>
       <TreeNodeWrapper
         nodeId={node.id}
         icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain" />}
@@ -81,21 +99,41 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         isSelected={isSelected}
-        isHovered={isHovered}
+        isHovered={isHovered || isDropTarget}
         isVisible={node.visible !== false}
         isLast={isLast && !expanded}
+        isDropTarget={isValidDropTarget && isDropTarget}
         actions={<TreeNodeActions node={node} />}
       >
-        {segments.map((seg, i) => (
-          <RoofSegmentTreeNode
-            key={seg.id}
-            node={seg}
-            depth={depth + 1}
-            isLast={isLast && i === segments.length - 1}
-          />
-        ))}
+        {visibleSegments.map((seg, i) => {
+          const showIndicatorBefore = isDropTarget && dropTarget?.insertIndex === i;
+          const showIndicatorAfter =
+            isDropTarget &&
+            i === visibleSegments.length - 1 &&
+            dropTarget?.insertIndex !== undefined &&
+            dropTarget.insertIndex > i;
+
+          return (
+            <div key={seg.id}>
+              <AnimatePresence>
+                {showIndicatorBefore && <DropIndicatorLine key="indicator-before" />}
+              </AnimatePresence>
+              <RoofSegmentTreeNode
+                node={seg}
+                depth={depth + 1}
+                isLast={isLast && i === visibleSegments.length - 1 && !showIndicatorAfter}
+              />
+              <AnimatePresence>
+                {showIndicatorAfter && <DropIndicatorLine key="indicator-after" />}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+        <AnimatePresence>
+          {isDropTarget && visibleSegments.length === 0 && <DropIndicatorLine />}
+        </AnimatePresence>
       </TreeNodeWrapper>
-    </>
+    </div>
   );
 }
 
@@ -114,40 +152,55 @@ function RoofSegmentTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === node.id);
   const setSelection = useViewer((state) => state.setSelection);
   const setHoveredId = useViewer((state) => state.setHoveredId);
+  const { startDrag, isDragging } = useTreeNodeDrag();
 
   const handleClick = (e: React.MouseEvent) => {
+    if (isDragging) return;
     e.stopPropagation();
     handleTreeSelection(e, node.id, selectedIds, setSelection);
   };
 
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      const label = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}×${node.depth.toFixed(1)}m)`;
+      startDrag(node.id, node.type, node.parentId as string, label, e.clientX, e.clientY);
+    },
+    [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag],
+  );
+
   const defaultName = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}x${node.depth.toFixed(1)}m)`;
 
   return (
-    <TreeNodeWrapper
-      nodeId={node.id}
-      icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain opacity-60" />}
-      label={
-        <InlineRenameInput
-          node={node}
-          isEditing={isEditing}
-          onStopEditing={() => setIsEditing(false)}
-          onStartEditing={() => setIsEditing(true)}
-          defaultName={defaultName}
-        />
-      }
-      depth={depth}
-      hasChildren={false}
-      expanded={false}
-      onToggle={() => {}}
-      onClick={handleClick}
-      onDoubleClick={() => setIsEditing(true)}
-      onMouseEnter={() => setHoveredId(node.id)}
-      onMouseLeave={() => setHoveredId(null)}
-      isSelected={isSelected}
-      isHovered={isHovered}
-      isVisible={node.visible !== false}
-      isLast={isLast}
-      actions={<TreeNodeActions node={node} />}
-    />
+    <div data-drop-child={node.id}>
+      <TreeNodeWrapper
+        nodeId={node.id}
+        icon={<Image src="/icons/roof.png" alt="" width={14} height={14} className="object-contain opacity-60" />}
+        label={
+          <InlineRenameInput
+            node={node}
+            isEditing={isEditing}
+            onStopEditing={() => setIsEditing(false)}
+            onStartEditing={() => setIsEditing(true)}
+            defaultName={defaultName}
+          />
+        }
+        depth={depth}
+        hasChildren={false}
+        expanded={false}
+        onToggle={() => {}}
+        onClick={handleClick}
+        onDoubleClick={() => setIsEditing(true)}
+        onMouseEnter={() => setHoveredId(node.id)}
+        onMouseLeave={() => setHoveredId(null)}
+        onPointerDown={handlePointerDown}
+        isSelected={isSelected}
+        isHovered={isHovered}
+        isVisible={node.visible !== false}
+        isLast={isLast}
+        isDraggable
+        actions={<TreeNodeActions node={node} />}
+      />
+    </div>
   );
 }

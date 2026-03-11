@@ -29,6 +29,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import useEditor from "@/store/use-editor";
+import { TreeNodeDragProvider } from "./tree-node-drag";
 import { TreeNode } from "./tree-node";
 import { InlineRenameInput } from "./inline-rename-input";
 import { useProjectStore } from '@/features/community/lib/projects/store';
@@ -1124,11 +1125,13 @@ function ContentSection() {
   }
 
   return (
-    <div className="flex flex-col">
-      {elementChildren.map((childId, index) => (
-        <TreeNode key={childId} nodeId={childId} depth={0} isLast={index === elementChildren.length - 1} />
-      ))}
-    </div>
+    <TreeNodeDragProvider>
+      <div className="flex flex-col">
+        {elementChildren.map((childId, index) => (
+          <TreeNode key={childId} nodeId={childId} depth={0} isLast={index === elementChildren.length - 1} />
+        ))}
+      </div>
+    </TreeNodeDragProvider>
   );
 }
 
