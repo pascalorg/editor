@@ -62,7 +62,7 @@ const ItemControlsOverlay = ({ nodeId }: { nodeId: AnyNodeId }) => {
     return z?.polygon ?? null
   })
 
-  if (!itemObj || !controlValues || !node?.asset.interactive) return null
+  if (!(itemObj && controlValues && node?.asset.interactive)) return null
 
   const { controls } = node.asset.interactive
   const [, height] = node.asset.dimensions
@@ -77,7 +77,7 @@ const ItemControlsOverlay = ({ nodeId }: { nodeId: AnyNodeId }) => {
   }
 
   return createPortal(
-    <Html center position={[0, height + 0.3, 0]} zIndexRange={[20, 0]} occlude distanceFactor={8}>
+    <Html center distanceFactor={8} occlude position={[0, height + 0.3, 0]} zIndexRange={[20, 0]}>
       <div
         style={{
           display: 'flex',
@@ -96,10 +96,10 @@ const ItemControlsOverlay = ({ nodeId }: { nodeId: AnyNodeId }) => {
       >
         {controls.map((control, i) => (
           <ControlWidget
-            key={i}
             control={control}
-            value={controlValues[i] ?? false}
+            key={i}
             onChange={(v) => setControlValue(nodeId, i, v)}
+            value={controlValues[i] ?? false}
           />
         ))}
       </div>
@@ -157,13 +157,13 @@ const ControlWidget = ({
           {control.unit ? ` ${control.unit}` : ''}
         </span>
         <input
-          type="range"
-          min={control.min}
           max={control.max}
-          step={control.step}
-          value={value as number}
+          min={control.min}
           onChange={(e) => onChange(Number(e.target.value))}
           onPointerDown={(e) => e.stopPropagation()}
+          step={control.step}
+          type="range"
+          value={value as number}
         />
       </label>
     )
@@ -176,13 +176,13 @@ const ControlWidget = ({
           {control.label}: {value}°{control.unit}
         </span>
         <input
-          type="range"
-          min={control.min}
           max={control.max}
-          step={1}
-          value={value as number}
+          min={control.min}
           onChange={(e) => onChange(Number(e.target.value))}
           onPointerDown={(e) => e.stopPropagation()}
+          step={1}
+          type="range"
+          value={value as number}
         />
       </label>
     )

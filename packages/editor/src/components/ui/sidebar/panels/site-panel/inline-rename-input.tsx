@@ -1,15 +1,15 @@
-import { useScene, type AnyNode } from "@pascal-app/core";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
-import { cn } from "./../../../../../lib/utils";
+import { type AnyNode, useScene } from '@pascal-app/core'
+import { Pencil } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { cn } from './../../../../../lib/utils'
 
 interface InlineRenameInputProps {
-  node: AnyNode;
-  isEditing: boolean;
-  onStopEditing: () => void;
-  defaultName: string;
-  className?: string;
-  onStartEditing?: () => void;
+  node: AnyNode
+  isEditing: boolean
+  onStopEditing: () => void
+  defaultName: string
+  className?: string
+  onStartEditing?: () => void
 }
 
 export function InlineRenameInput({
@@ -20,79 +20,77 @@ export function InlineRenameInput({
   className,
   onStartEditing,
 }: InlineRenameInputProps) {
-  const updateNode = useScene((s) => s.updateNode);
-  const [value, setValue] = useState(node.name || "");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const updateNode = useScene((s) => s.updateNode)
+  const [value, setValue] = useState(node.name || '')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isEditing) {
-      setValue(node.name || "");
+      setValue(node.name || '')
       // Focus and select all text after a short delay
       setTimeout(() => {
         if (inputRef.current) {
-          inputRef.current.focus();
-          inputRef.current.select();
+          inputRef.current.focus()
+          inputRef.current.select()
         }
-      }, 0);
+      }, 0)
     }
-  }, [isEditing, node.name]);
+  }, [isEditing, node.name])
 
   const handleSave = useCallback(() => {
-    const trimmed = value.trim();
+    const trimmed = value.trim()
     if (trimmed !== node.name) {
-      updateNode(node.id, { name: trimmed || undefined });
+      updateNode(node.id, { name: trimmed || undefined })
     }
-    onStopEditing();
-  }, [value, node.id, node.name, updateNode, onStopEditing]);
+    onStopEditing()
+  }, [value, node.id, node.name, updateNode, onStopEditing])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSave();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onStopEditing();
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSave()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      onStopEditing()
     }
-  };
+  }
 
   if (!isEditing) {
     return (
-      <div className="flex items-center gap-1 group/rename min-w-0 h-5">
-        <span 
-          className={cn("truncate border-b border-transparent", className)}
-        >
+      <div className="group/rename flex h-5 min-w-0 items-center gap-1">
+        <span className={cn('truncate border-transparent border-b', className)}>
           {node.name || defaultName}
         </span>
         {onStartEditing && (
           <button
-            className="opacity-0 group-hover/rename:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+            className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/rename:opacity-100"
             onClick={(e) => {
-              e.stopPropagation();
-              onStartEditing();
+              e.stopPropagation()
+              onStartEditing()
             }}
           >
-            <Pencil className="w-3 h-3" />
+            <Pencil className="h-3 w-3" />
           </button>
         )}
       </div>
-    );
+    )
   }
 
   return (
     <input
+      className={cn(
+        'm-0 h-5 w-full flex-1 rounded-none border-primary/50 border-b bg-transparent px-0 py-0 text-foreground text-sm outline-none focus:border-primary',
+        className,
+      )}
+      onBlur={handleSave}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={handleKeyDown}
+      placeholder={defaultName}
       ref={inputRef}
       type="text"
       value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={handleKeyDown}
-      onBlur={handleSave}
-      placeholder={defaultName}
-      className={cn(
-        "flex-1 w-full bg-transparent text-foreground outline-none border-b border-primary/50 focus:border-primary rounded-none px-0 py-0 m-0 h-5 text-sm",
-        className
-      )}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
     />
-  );
+  )
 }

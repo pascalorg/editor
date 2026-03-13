@@ -35,9 +35,8 @@ export function calculateCursorRotation(
   // In local wall space, front face has normal.z < 0, back face has normal.z > 0
   if (normal[2] < 0) {
     return -wallAngle
-  } else {
-    return Math.PI - wallAngle
   }
+  return Math.PI - wallAngle
 }
 
 /**

@@ -11,14 +11,6 @@ import type {
 } from '@pascal-app/core'
 import { getScaledDimensions, sceneRegistry, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
-import type {
-  CommitResult,
-  LevelResolver,
-  PlacementContext,
-  PlacementResult,
-  SpatialValidators,
-  TransitionResult,
-} from './placement-types'
 import {
   calculateCursorRotation,
   calculateItemRotation,
@@ -28,6 +20,14 @@ import {
   snapToHalf,
   stripTransient,
 } from './placement-math'
+import type {
+  CommitResult,
+  LevelResolver,
+  PlacementContext,
+  PlacementResult,
+  SpatialValidators,
+  TransitionResult,
+} from './placement-types'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
@@ -43,7 +43,9 @@ export const floorStrategy = {
   move(ctx: PlacementContext, event: GridEvent): PlacementResult | null {
     if (ctx.state.surface !== 'floor') return null
 
-    const dims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const dims = ctx.draftItem
+      ? getScaledDimensions(ctx.draftItem)
+      : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const [dimX, , dimZ] = dims
     const x = snapToGrid(event.position[0], dimX)
     const z = snapToGrid(event.position[2], dimZ)
@@ -62,9 +64,13 @@ export const floorStrategy = {
    * Handle grid:click — commit placement on floor.
    * Returns null if on wall/ceiling or validation fails.
    */
-  click(ctx: PlacementContext, _event: GridEvent, validators: SpatialValidators): CommitResult | null {
+  click(
+    ctx: PlacementContext,
+    _event: GridEvent,
+    validators: SpatialValidators,
+  ): CommitResult | null {
     if (ctx.state.surface !== 'floor') return null
-    if (!ctx.levelId || !ctx.draftItem) return null
+    if (!(ctx.levelId && ctx.draftItem)) return null
 
     const pos: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
     const valid = validators.canPlaceOnFloor(
@@ -128,7 +134,9 @@ export const wallStrategy = {
       event.node.id,
       x,
       y,
-      ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS),
+      ctx.draftItem
+        ? getScaledDimensions(ctx.draftItem)
+        : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS),
       attachTo,
       side,
       [],
@@ -160,9 +168,13 @@ export const wallStrategy = {
    * Returns null if not on a wall or face is invalid.
    * Auto-adjusts Y position to fit within wall bounds.
    */
-  move(ctx: PlacementContext, event: WallEvent, validators: SpatialValidators): PlacementResult | null {
+  move(
+    ctx: PlacementContext,
+    event: WallEvent,
+    validators: SpatialValidators,
+  ): PlacementResult | null {
     if (ctx.state.surface !== 'wall') return null
-    if (!ctx.draftItem || !ctx.levelId) return null
+    if (!(ctx.draftItem && ctx.levelId)) return null
     if (!isValidWallSideFace(event.normal)) return null
 
     const side = getSideFromNormal(event.normal)
@@ -209,10 +221,14 @@ export const wallStrategy = {
    * Handle wall:click — commit placement on wall.
    * Returns null if not on wall, face invalid, or validation fails.
    */
-  click(ctx: PlacementContext, event: WallEvent, validators: SpatialValidators): CommitResult | null {
+  click(
+    ctx: PlacementContext,
+    event: WallEvent,
+    validators: SpatialValidators,
+  ): CommitResult | null {
     if (ctx.state.surface !== 'wall') return null
     if (!isValidWallSideFace(event.normal)) return null
-    if (!ctx.levelId || !ctx.draftItem) return null
+    if (!(ctx.levelId && ctx.draftItem)) return null
 
     const valid = validators.canPlaceOnWall(
       ctx.levelId,
@@ -281,7 +297,9 @@ export const ceilingStrategy = {
     const ceilingLevelId = resolveLevelId(event.node, nodes)
     if (ctx.levelId !== ceilingLevelId) return null
 
-    const dims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const dims = ctx.draftItem
+      ? getScaledDimensions(ctx.draftItem)
+      : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const [dimX, , dimZ] = dims
     const itemHeight = dims[1]
 
@@ -328,7 +346,11 @@ export const ceilingStrategy = {
   /**
    * Handle ceiling:click — commit placement on ceiling.
    */
-  click(ctx: PlacementContext, event: CeilingEvent, validators: SpatialValidators): CommitResult | null {
+  click(
+    ctx: PlacementContext,
+    event: CeilingEvent,
+    validators: SpatialValidators,
+  ): CommitResult | null {
     if (ctx.state.surface !== 'ceiling') return null
     if (!ctx.draftItem) return null
 
@@ -399,7 +421,9 @@ export const itemSurfaceStrategy = {
     if (!surfaceItem.asset.surface) return null
 
     // Size check: our footprint must fit on surface item's footprint
-    const ourDims = ctx.draftItem ? getScaledDimensions(ctx.draftItem) : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const ourDims = ctx.draftItem
+      ? getScaledDimensions(ctx.draftItem)
+      : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const surfDims = getScaledDimensions(surfaceItem)
     if (ourDims[0] > surfDims[0] || ourDims[2] > surfDims[2]) return null
 
@@ -430,7 +454,7 @@ export const itemSurfaceStrategy = {
    */
   move(ctx: PlacementContext, event: ItemEvent): PlacementResult | null {
     if (ctx.state.surface !== 'item-surface') return null
-    if (!ctx.state.surfaceItemId || !ctx.draftItem) return null
+    if (!(ctx.state.surfaceItemId && ctx.draftItem)) return null
 
     const nodes = useScene.getState().nodes
     const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
@@ -464,7 +488,7 @@ export const itemSurfaceStrategy = {
    */
   click(ctx: PlacementContext, _event: ItemEvent): CommitResult | null {
     if (ctx.state.surface !== 'item-surface') return null
-    if (!ctx.draftItem || !ctx.state.surfaceItemId) return null
+    if (!(ctx.draftItem && ctx.state.surfaceItemId)) return null
 
     return {
       nodeUpdate: {
@@ -487,7 +511,7 @@ export const itemSurfaceStrategy = {
  * Switches on the active surface type and calls the appropriate spatial validator.
  */
 export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidators): boolean {
-  if (!ctx.levelId || !ctx.draftItem) return false
+  if (!(ctx.levelId && ctx.draftItem)) return false
 
   // Item surface: valid if we entered (size check was in enter)
   if (ctx.state.surface === 'item-surface') {

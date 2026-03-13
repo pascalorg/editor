@@ -38,7 +38,7 @@ export function ExportManager() {
             console.error('Export error:', error)
             reject(error)
           },
-          { binary: true }
+          { binary: true },
         )
       })
     }

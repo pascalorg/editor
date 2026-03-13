@@ -1,4 +1,10 @@
-import { type CeilingNode, type LevelNode, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type CeilingNode,
+  type LevelNode,
+  sceneRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
 
@@ -75,7 +81,9 @@ export function snapLevelsToTruePositions(): () => void {
   entries.sort((a, b) => a.index - b.index)
 
   // Snapshot current Y and visibility so we can restore them after the render
-  const snapshot = new Map(entries.map(({ levelId, obj }) => [levelId, { y: obj.position.y, visible: obj.visible }]))
+  const snapshot = new Map(
+    entries.map(({ levelId, obj }) => [levelId, { y: obj.position.y, visible: obj.visible }]),
+  )
 
   // Snap to true stacked positions and make all levels visible
   let cumulativeY = 0

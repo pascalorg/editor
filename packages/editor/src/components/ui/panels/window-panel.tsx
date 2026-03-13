@@ -1,20 +1,19 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, WindowNode, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, useScene, WindowNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { usePresetsAdapter } from '../../../contexts/presets-context'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-
-import { PanelWrapper } from './panel-wrapper'
+import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
-import { MetricControl } from '../controls/metric-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { ActionButton, ActionGroup } from '../controls/action-button'
+import { PanelWrapper } from './panel-wrapper'
 import { PresetsPopover } from './presets/presets-popover'
-import { usePresetsAdapter } from '../../../contexts/presets-context'
 
 export function WindowPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -60,7 +59,7 @@ export function WindowPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
-    if (!selectedId || !node) return
+    if (!(selectedId && node)) return
     sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
@@ -68,7 +67,7 @@ export function WindowPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node || !node.parentId) return
+    if (!(node && node.parentId)) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
     const duplicate = WindowNode.parse({
@@ -112,23 +111,32 @@ export function WindowPanel() {
     }
   }, [node])
 
-  const handleSavePreset = useCallback(async (name: string) => {
-    const data = getWindowPresetData()
-    if (!data || !selectedId) return
-    const presetId = await adapter.savePreset('window', name, data)
-    if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
-  }, [getWindowPresetData, selectedId, adapter])
+  const handleSavePreset = useCallback(
+    async (name: string) => {
+      const data = getWindowPresetData()
+      if (!(data && selectedId)) return
+      const presetId = await adapter.savePreset('window', name, data)
+      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
+    },
+    [getWindowPresetData, selectedId, adapter],
+  )
 
-  const handleOverwritePreset = useCallback(async (id: string) => {
-    const data = getWindowPresetData()
-    if (!data || !selectedId) return
-    await adapter.overwritePreset('window', id, data)
-    emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
-  }, [getWindowPresetData, selectedId, adapter])
+  const handleOverwritePreset = useCallback(
+    async (id: string) => {
+      const data = getWindowPresetData()
+      if (!(data && selectedId)) return
+      await adapter.overwritePreset('window', id, data)
+      emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
+    },
+    [getWindowPresetData, selectedId, adapter],
+  )
 
-  const handleApplyPreset = useCallback((data: Record<string, unknown>) => {
-    handleUpdate(data as Partial<WindowNode>)
-  }, [handleUpdate])
+  const handleApplyPreset = useCallback(
+    (data: Record<string, unknown>) => {
+      handleUpdate(data as Partial<WindowNode>)
+    },
+    [handleUpdate],
+  )
 
   if (!node || node.type !== 'window' || selectedIds.length !== 1) return null
 
@@ -137,8 +145,8 @@ export function WindowPanel() {
 
   const colSum = node.columnRatios.reduce((a, b) => a + b, 0)
   const rowSum = node.rowRatios.reduce((a, b) => a + b, 0)
-  const normCols = node.columnRatios.map(r => r / colSum)
-  const normRows = node.rowRatios.map(r => r / rowSum)
+  const normCols = node.columnRatios.map((r) => r / colSum)
+  const normRows = node.rowRatios.map((r) => r / rowSum)
 
   const setColumnRatio = (index: number, newVal: number) => {
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
@@ -168,26 +176,26 @@ export function WindowPanel() {
 
   return (
     <PanelWrapper
-      title={node.name || "Window"}
       icon="/icons/window.png"
       onClose={handleClose}
+      title={node.name || 'Window'}
       width={320}
     >
       {/* Presets strip */}
-      <div className="px-3 pt-2.5 pb-1.5 border-b border-border/30">
+      <div className="border-border/30 border-b px-3 pt-2.5 pb-1.5">
         <PresetsPopover
-          type="window"
-          onApply={handleApplyPreset}
-          onSave={handleSavePreset}
-          onOverwrite={handleOverwritePreset}
-          onFetchPresets={(tab) => adapter.fetchPresets('window', tab)}
-          onRename={(id, name) => adapter.renamePreset(id, name)}
-          onDelete={(id) => adapter.deletePreset(id)}
-          onToggleCommunity={adapter.togglePresetCommunity}
           isAuthenticated={adapter.isAuthenticated}
+          onApply={handleApplyPreset}
+          onDelete={(id) => adapter.deletePreset(id)}
+          onFetchPresets={(tab) => adapter.fetchPresets('window', tab)}
+          onOverwrite={handleOverwritePreset}
+          onRename={(id, name) => adapter.renamePreset(id, name)}
+          onSave={handleSavePreset}
+          onToggleCommunity={adapter.togglePresetCommunity}
           tabs={adapter.tabs}
+          type="window"
         >
-          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[#3e3e3e] transition-colors">
+          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 font-medium text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-foreground">
             <BookMarked className="h-3.5 w-3.5 shrink-0" />
             <span>Presets</span>
           </button>
@@ -196,31 +204,39 @@ export function WindowPanel() {
 
       <PanelSection title="Position">
         <SliderControl
-          label={<>X<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}
-          value={Math.round(node.position[0] * 100) / 100}
-          onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
-          min={-10}
+          label={
+            <>
+              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+            </>
+          }
           max={10}
+          min={-10}
+          onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
           precision={2}
           step={0.1}
           unit="m"
+          value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label={<>Y<sub className="text-[11px] ml-[1px] opacity-70">pos</sub></>}
-          value={Math.round(node.position[1] * 100) / 100}
-          onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
-          min={-10}
+          label={
+            <>
+              Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+            </>
+          }
           max={10}
+          min={-10}
+          onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
           precision={2}
           step={0.1}
           unit="m"
+          value={Math.round(node.position[1] * 100) / 100}
         />
-        <div className="pt-2 pb-1 px-1">
-          <ActionButton 
-            icon={<FlipHorizontal2 className="h-4 w-4" />} 
-            label="Flip Side" 
-            onClick={handleFlip} 
+        <div className="px-1 pt-2 pb-1">
+          <ActionButton
             className="w-full"
+            icon={<FlipHorizontal2 className="h-4 w-4" />}
+            label="Flip Side"
+            onClick={handleFlip}
           />
         </div>
       </PanelSection>
@@ -228,101 +244,103 @@ export function WindowPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          value={Math.round(node.width * 100) / 100}
-          onChange={(v) => handleUpdate({ width: v })}
-          min={0.2}
           max={5}
+          min={0.2}
+          onChange={(v) => handleUpdate({ width: v })}
           precision={2}
           step={0.1}
           unit="m"
+          value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
           label="Height"
-          value={Math.round(node.height * 100) / 100}
-          onChange={(v) => handleUpdate({ height: v })}
-          min={0.2}
           max={5}
+          min={0.2}
+          onChange={(v) => handleUpdate({ height: v })}
           precision={2}
           step={0.1}
           unit="m"
+          value={Math.round(node.height * 100) / 100}
         />
       </PanelSection>
 
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
-          value={Math.round(node.frameThickness * 1000) / 1000}
-          onChange={(v) => handleUpdate({ frameThickness: v })}
-          min={0.01}
           max={0.2}
+          min={0.01}
+          onChange={(v) => handleUpdate({ frameThickness: v })}
           precision={3}
           step={0.01}
           unit="m"
+          value={Math.round(node.frameThickness * 1000) / 1000}
         />
         <SliderControl
           label="Depth"
-          value={Math.round(node.frameDepth * 1000) / 1000}
-          onChange={(v) => handleUpdate({ frameDepth: v })}
-          min={0.01}
           max={0.3}
+          min={0.01}
+          onChange={(v) => handleUpdate({ frameDepth: v })}
           precision={3}
           step={0.01}
           unit="m"
+          value={Math.round(node.frameDepth * 1000) / 1000}
         />
       </PanelSection>
 
       <PanelSection title="Grid">
         <SliderControl
           label="Columns"
-          value={numCols}
+          max={8}
+          min={1}
           onChange={(v) => {
             const n = Math.max(1, Math.min(8, Math.round(v)))
             handleUpdate({ columnRatios: Array(n).fill(1 / n) })
           }}
-          min={1}
-          max={8}
           precision={0}
           step={1}
+          value={numCols}
         />
         <SliderControl
           label="Rows"
-          value={numRows}
+          max={8}
+          min={1}
           onChange={(v) => {
             const n = Math.max(1, Math.min(8, Math.round(v)))
             handleUpdate({ rowRatios: Array(n).fill(1 / n) })
           }}
-          min={1}
-          max={8}
           precision={0}
           step={1}
+          value={numRows}
         />
 
         {numCols > 1 && (
           <div className="mt-2 flex flex-col gap-1">
-            <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">Col Widths</div>
+            <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+              Col Widths
+            </div>
             {normCols.map((ratio, i) => (
               <SliderControl
                 key={`c-${i}`}
                 label={`C${i + 1}`}
-                value={Math.round(ratio * 100 * 10) / 10}
-                onChange={(v) => setColumnRatio(i, v / 100)}
-                min={5}
                 max={95}
+                min={5}
+                onChange={(v) => setColumnRatio(i, v / 100)}
                 precision={1}
                 step={1}
                 unit="%"
+                value={Math.round(ratio * 100 * 10) / 10}
               />
             ))}
-                <div className="mt-1 border-t border-border/50 pt-1">
+            <div className="mt-1 border-border/50 border-t pt-1">
               <SliderControl
                 label="Divider"
-                value={Math.round((node.columnDividerThickness ?? 0.03) * 1000) / 1000}
-                onChange={(v) => handleUpdate({ columnDividerThickness: v })}
-                min={0.005}
                 max={0.1}
+                min={0.005}
+                onChange={(v) => handleUpdate({ columnDividerThickness: v })}
                 precision={3}
                 step={0.01}
                 unit="m"
+                value={Math.round((node.columnDividerThickness ?? 0.03) * 1000) / 1000}
               />
             </div>
           </div>
@@ -330,30 +348,32 @@ export function WindowPanel() {
 
         {numRows > 1 && (
           <div className="mt-2 flex flex-col gap-1">
-            <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">Row Heights</div>
+            <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+              Row Heights
+            </div>
             {normRows.map((ratio, i) => (
               <SliderControl
                 key={`r-${i}`}
                 label={`R${i + 1}`}
-                value={Math.round(ratio * 100 * 10) / 10}
-                onChange={(v) => setRowRatio(i, v / 100)}
-                min={5}
                 max={95}
+                min={5}
+                onChange={(v) => setRowRatio(i, v / 100)}
                 precision={1}
                 step={1}
                 unit="%"
+                value={Math.round(ratio * 100 * 10) / 10}
               />
             ))}
-                <div className="mt-1 border-t border-border/50 pt-1">
+            <div className="mt-1 border-border/50 border-t pt-1">
               <SliderControl
                 label="Divider"
-                value={Math.round((node.rowDividerThickness ?? 0.03) * 1000) / 1000}
-                onChange={(v) => handleUpdate({ rowDividerThickness: v })}
-                min={0.005}
                 max={0.1}
+                min={0.005}
+                onChange={(v) => handleUpdate({ rowDividerThickness: v })}
                 precision={3}
                 step={0.01}
                 unit="m"
+                value={Math.round((node.rowDividerThickness ?? 0.03) * 1000) / 1000}
               />
             </div>
           </div>
@@ -362,31 +382,31 @@ export function WindowPanel() {
 
       <PanelSection title="Sill">
         <ToggleControl
-          label="Enable Sill"
           checked={node.sill}
+          label="Enable Sill"
           onChange={(checked) => handleUpdate({ sill: checked })}
         />
         {node.sill && (
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Depth"
-              value={Math.round(node.sillDepth * 1000) / 1000}
-              onChange={(v) => handleUpdate({ sillDepth: v })}
-              min={0.01}
               max={0.5}
+              min={0.01}
+              onChange={(v) => handleUpdate({ sillDepth: v })}
               precision={3}
               step={0.01}
               unit="m"
+              value={Math.round(node.sillDepth * 1000) / 1000}
             />
             <SliderControl
               label="Thickness"
-              value={Math.round(node.sillThickness * 1000) / 1000}
-              onChange={(v) => handleUpdate({ sillThickness: v })}
-              min={0.005}
               max={0.2}
+              min={0.005}
+              onChange={(v) => handleUpdate({ sillThickness: v })}
               precision={3}
               step={0.01}
               unit="m"
+              value={Math.round(node.sillThickness * 1000) / 1000}
             />
           </div>
         )}
@@ -395,12 +415,16 @@ export function WindowPanel() {
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-          <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={handleDuplicate} />
-          <ActionButton 
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />} 
-            label="Delete" 
-            onClick={handleDelete} 
+          <ActionButton
+            icon={<Copy className="h-3.5 w-3.5" />}
+            label="Duplicate"
+            onClick={handleDuplicate}
+          />
+          <ActionButton
             className="hover:bg-red-500/20"
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            label="Delete"
+            onClick={handleDelete}
           />
         </ActionGroup>
       </PanelSection>

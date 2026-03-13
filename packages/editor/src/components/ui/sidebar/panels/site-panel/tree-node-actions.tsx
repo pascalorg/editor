@@ -1,113 +1,109 @@
-import { type AnyNode, type AnyNodeId, emitter, useScene } from "@pascal-app/core";
-import { useViewer } from "@pascal-app/viewer";
-import { Camera, Eye, EyeOff, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { Camera, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "./../../../../../components/ui/primitives/popover";
+} from './../../../../../components/ui/primitives/popover'
 
 interface TreeNodeActionsProps {
-  node: AnyNode;
+  node: AnyNode
 }
 
 export function TreeNodeActions({ node }: TreeNodeActionsProps) {
-  const [open, setOpen] = useState(false);
-  const updateNode = useScene((state) => state.updateNode);
-  const updateNodes = useScene((state) => state.updateNodes);
-  const selectedIds = useViewer((state) => state.selection.selectedIds);
-  const hasCamera = !!node.camera;
-  const isVisible = node.visible !== false;
+  const [open, setOpen] = useState(false)
+  const updateNode = useScene((state) => state.updateNode)
+  const updateNodes = useScene((state) => state.updateNodes)
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const hasCamera = !!node.camera
+  const isVisible = node.visible !== false
 
   const toggleVisibility = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newVisibility = !isVisible;
+    e.stopPropagation()
+    const newVisibility = !isVisible
     if (selectedIds && selectedIds.includes(node.id)) {
       updateNodes(
         selectedIds.map((id) => ({
           id: id as AnyNodeId,
           data: { visible: newVisibility },
-        }))
-      );
+        })),
+      )
     } else {
-      updateNode(node.id, { visible: newVisibility });
+      updateNode(node.id, { visible: newVisibility })
     }
-  };
+  }
 
   const handleCaptureCamera = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    emitter.emit("camera-controls:capture", { nodeId: node.id });
-    setOpen(false);
-  };
+    e.stopPropagation()
+    emitter.emit('camera-controls:capture', { nodeId: node.id })
+    setOpen(false)
+  }
   const handleViewCamera = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    emitter.emit("camera-controls:view", { nodeId: node.id });
-    setOpen(false);
-  };
+    e.stopPropagation()
+    emitter.emit('camera-controls:view', { nodeId: node.id })
+    setOpen(false)
+  }
 
   const handleClearCamera = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    updateNode(node.id, { camera: undefined });
-    setOpen(false);
-  };
+    e.stopPropagation()
+    updateNode(node.id, { camera: undefined })
+    setOpen(false)
+  }
 
   return (
     <div className="flex items-center gap-0.5">
       <button
-        className="w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
         onClick={toggleVisibility}
-        title={isVisible ? "Hide" : "Show"}
+        title={isVisible ? 'Hide' : 'Show'}
       >
-        {isVisible ? (
-          <Eye className="w-3 h-3" />
-        ) : (
-          <EyeOff className="w-3 h-3 opacity-50" />
-        )}
+        {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 opacity-50" />}
       </button>
 
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover onOpenChange={setOpen} open={open}>
         <PopoverTrigger asChild>
           <button
-            className="relative w-6 h-6 flex items-center justify-center rounded-md cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+            className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
             onClick={(e) => e.stopPropagation()}
             title="Camera snapshot"
           >
-            <Camera className="w-3 h-3" />
+            <Camera className="h-3 w-3" />
             {hasCamera && (
-              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+              <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
             )}
           </button>
         </PopoverTrigger>
         <PopoverContent
-          side="right"
           align="start"
           className="w-auto p-1"
           onClick={(e) => e.stopPropagation()}
+          side="right"
         >
           <div className="flex flex-col gap-0.5">
             {hasCamera && (
               <button
-                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+                className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
                 onClick={handleViewCamera}
               >
-                <Camera className="w-3.5 h-3.5" />
+                <Camera className="h-3.5 w-3.5" />
                 View snapshot
               </button>
             )}
             <button
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-accent text-left w-full"
+              className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
               onClick={handleCaptureCamera}
             >
-              <Camera className="w-3.5 h-3.5" />
-              {hasCamera ? "Update snapshot" : "Take snapshot"}
+              <Camera className="h-3.5 w-3.5" />
+              {hasCamera ? 'Update snapshot' : 'Take snapshot'}
             </button>
             {hasCamera && (
               <button
-                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded cursor-pointer text-popover-foreground hover:bg-destructive hover:text-destructive-foreground text-left w-full"
+                className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-destructive hover:text-destructive-foreground"
                 onClick={handleClearCamera}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="h-3.5 w-3.5" />
                 Clear snapshot
               </button>
             )}
@@ -115,5 +111,5 @@ export function TreeNodeActions({ node }: TreeNodeActionsProps) {
         </PopoverContent>
       </Popover>
     </div>
-  );
+  )
 }

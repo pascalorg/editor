@@ -1,12 +1,29 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { BookMarked, Check, Globe, GlobeLock, MoreHorizontal, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
 import { emitter } from '@pascal-app/core'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../primitives/dropdown-menu'
-import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popover'
-import { cn } from '../../../../lib/utils'
+import {
+  BookMarked,
+  Check,
+  Globe,
+  GlobeLock,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import type { PresetsTab } from '../../../../contexts/presets-context'
+import { cn } from '../../../../lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../primitives/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '../../primitives/popover'
 
 export type PresetType = 'door' | 'window'
 
@@ -133,26 +150,29 @@ export function PresetsPopover({
   const showTabs = tabs.length > 1
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
-        side="left"
         align="start"
+        className="w-72 overflow-hidden rounded-xl border-border/50 bg-sidebar/95 p-0 shadow-2xl backdrop-blur-xl"
+        side="left"
         sideOffset={8}
-        className="w-72 p-0 border-border/50 bg-sidebar/95 backdrop-blur-xl shadow-2xl rounded-xl overflow-hidden"
       >
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
+        <div className="flex items-center justify-between border-border/50 border-b px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <BookMarked className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold text-foreground tracking-tight">
+            <span className="font-semibold text-foreground text-xs tracking-tight">
               {type === 'door' ? 'Door' : 'Window'} Presets
             </span>
           </div>
           {isAuthenticated && (
             <button
+              className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              onClick={() => {
+                setShowSaveInput((v) => !v)
+                setSaveName('')
+              }}
               type="button"
-              onClick={() => { setShowSaveInput((v) => !v); setSaveName('') }}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
             >
               <Plus className="h-3 w-3" />
               Save new
@@ -161,30 +181,36 @@ export function PresetsPopover({
         </div>
 
         {showSaveInput && (
-          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-white/5">
+          <div className="flex items-center gap-1.5 border-border/50 border-b bg-white/5 px-3 py-2">
             <input
               autoFocus
-              value={saveName}
+              className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none placeholder:text-muted-foreground/60 focus:border-ring focus:ring-1 focus:ring-ring/30"
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSaveNew()
-                if (e.key === 'Escape') { setShowSaveInput(false); setSaveName('') }
+                if (e.key === 'Escape') {
+                  setShowSaveInput(false)
+                  setSaveName('')
+                }
               }}
               placeholder="Preset name…"
-              className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
+              value={saveName}
             />
             <button
-              type="button"
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 text-primary transition-colors hover:bg-primary/30 disabled:opacity-40"
               disabled={!saveName.trim() || saving}
               onClick={handleSaveNew}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary disabled:opacity-40 transition-colors"
+              type="button"
             >
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+              onClick={() => {
+                setShowSaveInput(false)
+                setSaveName('')
+              }}
               type="button"
-              onClick={() => { setShowSaveInput(false); setSaveName('') }}
-              className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -192,7 +218,7 @@ export function PresetsPopover({
         )}
 
         {showTabs && (
-          <div className="flex border-b border-border/50">
+          <div className="flex border-border/50 border-b">
             {tabs.includes('community') && (
               <TabButton active={tab === 'community'} onClick={() => setTab('community')}>
                 <Users className="h-3 w-3" />
@@ -202,8 +228,10 @@ export function PresetsPopover({
             {tabs.includes('mine') && (
               <TabButton
                 active={tab === 'mine'}
-                onClick={() => { if (isAuthenticated) setTab('mine') }}
                 disabled={!isAuthenticated}
+                onClick={() => {
+                  if (isAuthenticated) setTab('mine')
+                }}
               >
                 <BookMarked className="h-3 w-3" />
                 My presets
@@ -212,35 +240,41 @@ export function PresetsPopover({
           </div>
         )}
 
-        <div className="max-h-72 overflow-y-auto no-scrollbar">
+        <div className="no-scrollbar max-h-72 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-foreground" />
             </div>
           ) : presets.length === 0 ? (
-            <EmptyState tab={tab} isAuthenticated={isAuthenticated} />
+            <EmptyState isAuthenticated={isAuthenticated} tab={tab} />
           ) : (
             <ul className="divide-y divide-border/30">
               {presets.map((preset) => (
                 <PresetRow
-                  key={preset.id}
-                  preset={preset}
-                  isMine={tab === 'mine'}
-                  showCommunityToggle={!!onToggleCommunity}
-                  renamingId={renamingId}
-                  renameValue={renameValue}
                   deletingId={deletingId}
-                  overwrittenId={overwrittenId}
-                  onApply={() => { onApply(preset.data); setOpen(false) }}
+                  isMine={tab === 'mine'}
+                  key={preset.id}
+                  onApply={() => {
+                    onApply(preset.data)
+                    setOpen(false)
+                  }}
+                  onDeleteCancel={() => setDeletingId(null)}
+                  onDeleteConfirm={() => handleDelete(preset.id)}
+                  onDeleteRequest={() => setDeletingId(preset.id)}
                   onOverwrite={() => handleOverwrite(preset.id)}
-                  onToggleCommunity={() => handleToggleCommunity(preset.id, preset.is_community)}
-                  onStartRename={() => { setRenamingId(preset.id); setRenameValue(preset.name) }}
+                  onRenameCancel={() => setRenamingId(null)}
                   onRenameChange={setRenameValue}
                   onRenameConfirm={() => handleRename(preset.id)}
-                  onRenameCancel={() => setRenamingId(null)}
-                  onDeleteRequest={() => setDeletingId(preset.id)}
-                  onDeleteConfirm={() => handleDelete(preset.id)}
-                  onDeleteCancel={() => setDeletingId(null)}
+                  onStartRename={() => {
+                    setRenamingId(preset.id)
+                    setRenameValue(preset.name)
+                  }}
+                  onToggleCommunity={() => handleToggleCommunity(preset.id, preset.is_community)}
+                  overwrittenId={overwrittenId}
+                  preset={preset}
+                  renameValue={renameValue}
+                  renamingId={renamingId}
+                  showCommunityToggle={!!onToggleCommunity}
                 />
               ))}
             </ul>
@@ -252,20 +286,28 @@ export function PresetsPopover({
 }
 
 function TabButton({
-  active, onClick, disabled, children,
+  active,
+  onClick,
+  disabled,
+  children,
 }: {
-  active: boolean; onClick: () => void; disabled?: boolean; children: React.ReactNode
+  active: boolean
+  onClick: () => void
+  disabled?: boolean
+  children: React.ReactNode
 }) {
   return (
     <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
       className={cn(
-        'flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors',
-        active ? 'text-foreground border-b-2 border-primary -mb-px' : 'text-muted-foreground hover:text-foreground',
-        disabled && 'opacity-40 cursor-not-allowed',
+        'flex flex-1 items-center justify-center gap-1.5 py-2 font-medium text-[11px] transition-colors',
+        active
+          ? '-mb-px border-primary border-b-2 text-foreground'
+          : 'text-muted-foreground hover:text-foreground',
+        disabled && 'cursor-not-allowed opacity-40',
       )}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
     >
       {children}
     </button>
@@ -274,9 +316,9 @@ function TabButton({
 
 function EmptyState({ tab, isAuthenticated }: { tab: PresetsTab; isAuthenticated: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center px-4">
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
       <BookMarked className="h-6 w-6 text-muted-foreground/40" />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         {tab === 'community'
           ? 'No community presets yet.'
           : isAuthenticated
@@ -308,9 +350,23 @@ interface PresetRowProps {
 }
 
 function PresetRow({
-  preset, isMine, showCommunityToggle, renamingId, renameValue, deletingId, overwrittenId,
-  onApply, onOverwrite, onToggleCommunity, onStartRename, onRenameChange, onRenameConfirm,
-  onRenameCancel, onDeleteRequest, onDeleteConfirm, onDeleteCancel,
+  preset,
+  isMine,
+  showCommunityToggle,
+  renamingId,
+  renameValue,
+  deletingId,
+  overwrittenId,
+  onApply,
+  onOverwrite,
+  onToggleCommunity,
+  onStartRename,
+  onRenameChange,
+  onRenameConfirm,
+  onRenameCancel,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
 }: PresetRowProps) {
   const isRenaming = renamingId === preset.id
   const isDeleting = deletingId === preset.id
@@ -318,11 +374,23 @@ function PresetRow({
 
   if (isDeleting) {
     return (
-      <li className="flex items-center justify-between gap-2 px-3 py-2.5 bg-red-500/10">
-        <span className="text-xs text-foreground/80 truncate">Delete "{preset.name}"?</span>
-        <div className="flex items-center gap-1 shrink-0">
-          <button type="button" onClick={onDeleteConfirm} className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">Delete</button>
-          <button type="button" onClick={onDeleteCancel} className="rounded-md px-2 py-0.5 text-[11px] font-medium hover:bg-white/10 text-muted-foreground transition-colors">Cancel</button>
+      <li className="flex items-center justify-between gap-2 bg-red-500/10 px-3 py-2.5">
+        <span className="truncate text-foreground/80 text-xs">Delete "{preset.name}"?</span>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-400 transition-colors hover:bg-red-500/30"
+            onClick={onDeleteConfirm}
+            type="button"
+          >
+            Delete
+          </button>
+          <button
+            className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10"
+            onClick={onDeleteCancel}
+            type="button"
+          >
+            Cancel
+          </button>
         </div>
       </li>
     )
@@ -333,58 +401,108 @@ function PresetRow({
       <li className="flex items-center gap-1.5 px-3 py-2">
         <input
           autoFocus
-          value={renameValue}
+          className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
           onChange={(e) => onRenameChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onRenameConfirm(); if (e.key === 'Escape') onRenameCancel() }}
-          className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onRenameConfirm()
+            if (e.key === 'Escape') onRenameCancel()
+          }}
+          value={renameValue}
         />
-        <button type="button" onClick={onRenameConfirm} className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary transition-colors"><Check className="h-3.5 w-3.5" /></button>
-        <button type="button" onClick={onRenameCancel} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"><X className="h-3.5 w-3.5" /></button>
+        <button
+          className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 text-primary transition-colors hover:bg-primary/30"
+          onClick={onRenameConfirm}
+          type="button"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+          onClick={onRenameCancel}
+          type="button"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </li>
     )
   }
 
   return (
-    <li className="group flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-      <div className="h-12 w-12 shrink-0 rounded-md border border-border/40 bg-white/5 overflow-hidden">
+    <li className="group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-white/5">
+      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border/40 bg-white/5">
         {preset.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preset.thumbnail_url} alt={preset.name} className="h-full w-full object-cover" />
+          <img
+            alt={preset.name}
+            className="h-full w-full object-cover"
+            src={preset.thumbnail_url}
+          />
         ) : (
-          <div className="h-full w-full flex items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center">
             <div className="h-3 w-5 rounded-sm border border-muted-foreground/30" />
           </div>
         )}
       </div>
-      <button type="button" onClick={onApply} className="flex-1 min-w-0 text-left">
+      <button className="min-w-0 flex-1 text-left" onClick={onApply} type="button">
         <span className="flex items-center gap-1.5">
-          <span className="block truncate text-xs font-medium text-foreground group-hover:text-foreground/90">{preset.name}</span>
-          {isMine && preset.is_community && <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />}
+          <span className="block truncate font-medium text-foreground text-xs group-hover:text-foreground/90">
+            {preset.name}
+          </span>
+          {isMine && preset.is_community && (
+            <Globe className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+          )}
         </span>
-        <span className="block text-[10px] text-muted-foreground/60">{new Date(preset.created_at).toLocaleDateString()}</span>
+        <span className="block text-[10px] text-muted-foreground/60">
+          {new Date(preset.created_at).toLocaleDateString()}
+        </span>
       </button>
       {isMine && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              type="button"
               className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors opacity-0 group-hover:opacity-100',
-                justOverwritten ? 'text-green-400 bg-green-500/10 opacity-100' : 'text-muted-foreground hover:text-foreground hover:bg-white/10',
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-0 transition-colors group-hover:opacity-100',
+                justOverwritten
+                  ? 'bg-green-500/10 text-green-400 opacity-100'
+                  : 'text-muted-foreground hover:bg-white/10 hover:text-foreground',
               )}
+              type="button"
             >
-              {justOverwritten ? <Check className="h-3 w-3" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+              {justOverwritten ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="left" align="start" className="min-w-44">
-            <DropdownMenuItem onClick={onOverwrite}><Save className="h-3.5 w-3.5" />Update with current</DropdownMenuItem>
+          <DropdownMenuContent align="start" className="min-w-44" side="left">
+            <DropdownMenuItem onClick={onOverwrite}>
+              <Save className="h-3.5 w-3.5" />
+              Update with current
+            </DropdownMenuItem>
             {showCommunityToggle && (
               <DropdownMenuItem onClick={onToggleCommunity}>
-                {preset.is_community ? <><GlobeLock className="h-3.5 w-3.5" />Remove from community</> : <><Globe className="h-3.5 w-3.5" />Share with community</>}
+                {preset.is_community ? (
+                  <>
+                    <GlobeLock className="h-3.5 w-3.5" />
+                    Remove from community
+                  </>
+                ) : (
+                  <>
+                    <Globe className="h-3.5 w-3.5" />
+                    Share with community
+                  </>
+                )}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={onStartRename}><Pencil className="h-3.5 w-3.5" />Rename</DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={onDeleteRequest}><Trash2 className="h-3.5 w-3.5" />Delete</DropdownMenuItem>
+            <DropdownMenuItem onClick={onStartRename}>
+              <Pencil className="h-3.5 w-3.5" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDeleteRequest} variant="destructive">
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

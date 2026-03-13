@@ -28,7 +28,14 @@ export const useUploadStore = create<UploadState>((set) => ({
     set((s) => ({
       uploads: {
         ...s.uploads,
-        [levelId]: { status: 'preparing', assetType, fileName, progress: 0, error: null, resultUrl: null },
+        [levelId]: {
+          status: 'preparing',
+          assetType,
+          fileName,
+          progress: 0,
+          error: null,
+          resultUrl: null,
+        },
       },
     })),
 
@@ -57,7 +64,9 @@ export const useUploadStore = create<UploadState>((set) => ({
     set((s) => {
       const entry = s.uploads[levelId]
       if (!entry) return s
-      return { uploads: { ...s.uploads, [levelId]: { ...entry, status: 'done' as const, resultUrl: url } } }
+      return {
+        uploads: { ...s.uploads, [levelId]: { ...entry, status: 'done' as const, resultUrl: url } },
+      }
     }),
 
   clearUpload: (levelId) =>

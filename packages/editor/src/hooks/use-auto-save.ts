@@ -2,9 +2,9 @@
 
 import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react'
-import { saveSceneToLocalStorage, type SceneGraph } from '../lib/scene'
+import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
-const AUTOSAVE_DEBOUNCE_MS = 1_000
+const AUTOSAVE_DEBOUNCE_MS = 1000
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
@@ -42,10 +42,18 @@ export function useAutoSave({
   const onSaveStatusChangeRef = useRef(onSaveStatusChange)
   const isVersionPreviewModeRef = useRef(isVersionPreviewMode)
 
-  useEffect(() => { onSaveRef.current = onSave }, [onSave])
-  useEffect(() => { onDirtyRef.current = onDirty }, [onDirty])
-  useEffect(() => { onSaveStatusChangeRef.current = onSaveStatusChange }, [onSaveStatusChange])
-  useEffect(() => { isVersionPreviewModeRef.current = isVersionPreviewMode }, [isVersionPreviewMode])
+  useEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
+  useEffect(() => {
+    onDirtyRef.current = onDirty
+  }, [onDirty])
+  useEffect(() => {
+    onSaveStatusChangeRef.current = onSaveStatusChange
+  }, [onSaveStatusChange])
+  useEffect(() => {
+    isVersionPreviewModeRef.current = isVersionPreviewMode
+  }, [isVersionPreviewMode])
 
   const setSaveStatus = useCallback((status: SaveStatus) => {
     _setSaveStatus(status)

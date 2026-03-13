@@ -95,7 +95,9 @@ const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
     }
     // Ceiling/slab/roof-attached items: check if parent structure is on the level
     if (
-      (parentNode?.type === 'ceiling' || parentNode?.type === 'slab' || parentNode?.type === 'roof') &&
+      (parentNode?.type === 'ceiling' ||
+        parentNode?.type === 'slab' ||
+        parentNode?.type === 'roof') &&
       parentNode.parentId === levelId
     ) {
       return true
@@ -160,19 +162,18 @@ const getStrategy = (): SelectionStrategy | null => {
   const { buildingId, levelId, zoneId } = useViewer.getState().selection
 
   const computeNextIds = (node: AnyNode, selectedIds: string[], event?: any): string[] => {
-    const isMeta = event?.metaKey || event?.nativeEvent?.metaKey;
-    const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey;
+    const isMeta = event?.metaKey || event?.nativeEvent?.metaKey
+    const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey
 
     if (isMeta || isCtrl) {
       if (selectedIds.includes(node.id)) {
-        return selectedIds.filter((id) => id !== node.id);
-      } else {
-        return [...selectedIds, node.id];
+        return selectedIds.filter((id) => id !== node.id)
       }
+      return [...selectedIds, node.id]
     }
 
-    return [node.id];
-  };
+    return [node.id]
+  }
 
   // No building selected -> can select buildings
   if (!buildingId) {
@@ -221,7 +222,9 @@ const getStrategy = (): SelectionStrategy | null => {
     types: ['wall', 'item', 'slab', 'ceiling', 'roof', 'window', 'door'],
     handleClick: (node, nativeEvent) => {
       const { selectedIds } = useViewer.getState().selection
-      useViewer.getState().setSelection({ selectedIds: computeNextIds(node, selectedIds, nativeEvent) })
+      useViewer
+        .getState()
+        .setSelection({ selectedIds: computeNextIds(node, selectedIds, nativeEvent) })
     },
     handleDeselect: () => {
       const { selectedIds } = useViewer.getState().selection

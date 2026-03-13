@@ -1,13 +1,13 @@
 'use client'
 
-import { WindowNode } from "@pascal-app/core"
-import { useViewer } from "@pascal-app/viewer"
-import Image from "next/image"
-import { useState } from "react"
-import useEditor from "./../../../../../store/use-editor"
-import { InlineRenameInput } from "./inline-rename-input"
-import { TreeNodeWrapper, handleTreeSelection } from "./tree-node"
-import { TreeNodeActions } from "./tree-node-actions"
+import type { WindowNode } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import Image from 'next/image'
+import { useState } from 'react'
+import useEditor from './../../../../../store/use-editor'
+import { InlineRenameInput } from './inline-rename-input'
+import { handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import { TreeNodeActions } from './tree-node-actions'
 
 interface WindowTreeNodeProps {
   node: WindowNode
@@ -23,40 +23,42 @@ export function WindowTreeNode({ node, depth, isLast }: WindowTreeNodeProps) {
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const defaultName = "Window"
+  const defaultName = 'Window'
 
   return (
     <TreeNodeWrapper
-      nodeId={node.id}
-      icon={<Image src="/icons/window.png" alt="" width={14} height={14} className="object-contain" />}
+      actions={<TreeNodeActions node={node} />}
+      depth={depth}
+      expanded={false}
+      hasChildren={false}
+      icon={
+        <Image alt="" className="object-contain" height={14} src="/icons/window.png" width={14} />
+      }
+      isHovered={isHovered}
+      isLast={isLast}
+      isSelected={isSelected}
+      isVisible={node.visible !== false}
       label={
         <InlineRenameInput
-          node={node}
-          isEditing={isEditing}
-          onStopEditing={() => setIsEditing(false)}
-          onStartEditing={() => setIsEditing(true)}
           defaultName={defaultName}
+          isEditing={isEditing}
+          node={node}
+          onStartEditing={() => setIsEditing(true)}
+          onStopEditing={() => setIsEditing(false)}
         />
       }
-      depth={depth}
-      hasChildren={false}
-      expanded={false}
-      onToggle={() => {}}
+      nodeId={node.id}
       onClick={(e: React.MouseEvent) => {
         e.stopPropagation()
         const handled = handleTreeSelection(e, node.id, selectedIds, setSelection)
-        if (!handled && useEditor.getState().phase === "furnish") {
-          useEditor.getState().setPhase("structure")
+        if (!handled && useEditor.getState().phase === 'furnish') {
+          useEditor.getState().setPhase('structure')
         }
       }}
       onDoubleClick={() => setIsEditing(true)}
       onMouseEnter={() => setHoveredId(node.id)}
       onMouseLeave={() => setHoveredId(null)}
-      isSelected={isSelected}
-      isHovered={isHovered}
-      isVisible={node.visible !== false}
-      isLast={isLast}
-      actions={<TreeNodeActions node={node} />}
+      onToggle={() => {}}
     />
   )
 }

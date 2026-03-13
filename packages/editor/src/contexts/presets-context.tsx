@@ -12,7 +12,11 @@ export interface PresetsAdapter {
   tabs?: PresetsTab[]
   isAuthenticated?: boolean
   fetchPresets: (type: PresetType, tab: PresetsTab) => Promise<PresetData[]>
-  savePreset: (type: PresetType, name: string, data: Record<string, unknown>) => Promise<string | null>
+  savePreset: (
+    type: PresetType,
+    name: string,
+    data: Record<string, unknown>,
+  ) => Promise<string | null>
   overwritePreset: (type: PresetType, id: string, data: Record<string, unknown>) => Promise<void>
   renamePreset: (id: string, name: string) => Promise<void>
   deletePreset: (id: string) => Promise<void>
@@ -63,7 +67,10 @@ export const localStoragePresetsAdapter: PresetsAdapter = {
       const raw = localStorage.getItem(PRESETS_KEY(type))
       if (!raw) return
       const presets: PresetData[] = JSON.parse(raw)
-      localStorage.setItem(PRESETS_KEY(type), JSON.stringify(presets.map(p => p.id === id ? { ...p, data } : p)))
+      localStorage.setItem(
+        PRESETS_KEY(type),
+        JSON.stringify(presets.map((p) => (p.id === id ? { ...p, data } : p))),
+      )
     } catch {}
   },
 
@@ -73,7 +80,10 @@ export const localStoragePresetsAdapter: PresetsAdapter = {
         const raw = localStorage.getItem(PRESETS_KEY(type))
         if (!raw) continue
         const presets: PresetData[] = JSON.parse(raw)
-        localStorage.setItem(PRESETS_KEY(type), JSON.stringify(presets.map(p => p.id === id ? { ...p, name } : p)))
+        localStorage.setItem(
+          PRESETS_KEY(type),
+          JSON.stringify(presets.map((p) => (p.id === id ? { ...p, name } : p))),
+        )
       } catch {}
     }
   },
@@ -84,7 +94,7 @@ export const localStoragePresetsAdapter: PresetsAdapter = {
         const raw = localStorage.getItem(PRESETS_KEY(type))
         if (!raw) continue
         const presets: PresetData[] = JSON.parse(raw)
-        localStorage.setItem(PRESETS_KEY(type), JSON.stringify(presets.filter(p => p.id !== id)))
+        localStorage.setItem(PRESETS_KEY(type), JSON.stringify(presets.filter((p) => p.id !== id)))
       } catch {}
     }
   },

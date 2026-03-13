@@ -12,10 +12,10 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
 
   return (
     <mesh
-      ref={ref}
       castShadow
-      receiveShadow
       position={node.position}
+      receiveShadow
+      ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}
       {...handlers}

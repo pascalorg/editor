@@ -61,7 +61,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const handlers = useNodeEvents(node, 'site')
 
-  if (!node || !floorShape || !lineGeometry) {
+  if (!(node && floorShape && lineGeometry)) {
     return null
   }
 
@@ -76,17 +76,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Transparent floor fill */}
-      <mesh position={[0, Y_OFFSET - 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[0, Y_OFFSET - 0.005, 0]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
         <shapeGeometry args={[floorShape]} />
-        <shadowMaterial  transparent opacity={0.75} />
+        <shadowMaterial opacity={0.75} transparent />
       </mesh>
 
       {/* Simple boundary line */}
       {/* @ts-ignore */}
-      <line geometry={lineGeometry} frustumCulled={false} renderOrder={9}>
-        <lineBasicMaterial color="#f59e0b" linewidth={2} transparent opacity={0.6} />
+      <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
+        <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
       </line>
-
     </group>
   )
 }

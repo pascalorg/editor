@@ -2,8 +2,8 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { Box, Camera, Diamond, Image, Layers, Layers2 } from 'lucide-react'
-import { ActionButton } from "./action-button";
 import { cn } from '../../../lib/utils'
+import { ActionButton } from './action-button'
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
   stacked: 'Stacked',
@@ -77,12 +77,12 @@ export function ViewToggles() {
     <div className="flex items-center gap-1">
       {/* Camera Mode */}
       <ActionButton
-        label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
         className={cn(
           cameraMode === 'orthographic'
             ? 'bg-violet-500/20 text-violet-400'
             : 'hover:text-violet-400',
         )}
+        label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
         onClick={toggleCameraMode}
         size="icon"
         variant="ghost"
@@ -92,12 +92,10 @@ export function ViewToggles() {
 
       {/* Level Mode */}
       <ActionButton
-        label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
         className={cn(
-          levelMode !== 'stacked'
-            ? 'bg-amber-500/20 text-amber-400'
-            : 'hover:text-amber-400',
+          levelMode !== 'stacked' ? 'bg-amber-500/20 text-amber-400' : 'hover:text-amber-400',
         )}
+        label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
         onClick={cycleLevelMode}
         size="icon"
         variant="ghost"
@@ -109,13 +107,13 @@ export function ViewToggles() {
 
       {/* Wall Mode */}
       <ActionButton
-        label={`Walls: ${wallModeConfig[wallMode].label}`}
         className={cn(
           'p-0',
           wallMode !== 'cutaway'
             ? 'bg-white/10'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+            : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
+        label={`Walls: ${wallModeConfig[wallMode].label}`}
         onClick={cycleWallMode}
         size="icon"
         variant="ghost"
@@ -128,13 +126,13 @@ export function ViewToggles() {
 
       {/* Show Scans */}
       <ActionButton
-        label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
         className={cn(
           'p-0',
           showScans
             ? 'bg-white/10'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+            : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
+        label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
         onClick={() => setShowScans(!showScans)}
         size="icon"
         variant="ghost"
@@ -144,13 +142,13 @@ export function ViewToggles() {
 
       {/* Show Guides */}
       <ActionButton
-        label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
         className={cn(
           'p-0',
           showGuides
             ? 'bg-white/10'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-white/5',
+            : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
+        label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
         onClick={() => setShowGuides(!showGuides)}
         size="icon"
         variant="ghost"

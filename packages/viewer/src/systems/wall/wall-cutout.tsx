@@ -92,7 +92,7 @@ export const WallCutout = () => {
         } else if (wallMode === 'down') {
           hideWall = true
         } else {
-          wallMesh.getWorldDirection(v) 
+          wallMesh.getWorldDirection(v)
           if (v.dot(u) < 0) {
             // Front side
             if (wallNode.frontSide === 'exterior' && wallNode.backSide !== 'exterior') {

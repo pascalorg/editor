@@ -1,54 +1,43 @@
-"use client";
+'use client'
 
-import { TooltipProvider } from "./../../../components/ui/primitives/tooltip";
-import { cn } from "./../../../lib/utils";
-
-import { CameraActions } from "./camera-actions";
-import { ControlModes } from "./control-modes";
-import { StructureTools } from "./structure-tools";
-import useEditor from "./../../../store/use-editor";
-import { useReducedMotion } from "./../../../hooks/use-reduced-motion";
-import { AnimatePresence, motion } from "motion/react";
-import { ItemCatalog } from "../item-catalog/item-catalog";
-import { FurnishTools } from "./furnish-tools";
-import { ViewToggles } from "./view-toggles";
+import { AnimatePresence, motion } from 'motion/react'
+import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
+import { useReducedMotion } from './../../../hooks/use-reduced-motion'
+import { cn } from './../../../lib/utils'
+import useEditor from './../../../store/use-editor'
+import { ItemCatalog } from '../item-catalog/item-catalog'
+import { CameraActions } from './camera-actions'
+import { ControlModes } from './control-modes'
+import { FurnishTools } from './furnish-tools'
+import { StructureTools } from './structure-tools'
+import { ViewToggles } from './view-toggles'
 
 export function ActionMenu({ className }: { className?: string }) {
-  const phase = useEditor((state) => state.phase);
-  const mode = useEditor((state) => state.mode);
-  const tool = useEditor((state) => state.tool);
-  const catalogCategory = useEditor((state) => state.catalogCategory);
-  const reducedMotion = useReducedMotion();
+  const phase = useEditor((state) => state.phase)
+  const mode = useEditor((state) => state.mode)
+  const tool = useEditor((state) => state.tool)
+  const catalogCategory = useEditor((state) => state.catalogCategory)
+  const reducedMotion = useReducedMotion()
   const transition = reducedMotion
     ? { duration: 0 }
-    : { type: "spring" as const, bounce: 0.2, duration: 0.4 };
+    : { type: 'spring' as const, bounce: 0.2, duration: 0.4 }
 
   return (
     <TooltipProvider>
       <motion.div
-        layout
-        transition={transition}
         className={cn(
-          "-translate-x-1/2 fixed bottom-6 left-1/2 z-50",
-          "rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md",
-          "transition-colors duration-200 ease-out",
+          'fixed bottom-6 left-1/2 z-50 -translate-x-1/2',
+          'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
+          'transition-colors duration-200 ease-out',
           className,
         )}
+        layout
+        transition={transition}
       >
         {/* Item Catalog Row - Only show when in build mode with item tool */}
         <AnimatePresence>
-          {mode === "build" && tool === "item" && catalogCategory && (
+          {mode === 'build' && tool === 'item' && catalogCategory && (
             <motion.div
-              className={cn(
-                "overflow-hidden border-border border-b px-2 py-2",
-              )}
-              initial={{
-                opacity: 0,
-                maxHeight: 0,
-                paddingTop: 0,
-                paddingBottom: 0,
-                borderBottomWidth: 0,
-              }}
               animate={{
                 opacity: 1,
                 maxHeight: 160,
@@ -56,7 +45,15 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 8,
                 borderBottomWidth: 1,
               }}
+              className={cn('overflow-hidden border-border border-b px-2 py-2')}
               exit={{
+                opacity: 0,
+                maxHeight: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                borderBottomWidth: 0,
+              }}
+              initial={{
                 opacity: 0,
                 maxHeight: 0,
                 paddingTop: 0,
@@ -65,25 +62,14 @@ export function ActionMenu({ className }: { className?: string }) {
               }}
               transition={transition}
             >
-              <ItemCatalog key={catalogCategory} category={catalogCategory} />
+              <ItemCatalog category={catalogCategory} key={catalogCategory} />
             </motion.div>
           )}
         </AnimatePresence>
 
         <AnimatePresence>
-          {phase === "furnish" && mode === "build" && (
+          {phase === 'furnish' && mode === 'build' && (
             <motion.div
-              className={cn(
-                "overflow-hidden border-border",
-                "max-h-20 border-b px-2 py-2 opacity-100",
-              )}
-              initial={{
-                opacity: 0,
-                maxHeight: 0,
-                paddingTop: 0,
-                paddingBottom: 0,
-                borderBottomWidth: 0,
-              }}
               animate={{
                 opacity: 1,
                 maxHeight: 80,
@@ -91,7 +77,18 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 8,
                 borderBottomWidth: 1,
               }}
+              className={cn(
+                'overflow-hidden border-border',
+                'max-h-20 border-b px-2 py-2 opacity-100',
+              )}
               exit={{
+                opacity: 0,
+                maxHeight: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                borderBottomWidth: 0,
+              }}
+              initial={{
                 opacity: 0,
                 maxHeight: 0,
                 paddingTop: 0,
@@ -109,18 +106,8 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {/* Structure Tools Row - Animated */}
         <AnimatePresence>
-          {phase === "structure" && mode === "build" && (
+          {phase === 'structure' && mode === 'build' && (
             <motion.div
-              className={cn(
-                "overflow-hidden border-border max-h-20 border-b px-2 py-2",
-              )}
-              initial={{
-                opacity: 0,
-                maxHeight: 0,
-                paddingTop: 0,
-                paddingBottom: 0,
-                borderBottomWidth: 0,
-              }}
               animate={{
                 opacity: 1,
                 maxHeight: 80,
@@ -128,7 +115,15 @@ export function ActionMenu({ className }: { className?: string }) {
                 paddingBottom: 8,
                 borderBottomWidth: 1,
               }}
+              className={cn('max-h-20 overflow-hidden border-border border-b px-2 py-2')}
               exit={{
+                opacity: 0,
+                maxHeight: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                borderBottomWidth: 0,
+              }}
+              initial={{
                 opacity: 0,
                 maxHeight: 0,
                 paddingTop: 0,
@@ -153,5 +148,5 @@ export function ActionMenu({ className }: { className?: string }) {
         </div>
       </motion.div>
     </TooltipProvider>
-  );
+  )
 }

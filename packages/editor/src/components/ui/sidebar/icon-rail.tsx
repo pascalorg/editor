@@ -1,48 +1,43 @@
-"use client";
+'use client'
 
-import { Moon, Sun } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useViewer } from '@pascal-app/viewer'
+import { Moon, Sun } from 'lucide-react'
+import { motion } from 'motion/react'
+import { type ReactNode, useEffect, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "./../../../components/ui/primitives/tooltip";
-import { cn } from "./../../../lib/utils";
-import { useViewer } from "@pascal-app/viewer";
+} from './../../../components/ui/primitives/tooltip'
+import { cn } from './../../../lib/utils'
 
-export type PanelId = "site" | "settings";
+export type PanelId = 'site' | 'settings'
 
 interface IconRailProps {
-  activePanel: PanelId;
-  onPanelChange: (panel: PanelId) => void;
-  appMenuButton?: ReactNode;
-  className?: string;
+  activePanel: PanelId
+  onPanelChange: (panel: PanelId) => void
+  appMenuButton?: ReactNode
+  className?: string
 }
 
 const panels: { id: PanelId; iconSrc: string; label: string }[] = [
-  { id: "site", iconSrc: "/icons/level.png", label: "Site" },
-  { id: "settings", iconSrc: "/icons/settings.png", label: "Settings" },
-];
+  { id: 'site', iconSrc: '/icons/level.png', label: 'Site' },
+  { id: 'settings', iconSrc: '/icons/settings.png', label: 'Settings' },
+]
 
-export function IconRail({
-  activePanel,
-  onPanelChange,
-  appMenuButton,
-  className,
-}: IconRailProps) {
-  const theme = useViewer((state) => state.theme);
-  const setTheme = useViewer((state) => state.setTheme);
-  const [mounted, setMounted] = useState(false);
+export function IconRail({ activePanel, onPanelChange, appMenuButton, className }: IconRailProps) {
+  const theme = useViewer((state) => state.theme)
+  const setTheme = useViewer((state) => state.setTheme)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setMounted(true)
+  }, [])
 
   return (
     <div
       className={cn(
-        "flex h-full w-11 flex-col items-center gap-1 border-border/50 border-r py-2",
+        'flex h-full w-11 flex-col items-center gap-1 border-border/50 border-r py-2',
         className,
       )}
     >
@@ -50,34 +45,34 @@ export function IconRail({
       {appMenuButton}
 
       {/* Divider */}
-      <div className="w-8 h-px bg-border/50 mb-1" />
+      <div className="mb-1 h-px w-8 bg-border/50" />
 
       {panels.map((panel) => {
-        const isActive = activePanel === panel.id;
+        const isActive = activePanel === panel.id
         return (
           <Tooltip key={panel.id}>
             <TooltipTrigger asChild>
               <button
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-all",
-                  isActive ? "bg-accent" : "hover:bg-accent",
+                  'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
+                  isActive ? 'bg-accent' : 'hover:bg-accent',
                 )}
                 onClick={() => onPanelChange(panel.id)}
                 type="button"
               >
                 <img
-                  src={panel.iconSrc}
                   alt={panel.label}
                   className={cn(
-                    "h-6 w-6 transition-all object-contain",
-                    !isActive && "opacity-50 saturate-0"
+                    'h-6 w-6 object-contain transition-all',
+                    !isActive && 'opacity-50 saturate-0',
                   )}
+                  src={panel.iconSrc}
                 />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">{panel.label}</TooltipContent>
           </Tooltip>
-        );
+        )
       })}
 
       {/* Spacer */}
@@ -88,17 +83,17 @@ export function IconRail({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-accent/40 transition-all text-foreground hover:bg-accent mb-2"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-accent/40 text-foreground transition-all hover:bg-accent"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               type="button"
             >
               <motion.div
-                key={theme}
-                initial={{ rotate: -90, opacity: 0 }}
                 animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
+                initial={{ rotate: -90, opacity: 0 }}
+                key={theme}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
               >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </motion.div>
             </button>
           </TooltipTrigger>
@@ -106,7 +101,7 @@ export function IconRail({
         </Tooltip>
       )}
     </div>
-  );
+  )
 }
 
-export { panels };
+export { panels }

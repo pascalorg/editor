@@ -1,15 +1,15 @@
 'use client'
 
-import { AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import { CeilingPanel } from './ceiling-panel'
+import { DoorPanel } from './door-panel'
 import { ItemPanel } from './item-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { SlabPanel } from './slab-panel'
 import { WallPanel } from './wall-panel'
-import { DoorPanel } from './door-panel'
 import { WindowPanel } from './window-panel'
 
 export function PanelManager() {

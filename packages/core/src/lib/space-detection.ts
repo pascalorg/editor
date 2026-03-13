@@ -199,7 +199,7 @@ type WallSideUpdate = {
 export function detectSpacesForLevel(
   levelId: string,
   walls: WallNode[],
-  gridResolution: number = 0.5, // Match spatial grid cell size
+  gridResolution = 0.5, // Match spatial grid cell size
 ): {
   wallUpdates: WallSideUpdate[]
   spaces: Space[]

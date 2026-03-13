@@ -24,7 +24,7 @@ import {
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
-  color: 0xef4444,
+  color: 0xef_44_44,
   linewidth: 3,
   depthTest: false,
   depthWrite: false,
@@ -52,9 +52,10 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
   useEffect(() => {
     useScene.temporal.getState().pause()
 
-    const meta = (typeof movingWindowNode.metadata === 'object' && movingWindowNode.metadata !== null)
-      ? movingWindowNode.metadata as Record<string, unknown>
-      : {}
+    const meta =
+      typeof movingWindowNode.metadata === 'object' && movingWindowNode.metadata !== null
+        ? (movingWindowNode.metadata as Record<string, unknown>)
+        : {}
     const isNew = !!meta.isNew
 
     // Save original state (only used in move mode)
@@ -106,7 +107,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       group.visible = true
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
-      edgeMaterial.color.setHex(valid ? 0x22c55e : 0xef4444)
+      edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -121,8 +122,11 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
-        event.node, localX, localY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node,
+        localX,
+        localY,
+        movingWindowNode.width,
+        movingWindowNode.height,
       )
 
       const prevWallId = currentWallId
@@ -140,13 +144,22 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       markWallDirty(event.node.id)
 
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingWindowNode.width,
+        movingWindowNode.height,
         movingWindowNode.id,
       )
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -165,8 +178,11 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
-        event.node, localX, localY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node,
+        localX,
+        localY,
+        movingWindowNode.width,
+        movingWindowNode.height,
       )
 
       useScene.getState().updateNode(movingWindowNode.id, {
@@ -184,13 +200,22 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       markWallDirty(event.node.id)
 
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingWindowNode.width,
+        movingWindowNode.height,
         movingWindowNode.id,
       )
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -208,13 +233,19 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
-        event.node, localX, localY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node,
+        localX,
+        localY,
+        movingWindowNode.width,
+        movingWindowNode.height,
       )
 
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY,
-        movingWindowNode.width, movingWindowNode.height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingWindowNode.width,
+        movingWindowNode.height,
         movingWindowNode.id,
       )
       if (!valid) return
@@ -331,7 +362,9 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
 
     return () => {
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
-      const current = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as WindowNode | undefined
+      const current = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
+        | WindowNode
+        | undefined
       const currentMeta = current?.metadata as Record<string, unknown> | undefined
       if (currentMeta?.isTransient) {
         if (isNew) {
@@ -371,7 +404,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
+      <lineSegments geometry={edgesGeo} layers={EDITOR_LAYER} material={edgeMaterial} />
     </group>
   )
 }

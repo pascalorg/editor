@@ -29,14 +29,14 @@ export const SiteBoundaryEditor: React.FC = () => {
     [site, updateNode],
   )
 
-  if (!site || !site.polygon?.points || site.polygon.points.length < 3) return null
+  if (!(site && site.polygon?.points) || site.polygon.points.length < 3) return null
 
   return (
     <PolygonEditor
-      polygon={site.polygon.points}
       color="#10b981"
-      onPolygonChange={handlePolygonChange}
       minVertices={3}
+      onPolygonChange={handlePolygonChange}
+      polygon={site.polygon.points}
     />
   )
 }

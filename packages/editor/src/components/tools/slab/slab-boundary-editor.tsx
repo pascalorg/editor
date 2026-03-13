@@ -27,15 +27,15 @@ export const SlabBoundaryEditor: React.FC<SlabBoundaryEditorProps> = ({ slabId }
     [slabId, updateNode, setSelection],
   )
 
-  if (!slab || !slab.polygon || slab.polygon.length < 3) return null
+  if (!(slab && slab.polygon) || slab.polygon.length < 3) return null
 
   return (
     <PolygonEditor
-      polygon={slab.polygon}
       color="#a3a3a3"
-      onPolygonChange={handlePolygonChange}
-      minVertices={3}
       levelId={resolveLevelId(slab, useScene.getState().nodes)}
+      minVertices={3}
+      onPolygonChange={handlePolygonChange}
+      polygon={slab.polygon}
       surfaceHeight={slab.elevation ?? 0.05}
     />
   )

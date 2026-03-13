@@ -1,11 +1,11 @@
+import { Html } from '@react-three/drei'
 import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
 import type { Group } from 'three'
-import { Html } from '@react-three/drei'
+import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
+import { tools } from '../../../components/ui/action-menu/structure-tools'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import useEditor from '../../../store/use-editor'
-import { tools } from '../../../components/ui/action-menu/structure-tools'
-import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
 
 interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   color?: string
@@ -37,31 +37,49 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       {/* Flat marker on the ground */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Center dot */}
-        <mesh renderOrder={2} layers={EDITOR_LAYER}>
+        <mesh layers={EDITOR_LAYER} renderOrder={2}>
           <circleGeometry args={[0.06, 32]} />
-          <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.9} />
+          <meshBasicMaterial
+            color={color}
+            depthTest={false}
+            depthWrite={false}
+            opacity={0.9}
+            transparent
+          />
         </mesh>
-        
+
         {/* Outer ring / glow */}
-        <mesh renderOrder={2} layers={EDITOR_LAYER}>
+        <mesh layers={EDITOR_LAYER} renderOrder={2}>
           <circleGeometry args={[0.2, 32]} />
-          <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.25} />
+          <meshBasicMaterial
+            color={color}
+            depthTest={false}
+            depthWrite={false}
+            opacity={0.25}
+            transparent
+          />
         </mesh>
       </group>
 
       {/* Vertical line */}
       {height > 0 && (
-        <mesh position={[0, height / 2, 0]} renderOrder={2} layers={EDITOR_LAYER}>
+        <mesh layers={EDITOR_LAYER} position={[0, height / 2, 0]} renderOrder={2}>
           <cylinderGeometry args={[0.01, 0.01, height, 8]} />
-          <meshBasicMaterial color={color} depthTest={false} depthWrite={false} transparent opacity={0.7} />
+          <meshBasicMaterial
+            color={color}
+            depthTest={false}
+            depthWrite={false}
+            opacity={0.7}
+            transparent
+          />
         </mesh>
       )}
 
       {/* Tool Icon Tooltip at the top of the line */}
       {showTooltip && activeToolConfig && (
         <Html
-          position={[0, height > 0 ? height + 0.2 : 0.6, 0]}
           center
+          position={[0, height > 0 ? height + 0.2 : 0.6, 0]}
           style={{
             pointerEvents: 'none',
             background: '#18181b', // zinc-900
@@ -77,15 +95,15 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img 
-            src={activeToolConfig.iconSrc} 
-            alt={activeToolConfig.label} 
-            style={{ 
-              width: '100%', 
-              height: '100%', 
+          <img
+            alt={activeToolConfig.label}
+            src={activeToolConfig.iconSrc}
+            style={{
+              width: '100%',
+              height: '100%',
               objectFit: 'contain',
-              filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
-            }} 
+              filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+            }}
           />
         </Html>
       )}

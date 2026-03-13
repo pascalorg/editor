@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import { DoubleSide, type Mesh, type Group, Shape, ShapeGeometry, Vector3 } from 'three'
+import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -110,7 +110,7 @@ export const WallTool: React.FC = () => {
     let previousWallEnd: [number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
-      if (!cursorRef.current || !wallPreviewRef.current) return
+      if (!(cursorRef.current && wallPreviewRef.current)) return
 
       gridPosition = [Math.round(event.position[0] * 2) / 2, Math.round(event.position[2] * 2) / 2]
       const cursorPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
@@ -127,8 +127,10 @@ export const WallTool: React.FC = () => {
 
         // Play snap sound only when the actual wall end position changes
         const currentWallEnd: [number, number] = [endingPoint.current.x, endingPoint.current.z]
-        if (previousWallEnd &&
-            (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])) {
+        if (
+          previousWallEnd &&
+          (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
+        ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
         previousWallEnd = currentWallEnd
@@ -196,18 +198,18 @@ export const WallTool: React.FC = () => {
   return (
     <group>
       {/* Cursor indicator */}
-      <CursorSphere ref={cursorRef}  />
+      <CursorSphere ref={cursorRef} />
 
       {/* Wall preview */}
-      <mesh ref={wallPreviewRef} visible={false} renderOrder={1} layers={EDITOR_LAYER}>
+      <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial
           color="#818cf8"
-          transparent
-          opacity={0.5}
-          side={DoubleSide}
           depthTest={false}
           depthWrite={false}
+          opacity={0.5}
+          side={DoubleSide}
+          transparent
         />
       </mesh>
     </group>

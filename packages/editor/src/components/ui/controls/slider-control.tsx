@@ -31,12 +31,12 @@ export function SliderControl({
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
-  
+
   // Track the original value and bounds when dragging starts
   const [dragStartValue, setDragStartValue] = useState<number | null>(null)
   const [dragMin, setDragMin] = useState<number | null>(null)
   const [dragMax, setDragMax] = useState<number | null>(null)
-  
+
   const trackRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -62,9 +62,9 @@ export function SliderControl({
 
     const handleWheel = (e: WheelEvent) => {
       if (isEditing) return
-      
+
       e.preventDefault()
-      
+
       const direction = e.deltaY < 0 ? 1 : -1
       let scrollStep = step
       if (e.shiftKey) scrollStep = step * 10
@@ -72,12 +72,12 @@ export function SliderControl({
 
       const newValue = clamp(valueRef.current + direction * scrollStep)
       const finalValue = Number.parseFloat(newValue.toFixed(precision))
-      
+
       if (finalValue !== valueRef.current) {
         onChange(finalValue)
       }
     }
-    
+
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
   }, [isEditing, step, clamp, onChange, precision])
@@ -89,16 +89,16 @@ export function SliderControl({
       let direction = 0
       if (e.key === 'ArrowUp') direction = 1
       else if (e.key === 'ArrowDown') direction = -1
-      
+
       if (direction !== 0) {
         e.preventDefault()
         let scrollStep = step
         if (e.shiftKey) scrollStep = step * 10
         else if (e.altKey) scrollStep = step * 0.1
-        
+
         const newValue = clamp(valueRef.current + direction * scrollStep)
         const finalValue = Number.parseFloat(newValue.toFixed(precision))
-        
+
         if (finalValue !== valueRef.current) {
           onChange(finalValue)
         }
@@ -113,7 +113,7 @@ export function SliderControl({
     (e: React.PointerEvent) => {
       if (isEditing) return
       e.preventDefault()
-      
+
       const track = trackRef.current
       if (!track) return
 
@@ -122,7 +122,7 @@ export function SliderControl({
       setDragMin(min)
       setDragMax(max)
       useScene.temporal.getState().pause()
-      
+
       const rect = track.getBoundingClientRect()
       const updateValueFromEvent = (clientX: number) => {
         const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
@@ -145,7 +145,7 @@ export function SliderControl({
         if ((e.target as HTMLElement).closest('button')) {
           return
         }
-        
+
         setIsDragging(false)
         const startVal = dragStartValue
         const finalVal = valueRef.current
@@ -159,9 +159,9 @@ export function SliderControl({
         if (startVal !== null && startVal !== finalVal) {
           // Revert to start value while paused so the undo baseline is clean
           onChange(startVal)
-          
+
           useScene.temporal.getState().resume()
-          
+
           // Apply final value while recording
           onChange(finalVal)
         } else {
@@ -172,7 +172,7 @@ export function SliderControl({
       document.addEventListener('pointermove', handlePointerMove)
       document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, min, max, step, precision, clamp, onChange]
+    [isEditing, min, max, step, precision, clamp, onChange],
   )
 
   const handleValueClick = useCallback(() => {
@@ -186,10 +186,10 @@ export function SliderControl({
 
   const submitValue = useCallback(() => {
     const numValue = Number.parseFloat(inputValue)
-    if (!Number.isNaN(numValue)) {
-      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
-    } else {
+    if (Number.isNaN(numValue)) {
       setInputValue(value.toFixed(precision))
+    } else {
+      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
     }
     setIsEditing(false)
   }, [inputValue, onChange, clamp, precision, value])
@@ -223,20 +223,33 @@ export function SliderControl({
   const currentMin = isDragging && dragMin !== null ? dragMin : min
   const currentMax = isDragging && dragMax !== null ? dragMax : max
 
-  const percent = Math.max(0, Math.min(100, ((value - currentMin) / (currentMax - currentMin)) * 100))
-  const startPercent = dragStartValue !== null ? Math.max(0, Math.min(100, ((dragStartValue - currentMin) / (currentMax - currentMin)) * 100)) : null
+  const percent = Math.max(
+    0,
+    Math.min(100, ((value - currentMin) / (currentMax - currentMin)) * 100),
+  )
+  const startPercent =
+    dragStartValue !== null
+      ? Math.max(
+          0,
+          Math.min(100, ((dragStartValue - currentMin) / (currentMax - currentMin)) * 100),
+        )
+      : null
 
   return (
-    <div 
-      ref={containerRef}
+    <div
+      className={cn(
+        'group relative flex h-12 w-full items-center rounded-lg border border-border/50 px-3 text-sm transition-colors',
+        isDragging ? 'bg-[#3e3e3e]' : 'bg-[#2C2C2E] hover:bg-[#3e3e3e]',
+        className,
+      )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={cn("group flex h-12 w-full items-center rounded-lg border border-border/50 px-3 text-sm transition-colors relative", isDragging ? "bg-[#3e3e3e]" : "bg-[#2C2C2E] hover:bg-[#3e3e3e]", className)}
+      ref={containerRef}
     >
       {/* Reset button that appears when dragged away from start */}
       {isDragging && dragStartValue !== null && dragStartValue !== value && (
         <button
-          className="absolute -top-10 right-0 rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm ring-1 ring-border/50 hover:bg-[#3e3e3e] hover:text-foreground z-50 pointer-events-auto cursor-pointer"
+          className="pointer-events-auto absolute -top-10 right-0 z-50 cursor-pointer rounded-md bg-[#2C2C2E] px-2 py-1 font-medium text-[10px] text-muted-foreground shadow-sm ring-1 ring-border/50 hover:bg-[#3e3e3e] hover:text-foreground"
           onPointerDown={(e) => {
             e.stopPropagation()
             onChange(dragStartValue)
@@ -251,38 +264,38 @@ export function SliderControl({
         </button>
       )}
 
-      <div className="w-[80px] shrink-0 text-muted-foreground select-none truncate">
-        {label}
-      </div>
-      
-      <div 
-        ref={trackRef}
+      <div className="w-[80px] shrink-0 select-none truncate text-muted-foreground">{label}</div>
+
+      <div
         className={cn(
-          "relative flex h-full flex-1 items-center justify-center touch-none mx-2",
-          isDragging ? "cursor-grabbing" : "cursor-grab"
+          'relative mx-2 flex h-full flex-1 touch-none items-center justify-center',
+          isDragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
         onPointerDown={handlePointerDown}
+        ref={trackRef}
       >
         {/* Track dots background */}
-        <div className="absolute inset-x-0 flex items-center justify-between opacity-30 px-1 pointer-events-none">
+        <div className="pointer-events-none absolute inset-x-0 flex items-center justify-between px-1 opacity-30">
           {[...Array(9)].map((_, i) => (
-            <div key={i} className="h-[3px] w-[3px] rounded-full bg-current" />
+            <div className="h-[3px] w-[3px] rounded-full bg-current" key={i} />
           ))}
         </div>
-        
+
         {/* Original Thumb Ghost */}
         {isDragging && startPercent !== null && (
-          <div 
-            className="absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-sm bg-foreground/20 pointer-events-none"
+          <div
+            className="pointer-events-none absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/20 shadow-sm"
             style={{ left: `${startPercent}%` }}
           />
         )}
-        
+
         {/* Active Thumb */}
-        <div 
+        <div
           className={cn(
-            "absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-sm transition pointer-events-none",
-            isDragging ? "bg-foreground scale-y-110" : "bg-foreground/60 group-hover:bg-foreground/80"
+            'pointer-events-none absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-sm transition',
+            isDragging
+              ? 'scale-y-110 bg-foreground'
+              : 'bg-foreground/60 group-hover:bg-foreground/80',
           )}
           style={{ left: `${percent}%` }}
         />
@@ -293,7 +306,7 @@ export function SliderControl({
           <div className="flex items-center">
             <input
               autoFocus
-              className="w-full bg-transparent p-0 text-right text-foreground font-mono outline-none selection:bg-primary/30"
+              className="w-full bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={handleInputBlur}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
@@ -304,7 +317,7 @@ export function SliderControl({
           </div>
         ) : (
           <div
-            className="flex w-full cursor-text items-center justify-end text-foreground/60 hover:text-foreground transition-colors"
+            className="flex w-full cursor-text items-center justify-end text-foreground/60 transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight">

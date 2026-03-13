@@ -1,4 +1,11 @@
-import type { AnyNode, AssetInput, CeilingNode, ItemNode, LevelNode, WallNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AssetInput,
+  CeilingNode,
+  ItemNode,
+  LevelNode,
+  WallNode,
+} from '@pascal-app/core'
 import type { Vector3 } from 'three'
 
 // ============================================================================

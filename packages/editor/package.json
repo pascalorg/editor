@@ -40,6 +40,7 @@
     "cmdk": "^1.1.1",
     "howler": "^2.2.4",
     "lucide-react": "^0.562.0",
+    "mitt": "^3.0.1",
     "motion": "^12.34.3",
     "nanoid": "^5.1.6",
     "tailwind-merge": "^3.5.0",
@@ -49,14 +50,11 @@
   "devDependencies": {
     "@pascal-app/core": "*",
     "@pascal-app/viewer": "*",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
-    "@repo/typescript-config": "*",
+    "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
     "@types/three": "^0.183.1",
-    "react": "^19.2.4",
-    "three": "^0.183.1",
     "typescript": "5.9.3"
   }
 }

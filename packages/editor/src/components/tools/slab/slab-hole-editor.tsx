@@ -32,15 +32,15 @@ export const SlabHoleEditor: React.FC<SlabHoleEditorProps> = ({ slabId, holeInde
     [slabId, holeIndex, holes, updateNode, setSelection],
   )
 
-  if (!slab || !hole || hole.length < 3) return null
+  if (!(slab && hole) || hole.length < 3) return null
 
   return (
     <PolygonEditor
-      polygon={hole}
-      color="#ef4444" // red for holes
-      onPolygonChange={handlePolygonChange}
+      color="#ef4444"
+      levelId={resolveLevelId(slab, useScene.getState().nodes)} // red for holes
       minVertices={3}
-      levelId={resolveLevelId(slab, useScene.getState().nodes)}
+      onPolygonChange={handlePolygonChange}
+      polygon={hole}
       surfaceHeight={slab.elevation ?? 0.05}
     />
   )

@@ -172,7 +172,8 @@ const useScene: UseSceneStore = create<SceneState>()(
             for (const nodeId of nodeIds) {
               const node = nextNodes[nodeId]
               if (!node) continue
-              const existing = ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
+              const existing =
+                ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
               nextNodes[nodeId] = { ...node, collectionIds: [...existing, id] } as AnyNode
             }
             return { collections: nextCollections, nodes: nextNodes }
@@ -189,7 +190,7 @@ const useScene: UseSceneStore = create<SceneState>()(
             const nextNodes = { ...state.nodes }
             for (const nodeId of col?.nodeIds ?? []) {
               const node = nextNodes[nodeId]
-              if (!node || !('collectionIds' in node)) continue
+              if (!(node && 'collectionIds' in node)) continue
               nextNodes[nodeId] = {
                 ...node,
                 collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
@@ -217,7 +218,8 @@ const useScene: UseSceneStore = create<SceneState>()(
             }
             const node = state.nodes[nodeId]
             if (!node) return { collections: nextCollections }
-            const existing = ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
+            const existing =
+              ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
             const nextNodes = {
               ...state.nodes,
               [nodeId]: { ...node, collectionIds: [...existing, id] } as AnyNode,
@@ -235,7 +237,7 @@ const useScene: UseSceneStore = create<SceneState>()(
               [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
             }
             const node = state.nodes[nodeId]
-            if (!node || !('collectionIds' in node)) return { collections: nextCollections }
+            if (!(node && 'collectionIds' in node)) return { collections: nextCollections }
             const nextNodes = {
               ...state.nodes,
               [nodeId]: {
@@ -279,7 +281,10 @@ const useScene: UseSceneStore = create<SceneState>()(
         if (persisted.nodes) {
           for (const [id, node] of Object.entries(persisted.nodes)) {
             if (node.type === 'item' && !('scale' in node)) {
-              persisted.nodes[id as AnyNodeId] = { ...(node as object), scale: [1, 1, 1] } as AnyNode
+              persisted.nodes[id as AnyNodeId] = {
+                ...(node as object),
+                scale: [1, 1, 1],
+              } as AnyNode
             }
           }
         }
@@ -308,8 +313,8 @@ const useScene: UseSceneStore = create<SceneState>()(
 
             // Collect existing root nodes (should be BuildingNode or ItemNode)
             const existingRoots = (state.rootNodeIds || [])
-              .map(id => state.nodes[id])
-              .filter(node => node?.type === 'building' || node?.type === 'item')
+              .map((id) => state.nodes[id])
+              .filter((node) => node?.type === 'building' || node?.type === 'item')
 
             // Create a new SiteNode with existing roots as children
             const site = SiteNode.parse({

@@ -20,8 +20,8 @@ export function MetricControl({
   label,
   value,
   onChange,
-  min = -Infinity,
-  max = Infinity,
+  min = Number.NEGATIVE_INFINITY,
+  max = Number.POSITIVE_INFINITY,
   precision = 2,
   step = 1,
   className,
@@ -57,9 +57,9 @@ export function MetricControl({
 
     const handleWheel = (e: WheelEvent) => {
       if (isEditing) return
-      
+
       e.preventDefault()
-      
+
       const direction = e.deltaY < 0 ? 1 : -1
       let scrollStep = step
       if (e.shiftKey) scrollStep = step * 10
@@ -67,12 +67,12 @@ export function MetricControl({
 
       const newValue = clamp(valueRef.current + direction * scrollStep)
       const finalValue = Number.parseFloat(newValue.toFixed(precision))
-      
+
       if (finalValue !== valueRef.current) {
         onChange(finalValue)
       }
     }
-    
+
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
   }, [isEditing, step, clamp, onChange, precision])
@@ -84,16 +84,16 @@ export function MetricControl({
       let direction = 0
       if (e.key === 'ArrowUp') direction = 1
       else if (e.key === 'ArrowDown') direction = -1
-      
+
       if (direction !== 0) {
         e.preventDefault()
         let scrollStep = step
         if (e.shiftKey) scrollStep = step * 10
         else if (e.altKey) scrollStep = step * 0.1
-        
+
         const newValue = clamp(valueRef.current + direction * scrollStep)
         const finalValue = Number.parseFloat(newValue.toFixed(precision))
-        
+
         if (finalValue !== valueRef.current) {
           onChange(finalValue)
         }
@@ -108,17 +108,17 @@ export function MetricControl({
     (e: React.PointerEvent) => {
       if (isEditing) return
       e.preventDefault()
-      
+
       setIsDragging(true)
       startXRef.current = e.clientX
       startValueRef.current = value
       useScene.temporal.getState().pause()
-      
+
       let finalValue = value
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startXRef.current
-        
+
         let dragStep = step
         if (moveEvent.shiftKey) dragStep = step * 10
         else if (moveEvent.altKey) dragStep = step * 0.1
@@ -137,7 +137,7 @@ export function MetricControl({
         setIsDragging(false)
         document.removeEventListener('pointermove', handlePointerMove)
         document.removeEventListener('pointerup', handlePointerUp)
-        
+
         if (finalValue !== startValueRef.current) {
           onChange(startValueRef.current)
           useScene.temporal.getState().resume()
@@ -150,7 +150,7 @@ export function MetricControl({
       document.addEventListener('pointermove', handlePointerMove)
       document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, value, onChange, clamp, precision, step]
+    [isEditing, value, onChange, clamp, precision, step],
   )
 
   const handleValueClick = useCallback(() => {
@@ -164,10 +164,10 @@ export function MetricControl({
 
   const submitValue = useCallback(() => {
     const numValue = Number.parseFloat(inputValue)
-    if (!Number.isNaN(numValue)) {
-      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
-    } else {
+    if (Number.isNaN(numValue)) {
       setInputValue(value.toFixed(precision))
+    } else {
+      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
     }
     setIsEditing(false)
   }, [inputValue, onChange, clamp, precision, value])
@@ -199,28 +199,34 @@ export function MetricControl({
   )
 
   return (
-    <div 
-      ref={containerRef}
+    <div
+      className={cn(
+        'group flex h-10 w-full items-center justify-between rounded-lg border border-border/50 px-3 text-sm transition-colors',
+        isDragging ? 'bg-[#3e3e3e]' : 'bg-[#2C2C2E] hover:bg-[#3e3e3e]',
+        className,
+      )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={cn("group flex h-10 w-full items-center justify-between rounded-lg border border-border/50 px-3 text-sm transition-colors", isDragging ? "bg-[#3e3e3e]" : "bg-[#2C2C2E] hover:bg-[#3e3e3e]", className)}
+      ref={containerRef}
     >
-      <div 
+      <div
         className={cn(
-          "text-muted-foreground select-none truncate transition-colors",
-          isDragging ? "cursor-ew-resize text-foreground" : "hover:text-foreground hover:cursor-ew-resize"
+          'select-none truncate text-muted-foreground transition-colors',
+          isDragging
+            ? 'cursor-ew-resize text-foreground'
+            : 'hover:cursor-ew-resize hover:text-foreground',
         )}
         onPointerDown={handlePointerDown}
       >
         {label}
       </div>
-      
+
       <div className="flex shrink-0 justify-end">
         {isEditing ? (
           <div className="flex items-center">
             <input
               autoFocus
-              className="w-full bg-transparent p-0 text-right text-foreground font-mono outline-none selection:bg-primary/30"
+              className="w-full bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={handleInputBlur}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
@@ -231,7 +237,7 @@ export function MetricControl({
           </div>
         ) : (
           <div
-            className="flex w-full cursor-text items-center justify-end text-foreground hover:text-primary transition-colors"
+            className="flex w-full cursor-text items-center justify-end text-foreground transition-colors hover:text-primary"
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight">

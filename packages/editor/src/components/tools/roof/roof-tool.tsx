@@ -8,7 +8,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, type Line, type Group, Vector3 } from 'three'
+import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -90,7 +90,7 @@ export const RoofTool: React.FC = () => {
       corner2: [number, number, number],
     ) => {
       const gridY = corner1[1] + GRID_OFFSET
-      
+
       const groundPoints = [
         new Vector3(corner1[0], gridY, corner1[2]),
         new Vector3(corner2[0], gridY, corner1[2]),
@@ -98,7 +98,7 @@ export const RoofTool: React.FC = () => {
         new Vector3(corner1[0], gridY, corner2[2]),
         new Vector3(corner1[0], gridY, corner1[2]), // Close the loop
       ]
-      
+
       outlineRef.current.geometry.dispose()
       outlineRef.current.geometry = new BufferGeometry().setFromPoints(groundPoints)
       outlineRef.current.visible = true
@@ -116,7 +116,7 @@ export const RoofTool: React.FC = () => {
 
       // Update cursors
       const gridY = y + GRID_OFFSET
-      
+
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
       // Play snap sound when grid position changes (only when placing)
@@ -149,14 +149,7 @@ export const RoofTool: React.FC = () => {
       const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 
-      if (!corner1Ref.current) {
-        // First click - set corner 1
-        corner1Ref.current = [gridX, y, gridZ]
-        setPreview((prev) => ({
-          ...prev,
-          corner1: corner1Ref.current,
-        }))
-      } else {
+      if (corner1Ref.current) {
         // Second click - create the roof
         const roofId = commitRoofPlacement(currentLevelId, corner1Ref.current, [gridX, y, gridZ])
 
@@ -166,6 +159,13 @@ export const RoofTool: React.FC = () => {
         // Reset state
         corner1Ref.current = null
         outlineRef.current.visible = false
+      } else {
+        // First click - set corner 1
+        corner1Ref.current = [gridX, y, gridZ]
+        setPreview((prev) => ({
+          ...prev,
+          corner1: corner1Ref.current,
+        }))
       }
     }
 
@@ -211,16 +211,29 @@ export const RoofTool: React.FC = () => {
 
       {/* Outline showing rectangle being drawn (Ground) */}
       {/* @ts-ignore */}
-      <line ref={outlineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
+      <line
+        frustumCulled={false}
+        layers={EDITOR_LAYER}
+        ref={outlineRef}
+        renderOrder={1}
+        visible={false}
+      >
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#818cf8" linewidth={2} depthTest={false} depthWrite={false} opacity={0.3} transparent />
+        <lineBasicNodeMaterial
+          color="#818cf8"
+          depthTest={false}
+          depthWrite={false}
+          linewidth={2}
+          opacity={0.3}
+          transparent
+        />
       </line>
 
       {/* First corner marker */}
       {corner1 && (
-        <CursorSphere 
-          position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]} 
-          color="#818cf8" 
+        <CursorSphere
+          color="#818cf8"
+          position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]}
           showTooltip={false}
         />
       )}
@@ -235,11 +248,11 @@ export const RoofTool: React.FC = () => {
           <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
           <meshBasicMaterial
             color="#818cf8"
-            opacity={0.1}
-            transparent
-            side={DoubleSide}
             depthTest={false}
             depthWrite={false}
+            opacity={0.1}
+            side={DoubleSide}
+            transparent
           />
         </mesh>
       )}

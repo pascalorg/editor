@@ -61,7 +61,9 @@ export const ToolManager: React.FC = () => {
 
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
-    phase === 'structure' && mode === 'select' && selectedSlabId !== undefined &&
+    phase === 'structure' &&
+    mode === 'select' &&
+    selectedSlabId !== undefined &&
     (!editingHole || editingHole.nodeId !== selectedSlabId)
 
   // Show slab hole editor when editing a hole on the selected slab
@@ -70,12 +72,16 @@ export const ToolManager: React.FC = () => {
 
   // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
   const showCeilingBoundaryEditor =
-    phase === 'structure' && mode === 'select' && selectedCeilingId !== undefined &&
+    phase === 'structure' &&
+    mode === 'select' &&
+    selectedCeilingId !== undefined &&
     (!editingHole || editingHole.nodeId !== selectedCeilingId)
 
   // Show ceiling hole editor when editing a hole on the selected ceiling
   const showCeilingHoleEditor =
-    selectedCeilingId !== undefined && editingHole !== null && editingHole.nodeId === selectedCeilingId
+    selectedCeilingId !== undefined &&
+    editingHole !== null &&
+    editingHole.nodeId === selectedCeilingId
 
   // Show zone boundary editor when in structure/select mode with a zone selected
   // Hide when editing a slab or ceiling to avoid overlapping handles
@@ -97,7 +103,7 @@ export const ToolManager: React.FC = () => {
       {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
       {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
       {showSlabHoleEditor && selectedSlabId && editingHole && (
-        <SlabHoleEditor slabId={selectedSlabId} holeIndex={editingHole.holeIndex} />
+        <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
       )}
       {showCeilingBoundaryEditor && selectedCeilingId && (
         <CeilingBoundaryEditor ceilingId={selectedCeilingId} />

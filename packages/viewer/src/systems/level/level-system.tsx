@@ -14,7 +14,11 @@ export const LevelSystem = () => {
 
     // Collect and sort levels by floor index so we can compute cumulative offsets.
     // Level 0 → Y=0, Level 1 → Y=height(0), Level 2 → Y=height(0)+height(1), etc.
-    type LevelEntry = { levelId: string; index: number; obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>> }
+    type LevelEntry = {
+      levelId: string
+      index: number
+      obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
+    }
     const entries: LevelEntry[] = []
     sceneRegistry.byType.level.forEach((levelId) => {
       const obj = sceneRegistry.nodes.get(levelId)

@@ -1,8 +1,8 @@
 'use client'
 
+import NumberFlow from '@number-flow/react'
 import { useScene } from '@pascal-app/core'
 import { useCallback, useRef, useState } from 'react'
-import NumberFlow from '@number-flow/react'
 
 interface NumberInputProps {
   label: string
@@ -132,10 +132,10 @@ export function NumberInput({
   )
 
   return (
-    <div className={`${className} relative group/input`}>
-      <div 
-        className={`absolute inset-y-0 left-0 bg-primary/10 dark:bg-primary/20 pointer-events-none transition-all duration-75 ${isDragging ? 'opacity-100' : 'opacity-0'}`}
-        style={{ 
+    <div className={`${className} group/input relative`}>
+      <div
+        className={`pointer-events-none absolute inset-y-0 left-0 bg-primary/10 transition-all duration-75 dark:bg-primary/20 ${isDragging ? 'opacity-100' : 'opacity-0'}`}
+        style={{
           width: `${Math.min(100, Math.max(0, ((value - (min ?? Math.min(0, value))) / ((max ?? Math.max(10, value)) - (min ?? Math.min(0, value)))) * 100))}%`,
           borderTopRightRadius: value >= (max ?? Math.max(10, value)) ? '0.5rem' : '0',
           borderBottomRightRadius: value >= (max ?? Math.max(10, value)) ? '0.5rem' : '0',
@@ -143,35 +143,41 @@ export function NumberInput({
           borderBottomLeftRadius: '0.5rem',
         }}
       />
-      <div className={`flex items-center rounded-lg border shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] overflow-hidden transition-all focus-within:ring-1 focus-within:ring-primary focus-within:border-primary relative z-10 ${isDragging ? 'bg-transparent border-neutral-300 dark:border-border ring-1 ring-neutral-200/60 dark:ring-border/50' : 'bg-white dark:bg-accent/30 border-neutral-200/60 dark:border-border/50 hover:border-neutral-300 dark:hover:border-border/80'}`}>
+      <div
+        className={`relative z-10 flex items-center overflow-hidden rounded-lg border shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary ${isDragging ? 'border-neutral-300 bg-transparent ring-1 ring-neutral-200/60 dark:border-border dark:ring-border/50' : 'border-neutral-200/60 bg-white hover:border-neutral-300 dark:border-border/50 dark:bg-accent/30 dark:hover:border-border/80'}`}
+      >
         <div
-          ref={labelRef}
-          className={`pl-2 pr-1 py-1.5 text-muted-foreground text-xs select-none font-barlow font-medium truncate z-10 ${
-            isDragging ? 'cursor-ew-resize text-foreground' : 'hover:cursor-ew-resize hover:text-foreground'
+          className={`z-10 select-none truncate py-1.5 pr-1 pl-2 font-barlow font-medium text-muted-foreground text-xs ${
+            isDragging
+              ? 'cursor-ew-resize text-foreground'
+              : 'hover:cursor-ew-resize hover:text-foreground'
           } transition-colors`}
           onMouseDown={handleLabelMouseDown}
+          ref={labelRef}
         >
           {label}
         </div>
         {isEditing ? (
           <input
             autoFocus
-            size={1}
-            className="flex-1 min-w-0 bg-transparent px-2 py-1.5 text-foreground text-sm font-mono font-medium outline-none text-right placeholder:text-muted-foreground/50 z-10"
+            className="z-10 min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right font-medium font-mono text-foreground text-sm outline-none placeholder:text-muted-foreground/50"
             onBlur={handleInputBlur}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
+            size={1}
             type="text"
             value={inputValue}
           />
         ) : (
           <div
-            className={`flex-1 px-2 py-1.5 text-sm font-mono font-medium cursor-text hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-right truncate z-10 text-foreground tabular-nums tracking-tight min-w-0`}
+            className={
+              'z-10 min-w-0 flex-1 cursor-text truncate px-2 py-1.5 text-right font-medium font-mono text-foreground text-sm tabular-nums tracking-tight transition-colors hover:bg-black/5 dark:hover:bg-white/5'
+            }
             onClick={handleValueClick}
           >
             <NumberFlow
-              value={Number(value.toFixed(precision))}
               format={{ minimumFractionDigits: precision, maximumFractionDigits: precision }}
+              value={Number(value.toFixed(precision))}
             />
           </div>
         )}

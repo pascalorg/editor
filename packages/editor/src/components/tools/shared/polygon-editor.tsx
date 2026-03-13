@@ -237,20 +237,20 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       {/* Border line */}
       <line
         // @ts-expect-error R3F <line> element conflicts with SVG <line> type
-        ref={lineRef}
         frustumCulled={false}
-        renderOrder={10}
-        raycast={() => {}}
         layers={EDITOR_LAYER}
+        raycast={() => {}}
+        ref={lineRef}
+        renderOrder={10}
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
           color={color}
-          linewidth={2}
           depthTest={false}
           depthWrite={false}
-          transparent
+          linewidth={2}
           opacity={0.8}
+          transparent
         />
       </line>
 
@@ -263,28 +263,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
         return (
           <mesh
-            layers={EDITOR_LAYER}
-            key={`vertex-${index}`}
-            position={[x!, editY + height / 2, z!]}
             castShadow
-            onPointerEnter={(e) => {
-              e.stopPropagation()
-              setHoveredVertex(index)
-            }}
-            onPointerLeave={(e) => {
-              e.stopPropagation()
-              setHoveredVertex(null)
-            }}
-            onPointerDown={(e) => {
-              if (e.button !== 0) return
-              e.stopPropagation()
-              setDragState({
-                isDragging: true,
-                vertexIndex: index,
-                initialPosition: [x!, z!],
-                pointerId: e.pointerId,
-              })
-            }}
+            key={`vertex-${index}`}
+            layers={EDITOR_LAYER}
             onClick={(e) => {
               if (e.button !== 0) return
               e.stopPropagation()
@@ -296,6 +277,25 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 handleDeleteVertex(index)
               }
             }}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              e.stopPropagation()
+              setDragState({
+                isDragging: true,
+                vertexIndex: index,
+                initialPosition: [x!, z!],
+                pointerId: e.pointerId,
+              })
+            }}
+            onPointerEnter={(e) => {
+              e.stopPropagation()
+              setHoveredVertex(index)
+            }}
+            onPointerLeave={(e) => {
+              e.stopPropagation()
+              setHoveredVertex(null)
+            }}
+            position={[x!, editY + height / 2, z!]}
           >
             <cylinderGeometry args={[radius, radius, height, 16]} />
             <meshStandardMaterial
@@ -314,16 +314,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <mesh
-              layers={EDITOR_LAYER}
               key={`midpoint-${index}`}
-              position={[x!, editY + height / 2, z!]}
-              onPointerEnter={(e) => {
+              layers={EDITOR_LAYER}
+              onClick={(e) => {
+                if (e.button !== 0) return
                 e.stopPropagation()
-                setHoveredMidpoint(index)
-              }}
-              onPointerLeave={(e) => {
-                e.stopPropagation()
-                setHoveredMidpoint(null)
               }}
               onPointerDown={(e) => {
                 if (e.button !== 0) return
@@ -339,16 +334,21 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   setHoveredMidpoint(null)
                 }
               }}
-              onClick={(e) => {
-                if (e.button !== 0) return
+              onPointerEnter={(e) => {
                 e.stopPropagation()
+                setHoveredMidpoint(index)
               }}
+              onPointerLeave={(e) => {
+                e.stopPropagation()
+                setHoveredMidpoint(null)
+              }}
+              position={[x!, editY + height / 2, z!]}
             >
               <cylinderGeometry args={[radius, radius, height, 16]} />
               <meshStandardMaterial
                 color={isHovered ? '#4ade80' : '#22c55e'}
-                transparent
                 opacity={isHovered ? 1 : 0.7}
+                transparent
               />
             </mesh>
           )

@@ -1,4 +1,12 @@
-import { type AnyNodeId, type DoorNode, getScaledDimensions, type ItemNode, useScene, type WallNode, type WindowNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type DoorNode,
+  getScaledDimensions,
+  type ItemNode,
+  useScene,
+  type WallNode,
+  type WindowNode,
+} from '@pascal-app/core'
 
 /**
  * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
@@ -36,7 +44,7 @@ export function clampToWall(
   const wallLength = Math.sqrt(dx * dx + dz * dz)
 
   const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
-  const clampedY = height / 2  // Doors always sit at floor level
+  const clampedY = height / 2 // Doors always sit at floor level
   return { clampedX, clampedY }
 }
 

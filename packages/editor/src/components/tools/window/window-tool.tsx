@@ -11,6 +11,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../../lib/constants'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   calculateCursorRotation,
   calculateItemRotation,
@@ -19,12 +21,10 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
-import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 
 // Shared edge material — reuse across renders, just toggle color
 const edgeMaterial = new LineBasicNodeMaterial({
-  color: 0xef4444, // red-500 default (invalid)
+  color: 0xef_44_44, // red-500 default (invalid)
   linewidth: 3,
   depthTest: false,
   depthWrite: false,
@@ -81,7 +81,7 @@ export const WindowTool: React.FC = () => {
       group.visible = true
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
-      edgeMaterial.color.setHex(valid ? 0x22c55e : 0xef4444)
+      edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -120,7 +120,13 @@ export const WindowTool: React.FC = () => {
       const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -155,12 +161,22 @@ export const WindowTool: React.FC = () => {
       }
 
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY, width, height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        width,
+        height,
         draftRef.current?.id,
       )
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -179,12 +195,18 @@ export const WindowTool: React.FC = () => {
       const localX = snapToHalf(event.localPosition[0])
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
-        event.node, localX, localY,
-        draftRef.current.width, draftRef.current.height,
+        event.node,
+        localX,
+        localY,
+        draftRef.current.width,
+        draftRef.current.height,
       )
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY,
-        draftRef.current.width, draftRef.current.height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        draftRef.current.width,
+        draftRef.current.height,
         draftRef.current.id,
       )
       if (!valid) return
@@ -270,7 +292,12 @@ export const WindowTool: React.FC = () => {
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
+      <lineSegments
+        geometry={edgesGeo}
+        layers={EDITOR_LAYER}
+        material={edgeMaterial}
+        ref={edgesRef}
+      />
     </group>
   )
 }

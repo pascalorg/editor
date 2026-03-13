@@ -1,8 +1,8 @@
 'use client'
 
-import { AnimatePresence, motion } from 'motion/react'
 import { Howl } from 'howler'
 import { Disc3, Settings2, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Slider } from '../components/ui/slider'
 import { cn } from '../lib/utils'
@@ -163,32 +163,30 @@ export function PascalRadio() {
 
   return (
     <motion.div
-      ref={containerRef}
+      className={cn(
+        'flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-lg backdrop-blur-md',
+        !isOpen && 'cursor-pointer transition-colors hover:bg-accent/90',
+      )}
       layout
       onClick={() => {
         if (!isOpen) setIsOpen(true)
       }}
+      ref={containerRef}
       transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-      className={cn(
-        'flex flex-col rounded-lg border border-border bg-background/95 shadow-lg backdrop-blur-md overflow-hidden',
-        !isOpen && 'cursor-pointer hover:bg-accent/90 transition-colors',
-      )}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 font-medium text-sm">
         <div className="flex items-center gap-2">
           <Disc3 className={cn('h-4 w-4 shrink-0', isRadioPlaying && 'animate-spin')} />
-          <span className="hidden sm:inline whitespace-nowrap">Radio Pascal</span>
+          <span className="hidden whitespace-nowrap sm:inline">Radio Pascal</span>
         </div>
         <div className="flex items-center gap-2">
           <div
+            aria-label={isRadioPlaying ? 'Pause' : 'Play'}
+            className="cursor-pointer rounded-sm bg-accent/30 p-1 transition-all hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
             onClick={(e) => {
               e.stopPropagation()
               handlePlayPause()
             }}
-            className="rounded-sm p-1 transition-all cursor-pointer bg-accent/30 hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
-            role="button"
-            tabIndex={0}
-            aria-label={isRadioPlaying ? 'Pause' : 'Play'}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
@@ -196,6 +194,8 @@ export function PascalRadio() {
                 handlePlayPause()
               }
             }}
+            role="button"
+            tabIndex={0}
           >
             {isRadioPlaying ? (
               <Volume2 className="h-3.5 w-3.5" />
@@ -204,15 +204,15 @@ export function PascalRadio() {
             )}
           </div>
           <button
+            aria-label="Radio Settings"
+            className={cn(
+              'cursor-pointer rounded-sm p-1 transition-all hover:bg-accent hover:text-accent-foreground',
+              isOpen && 'bg-accent text-accent-foreground',
+            )}
             onClick={(e) => {
               e.stopPropagation()
               setIsOpen(!isOpen)
             }}
-            className={cn(
-              'rounded-sm p-1 transition-all cursor-pointer hover:bg-accent hover:text-accent-foreground',
-              isOpen && 'bg-accent text-accent-foreground',
-            )}
-            aria-label="Radio Settings"
           >
             <Settings2 className="h-3.5 w-3.5" />
           </button>
@@ -222,34 +222,34 @@ export function PascalRadio() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
+            initial={{ opacity: 0, height: 0 }}
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           >
-            <div className="px-3 pb-3 space-y-3 w-[16rem]">
-              <div className="h-px w-full bg-border/50 mb-3" />
+            <div className="w-[16rem] space-y-3 px-3 pb-3">
+              <div className="mb-3 h-px w-full bg-border/50" />
               {/* Current song info with prev/next */}
               <div>
-                <p className="text-xs text-muted-foreground mb-2">Now Playing</p>
+                <p className="mb-2 text-muted-foreground text-xs">Now Playing</p>
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    onClick={handlePrevious}
-                    className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
                     aria-label="Previous"
+                    className="shrink-0 rounded-full p-1.5 transition-colors hover:bg-accent"
+                    onClick={handlePrevious}
                   >
                     <SkipBack className="h-4 w-4" />
                   </button>
                   <p
-                    className="text-sm font-medium text-center flex-1 truncate"
+                    className="flex-1 truncate text-center font-medium text-sm"
                     title={currentTrack.title}
                   >
                     {currentTrack.title}
                   </p>
                   <button
-                    onClick={handleNext}
-                    className="rounded-full p-1.5 transition-colors hover:bg-accent shrink-0"
                     aria-label="Next"
+                    className="shrink-0 rounded-full p-1.5 transition-colors hover:bg-accent"
+                    onClick={handleNext}
                   >
                     <SkipForward className="h-4 w-4" />
                   </button>
@@ -258,16 +258,16 @@ export function PascalRadio() {
 
               {/* Volume control */}
               <div className="flex items-center gap-2">
-                <Volume2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <Volume2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <Slider
-                  value={[radioVolume]}
-                  onValueChange={handleVolumeChange}
-                  max={100}
-                  step={1}
-                  className="flex-1"
                   aria-label="Radio Volume"
+                  className="flex-1"
+                  max={100}
+                  onValueChange={handleVolumeChange}
+                  step={1}
+                  value={[radioVolume]}
                 />
-                <span className="w-8 text-right text-xs text-muted-foreground shrink-0">
+                <span className="w-8 shrink-0 text-right text-muted-foreground text-xs">
                   {radioVolume}%
                 </span>
               </div>

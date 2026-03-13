@@ -1,3 +1,5 @@
+'use client'
+
 import { Editor } from '@pascal-app/editor'
 
 export default function Home() {

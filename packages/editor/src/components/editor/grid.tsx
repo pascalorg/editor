@@ -32,11 +32,11 @@ export const Grid = ({
   revealRadius?: number
 }) => {
   const theme = useViewer((state) => state.theme)
-  
+
   // Use slightly lighter colors for dark mode grid to make it apparent
   const effectiveCellColor = theme === 'dark' ? '#555566' : cellColor
   const effectiveSectionColor = theme === 'dark' ? '#666677' : sectionColor
-  
+
   const cursorPositionRef = useRef(new Vector2(0, 0))
 
   const material = useMemo(() => {
@@ -90,7 +90,7 @@ export const Grid = ({
 
     // Baseline alpha: small amount of opacity everywhere the grid exists
     const baseAlpha = float(0.4) // Subtle global visibility
-    
+
     // Combined alpha with cursor fade and baseline minimum
     const alpha = g1.add(g2).mul(fade).mul(cursorFade.max(baseAlpha))
     const finalAlpha = mix(alpha.mul(0.75), alpha, g2)
@@ -102,15 +102,15 @@ export const Grid = ({
       depthWrite: false,
     })
   }, [
-    cellSize, 
-    cellThickness, 
-    effectiveCellColor, 
-    sectionSize, 
-    sectionThickness, 
-    effectiveSectionColor, 
-    fadeDistance, 
-    fadeStrength, 
-    revealRadius
+    cellSize,
+    cellThickness,
+    effectiveCellColor,
+    sectionSize,
+    sectionThickness,
+    effectiveSectionColor,
+    fadeDistance,
+    fadeStrength,
+    revealRadius,
   ])
 
   const gridRef = useRef<Mesh>(null!)
@@ -148,7 +148,13 @@ export const Grid = ({
   const showGrid = useViewer((state) => state.showGrid)
 
   return (
-    <mesh rotation-x={-Math.PI / 2} material={material} ref={gridRef} visible={showGrid} layers={EDITOR_LAYER}>
+    <mesh
+      layers={EDITOR_LAYER}
+      material={material}
+      ref={gridRef}
+      rotation-x={-Math.PI / 2}
+      visible={showGrid}
+    >
       <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
     </mesh>
   )

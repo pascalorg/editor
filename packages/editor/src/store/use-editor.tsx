@@ -174,7 +174,7 @@ const useEditor = create<EditorState>()((set, get) => ({
         selectedIds: [],
         zoneId: null,
       })
-      
+
       // Ensure a tool is selected in build mode
       if (!tool) {
         if (phase === 'structure' && structureLayer === 'zones') {

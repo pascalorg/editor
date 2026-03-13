@@ -3,13 +3,18 @@
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import { type ReactNode, useEffect, useState } from 'react'
-import { useAutoSave, type SaveStatus } from '../../hooks/use-auto-save'
-import { applySceneGraphToEditor, loadSceneFromLocalStorage, type SceneGraph } from '../../lib/scene'
-import { useKeyboard } from '../../hooks/use-keyboard'
-import { initSFXBus } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
+import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
+import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
+import { useKeyboard } from '../../hooks/use-keyboard'
+import {
+  applySceneGraphToEditor,
+  loadSceneFromLocalStorage,
+  type SceneGraph,
+} from '../../lib/scene'
+import { initSFXBus } from '../../lib/sfx-bus'
+import useEditor from '../../store/use-editor'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
@@ -23,7 +28,6 @@ import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import type { SitePanelProps } from '../ui/sidebar/panels/site-panel'
-import { PresetsProvider, type PresetsAdapter } from '../../contexts/presets-context'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
 import { FloatingActionMenu } from './floating-action-menu'
@@ -97,20 +101,20 @@ function EditorSceneCrashFallback() {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-background/95 p-4 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <h2 className="text-lg font-semibold">The editor scene failed to render</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
+        <p className="mt-2 text-muted-foreground text-sm">
           You can retry the scene or return home without reloading the whole app shell.
         </p>
         <div className="mt-4 flex items-center gap-2">
           <button
-            className="rounded-md border border-border bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+            className="rounded-md border border-border bg-accent px-3 py-2 font-medium text-sm hover:bg-accent/80"
             onClick={() => window.location.reload()}
             type="button"
           >
             Reload editor
           </button>
           <a
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent/40"
+            className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
             href="/"
           >
             Back to home
@@ -175,7 +179,9 @@ export default function Editor({
 
     load()
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [onLoad, isLoadingSceneRef])
 
   // Apply preview scene when version preview mode changes
@@ -196,45 +202,46 @@ export default function Editor({
 
   return (
     <PresetsProvider adapter={presetsAdapter}>
-    <div className="w-full h-full dark text-foreground">
-      {showLoader && <SceneLoader />}
+      <div className="dark h-full w-full text-foreground">
+        {showLoader && <SceneLoader />}
 
-      {isPreviewMode ? (
-        <ViewerOverlay
-          onBack={() => useEditor.getState().setPreviewMode(false)}
-        />
-      ) : (
-        <>
-          <ActionMenu />
-          <PanelManager />
-          <HelperManager />
+        {isPreviewMode ? (
+          <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+        ) : (
+          <>
+            <ActionMenu />
+            <PanelManager />
+            <HelperManager />
 
-          <SidebarProvider className="fixed z-20">
-            <AppSidebar appMenuButton={appMenuButton} sidebarTop={sidebarTop} settingsPanelProps={settingsPanelProps} sitePanelProps={sitePanelProps} />
-          </SidebarProvider>
-        </>
-      )}
+            <SidebarProvider className="fixed z-20">
+              <AppSidebar
+                appMenuButton={appMenuButton}
+                settingsPanelProps={settingsPanelProps}
+                sidebarTop={sidebarTop}
+                sitePanelProps={sitePanelProps}
+              />
+            </SidebarProvider>
+          </>
+        )}
 
-      <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
-        <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
-          {!isPreviewMode && <SelectionManager />}
-          {!isPreviewMode && <FloatingActionMenu />}
-          <ExportManager />
-          {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
-          <CeilingSystem />
-          {!isPreviewMode && (
-            <Grid cellColor="#aaa" sectionColor="#ccc" fadeDistance={500} />
-          )}
-          {!isPreviewMode && <ToolManager />}
-          <CustomCameraControls />
-          <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-          <PresetThumbnailGenerator />
-          {!isPreviewMode && <SiteEdgeLabels />}
-          {isPreviewMode && <InteractiveSystem />}
-        </Viewer>
-        {!isPreviewMode && <ZoneLabelEditorSystem />}
-      </ErrorBoundary>
-    </div>
+        <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
+          <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
+            {!isPreviewMode && <SelectionManager />}
+            {!isPreviewMode && <FloatingActionMenu />}
+            <ExportManager />
+            {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+            <CeilingSystem />
+            {!isPreviewMode && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
+            {!isPreviewMode && <ToolManager />}
+            <CustomCameraControls />
+            <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+            <PresetThumbnailGenerator />
+            {!isPreviewMode && <SiteEdgeLabels />}
+            {isPreviewMode && <InteractiveSystem />}
+          </Viewer>
+          {!isPreviewMode && <ZoneLabelEditorSystem />}
+        </ErrorBoundary>
+      </div>
     </PresetsProvider>
   )
 }

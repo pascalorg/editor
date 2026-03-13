@@ -35,7 +35,7 @@ export function FloatingActionMenu() {
   const isValidType = node ? ALLOWED_TYPES.includes(node.type) : false
 
   useFrame(() => {
-    if (!selectedId || !isValidType || !groupRef.current) return
+    if (!(selectedId && isValidType && groupRef.current)) return
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
@@ -65,7 +65,7 @@ export function FloatingActionMenu() {
   const handleDuplicate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!node || !node.parentId) return
+      if (!(node && node.parentId)) return
       sfxEmitter.emit('sfx:item-pick')
       useScene.temporal.getState().pause()
 
@@ -103,7 +103,7 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!selectedId || !node) return
+      if (!(selectedId && node)) return
       sfxEmitter.emit('sfx:item-delete')
       deleteNode(selectedId as AnyNodeId)
       if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
@@ -112,43 +112,43 @@ export function FloatingActionMenu() {
     [selectedId, node, deleteNode, setSelection],
   )
 
-  if (!selectedId || !node || !isValidType) return null
+  if (!(selectedId && node && isValidType)) return null
 
   return (
     <group ref={groupRef}>
       <Html
         center
-        zIndexRange={[100, 0]}
         style={{
           pointerEvents: 'auto',
           touchAction: 'none',
         }}
+        zIndexRange={[100, 0]}
       >
         <div
-          className="flex items-center gap-1 p-1 rounded-lg border border-border bg-background/95 shadow-xl backdrop-blur-md"
+          className="flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         >
           <button
+            className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={handleMove}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors tooltip-trigger"
             title="Move"
           >
-            <Move className="w-4 h-4" />
+            <Move className="h-4 w-4" />
           </button>
           <button
+            className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={handleDuplicate}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors tooltip-trigger"
             title="Duplicate"
           >
-            <Copy className="w-4 h-4" />
+            <Copy className="h-4 w-4" />
           </button>
           <button
+            className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             onClick={handleDelete}
-            className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors tooltip-trigger"
             title="Delete"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </Html>

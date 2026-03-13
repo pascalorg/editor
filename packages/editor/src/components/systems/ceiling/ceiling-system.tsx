@@ -12,10 +12,10 @@ export const CeilingSystem = () => {
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
-    
+
     const levelsToShowCeilings = new Set<string>()
 
-    const isCeilingToolActive = 
+    const isCeilingToolActive =
       tool === 'ceiling' ||
       selectedItem?.attachTo === 'ceiling' ||
       (movingNode?.type === 'item' && movingNode?.asset?.attachTo === 'ceiling')
@@ -45,7 +45,7 @@ export const CeilingSystem = () => {
         levelsToShowCeilings.add(levelId)
       }
     }
-    
+
     const ceilings = sceneRegistry.byType.ceiling
     ceilings.forEach((ceiling) => {
       const mesh = sceneRegistry.nodes.get(ceiling)
@@ -54,7 +54,7 @@ export const CeilingSystem = () => {
         if (ceilingGrid) {
           let belongsToVisibleLevel = false
           let currentId: string | null = ceiling
-          
+
           while (currentId && nodes[currentId as AnyNodeId]) {
             const node = nodes[currentId as AnyNodeId]
             if (node && levelsToShowCeilings.has(node.id)) {
@@ -64,8 +64,8 @@ export const CeilingSystem = () => {
             currentId = node?.parentId as string | null
           }
 
-          const shouldShowGrid = belongsToVisibleLevel || 
-            (levelsToShowCeilings.size === 0 && isCeilingToolActive)
+          const shouldShowGrid =
+            belongsToVisibleLevel || (levelsToShowCeilings.size === 0 && isCeilingToolActive)
 
           ceilingGrid.visible = shouldShowGrid
           ceilingGrid.scale.setScalar(shouldShowGrid ? 1 : 0.0) // Scale down to zero to prevent event interference when grid is hidden

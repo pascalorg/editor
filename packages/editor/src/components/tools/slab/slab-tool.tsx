@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, type LevelNode, SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, type Line, type Group, Shape, Vector3 } from 'three'
+import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -35,13 +35,13 @@ const calculateSnapPoint = (
     // Snap to 45° diagonal
     const diagonalLength = Math.min(absDx, absDy)
     return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  } else if (minDist === horizontalDist) {
+  }
+  if (minDist === horizontalDist) {
     // Snap to horizontal
     return [x, y1]
-  } else {
-    // Snap to vertical
-    return [x1, y]
   }
+  // Snap to vertical
+  return [x1, y]
 }
 
 /**
@@ -94,12 +94,19 @@ export const SlabTool: React.FC = () => {
 
       // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = points[points.length - 1]
-      const displayPoint = (shiftPressed.current || !lastPoint) ? gridPosition : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint =
+        shiftPressed.current || !lastPoint
+          ? gridPosition
+          : calculateSnapPoint(lastPoint, gridPosition)
       setSnappedCursorPosition(displayPoint)
 
       // Play snap sound when the snapped position actually changes (only when drawing)
-      if (points.length > 0 && previousSnappedPointRef.current &&
-          (displayPoint[0] !== previousSnappedPointRef.current[0] || displayPoint[1] !== previousSnappedPointRef.current[1])) {
+      if (
+        points.length > 0 &&
+        previousSnappedPointRef.current &&
+        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
+          displayPoint[1] !== previousSnappedPointRef.current[1])
+      ) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
@@ -146,8 +153,12 @@ export const SlabTool: React.FC = () => {
       setPoints([])
     }
 
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = true }
-    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = false }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = true
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressed.current = false
+    }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
 
@@ -168,7 +179,7 @@ export const SlabTool: React.FC = () => {
 
   // Update line geometries when points change
   useEffect(() => {
-    if (!mainLineRef.current || !closingLineRef.current) return
+    if (!(mainLineRef.current && closingLineRef.current)) return
 
     if (points.length === 0) {
       mainLineRef.current.visible = false
@@ -261,20 +272,32 @@ export const SlabTool: React.FC = () => {
 
       {/* Main line */}
       {/* @ts-ignore */}
-      <line ref={mainLineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
+      <line
+        frustumCulled={false}
+        layers={EDITOR_LAYER}
+        ref={mainLineRef}
+        renderOrder={1}
+        visible={false}
+      >
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#818cf8" linewidth={3} depthTest={false} depthWrite={false} />
+        <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
       </line>
 
       {/* Closing line */}
       {/* @ts-ignore */}
-      <line ref={closingLineRef} frustumCulled={false} renderOrder={1} visible={false} layers={EDITOR_LAYER}>
+      <line
+        frustumCulled={false}
+        layers={EDITOR_LAYER}
+        ref={closingLineRef}
+        renderOrder={1}
+        visible={false}
+      >
         <bufferGeometry />
         <lineBasicNodeMaterial
           color="#818cf8"
-          linewidth={2}
           depthTest={false}
           depthWrite={false}
+          linewidth={2}
           opacity={0.5}
           transparent
         />
@@ -282,7 +305,13 @@ export const SlabTool: React.FC = () => {
 
       {/* Point markers */}
       {points.map(([x, z], index) => (
-        <CursorSphere key={index} position={[x, levelY + Y_OFFSET + 0.01, z]} color="#818cf8" showTooltip={false} height={0} />
+        <CursorSphere
+          color="#818cf8"
+          height={0}
+          key={index}
+          position={[x, levelY + Y_OFFSET + 0.01, z]}
+          showTooltip={false}
+        />
       ))}
     </group>
   )

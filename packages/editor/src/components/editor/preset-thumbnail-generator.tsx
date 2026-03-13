@@ -31,7 +31,10 @@ export const PresetThumbnailGenerator = () => {
 
       const clones: THREE.Object3D[] = []
       target.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)) return
+        if (
+          !(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)
+        )
+          return
         const c = obj.clone(false) // shallow clone: copies geometry, material, visible — no children
         relMatrix.multiplyMatrices(targetInverse, obj.matrixWorld)
         relMatrix.decompose(c.position, c.quaternion, c.scale)
@@ -72,7 +75,10 @@ export const PresetThumbnailGenerator = () => {
       const snapshot = new Map<THREE.Object3D, boolean>()
       scene.traverse((obj) => {
         if (cloneSet.has(obj)) return
-        if (!(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)) return
+        if (
+          !(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)
+        )
+          return
         snapshot.set(obj, obj.visible)
         obj.visible = false
       })

@@ -38,8 +38,8 @@ const useAudio = create<AudioState>()(
     }),
     {
       name: 'pascal-audio-settings',
-    }
-  )
+    },
+  ),
 )
 
 export default useAudio

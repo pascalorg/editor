@@ -5,11 +5,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { Edit, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import useEditor from '../../../store/use-editor'
-
-import { PanelWrapper } from './panel-wrapper'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
-import { ActionButton, ActionGroup } from '../controls/action-button'
+import { PanelWrapper } from './panel-wrapper'
 
 export function SlabPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -20,9 +19,7 @@ export function SlabPanel() {
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as SlabNode | undefined)
-    : undefined
+  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as SlabNode | undefined) : undefined
 
   const handleUpdate = useCallback(
     (updates: Partial<SlabNode>) => {
@@ -50,7 +47,7 @@ export function SlabPanel() {
   }, [setEditingHole])
 
   const handleAddHole = useCallback(() => {
-    if (!node || !selectedId) return
+    if (!(node && selectedId)) return
 
     const polygon = node.polygon
     let cx = 0
@@ -113,23 +110,23 @@ export function SlabPanel() {
 
   return (
     <PanelWrapper
-      title={node.name || "Slab"}
       icon="/icons/floor.png"
       onClose={handleClose}
+      title={node.name || 'Slab'}
       width={320}
     >
       <PanelSection title="Elevation">
         <SliderControl
           label="Height"
-          value={Math.round(node.elevation * 1000) / 1000}
-          onChange={(v) => handleUpdate({ elevation: v })}
-          min={-1}
           max={1}
+          min={-1}
+          onChange={(v) => handleUpdate({ elevation: v })}
           precision={3}
           step={0.01}
           unit="m"
+          value={Math.round(node.elevation * 1000) / 1000}
         />
-        
+
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
           <ActionButton label="Sunken (-15cm)" onClick={() => handleUpdate({ elevation: -0.15 })} />
           <ActionButton label="Ground (0m)" onClick={() => handleUpdate({ elevation: 0 })} />
@@ -139,7 +136,7 @@ export function SlabPanel() {
       </PanelSection>
 
       <PanelSection title="Info">
-        <div className="flex items-center justify-between px-2 py-1 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Area</span>
           <span className="font-mono text-white">{area.toFixed(2)} m²</span>
         </div>
@@ -150,18 +147,21 @@ export function SlabPanel() {
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
               const holeArea = calculateArea(hole)
-              const isEditing = editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
+              const isEditing =
+                editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               return (
                 <div
-                  key={index}
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
                     isEditing
                       ? 'border-primary/50 bg-primary/10'
                       : 'border-transparent hover:bg-accent/30'
                   }`}
+                  key={index}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-medium ${isEditing ? 'text-primary' : 'text-white'}`}>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-white'}`}
+                    >
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
@@ -170,24 +170,24 @@ export function SlabPanel() {
                   </div>
                   <div className="flex items-center gap-1">
                     {isEditing ? (
-                      <ActionButton 
-                        label="Done" 
-                        onClick={() => setEditingHole(null)} 
+                      <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                        label="Done"
+                        onClick={() => setEditingHole(null)}
                       />
                     ) : (
                       <>
                         <button
-                          type="button"
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
                           onClick={() => handleEditHole(index)}
+                          type="button"
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          type="button"
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
                           onClick={() => handleDeleteHole(index)}
+                          type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -199,18 +199,16 @@ export function SlabPanel() {
             })}
           </div>
         ) : (
-          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-            No holes
-          </div>
+          <div className="px-2 py-3 text-center text-muted-foreground text-xs">No holes</div>
         )}
-        
+
         <div className="px-1 pt-1 pb-1">
-          <ActionButton 
-            icon={<Plus className="h-3.5 w-3.5" />} 
-            label="Add Hole" 
-            onClick={handleAddHole} 
+          <ActionButton
             className="w-full"
             disabled={editingHole?.nodeId === selectedId}
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add Hole"
+            onClick={handleAddHole}
           />
         </div>
       </PanelSection>

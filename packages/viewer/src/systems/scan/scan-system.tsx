@@ -14,5 +14,5 @@ export const ScanSystem = () => {
       }
     })
   }, [showScans])
-  return null;
+  return null
 }

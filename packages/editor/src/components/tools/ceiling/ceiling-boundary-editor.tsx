@@ -1,4 +1,4 @@
-import { resolveLevelId, type CeilingNode, useScene } from '@pascal-app/core'
+import { type CeilingNode, resolveLevelId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
@@ -27,15 +27,15 @@ export const CeilingBoundaryEditor: React.FC<CeilingBoundaryEditorProps> = ({ ce
     [ceilingId, updateNode, setSelection],
   )
 
-  if (!ceiling || !ceiling.polygon || ceiling.polygon.length < 3) return null
+  if (!(ceiling && ceiling.polygon) || ceiling.polygon.length < 3) return null
 
   return (
     <PolygonEditor
-      polygon={ceiling.polygon}
       color="#d4d4d4"
-      onPolygonChange={handlePolygonChange}
-      minVertices={3}
       levelId={resolveLevelId(ceiling, useScene.getState().nodes)}
+      minVertices={3}
+      onPolygonChange={handlePolygonChange}
+      polygon={ceiling.polygon}
       surfaceHeight={ceiling.height ?? 2.5}
     />
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import React, { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface Props {
   children?: ReactNode
@@ -33,8 +33,8 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <div className="flex h-screen w-screen flex-col items-center justify-center bg-[#1b1c1f] p-4 text-white">
-          <h2 className="mb-4 text-xl font-bold text-red-400">Something went wrong</h2>
-          <pre className="max-w-full overflow-auto rounded bg-black/30 p-4 text-sm text-gray-300">
+          <h2 className="mb-4 font-bold text-red-400 text-xl">Something went wrong</h2>
+          <pre className="max-w-full overflow-auto rounded bg-black/30 p-4 text-gray-300 text-sm">
             {this.state.error?.message}
           </pre>
           <button
@@ -50,4 +50,3 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children
   }
 }
-

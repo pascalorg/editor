@@ -2,11 +2,30 @@
 
 import type { AnyNodeId, Collection, CollectionId } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
-import { Check, ChevronDown, ChevronRight, Layers, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../../components/ui/primitives/dropdown-menu'
-import { Popover, PopoverContent, PopoverTrigger } from '../../../../components/ui/primitives/popover'
 import { ColorDot } from '../../../../components/ui/primitives/color-dot'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../../../components/ui/primitives/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../../../../components/ui/primitives/popover'
 import { cn } from '../../../../lib/utils'
 
 interface CollectionsPopoverProps {
@@ -69,24 +88,29 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
-        side="left"
         align="start"
+        className="w-72 overflow-hidden rounded-xl border-border/50 bg-sidebar/95 p-0 shadow-2xl backdrop-blur-xl"
+        side="left"
         sideOffset={8}
-        className="w-72 p-0 border-border/50 bg-sidebar/95 backdrop-blur-xl shadow-2xl rounded-xl overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
+        <div className="flex items-center justify-between border-border/50 border-b px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold text-foreground tracking-tight">Collections</span>
+            <span className="font-semibold text-foreground text-xs tracking-tight">
+              Collections
+            </span>
           </div>
           <button
+            className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            onClick={() => {
+              setShowCreateInput((v) => !v)
+              setCreateName('')
+            }}
             type="button"
-            onClick={() => { setShowCreateInput((v) => !v); setCreateName('') }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
           >
             <Plus className="h-3 w-3" />
             New
@@ -95,30 +119,36 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
         {/* Create input */}
         {showCreateInput && (
-          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 bg-white/5">
+          <div className="flex items-center gap-1.5 border-border/50 border-b bg-white/5 px-3 py-2">
             <input
               autoFocus
-              value={createName}
+              className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none placeholder:text-muted-foreground/60 focus:border-ring focus:ring-1 focus:ring-ring/30"
               onChange={(e) => setCreateName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleCreate()
-                if (e.key === 'Escape') { setShowCreateInput(false); setCreateName('') }
+                if (e.key === 'Escape') {
+                  setShowCreateInput(false)
+                  setCreateName('')
+                }
               }}
               placeholder="Collection name…"
-              className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
+              value={createName}
             />
             <button
-              type="button"
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 text-primary transition-colors hover:bg-primary/30 disabled:opacity-40"
               disabled={!createName.trim()}
               onClick={handleCreate}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary disabled:opacity-40 transition-colors"
+              type="button"
             >
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+              onClick={() => {
+                setShowCreateInput(false)
+                setCreateName('')
+              }}
               type="button"
-              onClick={() => { setShowCreateInput(false); setCreateName('') }}
-              className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -126,11 +156,11 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
         )}
 
         {/* Collections list */}
-        <div className="max-h-72 overflow-y-auto no-scrollbar">
+        <div className="no-scrollbar max-h-72 overflow-y-auto">
           {allCollections.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-center px-4">
+            <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
               <Layers className="h-6 w-6 text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 No collections yet. Create one to group items together.
               </p>
             </div>
@@ -144,20 +174,28 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                 if (isDeleting) {
                   return (
-                    <li key={collection.id} className="flex items-center justify-between gap-2 px-3 py-2.5 bg-red-500/10">
-                      <span className="text-xs text-foreground/80 truncate">Delete "{collection.name}"?</span>
-                      <div className="flex items-center gap-1 shrink-0">
+                    <li
+                      className="flex items-center justify-between gap-2 bg-red-500/10 px-3 py-2.5"
+                      key={collection.id}
+                    >
+                      <span className="truncate text-foreground/80 text-xs">
+                        Delete "{collection.name}"?
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
                         <button
+                          className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-400 transition-colors hover:bg-red-500/30"
+                          onClick={() => {
+                            deleteCollection(collection.id)
+                            setDeletingId(null)
+                          }}
                           type="button"
-                          onClick={() => { deleteCollection(collection.id); setDeletingId(null) }}
-                          className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
                         >
                           Delete
                         </button>
                         <button
-                          type="button"
+                          className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10"
                           onClick={() => setDeletingId(null)}
-                          className="rounded-md px-2 py-0.5 text-[11px] font-medium hover:bg-white/10 text-muted-foreground transition-colors"
+                          type="button"
                         >
                           Cancel
                         </button>
@@ -168,29 +206,29 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                 if (isRenaming) {
                   return (
-                    <li key={collection.id} className="flex items-center gap-1.5 px-3 py-2">
+                    <li className="flex items-center gap-1.5 px-3 py-2" key={collection.id}>
                       <ColorDot color={renameColor || '#6366f1'} onChange={setRenameColor} />
                       <input
                         autoFocus
-                        value={renameValue}
+                        className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
                         onChange={(e) => setRenameValue(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleRenameConfirm(collection.id)
                           if (e.key === 'Escape') setRenamingId(null)
                         }}
-                        className="flex-1 min-w-0 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-xs text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring/30"
+                        value={renameValue}
                       />
                       <button
-                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 text-primary transition-colors hover:bg-primary/30"
                         onClick={() => handleRenameConfirm(collection.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/20 hover:bg-primary/30 text-primary transition-colors"
+                        type="button"
                       >
                         <Check className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        type="button"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
                         onClick={() => setRenamingId(null)}
-                        className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10 text-muted-foreground transition-colors"
+                        type="button"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -200,7 +238,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                 return (
                   <li key={collection.id}>
-                    <div className="group flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors">
+                    <div className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-white/5">
                       {/* Color dot — click to pick color */}
                       <ColorDot
                         color={collection.color ?? '#6366f1'}
@@ -209,11 +247,16 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                       {/* Name + count — clicking toggles membership */}
                       <button
-                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         onClick={() => toggleMembership(collection.id)}
-                        className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
+                        type="button"
                       >
-                        <span className={cn('truncate text-xs font-medium', isIn ? 'text-foreground' : 'text-muted-foreground')}>
+                        <span
+                          className={cn(
+                            'truncate font-medium text-xs',
+                            isIn ? 'text-foreground' : 'text-muted-foreground',
+                          )}
+                        >
                           {collection.name}
                         </span>
                         <span className="shrink-0 text-[10px] text-muted-foreground/60">
@@ -224,7 +267,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       {/* Membership check */}
                       <div
                         className={cn(
-                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors pointer-events-none',
+                          'pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
                           isIn ? 'border-primary bg-primary/20 text-primary' : 'border-border/50',
                         )}
                       >
@@ -234,13 +277,15 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       {/* Expand toggle (only if has members) */}
                       {collection.nodeIds.length > 0 && (
                         <button
-                          type="button"
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
                           onClick={() => toggleExpand(collection.id)}
-                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+                          type="button"
                         >
-                          {isExpanded
-                            ? <ChevronDown className="h-3 w-3" />
-                            : <ChevronRight className="h-3 w-3" />}
+                          {isExpanded ? (
+                            <ChevronDown className="h-3 w-3" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3" />
+                          )}
                         </button>
                       )}
 
@@ -248,18 +293,27 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
                             type="button"
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent side="left" align="start" className="min-w-40">
-                          <DropdownMenuItem onClick={() => { setRenamingId(collection.id); setRenameValue(collection.name); setRenameColor(collection.color ?? '') }}>
+                        <DropdownMenuContent align="start" className="min-w-40" side="left">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenamingId(collection.id)
+                              setRenameValue(collection.name)
+                              setRenameColor(collection.color ?? '')
+                            }}
+                          >
                             <Pencil className="h-3.5 w-3.5" />
                             Rename
                           </DropdownMenuItem>
-                          <DropdownMenuItem variant="destructive" onClick={() => setDeletingId(collection.id)}>
+                          <DropdownMenuItem
+                            onClick={() => setDeletingId(collection.id)}
+                            variant="destructive"
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                             Delete
                           </DropdownMenuItem>
@@ -269,13 +323,20 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                     {/* Expanded member list */}
                     {isExpanded && (
-                      <ul className="pb-1 pl-6 pr-3 flex flex-col gap-0.5">
+                      <ul className="flex flex-col gap-0.5 pr-3 pb-1 pl-6">
                         {collection.nodeIds.map((nid) => {
                           const n = nodes[nid]
                           return (
-                            <li key={nid} className="flex items-center gap-1.5 py-0.5">
-                              <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                              <span className={cn('truncate text-[11px]', nid === nodeId ? 'text-foreground font-medium' : 'text-muted-foreground')}>
+                            <li className="flex items-center gap-1.5 py-0.5" key={nid}>
+                              <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
+                              <span
+                                className={cn(
+                                  'truncate text-[11px]',
+                                  nid === nodeId
+                                    ? 'font-medium text-foreground'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
                                 {n?.name ?? nid}
                               </span>
                             </li>

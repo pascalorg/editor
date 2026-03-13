@@ -1,4 +1,4 @@
-import { resolveLevelId, type CeilingNode, useScene } from '@pascal-app/core'
+import { type CeilingNode, resolveLevelId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
@@ -32,15 +32,15 @@ export const CeilingHoleEditor: React.FC<CeilingHoleEditorProps> = ({ ceilingId,
     [ceilingId, holeIndex, holes, updateNode, setSelection],
   )
 
-  if (!ceiling || !hole || hole.length < 3) return null
+  if (!(ceiling && hole) || hole.length < 3) return null
 
   return (
     <PolygonEditor
-      polygon={hole}
-      color="#ef4444" // red for holes
-      onPolygonChange={handlePolygonChange}
+      color="#ef4444"
+      levelId={resolveLevelId(ceiling, useScene.getState().nodes)} // red for holes
       minVertices={3}
-      levelId={resolveLevelId(ceiling, useScene.getState().nodes)}
+      onPolygonChange={handlePolygonChange}
+      polygon={hole}
       surfaceHeight={ceiling.height ?? 2.5}
     />
   )

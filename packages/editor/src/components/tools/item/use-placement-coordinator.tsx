@@ -3,8 +3,8 @@ import {
   type AnyNodeId,
   type CeilingEvent,
   emitter,
-  getScaledDimensions,
   type GridEvent,
+  getScaledDimensions,
   type ItemEvent,
   resolveLevelId,
   sceneRegistry,
@@ -32,7 +32,13 @@ import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { ceilingStrategy, checkCanPlace, floorStrategy, itemSurfaceStrategy, wallStrategy } from './placement-strategies'
+import {
+  ceilingStrategy,
+  checkCanPlace,
+  floorStrategy,
+  itemSurfaceStrategy,
+  wallStrategy,
+} from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
@@ -41,14 +47,14 @@ const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 // Shared materials for placement cursor - we just change colors, not swap materials
 // Note: EdgesGeometry doesn't work with dashed lines, so using solid lines
 const edgeMaterial = new LineBasicNodeMaterial({
-  color: 0xef4444, // red-500 (invalid)
+  color: 0xef_44_44, // red-500 (invalid)
   linewidth: 3,
   depthTest: false,
   depthWrite: false,
 })
 
 const basePlaneMaterial = new MeshBasicNodeMaterial({
-  color: 0xef4444, // red-500 (invalid)
+  color: 0xef_44_44, // red-500 (invalid)
   transparent: true,
   depthTest: false,
   depthWrite: false,
@@ -111,13 +117,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       state: { ...placementState.current },
     })
 
-    const getActiveValidators = () => shiftFreeRef.current
-      ? { canPlaceOnFloor: () => ({ valid: true }), canPlaceOnWall: () => ({ valid: true }), canPlaceOnCeiling: () => ({ valid: true }) }
-      : validators
+    const getActiveValidators = () =>
+      shiftFreeRef.current
+        ? {
+            canPlaceOnFloor: () => ({ valid: true }),
+            canPlaceOnWall: () => ({ valid: true }),
+            canPlaceOnCeiling: () => ({ valid: true }),
+          }
+        : validators
 
     const revalidate = (): boolean => {
       const placeable = shiftFreeRef.current || checkCanPlace(getContext(), validators)
-      const color = placeable ? 0x22c55e : 0xef4444 // green-500 : red-500
+      const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
       return placeable
@@ -143,7 +154,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       cursorGroupRef.current.position.set(...result.cursorPosition)
       cursorGroupRef.current.rotation.y = result.cursorRotationY
 
-      draftNode.create(gridPosition.current, asset, [0, result.cursorRotationY, 0], configRef.current.defaultScale)
+      draftNode.create(
+        gridPosition.current,
+        asset,
+        [0, result.cursorRotationY, 0],
+        configRef.current.defaultScale,
+      )
 
       const draft = draftNode.current
       if (draft) {
@@ -224,7 +240,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onWallEnter = (event: WallEvent) => {
       const nodes = useScene.getState().nodes
-      const result = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, getActiveValidators())
+      const result = wallStrategy.enter(
+        getContext(),
+        event,
+        resolveLevelId,
+        nodes,
+        getActiveValidators(),
+      )
       if (!result) return
 
       event.stopPropagation()
@@ -246,7 +268,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (ctx.state.surface !== 'wall') {
         const nodes = useScene.getState().nodes
-        const enterResult = wallStrategy.enter(ctx, event, resolveLevelId, nodes, getActiveValidators())
+        const enterResult = wallStrategy.enter(
+          ctx,
+          event,
+          resolveLevelId,
+          nodes,
+          getActiveValidators(),
+        )
         if (!enterResult) return
 
         event.stopPropagation()
@@ -262,7 +290,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (!draftNode.current) {
         const nodes = useScene.getState().nodes
-        const setup = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, getActiveValidators())
+        const setup = wallStrategy.enter(
+          getContext(),
+          event,
+          resolveLevelId,
+          nodes,
+          getActiveValidators(),
+        )
         if (!setup) return
 
         event.stopPropagation()
@@ -334,7 +368,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (configRef.current.onCommitted()) {
         const nodes = useScene.getState().nodes
-        const enterResult = wallStrategy.enter(getContext(), event, resolveLevelId, nodes, validators)
+        const enterResult = wallStrategy.enter(
+          getContext(),
+          event,
+          resolveLevelId,
+          nodes,
+          validators,
+        )
         if (enterResult) {
           applyTransition(enterResult)
         } else {
@@ -703,7 +743,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const viewerLevelId = useViewer((s) => s.selection.levelId)
   useEffect(() => {
     const draft = draftNode.current
-    if (!draft || !viewerLevelId || asset.attachTo) return
+    if (!(draft && viewerLevelId) || asset.attachTo) return
     if (draft.parentId === viewerLevelId) return
     draft.parentId = viewerLevelId
     useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
@@ -749,7 +789,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   })
 
   const initialDraft = draftNode.current
-  const dims = initialDraft ? getScaledDimensions(initialDraft) : (config.asset.dimensions ?? DEFAULT_DIMENSIONS)
+  const dims = initialDraft
+    ? getScaledDimensions(initialDraft)
+    : (config.asset.dimensions ?? DEFAULT_DIMENSIONS)
   const initialBoxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
   initialBoxGeometry.translate(0, dims[1] / 2, 0)
 
@@ -760,10 +802,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
   return (
     <group ref={cursorGroupRef}>
-      <lineSegments ref={edgesRef} material={edgeMaterial} layers={EDITOR_LAYER}>
+      <lineSegments layers={EDITOR_LAYER} material={edgeMaterial} ref={edgesRef}>
         <edgesGeometry args={[initialBoxGeometry]} />
       </lineSegments>
-      <mesh ref={basePlaneRef} geometry={basePlaneGeometry} material={basePlaneMaterial} layers={EDITOR_LAYER} />
+      <mesh
+        geometry={basePlaneGeometry}
+        layers={EDITOR_LAYER}
+        material={basePlaneMaterial}
+        ref={basePlaneRef}
+      />
     </group>
   )
 }

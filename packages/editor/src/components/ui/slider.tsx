@@ -1,15 +1,15 @@
-import * as React from "react";
-import * as SliderPrimitive from "@radix-ui/react-slider";
-import { cva, type VariantProps } from "class-variance-authority";
+import * as SliderPrimitive from '@radix-ui/react-slider'
+import { cva, type VariantProps } from 'class-variance-authority'
+import type * as React from 'react'
 
-import { cn } from "./../../lib/utils";
+import { cn } from './../../lib/utils'
 
 const sliderVariants = cva(
-  "relative flex w-full touch-none select-none overflow-hidden items-center",
+  'relative flex w-full touch-none select-none items-center overflow-hidden',
   {
     variants: {
       variant: {
-        default: "",
+        default: '',
         temperature: `
           h-16
           [&_[data-slot=slider-track]]:h-14
@@ -46,39 +46,36 @@ const sliderVariants = cva(
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: 'default',
     },
-  }
-);
+  },
+)
 
 type SliderProps = React.ComponentProps<typeof SliderPrimitive.Root> &
-  VariantProps<typeof sliderVariants>;
+  VariantProps<typeof sliderVariants>
 
 function Slider({ variant, className, ...props }: SliderProps) {
   return (
     <SliderPrimitive.Root
-      data-slot="slider"
       className={cn(sliderVariants({ variant }), className)}
+      data-slot="slider"
       {...props}
     >
       <SliderPrimitive.Track
+        className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted"
         data-slot="slider-track"
-        className="bg-muted relative h-3 w-full grow overflow-hidden rounded-full"
       >
-        <SliderPrimitive.Range
-          data-slot="slider-range"
-          className="bg-primary absolute h-full"
-        />
+        <SliderPrimitive.Range className="absolute h-full bg-primary" data-slot="slider-range" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
-        data-slot="slider-thumb"
         className={cn(
-          "border-primary bg-background ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm",
-          "transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+          'block size-4 shrink-0 rounded-full border border-primary bg-background shadow-sm ring-ring/50',
+          'transition-[color,box-shadow] hover:ring-4 focus-visible:outline-none focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-50',
         )}
+        data-slot="slider-thumb"
       />
     </SliderPrimitive.Root>
-  );
+  )
 }
 
-export { Slider };
+export { Slider }

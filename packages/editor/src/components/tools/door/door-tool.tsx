@@ -11,6 +11,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../../lib/constants'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   calculateCursorRotation,
   calculateItemRotation,
@@ -19,11 +21,9 @@ import {
   snapToHalf,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
-import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 
 const edgeMaterial = new LineBasicNodeMaterial({
-  color: 0xef4444,
+  color: 0xef_44_44,
   linewidth: 3,
   depthTest: false,
   depthWrite: false,
@@ -79,7 +79,7 @@ export const DoorTool: React.FC = () => {
       group.visible = true
       group.position.set(...worldPosition)
       group.rotation.y = cursorRotationY
-      edgeMaterial.color.setHex(valid ? 0x22c55e : 0xef4444)
+      edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
     const onWallEnter = (event: WallEvent) => {
@@ -115,7 +115,13 @@ export const DoorTool: React.FC = () => {
       const valid = !hasWallChildOverlap(event.node.id, clampedX, clampedY, width, height, node.id)
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -147,12 +153,22 @@ export const DoorTool: React.FC = () => {
       }
 
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY, width, height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        width,
+        height,
         draftRef.current?.id,
       )
 
       updateCursor(
-        wallLocalToWorld(event.node, clampedX, clampedY, getLevelYOffset(), getSlabElevation(event)),
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
         cursorRotation,
         valid,
       )
@@ -169,12 +185,17 @@ export const DoorTool: React.FC = () => {
 
       const localX = snapToHalf(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
-        event.node, localX,
-        draftRef.current.width, draftRef.current.height,
+        event.node,
+        localX,
+        draftRef.current.width,
+        draftRef.current.height,
       )
       const valid = !hasWallChildOverlap(
-        event.node.id, clampedX, clampedY,
-        draftRef.current.width, draftRef.current.height,
+        event.node.id,
+        clampedX,
+        clampedY,
+        draftRef.current.width,
+        draftRef.current.height,
         draftRef.current.id,
       )
       if (!valid) return
@@ -261,7 +282,12 @@ export const DoorTool: React.FC = () => {
 
   return (
     <group ref={cursorGroupRef} visible={false}>
-      <lineSegments ref={edgesRef} geometry={edgesGeo} material={edgeMaterial} layers={EDITOR_LAYER} />
+      <lineSegments
+        geometry={edgesGeo}
+        layers={EDITOR_LAYER}
+        material={edgeMaterial}
+        ref={edgesRef}
+      />
     </group>
   )
 }

@@ -1,6 +1,17 @@
-import { getScaledDimensions, type AnyNode, type AnyNodeId, type ItemNode, type SlabNode, type WallNode } from '../../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getScaledDimensions,
+  type ItemNode,
+  type SlabNode,
+  type WallNode,
+} from '../../schema'
 import useScene from '../../store/use-scene'
-import { itemOverlapsPolygon, spatialGridManager, wallOverlapsPolygon } from './spatial-grid-manager'
+import {
+  itemOverlapsPolygon,
+  spatialGridManager,
+  wallOverlapsPolygon,
+} from './spatial-grid-manager'
 
 export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // If the node itself is a level
@@ -13,10 +24,10 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
   while (current) {
     if (current.type === 'level') return current.id
     // Find parent (you might need to add parentId to your schema or derive it)
-    if (!current.parentId) {
-      current = undefined
-    } else {
+    if (current.parentId) {
       current = nodes[current.parentId]
+    } else {
+      current = undefined
     }
   }
 
@@ -71,9 +82,11 @@ export function initSpatialGridSync() {
 
       if (node.type === 'item' && prev.type === 'item') {
         if (
-          !arraysEqual(node.position, prev.position) ||
-          !arraysEqual(node.rotation, prev.rotation) ||
-          !arraysEqual(node.scale, prev.scale) ||
+          !(
+            arraysEqual(node.position, prev.position) &&
+            arraysEqual(node.rotation, prev.rotation) &&
+            arraysEqual(node.scale, prev.scale)
+          ) ||
           node.parentId !== prev.parentId ||
           node.side !== prev.side
         ) {
@@ -85,7 +98,11 @@ export function initSpatialGridSync() {
           }
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
-        if (node.polygon !== prev.polygon || node.elevation !== prev.elevation || node.holes !== prev.holes) {
+        if (
+          node.polygon !== prev.polygon ||
+          node.elevation !== prev.elevation ||
+          node.holes !== prev.holes
+        ) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
 
@@ -119,7 +136,15 @@ function markNodesOverlappingSlab(
       // Only floor items are affected by slabs
       if (item.asset.attachTo) continue
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (itemOverlapsPolygon(item.position, getScaledDimensions(item), item.rotation, slab.polygon, 0.01)) {
+      if (
+        itemOverlapsPolygon(
+          item.position,
+          getScaledDimensions(item),
+          item.rotation,
+          slab.polygon,
+          0.01,
+        )
+      ) {
         markDirty(node.id)
       }
     } else if (node.type === 'wall') {

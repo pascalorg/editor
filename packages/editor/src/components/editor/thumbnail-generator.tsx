@@ -23,7 +23,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const pendingAutoRef = useRef(false)
   const onThumbnailCaptureRef = useRef(onThumbnailCapture)
 
-  useEffect(() => { onThumbnailCaptureRef.current = onThumbnailCapture }, [onThumbnailCapture])
+  useEffect(() => {
+    onThumbnailCaptureRef.current = onThumbnailCapture
+  }, [onThumbnailCapture])
 
   const generate = useCallback(async () => {
     if (isGenerating.current) return
@@ -32,7 +34,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     isGenerating.current = true
 
     try {
-      const thumbnailCamera = new THREE.PerspectiveCamera(60, THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT, 0.1, 1000)
+      const thumbnailCamera = new THREE.PerspectiveCamera(
+        60,
+        THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT,
+        0.1,
+        1000,
+      )
 
       const nodes = useScene.getState().nodes
       const siteNode = Object.values(nodes).find((n) => n.type === 'site')
@@ -74,7 +81,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
       const srcAspect = width / height
       const dstAspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT
-      let sx = 0, sy = 0, sWidth = width, sHeight = height
+      let sx = 0,
+        sy = 0,
+        sWidth = width,
+        sHeight = height
       if (srcAspect > dstAspect) {
         sWidth = Math.round(height * dstAspect)
         sx = Math.round((width - sWidth) / 2)

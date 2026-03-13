@@ -1,11 +1,11 @@
 {
-  "name": "web",
+  "name": "editor",
   "version": "0.1.0",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "set -a && . ../../.env 2>/dev/null; set +a; next dev",
-    "build": "next build",
+    "dev": "dotenv -e ./.env.local --override -- next dev --port 3002",
+    "build": "dotenv -e ./.env.local --override -- next build",
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit"
@@ -17,6 +17,8 @@
     "@pascal-app/viewer": "*",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.5.0",
     "@tailwindcss/postcss": "^4.2.1",
     "next": "16.1.6",
     "postcss": "^8.5.6",
@@ -26,7 +28,7 @@
     "three": "^0.183.1"
   },
   "devDependencies": {
-    "@repo/typescript-config": "*",
+    "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",

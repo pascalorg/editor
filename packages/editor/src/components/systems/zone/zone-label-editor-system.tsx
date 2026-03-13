@@ -21,7 +21,9 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
 
   // Keep a ref so the click handler never has a stale zone name
   const zoneNameRef = useRef(zone?.name ?? '')
-  useEffect(() => { zoneNameRef.current = zone?.name ?? '' }, [zone?.name])
+  useEffect(() => {
+    zoneNameRef.current = zone?.name ?? ''
+  }, [zone?.name])
 
   // Setup: find the label element, enable pointer events, and hide the
   // zone-renderer's own text node (children[0]) — we replace it via portal.
@@ -87,22 +89,26 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
   return createPortal(
     editing ? (
       <div
-        style={sharedStyle}
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
+        style={sharedStyle}
       >
         <input
-          ref={inputRef}
-          type="text"
-          value={value}
+          onBlur={save}
           onChange={(e) => setValue(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
             e.stopPropagation()
-            if (e.key === 'Enter') { e.preventDefault(); save() }
-            if (e.key === 'Escape') { e.preventDefault(); cancel() }
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              save()
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              cancel()
+            }
           }}
-          onBlur={save}
-          onClick={(e) => e.stopPropagation()}
+          ref={inputRef}
           style={{
             width: `${Math.max((value || zone?.name || '').length + 1, 4)}ch`,
             border: 'none',
@@ -118,10 +124,14 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
             fontFamily: 'inherit',
             textAlign: 'center',
           }}
+          type="text"
+          value={value}
         />
         <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); save() }}
+          onClick={(e) => {
+            e.stopPropagation()
+            save()
+          }}
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             background: 'none',
@@ -132,14 +142,13 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
             display: 'inline-flex',
             alignItems: 'center',
           }}
+          type="button"
         >
           <Check size={12} />
         </button>
       </div>
     ) : (
       <button
-        type="button"
-        style={{ ...sharedStyle, background: 'none', border: 'none', cursor: 'text', padding: 0 }}
         onClick={(e) => {
           e.stopPropagation()
           setSelection({ zoneId })
@@ -147,6 +156,8 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
           setEditing(true)
         }}
         onMouseDown={(e) => e.stopPropagation()}
+        style={{ ...sharedStyle, background: 'none', border: 'none', cursor: 'text', padding: 0 }}
+        type="button"
       >
         <span>{zone?.name}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', opacity: 0.55 }}>

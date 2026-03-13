@@ -25,16 +25,19 @@ function getInitialState(node: {
 function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   const draftNode = useDraftNode()
 
-  const meta = (typeof movingNode.metadata === 'object' && movingNode.metadata !== null)
-    ? movingNode.metadata as Record<string, unknown>
-    : {}
+  const meta =
+    typeof movingNode.metadata === 'object' && movingNode.metadata !== null
+      ? (movingNode.metadata as Record<string, unknown>)
+      : {}
   const isNew = !!meta.isNew
 
   const cursor = usePlacementCoordinator({
     asset: movingNode.asset,
     draftNode,
     // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
-    initialState: isNew ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null } : getInitialState(movingNode),
+    initialState: isNew
+      ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
+      : getInitialState(movingNode),
     // Preserve the original item's scale so Y-position calculations use the correct height
     defaultScale: isNew ? movingNode.scale : undefined,
     initDraft: (gridPosition) => {

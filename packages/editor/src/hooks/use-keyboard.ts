@@ -81,7 +81,9 @@ export const useKeyboard = () => {
             if (prevIdx !== -1 && prevIdx !== currentIdx) {
               useViewer.getState().setSelection({ levelId: building.children[prevIdx] as any })
             } else if (currentIdx === -1) {
-              useViewer.getState().setSelection({ levelId: building.children[building.children.length - 1] as any })
+              useViewer
+                .getState()
+                .setSelection({ levelId: building.children[building.children.length - 1] as any })
             }
           }
         }

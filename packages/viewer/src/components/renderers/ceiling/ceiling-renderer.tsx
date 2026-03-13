@@ -9,7 +9,7 @@ import { NodeRenderer } from '../node-renderer'
 // - Back face (looking up at ceiling from below): solid
 // - Front face (looking down at ceiling from above): 30% opacity
 const ceilingTopMaterial = new MeshBasicNodeMaterial({
-  color: 0xb5a78d,
+  color: 0xb5_a7_8d,
   transparent: true,
   depthWrite: false,
   side: FrontSide,
@@ -18,7 +18,7 @@ const ceilingTopMaterial = new MeshBasicNodeMaterial({
 })
 
 const ceilingBottomMaterial = new MeshBasicNodeMaterial({
-  color: 0x999999,
+  color: 0x99_99_99,
   transparent: true,
   side: BackSide,
 })
@@ -52,10 +52,16 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const handlers = useNodeEvents(node, 'ceiling')
 
   return (
-    <mesh ref={ref} material={ceilingBottomMaterial}>
+    <mesh material={ceilingBottomMaterial} ref={ref}>
       {/* CeilingSystem will replace this geometry in the next frame */}
       <boxGeometry args={[0, 0, 0]} />
-      <mesh name="ceiling-grid" material={ceilingTopMaterial} {...handlers} visible={false} scale={0}>
+      <mesh
+        material={ceilingTopMaterial}
+        name="ceiling-grid"
+        {...handlers}
+        scale={0}
+        visible={false}
+      >
         <boxGeometry args={[0, 0, 0]} />
       </mesh>
       {node.children.map((childId) => (

@@ -61,9 +61,7 @@ export const CustomCameraControls = () => {
         : CameraControlsImpl.ACTION.DOLLY
 
     return {
-      left: isPreviewMode
-        ? CameraControlsImpl.ACTION.SCREEN_PAN
-        : CameraControlsImpl.ACTION.NONE,
+      left: isPreviewMode ? CameraControlsImpl.ACTION.SCREEN_PAN : CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
@@ -159,7 +157,7 @@ export const CustomCameraControls = () => {
     : null
 
   useEffect(() => {
-    if (!isPreviewMode || !controls.current) return
+    if (!(isPreviewMode && controls.current)) return
 
     const nodes = useScene.getState().nodes
     let node = previewTargetNodeId ? nodes[previewTargetNodeId] : null
@@ -176,8 +174,12 @@ export const CustomCameraControls = () => {
       requestAnimationFrame(() => {
         if (!controls.current) return
         controls.current.setLookAt(
-          position[0], position[1], position[2],
-          target[0], target[1], target[2],
+          position[0],
+          position[1],
+          position[2],
+          target[0],
+          target[1],
+          target[2],
           true,
         )
       })
@@ -231,7 +233,7 @@ export const CustomCameraControls = () => {
       if (!controls.current) return
 
       const node = useScene.getState().nodes[nodeId]
-      if (!node || !node.camera) return
+      if (!(node && node.camera)) return
       const { position, target } = node.camera
 
       controls.current.setLookAt(
@@ -311,11 +313,11 @@ export const CustomCameraControls = () => {
       maxPolarAngle={Math.PI / 2 - 0.1}
       minDistance={10}
       minPolarAngle={0}
-      ref={controls}
       mouseButtons={mouseButtons}
-      onTransitionStart={onTransitionStart}
       onRest={onRest}
       onSleep={onRest}
+      onTransitionStart={onTransitionStart}
+      ref={controls}
       restThreshold={0.01}
     />
   )

@@ -1,4 +1,10 @@
-import { type AnyNodeId, type AssetInput, ItemNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type AssetInput,
+  ItemNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
@@ -18,7 +24,12 @@ export interface DraftNodeHandle {
   /** Whether the current draft was adopted (move mode) vs created (create mode) */
   readonly isAdopted: boolean
   /** Create a new draft item at the given position. Returns the created node or null. */
-  create: (gridPosition: Vector3, asset: AssetInput, rotation?: [number, number, number], scale?: [number, number, number]) => ItemNode | null
+  create: (
+    gridPosition: Vector3,
+    asset: AssetInput,
+    rotation?: [number, number, number],
+    scale?: [number, number, number],
+  ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
   /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place. */
@@ -40,32 +51,41 @@ export function useDraftNode(): DraftNodeHandle {
   const adoptedRef = useRef(false)
   const originalStateRef = useRef<OriginalState | null>(null)
 
-  const create = useCallback((gridPosition: Vector3, asset: AssetInput, rotation?: [number, number, number], scale?: [number, number, number]): ItemNode | null => {
-    const currentLevelId = useViewer.getState().selection.levelId
-    if (!currentLevelId) return null
+  const create = useCallback(
+    (
+      gridPosition: Vector3,
+      asset: AssetInput,
+      rotation?: [number, number, number],
+      scale?: [number, number, number],
+    ): ItemNode | null => {
+      const currentLevelId = useViewer.getState().selection.levelId
+      if (!currentLevelId) return null
 
-    const node = ItemNode.parse({
-      position: [gridPosition.x, gridPosition.y, gridPosition.z],
-      rotation: rotation ?? [0, 0, 0],
-      scale: scale ?? [1, 1, 1],
-      name: asset.name,
-      asset,
-      parentId: currentLevelId,
-      metadata: { isTransient: true },
-    })
+      const node = ItemNode.parse({
+        position: [gridPosition.x, gridPosition.y, gridPosition.z],
+        rotation: rotation ?? [0, 0, 0],
+        scale: scale ?? [1, 1, 1],
+        name: asset.name,
+        asset,
+        parentId: currentLevelId,
+        metadata: { isTransient: true },
+      })
 
-    useScene.getState().createNode(node, currentLevelId)
-    draftRef.current = node
-    adoptedRef.current = false
-    originalStateRef.current = null
-    return node
-  }, [])
+      useScene.getState().createNode(node, currentLevelId)
+      draftRef.current = node
+      adoptedRef.current = false
+      originalStateRef.current = null
+      return node
+    },
+    [],
+  )
 
   const adopt = useCallback((node: ItemNode): void => {
     // Save original state so destroy() can restore it
-    const meta = (typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata))
-      ? node.metadata as Record<string, unknown>
-      : {}
+    const meta =
+      typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
+        ? (node.metadata as Record<string, unknown>)
+        : {}
 
     originalStateRef.current = {
       position: [...node.position] as [number, number, number],
@@ -91,7 +111,8 @@ export function useDraftNode(): DraftNodeHandle {
     if (adoptedRef.current) {
       // Move mode: update in place (single undoable action)
       const { parentId: newParentId, ...updateProps } = finalUpdate
-      const parentId = newParentId ?? originalStateRef.current?.parentId ?? useViewer.getState().selection.levelId
+      const parentId =
+        newParentId ?? originalStateRef.current?.parentId ?? useViewer.getState().selection.levelId
       const original = originalStateRef.current!
 
       // Restore original state while paused — so the undo baseline is clean

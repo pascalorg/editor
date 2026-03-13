@@ -140,7 +140,7 @@ export class WallSpatialGrid {
 
     // Both are 'wall-side' - only conflict if they're on the same side
     // If either side is undefined, be conservative and assume conflict
-    if (!newSide || !existing.side) {
+    if (!(newSide && existing.side)) {
       return true
     }
     return newSide === existing.side

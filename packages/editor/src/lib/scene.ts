@@ -13,8 +13,7 @@ export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
   const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
-  const resolve = (child: any) =>
-    typeof child === 'string' ? sceneNodes[child] : child
+  const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
   const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
 

@@ -24,9 +24,7 @@ export function useContextualTools() {
 
     // Get types of selected nodes
     const selectedTypes = new Set(
-      selection.selectedIds
-        .map((id) => nodes[id as AnyNodeId]?.type)
-        .filter(Boolean)
+      selection.selectedIds.map((id) => nodes[id as AnyNodeId]?.type).filter(Boolean),
     )
 
     // If a wall is selected, prioritize wall-hosted elements

@@ -6,8 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const isDevelopment =
-  process.env.NODE_ENV === 'development' ||
-  process.env.NEXT_PUBLIC_VERCEL_ENV === 'development'
+  process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'development'
 
 export const isProduction =
   process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'production'
