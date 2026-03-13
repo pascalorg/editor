@@ -173,80 +173,83 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   const handlers = useNodeEvents(node, 'zone')
 
-  if (!node || !floorShape || !wallGeometry || !floorMaterial || !wallMaterial) {
+  if (!(node && floorShape && wallGeometry && floorMaterial && wallMaterial)) {
     return null
   }
-
 
   return (
     <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
       <Html
         name="label"
         position={[centroid[0], 1, centroid[1]]}
-        style={{ pointerEvents: 'none', }}
+        style={{ pointerEvents: 'none' }}
         zIndexRange={[10, 0]}
       >
-        <div id={`${node.id}-label`} style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          transform: 'translate3d(-50%, -50%, 0)',
-          opacity: 0,
-          transition: 'opacity 0.3s ease-in-out',
-        }}>
         <div
-          style={{
-            width: 'max-content',
-            color: 'white',
-            textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
-            textAlign: 'center',
-          }}
-        >
-          <span>{node.name}</span>  
-        </div>
-        <div 
-          className="label-pin"
+          id={`${node.id}-label`}
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            marginTop: '2px',
+            transform: 'translate3d(-50%, -50%, 0)',
             opacity: 0,
-            transition: 'opacity 0.5s ease-in-out',
+            transition: 'opacity 0.3s ease-in-out',
           }}
-          >
-        <div 
-          style={{
-          width: '2px',
-          height: '40px',
-          backgroundColor: node.color,
-        }}/>
+        >
           <div
             style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: node.color,
-              border: `1px solid white`,
+              width: 'max-content',
+              color: 'white',
+              textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+              textAlign: 'center',
             }}
-          />
+          >
+            <span>{node.name}</span>
+          </div>
+          <div
+            className="label-pin"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginTop: '2px',
+              opacity: 0,
+              transition: 'opacity 0.5s ease-in-out',
+            }}
+          >
+            <div
+              style={{
+                width: '2px',
+                height: '40px',
+                backgroundColor: node.color,
+              }}
+            />
+            <div
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: node.color,
+                border: '1px solid white',
+              }}
+            />
           </div>
         </div>
       </Html>
 
       {/* Floor fill */}
       <mesh
-        position={[0, Y_OFFSET, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
+        layers={ZONE_LAYER}
         material={floorMaterial}
         name="floor"
-        layers={ZONE_LAYER}
+        position={[0, Y_OFFSET, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
       >
         <shapeGeometry args={[floorShape]} />
       </mesh>
 
       {/* Wall borders with gradient */}
-      <mesh geometry={wallGeometry} material={wallMaterial} name="walls" layers={ZONE_LAYER} />
+      <mesh geometry={wallGeometry} layers={ZONE_LAYER} material={wallMaterial} name="walls" />
     </group>
   )
 }

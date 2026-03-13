@@ -1,4 +1,4 @@
-import { useRegistry, type DoorNode } from '@pascal-app/core'
+import { type DoorNode, useRegistry } from '@pascal-app/core'
 import { useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -12,12 +12,12 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
 
   return (
     <mesh
-      ref={ref}
       castShadow
-      receiveShadow
-      visible={node.visible}
       position={node.position}
+      receiveShadow
+      ref={ref}
       rotation={node.rotation}
+      visible={node.visible}
       {...(isTransient ? {} : handlers)}
     >
       {/* DoorSystem replaces this geometry each time the node is dirty */}

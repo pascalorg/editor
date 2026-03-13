@@ -58,8 +58,12 @@ export const DoorSystem = () => {
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
-  w: number, h: number, d: number,
-  x: number, y: number, z: number,
+  w: number,
+  h: number,
+  d: number,
+  x: number,
+  y: number,
+  z: number,
 ) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
@@ -84,29 +88,77 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   }
 
   const {
-    width, height, frameThickness, frameDepth, threshold, thresholdHeight,
-    segments, handle, handleHeight, handleSide,
-    doorCloser, panicBar, panicBarHeight, contentPadding, hingesSide,
+    width,
+    height,
+    frameThickness,
+    frameDepth,
+    threshold,
+    thresholdHeight,
+    segments,
+    handle,
+    handleHeight,
+    handleSide,
+    doorCloser,
+    panicBar,
+    panicBarHeight,
+    contentPadding,
+    hingesSide,
   } = node
 
   // Leaf occupies the full opening (no bottom frame bar — door opens to floor)
   const leafW = width - 2 * frameThickness
-  const leafH = height - frameThickness  // only top frame
+  const leafH = height - frameThickness // only top frame
   const leafDepth = 0.04
   // Leaf center is shifted down from door center by half the top frame
   const leafCenterY = -frameThickness / 2
 
   // ── Frame members ──
   // Left post — full height
-  addBox(mesh, baseMaterial, frameThickness, height, frameDepth, -width / 2 + frameThickness / 2, 0, 0)
+  addBox(
+    mesh,
+    baseMaterial,
+    frameThickness,
+    height,
+    frameDepth,
+    -width / 2 + frameThickness / 2,
+    0,
+    0,
+  )
   // Right post — full height
-  addBox(mesh, baseMaterial, frameThickness, height, frameDepth, width / 2 - frameThickness / 2, 0, 0)
+  addBox(
+    mesh,
+    baseMaterial,
+    frameThickness,
+    height,
+    frameDepth,
+    width / 2 - frameThickness / 2,
+    0,
+    0,
+  )
   // Head (top bar) — full width
-  addBox(mesh, baseMaterial, width, frameThickness, frameDepth, 0, height / 2 - frameThickness / 2, 0)
+  addBox(
+    mesh,
+    baseMaterial,
+    width,
+    frameThickness,
+    frameDepth,
+    0,
+    height / 2 - frameThickness / 2,
+    0,
+  )
 
   // ── Threshold (inside the frame) ──
   if (threshold) {
-    addBox(mesh, baseMaterial, leafW, thresholdHeight, frameDepth, 0, -height / 2 + thresholdHeight / 2, 0)
+    addBox(
+      mesh,
+      baseMaterial,
+      leafW,
+      thresholdHeight,
+      frameDepth,
+      0,
+      -height / 2 + thresholdHeight / 2,
+      0,
+    )
   }
 
   // ── Leaf — contentPadding border strips (no full backing; glass areas are open) ──
@@ -142,7 +194,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     const numCols = seg.columnRatios.length
     const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
     const usableW = contentW - (numCols - 1) * seg.dividerThickness
-    const colWidths = seg.columnRatios.map(r => (r / colSum) * usableW)
+    const colWidths = seg.columnRatios.map((r) => (r / colSum) * usableW)
 
     // Column x-centers (relative to mesh center)
     const colXCenters: number[] = []
@@ -157,7 +209,16 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     cx = -contentW / 2
     for (let c = 0; c < numCols - 1; c++) {
       cx += colWidths[c]!
-      addBox(mesh, baseMaterial, seg.dividerThickness, segH, leafDepth + 0.001, cx + seg.dividerThickness / 2, segCenterY, 0)
+      addBox(
+        mesh,
+        baseMaterial,
+        seg.dividerThickness,
+        segH,
+        leafDepth + 0.001,
+        cx + seg.dividerThickness / 2,
+        segCenterY,
+        0,
+      )
       cx += seg.dividerThickness
     }
 
@@ -198,9 +259,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     const faceZ = leafDepth / 2
 
     // X position: handleSide refers to which side the grip is on
-    const handleX = handleSide === 'right'
-      ? leafW / 2 - 0.045
-      : -leafW / 2 + 0.045
+    const handleX = handleSide === 'right' ? leafW / 2 - 0.045 : -leafW / 2 + 0.045
 
     // Backplate
     addBox(mesh, baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
@@ -214,7 +273,16 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     // Body
     addBox(mesh, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
     // Arm (simplified as thin bar to frame side)
-    addBox(mesh, baseMaterial, 0.14, 0.015, 0.015, leafW / 4, closerY + 0.025, leafDepth / 2 + 0.015)
+    addBox(
+      mesh,
+      baseMaterial,
+      0.14,
+      0.015,
+      0.015,
+      leafW / 4,
+      closerY + 0.025,
+      leafDepth / 2 + 0.015,
+    )
   }
 
   // ── Panic bar ──
@@ -225,9 +293,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
 
   // ── Hinges (3 knuckle-style hinges on the hinge side) ──
   {
-    const hingeX = hingesSide === 'right'
-      ? leafW / 2 - 0.012
-      : -leafW / 2 + 0.012
+    const hingeX = hingesSide === 'right' ? leafW / 2 - 0.012 : -leafW / 2 + 0.012
     const hingeZ = 0 // centered in leaf depth
     const hingeH = 0.1
     const hingeW = 0.024

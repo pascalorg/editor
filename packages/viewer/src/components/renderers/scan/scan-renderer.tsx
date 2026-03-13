@@ -14,15 +14,15 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
 
   return (
     <group
-      ref={ref}
-      visible={showScans}
       position={node.position}
+      ref={ref}
       rotation={node.rotation}
       scale={[node.scale, node.scale, node.scale]}
+      visible={showScans}
     >
       {resolvedUrl && (
         <Suspense>
-          <ScanModel url={resolvedUrl} opacity={node.opacity} />
+          <ScanModel opacity={node.opacity} url={resolvedUrl} />
         </Suspense>
       )}
     </group>
@@ -41,11 +41,11 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
       if (isTransparent) {
         material.transparent = true
         material.opacity = normalizedOpacity
-        material.depthWrite = false;
+        material.depthWrite = false
       } else {
         material.transparent = false
         material.opacity = 1
-        material.depthWrite = true;
+        material.depthWrite = true
       }
       material.needsUpdate = true
     }

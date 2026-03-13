@@ -321,10 +321,10 @@ function collectCutoutBrushes(
 
     // Calculate bounds in wall-local space
     const v3 = new THREE.Vector3()
-    let minX = Infinity,
-      maxX = -Infinity
-    let minY = Infinity,
-      maxY = -Infinity
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY,
+      maxY = Number.NEGATIVE_INFINITY
 
     for (let i = 0; i < positions.count; i++) {
       v3.fromBufferAttribute(positions, i)

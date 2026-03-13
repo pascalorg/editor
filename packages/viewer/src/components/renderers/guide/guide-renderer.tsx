@@ -15,10 +15,15 @@ export const GuideRenderer = ({ node }: { node: GuideNode }) => {
   const resolvedUrl = useAssetUrl(node.url)
 
   return (
-    <group ref={ref} visible={showGuides} position={node.position} rotation={[0, node.rotation[1], 0]}>
+    <group
+      position={node.position}
+      ref={ref}
+      rotation={[0, node.rotation[1], 0]}
+      visible={showGuides}
+    >
       {resolvedUrl && (
         <Suspense>
-          <GuidePlane url={resolvedUrl} scale={node.scale} opacity={node.opacity} />
+          <GuidePlane opacity={node.opacity} scale={node.scale} url={resolvedUrl} />
         </Suspense>
       )}
     </group>
@@ -53,10 +58,10 @@ const GuidePlane = ({ url, scale, opacity }: { url: string; scale: number; opaci
 
   return (
     <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
+      frustumCulled={false}
       material={material}
       raycast={() => {}}
-      frustumCulled={false}
+      rotation={[-Math.PI / 2, 0, 0]}
     >
       <planeGeometry args={[width, height]} boundingBox={null} boundingSphere={null} />
     </mesh>

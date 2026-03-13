@@ -24,8 +24,8 @@ import {
 } from 'three/tsl'
 
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
-import useViewer from '../../store/use-viewer'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
@@ -94,7 +94,7 @@ const PostProcessingPasses = () => {
   }, [renderer])
 
   useEffect(() => {
-    if (!renderer || !scene || !camera || !isInitialized) {
+    if (!(renderer && scene && camera && isInitialized)) {
       return
     }
 
@@ -105,10 +105,10 @@ const PostProcessingPasses = () => {
       const scenePass = pass(scene, camera)
       scenePass.setMRT(
         mrt({
-          output: output,
-          diffuseColor: diffuseColor,
+          output,
+          diffuseColor,
           normal: directionToColor(normalView),
-          velocity: velocity,
+          velocity,
         }),
       )
 
@@ -169,8 +169,8 @@ const PostProcessingPasses = () => {
         const edgeStrength = uniform(3)
         const edgeGlow = uniform(0)
         const edgeThickness = uniform(1)
-        const visibleEdgeColor = uniform(new Color(0xffffff))
-        const hiddenEdgeColor = uniform(new Color(0xf3ff47))
+        const visibleEdgeColor = uniform(new Color(0xff_ff_ff))
+        const hiddenEdgeColor = uniform(new Color(0xf3_ff_47))
 
         const outlinePass = outline(scene, camera, {
           selectedObjects: useViewer.getState().outliner.selectedObjects,
@@ -192,8 +192,8 @@ const PostProcessingPasses = () => {
         const edgeGlow = uniform(0.5)
         const edgeThickness = uniform(1.5)
         const pulsePeriod = uniform(3)
-        const visibleEdgeColor = uniform(new Color(0x00aaff))
-        const hiddenEdgeColor = uniform(new Color(0xf3ff47))
+        const visibleEdgeColor = uniform(new Color(0x00_aa_ff))
+        const hiddenEdgeColor = uniform(new Color(0xf3_ff_47))
 
         const outlinePass = outline(scene, camera, {
           selectedObjects: useViewer.getState().outliner.hoveredObjects,
@@ -230,10 +230,7 @@ const PostProcessingPasses = () => {
       // (zones over background, pure background) use compositePass.rgb directly.
       const traaRgb = (traaOutput as any).rgb
       const colorSource = mix(compositePass.rgb, traaRgb, hasGeometry)
-      const finalOutput = vec4(
-        mix(bgUniform.current, colorSource, contentAlpha),
-        float(1),
-      )
+      const finalOutput = vec4(mix(bgUniform.current, colorSource, contentAlpha), float(1))
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput

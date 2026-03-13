@@ -12,14 +12,6 @@
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
     "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
-    "db:generate": "bun run --cwd packages/db db:generate",
-    "db:migrate": "bun run --cwd packages/db db:migrate",
-    "db:push": "bun run --cwd packages/db db:push",
-    "db:studio": "bun run --cwd packages/db db:studio",
-    "db:start": "supabase start",
-    "db:stop": "supabase stop",
-    "db:reset": "supabase db reset",
-    "db:status": "supabase status",
     "release": "gh workflow run release.yml -f package=both -f bump=patch",
     "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
     "release:core": "gh workflow run release.yml -f package=core -f bump=patch",
@@ -31,7 +23,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
-    "supabase": "2.76.15",
+    "dotenv-cli": "^11.0.0",
     "turbo": "^2.8.15",
     "typescript": "5.9.3",
     "ultracite": "^7.2.5"
@@ -42,6 +34,7 @@
   "packageManager": "bun@1.3.0",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "tooling/*"
   ]
 }

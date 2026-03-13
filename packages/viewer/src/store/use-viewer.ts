@@ -1,28 +1,22 @@
-"use client";
+'use client'
 
-import type {
-  AnyNode,
-  BaseNode,
-  BuildingNode,
-  LevelNode,
-  ZoneNode,
-} from "@pascal-app/core";
-import type { Object3D } from "three";
+import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type { Object3D } from 'three'
 
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type SelectionPath = {
-  buildingId: BuildingNode["id"] | null;
-  levelId: LevelNode["id"] | null;
-  zoneId: ZoneNode["id"] | null;
-  selectedIds: BaseNode["id"][]; // For items/assets (multi-select)
-};
+  buildingId: BuildingNode['id'] | null
+  levelId: LevelNode['id'] | null
+  zoneId: ZoneNode['id'] | null
+  selectedIds: BaseNode['id'][] // For items/assets (multi-select)
+}
 
 type Outliner = {
-  selectedObjects: Object3D[];
-  hoveredObjects: Object3D[];
-};
+  selectedObjects: Object3D[]
+  hoveredObjects: Object3D[]
+}
 
 type ViewerState = {
   selection: SelectionPath
@@ -52,7 +46,10 @@ type ViewerState = {
 
   projectId: string | null
   setProjectId: (id: string | null) => void
-  projectPreferences: Record<string, { showScans?: boolean, showGuides?: boolean, showGrid?: boolean }>
+  projectPreferences: Record<
+    string,
+    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean }
+  >
 
   // Smart selection update
   setSelection: (updates: Partial<SelectionPath>) => void
@@ -75,13 +72,13 @@ const useViewer = create<ViewerState>()(
       hoveredId: null,
       setHoveredId: (id) => set({ hoveredId: id }),
 
-      cameraMode: "perspective",
+      cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
-      theme: "light",
+      theme: 'light',
       setTheme: (theme) => set({ theme }),
 
-      levelMode: "stacked",
+      levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
 
       wallMode: 'up',
@@ -90,75 +87,75 @@ const useViewer = create<ViewerState>()(
       showScans: true,
       setShowScans: (show) =>
         set((state) => {
-          const projectPreferences = { ...(state.projectPreferences || {}) };
+          const projectPreferences = { ...(state.projectPreferences || {}) }
           if (state.projectId) {
             projectPreferences[state.projectId] = {
               ...(projectPreferences[state.projectId] || {}),
               showScans: show,
-            };
+            }
           }
-          return { showScans: show, projectPreferences };
+          return { showScans: show, projectPreferences }
         }),
 
       showGuides: true,
       setShowGuides: (show) =>
         set((state) => {
-          const projectPreferences = { ...(state.projectPreferences || {}) };
+          const projectPreferences = { ...(state.projectPreferences || {}) }
           if (state.projectId) {
             projectPreferences[state.projectId] = {
               ...(projectPreferences[state.projectId] || {}),
               showGuides: show,
-            };
+            }
           }
-          return { showGuides: show, projectPreferences };
+          return { showGuides: show, projectPreferences }
         }),
 
       showGrid: true,
       setShowGrid: (show) =>
         set((state) => {
-          const projectPreferences = { ...(state.projectPreferences || {}) };
+          const projectPreferences = { ...(state.projectPreferences || {}) }
           if (state.projectId) {
             projectPreferences[state.projectId] = {
               ...(projectPreferences[state.projectId] || {}),
               showGrid: show,
-            };
+            }
           }
-          return { showGrid: show, projectPreferences };
+          return { showGrid: show, projectPreferences }
         }),
 
       projectId: null,
       setProjectId: (id) =>
         set((state) => {
-          if (!id) return { projectId: id };
-          const prefs = state.projectPreferences?.[id] || {};
+          if (!id) return { projectId: id }
+          const prefs = state.projectPreferences?.[id] || {}
           return {
             projectId: id,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
-          };
+          }
         }),
       projectPreferences: {},
 
       setSelection: (updates) =>
         set((state) => {
-          const newSelection = { ...state.selection, ...updates };
+          const newSelection = { ...state.selection, ...updates }
 
           // Hierarchy Guard: If we change a high-level parent, reset the children unless explicitly provided
           if (updates.buildingId !== undefined) {
-            if (updates.levelId === undefined) newSelection.levelId = null;
-            if (updates.zoneId === undefined) newSelection.zoneId = null;
-            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+            if (updates.levelId === undefined) newSelection.levelId = null
+            if (updates.zoneId === undefined) newSelection.zoneId = null
+            if (updates.selectedIds === undefined) newSelection.selectedIds = []
           }
           if (updates.levelId !== undefined) {
-            if (updates.zoneId === undefined) newSelection.zoneId = null;
-            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+            if (updates.zoneId === undefined) newSelection.zoneId = null
+            if (updates.selectedIds === undefined) newSelection.selectedIds = []
           }
           if (updates.zoneId !== undefined) {
-            if (updates.selectedIds === undefined) newSelection.selectedIds = [];
+            if (updates.selectedIds === undefined) newSelection.selectedIds = []
           }
 
-          return { selection: newSelection };
+          return { selection: newSelection }
         }),
 
       resetSelection: () =>
@@ -190,6 +187,6 @@ const useViewer = create<ViewerState>()(
       }),
     },
   ),
-);
+)
 
-export default useViewer;
+export default useViewer

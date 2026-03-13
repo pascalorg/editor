@@ -49,7 +49,13 @@ export function useSpatialQuery() {
       rotation: [number, number, number],
       ignoreIds?: string[],
     ) => {
-      return spatialGridManager.canPlaceOnCeiling(ceilingId, position, dimensions, rotation, ignoreIds)
+      return spatialGridManager.canPlaceOnCeiling(
+        ceilingId,
+        position,
+        dimensions,
+        rotation,
+        ignoreIds,
+      )
     },
     [],
   )

@@ -14,5 +14,5 @@ export const GuideSystem = () => {
       }
     })
   }, [showGuides])
-  return null;
+  return null
 }

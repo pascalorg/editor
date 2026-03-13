@@ -56,10 +56,7 @@ const lightEffectSchema = z.object({
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
 })
 
-const effectSchema = z.discriminatedUnion('kind', [
-  animationEffectSchema,
-  lightEffectSchema,
-])
+const effectSchema = z.discriminatedUnion('kind', [animationEffectSchema, lightEffectSchema])
 
 // --- Interactive descriptor ---
 

@@ -11,7 +11,7 @@ export const DoorSegment = z.object({
   dividerThickness: z.number().default(0.03),
 
   // panel-specific
-  panelDepth: z.number().default(0.01),  // + raised, - recessed
+  panelDepth: z.number().default(0.01), // + raised, - recessed
   panelInset: z.number().default(0.04),
 })
 
@@ -42,8 +42,22 @@ export const DoorNode = BaseNode.extend({
 
   // Leaf segments — stacked top to bottom, each with its own column split
   segments: z.array(DoorSegment).default([
-    { type: 'panel', heightRatio: 0.4, columnRatios: [1], dividerThickness: 0.03, panelDepth: 0.01, panelInset: 0.04 },
-    { type: 'panel', heightRatio: 0.6, columnRatios: [1], dividerThickness: 0.03, panelDepth: 0.01, panelInset: 0.04 },
+    {
+      type: 'panel',
+      heightRatio: 0.4,
+      columnRatios: [1],
+      dividerThickness: 0.03,
+      panelDepth: 0.01,
+      panelInset: 0.04,
+    },
+    {
+      type: 'panel',
+      heightRatio: 0.6,
+      columnRatios: [1],
+      dividerThickness: 0.03,
+      panelDepth: 0.01,
+      panelInset: 0.04,
+    },
   ]),
 
   // Handle
@@ -58,7 +72,6 @@ export const DoorNode = BaseNode.extend({
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),
   panicBarHeight: z.number().default(1.0),
-
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
   - segments: rows stacked top to bottom, each defining its own columnRatios

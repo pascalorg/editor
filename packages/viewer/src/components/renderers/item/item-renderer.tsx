@@ -24,7 +24,7 @@ import { NodeRenderer } from '../node-renderer'
 
 // Shared materials to avoid creating new instances for every mesh
 const defaultMaterial = new MeshStandardNodeMaterial({
-  color: 0xffffff,
+  color: 0xff_ff_ff,
   roughness: 1,
   metalness: 0,
 })
@@ -53,7 +53,7 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
   useRegistry(node.id, node.type, ref)
 
   return (
-    <group position={node.position} rotation={node.rotation} ref={ref} visible={node.visible}>
+    <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
       <Suspense fallback={<PreviewModel node={node} />}>
         <ModelRenderer node={node} />
       </Suspense>
@@ -78,7 +78,7 @@ previewMaterial.transparent = true
 
 const PreviewModel = ({ node }: { node: ItemNode }) => {
   return (
-    <mesh position-y={node.asset.dimensions[1] / 2} material={previewMaterial}>
+    <mesh material={previewMaterial} position-y={node.asset.dimensions[1] / 2}>
       <boxGeometry
         args={[node.asset.dimensions[0], node.asset.dimensions[1], node.asset.dimensions[2]]}
       />
@@ -150,24 +150,24 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   return (
     <>
       <Clone
-        ref={ref}
         object={scene}
-        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
         position={node.asset.offset}
+        ref={ref}
         rotation={node.asset.rotation}
+        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
         {...handlers}
       />
       {animations.length > 0 && (
         <ItemAnimation
-          nodeId={node.id}
-          animEffect={animEffect}
-          interactive={interactive ?? null}
           actions={actions}
           animations={animations}
+          animEffect={animEffect}
+          interactive={interactive ?? null}
+          nodeId={node.id}
         />
       )}
       {lightEffects.map((effect, i) => (
-        <ItemLight key={i} nodeId={node.id} effect={effect} interactive={interactive!} />
+        <ItemLight effect={effect} interactive={interactive!} key={i} nodeId={node.id} />
       ))}
     </>
   )
@@ -287,12 +287,12 @@ const ItemLight = ({
 
   return (
     <pointLight
-      ref={lightRef}
-      color={effect.color}
-      intensity={effect.intensityRange[0]}
-      distance={effect.distance ?? 0}
-      position={effect.offset}
       castShadow={false}
+      color={effect.color}
+      distance={effect.distance ?? 0}
+      intensity={effect.intensityRange[0]}
+      position={effect.offset}
+      ref={lightRef}
     />
   )
 }

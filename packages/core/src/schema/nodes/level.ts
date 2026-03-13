@@ -12,7 +12,19 @@ import { ZoneNode } from './zone'
 export const LevelNode = BaseNode.extend({
   id: objectId('level'),
   type: nodeType('level'),
-  children: z.array(z.union([WallNode.shape.id, ZoneNode.shape.id, SlabNode.shape.id, CeilingNode.shape.id, RoofNode.shape.id, ScanNode.shape.id, GuideNode.shape.id])).default([]),
+  children: z
+    .array(
+      z.union([
+        WallNode.shape.id,
+        ZoneNode.shape.id,
+        SlabNode.shape.id,
+        CeilingNode.shape.id,
+        RoofNode.shape.id,
+        ScanNode.shape.id,
+        GuideNode.shape.id,
+      ]),
+    )
+    .default([]),
   // Specific props
   level: z.number().default(0),
 }).describe(

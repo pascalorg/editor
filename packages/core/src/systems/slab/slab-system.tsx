@@ -74,8 +74,8 @@ function outsetPolygon(polygon: Array<[number, number]>, amount: number): Array<
       offEdges.push([polygon[i]![0], polygon[i]![1], dx, dz])
       continue
     }
-    const nx = (s * dz / len) * amount
-    const nz = (s * -dx / len) * amount
+    const nx = ((s * dz) / len) * amount
+    const nz = ((s * -dx) / len) * amount
     offEdges.push([polygon[i]![0] + nx, polygon[i]![1] + nz, dx, dz])
   }
 

@@ -1,5 +1,6 @@
 import { loadAssetUrl } from '@pascal-app/core'
 
+// @ts-expect-error
 export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.pascal.app'
 
 /**

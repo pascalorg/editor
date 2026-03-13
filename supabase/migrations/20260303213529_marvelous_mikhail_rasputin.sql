@@ -1,1 +1,0 @@
-ALTER TABLE "projects" ADD COLUMN "published_model_version" integer;

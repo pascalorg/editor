@@ -58,8 +58,12 @@ export const WindowSystem = () => {
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
-  w: number, h: number, d: number,
-  x: number, y: number, z: number,
+  w: number,
+  h: number,
+  d: number,
+  x: number,
+  y: number,
+  z: number,
 ) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
   m.position.set(x, y, z)
@@ -84,9 +88,17 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   }
 
   const {
-    width, height, frameDepth, frameThickness,
-    columnRatios, rowRatios, columnDividerThickness, rowDividerThickness,
-    sill, sillDepth, sillThickness,
+    width,
+    height,
+    frameDepth,
+    frameThickness,
+    columnRatios,
+    rowRatios,
+    columnDividerThickness,
+    rowDividerThickness,
+    sill,
+    sillDepth,
+    sillThickness,
   } = node
 
   const innerW = width - 2 * frameThickness
@@ -94,11 +106,47 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 
   // ── Frame members ──
   // Top / bottom — full width
-  addBox(mesh, frameMaterial, width, frameThickness, frameDepth, 0,  height / 2 - frameThickness / 2, 0)
-  addBox(mesh, frameMaterial, width, frameThickness, frameDepth, 0, -height / 2 + frameThickness / 2, 0)
+  addBox(
+    mesh,
+    frameMaterial,
+    width,
+    frameThickness,
+    frameDepth,
+    0,
+    height / 2 - frameThickness / 2,
+    0,
+  )
+  addBox(
+    mesh,
+    frameMaterial,
+    width,
+    frameThickness,
+    frameDepth,
+    0,
+    -height / 2 + frameThickness / 2,
+    0,
+  )
   // Left / right — inner height to avoid corner overlap
-  addBox(mesh, frameMaterial, frameThickness, innerH, frameDepth, -width / 2 + frameThickness / 2, 0, 0)
-  addBox(mesh, frameMaterial, frameThickness, innerH, frameDepth,  width / 2 - frameThickness / 2, 0, 0)
+  addBox(
+    mesh,
+    frameMaterial,
+    frameThickness,
+    innerH,
+    frameDepth,
+    -width / 2 + frameThickness / 2,
+    0,
+    0,
+  )
+  addBox(
+    mesh,
+    frameMaterial,
+    frameThickness,
+    innerH,
+    frameDepth,
+    width / 2 - frameThickness / 2,
+    0,
+    0,
+  )
 
   // ── Pane grid ──
   const numCols = columnRatios.length
@@ -109,8 +157,8 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 
   const colSum = columnRatios.reduce((a, b) => a + b, 0)
   const rowSum = rowRatios.reduce((a, b) => a + b, 0)
-  const colWidths  = columnRatios.map(r => (r / colSum) * usableW)
-  const rowHeights = rowRatios.map(r => (r / rowSum) * usableH)
+  const colWidths = columnRatios.map((r) => (r / colSum) * usableW)
+  const rowHeights = rowRatios.map((r) => (r / rowSum) * usableH)
 
   // Compute column x-centers starting from left edge of inner area
   const colXCenters: number[] = []
@@ -134,7 +182,16 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   cx = -innerW / 2
   for (let c = 0; c < numCols - 1; c++) {
     cx += colWidths[c]!
-    addBox(mesh, frameMaterial, columnDividerThickness, innerH, frameDepth, cx + columnDividerThickness / 2, 0, 0)
+    addBox(
+      mesh,
+      frameMaterial,
+      columnDividerThickness,
+      innerH,
+      frameDepth,
+      cx + columnDividerThickness / 2,
+      0,
+      0,
+    )
     cx += columnDividerThickness
   }
 
@@ -144,7 +201,16 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     cy -= rowHeights[r]!
     const divY = cy - rowDividerThickness / 2
     for (let c = 0; c < numCols; c++) {
-      addBox(mesh, frameMaterial, colWidths[c]!, rowDividerThickness, frameDepth, colXCenters[c]!, divY, 0)
+      addBox(
+        mesh,
+        frameMaterial,
+        colWidths[c]!,
+        rowDividerThickness,
+        frameDepth,
+        colXCenters[c]!,
+        divY,
+        0,
+      )
     }
     cy -= rowDividerThickness
   }
@@ -153,7 +219,16 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   const glassDepth = Math.max(0.004, frameDepth * 0.08)
   for (let c = 0; c < numCols; c++) {
     for (let r = 0; r < numRows; r++) {
-      addBox(mesh, glassMaterial, colWidths[c]!, rowHeights[r]!, glassDepth, colXCenters[c]!, rowYCenters[r]!, 0)
+      addBox(
+        mesh,
+        glassMaterial,
+        colWidths[c]!,
+        rowHeights[r]!,
+        glassDepth,
+        colXCenters[c]!,
+        rowYCenters[r]!,
+        0,
+      )
     }
   }
 
@@ -162,7 +237,16 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     const sillW = width + sillDepth * 0.4 // slightly wider than frame
     // Protrudes from the front face of the frame (+Z)
     const sillZ = frameDepth / 2 + sillDepth / 2
-    addBox(mesh, frameMaterial, sillW, sillThickness, sillDepth, 0, -height / 2 - sillThickness / 2, sillZ)
+    addBox(
+      mesh,
+      frameMaterial,
+      sillW,
+      sillThickness,
+      sillDepth,
+      0,
+      -height / 2 - sillThickness / 2,
+      sillZ,
+    )
   }
 
   // ── Cutout (for wall CSG) — always full window dimensions, 1m deep ──

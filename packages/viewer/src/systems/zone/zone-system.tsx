@@ -16,7 +16,7 @@ export const ZoneSystem = () => {
   const pendingZoneRef = useRef<string | null>(null)
   const pendingZoneSinceRef = useRef(0)
 
-  useFrame(({clock}, delta) => {
+  useFrame(({ clock }, delta) => {
     const hoveredId = useViewer.getState().hoveredId
     let rawZone: string | null = null
 
@@ -35,9 +35,8 @@ export const ZoneSystem = () => {
 
     // Apply non-null immediately; debounce null to filter out brief exits
     const age = clock.elapsedTime * 1000 - pendingZoneSinceRef.current
-    const highlightedZone = rawZone !== null
-      ? rawZone
-      : age >= EXIT_DEBOUNCE_MS ? null : lastHighlightedZoneRef.current
+    const highlightedZone =
+      rawZone !== null ? rawZone : age >= EXIT_DEBOUNCE_MS ? null : lastHighlightedZoneRef.current
 
     // Detect stable zone change
     if (highlightedZone !== lastHighlightedZoneRef.current) {
@@ -45,7 +44,7 @@ export const ZoneSystem = () => {
       if (lastHighlightedZoneRef.current) {
         const prevLabel = document.getElementById(`${lastHighlightedZoneRef.current}-label`)
         const pin = prevLabel?.querySelector('.label-pin') as HTMLElement | null
-          if (pin) pin.style.opacity = '0'
+        if (pin) pin.style.opacity = '0'
       }
       // Fade in new zone label-pin
       if (highlightedZone) {
@@ -92,7 +91,6 @@ export const ZoneSystem = () => {
         const currentOpacity = material.userData.uOpacity.value
         material.userData.uOpacity.value = MathUtils.lerp(currentOpacity, targetOpacity, lerpSpeed)
       }
-
     })
   })
 

@@ -12,12 +12,12 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
 
   return (
     <mesh
-      ref={ref}
       castShadow
-      receiveShadow
-      visible={node.visible}
       position={node.position}
+      receiveShadow
+      ref={ref}
       rotation={node.rotation}
+      visible={node.visible}
       {...(isTransient ? {} : handlers)}
     >
       {/* WindowSystem replaces this geometry each time the node is dirty */}

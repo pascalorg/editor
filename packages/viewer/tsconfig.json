@@ -1,14 +1,13 @@
 {
-  "extends": "@repo/typescript-config/react-library.json",
+  "extends": "@pascal/typescript-config/react-library.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
+    "noEmit": false,
     "composite": true,
     "incremental": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "../core" }
-  ]
+  "references": [{ "path": "../core" }]
 }

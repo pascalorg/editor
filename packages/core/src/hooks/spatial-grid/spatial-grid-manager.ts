@@ -1,5 +1,5 @@
-import { getScaledDimensions } from '../../schema'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
+import { getScaledDimensions } from '../../schema'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -14,10 +14,12 @@ export function pointInPolygon(px: number, pz: number, polygon: Array<[number, n
   let inside = false
   const n = polygon.length
   for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i]![0], zi = polygon[i]![1]
-    const xj = polygon[j]![0], zj = polygon[j]![1]
+    const xi = polygon[i]![0],
+      zi = polygon[i]![1]
+    const xj = polygon[j]![0],
+      zj = polygon[j]![1]
 
-    if ((zi > pz) !== (zj > pz) && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) {
+    if (zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) {
       inside = !inside
     }
   }
@@ -53,8 +55,14 @@ function getItemFootprint(
  * Test if two line segments (a1->a2) and (b1->b2) intersect.
  */
 function segmentsIntersect(
-  ax1: number, az1: number, ax2: number, az2: number,
-  bx1: number, bz1: number, bx2: number, bz2: number,
+  ax1: number,
+  az1: number,
+  ax2: number,
+  az2: number,
+  bx1: number,
+  bz1: number,
+  bx2: number,
+  bz2: number,
 ): boolean {
   const cross = (ox: number, oz: number, ax: number, az: number, bx: number, bz: number) =>
     (ax - ox) * (bz - oz) - (az - oz) * (bx - ox)
@@ -64,15 +72,16 @@ function segmentsIntersect(
   const d3 = cross(ax1, az1, ax2, az2, bx1, bz1)
   const d4 = cross(ax1, az1, ax2, az2, bx2, bz2)
 
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
     return true
   }
 
   // Collinear touching cases
   const onSeg = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
-    Math.min(px, qx) <= rx && rx <= Math.max(px, qx) &&
-    Math.min(pz, qz) <= rz && rz <= Math.max(pz, qz)
+    Math.min(px, qx) <= rx &&
+    rx <= Math.max(px, qx) &&
+    Math.min(pz, qz) <= rz &&
+    rz <= Math.max(pz, qz)
 
   if (d1 === 0 && onSeg(bx1, bz1, bx2, bz2, ax1, az1)) return true
   if (d2 === 0 && onSeg(bx1, bz1, bx2, bz2, ax2, az2)) return true
@@ -86,16 +95,27 @@ function segmentsIntersect(
  * Test if a line segment intersects any edge of a polygon.
  */
 function segmentIntersectsPolygon(
-  sx1: number, sz1: number, sx2: number, sz2: number,
+  sx1: number,
+  sz1: number,
+  sx2: number,
+  sz2: number,
   polygon: Array<[number, number]>,
 ): boolean {
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    if (segmentsIntersect(
-      sx1, sz1, sx2, sz2,
-      polygon[i]![0], polygon[i]![1], polygon[j]![0], polygon[j]![1],
-    )) {
+    if (
+      segmentsIntersect(
+        sx1,
+        sz1,
+        sx2,
+        sz2,
+        polygon[i]![0],
+        polygon[i]![1],
+        polygon[j]![0],
+        polygon[j]![1],
+      )
+    ) {
       return true
     }
   }
@@ -129,10 +149,16 @@ export function itemOverlapsPolygon(
   // Check if any item edge intersects any polygon edge
   for (let i = 0; i < 4; i++) {
     const j = (i + 1) % 4
-    if (segmentIntersectsPolygon(
-      corners[i]![0], corners[i]![1], corners[j]![0], corners[j]![1],
-      polygon,
-    )) return true
+    if (
+      segmentIntersectsPolygon(
+        corners[i]![0],
+        corners[i]![1],
+        corners[j]![0],
+        corners[j]![1],
+        polygon,
+      )
+    )
+      return true
   }
 
   return false
@@ -144,8 +170,14 @@ export function itemOverlapsPolygon(
  * This prevents walls that just touch one point from being detected.
  */
 function segmentsCollinearAndOverlap(
-  ax1: number, az1: number, ax2: number, az2: number,
-  bx1: number, bz1: number, bx2: number, bz2: number,
+  ax1: number,
+  az1: number,
+  ax2: number,
+  az2: number,
+  bx1: number,
+  bz1: number,
+  bx2: number,
+  bz2: number,
 ): boolean {
   const EPSILON = 1e-6
 
@@ -159,8 +191,10 @@ function segmentsCollinearAndOverlap(
 
   // Check if a point is on segment b
   const onSegment = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
-    Math.min(px, qx) - EPSILON <= rx && rx <= Math.max(px, qx) + EPSILON &&
-    Math.min(pz, qz) - EPSILON <= rz && rz <= Math.max(pz, qz) + EPSILON
+    Math.min(px, qx) - EPSILON <= rx &&
+    rx <= Math.max(px, qx) + EPSILON &&
+    Math.min(pz, qz) - EPSILON <= rz &&
+    rz <= Math.max(pz, qz) + EPSILON
 
   // BOTH endpoints of wall (a) must be on edge (b) for substantial overlap
   const a1OnB = onSegment(bx1, bz1, bx2, bz2, ax1, az1)
@@ -314,7 +348,7 @@ export class SpatialGridManager {
             // position[1] is the bottom of the item
             this.getWallGrid(levelId).insert({
               itemId: item.id,
-              wallId: wallId,
+              wallId,
               tStart: t - halfW,
               tEnd: t + halfW,
               yStart: item.position[1],
@@ -328,7 +362,12 @@ export class SpatialGridManager {
         // Ceiling item - use parentId as the ceiling ID
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
+          this.getCeilingGrid(ceilingId).insert(
+            item.id,
+            item.position,
+            getScaledDimensions(item),
+            item.rotation,
+          )
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
@@ -367,7 +406,7 @@ export class SpatialGridManager {
             // position[1] is the bottom of the item
             this.getWallGrid(levelId).insert({
               itemId: item.id,
-              wallId: wallId,
+              wallId,
               tStart: t - halfW,
               tEnd: t + halfW,
               yStart: item.position[1],
@@ -387,7 +426,12 @@ export class SpatialGridManager {
         // Insert into new ceiling grid
         const ceilingId = item.parentId
         if (ceilingId && this.ceilings.has(ceilingId)) {
-          this.getCeilingGrid(ceilingId).insert(item.id, item.position, getScaledDimensions(item), item.rotation)
+          this.getCeilingGrid(ceilingId).insert(
+            item.id,
+            item.position,
+            getScaledDimensions(item),
+            item.rotation,
+          )
           this.itemCeilingMap.set(item.id, ceilingId)
         }
       } else if (!item.asset.attachTo) {
@@ -530,9 +574,12 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    let maxElevation = -Infinity
+    let maxElevation = Number.NEGATIVE_INFINITY
     for (const slab of slabMap.values()) {
-      if (slab.polygon.length >= 3 && itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
+      if (
+        slab.polygon.length >= 3 &&
+        itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)
+      ) {
         // Check if item is entirely within a hole (if so, ignore this slab)
         // We consider it entirely in a hole if the item center is in the hole
         let inHole = false
@@ -553,7 +600,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return maxElevation === -Infinity ? 0 : maxElevation
+    return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
   }
 
   /**
@@ -561,15 +608,11 @@ export class SpatialGridManager {
    * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    */
-  getSlabElevationForWall(
-    levelId: string,
-    start: [number, number],
-    end: [number, number],
-  ): number {
+  getSlabElevationForWall(levelId: string, start: [number, number], end: [number, number]): number {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    let maxElevation = -Infinity
+    let maxElevation = Number.NEGATIVE_INFINITY
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
       if (!wallOverlapsPolygon(start, end, slab.polygon)) continue
@@ -609,7 +652,7 @@ export class SpatialGridManager {
         if (elevation > maxElevation) maxElevation = elevation
       }
     }
-    return maxElevation === -Infinity ? 0 : maxElevation
+    return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
   }
 
   /**
