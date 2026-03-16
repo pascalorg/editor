@@ -2,6 +2,12 @@
 
 A 3D building editor built with React Three Fiber and WebGPU.
 
+
+
+https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
+
+
+
 ## Repository Architecture
 
 This is a Turborepo monorepo with three main packages:
