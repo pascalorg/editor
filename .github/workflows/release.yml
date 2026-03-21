@@ -57,8 +57,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm version ${{ inputs.bump }} --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
+          BUMP=${{ inputs.bump }}
+          VERSION=$(jq -r '.version' package.json)
+          IFS='.' read -r MAJ MIN PAT <<< "$VERSION"
+          if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
+          if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
+          if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
+          VERSION="$MAJ.$MIN.$PAT"
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
           echo "CORE_VERSION=$VERSION" >> $GITHUB_ENV
 
           bun run build
@@ -77,8 +83,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm version ${{ inputs.bump }} --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
+          BUMP=${{ inputs.bump }}
+          VERSION=$(jq -r '.version' package.json)
+          IFS='.' read -r MAJ MIN PAT <<< "$VERSION"
+          if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
+          if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
+          if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
+          VERSION="$MAJ.$MIN.$PAT"
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
           echo "VIEWER_VERSION=$VERSION" >> $GITHUB_ENV
 
           bun run build
