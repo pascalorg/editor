@@ -46,7 +46,7 @@ export const WallSystem = () => {
       if (!dirtyWallsByLevel.has(levelId)) {
         dirtyWallsByLevel.set(levelId, new Set())
       }
-      dirtyWallsByLevel.get(levelId)!.add(id)
+      dirtyWallsByLevel.get(levelId)?.add(id)
     })
 
     // Process each level that has dirty walls

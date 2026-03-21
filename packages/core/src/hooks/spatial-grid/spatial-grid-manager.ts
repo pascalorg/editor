@@ -273,15 +273,19 @@ export function wallOverlapsPolygon(
 }
 
 export class SpatialGridManager {
-  private floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
-  private wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
-  private walls = new Map<string, WallNode>() // wallId -> wall data (for length calculations)
-  private slabsByLevel = new Map<string, Map<string, SlabNode>>() // levelId -> (slabId -> slab)
-  private ceilingGrids = new Map<string, SpatialGrid>() // ceilingId -> grid
-  private ceilings = new Map<string, CeilingNode>() // ceilingId -> ceiling data
-  private itemCeilingMap = new Map<string, string>() // itemId -> ceilingId (reverse lookup)
+  private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
+  private readonly wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
+  private readonly walls = new Map<string, WallNode>() // wallId -> wall data (for length calculations)
+  private readonly slabsByLevel = new Map<string, Map<string, SlabNode>>() // levelId -> (slabId -> slab)
+  private readonly ceilingGrids = new Map<string, SpatialGrid>() // ceilingId -> grid
+  private readonly ceilings = new Map<string, CeilingNode>() // ceilingId -> ceiling data
+  private readonly itemCeilingMap = new Map<string, string>() // itemId -> ceilingId (reverse lookup)
 
-  constructor(private cellSize = 0.5) {}
+  private readonly cellSize: number
+
+  constructor(cellSize = 0.5) {
+    this.cellSize = cellSize
+  }
 
   private getFloorGrid(levelId: string): SpatialGrid {
     if (!this.floorGrids.has(levelId)) {

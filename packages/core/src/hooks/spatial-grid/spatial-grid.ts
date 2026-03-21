@@ -9,10 +9,14 @@ interface SpatialGridConfig {
 }
 
 export class SpatialGrid {
-  private cells = new Map<CellKey, GridCell>()
-  private itemCells = new Map<string, Set<CellKey>>() // reverse lookup
+  private readonly cells = new Map<CellKey, GridCell>()
+  private readonly itemCells = new Map<string, Set<CellKey>>() // reverse lookup
 
-  constructor(private config: SpatialGridConfig) {}
+  private readonly config: SpatialGridConfig
+
+  constructor(config: SpatialGridConfig) {
+    this.config = config
+  }
 
   private posToCell(x: number, z: number): [number, number] {
     return [Math.floor(x / this.config.cellSize), Math.floor(z / this.config.cellSize)]
@@ -75,7 +79,7 @@ export class SpatialGrid {
       if (!this.cells.has(key)) {
         this.cells.set(key, { itemIds: new Set() })
       }
-      this.cells.get(key)!.itemIds.add(itemId)
+      this.cells.get(key)?.itemIds.add(itemId)
     }
   }
 

@@ -23,6 +23,7 @@ export type {
 export { getScaledDimensions, ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
 export { RoofNode } from './nodes/roof'
+export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
 export { ScanNode } from './nodes/scan'
 // Nodes
 export { SiteNode } from './nodes/site'

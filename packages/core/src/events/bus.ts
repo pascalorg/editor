@@ -7,6 +7,7 @@ import type {
   ItemNode,
   LevelNode,
   RoofNode,
+  RoofSegmentNode,
   SiteNode,
   SlabNode,
   WallNode,
@@ -39,6 +40,7 @@ export type ZoneEvent = NodeEvent<ZoneNode>
 export type SlabEvent = NodeEvent<SlabNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type RoofEvent = NodeEvent<RoofNode>
+export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 
@@ -100,6 +102,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'roof', RoofEvent> &
+  NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   CameraControlEvents &

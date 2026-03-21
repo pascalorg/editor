@@ -49,8 +49,8 @@ function autoAdjustYPosition(
 }
 
 export class WallSpatialGrid {
-  private wallItems = new Map<string, WallItemPlacement[]>() // wallId -> placements
-  private itemToWall = new Map<string, string>() // itemId -> wallId (reverse lookup)
+  private readonly wallItems = new Map<string, WallItemPlacement[]>() // wallId -> placements
+  private readonly itemToWall = new Map<string, string>() // itemId -> wallId (reverse lookup)
 
   /**
    * Check if an item can be placed on a wall with auto-adjustment for vertical position
@@ -152,7 +152,7 @@ export class WallSpatialGrid {
     if (!this.wallItems.has(wallId)) {
       this.wallItems.set(wallId, [])
     }
-    this.wallItems.get(wallId)!.push(placement)
+    this.wallItems.get(wallId)?.push(placement)
     this.itemToWall.set(itemId, wallId)
   }
 

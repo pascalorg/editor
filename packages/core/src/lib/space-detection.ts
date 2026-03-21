@@ -42,7 +42,7 @@ export function initSpaceDetectionSync(
         if (!currentWallsByLevel.has(levelId)) {
           currentWallsByLevel.set(levelId, new Set())
         }
-        currentWallsByLevel.get(levelId)!.add((node as any).id)
+        currentWallsByLevel.get(levelId)?.add((node as any).id)
       }
     }
 

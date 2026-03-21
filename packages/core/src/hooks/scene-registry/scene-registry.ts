@@ -17,10 +17,19 @@ export const sceneRegistry = {
     slab: new Set<string>(),
     zone: new Set<string>(),
     roof: new Set<string>(),
+    'roof-segment': new Set<string>(),
     scan: new Set<string>(),
     guide: new Set<string>(),
     window: new Set<string>(),
     door: new Set<string>(),
+  },
+
+  /** Remove all entries. Call when unloading a scene to prevent stale 3D refs. */
+  clear() {
+    this.nodes.clear()
+    for (const set of Object.values(this.byType)) {
+      set.clear()
+    }
   },
 }
 
