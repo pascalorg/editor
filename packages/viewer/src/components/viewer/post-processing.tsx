@@ -1,9 +1,10 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Color, Layers, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
+import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
   colorToDirection,
@@ -22,7 +23,6 @@ import {
   vec4,
   velocity,
 } from 'three/tsl'
-
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
@@ -30,18 +30,21 @@ import useViewer from '../../store/use-viewer'
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 2,
-  stepCount: 8,
+  sliceCount: 1,
+  stepCount: 4,
   radius: 1,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
   aoIntensity: 1.5,
-  giIntensity: 0.5,
+  giIntensity: 0,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
-  useTemporalFiltering: true,
+  useTemporalFiltering: false,
 }
+
+const MAX_PIPELINE_RETRIES = 3
+const RETRY_DELAY_MS = 500
 
 const DARK_BG = '#1f2433'
 const LIGHT_BG = '#ffffff'
@@ -50,6 +53,7 @@ const PostProcessingPasses = () => {
   const { gl: renderer, scene, camera } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
+  const retryCountRef = useRef(0)
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
@@ -65,6 +69,18 @@ const PostProcessingPasses = () => {
     l.disable(SCENE_LAYER)
     return l
   }, [])
+
+  // Subscribe to projectId so the pipeline rebuilds on project switch
+  const projectId = useViewer((s) => s.projectId)
+
+  // Bump this to force a pipeline rebuild (used by retry logic)
+  const [pipelineVersion, setPipelineVersion] = useState(0)
+
+  const requestPipelineRebuild = useCallback(() => {
+    setPipelineVersion((v) => v + 1)
+  }, [])
+
+  // Renderer initialization
 
   useEffect(() => {
     let mounted = true
@@ -93,12 +109,24 @@ const PostProcessingPasses = () => {
     }
   }, [renderer])
 
+  // Reset retry count when project changes
+  useEffect(() => {
+    retryCountRef.current = 0
+  }, [])
+
+  // Build / rebuild the post-processing pipeline
   useEffect(() => {
     if (!(renderer && scene && camera && isInitialized)) {
       return
     }
 
     hasPipelineErrorRef.current = false
+
+    // Clear outliner arrays synchronously to prevent stale Object3D refs
+    // from the previous project leaking into the new pipeline's outline passes.
+    const outliner = useViewer.getState().outliner
+    outliner.selectedObjects.length = 0
+    outliner.hoveredObjects.length = 0
 
     try {
       // Scene pass with MRT for SSGI
@@ -148,9 +176,20 @@ const PostProcessingPasses = () => {
       giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
       giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-      // Extract GI and AO from SSGI pass
+      const giTexture = (giPass as any).getTextureNode()
+
+      // DenoiseNode only denoises RGB — alpha is passed through unchanged.
+      // SSGI packs AO into alpha, so we remap it into RGB before denoising.
+      // convertToTexture() inside denoise() will call rtt() on this vec4 node automatically.
+      const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+      const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
+      denoisePass.index.value = 0
+      denoisePass.radius.value = 4
+
       const gi = giPass.rgb
-      const ao = giPass.a
+      const ao = (denoisePass as any).r
+      // const gi = giPass.rgb;
+      // const ao = giPass.a;
 
       // Background detection via alpha: renderer clears with alpha=0 (setClearAlpha(0) in useFrame),
       // so background pixels have scenePassColor.a=0 while geometry pixels have output.a=1.
@@ -272,12 +311,24 @@ const PostProcessingPasses = () => {
       renderPipelineRef.current.render()
     } catch (error) {
       hasPipelineErrorRef.current = true
-      console.error(
-        '[viewer] Post-processing render pass failed. Disabling post FX for this session.',
-        error,
-      )
-      renderPipelineRef.current.dispose()
+      console.error('[viewer] Post-processing render pass failed.', error)
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
       renderPipelineRef.current = null
+
+      if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
+        // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
+        retryCountRef.current++
+        console.warn(
+          `[viewer] Scheduling post-processing rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
+        )
+        setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
+      } else {
+        console.error(
+          '[viewer] Post-processing retries exhausted. Rendering without post FX for this session.',
+        )
+      }
     }
   }, 1)
 

@@ -13,6 +13,8 @@ import {
   type LevelNode,
   type RoofEvent,
   type RoofNode,
+  type RoofSegmentEvent,
+  type RoofSegmentNode,
   type SiteEvent,
   type SiteNode,
   type SlabEvent,
@@ -37,6 +39,7 @@ type NodeConfig = {
   slab: { node: SlabNode; event: SlabEvent }
   ceiling: { node: CeilingNode; event: CeilingEvent }
   roof: { node: RoofNode; event: RoofEvent }
+  'roof-segment': { node: RoofSegmentNode; event: RoofSegmentEvent }
   window: { node: WindowNode; event: WindowEvent }
   door: { node: DoorNode; event: DoorEvent }
 }

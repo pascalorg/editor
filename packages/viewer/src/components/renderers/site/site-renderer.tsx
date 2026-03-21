@@ -19,10 +19,10 @@ const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeom
 
   // Create a simple line loop at ground level
   for (const [x, z] of points) {
-    positions.push(x!, Y_OFFSET, z!)
+    positions.push(x ?? 0, Y_OFFSET, z ?? 0)
   }
   // Close the loop
-  positions.push(points[0]![0]!, Y_OFFSET, points[0]![1]!)
+  positions.push(points[0]?.[0] ?? 0, Y_OFFSET, points[0]?.[1] ?? 0)
 
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
 

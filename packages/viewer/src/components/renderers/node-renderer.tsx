@@ -8,6 +8,7 @@ import { GuideRenderer } from './guide/guide-renderer'
 import { ItemRenderer } from './item/item-renderer'
 import { LevelRenderer } from './level/level-renderer'
 import { RoofRenderer } from './roof/roof-renderer'
+import { RoofSegmentRenderer } from './roof-segment/roof-segment-renderer'
 import { ScanRenderer } from './scan/scan-renderer'
 import { SiteRenderer } from './site/site-renderer'
 import { SlabRenderer } from './slab/slab-renderer'
@@ -33,6 +34,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'window' && <WindowRenderer node={node} />}
       {node.type === 'zone' && <ZoneRenderer node={node} />}
       {node.type === 'roof' && <RoofRenderer node={node} />}
+      {node.type === 'roof-segment' && <RoofSegmentRenderer node={node} />}
       {node.type === 'scan' && <ScanRenderer node={node} />}
       {node.type === 'guide' && <GuideRenderer node={node} />}
     </>

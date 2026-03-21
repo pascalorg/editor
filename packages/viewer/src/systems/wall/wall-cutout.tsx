@@ -98,11 +98,9 @@ export const WallCutout = () => {
             if (wallNode.frontSide === 'exterior' && wallNode.backSide !== 'exterior') {
               hideWall = true
             }
-          } else {
+          } else if (wallNode.backSide === 'exterior' && wallNode.frontSide !== 'exterior') {
             // Back side
-            if (wallNode.backSide === 'exterior' && wallNode.frontSide !== 'exterior') {
-              hideWall = true
-            }
+            hideWall = true
           }
         }
         ;(wallMesh as Mesh).material = hideWall ? invsibleWallMaterial : wallMaterial
