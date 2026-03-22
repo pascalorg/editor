@@ -29,7 +29,7 @@ import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
-  enabled: true,
+  enabled: false,
   sliceCount: 1,
   stepCount: 4,
   radius: 1,
@@ -198,11 +198,18 @@ const PostProcessingPasses = () => {
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
-      // Composite: scene * AO + diffuse * GI
-      const compositePass = vec4(
-        add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
-        contentAlpha,
-      )
+      // Composite pass - always defined regardless of SSGI
+      let compositePass
+      if (SSGI_PARAMS.enabled) {
+        // Composite: scene * AO + diffuse * GI
+        compositePass = vec4(
+          add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
+          contentAlpha,
+        )
+      } else {
+        // Simple composite without AO/GI
+        compositePass = vec4(add(scenePassColor.rgb, zonePass.rgb), contentAlpha)
+      }
 
       function generateSelectedOutlinePass() {
         const edgeStrength = uniform(3)
