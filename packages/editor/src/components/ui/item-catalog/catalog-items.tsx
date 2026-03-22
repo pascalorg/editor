@@ -1,4 +1,4 @@
-import { type AssetInput, ItemNode } from '@pascal-app/core'
+import { type AssetInput, ItemNode } from '@vesper/core'
 export const CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'tesla',

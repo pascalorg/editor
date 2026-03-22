@@ -1,4 +1,4 @@
-import { type SiteNode, useScene } from '@pascal-app/core'
+import { type SiteNode, useScene } from '@vesper/core'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
 

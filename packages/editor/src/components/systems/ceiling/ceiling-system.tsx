@@ -1,5 +1,5 @@
-import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNodeId, sceneRegistry, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect } from 'react'
 import useEditor from '../../../store/use-editor'
 

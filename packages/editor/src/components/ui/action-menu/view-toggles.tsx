@@ -1,6 +1,6 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@vesper/viewer'
 import { Box, Camera, Diamond, Image, Layers, Layers2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { ActionButton } from './action-button'

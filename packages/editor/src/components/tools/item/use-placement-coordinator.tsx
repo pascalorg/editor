@@ -1,4 +1,4 @@
-import type { AssetInput } from '@pascal-app/core'
+import type { AssetInput } from '@vesper/core'
 import {
   type AnyNodeId,
   type CeilingEvent,
@@ -13,8 +13,8 @@ import {
   useSpatialQuery,
   type WallEvent,
   type WallNode,
-} from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+} from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import {

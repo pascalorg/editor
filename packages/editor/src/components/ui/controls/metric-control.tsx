@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { useScene } from '@vesper/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../../lib/utils'
 

@@ -1,7 +1,7 @@
 'use client'
 
-import type { AnyNodeId, Collection, CollectionId } from '@pascal-app/core'
-import { useScene } from '@pascal-app/core'
+import type { AnyNodeId, Collection, CollectionId } from '@vesper/core'
+import { useScene } from '@vesper/core'
 import {
   Check,
   ChevronDown,

@@ -1,5 +1,6 @@
 // Store
 
+export { shallow } from 'zustand/shallow'
 export type {
   BuildingEvent,
   CameraControlEvent,

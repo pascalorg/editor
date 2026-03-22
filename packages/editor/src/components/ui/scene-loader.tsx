@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { cn } from '../../lib/utils'
 
 const LOADERS = [
-  'pascal-loader-1',
-  'pascal-loader-2',
-  'pascal-loader-3',
-  'pascal-loader-4',
-  'pascal-loader-5',
+  'vesper-loader-1',
+  'vesper-loader-2',
+  'vesper-loader-3',
+  'vesper-loader-4',
+  'vesper-loader-5',
 ]
 
 interface SceneLoaderProps {

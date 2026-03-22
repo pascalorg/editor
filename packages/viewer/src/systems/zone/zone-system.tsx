@@ -1,4 +1,4 @@
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@vesper/core'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { type Group, MathUtils, type Mesh } from 'three'

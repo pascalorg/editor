@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { useScene } from '@vesper/core'
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 

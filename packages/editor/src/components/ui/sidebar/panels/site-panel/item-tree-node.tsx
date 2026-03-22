@@ -1,5 +1,5 @@
-import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNodeId, type ItemNode, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'

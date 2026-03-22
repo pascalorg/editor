@@ -1,6 +1,6 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@vesper/viewer'
 import { Moon, Sun } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useState } from 'react'

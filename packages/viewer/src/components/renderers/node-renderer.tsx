@@ -1,6 +1,7 @@
 'use client'
 
-import { type AnyNode, useScene } from '@pascal-app/core'
+import { type AnyNode, useScene } from '@vesper/core'
+import { memo } from 'react'
 import { BuildingRenderer } from './building/building-renderer'
 import { CeilingRenderer } from './ceiling/ceiling-renderer'
 import { DoorRenderer } from './door/door-renderer'
@@ -16,7 +17,7 @@ import { WallRenderer } from './wall/wall-renderer'
 import { WindowRenderer } from './window/window-renderer'
 import { ZoneRenderer } from './zone/zone-renderer'
 
-export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
+const NodeRendererInner = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
 
   if (!node) return null
@@ -40,3 +41,5 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
     </>
   )
 }
+
+export const NodeRenderer = memo(NodeRendererInner)

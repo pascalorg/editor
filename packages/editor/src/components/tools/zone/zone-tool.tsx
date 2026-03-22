@@ -1,5 +1,5 @@
-import { emitter, type GridEvent, type LevelNode, useScene, ZoneNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { emitter, type GridEvent, type LevelNode, useScene, ZoneNode } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { PALETTE_COLORS } from './../../../components/ui/primitives/color-dot'

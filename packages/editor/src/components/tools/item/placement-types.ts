@@ -5,7 +5,7 @@ import type {
   ItemNode,
   LevelNode,
   WallNode,
-} from '@pascal-app/core'
+} from '@vesper/core'
 import type { Vector3 } from 'three'
 
 // ============================================================================

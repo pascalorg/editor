@@ -1,4 +1,4 @@
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@vesper/core'
 import type { Object3D } from 'three'
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null

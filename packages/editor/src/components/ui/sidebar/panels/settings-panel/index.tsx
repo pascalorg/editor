@@ -1,5 +1,5 @@
-import { emitter, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { emitter, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
 import {

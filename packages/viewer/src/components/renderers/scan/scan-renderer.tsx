@@ -1,4 +1,4 @@
-import { type ScanNode, useRegistry } from '@pascal-app/core'
+import { type ScanNode, useRegistry } from '@vesper/core'
 import { Suspense, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 import { useAssetUrl } from '../../../hooks/use-asset-url'

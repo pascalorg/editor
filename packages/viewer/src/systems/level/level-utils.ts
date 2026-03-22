@@ -4,7 +4,7 @@ import {
   sceneRegistry,
   useScene,
   type WallNode,
-} from '@pascal-app/core'
+} from '@vesper/core'
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
 

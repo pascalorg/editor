@@ -1,9 +1,10 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { useScene } from '@vesper/core'
+import { memo } from 'react'
 import { NodeRenderer } from './node-renderer'
 
-export const SceneRenderer = () => {
+const SceneRendererInner = () => {
   const rootNodes = useScene((state) => state.rootNodeIds)
 
   return (
@@ -14,3 +15,5 @@ export const SceneRenderer = () => {
     </group>
   )
 }
+
+export const SceneRenderer = memo(SceneRendererInner)

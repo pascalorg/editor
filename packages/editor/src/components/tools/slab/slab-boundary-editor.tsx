@@ -1,5 +1,5 @@
-import { resolveLevelId, type SlabNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { resolveLevelId, type SlabNode, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'
 

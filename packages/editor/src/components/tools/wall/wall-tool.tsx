@@ -1,5 +1,5 @@
-import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { emitter, type GridEvent, useScene, WallNode } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'

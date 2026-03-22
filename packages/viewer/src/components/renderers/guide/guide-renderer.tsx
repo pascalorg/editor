@@ -1,4 +1,4 @@
-import { type GuideNode, useRegistry } from '@pascal-app/core'
+import { type GuideNode, useRegistry } from '@vesper/core'
 import { useLoader } from '@react-three/fiber'
 import { Suspense, useMemo, useRef } from 'react'
 import { DoubleSide, type Group, type Texture, TextureLoader } from 'three'

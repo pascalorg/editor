@@ -1,7 +1,7 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, DoorNode, emitter, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNode, type AnyNodeId, DoorNode, emitter, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { usePresetsAdapter } from '../../../contexts/presets-context'

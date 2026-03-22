@@ -1,10 +1,10 @@
-import { useRegistry, type WallNode } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useRegistry, type WallNode } from '@vesper/core'
+import { memo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
 
-export const WallRenderer = ({ node }: { node: WallNode }) => {
+const WallRendererInner = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'wall', ref)
@@ -26,3 +26,5 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
     </mesh>
   )
 }
+
+export const WallRenderer = memo(WallRendererInner)

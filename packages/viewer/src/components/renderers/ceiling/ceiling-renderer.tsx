@@ -1,4 +1,4 @@
-import { type CeilingNode, useRegistry } from '@pascal-app/core'
+import { type CeilingNode, useRegistry } from '@vesper/core'
 import { useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'

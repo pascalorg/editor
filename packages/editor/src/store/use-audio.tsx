@@ -37,7 +37,7 @@ const useAudio = create<AudioState>()(
       setAutoplay: (v) => set({ autoplay: v }),
     }),
     {
-      name: 'pascal-audio-settings',
+      name: 'vesper-audio-settings',
     },
   ),
 )

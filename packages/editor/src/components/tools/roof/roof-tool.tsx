@@ -5,8 +5,8 @@ import {
   type LevelNode,
   RoofNode,
   useScene,
-} from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+} from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'

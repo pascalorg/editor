@@ -1,4 +1,4 @@
-import { type RoofSegmentNode, useRegistry } from '@pascal-app/core'
+import { type RoofSegmentNode, useRegistry } from '@vesper/core'
 import { useRef } from 'react'
 import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'

@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter } from '@pascal-app/core'
+import { emitter } from '@vesper/core'
 import {
   BookMarked,
   Check,

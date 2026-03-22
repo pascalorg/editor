@@ -1,6 +1,6 @@
 'use client'
 
-import { Editor } from '@pascal-app/editor'
+import { Editor } from '@vesper/editor'
 
 export default function Home() {
   return (

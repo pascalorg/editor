@@ -13,7 +13,7 @@ import {
   useScene,
   type WallNode,
   type ZoneNode,
-} from '@pascal-app/core'
+} from '@vesper/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'

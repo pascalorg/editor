@@ -1,4 +1,4 @@
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@vesper/core'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, useEffect, useRef } from 'react'

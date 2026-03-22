@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter } from '@pascal-app/core'
+import { emitter } from '@vesper/core'
 import Image from 'next/image'
 import { ActionButton } from './action-button'
 

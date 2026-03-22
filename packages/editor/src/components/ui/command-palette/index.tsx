@@ -1,8 +1,8 @@
 'use client'
 
-import type { AnyNodeId } from '@pascal-app/core'
-import { emitter, LevelNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import type { AnyNodeId } from '@vesper/core'
+import { emitter, LevelNode, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { Command } from 'cmdk'
 import {
   AppWindow,

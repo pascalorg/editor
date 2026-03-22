@@ -25,7 +25,7 @@ import {
   type WindowNode,
   type ZoneEvent,
   type ZoneNode,
-} from '@pascal-app/core'
+} from '@vesper/core'
 import type { ThreeEvent } from '@react-three/fiber'
 import useViewer from '../store/use-viewer'
 

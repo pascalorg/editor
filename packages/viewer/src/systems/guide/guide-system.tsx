@@ -1,4 +1,4 @@
-import { sceneRegistry } from '@pascal-app/core'
+import { sceneRegistry } from '@vesper/core'
 import { useEffect } from 'react'
 import useViewer from '../../store/use-viewer'
 

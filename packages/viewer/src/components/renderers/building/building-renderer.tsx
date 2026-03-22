@@ -1,4 +1,4 @@
-import { type BuildingNode, useRegistry } from '@pascal-app/core'
+import { type BuildingNode, useRegistry } from '@vesper/core'
 import { useRef } from 'react'
 import type { Group } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'

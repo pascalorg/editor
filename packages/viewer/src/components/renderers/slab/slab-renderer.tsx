@@ -1,9 +1,9 @@
-import { type SlabNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
+import { type SlabNode, useRegistry } from '@vesper/core'
+import { memo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
-export const SlabRenderer = ({ node }: { node: SlabNode }) => {
+const SlabRendererInner = ({ node }: { node: SlabNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'slab', ref)
@@ -18,3 +18,5 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
     </mesh>
   )
 }
+
+export const SlabRenderer = memo(SlabRendererInner)

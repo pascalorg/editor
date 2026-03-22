@@ -1,7 +1,7 @@
 'use client'
 
-import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'

@@ -1,11 +1,11 @@
-# @pascal-app/core
+# @vesper/core
 
 Core library for Pascal 3D building editor.
 
 ## Installation
 
 ```bash
-npm install @pascal-app/core
+npm install @vesper/core
 ```
 
 ## Peer Dependencies
@@ -27,7 +27,7 @@ npm install react three @react-three/fiber @react-three/drei
 ## Usage
 
 ```typescript
-import { useScene, WallNode, ItemNode } from '@pascal-app/core'
+import { useScene, WallNode, ItemNode } from '@vesper/core'
 
 // Create a wall
 const wall = WallNode.parse({

@@ -1,5 +1,5 @@
 {
-  "extends": "@pascal/typescript-config/react-library.json",
+  "extends": "@vesper/typescript-config/react-library.json",
   "compilerOptions": {
     "rootDir": "src",
     "noEmit": true

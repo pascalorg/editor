@@ -1,5 +1,5 @@
 {
-  "name": "@pascal-app/core",
+  "name": "@vesper/core",
   "version": "0.2.0",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
@@ -39,7 +39,7 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@pascal/typescript-config": "*",
+    "@vesper/typescript-config": "*",
     "@types/react": "^19.2.2",
     "typescript": "5.9.3",
     "@types/three": "^0.183.0"

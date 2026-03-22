@@ -1,9 +1,9 @@
-import { type DoorNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
+import { type DoorNode, useRegistry } from '@vesper/core'
+import { memo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
-export const DoorRenderer = ({ node }: { node: DoorNode }) => {
+const DoorRendererInner = ({ node }: { node: DoorNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'door', ref)
@@ -26,3 +26,5 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
     </mesh>
   )
 }
+
+export const DoorRenderer = memo(DoorRendererInner)

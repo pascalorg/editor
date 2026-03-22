@@ -1,4 +1,4 @@
-import { useRegistry, type ZoneNode } from '@pascal-app/core'
+import { useRegistry, type ZoneNode } from '@vesper/core'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'

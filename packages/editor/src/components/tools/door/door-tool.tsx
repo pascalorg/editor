@@ -6,8 +6,8 @@ import {
   spatialGridManager,
   useScene,
   type WallEvent,
-} from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+} from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'

@@ -1,5 +1,5 @@
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNodeId, emitter, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useEffect } from 'react'
 import { sfxEmitter } from '../lib/sfx-bus'
 import useEditor from '../store/use-editor'

@@ -1,7 +1,7 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import useEditor from '../store/use-editor'
 
 export type SceneGraph = {
@@ -53,7 +53,7 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   syncEditorSelectionFromCurrentScene()
 }
 
-const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
+const LOCAL_STORAGE_KEY = 'vesper-editor-scene'
 
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {

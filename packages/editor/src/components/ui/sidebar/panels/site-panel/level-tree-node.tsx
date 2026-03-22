@@ -1,5 +1,5 @@
-import type { LevelNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import type { LevelNode } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { Layers } from 'lucide-react'
 import { useState } from 'react'
 import { InlineRenameInput } from './inline-rename-input'

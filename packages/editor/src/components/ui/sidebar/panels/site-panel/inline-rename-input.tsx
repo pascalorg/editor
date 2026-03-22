@@ -1,4 +1,4 @@
-import { type AnyNode, useScene } from '@pascal-app/core'
+import { type AnyNode, useScene } from '@vesper/core'
 import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from './../../../../../lib/utils'

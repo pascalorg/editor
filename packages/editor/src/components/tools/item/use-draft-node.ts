@@ -4,8 +4,8 @@ import {
   ItemNode,
   sceneRegistry,
   useScene,
-} from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+} from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
 import { stripTransient } from './placement-math'

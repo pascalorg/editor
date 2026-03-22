@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@number-flow/react": "^0.5.14",
-    "@pascal-app/core": "*",
-    "@pascal-app/editor": "*",
-    "@pascal-app/viewer": "*",
+    "@vesper/core": "*",
+    "@vesper/editor": "*",
+    "@vesper/viewer": "*",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "clsx": "^2.1.1",
@@ -28,7 +28,7 @@
     "three": "^0.183.1"
   },
   "devDependencies": {
-    "@pascal/typescript-config": "*",
+    "@vesper/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",

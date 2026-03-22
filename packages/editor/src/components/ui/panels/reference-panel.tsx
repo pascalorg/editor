@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type GuideNode, type ScanNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type GuideNode, type ScanNode, useScene } from '@vesper/core'
 import { Box, Image as ImageIcon } from 'lucide-react'
 import { useCallback } from 'react'
 import useEditor from '../../../store/use-editor'

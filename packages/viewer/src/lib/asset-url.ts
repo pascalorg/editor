@@ -1,7 +1,7 @@
-import { loadAssetUrl } from '@pascal-app/core'
+import { loadAssetUrl } from '@vesper/core'
 
 // @ts-expect-error
-export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.pascal.app'
+export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.vesper.app'
 
 /**
  * Resolves an asset URL to the appropriate format:

@@ -1,4 +1,4 @@
-import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { emitter, type GridEvent, sceneRegistry } from '@vesper/core'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Line } from 'three'

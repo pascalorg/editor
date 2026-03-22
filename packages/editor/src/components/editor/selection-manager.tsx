@@ -7,9 +7,9 @@ import {
   resolveLevelId,
   sceneRegistry,
   useScene,
-} from '@pascal-app/core'
+} from '@vesper/core'
 
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@vesper/viewer'
 import { useEffect, useRef } from 'react'
 import useEditor from './../../store/use-editor'
 

@@ -1,4 +1,4 @@
-import { isObject } from '@pascal-app/core'
+import { isObject } from '@vesper/core'
 
 /**
  * Snaps a position to 0.5 grid, with an offset to align item edges to grid lines.

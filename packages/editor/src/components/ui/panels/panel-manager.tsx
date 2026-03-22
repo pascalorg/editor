@@ -1,7 +1,7 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNodeId, useScene } from '@vesper/core'
+import { useViewer } from '@vesper/viewer'
 import useEditor from '../../../store/use-editor'
 import { CeilingPanel } from './ceiling-panel'
 import { DoorPanel } from './door-panel'

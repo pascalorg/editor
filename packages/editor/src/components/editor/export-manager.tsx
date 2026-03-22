@@ -1,6 +1,6 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@vesper/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'

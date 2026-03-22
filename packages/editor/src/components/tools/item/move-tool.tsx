@@ -1,4 +1,4 @@
-import type { DoorNode, ItemNode, WindowNode } from '@pascal-app/core'
+import type { DoorNode, ItemNode, WindowNode } from '@vesper/core'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'

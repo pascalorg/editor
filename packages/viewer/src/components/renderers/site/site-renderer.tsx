@@ -1,4 +1,4 @@
-import { type SiteNode, useRegistry } from '@pascal-app/core'
+import { type SiteNode, useRegistry } from '@vesper/core'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'

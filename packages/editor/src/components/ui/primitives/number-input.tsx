@@ -1,7 +1,7 @@
 'use client'
 
 import NumberFlow from '@number-flow/react'
-import { useScene } from '@pascal-app/core'
+import { useScene } from '@vesper/core'
 import { useCallback, useRef, useState } from 'react'
 
 interface NumberInputProps {

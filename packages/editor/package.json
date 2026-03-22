@@ -1,7 +1,7 @@
 {
-  "name": "@pascal-app/editor",
+  "name": "@vesper/editor",
   "version": "0.1.0",
-  "description": "Pascal building editor component",
+  "description": "Vesper building editor component",
   "type": "module",
   "exports": {
     ".": "./src/index.tsx"
@@ -10,8 +10,8 @@
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@pascal-app/core": "*",
-    "@pascal-app/viewer": "*",
+    "@vesper/core": "*",
+    "@vesper/viewer": "*",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "next": ">=15",
@@ -48,9 +48,9 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@pascal-app/core": "*",
-    "@pascal-app/viewer": "*",
-    "@pascal/typescript-config": "*",
+    "@vesper/core": "*",
+    "@vesper/viewer": "*",
+    "@vesper/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",

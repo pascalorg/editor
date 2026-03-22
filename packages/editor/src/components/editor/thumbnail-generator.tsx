@@ -1,7 +1,7 @@
 'use client'
 
-import { emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { snapLevelsToTruePositions } from '@pascal-app/viewer'
+import { emitter, sceneRegistry, useScene } from '@vesper/core'
+import { snapLevelsToTruePositions } from '@vesper/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
