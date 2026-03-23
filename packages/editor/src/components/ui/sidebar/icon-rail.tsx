@@ -1,7 +1,7 @@
 'use client'
 
 import { useViewer } from '@vesper/viewer'
-import { Moon, Sun } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Moon, Sun } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useState } from 'react'
 import {
@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
+import { useSidebar } from './../../../components/ui/primitives/sidebar'
 import { cn } from './../../../lib/utils'
 
 export type PanelId = 'site' | 'settings'
@@ -29,6 +30,7 @@ export function IconRail({ activePanel, onPanelChange, appMenuButton, className 
   const theme = useViewer((state) => state.theme)
   const setTheme = useViewer((state) => state.setTheme)
   const [mounted, setMounted] = useState(false)
+  const { open, toggleSidebar } = useSidebar()
 
   useEffect(() => {
     setMounted(true)
@@ -43,6 +45,20 @@ export function IconRail({ activePanel, onPanelChange, appMenuButton, className 
     >
       {/* App menu slot */}
       {appMenuButton}
+
+      {/* Collapse Toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:bg-accent"
+            onClick={toggleSidebar}
+            type="button"
+          >
+            <ChevronLeft className={cn('h-5 w-5 transition-transform', !open && 'rotate-180')} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{open ? 'Collapse sidebar' : 'Expand sidebar'}</TooltipContent>
+      </Tooltip>
 
       {/* Divider */}
       <div className="mb-1 h-px w-8 bg-border/50" />
