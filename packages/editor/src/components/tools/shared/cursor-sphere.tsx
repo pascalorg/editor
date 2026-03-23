@@ -1,4 +1,3 @@
-import { Html } from '@react-three/drei'
 import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
 import type { Group } from 'three'
@@ -15,7 +14,7 @@ interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
 }
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
-  { color = '#818cf8', showTooltip = true, height = 2.5, ...props },
+  { color = '#22c55e', showTooltip = true, height = 2.5, ...props }, // Green default
   ref,
 ) {
   const tool = useEditor((s) => s.tool)
@@ -75,8 +74,8 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
         </mesh>
       )}
 
-      {/* Tool Icon Tooltip at the top of the line */}
-      {showTooltip && activeToolConfig && (
+      {/* Tool Icon Tooltip at the top of the line - disabled since we switched to Lucide icons */}
+      {/*showTooltip && activeToolConfig && (
         <Html
           center
           position={[0, height > 0 ? height + 0.2 : 0.6, 0]}
@@ -94,19 +93,22 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
             height: '36px',
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt={activeToolConfig.label}
-            src={activeToolConfig.iconSrc}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
-            }}
-          />
+          {activeToolConfig.iconSrc ? (
+            <img
+              alt={activeToolConfig.label}
+              src={activeToolConfig.iconSrc}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+              }}
+            />
+          ) : (
+            <span style={{ color: '#22c55e', fontSize: '20px' }}>●</span>
+          )}
         </Html>
-      )}
+      )*/}
     </group>
   )
 })

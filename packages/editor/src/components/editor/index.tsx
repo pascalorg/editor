@@ -191,18 +191,36 @@ export default function Editor({
     }
   }, [isVersionPreviewMode, previewScene])
 
+  // Apply dark class based on actual theme state
   useEffect(() => {
-    document.body.classList.add('dark')
-    return () => {
+    // Set initial class based on theme
+    const theme = useViewer.getState().theme
+    if (theme === 'dark') {
+      document.body.classList.add('dark')
+    } else {
       document.body.classList.remove('dark')
     }
+
+    // Watch for theme changes via simple interval polling
+    const interval = setInterval(() => {
+      const currentTheme = useViewer.getState().theme
+      if (currentTheme === 'dark') {
+        document.body.classList.add('dark')
+      } else {
+        document.body.classList.remove('dark')
+      }
+    }, 500)
+    return () => clearInterval(interval)
   }, [])
 
   const showLoader = isLoading || isSceneLoading
 
+  // Get current theme for conditional classes
+  const theme = useViewer((state) => state.theme)
+
   return (
     <PresetsProvider adapter={presetsAdapter}>
-      <div className="dark h-full w-full text-foreground">
+      <div className={`${theme === 'dark' ? 'dark' : ''} h-full w-full text-foreground`}>
         {showLoader && <SceneLoader />}
 
         {isPreviewMode ? (

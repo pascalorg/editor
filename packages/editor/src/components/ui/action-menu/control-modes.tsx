@@ -1,6 +1,6 @@
 'use client'
 
-import { type LucideIcon, Pencil, Trash2 } from 'lucide-react'
+import { type LucideIcon, Pencil, Trash2, MousePointer2, Layout, Hammer } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
 import useEditor, { type Mode, type Phase } from './../../../store/use-editor'
@@ -20,7 +20,7 @@ type ModeConfig = {
 const allModes: ModeConfig[] = [
   {
     id: 'select',
-    imageSrc: '/icons/select.png',
+    icon: MousePointer2,
     label: 'Select',
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
@@ -36,7 +36,7 @@ const allModes: ModeConfig[] = [
   },
   {
     id: 'build',
-    imageSrc: '/icons/build.png',
+    icon: Hammer,
     label: 'Build',
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',

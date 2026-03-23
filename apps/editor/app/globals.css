@@ -111,7 +111,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.6 0.18 150);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -124,7 +124,7 @@
   --sidebar-accent: oklch(0.235 0 0); /* matching accent */
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.6 0.18 150);
 }
 
 @layer base {
@@ -149,6 +149,27 @@
 .rounded-smooth-xl {
   border-radius: var(--radius-xl);
   corner-shape: squircle;
+}
+
+/* Translucent panel - source of truth for all floating UI */
+.panel-translucent {
+  background: oklch(0.25 0 0 / 85%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid oklch(1 0 0 / 8%);
+}
+.dark .panel-translucent {
+  background: oklch(0.145 0 0 / 85%);
+}
+
+/* Sidebar specific */
+.sidebar-translucent {
+  background: oklch(0.25 0 0 / 80%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.dark .sidebar-translucent {
+  background: oklch(0.145 0 0 / 80%);
 }
 
 .no-scrollbar::-webkit-scrollbar {

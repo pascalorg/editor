@@ -1,8 +1,8 @@
 'use client'
 
+import { useFrame } from '@react-three/fiber'
 import { emitter, type GridEvent, sceneRegistry } from '@vesper/core'
 import { useViewer } from '@vesper/viewer'
-import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
@@ -33,9 +33,9 @@ export const Grid = ({
 }) => {
   const theme = useViewer((state) => state.theme)
 
-  // Use slightly lighter colors for dark mode grid to make it apparent
-  const effectiveCellColor = theme === 'dark' ? '#555566' : cellColor
-  const effectiveSectionColor = theme === 'dark' ? '#666677' : sectionColor
+  // Grid colors: #333 for both modes (clean, consistent look)
+  const effectiveCellColor = theme === 'dark' ? '#333333' : cellColor
+  const effectiveSectionColor = theme === 'dark' ? '#333333' : sectionColor
 
   const cursorPositionRef = useRef(new Vector2(0, 0))
 

@@ -10,7 +10,19 @@ import {
   type ZoneNode,
 } from '@vesper/core'
 import { useViewer } from '@vesper/viewer'
-import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Layers2, Moon, Sun } from 'lucide-react'
+import {
+  ArrowLeft,
+  Camera,
+  ChevronRight,
+  Diamond,
+  Layers,
+  Layers2,
+  Maximize2,
+  Minimize2,
+  Moon,
+  Scissors,
+  Sun,
+} from 'lucide-react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { cn } from '../lib/utils'
@@ -32,21 +44,15 @@ const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
 
 const wallModeConfig = {
   up: {
-    icon: (props: any) => (
-      <img alt="Full Height" height={28} src="/icons/room.png" width={28} {...props} />
-    ),
+    icon: Maximize2,
     label: 'Full Height',
   },
   cutaway: {
-    icon: (props: any) => (
-      <img alt="Cutaway" height={28} src="/icons/wallcut.png" width={28} {...props} />
-    ),
+    icon: Scissors,
     label: 'Cutaway',
   },
   down: {
-    icon: (props: any) => (
-      <img alt="Low" height={28} src="/icons/walllow.png" width={28} {...props} />
-    ),
+    icon: Minimize2,
     label: 'Low',
   },
 }
@@ -360,8 +366,8 @@ export const ViewerOverlay = ({
             <ActionButton
               className={
                 cameraMode === 'orthographic'
-                  ? 'bg-violet-500/20 text-violet-400'
-                  : 'hover:bg-white/5 hover:text-violet-400'
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'hover:bg-white/5 hover:text-green-400'
               }
               label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
               onClick={() =>

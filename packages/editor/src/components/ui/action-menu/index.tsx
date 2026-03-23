@@ -27,7 +27,7 @@ export function ActionMenu({ className }: { className?: string }) {
       <motion.div
         className={cn(
           'fixed bottom-6 left-1/2 z-50 -translate-x-1/2',
-          'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
+          'rounded-2xl border border-border panel-translucent shadow-2xl',
           'transition-colors duration-200 ease-out',
           className,
         )}

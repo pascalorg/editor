@@ -261,7 +261,7 @@ export const SlabTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#818cf8"
+            color="#22c55e"
             depthTest={false}
             opacity={0.15}
             side={DoubleSide}
@@ -280,7 +280,7 @@ export const SlabTool: React.FC = () => {
         visible={false}
       >
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
+        <lineBasicNodeMaterial color="#22c55e" depthTest={false} depthWrite={false} linewidth={3} />
       </line>
 
       {/* Closing line */}
@@ -294,7 +294,7 @@ export const SlabTool: React.FC = () => {
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           linewidth={2}
@@ -306,7 +306,7 @@ export const SlabTool: React.FC = () => {
       {/* Point markers */}
       {points.map(([x, z], index) => (
         <CursorSphere
-          color="#818cf8"
+          color="#22c55e"
           height={0}
           key={index}
           position={[x, levelY + Y_OFFSET + 0.01, z]}

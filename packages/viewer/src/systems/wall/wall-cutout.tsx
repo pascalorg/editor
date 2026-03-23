@@ -1,5 +1,5 @@
-import { sceneRegistry, useScene, type WallNode } from '@vesper/core'
 import { useFrame } from '@react-three/fiber'
+import { sceneRegistry, useScene, type WallNode } from '@vesper/core'
 import { useRef } from 'react'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
 
@@ -41,7 +41,7 @@ const invsibleWallMaterial = new MeshStandardNodeMaterial({
   emissive: 'white',
 })
 const wallMaterial = new MeshStandardNodeMaterial({
-  color: 'white',
+  color: '#cccccc', // Light grey walls for visibility
   roughness: 1,
   metalness: 0,
 })

@@ -29,7 +29,7 @@ export function SceneLoader({ className, fullScreen = false }: SceneLoaderProps)
   return (
     <div
       className={cn(
-        'z-100 flex items-center justify-center bg-background/80 backdrop-blur-md transition-opacity duration-300',
+        'z-100 flex items-center justify-center panel-translucent transition-opacity duration-300',
         fullScreen ? 'fixed inset-0' : 'absolute inset-0',
         className,
       )}

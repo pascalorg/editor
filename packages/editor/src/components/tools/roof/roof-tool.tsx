@@ -220,7 +220,7 @@ export const RoofTool: React.FC = () => {
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           linewidth={2}
@@ -232,7 +232,7 @@ export const RoofTool: React.FC = () => {
       {/* First corner marker */}
       {corner1 && (
         <CursorSphere
-          color="#818cf8"
+          color="#22c55e"
           position={[corner1[0], levelY + GRID_OFFSET, corner1[2]]}
           showTooltip={false}
         />
@@ -247,7 +247,7 @@ export const RoofTool: React.FC = () => {
         >
           <planeGeometry args={[previewDimensions.length, previewDimensions.width]} />
           <meshBasicMaterial
-            color="#818cf8"
+            color="#22c55e"
             depthTest={false}
             depthWrite={false}
             opacity={0.1}

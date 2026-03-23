@@ -1,5 +1,7 @@
 'use client'
 
+import { Bvh } from '@react-three/drei'
+import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import {
   CeilingSystem,
   DoorSystem,
@@ -9,8 +11,6 @@ import {
   WallSystem,
   WindowSystem,
 } from '@vesper/core'
-import { Bvh } from '@react-three/drei'
-import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
@@ -104,7 +104,7 @@ const Viewer: React.FC<ViewerProps> = ({
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[#fafafa]'}`}
       dpr={[1, 1.5]}
       gl={(props) => {
         const renderer = new THREE.WebGPURenderer(props as any)

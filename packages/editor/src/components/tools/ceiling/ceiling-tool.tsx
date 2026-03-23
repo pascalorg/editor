@@ -313,7 +313,7 @@ export const CeilingTool: React.FC = () => {
       >
         <ringGeometry args={[0.15, 0.2, 32]} />
         <meshBasicMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={true}
           opacity={0.5}
@@ -326,7 +326,7 @@ export const CeilingTool: React.FC = () => {
       {/* @ts-ignore */}
       <line geometry={verticalGeo} layers={EDITOR_LAYER} ref={verticalLineRef} renderOrder={1}>
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           opacityNode={gradientOpacityNode}
@@ -344,7 +344,7 @@ export const CeilingTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#818cf8"
+            color="#22c55e"
             depthTest={false}
             opacity={0.15}
             side={DoubleSide}
@@ -363,7 +363,7 @@ export const CeilingTool: React.FC = () => {
         >
           <shapeGeometry args={[previewShape]} />
           <meshBasicMaterial
-            color="#818cf8"
+            color="#22c55e"
             depthTest={false}
             opacity={0.1}
             side={DoubleSide}
@@ -382,7 +382,7 @@ export const CeilingTool: React.FC = () => {
         visible={false}
       >
         <bufferGeometry />
-        <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
+        <lineBasicNodeMaterial color="#22c55e" depthTest={false} depthWrite={false} linewidth={3} />
       </line>
 
       {/* Closing line */}
@@ -396,7 +396,7 @@ export const CeilingTool: React.FC = () => {
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           linewidth={2}
@@ -416,7 +416,7 @@ export const CeilingTool: React.FC = () => {
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           linewidth={3}
@@ -436,7 +436,7 @@ export const CeilingTool: React.FC = () => {
       >
         <bufferGeometry />
         <lineBasicNodeMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           linewidth={2}
@@ -448,7 +448,7 @@ export const CeilingTool: React.FC = () => {
       {/* Point markers */}
       {points.map(([x, z], index) => (
         <CursorSphere
-          color="#818cf8"
+          color="#22c55e"
           key={index}
           position={[x, levelY + CEILING_HEIGHT + 0.01, z]}
           showTooltip={false}

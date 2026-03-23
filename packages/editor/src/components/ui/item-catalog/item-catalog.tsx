@@ -139,10 +139,10 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
                     className={cn(
                       'inline-flex cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-2 font-medium text-xs capitalize transition-colors',
                       isActive
-                        ? 'bg-violet-500 text-white'
-                        : isEmpty
-                          ? 'cursor-not-allowed bg-zinc-800 text-zinc-500'
-                          : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+                          ? 'bg-green-500 text-white'
+                          : isEmpty
+                            ? 'cursor-not-allowed bg-zinc-800 text-zinc-500'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
                     )}
                     disabled={isEmpty}
                     key={tag}
@@ -154,7 +154,7 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
                       className={cn(
                         'text-[10px]',
                         isActive
-                          ? 'text-violet-200'
+                          ? 'text-green-200'
                           : isEmpty
                             ? 'text-zinc-600'
                             : 'text-zinc-500/70',

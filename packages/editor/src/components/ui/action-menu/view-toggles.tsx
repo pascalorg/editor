@@ -79,8 +79,8 @@ export function ViewToggles() {
       <ActionButton
         className={cn(
           cameraMode === 'orthographic'
-            ? 'bg-violet-500/20 text-violet-400'
-            : 'hover:text-violet-400',
+            ? 'bg-green-500/20 text-green-400'
+            : 'hover:text-green-400',
         )}
         label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
         onClick={toggleCameraMode}

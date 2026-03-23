@@ -46,7 +46,7 @@ export const SSGI_PARAMS = {
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
 
-const DARK_BG = '#1f2433'
+const DARK_BG = '#0a0a0a' // Near black for dark mode
 const LIGHT_BG = '#ffffff'
 
 const PostProcessingPasses = () => {
@@ -215,8 +215,8 @@ const PostProcessingPasses = () => {
         const edgeStrength = uniform(3)
         const edgeGlow = uniform(0)
         const edgeThickness = uniform(1)
-        const visibleEdgeColor = uniform(new Color(0xff_ff_ff))
-        const hiddenEdgeColor = uniform(new Color(0xf3_ff_47))
+        const visibleEdgeColor = uniform(new Color(0xff_00_00)) // Red for selection
+        const hiddenEdgeColor = uniform(new Color(0x00_ff_00)) // Green hidden edge
 
         const outlinePass = outline(scene, camera, {
           selectedObjects: useViewer.getState().outliner.selectedObjects,
@@ -238,8 +238,8 @@ const PostProcessingPasses = () => {
         const edgeGlow = uniform(0.5)
         const edgeThickness = uniform(1.5)
         const pulsePeriod = uniform(3)
-        const visibleEdgeColor = uniform(new Color(0x00_aa_ff))
-        const hiddenEdgeColor = uniform(new Color(0xf3_ff_47))
+        const visibleEdgeColor = uniform(new Color(0x00_ff_00)) // Green for hover
+        const hiddenEdgeColor = uniform(new Color(0x00_ff_00)) // Green
 
         const outlinePass = outline(scene, camera, {
           selectedObjects: useViewer.getState().outliner.hoveredObjects,

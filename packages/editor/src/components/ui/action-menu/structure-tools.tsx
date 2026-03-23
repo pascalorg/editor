@@ -1,5 +1,6 @@
 'use client'
 
+import { type LucideIcon, Layout, DoorOpen, Home, Tent, Square, Box, Fence } from 'lucide-react'
 import NextImage from 'next/image'
 import { useContextualTools } from '../../../hooks/use-contextual-tools'
 
@@ -7,27 +8,25 @@ import { cn } from '../../../lib/utils'
 import useEditor, {
   type CatalogCategory,
   type StructureTool,
-  Tool,
 } from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 export type ToolConfig = {
   id: StructureTool
-  iconSrc: string
+  iconSrc?: string
+  icon?: LucideIcon
   label: string
   catalogCategory?: CatalogCategory
 }
 
 export const tools: ToolConfig[] = [
-  { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
-  // { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
-  // { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
-  { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
-  { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
-  { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
-  { id: 'door', iconSrc: '/icons/door.png', label: 'Door' },
-  { id: 'window', iconSrc: '/icons/window.png', label: 'Window' },
-  { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
+  { id: 'wall', icon: Layout, label: 'Wall' },
+  { id: 'slab', icon: Fence, label: 'Slab' },
+  { id: 'ceiling', icon: Square, label: 'Ceiling' },
+  { id: 'roof', icon: Tent, label: 'Gable Roof' },
+  { id: 'door', icon: DoorOpen, label: 'Door' },
+  { id: 'window', icon: Home, label: 'Window' },
+  { id: 'zone', icon: Box, label: 'Zone' },
 ]
 
 export function StructureTools() {
@@ -84,13 +83,17 @@ export function StructureTools() {
             size="icon"
             variant="ghost"
           >
-            <NextImage
-              alt={tool.label}
-              className="size-full object-contain"
-              height={28}
-              src={tool.iconSrc}
-              width={28}
-            />
+            {tool.icon ? (
+              <tool.icon className="h-7 w-7" />
+            ) : (
+              <NextImage
+                alt={tool.label}
+                className="size-full object-contain"
+                height={28}
+                src={tool.iconSrc!}
+                width={28}
+              />
+            )}
           </ActionButton>
         )
       })}

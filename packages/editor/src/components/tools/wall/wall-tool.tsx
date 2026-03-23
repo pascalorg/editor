@@ -204,7 +204,7 @@ export const WallTool: React.FC = () => {
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial
-          color="#818cf8"
+          color="#22c55e"
           depthTest={false}
           depthWrite={false}
           opacity={0.5}
