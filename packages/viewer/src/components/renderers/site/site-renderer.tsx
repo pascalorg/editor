@@ -84,7 +84,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       {/* Simple boundary line */}
       {/* @ts-ignore */}
       <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
-        <lineBasicMaterial color="#ef4444" linewidth={2} opacity={0.6} transparent />
+        <lineBasicMaterial color="#444444" linewidth={3} opacity={0.8} transparent />
       </line>
     </group>
   )

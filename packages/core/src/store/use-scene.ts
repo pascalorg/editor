@@ -121,6 +121,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
         })
+        clearTemporalTracking()
       },
 
       clearScene: () => {
@@ -180,11 +181,15 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       markDirty: (id) => {
-        get().dirtyNodes.add(id)
+        const state = get()
+        state.dirtyNodes.add(id)
+        set({ dirtyNodes: new Set(state.dirtyNodes) })
       },
 
       clearDirty: (id) => {
-        get().dirtyNodes.delete(id)
+        const state = get()
+        state.dirtyNodes.delete(id)
+        set({ dirtyNodes: new Set(state.dirtyNodes) })
       },
 
       createNodes: (ops) => nodeActions.createNodesAction(set, get, ops),
@@ -307,6 +312,10 @@ let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
   useScene.temporal.getState().clear()
+  clearTemporalTracking()
+}
+
+function clearTemporalTracking() {
   prevPastLength = 0
   prevFutureLength = 0
   prevNodesSnapshot = null

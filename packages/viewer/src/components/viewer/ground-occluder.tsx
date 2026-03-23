@@ -6,7 +6,7 @@ import useViewer from '../../store/use-viewer'
 
 export const GroundOccluder = () => {
   const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#0a0a0a' : '#fafafa'
+  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
 
   const nodes = useScene((state) => state.nodes)
 
