@@ -38,6 +38,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['3'], action: 'Switch to Furnish phase' },
       { keys: ['S'], action: 'Switch to Structure layer' },
       { keys: ['F'], action: 'Switch to Furnish layer' },
+      { keys: ['M'], action: 'Jump to the Measure tool' },
       { keys: ['Z'], action: 'Switch to Zones layer' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
@@ -79,8 +80,13 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       {
         keys: ['Shift'],
-        action: 'Temporarily disable angle snapping while drawing walls, slabs, and ceilings',
+        action: 'Temporarily disable angle snapping while drawing or measuring',
         note: 'Hold while drawing.',
+      },
+      {
+        keys: ['Tab'],
+        action: 'Type an exact wall, slab segment, or measurement distance',
+        note: 'Available while a draw segment is active.',
       },
     ],
   },

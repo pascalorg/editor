@@ -1,40 +1,30 @@
 import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
+import {
+  formatDistance,
+  getPlanDistance,
+  getPlanMidpoint,
+  MIN_DRAW_DISTANCE,
+  type PlanPoint,
+  parseDistanceInput,
+  projectPointAtDistance,
+  snapSegmentTo45Degrees,
+  snapToGrid,
+} from '../shared/drawing-utils'
 
 const WALL_HEIGHT = 2.5
 const WALL_THICKNESS = 0.15
 
-/**
- * Snap point to 45° angle increments relative to start point
- * Also snaps end point to 0.5 grid
- */
-const snapTo45Degrees = (start: Vector3, cursor: Vector3): Vector3 => {
-  const dx = cursor.x - start.x
-  const dz = cursor.z - start.z
-
-  // Calculate angle in radians
-  const angle = Math.atan2(dz, dx)
-
-  // Round to nearest 45° (π/4 radians)
-  const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
-
-  // Calculate distance from start to cursor
-  const distance = Math.sqrt(dx * dx + dz * dz)
-
-  // Project end point along snapped angle
-  let snappedX = start.x + Math.cos(snappedAngle) * distance
-  let snappedZ = start.z + Math.sin(snappedAngle) * distance
-
-  // Snap to 0.5 grid
-  snappedX = Math.round(snappedX * 2) / 2
-  snappedZ = Math.round(snappedZ * 2) / 2
-
-  return new Vector3(snappedX, cursor.y, snappedZ)
+type WallDraft = {
+  start: PlanPoint | null
+  end: PlanPoint | null
+  levelY: number
 }
 
 /**
@@ -104,29 +94,83 @@ export const WallTool: React.FC = () => {
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
+  const levelYRef = useRef(0)
+  const inputOpenRef = useRef(false)
+  const ignoreNextGridClickRef = useRef(false)
+
+  const [draft, setDraft] = useState<WallDraft>({
+    start: null,
+    end: null,
+    levelY: 0,
+  })
+  const [distanceInput, setDistanceInput] = useState({ open: false, value: '' })
+
+  const closeDistanceInput = useCallback((options?: { ignoreNextGridClick?: boolean }) => {
+    inputOpenRef.current = false
+    shiftPressed.current = false
+    if (options?.ignoreNextGridClick) {
+      ignoreNextGridClickRef.current = true
+    }
+    setDistanceInput({ open: false, value: '' })
+  }, [])
+
+  const syncDraftState = useCallback(() => {
+    setDraft({
+      start: [startingPoint.current.x, startingPoint.current.z],
+      end: [endingPoint.current.x, endingPoint.current.z],
+      levelY: levelYRef.current,
+    })
+  }, [])
+
+  const applyDistanceInput = (rawValue: string, options?: { ignoreNextGridClick?: boolean }) => {
+    if (buildingState.current !== 1) {
+      closeDistanceInput(options)
+      return
+    }
+
+    const parsedDistance = parseDistanceInput(rawValue)
+    if (!(parsedDistance && parsedDistance >= MIN_DRAW_DISTANCE)) {
+      closeDistanceInput(options)
+      return
+    }
+
+    const start: PlanPoint = [startingPoint.current.x, startingPoint.current.z]
+    const currentEnd: PlanPoint = [endingPoint.current.x, endingPoint.current.z]
+    const projected = projectPointAtDistance(start, currentEnd, parsedDistance)
+
+    endingPoint.current.set(projected[0], levelYRef.current, projected[1])
+    cursorRef.current?.position.set(projected[0], levelYRef.current, projected[1])
+    updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
+    syncDraftState()
+    closeDistanceInput(options)
+  }
 
   useEffect(() => {
-    let gridPosition: [number, number] = [0, 0]
-    let previousWallEnd: [number, number] | null = null
+    let gridPosition: PlanPoint = [0, 0]
+    let previousWallEnd: PlanPoint | null = null
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
-      gridPosition = [Math.round(event.position[0] * 2) / 2, Math.round(event.position[2] * 2) / 2]
-      const cursorPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
+      gridPosition = [snapToGrid(event.position[0]), snapToGrid(event.position[2])]
+      levelYRef.current = event.position[1]
+      const cursorPosition: PlanPoint = [gridPosition[0], gridPosition[1]]
 
       if (buildingState.current === 1) {
-        // Snap to 45° angles only if shift is not pressed
+        if (inputOpenRef.current) return
+
+        const start: PlanPoint = [startingPoint.current.x, startingPoint.current.z]
         const snapped = shiftPressed.current
           ? cursorPosition
-          : snapTo45Degrees(startingPoint.current, cursorPosition)
-        endingPoint.current.copy(snapped)
+          : snapSegmentTo45Degrees(start, cursorPosition)
+
+        endingPoint.current.set(snapped[0], event.position[1], snapped[1])
 
         // Position the cursor at the end of the wall being drawn
-        cursorRef.current.position.set(snapped.x, snapped.y, snapped.z)
+        cursorRef.current.position.set(snapped[0], event.position[1], snapped[1])
 
         // Play snap sound only when the actual wall end position changes
-        const currentWallEnd: [number, number] = [endingPoint.current.x, endingPoint.current.z]
+        const currentWallEnd: PlanPoint = [endingPoint.current.x, endingPoint.current.z]
         if (
           previousWallEnd &&
           (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
@@ -137,6 +181,7 @@ export const WallTool: React.FC = () => {
 
         // Update wall preview geometry
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
+        syncDraftState()
       } else {
         // Not drawing a wall, just follow the grid position
         cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
@@ -144,27 +189,58 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (ignoreNextGridClickRef.current) {
+        ignoreNextGridClickRef.current = false
+        return
+      }
+
+      if (inputOpenRef.current) return
+
       if (buildingState.current === 0) {
         startingPoint.current.set(gridPosition[0], event.position[1], gridPosition[1])
+        endingPoint.current.copy(startingPoint.current)
+        levelYRef.current = event.position[1]
         buildingState.current = 1
         wallPreviewRef.current.visible = true
+        syncDraftState()
       } else if (buildingState.current === 1) {
         const dx = endingPoint.current.x - startingPoint.current.x
         const dz = endingPoint.current.z - startingPoint.current.z
-        if (dx * dx + dz * dz < 0.01 * 0.01) return
+        if (dx * dx + dz * dz < MIN_DRAW_DISTANCE * MIN_DRAW_DISTANCE) return
         commitWallDrawing(
           [startingPoint.current.x, startingPoint.current.z],
           [endingPoint.current.x, endingPoint.current.z],
         )
         wallPreviewRef.current.visible = false
         buildingState.current = 0
+        closeDistanceInput()
+        setDraft({ start: null, end: null, levelY: 0 })
       }
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
       if (e.key === 'Shift') {
         shiftPressed.current = true
+        return
       }
+
+      if (e.key !== 'Tab' || buildingState.current !== 1) return
+
+      const currentDistance = getPlanDistance(
+        [startingPoint.current.x, startingPoint.current.z],
+        [endingPoint.current.x, endingPoint.current.z],
+      )
+      if (currentDistance < MIN_DRAW_DISTANCE) return
+
+      e.preventDefault()
+      shiftPressed.current = false
+      inputOpenRef.current = true
+      setDistanceInput({
+        open: true,
+        value: currentDistance.toFixed(2),
+      })
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -177,6 +253,8 @@ export const WallTool: React.FC = () => {
       if (buildingState.current === 1) {
         buildingState.current = 0
         wallPreviewRef.current.visible = false
+        closeDistanceInput()
+        setDraft({ start: null, end: null, levelY: 0 })
       }
     }
 
@@ -193,7 +271,18 @@ export const WallTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [])
+  }, [closeDistanceInput, syncDraftState])
+
+  const currentDistance = useMemo(() => {
+    if (!(draft.start && draft.end)) return 0
+    return getPlanDistance(draft.start, draft.end)
+  }, [draft.end, draft.start])
+
+  const labelPosition = useMemo(() => {
+    if (!(draft.start && draft.end)) return null
+    const midpoint = getPlanMidpoint(draft.start, draft.end)
+    return [midpoint[0], draft.levelY + WALL_HEIGHT + 0.3, midpoint[1]] as [number, number, number]
+  }, [draft.end, draft.levelY, draft.start])
 
   return (
     <group>
@@ -212,6 +301,33 @@ export const WallTool: React.FC = () => {
           transparent
         />
       </mesh>
+
+      {labelPosition && currentDistance >= MIN_DRAW_DISTANCE && (
+        <DrawingDimensionLabel
+          hint="Enter to apply, Esc to cancel"
+          inputLabel="Wall length"
+          inputValue={distanceInput.value}
+          isEditing={distanceInput.open}
+          onInputBlur={() => {
+            if (!distanceInput.open) return
+            applyDistanceInput(distanceInput.value, { ignoreNextGridClick: true })
+          }}
+          onInputChange={(value) => {
+            setDistanceInput((current) => ({ ...current, value }))
+          }}
+          onInputKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              applyDistanceInput(distanceInput.value)
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              closeDistanceInput()
+            }
+          }}
+          position={labelPosition}
+          value={formatDistance(currentDistance)}
+        />
+      )}
     </group>
   )
 }

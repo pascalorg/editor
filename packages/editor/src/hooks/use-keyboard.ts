@@ -38,6 +38,12 @@ export const useKeyboard = () => {
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
+      } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('build')
+        useEditor.getState().setTool('measure')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('structure')
