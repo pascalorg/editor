@@ -1938,7 +1938,17 @@
             }
           ]
         },
-        "panel_prototype_room_id": "_0-2_ROOM_OUTLINE-1"
+        "panel_room_count": 6,
+        "panel_item_count": 72,
+        "panel_item_room_ids": [
+          "_0-2_ROOM_OUTLINE-1",
+          "_0-2_ROOM_OUTLINE-2",
+          "_0-2_ROOM_OUTLINE-3",
+          "_0-2_ROOM_OUTLINE-4",
+          "_0-2_ROOM_OUTLINE-5",
+          "_0-2_ROOM_OUTLINE-6"
+        ],
+        "panel_import_scope": "all_rooms"
       },
       "children": [
         "wall_eb8a9a52e0160958",
@@ -1999,7 +2009,72 @@
         "item_bf273a3cbc89c403",
         "item_a860419384d19189",
         "item_66dbc2718d9a7816",
-        "item_525902a5aa76c601"
+        "item_525902a5aa76c601",
+        "item_b6638136eaa12b3a",
+        "item_e66d7c5a5a0dfc40",
+        "item_aa9a10b47b919bd7",
+        "item_2d42edaf6f2282ac",
+        "item_409f16f4929e94ec",
+        "item_1bc9eb25ea7a6a89",
+        "item_1423aa90934d21f6",
+        "item_0d1e4fee4dcc1e7b",
+        "item_dd2302fdb4f4f27d",
+        "item_b910f15e46cfc344",
+        "item_2276759e49c5a011",
+        "item_87be7357e3044a1a",
+        "item_1539a2e0eeaef4c6",
+        "item_cc70e35abeeb32a7",
+        "item_6bec0caca826b285",
+        "item_b8ef355cd3afb4e5",
+        "item_e91fe7feb9b94020",
+        "item_09dc4bf8205f5a58",
+        "item_f7080ba4b3235244",
+        "item_ee3bf2c35f89d1f2",
+        "item_951c1210e58a3e2f",
+        "item_680d3986ce870ea4",
+        "item_6d01ad18871f3395",
+        "item_ef8c9b4b8608e2d6",
+        "item_1e855a37542c5478",
+        "item_3ab5d055eb771bec",
+        "item_d4c23e319ee8bc72",
+        "item_0e03fd1662af6efc",
+        "item_700b67f6f31188a4",
+        "item_4bee287bf49cc892",
+        "item_94134213935168f3",
+        "item_079acd1c6c0325bc",
+        "item_777cfea760578a84",
+        "item_9598915a5419ab5b",
+        "item_380bea8658f61fe3",
+        "item_00e9442e2186172f",
+        "item_30f614ef3a256071",
+        "item_95143e3944a1bda3",
+        "item_40409dafe401b4fb",
+        "item_738da4d0823ba1b9",
+        "item_28afb7f95abea138",
+        "item_087fb172499d2635",
+        "item_86905ef41394bef5",
+        "item_3f157db4284e3b8d",
+        "item_295264df527904e7",
+        "item_4ef82aff8f2c054c",
+        "item_e12cab50855ca1aa",
+        "item_2ccbf6546096c65f",
+        "item_245589fbfde134fa",
+        "item_31741dbb3abc973a",
+        "item_43a9056563cc9b1f",
+        "item_72460fbe0ab39282",
+        "item_b8592119d90965f3",
+        "item_4b3dfb14bb4d3612",
+        "item_43fcb9f245dc4171",
+        "item_da80e2c20c179899",
+        "item_025036ec168a7443",
+        "item_c68d0611eecb52e2",
+        "item_33ee411e2bf3612c",
+        "item_4f331a63748f951b",
+        "item_7ad9bcc19b9bd3cf",
+        "item_9cd5c69a53c5aee6",
+        "item_0d5e97930a710210",
+        "item_46ad6f0311f66140",
+        "item_a06d3e4c7abf3076"
       ],
       "level": 0
     },
@@ -2852,7 +2927,7 @@
           }
         ],
         "panel_item_count": 7,
-        "panel_prototype_enabled": true
+        "panel_items_imported": true
       }
     },
     "wall_eb8a9a52e0160958": {
@@ -3095,6 +3170,426 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
+    "item_b6638136eaa12b3a": {
+      "object": "node",
+      "id": "item_b6638136eaa12b3a",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-2 Panel 2-1",
+      "position": [
+        7.5769,
+        0,
+        11.1822
+      ],
+      "rotation": [
+        0,
+        -1.5707963267948966,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.607,
+          0.012,
+          0.0
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.3035,
+          0.0,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "rejected"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "panel_index": 0,
+        "panel_type": "rejected",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            7576.9,
+            11485.7
+          ],
+          [
+            7576.9,
+            10878.7
+          ],
+          [
+            7576.9,
+            10878.7
+          ],
+          [
+            7576.9,
+            11485.7
+          ]
+        ],
+        "coords_m": [
+          [
+            7.5769,
+            11.4857
+          ],
+          [
+            7.5769,
+            10.8787
+          ],
+          [
+            7.5769,
+            10.8787
+          ],
+          [
+            7.5769,
+            11.4857
+          ]
+        ],
+        "width_mm": 607.0,
+        "depth_mm": 0.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": -1.570796
+      }
+    },
+    "item_e66d7c5a5a0dfc40": {
+      "object": "node",
+      "id": "item_e66d7c5a5a0dfc40",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-2 Panel 2-2",
+      "position": [
+        8.1339,
+        0,
+        11.1822
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.114,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.557,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "panel_index": 1,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            7576.9,
+            11485.7
+          ],
+          [
+            8690.9,
+            11485.7
+          ],
+          [
+            8690.9,
+            10878.7
+          ],
+          [
+            7576.9,
+            10878.7
+          ]
+        ],
+        "coords_m": [
+          [
+            7.5769,
+            11.4857
+          ],
+          [
+            8.6909,
+            11.4857
+          ],
+          [
+            8.6909,
+            10.8787
+          ],
+          [
+            7.5769,
+            10.8787
+          ]
+        ],
+        "width_mm": 1114.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_aa9a10b47b919bd7": {
+      "object": "node",
+      "id": "item_aa9a10b47b919bd7",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-2 Panel 2-3",
+      "position": [
+        8.0336,
+        0,
+        11.5642
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.157
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.19624999999999998,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "panel_index": 2,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8490.4,
+            11485.7
+          ],
+          [
+            7576.9,
+            11485.7
+          ],
+          [
+            7576.9,
+            11642.7
+          ],
+          [
+            8490.4,
+            11642.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4904,
+            11.4857
+          ],
+          [
+            7.5769,
+            11.4857
+          ],
+          [
+            7.5769,
+            11.6427
+          ],
+          [
+            8.4904,
+            11.6427
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 157.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_2d42edaf6f2282ac": {
+      "object": "node",
+      "id": "item_2d42edaf6f2282ac",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-2 Panel 2-4",
+      "position": [
+        8.5907,
+        0,
+        11.5642
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.2005,
+          0.012,
+          0.157
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.10025,
+          0.19624999999999998,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "panel_index": 3,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8490.4,
+            11485.7
+          ],
+          [
+            8490.4,
+            11642.7
+          ],
+          [
+            8690.9,
+            11642.7
+          ],
+          [
+            8690.9,
+            11485.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4904,
+            11.4857
+          ],
+          [
+            8.4904,
+            11.6427
+          ],
+          [
+            8.6909,
+            11.6427
+          ],
+          [
+            8.6909,
+            11.4857
+          ]
+        ],
+        "width_mm": 200.5,
+        "depth_mm": 157.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
     "zone_ff801f8588425836": {
       "object": "node",
       "id": "zone_ff801f8588425836",
@@ -3132,8 +3627,8 @@
             "count": 2
           }
         ],
-        "panel_item_count": 0,
-        "panel_prototype_enabled": false
+        "panel_item_count": 4,
+        "panel_items_imported": true
       }
     },
     "wall_9f2c0d4b85e92c0a": {
@@ -3232,6 +3727,1597 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
+    "item_409f16f4929e94ec": {
+      "object": "node",
+      "id": "item_409f16f4929e94ec",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-1",
+      "position": [
+        12.9064,
+        0,
+        7.6322
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 0,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            7935.7
+          ],
+          [
+            13819.9,
+            7328.7
+          ],
+          [
+            11992.9,
+            7328.7
+          ],
+          [
+            11992.9,
+            7935.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            7.9357
+          ],
+          [
+            13.8199,
+            7.3287
+          ],
+          [
+            11.9929,
+            7.3287
+          ],
+          [
+            11.9929,
+            7.9357
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_1bc9eb25ea7a6a89": {
+      "object": "node",
+      "id": "item_1bc9eb25ea7a6a89",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-2",
+      "position": [
+        14.1634,
+        0,
+        7.6322
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.687,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.3435,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 1,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            7935.7
+          ],
+          [
+            14506.9,
+            7935.7
+          ],
+          [
+            14506.9,
+            7328.7
+          ],
+          [
+            13819.9,
+            7328.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            7.9357
+          ],
+          [
+            14.5069,
+            7.9357
+          ],
+          [
+            14.5069,
+            7.3287
+          ],
+          [
+            13.8199,
+            7.3287
+          ]
+        ],
+        "width_mm": 687.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_1423aa90934d21f6": {
+      "object": "node",
+      "id": "item_1423aa90934d21f6",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-3",
+      "position": [
+        12.4497,
+        0,
+        8.2392
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 2,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            8542.7
+          ],
+          [
+            12906.4,
+            7935.7
+          ],
+          [
+            11992.9,
+            7935.7
+          ],
+          [
+            11992.9,
+            8542.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            8.5427
+          ],
+          [
+            12.9064,
+            7.9357
+          ],
+          [
+            11.9929,
+            7.9357
+          ],
+          [
+            11.9929,
+            8.5427
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_0d1e4fee4dcc1e7b": {
+      "object": "node",
+      "id": "item_0d1e4fee4dcc1e7b",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-4",
+      "position": [
+        13.7066,
+        0,
+        8.2392
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.6005,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.80025,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 3,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            7935.7
+          ],
+          [
+            12906.4,
+            8542.7
+          ],
+          [
+            14506.9,
+            8542.7
+          ],
+          [
+            14506.9,
+            7935.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            7.9357
+          ],
+          [
+            12.9064,
+            8.5427
+          ],
+          [
+            14.5069,
+            8.5427
+          ],
+          [
+            14.5069,
+            7.9357
+          ]
+        ],
+        "width_mm": 1600.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_dd2302fdb4f4f27d": {
+      "object": "node",
+      "id": "item_dd2302fdb4f4f27d",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-5",
+      "position": [
+        12.9064,
+        0,
+        8.8462
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 4,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            8542.7
+          ],
+          [
+            13819.9,
+            9149.7
+          ],
+          [
+            11992.9,
+            9149.7
+          ],
+          [
+            11992.9,
+            8542.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            8.5427
+          ],
+          [
+            13.8199,
+            9.1497
+          ],
+          [
+            11.9929,
+            9.1497
+          ],
+          [
+            11.9929,
+            8.5427
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_b910f15e46cfc344": {
+      "object": "node",
+      "id": "item_b910f15e46cfc344",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-6",
+      "position": [
+        14.1634,
+        0,
+        8.8462
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.687,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.3435,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 5,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            8542.7
+          ],
+          [
+            13819.9,
+            9149.7
+          ],
+          [
+            14506.9,
+            9149.7
+          ],
+          [
+            14506.9,
+            8542.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            8.5427
+          ],
+          [
+            13.8199,
+            9.1497
+          ],
+          [
+            14.5069,
+            9.1497
+          ],
+          [
+            14.5069,
+            8.5427
+          ]
+        ],
+        "width_mm": 687.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_2276759e49c5a011": {
+      "object": "node",
+      "id": "item_2276759e49c5a011",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-7",
+      "position": [
+        12.4497,
+        0,
+        9.4532
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 6,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            9756.7
+          ],
+          [
+            12906.4,
+            9149.7
+          ],
+          [
+            11992.9,
+            9149.7
+          ],
+          [
+            11992.9,
+            9756.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            9.7567
+          ],
+          [
+            12.9064,
+            9.1497
+          ],
+          [
+            11.9929,
+            9.1497
+          ],
+          [
+            11.9929,
+            9.7567
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_87be7357e3044a1a": {
+      "object": "node",
+      "id": "item_87be7357e3044a1a",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-8",
+      "position": [
+        13.7066,
+        0,
+        9.4532
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.6005,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.80025,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 7,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            9149.7
+          ],
+          [
+            12906.4,
+            9756.7
+          ],
+          [
+            14506.9,
+            9756.7
+          ],
+          [
+            14506.9,
+            9149.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            9.1497
+          ],
+          [
+            12.9064,
+            9.7567
+          ],
+          [
+            14.5069,
+            9.7567
+          ],
+          [
+            14.5069,
+            9.1497
+          ]
+        ],
+        "width_mm": 1600.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_1539a2e0eeaef4c6": {
+      "object": "node",
+      "id": "item_1539a2e0eeaef4c6",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-9",
+      "position": [
+        12.9064,
+        0,
+        10.0602
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 8,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            9756.7
+          ],
+          [
+            13819.9,
+            10363.7
+          ],
+          [
+            11992.9,
+            10363.7
+          ],
+          [
+            11992.9,
+            9756.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            9.7567
+          ],
+          [
+            13.8199,
+            10.3637
+          ],
+          [
+            11.9929,
+            10.3637
+          ],
+          [
+            11.9929,
+            9.7567
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_cc70e35abeeb32a7": {
+      "object": "node",
+      "id": "item_cc70e35abeeb32a7",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-10",
+      "position": [
+        14.1634,
+        0,
+        10.0602
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.687,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.3435,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 9,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13819.9,
+            9756.7
+          ],
+          [
+            13819.9,
+            10363.7
+          ],
+          [
+            14506.9,
+            10363.7
+          ],
+          [
+            14506.9,
+            9756.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.8199,
+            9.7567
+          ],
+          [
+            13.8199,
+            10.3637
+          ],
+          [
+            14.5069,
+            10.3637
+          ],
+          [
+            14.5069,
+            9.7567
+          ]
+        ],
+        "width_mm": 687.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_6bec0caca826b285": {
+      "object": "node",
+      "id": "item_6bec0caca826b285",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-11",
+      "position": [
+        12.4497,
+        0,
+        10.6672
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 10,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            10970.7
+          ],
+          [
+            12906.4,
+            10363.7
+          ],
+          [
+            11992.9,
+            10363.7
+          ],
+          [
+            11992.9,
+            10970.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            10.9707
+          ],
+          [
+            12.9064,
+            10.3637
+          ],
+          [
+            11.9929,
+            10.3637
+          ],
+          [
+            11.9929,
+            10.9707
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_b8ef355cd3afb4e5": {
+      "object": "node",
+      "id": "item_b8ef355cd3afb4e5",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-12",
+      "position": [
+        13.7066,
+        0,
+        10.6672
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.6005,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.80025,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 11,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            10363.7
+          ],
+          [
+            12906.4,
+            10970.7
+          ],
+          [
+            13762.9,
+            10970.7
+          ],
+          [
+            13762.9,
+            10826.7
+          ],
+          [
+            14506.9,
+            10826.7
+          ],
+          [
+            14506.9,
+            10363.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            10.3637
+          ],
+          [
+            12.9064,
+            10.9707
+          ],
+          [
+            13.7629,
+            10.9707
+          ],
+          [
+            13.7629,
+            10.8267
+          ],
+          [
+            14.5069,
+            10.8267
+          ],
+          [
+            14.5069,
+            10.3637
+          ]
+        ],
+        "width_mm": 1600.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_e91fe7feb9b94020": {
+      "object": "node",
+      "id": "item_e91fe7feb9b94020",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-13",
+      "position": [
+        12.8779,
+        0,
+        11.2742
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.77,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.885,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 12,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13762.9,
+            11577.7
+          ],
+          [
+            13762.9,
+            10970.7
+          ],
+          [
+            11992.9,
+            10970.7
+          ],
+          [
+            11992.9,
+            11577.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.7629,
+            11.5777
+          ],
+          [
+            13.7629,
+            10.9707
+          ],
+          [
+            11.9929,
+            10.9707
+          ],
+          [
+            11.9929,
+            11.5777
+          ]
+        ],
+        "width_mm": 1770.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_09dc4bf8205f5a58": {
+      "object": "node",
+      "id": "item_09dc4bf8205f5a58",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-14",
+      "position": [
+        12.4497,
+        0,
+        11.6102
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.065
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.08125,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "rejected"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 13,
+        "panel_type": "rejected",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            11577.7
+          ],
+          [
+            11992.9,
+            11577.7
+          ],
+          [
+            11992.9,
+            11642.7
+          ],
+          [
+            12906.4,
+            11642.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            11.5777
+          ],
+          [
+            11.9929,
+            11.5777
+          ],
+          [
+            11.9929,
+            11.6427
+          ],
+          [
+            12.9064,
+            11.6427
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 65.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_f7080ba4b3235244": {
+      "object": "node",
+      "id": "item_f7080ba4b3235244",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3 Panel 3-15",
+      "position": [
+        13.3346,
+        0,
+        11.6102
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.8565,
+          0.012,
+          0.065
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.42825,
+          0.08125,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "rejected"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_index": 14,
+        "panel_type": "rejected",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12906.4,
+            11577.7
+          ],
+          [
+            12906.4,
+            11642.7
+          ],
+          [
+            13762.9,
+            11642.7
+          ],
+          [
+            13762.9,
+            11577.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.9064,
+            11.5777
+          ],
+          [
+            12.9064,
+            11.6427
+          ],
+          [
+            13.7629,
+            11.6427
+          ],
+          [
+            13.7629,
+            11.5777
+          ]
+        ],
+        "width_mm": 856.5,
+        "depth_mm": 65.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
     "zone_66910c050a58294c": {
       "object": "node",
       "id": "zone_66910c050a58294c",
@@ -3277,8 +5363,8 @@
             "count": 28
           }
         ],
-        "panel_item_count": 0,
-        "panel_prototype_enabled": false
+        "panel_item_count": 15,
+        "panel_items_imported": true
       }
     },
     "wall_01b58a83697b1eb7": {
@@ -3425,6 +5511,1266 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
+    "item_ee3bf2c35f89d1f2": {
+      "object": "node",
+      "id": "item_ee3bf2c35f89d1f2",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-1",
+      "position": [
+        11.9664,
+        0,
+        4.9162
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 0,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            5219.7
+          ],
+          [
+            12879.9,
+            4612.7
+          ],
+          [
+            11052.9,
+            4612.7
+          ],
+          [
+            11052.9,
+            5219.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            5.2197
+          ],
+          [
+            12.8799,
+            4.6127
+          ],
+          [
+            11.0529,
+            4.6127
+          ],
+          [
+            11.0529,
+            5.2197
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_951c1210e58a3e2f": {
+      "object": "node",
+      "id": "item_951c1210e58a3e2f",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-2",
+      "position": [
+        13.6934,
+        0,
+        4.9162
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.627,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.8135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 1,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            5219.7
+          ],
+          [
+            14506.9,
+            5219.7
+          ],
+          [
+            14506.9,
+            4612.7
+          ],
+          [
+            12879.9,
+            4612.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            5.2197
+          ],
+          [
+            14.5069,
+            5.2197
+          ],
+          [
+            14.5069,
+            4.6127
+          ],
+          [
+            12.8799,
+            4.6127
+          ]
+        ],
+        "width_mm": 1627.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_680d3986ce870ea4": {
+      "object": "node",
+      "id": "item_680d3986ce870ea4",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-3",
+      "position": [
+        11.5096,
+        0,
+        5.5232
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 2,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11966.4,
+            5826.7
+          ],
+          [
+            11966.4,
+            5219.7
+          ],
+          [
+            11052.9,
+            5219.7
+          ],
+          [
+            11052.9,
+            5826.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.9664,
+            5.8267
+          ],
+          [
+            11.9664,
+            5.2197
+          ],
+          [
+            11.0529,
+            5.2197
+          ],
+          [
+            11.0529,
+            5.8267
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_6d01ad18871f3395": {
+      "object": "node",
+      "id": "item_6d01ad18871f3395",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-4",
+      "position": [
+        12.8799,
+        0,
+        5.5232
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 3,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13793.4,
+            5219.7
+          ],
+          [
+            13793.4,
+            5826.7
+          ],
+          [
+            11966.4,
+            5826.7
+          ],
+          [
+            11966.4,
+            5219.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.7934,
+            5.2197
+          ],
+          [
+            13.7934,
+            5.8267
+          ],
+          [
+            11.9664,
+            5.8267
+          ],
+          [
+            11.9664,
+            5.2197
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_ef8c9b4b8608e2d6": {
+      "object": "node",
+      "id": "item_ef8c9b4b8608e2d6",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-5",
+      "position": [
+        14.1502,
+        0,
+        5.5232
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.7135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.35675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 4,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13793.4,
+            5219.7
+          ],
+          [
+            13793.4,
+            5826.7
+          ],
+          [
+            14506.9,
+            5826.7
+          ],
+          [
+            14506.9,
+            5219.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.7934,
+            5.2197
+          ],
+          [
+            13.7934,
+            5.8267
+          ],
+          [
+            14.5069,
+            5.8267
+          ],
+          [
+            14.5069,
+            5.2197
+          ]
+        ],
+        "width_mm": 713.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_1e855a37542c5478": {
+      "object": "node",
+      "id": "item_1e855a37542c5478",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-6",
+      "position": [
+        11.9664,
+        0,
+        6.1302
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 5,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            5826.7
+          ],
+          [
+            12879.9,
+            6433.7
+          ],
+          [
+            11052.9,
+            6433.7
+          ],
+          [
+            11052.9,
+            5826.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            5.8267
+          ],
+          [
+            12.8799,
+            6.4337
+          ],
+          [
+            11.0529,
+            6.4337
+          ],
+          [
+            11.0529,
+            5.8267
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_3ab5d055eb771bec": {
+      "object": "node",
+      "id": "item_3ab5d055eb771bec",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-7",
+      "position": [
+        13.6934,
+        0,
+        6.1302
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.627,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.8135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 6,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            5826.7
+          ],
+          [
+            12879.9,
+            6433.7
+          ],
+          [
+            14506.9,
+            6433.7
+          ],
+          [
+            14506.9,
+            5826.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            5.8267
+          ],
+          [
+            12.8799,
+            6.4337
+          ],
+          [
+            14.5069,
+            6.4337
+          ],
+          [
+            14.5069,
+            5.8267
+          ]
+        ],
+        "width_mm": 1627.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_d4c23e319ee8bc72": {
+      "object": "node",
+      "id": "item_d4c23e319ee8bc72",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-8",
+      "position": [
+        11.5096,
+        0,
+        6.7372
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 7,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11966.4,
+            7040.7
+          ],
+          [
+            11966.4,
+            6433.7
+          ],
+          [
+            11052.9,
+            6433.7
+          ],
+          [
+            11052.9,
+            7040.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.9664,
+            7.0407
+          ],
+          [
+            11.9664,
+            6.4337
+          ],
+          [
+            11.0529,
+            6.4337
+          ],
+          [
+            11.0529,
+            7.0407
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_0e03fd1662af6efc": {
+      "object": "node",
+      "id": "item_0e03fd1662af6efc",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-9",
+      "position": [
+        12.8799,
+        0,
+        6.7372
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 8,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13793.4,
+            6433.7
+          ],
+          [
+            13793.4,
+            7040.7
+          ],
+          [
+            11966.4,
+            7040.7
+          ],
+          [
+            11966.4,
+            6433.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.7934,
+            6.4337
+          ],
+          [
+            13.7934,
+            7.0407
+          ],
+          [
+            11.9664,
+            7.0407
+          ],
+          [
+            11.9664,
+            6.4337
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_700b67f6f31188a4": {
+      "object": "node",
+      "id": "item_700b67f6f31188a4",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-10",
+      "position": [
+        14.1502,
+        0,
+        6.7372
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.7135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.35675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 9,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            13793.4,
+            6433.7
+          ],
+          [
+            13793.4,
+            7040.7
+          ],
+          [
+            14506.9,
+            7040.7
+          ],
+          [
+            14506.9,
+            6433.7
+          ]
+        ],
+        "coords_m": [
+          [
+            13.7934,
+            6.4337
+          ],
+          [
+            13.7934,
+            7.0407
+          ],
+          [
+            14.5069,
+            7.0407
+          ],
+          [
+            14.5069,
+            6.4337
+          ]
+        ],
+        "width_mm": 713.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_4bee287bf49cc892": {
+      "object": "node",
+      "id": "item_4bee287bf49cc892",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-11",
+      "position": [
+        11.9664,
+        0,
+        7.1337
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.186
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.23249999999999998,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 10,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            7040.7
+          ],
+          [
+            11052.9,
+            7040.7
+          ],
+          [
+            11052.9,
+            7226.7
+          ],
+          [
+            12879.9,
+            7226.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            7.0407
+          ],
+          [
+            11.0529,
+            7.0407
+          ],
+          [
+            11.0529,
+            7.2267
+          ],
+          [
+            12.8799,
+            7.2267
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 186.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_94134213935168f3": {
+      "object": "node",
+      "id": "item_94134213935168f3",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4 Panel 4-12",
+      "position": [
+        13.6934,
+        0,
+        7.1337
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.627,
+          0.012,
+          0.186
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.8135,
+          0.23249999999999998,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_index": 11,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            12879.9,
+            7040.7
+          ],
+          [
+            12879.9,
+            7226.7
+          ],
+          [
+            14506.9,
+            7226.7
+          ],
+          [
+            14506.9,
+            7040.7
+          ]
+        ],
+        "coords_m": [
+          [
+            12.8799,
+            7.0407
+          ],
+          [
+            12.8799,
+            7.2267
+          ],
+          [
+            14.5069,
+            7.2267
+          ],
+          [
+            14.5069,
+            7.0407
+          ]
+        ],
+        "width_mm": 1627.0,
+        "depth_mm": 186.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
     "zone_ee82e535e997765f": {
       "object": "node",
       "id": "zone_ee82e535e997765f",
@@ -3462,8 +6808,8 @@
             "count": 28
           }
         ],
-        "panel_item_count": 0,
-        "panel_prototype_enabled": false
+        "panel_item_count": 12,
+        "panel_items_imported": true
       }
     },
     "wall_ca2cf1cb904b1448": {
@@ -3562,6 +6908,3268 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
+    "item_079acd1c6c0325bc": {
+      "object": "node",
+      "id": "item_079acd1c6c0325bc",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-1",
+      "position": [
+        8.4679,
+        0,
+        3.6162
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.782,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.891,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 0,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            3919.7
+          ],
+          [
+            9358.9,
+            3312.7
+          ],
+          [
+            7576.9,
+            3312.7
+          ],
+          [
+            7576.9,
+            3919.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            3.9197
+          ],
+          [
+            9.3589,
+            3.3127
+          ],
+          [
+            7.5769,
+            3.3127
+          ],
+          [
+            7.5769,
+            3.9197
+          ]
+        ],
+        "width_mm": 1782.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_777cfea760578a84": {
+      "object": "node",
+      "id": "item_777cfea760578a84",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-2",
+      "position": [
+        10.1329,
+        0,
+        3.6162
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.548,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.774,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 1,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            3919.7
+          ],
+          [
+            10906.9,
+            3919.7
+          ],
+          [
+            10906.9,
+            3312.7
+          ],
+          [
+            9358.9,
+            3312.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            3.9197
+          ],
+          [
+            10.9069,
+            3.9197
+          ],
+          [
+            10.9069,
+            3.3127
+          ],
+          [
+            9.3589,
+            3.3127
+          ]
+        ],
+        "width_mm": 1548.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_9598915a5419ab5b": {
+      "object": "node",
+      "id": "item_9598915a5419ab5b",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-3",
+      "position": [
+        8.0112,
+        0,
+        4.2232
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.8685,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.43425,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 2,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8445.4,
+            4526.7
+          ],
+          [
+            8445.4,
+            3919.7
+          ],
+          [
+            7576.9,
+            3919.7
+          ],
+          [
+            7576.9,
+            4526.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4454,
+            4.5267
+          ],
+          [
+            8.4454,
+            3.9197
+          ],
+          [
+            7.5769,
+            3.9197
+          ],
+          [
+            7.5769,
+            4.5267
+          ]
+        ],
+        "width_mm": 868.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_380bea8658f61fe3": {
+      "object": "node",
+      "id": "item_380bea8658f61fe3",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-4",
+      "position": [
+        9.3589,
+        0,
+        4.2232
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 3,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            3919.7
+          ],
+          [
+            10272.4,
+            4526.7
+          ],
+          [
+            8445.4,
+            4526.7
+          ],
+          [
+            8445.4,
+            3919.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            3.9197
+          ],
+          [
+            10.2724,
+            4.5267
+          ],
+          [
+            8.4454,
+            4.5267
+          ],
+          [
+            8.4454,
+            3.9197
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_00e9442e2186172f": {
+      "object": "node",
+      "id": "item_00e9442e2186172f",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-5",
+      "position": [
+        10.5896,
+        0,
+        4.2232
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.6345,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.31725,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 4,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            3919.7
+          ],
+          [
+            10272.4,
+            4526.7
+          ],
+          [
+            10906.9,
+            4526.7
+          ],
+          [
+            10906.9,
+            3919.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            3.9197
+          ],
+          [
+            10.2724,
+            4.5267
+          ],
+          [
+            10.9069,
+            4.5267
+          ],
+          [
+            10.9069,
+            3.9197
+          ]
+        ],
+        "width_mm": 634.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_30f614ef3a256071": {
+      "object": "node",
+      "id": "item_30f614ef3a256071",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-6",
+      "position": [
+        8.4454,
+        0,
+        4.8302
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 5,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            5133.7
+          ],
+          [
+            9358.9,
+            4526.7
+          ],
+          [
+            7576.9,
+            4526.7
+          ],
+          [
+            7576.9,
+            4826.7
+          ],
+          [
+            8086.9,
+            4826.7
+          ],
+          [
+            8086.9,
+            4928.7
+          ],
+          [
+            7531.9,
+            4928.7
+          ],
+          [
+            7531.9,
+            5133.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            5.1337
+          ],
+          [
+            9.3589,
+            4.5267
+          ],
+          [
+            7.5769,
+            4.5267
+          ],
+          [
+            7.5769,
+            4.8267
+          ],
+          [
+            8.0869,
+            4.8267
+          ],
+          [
+            8.0869,
+            4.9287
+          ],
+          [
+            7.5319,
+            4.9287
+          ],
+          [
+            7.5319,
+            5.1337
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_95143e3944a1bda3": {
+      "object": "node",
+      "id": "item_95143e3944a1bda3",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-7",
+      "position": [
+        10.1549,
+        0,
+        4.8302
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.592,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.796,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 6,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            4526.7
+          ],
+          [
+            9358.9,
+            5133.7
+          ],
+          [
+            10950.9,
+            5133.7
+          ],
+          [
+            10950.9,
+            4612.7
+          ],
+          [
+            10906.9,
+            4612.7
+          ],
+          [
+            10906.9,
+            4526.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            4.5267
+          ],
+          [
+            9.3589,
+            5.1337
+          ],
+          [
+            10.9509,
+            5.1337
+          ],
+          [
+            10.9509,
+            4.6127
+          ],
+          [
+            10.9069,
+            4.6127
+          ],
+          [
+            10.9069,
+            4.5267
+          ]
+        ],
+        "width_mm": 1592.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_40409dafe401b4fb": {
+      "object": "node",
+      "id": "item_40409dafe401b4fb",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-8",
+      "position": [
+        7.9887,
+        0,
+        5.4372
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 7,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8445.4,
+            5740.7
+          ],
+          [
+            8445.4,
+            5133.7
+          ],
+          [
+            7531.9,
+            5133.7
+          ],
+          [
+            7531.9,
+            5740.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4454,
+            5.7407
+          ],
+          [
+            8.4454,
+            5.1337
+          ],
+          [
+            7.5319,
+            5.1337
+          ],
+          [
+            7.5319,
+            5.7407
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_738da4d0823ba1b9": {
+      "object": "node",
+      "id": "item_738da4d0823ba1b9",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-9",
+      "position": [
+        9.3589,
+        0,
+        5.4372
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 8,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            5133.7
+          ],
+          [
+            10272.4,
+            5740.7
+          ],
+          [
+            8445.4,
+            5740.7
+          ],
+          [
+            8445.4,
+            5133.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            5.1337
+          ],
+          [
+            10.2724,
+            5.7407
+          ],
+          [
+            8.4454,
+            5.7407
+          ],
+          [
+            8.4454,
+            5.1337
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_28afb7f95abea138": {
+      "object": "node",
+      "id": "item_28afb7f95abea138",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-10",
+      "position": [
+        10.6116,
+        0,
+        5.4372
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.6785,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.33925,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 9,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            5133.7
+          ],
+          [
+            10272.4,
+            5740.7
+          ],
+          [
+            10950.9,
+            5740.7
+          ],
+          [
+            10950.9,
+            5133.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            5.1337
+          ],
+          [
+            10.2724,
+            5.7407
+          ],
+          [
+            10.9509,
+            5.7407
+          ],
+          [
+            10.9509,
+            5.1337
+          ]
+        ],
+        "width_mm": 678.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_087fb172499d2635": {
+      "object": "node",
+      "id": "item_087fb172499d2635",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-11",
+      "position": [
+        8.4454,
+        0,
+        6.0442
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 10,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            5740.7
+          ],
+          [
+            9358.9,
+            6347.7
+          ],
+          [
+            7531.9,
+            6347.7
+          ],
+          [
+            7531.9,
+            5740.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            5.7407
+          ],
+          [
+            9.3589,
+            6.3477
+          ],
+          [
+            7.5319,
+            6.3477
+          ],
+          [
+            7.5319,
+            5.7407
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_86905ef41394bef5": {
+      "object": "node",
+      "id": "item_86905ef41394bef5",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-12",
+      "position": [
+        10.1549,
+        0,
+        6.0442
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.592,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.796,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 11,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            5740.7
+          ],
+          [
+            9358.9,
+            6347.7
+          ],
+          [
+            10950.9,
+            6347.7
+          ],
+          [
+            10950.9,
+            5740.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            5.7407
+          ],
+          [
+            9.3589,
+            6.3477
+          ],
+          [
+            10.9509,
+            6.3477
+          ],
+          [
+            10.9509,
+            5.7407
+          ]
+        ],
+        "width_mm": 1592.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_3f157db4284e3b8d": {
+      "object": "node",
+      "id": "item_3f157db4284e3b8d",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-13",
+      "position": [
+        7.9887,
+        0,
+        6.6512
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 12,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8445.4,
+            6954.7
+          ],
+          [
+            8445.4,
+            6347.7
+          ],
+          [
+            7531.9,
+            6347.7
+          ],
+          [
+            7531.9,
+            6368.7
+          ],
+          [
+            8360.9,
+            6368.7
+          ],
+          [
+            8360.9,
+            6528.7
+          ],
+          [
+            7531.9,
+            6528.7
+          ],
+          [
+            7531.9,
+            6954.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4454,
+            6.9547
+          ],
+          [
+            8.4454,
+            6.3477
+          ],
+          [
+            7.5319,
+            6.3477
+          ],
+          [
+            7.5319,
+            6.3687
+          ],
+          [
+            8.3609,
+            6.3687
+          ],
+          [
+            8.3609,
+            6.5287
+          ],
+          [
+            7.5319,
+            6.5287
+          ],
+          [
+            7.5319,
+            6.9547
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_295264df527904e7": {
+      "object": "node",
+      "id": "item_295264df527904e7",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-14",
+      "position": [
+        9.3589,
+        0,
+        6.6512
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 13,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            6347.7
+          ],
+          [
+            10272.4,
+            6954.7
+          ],
+          [
+            8445.4,
+            6954.7
+          ],
+          [
+            8445.4,
+            6347.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            6.3477
+          ],
+          [
+            10.2724,
+            6.9547
+          ],
+          [
+            8.4454,
+            6.9547
+          ],
+          [
+            8.4454,
+            6.3477
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_4ef82aff8f2c054c": {
+      "object": "node",
+      "id": "item_4ef82aff8f2c054c",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-15",
+      "position": [
+        10.6116,
+        0,
+        6.6512
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.6785,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.33925,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 14,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            6347.7
+          ],
+          [
+            10272.4,
+            6954.7
+          ],
+          [
+            10950.9,
+            6954.7
+          ],
+          [
+            10950.9,
+            6347.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            6.3477
+          ],
+          [
+            10.2724,
+            6.9547
+          ],
+          [
+            10.9509,
+            6.9547
+          ],
+          [
+            10.9509,
+            6.3477
+          ]
+        ],
+        "width_mm": 678.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_e12cab50855ca1aa": {
+      "object": "node",
+      "id": "item_e12cab50855ca1aa",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-16",
+      "position": [
+        8.4454,
+        0,
+        7.2582
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 15,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            6954.7
+          ],
+          [
+            9358.9,
+            7561.7
+          ],
+          [
+            7531.9,
+            7561.7
+          ],
+          [
+            7531.9,
+            6954.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            6.9547
+          ],
+          [
+            9.3589,
+            7.5617
+          ],
+          [
+            7.5319,
+            7.5617
+          ],
+          [
+            7.5319,
+            6.9547
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_2ccbf6546096c65f": {
+      "object": "node",
+      "id": "item_2ccbf6546096c65f",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-17",
+      "position": [
+        10.2724,
+        0,
+        7.2582
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 16,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            6954.7
+          ],
+          [
+            9358.9,
+            7561.7
+          ],
+          [
+            11185.9,
+            7561.7
+          ],
+          [
+            11185.9,
+            7328.7
+          ],
+          [
+            10950.9,
+            7328.7
+          ],
+          [
+            10950.9,
+            6954.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            6.9547
+          ],
+          [
+            9.3589,
+            7.5617
+          ],
+          [
+            11.1859,
+            7.5617
+          ],
+          [
+            11.1859,
+            7.3287
+          ],
+          [
+            10.9509,
+            7.3287
+          ],
+          [
+            10.9509,
+            6.9547
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_245589fbfde134fa": {
+      "object": "node",
+      "id": "item_245589fbfde134fa",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-18",
+      "position": [
+        11.5394,
+        0,
+        7.4452
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.7069,
+          0.012,
+          0.233
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.35345,
+          0.29125,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 17,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11185.9,
+            7561.7
+          ],
+          [
+            11892.6,
+            7561.7
+          ],
+          [
+            11892.8,
+            7328.7
+          ],
+          [
+            11185.9,
+            7328.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.1859,
+            7.5617
+          ],
+          [
+            11.8926,
+            7.5617
+          ],
+          [
+            11.8928,
+            7.3287
+          ],
+          [
+            11.1859,
+            7.3287
+          ]
+        ],
+        "width_mm": 706.9,
+        "depth_mm": 233.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_31741dbb3abc973a": {
+      "object": "node",
+      "id": "item_31741dbb3abc973a",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-19",
+      "position": [
+        7.9886,
+        0,
+        7.8652
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 18,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8445.4,
+            8168.7
+          ],
+          [
+            8445.4,
+            7561.7
+          ],
+          [
+            7531.9,
+            7561.7
+          ],
+          [
+            7531.9,
+            8168.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4454,
+            8.1687
+          ],
+          [
+            8.4454,
+            7.5617
+          ],
+          [
+            7.5319,
+            7.5617
+          ],
+          [
+            7.5319,
+            8.1687
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_43a9056563cc9b1f": {
+      "object": "node",
+      "id": "item_43a9056563cc9b1f",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-20",
+      "position": [
+        9.3589,
+        0,
+        7.8652
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 19,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            7561.7
+          ],
+          [
+            10272.4,
+            8168.7
+          ],
+          [
+            8445.4,
+            8168.7
+          ],
+          [
+            8445.4,
+            7561.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            7.5617
+          ],
+          [
+            10.2724,
+            8.1687
+          ],
+          [
+            8.4454,
+            8.1687
+          ],
+          [
+            8.4454,
+            7.5617
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_72460fbe0ab39282": {
+      "object": "node",
+      "id": "item_72460fbe0ab39282",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-21",
+      "position": [
+        11.0825,
+        0,
+        7.8652
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.6202,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.8101,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 20,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            7561.7
+          ],
+          [
+            10272.4,
+            8168.7
+          ],
+          [
+            11891.9,
+            8168.7
+          ],
+          [
+            11892.6,
+            7561.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            7.5617
+          ],
+          [
+            10.2724,
+            8.1687
+          ],
+          [
+            11.8919,
+            8.1687
+          ],
+          [
+            11.8926,
+            7.5617
+          ]
+        ],
+        "width_mm": 1620.2,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_b8592119d90965f3": {
+      "object": "node",
+      "id": "item_b8592119d90965f3",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-22",
+      "position": [
+        8.4454,
+        0,
+        8.4722
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 21,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            8168.7
+          ],
+          [
+            9358.9,
+            8775.7
+          ],
+          [
+            7531.9,
+            8775.7
+          ],
+          [
+            7531.9,
+            8168.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            8.1687
+          ],
+          [
+            9.3589,
+            8.7757
+          ],
+          [
+            7.5319,
+            8.7757
+          ],
+          [
+            7.5319,
+            8.1687
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_4b3dfb14bb4d3612": {
+      "object": "node",
+      "id": "item_4b3dfb14bb4d3612",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-23",
+      "position": [
+        10.2724,
+        0,
+        8.4722
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 22,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11185.9,
+            8168.7
+          ],
+          [
+            11185.9,
+            8775.7
+          ],
+          [
+            9358.9,
+            8775.7
+          ],
+          [
+            9358.9,
+            8168.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.1859,
+            8.1687
+          ],
+          [
+            11.1859,
+            8.7757
+          ],
+          [
+            9.3589,
+            8.7757
+          ],
+          [
+            9.3589,
+            8.1687
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_43fcb9f245dc4171": {
+      "object": "node",
+      "id": "item_43fcb9f245dc4171",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-24",
+      "position": [
+        11.5389,
+        0,
+        8.4722
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.706,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.353,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 23,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11185.9,
+            8168.7
+          ],
+          [
+            11185.9,
+            8775.7
+          ],
+          [
+            11891.2,
+            8775.7
+          ],
+          [
+            11891.9,
+            8168.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.1859,
+            8.1687
+          ],
+          [
+            11.1859,
+            8.7757
+          ],
+          [
+            11.8912,
+            8.7757
+          ],
+          [
+            11.8919,
+            8.1687
+          ]
+        ],
+        "width_mm": 706.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_da80e2c20c179899": {
+      "object": "node",
+      "id": "item_da80e2c20c179899",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-25",
+      "position": [
+        7.9886,
+        0,
+        9.0792
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 24,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8445.4,
+            9382.7
+          ],
+          [
+            8445.4,
+            8775.7
+          ],
+          [
+            7531.9,
+            8775.7
+          ],
+          [
+            7531.9,
+            9382.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.4454,
+            9.3827
+          ],
+          [
+            8.4454,
+            8.7757
+          ],
+          [
+            7.5319,
+            8.7757
+          ],
+          [
+            7.5319,
+            9.3827
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_025036ec168a7443": {
+      "object": "node",
+      "id": "item_025036ec168a7443",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-26",
+      "position": [
+        9.3589,
+        0,
+        9.0792
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 25,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            8775.7
+          ],
+          [
+            10272.4,
+            9382.7
+          ],
+          [
+            8445.4,
+            9382.7
+          ],
+          [
+            8445.4,
+            8775.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            8.7757
+          ],
+          [
+            10.2724,
+            9.3827
+          ],
+          [
+            8.4454,
+            9.3827
+          ],
+          [
+            8.4454,
+            8.7757
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_c68d0611eecb52e2": {
+      "object": "node",
+      "id": "item_c68d0611eecb52e2",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-27",
+      "position": [
+        11.0818,
+        0,
+        9.0792
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.6188,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.8094,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 26,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10272.4,
+            8775.7
+          ],
+          [
+            10272.4,
+            9382.7
+          ],
+          [
+            11590.9,
+            9382.7
+          ],
+          [
+            11590.9,
+            9066.7
+          ],
+          [
+            11890.9,
+            9066.7
+          ],
+          [
+            11891.2,
+            8775.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.2724,
+            8.7757
+          ],
+          [
+            10.2724,
+            9.3827
+          ],
+          [
+            11.5909,
+            9.3827
+          ],
+          [
+            11.5909,
+            9.0667
+          ],
+          [
+            11.8909,
+            9.0667
+          ],
+          [
+            11.8912,
+            8.7757
+          ]
+        ],
+        "width_mm": 1618.8,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_33ee411e2bf3612c": {
+      "object": "node",
+      "id": "item_33ee411e2bf3612c",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-28",
+      "position": [
+        8.4454,
+        0,
+        9.5747
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.384
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.48,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 27,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9358.9,
+            9382.7
+          ],
+          [
+            7531.9,
+            9382.7
+          ],
+          [
+            7531.9,
+            9766.7
+          ],
+          [
+            9358.9,
+            9766.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.3589,
+            9.3827
+          ],
+          [
+            7.5319,
+            9.3827
+          ],
+          [
+            7.5319,
+            9.7667
+          ],
+          [
+            9.3589,
+            9.7667
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 384.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_4f331a63748f951b": {
+      "object": "node",
+      "id": "item_4f331a63748f951b",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-29",
+      "position": [
+        10.2724,
+        0,
+        9.5747
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.384
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.48,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 28,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11185.9,
+            9382.7
+          ],
+          [
+            9358.9,
+            9382.7
+          ],
+          [
+            9358.9,
+            9766.7
+          ],
+          [
+            11185.9,
+            9766.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.1859,
+            9.3827
+          ],
+          [
+            9.3589,
+            9.3827
+          ],
+          [
+            9.3589,
+            9.7667
+          ],
+          [
+            11.1859,
+            9.7667
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 384.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_7ad9bcc19b9bd3cf": {
+      "object": "node",
+      "id": "item_7ad9bcc19b9bd3cf",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5 Panel 5-30",
+      "position": [
+        11.3884,
+        0,
+        9.5747
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.405,
+          0.012,
+          0.384
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.2025,
+          0.48,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_index": 29,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            11185.9,
+            9382.7
+          ],
+          [
+            11185.9,
+            9766.7
+          ],
+          [
+            11590.9,
+            9766.7
+          ],
+          [
+            11590.9,
+            9382.7
+          ]
+        ],
+        "coords_m": [
+          [
+            11.1859,
+            9.3827
+          ],
+          [
+            11.1859,
+            9.7667
+          ],
+          [
+            11.5909,
+            9.7667
+          ],
+          [
+            11.5909,
+            9.3827
+          ]
+        ],
+        "width_mm": 405.0,
+        "depth_mm": 384.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
     "zone_f9fca0a01ffebec3": {
       "object": "node",
       "id": "zone_f9fca0a01ffebec3",
@@ -3659,8 +10267,8 @@
             "count": 41
           }
         ],
-        "panel_item_count": 0,
-        "panel_prototype_enabled": false
+        "panel_item_count": 30,
+        "panel_items_imported": true
       }
     },
     "wall_a969b71a722fc3aa": {
@@ -4095,6 +10703,426 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
+    "item_9cd5c69a53c5aee6": {
+      "object": "node",
+      "id": "item_9cd5c69a53c5aee6",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-6 Panel 6-1",
+      "position": [
+        9.5669,
+        0,
+        10.1722
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.548,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.774,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "panel_index": 0,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            10340.9,
+            10475.7
+          ],
+          [
+            10340.9,
+            9868.7
+          ],
+          [
+            8792.9,
+            9868.7
+          ],
+          [
+            8792.9,
+            10475.7
+          ]
+        ],
+        "coords_m": [
+          [
+            10.3409,
+            10.4757
+          ],
+          [
+            10.3409,
+            9.8687
+          ],
+          [
+            8.7929,
+            9.8687
+          ],
+          [
+            8.7929,
+            10.4757
+          ]
+        ],
+        "width_mm": 1548.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_0d5e97930a710210": {
+      "object": "node",
+      "id": "item_0d5e97930a710210",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-6 Panel 6-2",
+      "position": [
+        9.2496,
+        0,
+        10.7792
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "panel_index": 1,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9706.4,
+            11082.7
+          ],
+          [
+            9706.4,
+            10475.7
+          ],
+          [
+            8792.9,
+            10475.7
+          ],
+          [
+            8792.9,
+            11082.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.7064,
+            11.0827
+          ],
+          [
+            9.7064,
+            10.4757
+          ],
+          [
+            8.7929,
+            10.4757
+          ],
+          [
+            8.7929,
+            11.0827
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_46ad6f0311f66140": {
+      "object": "node",
+      "id": "item_46ad6f0311f66140",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-6 Panel 6-3",
+      "position": [
+        10.0236,
+        0,
+        10.7792
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.6345,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.31725,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "panel_index": 2,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            9706.4,
+            10475.7
+          ],
+          [
+            9706.4,
+            11082.7
+          ],
+          [
+            10340.9,
+            11082.7
+          ],
+          [
+            10340.9,
+            10475.7
+          ]
+        ],
+        "coords_m": [
+          [
+            9.7064,
+            10.4757
+          ],
+          [
+            9.7064,
+            11.0827
+          ],
+          [
+            10.3409,
+            11.0827
+          ],
+          [
+            10.3409,
+            10.4757
+          ]
+        ],
+        "width_mm": 634.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_a06d3e4c7abf3076": {
+      "object": "node",
+      "id": "item_a06d3e4c7abf3076",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-6 Panel 6-4",
+      "position": [
+        9.5669,
+        0,
+        11.3627
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.548,
+          0.012,
+          0.56
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.774,
+          0.7000000000000001,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "panel_index": 3,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8792.9,
+            11642.7
+          ],
+          [
+            10340.9,
+            11642.7
+          ],
+          [
+            10340.9,
+            11082.7
+          ],
+          [
+            8792.9,
+            11082.7
+          ]
+        ],
+        "coords_m": [
+          [
+            8.7929,
+            11.6427
+          ],
+          [
+            10.3409,
+            11.6427
+          ],
+          [
+            10.3409,
+            11.0827
+          ],
+          [
+            8.7929,
+            11.0827
+          ]
+        ],
+        "width_mm": 1548.0,
+        "depth_mm": 560.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
     "zone_ec025366655be2bc": {
       "object": "node",
       "id": "zone_ec025366655be2bc",
@@ -4132,8 +11160,8 @@
             "count": 6
           }
         ],
-        "panel_item_count": 0,
-        "panel_prototype_enabled": false
+        "panel_item_count": 4,
+        "panel_items_imported": true
       }
     },
     "wall_ae15f6e79893e42c": {

@@ -56,7 +56,7 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 - all rooms -> one site / one building / one level
 - Okiyuka summary and offcut pool -> node metadata
 - Okiyuka pedestals -> level metadata plus per-zone pedestal summaries
-- one prototype room's panels -> Pascal item nodes with proxy item assets
+- all rooms' panels -> Pascal item nodes with proxy item assets
 - stable input-derived IDs -> site, building, level, wall, zone, and imported item nodes
 
 ## Current Load Procedure
@@ -81,7 +81,8 @@ An end-to-end validation was completed with a real Okiyuka export generated from
 - Source drawing recorded in export: `normal_plan2.dxf`
 - Converted Pascal scene file: `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\pascal_scene.json`
 - Conversion result: success
-- Generated scene size: 62 nodes, 1 root node
+- Generated scene size: 127 nodes, 1 root node
+- Imported panel item count: 72 across 6 rooms
 - Pascal load result: success through `Settings -> Load Build`
 
 Observed result in Pascal Editor:
@@ -110,7 +111,7 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 
 ## Current Limitations
 
-- only one prototype room currently maps panels into Pascal item nodes
+- all rooms with panel geometry now map panels into Pascal item nodes
 - imported panel items currently use a proxy asset and metadata-rich box approximation
 - pedestals are preserved as metadata only and do not render as explicit scene elements
 - edge rails are not yet mapped
@@ -154,7 +155,7 @@ Current result:
 
 Status:
 
-- prototype implemented for one room from the real fixture
+- expanded across all rooms from the real fixture
 
 Goal:
 
@@ -167,10 +168,10 @@ Preferred direction:
 
 Current prototype result:
 
-- the converter selects one room with panels from the real fixture and maps its panels to level child `item` nodes
+- the converter maps panels from every room in the real fixture to level child `item` nodes
 - each imported panel item carries source coordinates, panel type, dimensions, and rotation in metadata
 - each imported panel item uses a proxy asset so the current viewer can render it without adding a new renderer
-- the real fixture now imports 7 panel items for `_0-2_ROOM_OUTLINE-1`
+- the real fixture now imports 72 panel items across 6 rooms that expose Okiyuka panel geometry
 
 Open design questions:
 
@@ -180,7 +181,7 @@ Open design questions:
 
 Acceptance target:
 
-- at least one room from the real fixture shows individual panel elements in Pascal Editor
+- rooms from the real fixture show individual panel elements in Pascal Editor
 - full, cut, reused, and rejected panels remain distinguishable in metadata or appearance
 
 ### Phase 3: Edge Rail Mapping
@@ -217,7 +218,7 @@ Potential work:
 ### Recommended Order
 
 1. pedestal metadata preservation
-2. panel element prototype for one room from the real fixture
+2. panel element prototype across the real fixture
 3. edge rail import path
 4. schema and renderer promotion only where the prototype proves useful
 
@@ -252,7 +253,7 @@ Why this changed:
 - A minimal bridge now exists on the Okiyuka side at `C:\Okiyuka_V1.0\tools\okiyuka_to_pascal_scene.py`.
 - The bridge currently converts room polygons into Pascal zones and room perimeter segments into Pascal walls under one site, one building, and one level.
 - Phase 1 pedestal preservation is now in place: the converter stores full pedestal records in level metadata and room-level summaries in zone metadata.
-- Phase 2 panel prototyping is now in place for one room from the real fixture: 7 panel items are imported as level child item nodes using a proxy asset.
+- Phase 2 panel prototyping is now in place across the real fixture: 72 panel items are imported as level child item nodes using a proxy asset for all 6 rooms that carry panel geometry.
 - Converter output IDs are now deterministic for identical inputs, which keeps fixture regeneration stable.
 - Synthetic import validation succeeded in Pascal Editor, confirming that the current conversion shape can be loaded by the existing UI.
 - Local setup and architecture notes in this repository were updated to reflect the current checkout instead of the older auth / db / Supabase-oriented documentation.
