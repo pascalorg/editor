@@ -13,6 +13,7 @@ import { PALETTE_COLORS } from './../../../components/ui/primitives/color-dot'
 import { EDITOR_LAYER } from './../../../lib/constants'
 import { formatLengthInputValue, getLengthInputUnitLabel } from './../../../lib/measurements'
 import { sfxEmitter } from './../../../lib/sfx-bus'
+import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
 import {
@@ -20,7 +21,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
-  getWallSnapPoint,
+  getSegmentSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -79,6 +80,8 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<PlanPoint>) =
 
 export const ZoneTool: React.FC = () => {
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const measurementGuides = useEditor((state) => state.measurementGuides)
+  const showGuides = useViewer((state) => state.showGuides)
   const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
@@ -188,6 +191,14 @@ export const ZoneTool: React.FC = () => {
       Object.values(useScene.getState().nodes).filter(
         (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
       )
+    const getSnapSegments = () => [
+      ...getLevelWalls(),
+      ...(showGuides
+        ? measurementGuides
+            .filter((guide) => guide.levelId === currentLevelId)
+            .map((guide) => ({ start: guide.start, end: guide.end }))
+        : []),
+    ]
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
@@ -206,7 +217,7 @@ export const ZoneTool: React.FC = () => {
           : calculateSnapPoint(lastPoint, gridPosition)
       const displayPoint = shiftPressed.current
         ? basePoint
-        : (getWallSnapPoint(basePoint, getLevelWalls()) ?? basePoint)
+        : (getSegmentSnapPoint(basePoint, getSnapSegments()) ?? basePoint)
 
       snappedCursorPositionRef.current = displayPoint
       setSnappedCursorPosition(displayPoint)
@@ -297,7 +308,7 @@ export const ZoneTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [clearDraft, commitDraftPoint, currentLevelId, unitSystem])
+  }, [clearDraft, commitDraftPoint, currentLevelId, measurementGuides, showGuides, unitSystem])
 
   useEffect(() => {
     if (!(mainLineRef.current && closingLineRef.current)) return

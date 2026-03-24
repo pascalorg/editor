@@ -5,13 +5,14 @@ import { BufferGeometry, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
 import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
-  getWallSnapPoint,
+  getSegmentSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -51,7 +52,10 @@ const syncLineGeometry = (
 }
 
 export const MeasureTool: React.FC = () => {
+  const addMeasurementGuide = useEditor((state) => state.addMeasurementGuide)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const measurementGuides = useEditor((state) => state.measurementGuides)
+  const showGuides = useViewer((state) => state.showGuides)
   const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const lineRef = useRef<Line>(null!)
@@ -96,11 +100,28 @@ export const MeasureTool: React.FC = () => {
       if (!(startRef.current && endRef.current)) return
       if (getPlanDistance(startRef.current, endRef.current) < MIN_DRAW_DISTANCE) return
 
-      isLockedRef.current = true
-      syncLineGeometry(lineRef.current, startRef.current, endRef.current, levelY)
-      syncMeasurementState(levelY)
+      if (currentLevelId) {
+        addMeasurementGuide({
+          end: endRef.current,
+          levelId: currentLevelId,
+          levelY,
+          start: startRef.current,
+        })
+      }
+
+      const finalEnd = endRef.current
+      cursorRef.current?.position.set(finalEnd[0], levelY, finalEnd[1])
+      startRef.current = null
+      endRef.current = null
+      isLockedRef.current = false
+      previousEndRef.current = null
+      ignoreNextGridClickRef.current = false
+      if (lineRef.current.geometry) {
+        lineRef.current.visible = false
+      }
+      setMeasurement({ start: null, end: null, isLocked: false, levelY })
     },
-    [syncMeasurementState],
+    [addMeasurementGuide, currentLevelId],
   )
 
   const applyDistanceInput = (
@@ -140,6 +161,14 @@ export const MeasureTool: React.FC = () => {
       Object.values(useScene.getState().nodes).filter(
         (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
       )
+    const getSnapSegments = () => [
+      ...getLevelWalls(),
+      ...(showGuides
+        ? measurementGuides
+            .filter((guide) => guide.levelId === currentLevelId)
+            .map((guide) => ({ start: guide.start, end: guide.end }))
+        : []),
+    ]
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
@@ -152,7 +181,7 @@ export const MeasureTool: React.FC = () => {
       const gridPosition =
         shiftPressed.current || !currentLevelId
           ? rawGridPosition
-          : (getWallSnapPoint(rawGridPosition, getLevelWalls()) ?? rawGridPosition)
+          : (getSegmentSnapPoint(rawGridPosition, getSnapSegments()) ?? rawGridPosition)
 
       if (!(startRef.current && !isLockedRef.current)) {
         cursorRef.current.position.set(gridPosition[0], levelY, gridPosition[1])
@@ -167,7 +196,7 @@ export const MeasureTool: React.FC = () => {
       const nextEnd =
         shiftPressed.current || !currentLevelId
           ? angleSnapped
-          : (getWallSnapPoint(angleSnapped, getLevelWalls()) ?? angleSnapped)
+          : (getSegmentSnapPoint(angleSnapped, getSnapSegments()) ?? angleSnapped)
 
       if (
         previousEndRef.current &&
@@ -198,7 +227,7 @@ export const MeasureTool: React.FC = () => {
       const gridPosition =
         shiftPressed.current || !currentLevelId
           ? rawGridPosition
-          : (getWallSnapPoint(rawGridPosition, getLevelWalls()) ?? rawGridPosition)
+          : (getSegmentSnapPoint(rawGridPosition, getSnapSegments()) ?? rawGridPosition)
 
       if (!startRef.current || isLockedRef.current) {
         startRef.current = gridPosition
@@ -274,7 +303,15 @@ export const MeasureTool: React.FC = () => {
       window.removeEventListener('keyup', onKeyUp)
       closeDistanceInput()
     }
-  }, [closeDistanceInput, currentLevelId, lockMeasurement, syncMeasurementState, unitSystem])
+  }, [
+    closeDistanceInput,
+    currentLevelId,
+    lockMeasurement,
+    measurementGuides,
+    showGuides,
+    syncMeasurementState,
+    unitSystem,
+  ])
 
   const currentDistance = useMemo(() => {
     if (!(measurement.start && measurement.end)) return 0

@@ -3,14 +3,14 @@
 import { type AnyNode, type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
-import { formatLength } from '../../../lib/measurements'
+import { METERS_PER_INCH } from '../../../lib/measurements'
 import { PanelSection } from '../controls/panel-section'
+import { MetricControl } from '../controls/metric-control'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function WallPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
@@ -39,6 +39,23 @@ export function WallPanel() {
 
   const height = node.height ?? 2.5
   const thickness = node.thickness ?? 0.1
+
+  const handleLengthChange = useCallback(
+    (nextLength: number) => {
+      const directionX = node.end[0] - node.start[0]
+      const directionZ = node.end[1] - node.start[1]
+      const currentLength = Math.hypot(directionX, directionZ)
+      const resolvedLength = Math.max(METERS_PER_INCH, nextLength)
+
+      const unitX = currentLength > 1e-6 ? directionX / currentLength : 1
+      const unitZ = currentLength > 1e-6 ? directionZ / currentLength : 0
+
+      handleUpdate({
+        end: [node.start[0] + unitX * resolvedLength, node.start[1] + unitZ * resolvedLength],
+      })
+    },
+    [handleUpdate, node.end, node.start],
+  )
 
   return (
     <PanelWrapper
@@ -71,10 +88,17 @@ export function WallPanel() {
       </PanelSection>
 
       <PanelSection title="Info">
-        <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Length</span>
-          <span className="font-mono text-white">{formatLength(length, unitSystem)}</span>
-        </div>
+        <MetricControl
+          editTrigger="doubleClick"
+          label="Length"
+          max={100}
+          min={METERS_PER_INCH}
+          onChange={handleLengthChange}
+          precision={3}
+          step={METERS_PER_INCH}
+          unit="m"
+          value={length}
+        />
       </PanelSection>
     </PanelWrapper>
   )

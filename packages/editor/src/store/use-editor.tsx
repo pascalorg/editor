@@ -51,6 +51,14 @@ export type CatalogCategory =
 
 export type StructureLayer = 'zones' | 'elements'
 
+export type MeasurementGuide = {
+  id: string
+  levelId: LevelNode['id']
+  levelY: number
+  start: [number, number]
+  end: [number, number]
+}
+
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
@@ -71,6 +79,9 @@ type EditorState = {
   setMovingNode: (node: ItemNode | WindowNode | DoorNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  measurementGuides: MeasurementGuide[]
+  addMeasurementGuide: (guide: Omit<MeasurementGuide, 'id'> & { id?: string }) => void
+  clearMeasurementGuides: (levelId?: LevelNode['id']) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -80,6 +91,14 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
+}
+
+const createMeasurementGuideId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `measure-guide-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -219,6 +238,23 @@ const useEditor = create<EditorState>()((set, get) => ({
   setMovingNode: (node) => set({ movingNode: node }),
   selectedReferenceId: null,
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+  measurementGuides: [],
+  addMeasurementGuide: (guide) =>
+    set((state) => ({
+      measurementGuides: [
+        ...state.measurementGuides,
+        {
+          ...guide,
+          id: guide.id ?? createMeasurementGuideId(),
+        },
+      ],
+    })),
+  clearMeasurementGuides: (levelId) =>
+    set((state) => ({
+      measurementGuides: levelId
+        ? state.measurementGuides.filter((guide) => guide.levelId !== levelId)
+        : [],
+    })),
   spaces: {},
   setSpaces: (spaces) => set({ spaces }),
   editingHole: null,

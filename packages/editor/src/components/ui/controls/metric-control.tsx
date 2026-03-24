@@ -20,6 +20,7 @@ interface MetricControlProps {
   step?: number
   className?: string
   unit?: string
+  editTrigger?: 'click' | 'doubleClick'
 }
 
 export function MetricControl({
@@ -32,6 +33,7 @@ export function MetricControl({
   step = 1,
   className,
   unit = '',
+  editTrigger = 'click',
 }: MetricControlProps) {
   const unitSystem = useViewer((state) => state.unitSystem)
   const isLengthMeasurement = unit === 'm'
@@ -260,7 +262,8 @@ export function MetricControl({
         ) : (
           <div
             className="flex w-full cursor-text items-center justify-end text-foreground transition-colors hover:text-primary"
-            onClick={handleValueClick}
+            onClick={editTrigger === 'click' ? handleValueClick : undefined}
+            onDoubleClick={editTrigger === 'doubleClick' ? handleValueClick : undefined}
           >
             <span className="font-mono tabular-nums tracking-tight">{formattedDisplayValue}</span>
             {!isLengthMeasurement && unit && (

@@ -12,6 +12,7 @@ import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } fro
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
 import {
@@ -19,7 +20,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
-  getWallSnapPoint,
+  getSegmentSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -86,6 +87,8 @@ const commitSlabDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 }
 
 export const SlabTool: React.FC = () => {
+  const measurementGuides = useEditor((state) => state.measurementGuides)
+  const showGuides = useViewer((state) => state.showGuides)
   const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
@@ -187,6 +190,14 @@ export const SlabTool: React.FC = () => {
       Object.values(useScene.getState().nodes).filter(
         (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
       )
+    const getSnapSegments = () => [
+      ...getLevelWalls(),
+      ...(showGuides
+        ? measurementGuides
+            .filter((guide) => guide.levelId === currentLevelId)
+            .map((guide) => ({ start: guide.start, end: guide.end }))
+        : []),
+    ]
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
@@ -209,7 +220,7 @@ export const SlabTool: React.FC = () => {
           : calculateSnapPoint(lastPoint, gridPosition)
       const displayPoint = shiftPressed.current
         ? basePoint
-        : (getWallSnapPoint(basePoint, getLevelWalls()) ?? basePoint)
+        : (getSegmentSnapPoint(basePoint, getSnapSegments()) ?? basePoint)
       snappedCursorPositionRef.current = displayPoint
       setSnappedCursorPosition(displayPoint)
 
@@ -304,7 +315,16 @@ export const SlabTool: React.FC = () => {
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [commitDraftPoint, currentLevelId, setSelection, closeDistanceInput, updatePoints, unitSystem])
+  }, [
+    closeDistanceInput,
+    commitDraftPoint,
+    currentLevelId,
+    measurementGuides,
+    setSelection,
+    showGuides,
+    unitSystem,
+    updatePoints,
+  ])
 
   // Update line geometries when points change
   useEffect(() => {

@@ -13,6 +13,7 @@ import { mix, positionLocal } from 'three/tsl'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
 import {
@@ -20,7 +21,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
-  getWallSnapPoint,
+  getSegmentSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -78,7 +79,9 @@ const commitCeilingDrawing = (levelId: LevelNode['id'], points: Array<PlanPoint>
 }
 
 export const CeilingTool: React.FC = () => {
+  const measurementGuides = useEditor((state) => state.measurementGuides)
   const unitSystem = useViewer((state) => state.unitSystem)
+  const showGuides = useViewer((state) => state.showGuides)
   const cursorRef = useRef<Group>(null)
   const gridCursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
@@ -206,6 +209,14 @@ export const CeilingTool: React.FC = () => {
       Object.values(useScene.getState().nodes).filter(
         (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
       )
+    const getSnapSegments = () => [
+      ...getLevelWalls(),
+      ...(showGuides
+        ? measurementGuides
+            .filter((guide) => guide.levelId === currentLevelId)
+            .map((guide) => ({ start: guide.start, end: guide.end }))
+        : []),
+    ]
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
@@ -224,7 +235,7 @@ export const CeilingTool: React.FC = () => {
           : calculateSnapPoint(lastPoint, gridPosition)
       const displayPoint = shiftPressed.current
         ? basePoint
-        : (getWallSnapPoint(basePoint, getLevelWalls()) ?? basePoint)
+        : (getSegmentSnapPoint(basePoint, getSnapSegments()) ?? basePoint)
 
       snappedCursorPositionRef.current = displayPoint
       setSnappedCursorPosition(displayPoint)
@@ -321,7 +332,15 @@ export const CeilingTool: React.FC = () => {
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [clearDraft, commitDraftPoint, currentLevelId, setSelection, unitSystem])
+  }, [
+    clearDraft,
+    commitDraftPoint,
+    currentLevelId,
+    measurementGuides,
+    setSelection,
+    showGuides,
+    unitSystem,
+  ])
 
   useEffect(() => {
     if (!(mainLineRef.current && closingLineRef.current)) return

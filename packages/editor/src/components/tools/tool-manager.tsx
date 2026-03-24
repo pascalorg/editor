@@ -9,6 +9,7 @@ import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { MeasureTool } from './measure/measure-tool'
 import { RoofTool } from './roof/roof-tool'
+import { MeasurementGuides } from './shared/measurement-guides'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
@@ -101,6 +102,7 @@ export const ToolManager: React.FC = () => {
 
   return (
     <>
+      <MeasurementGuides />
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
       {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}

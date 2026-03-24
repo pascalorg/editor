@@ -55,12 +55,12 @@ export const useKeyboard = () => {
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('build')
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        useScene.temporal.getState().undo()
-      } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+      } else if (e.key.toLowerCase() === 'z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         useScene.temporal.getState().redo()
+      } else if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        useScene.temporal.getState().undo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection

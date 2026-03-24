@@ -11,7 +11,7 @@ export function MeasureHelper() {
       </div>
       <div className="flex items-center gap-2 text-sm">
         <kbd className="rounded bg-muted px-2 py-1 font-medium text-xs">Esc</kbd>
-        <span className="text-muted-foreground">Clear the measurement</span>
+        <span className="text-muted-foreground">Cancel the current measurement draft</span>
       </div>
     </div>
   )

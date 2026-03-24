@@ -7,6 +7,10 @@ import {
 } from '../../../lib/measurements'
 
 export type PlanPoint = [number, number]
+export type SnapSegment = {
+  start: PlanPoint
+  end: PlanPoint
+}
 
 export const GRID_STEP = METERS_PER_INCH
 export const MIN_DRAW_DISTANCE = 0.01
@@ -81,9 +85,9 @@ const getClosestPointOnSegment = (
   return [segmentStart[0] + dx * t, segmentStart[1] + dz * t]
 }
 
-export const getWallSnapPoint = (
+export const getSegmentSnapPoint = (
   point: PlanPoint,
-  walls: Array<Pick<WallNode, 'start' | 'end'>>,
+  segments: Array<SnapSegment>,
   maxDistance = WALL_SNAP_DISTANCE,
 ): PlanPoint | null => {
   const maxDistanceSquared = maxDistance * maxDistance
@@ -92,8 +96,8 @@ export const getWallSnapPoint = (
   let nearestWallPoint: PlanPoint | null = null
   let nearestWallDistanceSquared = Number.POSITIVE_INFINITY
 
-  for (const wall of walls) {
-    for (const corner of [wall.start, wall.end] as PlanPoint[]) {
+  for (const segment of segments) {
+    for (const corner of [segment.start, segment.end] as PlanPoint[]) {
       const cornerDistanceSquared = getDistanceSquared(point, corner)
       if (
         cornerDistanceSquared <= maxDistanceSquared &&
@@ -104,7 +108,7 @@ export const getWallSnapPoint = (
       }
     }
 
-    const projectedPoint = getClosestPointOnSegment(point, wall.start, wall.end)
+    const projectedPoint = getClosestPointOnSegment(point, segment.start, segment.end)
     const wallDistanceSquared = getDistanceSquared(point, projectedPoint)
     if (
       wallDistanceSquared <= maxDistanceSquared &&
@@ -117,6 +121,12 @@ export const getWallSnapPoint = (
 
   return nearestCorner ?? nearestWallPoint
 }
+
+export const getWallSnapPoint = (
+  point: PlanPoint,
+  walls: Array<Pick<WallNode, 'start' | 'end'>>,
+  maxDistance = WALL_SNAP_DISTANCE,
+) => getSegmentSnapPoint(point, walls, maxDistance)
 
 export const snapSegmentTo45Degrees = (start: PlanPoint, cursor: PlanPoint): PlanPoint => {
   const dx = cursor[0] - start[0]
