@@ -208,7 +208,7 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [setWidth, side])
+  }, [setWidth, side, setIsDragging])
 
   return (
     <div

@@ -182,6 +182,7 @@ export function SettingsPanel({
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
+  const showGrid = useViewer((state) => state.showGrid)
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const sceneGraphValue = useMemo(
@@ -307,7 +308,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Visible only in the editor</div>
             </div>
             <Switch
-              checked={useViewer((state) => state.showGrid)}
+              checked={showGrid}
               onCheckedChange={(checked) => useViewer.getState().setShowGrid(checked)}
             />
           </div>

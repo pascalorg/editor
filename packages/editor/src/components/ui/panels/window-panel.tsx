@@ -67,7 +67,7 @@ export function WindowPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!(node && node.parentId)) return
+    if (!node?.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
     const duplicate = WindowNode.parse({

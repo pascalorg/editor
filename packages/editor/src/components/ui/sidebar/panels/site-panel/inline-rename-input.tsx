@@ -23,6 +23,7 @@ export function InlineRenameInput({
   const updateNode = useScene((s) => s.updateNode)
   const [value, setValue] = useState(node.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
+  const inputSize = Math.max((value || defaultName).length, 1)
 
   useEffect(() => {
     if (isEditing) {
@@ -79,7 +80,7 @@ export function InlineRenameInput({
   return (
     <input
       className={cn(
-        'm-0 h-5 w-full flex-1 rounded-none border-primary/50 border-b bg-transparent px-0 py-0 text-foreground text-sm outline-none focus:border-primary',
+        'm-0 h-5 min-w-[1ch] max-w-full flex-none rounded-none border-primary/50 border-b bg-transparent px-0 py-0 text-foreground text-sm outline-none focus:border-primary',
         className,
       )}
       onBlur={handleSave}
@@ -89,6 +90,7 @@ export function InlineRenameInput({
       onKeyDown={handleKeyDown}
       placeholder={defaultName}
       ref={inputRef}
+      size={inputSize}
       type="text"
       value={value}
     />

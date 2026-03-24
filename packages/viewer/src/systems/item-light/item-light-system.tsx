@@ -286,7 +286,7 @@ export function ItemLightSystem() {
           castShadow={false}
           intensity={0}
           key={i}
-          ref={(el) => {
+          ref={(el: any) => {
             lightRefs.current[i] = el
           }}
         />

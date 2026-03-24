@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface CeilingTreeNodeProps {
@@ -28,7 +28,7 @@ export function CeilingTreeNode({ node, depth, isLast }: CeilingTreeNodeProps) {
     let isDescendant = false
     for (const id of selectedIds) {
       let current = nodes[id as AnyNodeId]
-      while (current && current.parentId) {
+      while (current?.parentId) {
         if (current.parentId === node.id) {
           isDescendant = true
           break
@@ -51,7 +51,7 @@ export function CeilingTreeNode({ node, depth, isLast }: CeilingTreeNodeProps) {
   }
 
   const handleDoubleClick = () => {
-    setIsEditing(true)
+    focusTreeNode(node.id)
   }
 
   const handleMouseEnter = () => {
@@ -118,8 +118,12 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
 
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]![0] * polygon[j]![1]
-    area -= polygon[j]![0] * polygon[i]![1]
+    const pi = polygon[i]
+    const pj = polygon[j]
+    if (pi && pj) {
+      area += pi[0] * pj[1]
+      area -= pj[0] * pi[1]
+    }
   }
 
   return Math.abs(area) / 2

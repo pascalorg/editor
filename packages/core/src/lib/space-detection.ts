@@ -104,9 +104,11 @@ export function initSpaceDetectionSync(
     // Run detection for affected levels
     if (levelsToUpdate.size > 0) {
       isProcessing = true
+      sceneStore.temporal.getState().pause()
       try {
         runSpaceDetection(Array.from(levelsToUpdate), sceneStore, editorStore, nodes)
       } finally {
+        sceneStore.temporal.getState().resume()
         isProcessing = false
       }
     }

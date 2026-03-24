@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface WindowTreeNodeProps {
@@ -55,7 +55,7 @@ export function WindowTreeNode({ node, depth, isLast }: WindowTreeNodeProps) {
           useEditor.getState().setPhase('structure')
         }
       }}
-      onDoubleClick={() => setIsEditing(true)}
+      onDoubleClick={() => focusTreeNode(node.id)}
       onMouseEnter={() => setHoveredId(node.id)}
       onMouseLeave={() => setHoveredId(null)}
       onToggle={() => {}}

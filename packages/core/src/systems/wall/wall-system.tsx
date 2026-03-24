@@ -7,11 +7,11 @@ import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manage
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
+import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
   type Point2D,
-  pointToKey,
   type WallMiterData,
 } from './wall-mitering'
 
@@ -148,17 +148,14 @@ export function generateExtrudedWall(
   miterData: WallMiterData,
   slabElevation = 0,
 ) {
-  const { junctionData } = miterData
-
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   // Positive slab: shift the whole wall up (full height preserved)
   // Negative slab: extend wall downward so top stays fixed at wallNode.height
-  const wallHeight = wallNode.height ?? 2.5
+  const wallHeight = wallNode.height ?? DEFAULT_WALL_HEIGHT
   const height = slabElevation > 0 ? wallHeight : wallHeight - slabElevation
 
-  const thickness = wallNode.thickness ?? 0.1
-  const halfT = thickness / 2
+  const thickness = getWallThickness(wallNode)
 
   // Wall direction and normal (exactly like demo)
   const v = { x: wallEnd.x - wallStart.x, y: wallEnd.y - wallStart.y }
@@ -166,51 +163,9 @@ export function generateExtrudedWall(
   if (L < 1e-9) {
     return new THREE.BufferGeometry()
   }
-  const nUnit = { x: -v.y / L, y: v.x / L }
-
-  // Get junction data for start and end (exactly like demo)
-  const keyStart = pointToKey(wallStart)
-  const keyEnd = pointToKey(wallEnd)
-
-  const startJunction = junctionData.get(keyStart)?.get(wallNode.id)
-  const endJunction = junctionData.get(keyEnd)?.get(wallNode.id)
-
-  // Calculate polygon corners in world coordinates (exactly like demo)
-  // p_start_L = left side at start
-  // p_start_R = right side at start
-  // p_end_L = left side at end
-  // p_end_R = right side at end
-
-  const p_start_L: Point2D = startJunction?.left || {
-    x: wallStart.x + nUnit.x * halfT,
-    y: wallStart.y + nUnit.y * halfT,
-  }
-  const p_start_R: Point2D = startJunction?.right || {
-    x: wallStart.x - nUnit.x * halfT,
-    y: wallStart.y - nUnit.y * halfT,
-  }
-
-  // At end, SWAP left/right from junction data (exactly like demo)
-  // This is because junction stores left/right relative to OUTGOING direction,
-  // which is reversed at the end of the wall
-  const p_end_L: Point2D = endJunction?.right || {
-    x: wallEnd.x + nUnit.x * halfT,
-    y: wallEnd.y + nUnit.y * halfT,
-  }
-  const p_end_R: Point2D = endJunction?.left || {
-    x: wallEnd.x - nUnit.x * halfT,
-    y: wallEnd.y - nUnit.y * halfT,
-  }
-
-  // Build polygon points (exactly like demo)
-  // Order: start-right -> end-right -> [end center] -> end-left -> start-left -> [start center]
-  const polyPoints: Point2D[] = [p_start_R, p_end_R]
-  if (endJunction) {
-    polyPoints.push(wallEnd) // Add center vertex at junction
-  }
-  polyPoints.push(p_end_L, p_start_L)
-  if (startJunction) {
-    polyPoints.push(wallStart) // Add center vertex at junction
+  const polyPoints = getWallPlanFootprint(wallNode, miterData)
+  if (polyPoints.length < 3) {
+    return new THREE.BufferGeometry()
   }
 
   // Transform world coordinates to wall-local coordinates

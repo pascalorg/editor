@@ -3,7 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { useState } from 'react'
 import { InlineRenameInput } from './inline-rename-input'
-import { TreeNode, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface LevelTreeNodeProps {
@@ -24,7 +24,7 @@ export function LevelTreeNode({ node, depth, isLast }: LevelTreeNodeProps) {
   }
 
   const handleDoubleClick = () => {
-    setIsEditing(true)
+    focusTreeNode(node.id)
   }
 
   const defaultName = `Level ${node.level}`

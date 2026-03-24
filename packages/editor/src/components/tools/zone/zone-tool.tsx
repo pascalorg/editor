@@ -256,7 +256,7 @@ export const ZoneTool: React.FC = () => {
       // Reset state on unmount
       pointsRef.current = []
     }
-  }, [currentLevelId, setTool])
+  }, [currentLevelId])
 
   const { points, cursorPoint, levelY } = preview
 
@@ -318,6 +318,7 @@ export const ZoneTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={mainLineRef}
         renderOrder={1}
         visible={false}
@@ -331,6 +332,7 @@ export const ZoneTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={closingLineRef}
         renderOrder={1}
         visible={false}

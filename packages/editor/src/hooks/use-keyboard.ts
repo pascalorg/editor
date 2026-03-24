@@ -16,7 +16,11 @@ export const useKeyboard = () => {
         e.preventDefault()
         emitter.emit('tool:cancel')
 
-        // Clear selections to close UI panels, but KEEP the active building and level context
+        // Return to the default select tool while keeping the active building/level context.
+        useEditor.getState().setEditingHole(null)
+        useEditor.getState().setMode('select')
+
+        // Clear selections to close UI panels, but KEEP the active building and level context.
         useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         useEditor.getState().setSelectedReferenceId(null)
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
@@ -85,6 +89,29 @@ export const useKeyboard = () => {
                 .getState()
                 .setSelection({ levelId: building.children[building.children.length - 1] as any })
             }
+          }
+        }
+      } else if (e.key === 'r' || e.key === 'R') {
+        // Rotate selected node if it supports rotation (items, roofs, etc.)
+        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        if (selectedNodeIds.length === 1) {
+          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          if (node && 'rotation' in node) {
+            e.preventDefault()
+            const ROTATION_STEP = Math.PI / 4
+            let newRotationY = 0
+
+            // Handle different rotation types (number for roof, array for items/windows/doors)
+            if (typeof node.rotation === 'number') {
+              newRotationY = node.rotation + ROTATION_STEP
+              useScene.getState().updateNode(node.id, { rotation: newRotationY })
+            } else if (Array.isArray(node.rotation)) {
+              newRotationY = node.rotation[1] + ROTATION_STEP
+              useScene.getState().updateNode(node.id, {
+                rotation: [node.rotation[0], newRotationY, node.rotation[2]],
+              })
+            }
+            sfxEmitter.emit('sfx:item-rotate') // Play a sound for feedback
           }
         }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {

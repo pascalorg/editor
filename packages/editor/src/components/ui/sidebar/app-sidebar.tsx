@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from 'react'
 import { CommandPalette } from './../../../components/ui/command-palette'
+import { EditorCommands } from './../../../components/ui/command-palette/editor-commands'
 import {
   Sidebar,
   SidebarContent,
@@ -72,6 +73,7 @@ export function AppSidebar({
           </div>
         </div>
       </Sidebar>
+      <EditorCommands />
       <CommandPalette />
     </>
   )

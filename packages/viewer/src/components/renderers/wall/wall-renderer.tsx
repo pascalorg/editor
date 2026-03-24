@@ -1,5 +1,5 @@
-import { useRegistry, type WallNode } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
+import { useLayoutEffect, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
@@ -8,6 +8,11 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'wall', ref)
+
+  // Mark dirty on mount so WallSystem rebuilds geometry when wall (re)appears
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
 
   const handlers = useNodeEvents(node, 'wall')
 

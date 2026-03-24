@@ -7,7 +7,7 @@ import { cn } from '../../../lib/utils'
 import useEditor, {
   type CatalogCategory,
   type StructureTool,
-  Tool,
+  type Tool,
 } from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 

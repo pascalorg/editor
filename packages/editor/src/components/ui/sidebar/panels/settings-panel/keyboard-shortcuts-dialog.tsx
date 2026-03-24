@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './../../../../../components/ui/primitives/dialog'
+import { ShortcutToken } from './../../../../../components/ui/primitives/shortcut-token'
 
 type Shortcut = {
   keys: string[]
@@ -57,7 +58,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['B'], action: 'Switch to Build mode' },
       {
         keys: ['Esc'],
-        action: 'Cancel active tool, clear selection, and exit build mode',
+        action: 'Cancel the active tool and return to Select mode',
       },
       { keys: ['Delete / Backspace'], action: 'Delete selected objects' },
       { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
@@ -68,7 +69,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     title: 'Selection',
     shortcuts: [
       {
-        keys: ['Cmd/Ctrl', 'Click'],
+        keys: ['Cmd/Ctrl', 'Left click'],
         action: 'Add or remove an object from multi-selection',
         note: 'Works while in Select mode.',
       },
@@ -100,9 +101,14 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     title: 'Camera',
     shortcuts: [
       {
-        keys: ['Space', 'Drag'],
+        keys: ['Middle click'],
         action: 'Pan camera',
-        note: 'Hold Space while dragging with the mouse.',
+        note: 'Drag with the middle mouse button, or hold Space while dragging with the left mouse button.',
+      },
+      {
+        keys: ['Right click'],
+        action: 'Orbit camera',
+        note: 'Drag with the right mouse button.',
       },
     ],
   },
@@ -126,12 +132,7 @@ function ShortcutKeys({ keys }: { keys: string[] }) {
       {keys.map((key, index) => (
         <div className="flex items-center gap-1" key={`${key}-${index}`}>
           {index > 0 ? <span className="text-[10px] text-muted-foreground">+</span> : null}
-          <kbd
-            className="inline-flex h-6 items-center rounded border border-border bg-muted px-2 font-medium font-mono text-[11px] text-muted-foreground"
-            title={key}
-          >
-            {getDisplayKey(key, isMac)}
-          </kbd>
+          <ShortcutToken displayValue={getDisplayKey(key, isMac)} value={key} />
         </div>
       ))}
     </div>

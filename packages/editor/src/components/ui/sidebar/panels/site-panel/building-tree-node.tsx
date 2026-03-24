@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from './../../../../../components/ui/primitives/tooltip'
-import { TreeNode, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface BuildingTreeNodeProps {
@@ -64,6 +64,7 @@ export function BuildingTreeNode({ node, depth, isLast }: BuildingTreeNodeProps)
       isSelected={isSelected}
       label={node.name || 'Building'}
       onClick={handleClick}
+      onDoubleClick={() => focusTreeNode(node.id)}
       onToggle={() => setExpanded(!expanded)}
     >
       {node.children.map((childId, index) => (

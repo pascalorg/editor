@@ -66,7 +66,7 @@ export function DoorPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!(node && node.parentId)) return
+    if (!node?.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
     const cloned = structuredClone(node) as any
@@ -79,9 +79,10 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    const numSegs = node!.segments.length
-    const totalH = node!.segments.reduce((sum, s) => sum + s.heightRatio, 0)
-    const normH = node!.segments.map((s) => s.heightRatio / totalH)
+    if (!node) return
+    const numSegs = node.segments.length
+    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node.segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
     const delta = clamped - normH[segIdx]!
@@ -91,12 +92,13 @@ export function DoorPanel() {
       if (i === neighborIdx) return neighborVal
       return v
     })
-    const updated = node!.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
+    const updated = node?.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
     handleUpdate({ segments: updated })
   }
 
   const setSegmentColumnRatio = (segIdx: number, colIdx: number, newVal: number) => {
-    const seg = node!.segments[segIdx]!
+    const seg = node?.segments[segIdx]
+    if (!seg) return
     const normRatios = (() => {
       const sum = seg.columnRatios.reduce((a, b) => a + b, 0)
       return seg.columnRatios.map((r) => r / sum)
@@ -111,7 +113,7 @@ export function DoorPanel() {
       if (i === neighborIdx) return neighborVal
       return v
     })
-    const updated = node!.segments.map((s, idx) =>
+    const updated = node?.segments.map((s, idx) =>
       idx === segIdx ? { ...s, columnRatios: newRatios } : s,
     )
     handleUpdate({ segments: updated })

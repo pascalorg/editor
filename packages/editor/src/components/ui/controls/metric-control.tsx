@@ -1,6 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../../lib/utils'
 
@@ -27,10 +28,17 @@ export function MetricControl({
   className,
   unit = '',
 }: MetricControlProps) {
+  const viewerUnit = useViewer((state) => state.unit)
+  const isImperial = viewerUnit === 'imperial' && unit === 'm'
+  const multiplier = isImperial ? 3.280_84 : 1
+  const displayUnit = isImperial ? 'ft' : unit
+
+  const displayValue = value * multiplier
+
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [inputValue, setInputValue] = useState(value.toFixed(precision))
+  const [inputValue, setInputValue] = useState(displayValue.toFixed(precision))
   const startXRef = useRef(0)
   const startValueRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -47,9 +55,9 @@ export function MetricControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(value.toFixed(precision))
+      setInputValue(displayValue.toFixed(precision))
     }
-  }, [value, precision, isEditing])
+  }, [displayValue, precision, isEditing])
 
   useEffect(() => {
     const container = containerRef.current
@@ -61,21 +69,21 @@ export function MetricControl({
       e.preventDefault()
 
       const direction = e.deltaY < 0 ? 1 : -1
-      let scrollStep = step
-      if (e.shiftKey) scrollStep = step * 10
-      else if (e.altKey) scrollStep = step * 0.1
+      let scrollStep = step / multiplier
+      if (e.shiftKey) scrollStep = (step * 10) / multiplier
+      else if (e.altKey) scrollStep = (step * 0.1) / multiplier
 
       const newValue = clamp(valueRef.current + direction * scrollStep)
-      const finalValue = Number.parseFloat(newValue.toFixed(precision))
+      const finalValue = Number.parseFloat((newValue * multiplier).toFixed(precision)) / multiplier
 
-      if (finalValue !== valueRef.current) {
+      if (Math.abs(finalValue - valueRef.current) > 1e-6) {
         onChange(finalValue)
       }
     }
 
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, onChange, precision])
+  }, [isEditing, step, clamp, onChange, precision, multiplier])
 
   useEffect(() => {
     if (!isHovered || isEditing) return
@@ -87,14 +95,15 @@ export function MetricControl({
 
       if (direction !== 0) {
         e.preventDefault()
-        let scrollStep = step
-        if (e.shiftKey) scrollStep = step * 10
-        else if (e.altKey) scrollStep = step * 0.1
+        let scrollStep = step / multiplier
+        if (e.shiftKey) scrollStep = (step * 10) / multiplier
+        else if (e.altKey) scrollStep = (step * 0.1) / multiplier
 
         const newValue = clamp(valueRef.current + direction * scrollStep)
-        const finalValue = Number.parseFloat(newValue.toFixed(precision))
+        const finalValue =
+          Number.parseFloat((newValue * multiplier).toFixed(precision)) / multiplier
 
-        if (finalValue !== valueRef.current) {
+        if (Math.abs(finalValue - valueRef.current) > 1e-6) {
           onChange(finalValue)
         }
       }
@@ -102,7 +111,7 @@ export function MetricControl({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, clamp, onChange, precision])
+  }, [isHovered, isEditing, step, clamp, onChange, precision, multiplier])
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -119,15 +128,16 @@ export function MetricControl({
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startXRef.current
 
-        let dragStep = step
-        if (moveEvent.shiftKey) dragStep = step * 10
-        else if (moveEvent.altKey) dragStep = step * 0.1
+        let dragStep = step / multiplier
+        if (moveEvent.shiftKey) dragStep = (step * 10) / multiplier
+        else if (moveEvent.altKey) dragStep = (step * 0.1) / multiplier
 
         const deltaValue = deltaX * dragStep
         const newValue = clamp(startValueRef.current + deltaValue)
-        const newFinalValue = Number.parseFloat(newValue.toFixed(precision))
+        const newFinalValue =
+          Number.parseFloat((newValue * multiplier).toFixed(precision)) / multiplier
 
-        if (newFinalValue !== finalValue) {
+        if (Math.abs(newFinalValue - finalValue) > 1e-6) {
           finalValue = newFinalValue
           onChange(finalValue)
         }
@@ -138,7 +148,7 @@ export function MetricControl({
         document.removeEventListener('pointermove', handlePointerMove)
         document.removeEventListener('pointerup', handlePointerUp)
 
-        if (finalValue !== startValueRef.current) {
+        if (Math.abs(finalValue - startValueRef.current) > 1e-6) {
           onChange(startValueRef.current)
           useScene.temporal.getState().resume()
           onChange(finalValue)
@@ -150,13 +160,13 @@ export function MetricControl({
       document.addEventListener('pointermove', handlePointerMove)
       document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, value, onChange, clamp, precision, step],
+    [isEditing, value, onChange, clamp, precision, step, multiplier],
   )
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
-    setInputValue(value.toFixed(precision))
-  }, [value, precision])
+    setInputValue((value * multiplier).toFixed(precision))
+  }, [value, multiplier, precision])
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
@@ -165,12 +175,12 @@ export function MetricControl({
   const submitValue = useCallback(() => {
     const numValue = Number.parseFloat(inputValue)
     if (Number.isNaN(numValue)) {
-      setInputValue(value.toFixed(precision))
+      setInputValue((value * multiplier).toFixed(precision))
     } else {
-      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
+      onChange(clamp(numValue / multiplier))
     }
     setIsEditing(false)
-  }, [inputValue, onChange, clamp, precision, value])
+  }, [inputValue, onChange, clamp, multiplier, value, precision])
 
   const handleInputBlur = useCallback(() => {
     submitValue()
@@ -181,21 +191,21 @@ export function MetricControl({
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(value.toFixed(precision))
+        setInputValue((value * multiplier).toFixed(precision))
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const newV = clamp(value + step)
+        const newV = clamp(value + step / multiplier)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue((newV * multiplier).toFixed(precision))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const newV = clamp(value - step)
+        const newV = clamp(value - step / multiplier)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue((newV * multiplier).toFixed(precision))
       }
     },
-    [submitValue, value, precision, step, clamp, onChange],
+    [submitValue, value, multiplier, precision, step, clamp, onChange],
   )
 
   return (
@@ -233,7 +243,7 @@ export function MetricControl({
               type="text"
               value={inputValue}
             />
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </div>
         ) : (
           <div
@@ -241,9 +251,9 @@ export function MetricControl({
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight">
-              {Number(value.toFixed(precision)).toFixed(precision)}
+              {Number(displayValue.toFixed(precision)).toFixed(precision)}
             </span>
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </div>
         )}
       </div>

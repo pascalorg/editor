@@ -29,7 +29,7 @@ export const SiteBoundaryEditor: React.FC = () => {
     [site, updateNode],
   )
 
-  if (!(site && site.polygon?.points) || site.polygon.points.length < 3) return null
+  if (!site?.polygon?.points || site.polygon.points.length < 3) return null
 
   return (
     <PolygonEditor

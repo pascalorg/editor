@@ -1,64 +1,63 @@
 'use client'
 
-import type { AnyNodeId } from '@pascal-app/core'
-import { emitter, LevelNode, useScene } from '@pascal-app/core'
+import type { AnyNodeId, LevelNode } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Command } from 'cmdk'
-import {
-  AppWindow,
-  ArrowRight,
-  Box,
-  Building2,
-  Camera,
-  ChevronRight,
-  Copy,
-  DoorOpen,
-  Eye,
-  EyeOff,
-  FileJson,
-  Grid3X3,
-  Hexagon,
-  Layers,
-  Map,
-  Maximize2,
-  Minimize2,
-  Moon,
-  MousePointer2,
-  Package,
-  PencilLine,
-  Plus,
-  Redo2,
-  Search,
-  Square,
-  SquareStack,
-  Sun,
-  Trash2,
-  Undo2,
-  Video,
-} from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
-import { Dialog, DialogContent } from './../../../components/ui/primitives/dialog'
-import type { StructureTool } from './../../../store/use-editor'
-import useEditor from './../../../store/use-editor'
+import { Dialog, DialogContent, DialogTitle } from './../../../components/ui/primitives/dialog'
+import { useCommandRegistry } from '../../../store/use-command-registry'
+import { usePaletteViewRegistry } from '../../../store/use-palette-view-registry'
 
 // ---------------------------------------------------------------------------
-// Open-state store — imported by icon-rail to trigger the palette
+// Open + navigation state store
 // ---------------------------------------------------------------------------
 interface CommandPaletteStore {
   open: boolean
   setOpen: (open: boolean) => void
+  /** Current rendering mode. 'command' = normal palette; anything else = registered mode view. */
+  mode: string
+  setMode: (mode: string) => void
+  pages: string[]
+  inputValue: string
+  setInputValue: (value: string) => void
+  navigateTo: (page: string) => void
+  goBack: () => void
+  cameraScope: { nodeId: string; label: string } | null
+  setCameraScope: (scope: { nodeId: string; label: string } | null) => void
 }
 
-export const useCommandPalette = create<CommandPaletteStore>((set) => ({
+export const useCommandPalette = create<CommandPaletteStore>((set, get) => ({
   open: false,
-  setOpen: (open) => set({ open }),
+  setOpen: (open) => {
+    set({ open })
+    if (!open) set({ pages: [], inputValue: '', cameraScope: null, mode: 'command' })
+  },
+  mode: 'command',
+  setMode: (mode) => set({ mode }),
+  pages: [],
+  inputValue: '',
+  setInputValue: (value) => set({ inputValue: value }),
+  navigateTo: (page) => set((s) => ({ pages: [...s.pages, page], inputValue: '' })),
+  goBack: () => {
+    const { pages } = get()
+    if (pages[pages.length - 1] === 'camera-scope') set({ cameraScope: null })
+    set((s) => ({ pages: s.pages.slice(0, -1), inputValue: '' }))
+  },
+  cameraScope: null,
+  setCameraScope: (scope) => set({ cameraScope: scope }),
 }))
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+function resolve(value: string | (() => string)): string {
+  return typeof value === 'function' ? value() : value
+}
+
 function Shortcut({ keys }: { keys: string[] }) {
   return (
     <span className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -85,33 +84,38 @@ function Item({
   navigate = false,
 }: {
   icon: React.ReactNode
-  label: string
+  label: string | (() => string)
   onSelect: () => void
   shortcut?: string[]
   disabled?: boolean
   keywords?: string[]
-  badge?: string
+  badge?: string | (() => string)
   navigate?: boolean
 }) {
+  const resolvedLabel = resolve(label)
+  const resolvedBadge = badge ? resolve(badge) : undefined
+
   return (
     <Command.Item
       className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground text-sm transition-colors data-[disabled=true]:cursor-not-allowed data-[selected=true]:bg-accent data-[disabled=true]:opacity-40"
       disabled={disabled}
       keywords={keywords}
       onSelect={onSelect}
-      value={label}
+      value={resolvedLabel}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
         {icon}
       </span>
-      <span className="flex-1 truncate">{label}</span>
-      {badge && (
+      <span className="flex-1 truncate">{resolvedLabel}</span>
+      {resolvedBadge && (
         <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-          {badge}
+          {resolvedBadge}
         </span>
       )}
       {shortcut && <Shortcut keys={shortcut} />}
-      {(badge || navigate) && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />}
+      {(resolvedBadge || navigate) && (
+        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+      )}
     </Command.Item>
   )
 }
@@ -153,46 +157,42 @@ const PAGE_LABEL: Record<string, string> = {
   'rename-level': 'Rename Level',
   'goto-level': 'Go to Level',
   'camera-view': 'Camera Snapshot',
-  'camera-scope': '', // dynamic — overridden in breadcrumb
+  'camera-scope': '',
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 export function CommandPalette() {
-  const { open, setOpen } = useCommandPalette()
+  const {
+    open,
+    setOpen,
+    mode,
+    setMode,
+    pages,
+    inputValue,
+    setInputValue,
+    navigateTo,
+    goBack,
+    cameraScope,
+    setCameraScope,
+  } = useCommandPalette()
+
   const [meta, setMeta] = useState('⌘')
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [pages, setPages] = useState<string[]>([])
-  const [inputValue, setInputValue] = useState('')
-  const [cameraScope, setCameraScope] = useState<{ nodeId: string; label: string } | null>(null)
 
   const page = pages[pages.length - 1]
 
-  const { setPhase, setMode, setTool, setStructureLayer, isPreviewMode, setPreviewMode } =
-    useEditor()
+  const actions = useCommandRegistry((s) => s.actions)
+  const views = usePaletteViewRegistry((s) => s.views)
 
-  const cameraMode = useViewer((s) => s.cameraMode)
-  const setCameraMode = useViewer((s) => s.setCameraMode)
-  const levelMode = useViewer((s) => s.levelMode)
-  const setLevelMode = useViewer((s) => s.setLevelMode)
+  const activeLevelId = useViewer((s) => s.selection.levelId)
+  const activeLevelNode = useScene((s) => (activeLevelId ? s.nodes[activeLevelId] : null))
+
   const wallMode = useViewer((s) => s.wallMode)
   const setWallMode = useViewer((s) => s.setWallMode)
-  const theme = useViewer((s) => s.theme)
-  const setTheme = useViewer((s) => s.setTheme)
-  const selection = useViewer((s) => s.selection)
-  const exportScene = useViewer((s) => s.exportScene)
-
-  const activeLevelId = selection.levelId
-  const activeLevelNode = useScene((s) => (activeLevelId ? s.nodes[activeLevelId] : null))
-  const isLevelZero =
-    activeLevelNode?.type === 'level' && (activeLevelNode as LevelNode).level === 0
-
-  // Reactive snapshot status for the selected camera scope
-  const cameraScopeNode = useScene((s) =>
-    cameraScope ? s.nodes[cameraScope.nodeId as AnyNodeId] : null,
-  )
-  const hasScopeSnapshot = !!(cameraScopeNode as any)?.camera
+  const levelMode = useViewer((s) => s.levelMode)
+  const setLevelMode = useViewer((s) => s.setLevelMode)
 
   const allLevels = useScene(
     useShallow((s) =>
@@ -202,7 +202,10 @@ export function CommandPalette() {
     ),
   )
 
-  const hasSelection = selection.selectedIds.length > 0
+  const cameraScopeNode = useScene((s) =>
+    cameraScope ? s.nodes[cameraScope.nodeId as AnyNodeId] : null,
+  )
+  const hasScopeSnapshot = !!(cameraScopeNode as any)?.camera
 
   // Platform detection
   useEffect(() => {
@@ -228,57 +231,9 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handler)
   }, [setOpen])
 
-  // Reset sub-pages when palette closes
-  useEffect(() => {
-    if (!open) {
-      setPages([])
-      setInputValue('')
-      setCameraScope(null)
-    }
-  }, [open])
-
-  // ---------------------------------------------------------------------------
-  // Navigation helpers
-  // ---------------------------------------------------------------------------
-  const goBack = () => {
-    const leavingPage = pages[pages.length - 1]
-    if (leavingPage === 'camera-scope') setCameraScope(null)
-    setPages((p) => p.slice(0, -1))
-    setInputValue('')
-  }
-
-  const navigateTo = (p: string) => {
-    // Pre-fill the rename input with the current level name
-    if (p === 'rename-level' && activeLevelId) {
-      const level = useScene.getState().nodes[activeLevelId] as LevelNode
-      setInputValue(level?.name ?? '')
-    } else {
-      setInputValue('')
-    }
-    setPages((prev) => [...prev, p])
-  }
-
-  const navigateToCameraScope = (nodeId: string, label: string) => {
-    setCameraScope({ nodeId, label })
-    setInputValue('')
-    setPages((prev) => [...prev, 'camera-scope'])
-  }
-
-  // ---------------------------------------------------------------------------
-  // Action helpers
-  // ---------------------------------------------------------------------------
   const run = (fn: () => void) => {
     fn()
     setOpen(false)
-  }
-
-  const activateTool = (tool: StructureTool) => {
-    run(() => {
-      setPhase('structure')
-      setMode('build')
-      if (tool === 'zone') setStructureLayer('zones')
-      setTool(tool)
-    })
   }
 
   const wallModeLabel: Record<'cutaway' | 'up' | 'down', string> = {
@@ -293,40 +248,7 @@ export function CommandPalette() {
     solo: 'Solo',
   }
 
-  const deleteSelection = () => {
-    if (!hasSelection) return
-    run(() => {
-      useScene.getState().deleteNodes(selection.selectedIds as any[])
-    })
-  }
-
-  // Level management
-  const addLevel = () =>
-    run(() => {
-      const { nodes } = useScene.getState()
-      const building = Object.values(nodes).find((n) => n.type === 'building')
-      if (!building) return
-      const newLevel = LevelNode.parse({
-        level: building.children.length,
-        children: [],
-        parentId: building.id,
-      })
-      useScene.getState().createNode(newLevel, building.id)
-      useViewer.getState().setSelection({ levelId: newLevel.id })
-    })
-
-  const deleteActiveLevel = () => {
-    if (!activeLevelId || isLevelZero) return
-    run(() => {
-      useScene.getState().deleteNode(activeLevelId as AnyNodeId)
-      const { nodes } = useScene.getState()
-      const level0 = Object.values(nodes).find(
-        (n) => n.type === 'level' && (n as LevelNode).level === 0,
-      )
-      if (level0) useViewer.getState().setSelection({ levelId: level0.id as `level_${string}` })
-    })
-  }
-
+  // Camera snapshot helpers (used by sub-pages registered via EditorCommands)
   const confirmRename = () => {
     if (!(activeLevelId && inputValue.trim())) return
     run(() => {
@@ -334,15 +256,20 @@ export function CommandPalette() {
     })
   }
 
-  // Camera snapshot (scoped to the currently selected camera scope)
   const takeSnapshot = () => {
     if (!cameraScope) return
-    run(() => emitter.emit('camera-controls:capture', { nodeId: cameraScope.nodeId as AnyNodeId }))
+    import('@pascal-app/core').then(({ emitter }) => {
+      run(() =>
+        emitter.emit('camera-controls:capture', { nodeId: cameraScope.nodeId as AnyNodeId }),
+      )
+    })
   }
 
   const viewSnapshot = () => {
     if (!(cameraScope && hasScopeSnapshot)) return
-    run(() => emitter.emit('camera-controls:view', { nodeId: cameraScope.nodeId as AnyNodeId }))
+    import('@pascal-app/core').then(({ emitter }) => {
+      run(() => emitter.emit('camera-controls:view', { nodeId: cameraScope.nodeId as AnyNodeId }))
+    })
   }
 
   const clearSnapshot = () => {
@@ -352,461 +279,416 @@ export function CommandPalette() {
     })
   }
 
-  // Export helpers
-  const exportJson = () =>
-    run(() => {
-      const { nodes, rootNodeIds } = useScene.getState()
-      const blob = new Blob([JSON.stringify({ nodes, rootNodeIds }, null, 2)], {
-        type: 'application/json',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = Object.assign(document.createElement('a'), {
-        href: url,
-        download: `scene_${new Date().toISOString().split('T')[0]}.json`,
-      })
-      a.click()
-      URL.revokeObjectURL(url)
-    })
+  // ---------------------------------------------------------------------------
+  // Group registered actions by group (preserving insertion order)
+  // ---------------------------------------------------------------------------
+  const grouped = actions.reduce<Map<string, typeof actions>>((acc, action) => {
+    const list = acc.get(action.group) ?? []
+    list.push(action)
+    acc.set(action.group, list)
+    return acc
+  }, new Map())
 
-  const copyShareLink = () =>
-    run(() => {
-      navigator.clipboard.writeText(window.location.href)
-    })
-
-  const takeScreenshot = () =>
-    run(() => {
-      const canvas = document.querySelector('canvas')
-      if (!canvas) return
-      const a = Object.assign(document.createElement('a'), {
-        href: canvas.toDataURL('image/png'),
-        download: `screenshot_${new Date().toISOString().split('T')[0]}.png`,
-      })
-      a.click()
-    })
-
-  const toggleFullscreen = () =>
-    run(() => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen()
-      } else {
-        document.documentElement.requestFullscreen()
-      }
-    })
+  const onClose = () => setOpen(false)
+  const onBack = () => {
+    if (mode !== 'command') {
+      setMode('command')
+    } else {
+      goBack()
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  // Mode view: replaces the entire cmdk shell
+  const modeView = mode !== 'command' ? views.get(mode) : undefined
+
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogContent className="max-w-lg gap-0 overflow-hidden p-0" showCloseButton={false}>
-        <Command
-          className="**:[[cmdk-group-heading]]:px-2.5 **:[[cmdk-group-heading]]:pt-3 **:[[cmdk-group-heading]]:pb-1 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-[10px] **:[[cmdk-group-heading]]:text-muted-foreground **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-wider"
-          onKeyDown={(e) => {
-            if (e.key === 'Backspace' && !inputValue && pages.length > 0) {
-              e.preventDefault()
-              goBack()
-            }
-          }}
-          shouldFilter={page !== 'rename-level'}
-        >
-          {/* Search bar */}
-          <div className="flex items-center border-border/50 border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-            {page && (
-              <button
-                className="mr-2 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/70"
-                onClick={goBack}
-                type="button"
-              >
-                {page === 'camera-scope'
-                  ? (cameraScope?.label ?? 'Snapshot')
-                  : (PAGE_LABEL[page] ?? page)}
-              </button>
-            )}
-            <Command.Input
-              className="flex h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              onValueChange={setInputValue}
-              placeholder={
-                page === 'rename-level'
-                  ? 'Type a new name…'
-                  : page
-                    ? 'Filter options…'
-                    : 'Search actions…'
+        <DialogTitle className="sr-only">Command Palette</DialogTitle>
+
+        {modeView && <modeView.Component onBack={onBack} onClose={onClose} />}
+
+        {!modeView && (
+          <Command
+            className="**:[[cmdk-group-heading]]:px-2.5 **:[[cmdk-group-heading]]:pt-3 **:[[cmdk-group-heading]]:pb-1 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-[10px] **:[[cmdk-group-heading]]:text-muted-foreground **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-wider"
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace' && !inputValue && pages.length > 0) {
+                e.preventDefault()
+                goBack()
               }
-              value={inputValue}
-            />
-          </div>
+            }}
+            shouldFilter={page !== 'rename-level'}
+          >
+            {/* Search bar */}
+            <div className="flex items-center border-border/50 border-b px-3">
+              <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+              {page && (
+                <button
+                  className="mr-2 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/70"
+                  onClick={goBack}
+                  type="button"
+                >
+                  {page === 'camera-scope'
+                    ? (cameraScope?.label ?? 'Snapshot')
+                    : (PAGE_LABEL[page] ?? views.get(page)?.label ?? page)}
+                </button>
+              )}
+              <Command.Input
+                autoFocus
+                className="flex h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                onValueChange={setInputValue}
+                placeholder={
+                  page === 'rename-level'
+                    ? 'Type a new name…'
+                    : page
+                      ? 'Filter options…'
+                      : 'Search actions…'
+                }
+                value={inputValue}
+              />
+            </div>
 
-          <Command.List className="max-h-100 overflow-y-auto p-1.5">
-            <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
-              No commands found.
-            </Command.Empty>
+            <Command.List className="max-h-100 overflow-y-auto p-1.5">
+              <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
+                No commands found.
+              </Command.Empty>
 
-            {/* ── Root view ─────────────────────────────────────────────── */}
-            {!page && (
-              <>
-                {/* Scene / Tools */}
-                <Command.Group heading="Scene">
-                  <Item
-                    icon={<Square className="h-4 w-4" />}
-                    keywords={['draw', 'build', 'structure']}
-                    label="Wall Tool"
-                    onSelect={() => activateTool('wall')}
-                  />
-                  <Item
-                    icon={<Layers className="h-4 w-4" />}
-                    keywords={['floor', 'build']}
-                    label="Slab Tool"
-                    onSelect={() => activateTool('slab')}
-                  />
-                  <Item
-                    icon={<Grid3X3 className="h-4 w-4" />}
-                    keywords={['top', 'build']}
-                    label="Ceiling Tool"
-                    onSelect={() => activateTool('ceiling')}
-                  />
-                  <Item
-                    icon={<DoorOpen className="h-4 w-4" />}
-                    keywords={['opening', 'entrance']}
-                    label="Door Tool"
-                    onSelect={() => activateTool('door')}
-                  />
-                  <Item
-                    icon={<AppWindow className="h-4 w-4" />}
-                    keywords={['opening', 'glass']}
-                    label="Window Tool"
-                    onSelect={() => activateTool('window')}
-                  />
-                  <Item
-                    icon={<Package className="h-4 w-4" />}
-                    keywords={['furniture', 'object', 'asset', 'furnish']}
-                    label="Item Tool"
-                    onSelect={() => activateTool('item')}
-                  />
-                  <Item
-                    icon={<Hexagon className="h-4 w-4" />}
-                    keywords={['area', 'room', 'space']}
-                    label="Zone Tool"
-                    onSelect={() => activateTool('zone')}
-                  />
-                  <Item
-                    disabled={!hasSelection}
-                    icon={<Trash2 className="h-4 w-4" />}
-                    keywords={['remove', 'erase']}
-                    label="Delete Selection"
-                    onSelect={deleteSelection}
-                    shortcut={['⌫']}
-                  />
+              {/* ── Registered page view (e.g. 'ai') ─────────────────────── */}
+              {page &&
+                views.get(page)?.type === 'page' &&
+                (() => {
+                  const pageView = views.get(page)
+                  return pageView ? <pageView.Component onBack={onBack} onClose={onClose} /> : null
+                })()}
+
+              {/* ── Root view: render from registry ───────────────────────── */}
+              {!page &&
+                Array.from(grouped.entries()).map(([group, groupActions]) => (
+                  <Command.Group heading={group} key={group}>
+                    {groupActions.map((action) => (
+                      <Item
+                        badge={action.badge}
+                        disabled={action.when ? !action.when() : false}
+                        icon={action.icon}
+                        key={action.id}
+                        keywords={action.keywords}
+                        label={action.label}
+                        navigate={action.navigate}
+                        onSelect={() => action.execute()}
+                        shortcut={action.shortcut}
+                      />
+                    ))}
+                  </Command.Group>
+                ))}
+
+              {/* ── Wall Mode sub-page ────────────────────────────────────── */}
+              {page === 'wall-mode' && (
+                <Command.Group heading="Wall Mode">
+                  {(['cutaway', 'up', 'down'] as const).map((mode) => (
+                    <OptionItem
+                      isActive={wallMode === mode}
+                      key={mode}
+                      label={wallModeLabel[mode]}
+                      onSelect={() => run(() => setWallMode(mode))}
+                    />
+                  ))}
                 </Command.Group>
+              )}
 
-                {/* Levels */}
-                <Command.Group heading="Levels">
-                  <Item
-                    disabled={allLevels.length === 0}
-                    icon={<ArrowRight className="h-4 w-4" />}
-                    keywords={['level', 'floor', 'go', 'navigate', 'switch', 'select']}
-                    label="Go to Level"
-                    navigate
-                    onSelect={() => navigateTo('goto-level')}
-                  />
-                  <Item
-                    icon={<Plus className="h-4 w-4" />}
-                    keywords={['level', 'floor', 'add', 'create', 'new']}
-                    label="Add Level"
-                    onSelect={addLevel}
-                  />
-                  <Item
-                    disabled={!activeLevelId}
-                    icon={<PencilLine className="h-4 w-4" />}
-                    keywords={['level', 'floor', 'rename', 'name']}
-                    label="Rename Level"
-                    navigate
-                    onSelect={() => navigateTo('rename-level')}
-                  />
-                  <Item
-                    disabled={!activeLevelId || isLevelZero}
-                    icon={<Trash2 className="h-4 w-4" />}
-                    keywords={['level', 'floor', 'delete', 'remove']}
-                    label="Delete Level"
-                    onSelect={deleteActiveLevel}
-                  />
+              {/* ── Level Mode sub-page ───────────────────────────────────── */}
+              {page === 'level-mode' && (
+                <Command.Group heading="Level Mode">
+                  {(['stacked', 'exploded', 'solo'] as const).map((mode) => (
+                    <OptionItem
+                      isActive={levelMode === mode}
+                      key={mode}
+                      label={levelModeLabel[mode]}
+                      onSelect={() => run(() => setLevelMode(mode))}
+                    />
+                  ))}
                 </Command.Group>
+              )}
 
-                {/* Viewer Controls */}
-                <Command.Group heading="Viewer Controls">
-                  <Item
-                    badge={wallModeLabel[wallMode]}
-                    icon={<Layers className="h-4 w-4" />}
-                    keywords={['wall', 'cutaway', 'up', 'down', 'view']}
-                    label="Wall Mode"
-                    onSelect={() => navigateTo('wall-mode')}
-                  />
-                  <Item
-                    badge={levelModeLabel[levelMode]}
-                    icon={<SquareStack className="h-4 w-4" />}
-                    keywords={['level', 'floor', 'exploded', 'stacked', 'solo']}
-                    label="Level Mode"
-                    onSelect={() => navigateTo('level-mode')}
-                  />
-                  <Item
-                    icon={<Video className="h-4 w-4" />}
-                    keywords={['camera', 'ortho', 'perspective', '2d', '3d', 'view']}
-                    label={`Camera: Switch to ${cameraMode === 'perspective' ? 'Orthographic' : 'Perspective'}`}
-                    onSelect={() =>
-                      run(() =>
-                        setCameraMode(
-                          cameraMode === 'perspective' ? 'orthographic' : 'perspective',
-                        ),
-                      )
-                    }
-                  />
-                  <Item
-                    icon={
-                      theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
-                    }
-                    keywords={['theme', 'dark', 'light', 'appearance', 'color']}
-                    label={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-                    onSelect={() => run(() => setTheme(theme === 'dark' ? 'light' : 'dark'))}
-                  />
-                  <Item
-                    icon={<Camera className="h-4 w-4" />}
-                    keywords={['camera', 'snapshot', 'capture', 'save', 'view', 'bookmark']}
-                    label="Camera Snapshot"
-                    navigate
-                    onSelect={() => navigateTo('camera-view')}
-                  />
+              {/* ── Go to Level sub-page ──────────────────────────────────── */}
+              {page === 'goto-level' && (
+                <Command.Group heading="Go to Level">
+                  {allLevels.map((level) => (
+                    <OptionItem
+                      isActive={level.id === activeLevelId}
+                      key={level.id}
+                      label={level.name ?? `Level ${level.level}`}
+                      onSelect={() =>
+                        run(() => useViewer.getState().setSelection({ levelId: level.id }))
+                      }
+                    />
+                  ))}
                 </Command.Group>
+              )}
 
-                {/* View / Mode */}
-                <Command.Group heading="View">
-                  <Item
-                    icon={
-                      isPreviewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />
-                    }
-                    keywords={['preview', 'view', 'read-only', 'present']}
-                    label={isPreviewMode ? 'Exit Preview' : 'Enter Preview'}
-                    onSelect={() => run(() => setPreviewMode(!isPreviewMode))}
-                  />
-                  <Item
-                    icon={
-                      isFullscreen ? (
-                        <Minimize2 className="h-4 w-4" />
+              {/* ── Rename Level sub-page ─────────────────────────────────── */}
+              {page === 'rename-level' && (
+                <Command.Group heading="Rename Level">
+                  <Command.Item
+                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground text-sm transition-colors data-[disabled=true]:cursor-not-allowed data-[selected=true]:bg-accent data-[disabled=true]:opacity-40"
+                    disabled={!inputValue.trim()}
+                    onSelect={confirmRename}
+                    value="confirm-rename"
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
+                        <path
+                          d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="flex-1 truncate">
+                      {inputValue.trim() ? (
+                        <>
+                          Rename to <span className="font-medium">"{inputValue.trim()}"</span>
+                        </>
                       ) : (
-                        <Maximize2 className="h-4 w-4" />
-                      )
+                        <span className="text-muted-foreground">Type a new name above…</span>
+                      )}
+                    </span>
+                  </Command.Item>
+                </Command.Group>
+              )}
+
+              {/* ── Camera Snapshot: scope picker ─────────────────────────── */}
+              {page === 'camera-view' && (
+                <Command.Group heading="Camera Snapshot — Select Scope">
+                  <OptionItem
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M3 3h18v18H3z" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M3 9h18M9 21V9" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     }
-                    keywords={['fullscreen', 'maximize', 'expand', 'window']}
-                    label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                    onSelect={toggleFullscreen}
+                    label="Site"
+                    onSelect={() => {
+                      const { rootNodeIds } = useScene.getState()
+                      const siteId = rootNodeIds[0]
+                      if (siteId) {
+                        setCameraScope({ nodeId: siteId, label: 'Site' })
+                        navigateTo('camera-scope')
+                      }
+                    }}
+                  />
+                  <OptionItem
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <polyline
+                          points="9 22 9 12 15 12 15 22"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
+                    label="Building"
+                    onSelect={() => {
+                      const building = Object.values(useScene.getState().nodes).find(
+                        (n) => n.type === 'building',
+                      )
+                      if (building) {
+                        setCameraScope({ nodeId: building.id, label: 'Building' })
+                        navigateTo('camera-scope')
+                      }
+                    }}
+                  />
+                  <OptionItem
+                    disabled={!activeLevelId}
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M12 2L2 7l10 5 10-5-10-5z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M2 17l10 5 10-5M2 12l10 5 10-5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
+                    label="Level"
+                    onSelect={() => {
+                      if (activeLevelId) {
+                        setCameraScope({ nodeId: activeLevelId, label: 'Level' })
+                        navigateTo('camera-scope')
+                      }
+                    }}
+                  />
+                  <OptionItem
+                    disabled={!useViewer.getState().selection.selectedIds.length}
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M5 3l14 9-14 9V3z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    }
+                    label="Selection"
+                    onSelect={() => {
+                      const firstId = useViewer.getState().selection.selectedIds[0]
+                      if (firstId) {
+                        setCameraScope({ nodeId: firstId, label: 'Selection' })
+                        navigateTo('camera-scope')
+                      }
+                    }}
                   />
                 </Command.Group>
+              )}
 
-                {/* History */}
-                <Command.Group heading="History">
-                  <Item
-                    icon={<Undo2 className="h-4 w-4" />}
-                    keywords={['undo', 'revert', 'back']}
-                    label="Undo"
-                    onSelect={() => run(() => useScene.temporal.getState().undo())}
-                    shortcut={[meta, 'Z']}
+              {/* ── Camera Snapshot: actions for selected scope ───────────── */}
+              {page === 'camera-scope' && cameraScope && (
+                <Command.Group heading={`${cameraScope.label} Snapshot`}>
+                  <OptionItem
+                    icon={
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <circle
+                          cx="12"
+                          cy="13"
+                          r="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
+                    label={hasScopeSnapshot ? 'Update Snapshot' : 'Take Snapshot'}
+                    onSelect={takeSnapshot}
                   />
-                  <Item
-                    icon={<Redo2 className="h-4 w-4" />}
-                    keywords={['redo', 'forward', 'repeat']}
-                    label="Redo"
-                    onSelect={() => run(() => useScene.temporal.getState().redo())}
-                    shortcut={[meta, '⇧', 'Z']}
-                  />
-                </Command.Group>
-
-                {/* Export / Share */}
-                <Command.Group heading="Export & Share">
-                  <Item
-                    icon={<FileJson className="h-4 w-4" />}
-                    keywords={['export', 'download', 'json', 'save', 'data']}
-                    label="Export Scene (JSON)"
-                    onSelect={exportJson}
-                  />
-                  {exportScene && (
-                    <Item
-                      icon={<Box className="h-4 w-4" />}
-                      keywords={['export', 'glb', 'gltf', '3d', 'model', 'download']}
-                      label="Export 3D Model (GLB)"
-                      onSelect={() => run(() => exportScene())}
+                  {hasScopeSnapshot && (
+                    <OptionItem
+                      icon={
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      }
+                      label="View Snapshot"
+                      onSelect={viewSnapshot}
                     />
                   )}
-                  <Item
-                    icon={<Copy className="h-4 w-4" />}
-                    keywords={['share', 'copy', 'url', 'link']}
-                    label="Copy Share Link"
-                    onSelect={copyShareLink}
-                  />
-                  <Item
-                    icon={<Camera className="h-4 w-4" />}
-                    keywords={['screenshot', 'capture', 'image', 'photo', 'png']}
-                    label="Take Screenshot"
-                    onSelect={takeScreenshot}
-                  />
+                  {hasScopeSnapshot && (
+                    <OptionItem
+                      icon={
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          viewBox="0 0 24 24"
+                        >
+                          <polyline
+                            points="3 6 5 6 21 6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M19 6l-1 14H6L5 6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M10 11v6M14 11v6" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M9 6V4h6v2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      }
+                      label="Clear Snapshot"
+                      onSelect={clearSnapshot}
+                    />
+                  )}
                 </Command.Group>
-              </>
-            )}
+              )}
+            </Command.List>
 
-            {/* ── Wall Mode sub-page ────────────────────────────────────── */}
-            {page === 'wall-mode' && (
-              <Command.Group heading="Wall Mode">
-                {(['cutaway', 'up', 'down'] as const).map((mode) => (
-                  <OptionItem
-                    isActive={wallMode === mode}
-                    key={mode}
-                    label={wallModeLabel[mode]}
-                    onSelect={() => run(() => setWallMode(mode))}
-                  />
-                ))}
-              </Command.Group>
-            )}
-
-            {/* ── Level Mode sub-page ───────────────────────────────────── */}
-            {page === 'level-mode' && (
-              <Command.Group heading="Level Mode">
-                {(['stacked', 'exploded', 'solo'] as const).map((mode) => (
-                  <OptionItem
-                    isActive={levelMode === mode}
-                    key={mode}
-                    label={levelModeLabel[mode]}
-                    onSelect={() => run(() => setLevelMode(mode))}
-                  />
-                ))}
-              </Command.Group>
-            )}
-
-            {/* ── Go to Level sub-page ──────────────────────────────────── */}
-            {page === 'goto-level' && (
-              <Command.Group heading="Go to Level">
-                {allLevels.map((level) => (
-                  <OptionItem
-                    isActive={level.id === activeLevelId}
-                    key={level.id}
-                    label={level.name ?? `Level ${level.level}`}
-                    onSelect={() =>
-                      run(() => useViewer.getState().setSelection({ levelId: level.id }))
-                    }
-                  />
-                ))}
-              </Command.Group>
-            )}
-
-            {/* ── Rename Level sub-page ─────────────────────────────────── */}
-            {page === 'rename-level' && (
-              <Command.Group heading="Rename Level">
-                <Command.Item
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground text-sm transition-colors data-[disabled=true]:cursor-not-allowed data-[selected=true]:bg-accent data-[disabled=true]:opacity-40"
-                  disabled={!inputValue.trim()}
-                  onSelect={confirmRename}
-                  value="confirm-rename"
-                >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                    <PencilLine className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1 truncate">
-                    {inputValue.trim() ? (
-                      <>
-                        Rename to <span className="font-medium">"{inputValue.trim()}"</span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">Type a new name above…</span>
-                    )}
-                  </span>
-                </Command.Item>
-              </Command.Group>
-            )}
-
-            {/* ── Camera Snapshot: scope picker ─────────────────────────── */}
-            {page === 'camera-view' && (
-              <Command.Group heading="Camera Snapshot — Select Scope">
-                <OptionItem
-                  icon={<Map className="h-4 w-4" />}
-                  label="Site"
-                  onSelect={() => {
-                    const { rootNodeIds } = useScene.getState()
-                    const siteId = rootNodeIds[0]
-                    if (siteId) navigateToCameraScope(siteId, 'Site')
-                  }}
-                />
-                <OptionItem
-                  icon={<Building2 className="h-4 w-4" />}
-                  label="Building"
-                  onSelect={() => {
-                    const building = Object.values(useScene.getState().nodes).find(
-                      (n) => n.type === 'building',
-                    )
-                    if (building) navigateToCameraScope(building.id, 'Building')
-                  }}
-                />
-                <OptionItem
-                  disabled={!activeLevelId}
-                  icon={<Layers className="h-4 w-4" />}
-                  label="Level"
-                  onSelect={() => {
-                    if (activeLevelId) navigateToCameraScope(activeLevelId, 'Level')
-                  }}
-                />
-                <OptionItem
-                  disabled={!hasSelection}
-                  icon={<MousePointer2 className="h-4 w-4" />}
-                  label="Selection"
-                  onSelect={() => {
-                    const firstId = selection.selectedIds[0]
-                    if (firstId) navigateToCameraScope(firstId, 'Selection')
-                  }}
-                />
-              </Command.Group>
-            )}
-
-            {/* ── Camera Snapshot: actions for selected scope ───────────── */}
-            {page === 'camera-scope' && cameraScope && (
-              <Command.Group heading={`${cameraScope.label} Snapshot`}>
-                <OptionItem
-                  icon={<Camera className="h-4 w-4" />}
-                  label={hasScopeSnapshot ? 'Update Snapshot' : 'Take Snapshot'}
-                  onSelect={takeSnapshot}
-                />
-                {hasScopeSnapshot && (
-                  <OptionItem
-                    icon={<Eye className="h-4 w-4" />}
-                    label="View Snapshot"
-                    onSelect={viewSnapshot}
-                  />
-                )}
-                {hasScopeSnapshot && (
-                  <OptionItem
-                    icon={<Trash2 className="h-4 w-4" />}
-                    label="Clear Snapshot"
-                    onSelect={clearSnapshot}
-                  />
-                )}
-              </Command.Group>
-            )}
-          </Command.List>
-
-          {/* Footer hint */}
-          <div className="flex items-center justify-between border-border/50 border-t px-3 py-2">
-            <span className="text-[11px] text-muted-foreground">
-              <Shortcut keys={['↑', '↓']} /> navigate
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              <Shortcut keys={['↵']} /> select
-            </span>
-            {page ? (
+            {/* Footer hint */}
+            <div className="flex items-center justify-between border-border/50 border-t px-3 py-2">
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['⌫']} /> back
+                <Shortcut keys={['↑', '↓']} /> navigate
               </span>
-            ) : (
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['Esc']} /> close
+                <Shortcut keys={['↵']} /> select
               </span>
-            )}
-          </div>
-        </Command>
+              {page ? (
+                <span className="text-[11px] text-muted-foreground">
+                  <Shortcut keys={['⌫']} /> back
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">
+                  <Shortcut keys={['Esc']} /> close
+                </span>
+              )}
+            </div>
+          </Command>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -236,10 +236,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     <group>
       {/* Border line */}
       <line
-        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
         frustumCulled={false}
         layers={EDITOR_LAYER}
         raycast={() => {}}
+        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
         ref={lineRef}
         renderOrder={10}
       >

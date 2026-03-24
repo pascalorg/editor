@@ -27,7 +27,7 @@ export const CeilingBoundaryEditor: React.FC<CeilingBoundaryEditorProps> = ({ ce
     [ceilingId, updateNode, setSelection],
   )
 
-  if (!(ceiling && ceiling.polygon) || ceiling.polygon.length < 3) return null
+  if (!ceiling?.polygon || ceiling.polygon.length < 3) return null
 
   return (
     <PolygonEditor

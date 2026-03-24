@@ -1,58 +1,118 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   emitter,
   type GridEvent,
   type LevelNode,
   RoofNode,
+  RoofSegmentNode,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
 import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-// Default roof dimensions
-const DEFAULT_HEIGHT = 1.5
-const CEILING_HEIGHT = 2.52
+const DEFAULT_WALL_HEIGHT = 0.5
+const DEFAULT_ROOF_HEIGHT = 2.5
 const GRID_OFFSET = 0.02
 
 /**
- * Creates a roof with the given corners
+ * Creates a roof group with one default gable segment
  */
 const commitRoofPlacement = (
   levelId: LevelNode['id'],
   corner1: [number, number, number],
   corner2: [number, number, number],
-): RoofNode['id'] => {
-  const { createNode, nodes } = useScene.getState()
+  selectedIds: string[],
+): AnyNode['id'] => {
+  const { createNode, createNodes, nodes } = useScene.getState()
 
-  // Calculate center position and dimensions from corners
   const centerX = (corner1[0] + corner2[0]) / 2
   const centerZ = (corner1[2] + corner2[2]) / 2
 
-  const length = Math.abs(corner2[0] - corner1[0])
-  const width = Math.abs(corner2[2] - corner1[2])
+  const width = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
+  const depth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
 
-  // Split width evenly between left and right slopes
-  const slopeWidth = Math.max(width / 2, 0.5)
+  // Determine if there is an active roof node we should add to
+  let targetRoofId: RoofNode['id'] | null = null
+  const selectedId = selectedIds[0]
+  if (selectedIds.length === 1 && selectedId) {
+    const selectedNode = nodes[selectedId as AnyNodeId]
+    if (selectedNode?.type === 'roof') {
+      targetRoofId = selectedNode.id
+    } else if (selectedNode?.type === 'roof-segment' && selectedNode.parentId) {
+      targetRoofId = selectedNode.parentId as RoofNode['id']
+    }
+  }
+
+  if (targetRoofId) {
+    const targetRoof = nodes[targetRoofId] as RoofNode
+    let localX = centerX
+    let localZ = centerZ
+
+    // Convert world coordinates to the local space of the parent roof
+    const targetObj = sceneRegistry.nodes.get(targetRoofId)
+    if (targetObj) {
+      const worldVec = new THREE.Vector3(centerX, 0, centerZ)
+      targetObj.worldToLocal(worldVec)
+      localX = worldVec.x
+      localZ = worldVec.z
+    } else {
+      // Math fallback if mesh isn't ready
+      const dx = centerX - targetRoof.position[0]
+      const dz = centerZ - targetRoof.position[2]
+      const angle = -targetRoof.rotation
+      localX = dx * Math.cos(angle) - dz * Math.sin(angle)
+      localZ = dx * Math.sin(angle) + dz * Math.cos(angle)
+    }
+
+    const segment = RoofSegmentNode.parse({
+      width,
+      depth,
+      wallHeight: DEFAULT_WALL_HEIGHT,
+      roofHeight: DEFAULT_ROOF_HEIGHT,
+      roofType: 'gable',
+      position: [localX, 0, localZ],
+    })
+
+    createNode(segment, targetRoofId as AnyNode['id'])
+    sfxEmitter.emit('sfx:structure-build')
+    return segment.id // Returns segment ID so it can be selected immediately
+  }
 
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
   const name = `Roof ${roofCount + 1}`
 
-  const roof = RoofNode.parse({
-    name,
-    position: [centerX, 0, centerZ], // Y is always 0
-    length: Math.max(length, 0.5),
-    height: DEFAULT_HEIGHT,
-    leftWidth: slopeWidth,
-    rightWidth: slopeWidth,
+  // Create the segment first (centered in its new parent)
+  const segment = RoofSegmentNode.parse({
+    width,
+    depth,
+    wallHeight: DEFAULT_WALL_HEIGHT,
+    roofHeight: DEFAULT_ROOF_HEIGHT,
+    roofType: 'gable',
+    position: [0, 0, 0],
   })
 
-  createNode(roof, levelId)
+  // Create the roof container
+  const roof = RoofNode.parse({
+    name,
+    position: [centerX, 0, centerZ],
+    children: [segment.id],
+  })
+
+  // Create roof first (so segment can be parented to it), then segment
+  createNodes([
+    { node: roof, parentId: levelId },
+    { node: segment, parentId: roof.id },
+  ])
+
   sfxEmitter.emit('sfx:structure-build')
   return roof.id
 }
@@ -67,9 +127,15 @@ export const RoofTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const setTool = useEditor((state) => state.setTool)
   const setMode = useEditor((state) => state.setMode)
+
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds
+  }, [selectedIds])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -82,7 +148,6 @@ export const RoofTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
-    // Initialize outline geometry
     outlineRef.current.geometry = new BufferGeometry()
 
     const updateOutline = (
@@ -96,7 +161,7 @@ export const RoofTool: React.FC = () => {
         new Vector3(corner2[0], gridY, corner1[2]),
         new Vector3(corner2[0], gridY, corner2[2]),
         new Vector3(corner1[0], gridY, corner2[2]),
-        new Vector3(corner1[0], gridY, corner1[2]), // Close the loop
+        new Vector3(corner1[0], gridY, corner1[2]),
       ]
 
       outlineRef.current.geometry.dispose()
@@ -107,19 +172,15 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      // Snap to 0.5 grid
       const gridX = Math.round(event.position[0] * 2) / 2
       const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
-
-      // Update cursors
       const gridY = y + GRID_OFFSET
 
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
-      // Play snap sound when grid position changes (only when placing)
       if (
         corner1Ref.current &&
         previousGridPosRef.current &&
@@ -136,7 +197,6 @@ export const RoofTool: React.FC = () => {
         levelY: y,
       })
 
-      // Update outline if we have first corner
       if (corner1Ref.current) {
         updateOutline(corner1Ref.current, cursorPosition)
       }
@@ -150,17 +210,18 @@ export const RoofTool: React.FC = () => {
       const y = event.position[1]
 
       if (corner1Ref.current) {
-        // Second click - create the roof
-        const roofId = commitRoofPlacement(currentLevelId, corner1Ref.current, [gridX, y, gridZ])
+        const roofId = commitRoofPlacement(
+          currentLevelId,
+          corner1Ref.current,
+          [gridX, y, gridZ],
+          selectedIdsRef.current,
+        )
 
-        // Auto-select the newly created roof
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 
-        // Reset state
         corner1Ref.current = null
         outlineRef.current.visible = false
       } else {
-        // First click - set corner 1
         corner1Ref.current = [gridX, y, gridZ]
         setPreview((prev) => ({
           ...prev,
@@ -177,7 +238,6 @@ export const RoofTool: React.FC = () => {
       }
     }
 
-    // Subscribe to events
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
@@ -187,14 +247,12 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
 
-      // Reset state on unmount
       corner1Ref.current = null
     }
-  }, [currentLevelId, setTool, setSelection, setMode])
+  }, [currentLevelId, setSelection])
 
   const { corner1, cursorPosition, levelY } = preview
 
-  // Calculate preview dimensions for display
   const previewDimensions = useMemo(() => {
     if (!corner1) return null
     const length = Math.abs(cursorPosition[0] - corner1[0])
@@ -206,14 +264,13 @@ export const RoofTool: React.FC = () => {
 
   return (
     <group>
-      {/* Cursor at ground height */}
       <CursorSphere ref={cursorRef} />
 
-      {/* Outline showing rectangle being drawn (Ground) */}
       {/* @ts-ignore */}
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={outlineRef}
         renderOrder={1}
         visible={false}
@@ -229,7 +286,6 @@ export const RoofTool: React.FC = () => {
         />
       </line>
 
-      {/* First corner marker */}
       {corner1 && (
         <CursorSphere
           color="#818cf8"
@@ -238,7 +294,6 @@ export const RoofTool: React.FC = () => {
         />
       )}
 
-      {/* Thin preview fill when drawing (Ground) */}
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
         <mesh
           layers={EDITOR_LAYER}

@@ -1,12 +1,21 @@
 'use client'
 
+import { Icon } from '@iconify/react'
 import { useViewer } from '@pascal-app/viewer'
-import { Box, Camera, Diamond, Image, Layers, Layers2 } from 'lucide-react'
+import { Diamond } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import useEditor from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
   stacked: 'Stacked',
+  exploded: 'Exploded',
+  solo: 'Solo',
+}
+
+const levelModeBadgeLabels: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
+  manual: 'Stack',
+  stacked: 'Stack',
   exploded: 'Exploded',
   solo: 'Solo',
 }
@@ -50,6 +59,8 @@ export function ViewToggles() {
   const setShowScans = useViewer((state) => state.setShowScans)
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
+  const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
+  const toggleFloorplanOpen = useEditor((state) => state.toggleFloorplanOpen)
 
   const toggleCameraMode = () => {
     setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')
@@ -87,22 +98,41 @@ export function ViewToggles() {
         size="icon"
         variant="ghost"
       >
-        <Camera className="h-6 w-6" />
+        {cameraMode === 'perspective' ? (
+          <Icon color="currentColor" height={24} icon="icon-park-outline:perspective" width={24} />
+        ) : (
+          <Icon color="currentColor" height={24} icon="vaadin:grid" width={24} />
+        )}
       </ActionButton>
 
       {/* Level Mode */}
       <ActionButton
         className={cn(
-          levelMode !== 'stacked' ? 'bg-amber-500/20 text-amber-400' : 'hover:text-amber-400',
+          'p-0',
+          levelMode === 'stacked' || levelMode === 'manual'
+            ? 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
+            : 'bg-white/10 text-foreground',
         )}
         label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
         onClick={cycleLevelMode}
         size="icon"
         variant="ghost"
       >
-        {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
-        {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
-        {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-6 w-6" />}
+        <span className="relative flex h-full w-full items-center justify-center pb-1">
+          {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
+          {levelMode === 'exploded' && (
+            <Icon color="currentColor" height={24} icon="charm:stack-pop" width={24} />
+          )}
+          {(levelMode === 'stacked' || levelMode === 'manual') && (
+            <Icon color="currentColor" height={24} icon="charm:stack-push" width={24} />
+          )}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1 bottom-1 left-1 rounded border border-border/50 bg-background/70 px-0.5 py-[2px] text-center font-medium font-pixel text-[8px] text-foreground/85 leading-none tracking-[-0.02em] backdrop-blur-sm"
+          >
+            {levelModeBadgeLabels[levelMode]}
+          </span>
+        </span>
       </ActionButton>
 
       {/* Wall Mode */}
@@ -154,6 +184,37 @@ export function ViewToggles() {
         variant="ghost"
       >
         <img alt="Guides" className="h-[28px] w-[28px] object-contain" src="/icons/floorplan.png" />
+      </ActionButton>
+
+      <ActionButton
+        className={cn('overflow-visible p-0', isFloorplanOpen ? 'bg-white/10' : 'hover:bg-white/5')}
+        label={`2D floor plan: ${isFloorplanOpen ? 'Visible' : 'Hidden'}`}
+        onClick={toggleFloorplanOpen}
+        size="icon"
+        variant="ghost"
+      >
+        <span className="relative flex h-full w-full items-center justify-center pb-1">
+          <img
+            alt="2D floor plan"
+            className={cn(
+              'h-[28px] w-[28px] object-contain transition-[filter,opacity] duration-200',
+              isFloorplanOpen ? 'opacity-100 grayscale-0' : 'opacity-60 grayscale',
+            )}
+            src="/icons/blueprint.png"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-1 -right-1 z-10 rounded-full border border-background/80 bg-emerald-600 px-1.5 py-0.5 font-semibold text-[7px] text-white leading-none shadow-[0_4px_10px_rgba(5,150,105,0.24)]"
+          >
+            New
+          </span>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1 bottom-1 left-1 rounded border border-border/50 bg-background/70 px-0.5 py-[2px] text-center font-medium font-pixel text-[8px] text-foreground/85 leading-none tracking-[-0.02em] backdrop-blur-sm"
+          >
+            2D
+          </span>
+        </span>
       </ActionButton>
     </div>
   )
