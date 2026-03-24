@@ -39,6 +39,7 @@ import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { InlineRenameInput } from './inline-rename-input'
+import { MeasurementGuideTreeNode } from './measurement-guide-tree-node'
 import { TreeNode } from './tree-node'
 
 // ============================================================================
@@ -1170,6 +1171,7 @@ function ContentSection() {
   const nodes = useScene((state) => state.nodes)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
+  const measurementGuides = useEditor((state) => state.measurementGuides)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
@@ -1226,19 +1228,34 @@ function ContentSection() {
     return true
   })
 
-  if (elementChildren.length === 0) {
+  const levelMeasurementGuides = measurementGuides.filter((guide) => guide.levelId === selectedLevelId)
+  const rows = [
+    ...levelMeasurementGuides.map((guide) => ({ type: 'measurement' as const, guide })),
+    ...elementChildren.map((childId) => ({ type: 'node' as const, childId })),
+  ]
+
+  if (rows.length === 0) {
     return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
   }
 
   return (
     <div className="flex flex-col">
-      {elementChildren.map((childId, index) => (
-        <TreeNode
-          depth={0}
-          isLast={index === elementChildren.length - 1}
-          key={childId}
-          nodeId={childId}
-        />
+      {rows.map((row, index) => (
+        row.type === 'measurement' ? (
+          <MeasurementGuideTreeNode
+            depth={0}
+            guide={row.guide}
+            isLast={index === rows.length - 1}
+            key={row.guide.id}
+          />
+        ) : (
+          <TreeNode
+            depth={0}
+            isLast={index === rows.length - 1}
+            key={row.childId}
+            nodeId={row.childId}
+          />
+        )
       ))}
     </div>
   )

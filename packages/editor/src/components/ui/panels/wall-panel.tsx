@@ -3,102 +3,158 @@
 import { type AnyNode, type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
-import { METERS_PER_INCH } from '../../../lib/measurements'
+import { formatLength, METERS_PER_INCH } from '../../../lib/measurements'
 import { PanelSection } from '../controls/panel-section'
 import { MetricControl } from '../controls/metric-control'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
+const DEFAULT_WALL_HEIGHT = 2.5
+const DEFAULT_WALL_THICKNESS = 0.1
+const VALUE_TOLERANCE = 1e-4
+
+const getWallLength = (wall: WallNode) => {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  return Math.sqrt(dx * dx + dz * dz)
+}
+
+const getUniformValue = (values: number[]) => {
+  if (values.length === 0) return null
+
+  const firstValue = values[0]!
+  return values.every((value) => Math.abs(value - firstValue) <= VALUE_TOLERANCE) ? firstValue : null
+}
+
 export function WallPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
-  const updateNode = useScene((s) => s.updateNode)
+  const updateNodes = useScene((s) => s.updateNodes)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined
+  const wallNodes = selectedIds
+    .map((selectedId) => nodes[selectedId as AnyNode['id']])
+    .filter((node): node is WallNode => Boolean(node && node.type === 'wall'))
 
-  const handleUpdate = useCallback(
-    (updates: Partial<WallNode>) => {
-      if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+  const node = wallNodes[0]
+  const isSingleWall = wallNodes.length === 1
+  const selectionCount = wallNodes.length
+
+  const handleBatchUpdate = useCallback(
+    (getUpdates: (wall: WallNode) => Partial<WallNode>) => {
+      if (wallNodes.length === 0) return
+
+      updateNodes(wallNodes.map((wall) => ({ id: wall.id, data: getUpdates(wall) })))
+      for (const wall of wallNodes) {
+        useScene.getState().dirtyNodes.add(wall.id as AnyNodeId)
+      }
     },
-    [selectedId, updateNode],
+    [updateNodes, wallNodes],
   )
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-  if (!node || node.type !== 'wall' || selectedIds.length !== 1) return null
+  if (!node || wallNodes.length !== selectedIds.length) return null
 
-  const dx = node.end[0] - node.start[0]
-  const dz = node.end[1] - node.start[1]
-  const length = Math.sqrt(dx * dx + dz * dz)
-
-  const height = node.height ?? 2.5
-  const thickness = node.thickness ?? 0.1
+  const height = getUniformValue(wallNodes.map((wall) => wall.height ?? DEFAULT_WALL_HEIGHT))
+  const thickness = getUniformValue(wallNodes.map((wall) => wall.thickness ?? DEFAULT_WALL_THICKNESS))
+  const length = getUniformValue(wallNodes.map(getWallLength))
+  const hasMixedDimensionValues = height === null || thickness === null
+  const title = isSingleWall ? node.name || 'Wall' : `${selectionCount} Walls`
 
   const handleLengthChange = useCallback(
     (nextLength: number) => {
-      const directionX = node.end[0] - node.start[0]
-      const directionZ = node.end[1] - node.start[1]
-      const currentLength = Math.hypot(directionX, directionZ)
       const resolvedLength = Math.max(METERS_PER_INCH, nextLength)
 
-      const unitX = currentLength > 1e-6 ? directionX / currentLength : 1
-      const unitZ = currentLength > 1e-6 ? directionZ / currentLength : 0
+      handleBatchUpdate((wall) => {
+        const directionX = wall.end[0] - wall.start[0]
+        const directionZ = wall.end[1] - wall.start[1]
+        const currentLength = Math.hypot(directionX, directionZ)
+        const unitX = currentLength > 1e-6 ? directionX / currentLength : 1
+        const unitZ = currentLength > 1e-6 ? directionZ / currentLength : 0
 
-      handleUpdate({
-        end: [node.start[0] + unitX * resolvedLength, node.start[1] + unitZ * resolvedLength],
+        return {
+          end: [wall.start[0] + unitX * resolvedLength, wall.start[1] + unitZ * resolvedLength],
+        }
       })
     },
-    [handleUpdate, node.end, node.start],
+    [handleBatchUpdate],
   )
 
   return (
     <PanelWrapper
       icon="/icons/wall.png"
       onClose={handleClose}
-      title={node.name || 'Wall'}
+      title={title}
       width={280}
     >
       <PanelSection title="Dimensions">
-        <SliderControl
-          label="Height"
-          max={6}
-          min={0.1}
-          onChange={(v) => handleUpdate({ height: Math.max(0.1, v) })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={Math.round(height * 100) / 100}
-        />
-        <SliderControl
-          label="Thickness"
-          max={1}
-          min={0.05}
-          onChange={(v) => handleUpdate({ thickness: Math.max(0.05, v) })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(thickness * 1000) / 1000}
-        />
+        {height !== null && (
+          <SliderControl
+            label="Height"
+            max={6}
+            min={0.1}
+            onChange={(value) =>
+              handleBatchUpdate(() => ({ height: Math.max(0.1, value) }))
+            }
+            precision={2}
+            step={0.1}
+            unit="m"
+            value={Math.round(height * 100) / 100}
+          />
+        )}
+        {thickness !== null && (
+          <SliderControl
+            label="Thickness"
+            max={1}
+            min={0.05}
+            onChange={(value) =>
+              handleBatchUpdate(() => ({ thickness: Math.max(0.05, value) }))
+            }
+            precision={3}
+            step={0.01}
+            unit="m"
+            value={Math.round(thickness * 1000) / 1000}
+          />
+        )}
+        {!isSingleWall && hasMixedDimensionValues && (
+          <p className="px-1 text-muted-foreground text-xs leading-relaxed">
+            Only shared wall dimensions are editable in bulk. Mixed values stay read-only until the
+            selection matches.
+          </p>
+        )}
       </PanelSection>
 
       <PanelSection title="Info">
-        <MetricControl
-          editTrigger="doubleClick"
-          label="Length"
-          max={100}
-          min={METERS_PER_INCH}
-          onChange={handleLengthChange}
-          precision={3}
-          step={METERS_PER_INCH}
-          unit="m"
-          value={length}
-        />
+        {length !== null ? (
+          <MetricControl
+            editTrigger="doubleClick"
+            label="Length"
+            max={100}
+            min={METERS_PER_INCH}
+            onChange={handleLengthChange}
+            precision={3}
+            step={METERS_PER_INCH}
+            unit="m"
+            value={length}
+          />
+        ) : (
+          <div className="flex h-10 items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
+            <span className="text-muted-foreground">Length</span>
+            <span className="font-mono text-muted-foreground">
+              Mixed lengths
+            </span>
+          </div>
+        )}
+        {!isSingleWall && length !== null && (
+          <p className="px-1 text-muted-foreground text-xs leading-relaxed">
+            Double-click Length to set every selected wall to {formatLength(length, unitSystem)} and
+            then drag or type a new shared value.
+          </p>
+        )}
       </PanelSection>
     </PanelWrapper>
   )

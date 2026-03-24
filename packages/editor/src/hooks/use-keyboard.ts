@@ -19,6 +19,8 @@ export const useKeyboard = () => {
         // Clear selections to close UI panels, but KEEP the active building and level context
         useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         useEditor.getState().setSelectedReferenceId(null)
+        useEditor.getState().setSelectedMeasurementGuideId(null)
+        useEditor.getState().setHoveredMeasurementGuideId(null)
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
@@ -97,6 +99,7 @@ export const useKeyboard = () => {
         e.preventDefault()
 
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        const { deleteMeasurementGuide, selectedMeasurementGuideId } = useEditor.getState()
 
         if (selectedNodeIds.length > 0) {
           // Play appropriate SFX based on what's being deleted
@@ -112,6 +115,9 @@ export const useKeyboard = () => {
           }
 
           useScene.getState().deleteNodes(selectedNodeIds)
+        } else if (selectedMeasurementGuideId) {
+          sfxEmitter.emit('sfx:structure-delete')
+          deleteMeasurementGuide(selectedMeasurementGuideId)
         }
       }
     }

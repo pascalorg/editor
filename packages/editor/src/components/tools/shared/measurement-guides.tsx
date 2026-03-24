@@ -12,6 +12,8 @@ import {
 } from './drawing-utils'
 
 const MeasurementGuideLine = ({
+  isHovered,
+  isSelected,
   end,
   levelY,
   start,
@@ -19,10 +21,14 @@ const MeasurementGuideLine = ({
   start: [number, number]
   end: [number, number]
   levelY: number
+  isSelected: boolean
+  isHovered: boolean
 }) => {
   const unitSystem = useViewer((state) => state.unitSystem)
   const distance = useMemo(() => getPlanDistance(start, end), [end, start])
   const midpoint = useMemo(() => getPlanMidpoint(start, end), [end, start])
+  const color = isSelected ? '#f97316' : isHovered ? '#f59e0b' : '#fbbf24'
+  const opacity = isSelected ? 1 : isHovered ? 0.95 : 0.8
   const geometry = useMemo(() => {
     return new BufferGeometry().setFromPoints([
       new Vector3(start[0], levelY + 0.02, start[1]),
@@ -44,11 +50,11 @@ const MeasurementGuideLine = ({
       <line frustumCulled={false} layers={EDITOR_LAYER} raycast={() => {}} renderOrder={1}>
         <primitive attach="geometry" object={geometry} />
         <lineBasicNodeMaterial
-          color="#fbbf24"
+          color={color}
           depthTest={false}
           depthWrite={false}
           linewidth={2}
-          opacity={0.8}
+          opacity={opacity}
           transparent
         />
       </line>
@@ -65,10 +71,14 @@ export const MeasurementGuides: React.FC = () => {
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const showGuides = useViewer((state) => state.showGuides)
   const measurementGuides = useEditor((state) => state.measurementGuides)
+  const selectedMeasurementGuideId = useEditor((state) => state.selectedMeasurementGuideId)
+  const hoveredMeasurementGuideId = useEditor((state) => state.hoveredMeasurementGuideId)
 
   const visibleGuides = useMemo(() => {
     if (!(showGuides && currentLevelId)) return []
-    return measurementGuides.filter((guide) => guide.levelId === currentLevelId)
+    return measurementGuides.filter(
+      (guide) => guide.levelId === currentLevelId && guide.visible !== false,
+    )
   }, [currentLevelId, measurementGuides, showGuides])
 
   if (visibleGuides.length === 0) return null
@@ -78,6 +88,8 @@ export const MeasurementGuides: React.FC = () => {
       {visibleGuides.map((guide) => (
         <MeasurementGuideLine
           end={guide.end}
+          isHovered={hoveredMeasurementGuideId === guide.id}
+          isSelected={selectedMeasurementGuideId === guide.id}
           key={guide.id}
           levelY={guide.levelY}
           start={guide.start}
