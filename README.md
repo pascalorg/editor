@@ -2,6 +2,10 @@
 
 A 3D building editor built with React Three Fiber and WebGPU.
 
+## Local Notes
+
+- Okiyuka integration PoC: [OKIYUKA_INTEGRATION.md](OKIYUKA_INTEGRATION.md)
+
 
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
