@@ -1,12 +1,11 @@
 'use client'
 
-import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { formatLength } from '../../../lib/measurements'
 import { getRoofDimensions } from '../../../lib/roof-dimensions'
 import { ActionButton } from '../controls/action-button'
-import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -16,17 +15,50 @@ export function RoofPanel() {
   const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
-  const updateNode = useScene((s) => s.updateNode)
+  const updateNodes = useScene((s) => s.updateNodes)
 
   const selectedId = selectedIds[0]
   const node = selectedId ? (nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined
 
   const handleUpdate = useCallback(
-    (updates: Partial<RoofNode>) => {
+    (
+      updates: Partial<RoofNode> & {
+        length?: number
+        height?: number
+        leftWidth?: number
+        rightWidth?: number
+      },
+    ) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+
+      const roof = nodes[selectedId as AnyNode['id']] as RoofNode | undefined
+      if (!roof) return
+
+      const dimensions = getRoofDimensions(roof, nodes)
+      const nextLeftWidth = updates.leftWidth ?? dimensions.leftWidth
+      const nextRightWidth = updates.rightWidth ?? dimensions.rightWidth
+
+      const batchedUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = [
+        {
+          id: selectedId as AnyNodeId,
+          data: updates as Partial<AnyNode>,
+        },
+      ]
+
+      if (dimensions.primarySegment) {
+        batchedUpdates.push({
+          id: dimensions.primarySegment.id as AnyNodeId,
+          data: {
+            width: updates.length ?? dimensions.primarySegment.width,
+            depth: nextLeftWidth + nextRightWidth,
+            roofHeight: updates.height ?? dimensions.primarySegment.roofHeight,
+          } as Partial<AnyNode>,
+        })
+      }
+
+      updateNodes(batchedUpdates)
     },
-    [selectedId, updateNode],
+    [nodes, selectedId, updateNodes],
   )
 
   const handleClose = useCallback(() => {
