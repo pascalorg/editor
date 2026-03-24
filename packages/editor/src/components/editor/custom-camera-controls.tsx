@@ -3,7 +3,7 @@
 import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useThree, useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
@@ -40,7 +40,7 @@ export const CustomCameraControls = () => {
     }
     if (firstLoad.current) {
       firstLoad.current = false
-      ;(controls.current as CameraControlsImpl).setLookAt(20, 20, 20, 0, 0, 0, true)
+      ;(controls.current as CameraControlsImpl).setLookAt(65, 65, 65, 0, 0, 0, true)
     }
     ;(controls.current as CameraControlsImpl).getTarget(currentTarget)
     ;(controls.current as CameraControlsImpl).moveTo(
@@ -61,9 +61,9 @@ export const CustomCameraControls = () => {
         : CameraControlsImpl.ACTION.DOLLY
 
     return {
-      left: isPreviewMode ? CameraControlsImpl.ACTION.SCREEN_PAN : CameraControlsImpl.ACTION.NONE,
-      middle: CameraControlsImpl.ACTION.SCREEN_PAN,
-      right: CameraControlsImpl.ACTION.ROTATE,
+      left: CameraControlsImpl.ACTION.ROTATE,
+      middle: CameraControlsImpl.ACTION.DOLLY,
+      right: CameraControlsImpl.ACTION.SCREEN_PAN,
       wheel: wheelAction,
     }
   }, [cameraMode, isPreviewMode])
@@ -89,15 +89,14 @@ export const CustomCameraControls = () => {
           ? CameraControlsImpl.ACTION.ZOOM
           : CameraControlsImpl.ACTION.DOLLY
       controls.current.mouseButtons.wheel = wheelAction
-      controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
-      controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
+      controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.DOLLY
+      controls.current.mouseButtons.right = CameraControlsImpl.ACTION.SCREEN_PAN
       if (isPreviewMode) {
-        // In preview mode, left-click is always pan (viewer-style)
-        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
+        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.ROTATE
       } else if (space) {
         controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
       } else {
-        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.NONE
+        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.ROTATE
       }
     }
 
@@ -306,11 +305,54 @@ export const CustomCameraControls = () => {
     useViewer.getState().setCameraDragging(false)
   }, [])
 
+  const panKeys = useRef({ up: false, down: false, left: false, right: false })
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      const k = e.key.toLowerCase()
+      if (k === 'w' || k === 'arrowup') panKeys.current.up = true
+      if (k === 's' || k === 'arrowdown') panKeys.current.down = true
+      if (k === 'a' || k === 'arrowleft') panKeys.current.left = true
+      if (k === 'd' || k === 'arrowright') panKeys.current.right = true
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase()
+      if (k === 'w' || k === 'arrowup') panKeys.current.up = false
+      if (k === 's' || k === 'arrowdown') panKeys.current.down = false
+      if (k === 'a' || k === 'arrowleft') panKeys.current.left = false
+      if (k === 'd' || k === 'arrowright') panKeys.current.right = false
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  useFrame((state, delta) => {
+    if (!controls.current) return
+    const { up, down, left, right } = panKeys.current
+    if (up || down || left || right) {
+      // Scale speed with distance to make panning feel consistent at different zoom levels
+      const distance = controls.current.distance || 50
+      const speed = distance * delta * 1.5 
+      let x = 0
+      let y = 0
+      if (left) x -= speed
+      if (right) x += speed
+      if (up) y += speed
+      if (down) y -= speed
+      
+      controls.current.truck(x, y, true)
+    }
+  })
+
   return (
     <CameraControls
       makeDefault
-      maxDistance={100}
-      maxPolarAngle={Math.PI / 2 - 0.1}
+      maxDistance={8000}
+      maxPolarAngle={Math.PI}
       minDistance={10}
       minPolarAngle={0}
       mouseButtons={mouseButtons}

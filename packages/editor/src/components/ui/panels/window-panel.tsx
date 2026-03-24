@@ -209,12 +209,12 @@ export function WindowPanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={10}
-          min={-10}
+          max={200}
+          min={-200}
           onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
@@ -223,12 +223,12 @@ export function WindowPanel() {
               Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={10}
-          min={-10}
+          max={200}
+          min={-200}
           onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[1] * 100) / 100}
         />
         <div className="px-1 pt-2 pb-1">
@@ -244,22 +244,22 @@ export function WindowPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={5}
-          min={0.2}
+          max={20}
+          min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
           label="Height"
-          max={5}
-          min={0.2}
+          max={20}
+          min={0.5}
           onChange={(v) => handleUpdate({ height: v })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.height * 100) / 100}
         />
       </PanelSection>
@@ -267,23 +267,23 @@ export function WindowPanel() {
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
-          max={0.2}
-          min={0.01}
+          max={1}
+          min={0.05}
           onChange={(v) => handleUpdate({ frameThickness: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.frameThickness * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.frameThickness * 100) / 100}
         />
         <SliderControl
           label="Depth"
-          max={0.3}
-          min={0.01}
+          max={1}
+          min={0.05}
           onChange={(v) => handleUpdate({ frameDepth: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.frameDepth * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.frameDepth * 100) / 100}
         />
       </PanelSection>
 
@@ -334,13 +334,13 @@ export function WindowPanel() {
             <div className="mt-1 border-border/50 border-t pt-1">
               <SliderControl
                 label="Divider"
-                max={0.1}
-                min={0.005}
+                max={0.5}
+                min={0.02}
                 onChange={(v) => handleUpdate({ columnDividerThickness: v })}
-                precision={3}
+                precision={2}
                 step={0.01}
-                unit="m"
-                value={Math.round((node.columnDividerThickness ?? 0.03) * 1000) / 1000}
+                unit="ft"
+                value={Math.round((node.columnDividerThickness ?? 0.1) * 100) / 100}
               />
             </div>
           </div>
@@ -367,13 +367,13 @@ export function WindowPanel() {
             <div className="mt-1 border-border/50 border-t pt-1">
               <SliderControl
                 label="Divider"
-                max={0.1}
-                min={0.005}
+                max={0.5}
+                min={0.02}
                 onChange={(v) => handleUpdate({ rowDividerThickness: v })}
-                precision={3}
+                precision={2}
                 step={0.01}
-                unit="m"
-                value={Math.round((node.rowDividerThickness ?? 0.03) * 1000) / 1000}
+                unit="ft"
+                value={Math.round((node.rowDividerThickness ?? 0.1) * 100) / 100}
               />
             </div>
           </div>
@@ -390,23 +390,23 @@ export function WindowPanel() {
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Depth"
-              max={0.5}
-              min={0.01}
+              max={2}
+              min={0.05}
               onChange={(v) => handleUpdate({ sillDepth: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.sillDepth * 1000) / 1000}
+              precision={2}
+              step={0.05}
+              unit="ft"
+              value={Math.round(node.sillDepth * 100) / 100}
             />
             <SliderControl
               label="Thickness"
-              max={0.2}
-              min={0.005}
+              max={1}
+              min={0.05}
               onChange={(v) => handleUpdate({ sillThickness: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.sillThickness * 1000) / 1000}
+              precision={2}
+              step={0.05}
+              unit="ft"
+              value={Math.round(node.sillThickness * 100) / 100}
             />
           </div>
         )}

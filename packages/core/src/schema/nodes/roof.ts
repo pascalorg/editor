@@ -12,6 +12,11 @@ export const RoofNode = BaseNode.extend({
   rotation: z.number().default(0),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
+  // Legacy dimensions used by simple roof renderer
+  length: z.number().default(10),
+  height: z.number().default(4),
+  leftWidth: z.number().default(4),
+  rightWidth: z.number().default(4),
 }).describe(
   dedent`
   Roof node - a container for roof segments.
@@ -20,6 +25,10 @@ export const RoofNode = BaseNode.extend({
   - position: center position of the roof group
   - rotation: rotation around Y axis
   - children: array of RoofSegmentNode IDs
+  - length: legacy overall length
+  - height: legacy peak height
+  - leftWidth: legacy left slope width
+  - rightWidth: legacy right slope width
   `,
 )
 

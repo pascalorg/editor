@@ -10,6 +10,7 @@ import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
+
 export function SlabPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
@@ -106,7 +107,7 @@ export function SlabPanel() {
     return Math.abs(area) / 2
   }
 
-  const area = calculateArea(node.polygon)
+  const areaSqFt = calculateArea(node.polygon)
 
   return (
     <PanelWrapper
@@ -118,27 +119,67 @@ export function SlabPanel() {
       <PanelSection title="Elevation">
         <SliderControl
           label="Height"
-          max={1}
-          min={-1}
+          max={4}
+          min={-4}
           onChange={(v) => handleUpdate({ elevation: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.elevation * 1000) / 1000}
+          precision={2}
+          step={0.1}
+          unit="ft"
+          value={Math.round(node.elevation * 100) / 100}
         />
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label="Sunken (-15cm)" onClick={() => handleUpdate({ elevation: -0.15 })} />
-          <ActionButton label="Ground (0m)" onClick={() => handleUpdate({ elevation: 0 })} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleUpdate({ elevation: 0.05 })} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleUpdate({ elevation: 0.15 })} />
+          <ActionButton label="Sunken (-0.5ft)" onClick={() => handleUpdate({ elevation: -0.5 })} />
+          <ActionButton label="Ground (0)" onClick={() => handleUpdate({ elevation: 0 })} />
+          <ActionButton label="Raised (+0.5ft)" onClick={() => handleUpdate({ elevation: 0.5 })} />
+          <ActionButton label="Step (+1ft)" onClick={() => handleUpdate({ elevation: 1 })} />
         </div>
       </PanelSection>
 
       <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Area</span>
-          <span className="font-mono text-white">{area.toFixed(2)} m²</span>
+          <span className="font-mono text-white">{areaSqFt.toFixed(1)} sq ft</span>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Points">
+        <div className="flex flex-col gap-2">
+          {node.polygon.map((point, i) => (
+            <div className="rounded-lg border border-border/50 p-2" key={i}>
+              <div className="mb-2 font-medium text-muted-foreground text-xs">Point {i + 1}</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <SliderControl
+                  label="X"
+                  max={400}
+                  min={-400}
+                  onChange={(v) => {
+                    const newPoly = [...node.polygon]
+                    newPoly[i] = [v, point[1]]
+                    handleUpdate({ polygon: newPoly })
+                  }}
+                  precision={2}
+                  step={0.1}
+                  unit="ft"
+                  value={Math.round(point[0] * 100) / 100}
+                />
+                <SliderControl
+                  label="Z"
+                  max={400}
+                  min={-400}
+                  onChange={(v) => {
+                    const newPoly = [...node.polygon]
+                    newPoly[i] = [point[0], v]
+                    handleUpdate({ polygon: newPoly })
+                  }}
+                  precision={2}
+                  step={0.1}
+                  unit="ft"
+                  value={Math.round(point[1] * 100) / 100}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </PanelSection>
 
@@ -146,7 +187,7 @@ export function SlabPanel() {
         {node.holes && node.holes.length > 0 ? (
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
-              const holeArea = calculateArea(hole)
+              const holeSqFt = calculateArea(hole)
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               return (
@@ -165,7 +206,7 @@ export function SlabPanel() {
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts
+                      {holeSqFt.toFixed(1)} sq ft · {hole.length} pts
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -180,6 +221,7 @@ export function SlabPanel() {
                         <button
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
                           onClick={() => handleEditHole(index)}
+                          title="Edit Hole"
                           type="button"
                         >
                           <Edit className="h-3.5 w-3.5" />
@@ -187,6 +229,7 @@ export function SlabPanel() {
                         <button
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
                           onClick={() => handleDeleteHole(index)}
+                          title="Delete Hole"
                           type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

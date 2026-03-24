@@ -221,11 +221,13 @@ export function MetricControl({
         {label}
       </div>
 
-      <div className="flex shrink-0 justify-end">
+      <div className="flex shrink-0 justify-end min-w-[70px]">
         {isEditing ? (
           <div className="flex items-center">
             <input
               autoFocus
+              title="Metric value"
+              placeholder="0.00"
               className="w-full bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={handleInputBlur}
               onChange={handleInputChange}

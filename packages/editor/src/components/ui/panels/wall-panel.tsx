@@ -35,43 +35,101 @@ export function WallPanel() {
   const dz = node.end[1] - node.start[1]
   const length = Math.sqrt(dx * dx + dz * dz)
 
-  const height = node.height ?? 2.5
-  const thickness = node.thickness ?? 0.1
+  const height = node.height ?? 10
+  const thickness = node.thickness ?? 0.5
 
   return (
     <PanelWrapper
       icon="/icons/wall.png"
       onClose={handleClose}
       title={node.name || 'Wall'}
-      width={280}
+      width={320}
     >
       <PanelSection title="Dimensions">
         <SliderControl
-          label="Height"
-          max={6}
-          min={0.1}
-          onChange={(v) => handleUpdate({ height: Math.max(0.1, v) })}
+          label="Length"
+          max={200}
+          min={0.5}
+          onChange={(v) => {
+            const dx = node.end[0] - node.start[0]
+            const dz = node.end[1] - node.start[1]
+            let angle = Math.atan2(dz, dx)
+            if (dx === 0 && dz === 0) angle = 0
+            const newEnd = [
+              node.start[0] + Math.cos(angle) * v,
+              node.start[1] + Math.sin(angle) * v,
+            ]
+            handleUpdate({ end: newEnd as [number, number] })
+          }}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
+          value={Math.round(length * 100) / 100}
+        />
+        <SliderControl
+          label="Height"
+          max={40}
+          min={1}
+          onChange={(v) => handleUpdate({ height: Math.max(1, v) })}
+          precision={2}
+          step={0.1}
+          unit="ft"
           value={Math.round(height * 100) / 100}
         />
         <SliderControl
           label="Thickness"
-          max={1}
-          min={0.05}
-          onChange={(v) => handleUpdate({ thickness: Math.max(0.05, v) })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(thickness * 1000) / 1000}
+          max={4}
+          min={0.1}
+          onChange={(v) => handleUpdate({ thickness: Math.max(0.1, v) })}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(thickness * 100) / 100}
         />
       </PanelSection>
 
-      <PanelSection title="Info">
-        <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Length</span>
-          <span className="font-mono text-white">{length.toFixed(2)} m</span>
+      <PanelSection title="Position">
+        <div className="grid grid-cols-2 gap-1.5">
+          <SliderControl
+            label="Start X"
+            max={400}
+            min={-400}
+            onChange={(v) => handleUpdate({ start: [v, node.start[1]] })}
+            precision={2}
+            step={0.1}
+            unit="ft"
+            value={Math.round(node.start[0] * 100) / 100}
+          />
+          <SliderControl
+            label="Start Z"
+            max={400}
+            min={-400}
+            onChange={(v) => handleUpdate({ start: [node.start[0], v] })}
+            precision={2}
+            step={0.1}
+            unit="ft"
+            value={Math.round(node.start[1] * 100) / 100}
+          />
+          <SliderControl
+            label="End X"
+            max={400}
+            min={-400}
+            onChange={(v) => handleUpdate({ end: [v, node.end[1]] })}
+            precision={2}
+            step={0.1}
+            unit="ft"
+            value={Math.round(node.end[0] * 100) / 100}
+          />
+          <SliderControl
+            label="End Z"
+            max={400}
+            min={-400}
+            onChange={(v) => handleUpdate({ end: [node.end[0], v] })}
+            precision={2}
+            step={0.1}
+            unit="ft"
+            value={Math.round(node.end[1] * 100) / 100}
+          />
         </div>
       </PanelSection>
     </PanelWrapper>

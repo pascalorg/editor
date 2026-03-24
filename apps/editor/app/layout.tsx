@@ -37,11 +37,6 @@ export default function RootLayout({
           <>
             <Script
               crossOrigin="anonymous"
-              src="//unpkg.com/react-scan/dist/auto.global.js"
-              strategy="beforeInteractive"
-            />
-            <Script
-              crossOrigin="anonymous"
               src="//unpkg.com/react-grab/dist/index.global.js"
               strategy="beforeInteractive"
             />
