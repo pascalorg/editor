@@ -3238,6 +3238,7 @@ export function FloorplanPanel() {
     setIsMacPlatform(navigator.platform.toUpperCase().includes('MAC'))
   }, [])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset guide panel when level changes
   useEffect(() => {
     setIsGuideQuickAccessOpen(false)
   }, [levelId])
@@ -4029,6 +4030,7 @@ export function FloorplanPanel() {
     }
   }, [selectedOpeningEntry, surfaceSize.height, surfaceSize.width, viewBox])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset hovered corner when selected guide changes
   useEffect(() => {
     setHoveredGuideCorner(null)
   }, [selectedGuide?.id])
@@ -4843,6 +4845,7 @@ export function FloorplanPanel() {
     walls,
   ])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clear drag state when level changes
   useEffect(() => {
     clearWallEndpointDrag()
   }, [clearWallEndpointDrag, levelId])
@@ -6769,6 +6772,7 @@ export function FloorplanPanel() {
       zoneId: null,
     })
   }, [
+    currentBuildingId,
     isSiteEditShortcutActive,
     levelNode,
     setMode,
