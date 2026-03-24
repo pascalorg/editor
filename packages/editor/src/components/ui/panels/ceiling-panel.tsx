@@ -10,6 +10,7 @@ import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
+
 export function CeilingPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
@@ -108,7 +109,7 @@ export function CeilingPanel() {
     return Math.abs(area) / 2
   }
 
-  const area = calculateArea(node.polygon)
+  const areaSqFt = calculateArea(node.polygon)
 
   return (
     <PanelWrapper
@@ -120,26 +121,66 @@ export function CeilingPanel() {
       <PanelSection title="Height">
         <SliderControl
           label="Height"
-          max={6}
+          max={20}
           min={0}
           onChange={(v) => handleUpdate({ height: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.height * 1000) / 1000}
+          precision={2}
+          step={0.1}
+          unit="ft"
+          value={Math.round(node.height * 100) / 100}
         />
 
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
-          <ActionButton label="Low (2.4m)" onClick={() => handleUpdate({ height: 2.4 })} />
-          <ActionButton label="Standard (2.5m)" onClick={() => handleUpdate({ height: 2.5 })} />
-          <ActionButton label="High (3.0m)" onClick={() => handleUpdate({ height: 3.0 })} />
+          <ActionButton label="Low (8ft)" onClick={() => handleUpdate({ height: 8 })} />
+          <ActionButton label="Std (9ft)" onClick={() => handleUpdate({ height: 9 })} />
+          <ActionButton label="High (10ft)" onClick={() => handleUpdate({ height: 10 })} />
         </div>
       </PanelSection>
 
       <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Area</span>
-          <span className="font-mono text-white">{area.toFixed(2)} m²</span>
+          <span className="font-mono text-white">{areaSqFt.toFixed(1)} sq ft</span>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Points">
+        <div className="flex flex-col gap-2">
+          {node.polygon.map((point, i) => (
+            <div className="rounded-lg border border-border/50 p-2" key={i}>
+              <div className="mb-2 font-medium text-muted-foreground text-xs">Point {i + 1}</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <SliderControl
+                  label="X"
+                  max={400}
+                  min={-400}
+                  onChange={(v) => {
+                    const newPoly = [...node.polygon]
+                    newPoly[i] = [v, point[1]]
+                    handleUpdate({ polygon: newPoly })
+                  }}
+                  precision={2}
+                  step={0.1}
+                  unit="ft"
+                  value={Math.round(point[0] * 100) / 100}
+                />
+                <SliderControl
+                  label="Z"
+                  max={400}
+                  min={-400}
+                  onChange={(v) => {
+                    const newPoly = [...node.polygon]
+                    newPoly[i] = [point[0], v]
+                    handleUpdate({ polygon: newPoly })
+                  }}
+                  precision={2}
+                  step={0.1}
+                  unit="ft"
+                  value={Math.round(point[1] * 100) / 100}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </PanelSection>
 
@@ -147,7 +188,7 @@ export function CeilingPanel() {
         {node.holes && node.holes.length > 0 ? (
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
-              const holeArea = calculateArea(hole)
+              const holeSqFt = calculateArea(hole)
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               return (
@@ -166,7 +207,7 @@ export function CeilingPanel() {
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts
+                      {holeSqFt.toFixed(1)} sq ft · {hole.length} pts
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -181,6 +222,7 @@ export function CeilingPanel() {
                         <button
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
                           onClick={() => handleEditHole(index)}
+                          title="Edit Hole"
                           type="button"
                         >
                           <Edit className="h-3.5 w-3.5" />
@@ -188,6 +230,7 @@ export function CeilingPanel() {
                         <button
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
                           onClick={() => handleDeleteHole(index)}
+                          title="Delete Hole"
                           type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

@@ -91,14 +91,14 @@ export function ItemPanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={node.position[0] + 2}
-          min={node.position[0] - 2}
+          max={200}
+          min={-200}
           onChange={(value) =>
             handleUpdate({ position: [value, node.position[1], node.position[2]] })
           }
           precision={2}
-          step={0.01}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
@@ -107,14 +107,14 @@ export function ItemPanel() {
               Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={node.position[1] + 2}
-          min={node.position[1] - 2}
+          max={200}
+          min={-200}
           onChange={(value) =>
             handleUpdate({ position: [node.position[0], value, node.position[2]] })
           }
           precision={2}
-          step={0.01}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
@@ -123,14 +123,14 @@ export function ItemPanel() {
               Z<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={node.position[2] + 2}
-          min={node.position[2] - 2}
+          max={200}
+          min={-200}
           onChange={(value) =>
             handleUpdate({ position: [node.position[0], node.position[1], value] })
           }
           precision={2}
-          step={0.01}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.position[2] * 100) / 100}
         />
       </PanelSection>
@@ -267,7 +267,7 @@ export function ItemPanel() {
             const [w, h, d] = getScaledDimensions(node)
             return (
               <span className="font-mono text-white">
-                {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
+                {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100} ft
               </span>
             )
           })()}

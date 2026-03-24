@@ -80,6 +80,7 @@ type CameraControlEvents = {
   'camera-controls:top-view': undefined
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
+  'camera-controls:set-angle': { azimuth?: number; polar?: number }
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
 }
 

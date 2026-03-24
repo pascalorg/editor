@@ -206,12 +206,12 @@ export function DoorPanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">wall</sub>
             </>
           }
-          max={10}
-          min={-10}
+          max={200}
+          min={-200}
           onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[0] * 100) / 100}
         />
         <div className="px-1 pt-2 pb-1">
@@ -227,24 +227,24 @@ export function DoorPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={3}
-          min={0.5}
+          max={10}
+          min={1.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
-          step={0.05}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
           label="Height"
-          max={4}
-          min={1.0}
-          onChange={(v) =>
+          max={15}
+          min={3}
+          onChange={(v) => {
             handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })
-          }
+          }}
           precision={2}
-          step={0.05}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.height * 100) / 100}
         />
       </PanelSection>
@@ -252,46 +252,46 @@ export function DoorPanel() {
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
-          max={0.2}
-          min={0.01}
+          max={1}
+          min={0.05}
           onChange={(v) => handleUpdate({ frameThickness: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.frameThickness * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.frameThickness * 100) / 100}
         />
         <SliderControl
           label="Depth"
-          max={0.3}
-          min={0.01}
+          max={1}
+          min={0.05}
           onChange={(v) => handleUpdate({ frameDepth: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.frameDepth * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.frameDepth * 100) / 100}
         />
       </PanelSection>
 
       <PanelSection title="Content Padding">
         <SliderControl
           label="Horizontal"
-          max={0.2}
+          max={1}
           min={0}
           onChange={(v) => handleUpdate({ contentPadding: [v, node.contentPadding[1]] })}
-          precision={3}
-          step={0.005}
-          unit="m"
-          value={Math.round(node.contentPadding[0] * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.contentPadding[0] * 100) / 100}
         />
         <SliderControl
           label="Vertical"
-          max={0.2}
+          max={1}
           min={0}
           onChange={(v) => handleUpdate({ contentPadding: [node.contentPadding[0], v] })}
-          precision={3}
-          step={0.005}
-          unit="m"
-          value={Math.round(node.contentPadding[1] * 1000) / 1000}
+          precision={2}
+          step={0.05}
+          unit="ft"
+          value={Math.round(node.contentPadding[1] * 100) / 100}
         />
       </PanelSection>
 
@@ -336,13 +336,13 @@ export function DoorPanel() {
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Height"
-              max={0.1}
-              min={0.005}
+              max={0.5}
+              min={0.02}
               onChange={(v) => handleUpdate({ thresholdHeight: v })}
-              precision={3}
-              step={0.005}
-              unit="m"
-              value={Math.round(node.thresholdHeight * 1000) / 1000}
+              precision={2}
+              step={0.01}
+              unit="ft"
+              value={Math.round(node.thresholdHeight * 100) / 100}
             />
           </div>
         )}
@@ -358,12 +358,12 @@ export function DoorPanel() {
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Height"
-              max={node.height - 0.1}
-              min={0.5}
+              max={node.height - 0.5}
+              min={1.5}
               onChange={(v) => handleUpdate({ handleHeight: v })}
               precision={2}
-              step={0.05}
-              unit="m"
+              step={0.1}
+              unit="ft"
               value={Math.round(node.handleHeight * 100) / 100}
             />
             <div className="space-y-1">
@@ -398,12 +398,12 @@ export function DoorPanel() {
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Bar Height"
-              max={node.height - 0.1}
-              min={0.5}
+              max={node.height - 0.5}
+              min={1.5}
               onChange={(v) => handleUpdate({ panicBarHeight: v })}
               precision={2}
-              step={0.05}
-              unit="m"
+              step={0.1}
+              unit="ft"
               value={Math.round(node.panicBarHeight * 100) / 100}
             />
           </div>
@@ -478,18 +478,18 @@ export function DoorPanel() {
                   ))}
                   <SliderControl
                     label="Divider"
-                    max={0.1}
-                    min={0.005}
+                    max={0.5}
+                    min={0.02}
                     onChange={(v) => {
                       const updated = node.segments.map((s, idx) =>
                         idx === i ? { ...s, dividerThickness: v } : s,
                       )
                       handleUpdate({ segments: updated })
                     }}
-                    precision={3}
-                    step={0.005}
-                    unit="m"
-                    value={Math.round(seg.dividerThickness * 1000) / 1000}
+                    precision={2}
+                    step={0.02}
+                    unit="ft"
+                    value={Math.round(seg.dividerThickness * 100) / 100}
                   />
                 </div>
               )}
@@ -498,7 +498,7 @@ export function DoorPanel() {
                 <div className="mt-1 border-border/50 border-t pt-1">
                   <SliderControl
                     label="Inset"
-                    max={0.1}
+                    max={0.5}
                     min={0}
                     onChange={(v) => {
                       const updated = node.segments.map((s, idx) =>
@@ -506,14 +506,14 @@ export function DoorPanel() {
                       )
                       handleUpdate({ segments: updated })
                     }}
-                    precision={3}
-                    step={0.005}
-                    unit="m"
-                    value={Math.round(seg.panelInset * 1000) / 1000}
+                    precision={2}
+                    step={0.02}
+                    unit="ft"
+                    value={Math.round(seg.panelInset * 100) / 100}
                   />
                   <SliderControl
                     label="Depth"
-                    max={0.1}
+                    max={0.5}
                     min={0}
                     onChange={(v) => {
                       const updated = node.segments.map((s, idx) =>
@@ -521,10 +521,10 @@ export function DoorPanel() {
                       )
                       handleUpdate({ segments: updated })
                     }}
-                    precision={3}
-                    step={0.005}
-                    unit="m"
-                    value={Math.round(seg.panelDepth * 1000) / 1000}
+                    precision={2}
+                    step={0.02}
+                    unit="ft"
+                    value={Math.round(seg.panelDepth * 100) / 100}
                   />
                 </div>
               )}

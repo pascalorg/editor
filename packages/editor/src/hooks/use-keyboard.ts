@@ -87,7 +87,7 @@ export const useKeyboard = () => {
             }
           }
         }
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      } else if (e.key === 'Delete') {
         e.preventDefault()
 
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]

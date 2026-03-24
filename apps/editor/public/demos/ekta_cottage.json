@@ -1,0 +1,1056 @@
+{
+  "nodes": {
+    "wall_uxhdf00bm79a0suk": {
+      "object": "node",
+      "id": "wall_uxhdf00bm79a0suk",
+      "type": "wall",
+      "name": "A-GF-Front Wall (Ext)",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "door_me46h9svd3ccczyp",
+        "window_tegvuf75kfb2ir9m"
+      ],
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        343,
+        0
+      ],
+      "thickness": 9,
+      "height": 120,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_663tropgtwgc3lxw": {
+      "object": "node",
+      "id": "wall_663tropgtwgc3lxw",
+      "type": "wall",
+      "name": "A-GF-Right Wall (Ext)",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "window_prj8l7z158knwcs7"
+      ],
+      "start": [
+        343,
+        0
+      ],
+      "end": [
+        343,
+        432
+      ],
+      "thickness": 9,
+      "height": 120,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_t49tuq2rcyi0va1s": {
+      "object": "node",
+      "id": "wall_t49tuq2rcyi0va1s",
+      "type": "wall",
+      "name": "A-GF-Rear Wall (Ext)",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "window_2vmjjonw6kvqolr9"
+      ],
+      "start": [
+        343,
+        432
+      ],
+      "end": [
+        0,
+        432
+      ],
+      "thickness": 9,
+      "height": 120,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_8leuoaa66avrrjey": {
+      "object": "node",
+      "id": "wall_8leuoaa66avrrjey",
+      "type": "wall",
+      "name": "A-GF-Left Wall (Ext)",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "window_va9p546zsc81oreq",
+        "window_kvzrt7i4tam0cgv8"
+      ],
+      "start": [
+        0,
+        432
+      ],
+      "end": [
+        0,
+        0
+      ],
+      "thickness": 9,
+      "height": 120,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_tq5u56vw6sr69ncy": {
+      "object": "node",
+      "id": "wall_tq5u56vw6sr69ncy",
+      "type": "wall",
+      "name": "A-GF-Bedroom/Living Partition",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "door_gq7vidbvz555dspk"
+      ],
+      "start": [
+        153,
+        0
+      ],
+      "end": [
+        153,
+        166.5
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_gncvgkoubjen66f6": {
+      "object": "node",
+      "id": "wall_gncvgkoubjen66f6",
+      "type": "wall",
+      "name": "A-GF-Bedroom/Toilet Back Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        0,
+        166.5
+      ],
+      "end": [
+        153,
+        166.5
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_o5q5docvrrzncgfl": {
+      "object": "node",
+      "id": "wall_o5q5docvrrzncgfl",
+      "type": "wall",
+      "name": "A-GF-Toilet Front Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "door_yl6xza10cz810d2n"
+      ],
+      "start": [
+        0,
+        171
+      ],
+      "end": [
+        117,
+        171
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_zsmjcs34yxi8tmx1": {
+      "object": "node",
+      "id": "wall_zsmjcs34yxi8tmx1",
+      "type": "wall",
+      "name": "A-GF-Toilet Right Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        117,
+        171
+      ],
+      "end": [
+        117,
+        243
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_w7ao8ywtqfygdx84": {
+      "object": "node",
+      "id": "wall_w7ao8ywtqfygdx84",
+      "type": "wall",
+      "name": "A-GF-Toilet Back Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        117,
+        243
+      ],
+      "end": [
+        0,
+        243
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_qdl8i3orrr6j20j1": {
+      "object": "node",
+      "id": "wall_qdl8i3orrr6j20j1",
+      "type": "wall",
+      "name": "A-GF-Living/Kitchen Partition",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "door_c1xduc0jy885ddsy"
+      ],
+      "start": [
+        153,
+        217.5
+      ],
+      "end": [
+        343,
+        217.5
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_per2l8qozpdy7z5b": {
+      "object": "node",
+      "id": "wall_per2l8qozpdy7z5b",
+      "type": "wall",
+      "name": "A-GF-Kitchen Left Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        139,
+        217.5
+      ],
+      "end": [
+        139,
+        432
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "wall_elff2psjih49enyf": {
+      "object": "node",
+      "id": "wall_elff2psjih49enyf",
+      "type": "wall",
+      "name": "A-GF-Staircase Wall",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        292,
+        0
+      ],
+      "end": [
+        292,
+        217.5
+      ],
+      "thickness": 4.5,
+      "height": 120,
+      "frontSide": "interior",
+      "backSide": "interior"
+    },
+    "slab_fw25wyjb5pxtz5s1": {
+      "object": "node",
+      "id": "slab_fw25wyjb5pxtz5s1",
+      "type": "slab",
+      "name": "A-GF-Main Floor Slab",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          343,
+          0
+        ],
+        [
+          343,
+          432
+        ],
+        [
+          0,
+          432
+        ]
+      ],
+      "holes": [],
+      "elevation": 1.97
+    },
+    "slab_sh4hkvhhpan9vfrp": {
+      "object": "node",
+      "id": "slab_sh4hkvhhpan9vfrp",
+      "type": "slab",
+      "name": "A-GF-Verandah Slab",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          -72
+        ],
+        [
+          399,
+          -72
+        ],
+        [
+          399,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "holes": [],
+      "elevation": 1.97
+    },
+    "zone_mrl5gqmqs9fhqiyb": {
+      "object": "node",
+      "id": "zone_mrl5gqmqs9fhqiyb",
+      "type": "zone",
+      "name": "Bedroom",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          9,
+          9
+        ],
+        [
+          153,
+          9
+        ],
+        [
+          153,
+          166.5
+        ],
+        [
+          9,
+          166.5
+        ]
+      ],
+      "color": "#B3D9FF"
+    },
+    "zone_wkamx7nc4z1s0tks": {
+      "object": "node",
+      "id": "zone_wkamx7nc4z1s0tks",
+      "type": "zone",
+      "name": "Living Room",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          157.5,
+          9
+        ],
+        [
+          292,
+          9
+        ],
+        [
+          292,
+          217.5
+        ],
+        [
+          157.5,
+          217.5
+        ]
+      ],
+      "color": "#FFE0B2"
+    },
+    "zone_zwnmpg8mgs29a9g4": {
+      "object": "node",
+      "id": "zone_zwnmpg8mgs29a9g4",
+      "type": "zone",
+      "name": "Kitchen & Utility",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          143.5,
+          222
+        ],
+        [
+          334,
+          222
+        ],
+        [
+          334,
+          423
+        ],
+        [
+          143.5,
+          423
+        ]
+      ],
+      "color": "#C8E6C9"
+    },
+    "zone_7lgzxy1j09fstynq": {
+      "object": "node",
+      "id": "zone_7lgzxy1j09fstynq",
+      "type": "zone",
+      "name": "Toilet",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          9,
+          175.5
+        ],
+        [
+          112.5,
+          175.5
+        ],
+        [
+          112.5,
+          238.5
+        ],
+        [
+          9,
+          238.5
+        ]
+      ],
+      "color": "#F8BBD0"
+    },
+    "zone_no3ben3gt5kqkfq2": {
+      "object": "node",
+      "id": "zone_no3ben3gt5kqkfq2",
+      "type": "zone",
+      "name": "Verandah",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          -72
+        ],
+        [
+          399,
+          -72
+        ],
+        [
+          399,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "color": "#E0F7FA"
+    },
+    "zone_duc4z29xsfr2gkew": {
+      "object": "node",
+      "id": "zone_duc4z29xsfr2gkew",
+      "type": "zone",
+      "name": "Staircase",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          296.5,
+          9
+        ],
+        [
+          334,
+          9
+        ],
+        [
+          334,
+          217.5
+        ],
+        [
+          296.5,
+          217.5
+        ]
+      ],
+      "color": "#D1C4E9"
+    },
+    "window_va9p546zsc81oreq": {
+      "object": "node",
+      "id": "window_va9p546zsc81oreq",
+      "type": "window",
+      "name": "Bedroom Window",
+      "parentId": "wall_8leuoaa66avrrjey",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        98.43,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_8leuoaa66avrrjey",
+      "width": 48,
+      "height": 60,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "columnRatios": [
+        0.5,
+        0.5
+      ],
+      "rowRatios": [
+        1
+      ],
+      "columnDividerThickness": 1.18,
+      "rowDividerThickness": 1.18,
+      "sill": true,
+      "sillDepth": 3.15,
+      "sillThickness": 1.18
+    },
+    "window_kvzrt7i4tam0cgv8": {
+      "object": "node",
+      "id": "window_kvzrt7i4tam0cgv8",
+      "type": "window",
+      "name": "Toilet Ventilator",
+      "parentId": "wall_8leuoaa66avrrjey",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        216.54,
+        70.87,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_8leuoaa66avrrjey",
+      "width": 24,
+      "height": 24,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "columnRatios": [
+        1
+      ],
+      "rowRatios": [
+        1
+      ],
+      "columnDividerThickness": 1.18,
+      "rowDividerThickness": 1.18,
+      "sill": true,
+      "sillDepth": 2.36,
+      "sillThickness": 1.18
+    },
+    "door_me46h9svd3ccczyp": {
+      "object": "node",
+      "id": "door_me46h9svd3ccczyp",
+      "type": "door",
+      "name": "Main Entrance Door",
+      "parentId": "wall_uxhdf00bm79a0suk",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        216.54,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_uxhdf00bm79a0suk",
+      "width": 42,
+      "height": 84,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "threshold": true,
+      "thresholdHeight": 0.79,
+      "hingesSide": "left",
+      "swingDirection": "inward",
+      "segments": [
+        {
+          "type": "panel",
+          "heightRatio": 0.4,
+          "columnRatios": [
+            1
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        },
+        {
+          "type": "glass",
+          "heightRatio": 0.6,
+          "columnRatios": [
+            1
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        }
+      ],
+      "handle": true,
+      "handleHeight": 41.34,
+      "handleSide": "right",
+      "contentPadding": [
+        1.57,
+        1.57
+      ],
+      "doorCloser": false,
+      "panicBar": false,
+      "panicBarHeight": 39.37
+    },
+    "window_tegvuf75kfb2ir9m": {
+      "object": "node",
+      "id": "window_tegvuf75kfb2ir9m",
+      "type": "window",
+      "name": "Living Room Window",
+      "parentId": "wall_uxhdf00bm79a0suk",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        118.11,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_uxhdf00bm79a0suk",
+      "width": 60,
+      "height": 60,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "columnRatios": [
+        0.5,
+        0.5
+      ],
+      "rowRatios": [
+        1
+      ],
+      "columnDividerThickness": 1.18,
+      "rowDividerThickness": 1.18,
+      "sill": true,
+      "sillDepth": 3.15,
+      "sillThickness": 1.18
+    },
+    "window_2vmjjonw6kvqolr9": {
+      "object": "node",
+      "id": "window_2vmjjonw6kvqolr9",
+      "type": "window",
+      "name": "Kitchen Sliding Window (5ft)",
+      "parentId": "wall_t49tuq2rcyi0va1s",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        157.48,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_t49tuq2rcyi0va1s",
+      "width": 60,
+      "height": 60,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "columnRatios": [
+        0.5,
+        0.5
+      ],
+      "rowRatios": [
+        1
+      ],
+      "columnDividerThickness": 1.18,
+      "rowDividerThickness": 1.18,
+      "sill": true,
+      "sillDepth": 3.15,
+      "sillThickness": 1.18
+    },
+    "window_prj8l7z158knwcs7": {
+      "object": "node",
+      "id": "window_prj8l7z158knwcs7",
+      "type": "window",
+      "name": "Kitchen Casement Window",
+      "parentId": "wall_663tropgtwgc3lxw",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        314.96,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_663tropgtwgc3lxw",
+      "width": 30,
+      "height": 60,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "columnRatios": [
+        1
+      ],
+      "rowRatios": [
+        1
+      ],
+      "columnDividerThickness": 1.18,
+      "rowDividerThickness": 1.18,
+      "sill": true,
+      "sillDepth": 2.36,
+      "sillThickness": 1.18
+    },
+    "door_c1xduc0jy885ddsy": {
+      "object": "node",
+      "id": "door_c1xduc0jy885ddsy",
+      "type": "door",
+      "name": "Kitchen Sliding Door (5ft)",
+      "parentId": "wall_qdl8i3orrr6j20j1",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        59.06,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_qdl8i3orrr6j20j1",
+      "width": 60,
+      "height": 84,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "threshold": false,
+      "thresholdHeight": 0.79,
+      "hingesSide": "left",
+      "swingDirection": "inward",
+      "segments": [
+        {
+          "type": "glass",
+          "heightRatio": 1,
+          "columnRatios": [
+            0.5,
+            0.5
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        }
+      ],
+      "handle": true,
+      "handleHeight": 41.34,
+      "handleSide": "right",
+      "contentPadding": [
+        1.57,
+        1.57
+      ],
+      "doorCloser": false,
+      "panicBar": false,
+      "panicBarHeight": 39.37
+    },
+    "door_gq7vidbvz555dspk": {
+      "object": "node",
+      "id": "door_gq7vidbvz555dspk",
+      "type": "door",
+      "name": "Bedroom Door",
+      "parentId": "wall_tq5u56vw6sr69ncy",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        39.37,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_tq5u56vw6sr69ncy",
+      "width": 36,
+      "height": 84,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "threshold": true,
+      "thresholdHeight": 0.79,
+      "hingesSide": "left",
+      "swingDirection": "inward",
+      "segments": [
+        {
+          "type": "panel",
+          "heightRatio": 0.4,
+          "columnRatios": [
+            1
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        },
+        {
+          "type": "panel",
+          "heightRatio": 0.6,
+          "columnRatios": [
+            1
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        }
+      ],
+      "handle": true,
+      "handleHeight": 41.34,
+      "handleSide": "right",
+      "contentPadding": [
+        1.57,
+        1.57
+      ],
+      "doorCloser": false,
+      "panicBar": false,
+      "panicBarHeight": 39.37
+    },
+    "door_yl6xza10cz810d2n": {
+      "object": "node",
+      "id": "door_yl6xza10cz810d2n",
+      "type": "door",
+      "name": "Toilet Door",
+      "parentId": "wall_o5q5docvrrzncgfl",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        59.06,
+        41.34,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_o5q5docvrrzncgfl",
+      "width": 30,
+      "height": 84,
+      "frameThickness": 2,
+      "frameDepth": 2.76,
+      "threshold": true,
+      "thresholdHeight": 0.79,
+      "hingesSide": "left",
+      "swingDirection": "inward",
+      "segments": [
+        {
+          "type": "panel",
+          "heightRatio": 1,
+          "columnRatios": [
+            1
+          ],
+          "dividerThickness": 1.18,
+          "panelDepth": 0.39,
+          "panelInset": 1.57
+        }
+      ],
+      "handle": true,
+      "handleHeight": 41.34,
+      "handleSide": "right",
+      "contentPadding": [
+        1.57,
+        1.57
+      ],
+      "doorCloser": false,
+      "panicBar": false,
+      "panicBarHeight": 39.37
+    },
+    "ceiling_nf5hpnxybri3danz": {
+      "object": "node",
+      "id": "ceiling_nf5hpnxybri3danz",
+      "type": "ceiling",
+      "name": "Ground Floor Ceiling",
+      "parentId": "level_eyx5noiv427tacuy",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          343,
+          0
+        ],
+        [
+          343,
+          432
+        ],
+        [
+          0,
+          432
+        ]
+      ],
+      "holes": [],
+      "height": 120
+    },
+    "level_eyx5noiv427tacuy": {
+      "object": "node",
+      "id": "level_eyx5noiv427tacuy",
+      "type": "level",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "wall_uxhdf00bm79a0suk",
+        "wall_663tropgtwgc3lxw",
+        "wall_t49tuq2rcyi0va1s",
+        "wall_8leuoaa66avrrjey",
+        "wall_tq5u56vw6sr69ncy",
+        "wall_gncvgkoubjen66f6",
+        "wall_o5q5docvrrzncgfl",
+        "wall_zsmjcs34yxi8tmx1",
+        "wall_w7ao8ywtqfygdx84",
+        "wall_qdl8i3orrr6j20j1",
+        "wall_per2l8qozpdy7z5b",
+        "wall_elff2psjih49enyf",
+        "slab_fw25wyjb5pxtz5s1",
+        "slab_sh4hkvhhpan9vfrp",
+        "zone_mrl5gqmqs9fhqiyb",
+        "zone_wkamx7nc4z1s0tks",
+        "zone_zwnmpg8mgs29a9g4",
+        "zone_7lgzxy1j09fstynq",
+        "zone_no3ben3gt5kqkfq2",
+        "zone_duc4z29xsfr2gkew",
+        "ceiling_nf5hpnxybri3danz"
+      ],
+      "level": 0
+    },
+    "building_s4u52soibo4isbri": {
+      "object": "node",
+      "id": "building_s4u52soibo4isbri",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_eyx5noiv427tacuy"
+      ],
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "site_a9ennbcvfyh8f0n9": {
+      "object": "node",
+      "id": "site_a9ennbcvfyh8f0n9",
+      "type": "site",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "polygon": {
+        "type": "polygon",
+        "points": [
+          [
+            -600,
+            -600
+          ],
+          [
+            600,
+            -600
+          ],
+          [
+            600,
+            600
+          ],
+          [
+            -600,
+            600
+          ]
+        ]
+      },
+      "children": [
+        {
+          "object": "node",
+          "id": "building_s4u52soibo4isbri",
+          "type": "building",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "children": [
+            "level_eyx5noiv427tacuy"
+          ],
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "rootNodeIds": {
+    "0": "site_a9ennbcvfyh8f0n9"
+  }
+}

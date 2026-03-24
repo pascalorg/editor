@@ -6,8 +6,8 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-const WALL_HEIGHT = 2.5
-const WALL_THICKNESS = 0.15
+const WALL_HEIGHT = 10
+const WALL_THICKNESS = 0.5
 
 /**
  * Snap point to 45° angle increments relative to start point
@@ -113,13 +113,40 @@ export const WallTool: React.FC = () => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
       gridPosition = [Math.round(event.position[0] * 2) / 2, Math.round(event.position[2] * 2) / 2]
-      const cursorPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
+      
+      const currentLevelId = useViewer.getState().selection.levelId
+      const nodes = useScene.getState().nodes
+      const allWalls = Object.values(nodes).filter((n) => n.type === 'wall' && n.parentId === currentLevelId) as WallNode[]
+
+      let snappedGridPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
+      const SNAP_DISTANCE = 1.0
+      let isSnapped = false
+
+      for (const w of allWalls) {
+        const distStart = Math.hypot(w.start[0] - event.position[0], w.start[1] - event.position[2])
+        const distEnd = Math.hypot(w.end[0] - event.position[0], w.end[1] - event.position[2])
+        
+        if (distStart < SNAP_DISTANCE) {
+          snappedGridPosition = new Vector3(w.start[0], event.position[1], w.start[1])
+          isSnapped = true
+          break
+        } else if (distEnd < SNAP_DISTANCE) {
+          snappedGridPosition = new Vector3(w.end[0], event.position[1], w.end[1])
+          isSnapped = true
+          break
+        }
+      }
+
+      gridPosition = [snappedGridPosition.x, snappedGridPosition.z]
+      const cursorPosition = snappedGridPosition
 
       if (buildingState.current === 1) {
-        // Snap to 45° angles only if shift is not pressed
-        const snapped = shiftPressed.current
+        // Snap to precise wall endings if in distance, else snap to 45° angles only if shift is not pressed
+        const snapped = isSnapped
           ? cursorPosition
-          : snapTo45Degrees(startingPoint.current, cursorPosition)
+          : shiftPressed.current
+            ? cursorPosition
+            : snapTo45Degrees(startingPoint.current, cursorPosition)
         endingPoint.current.copy(snapped)
 
         // Position the cursor at the end of the wall being drawn

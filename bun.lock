@@ -49,7 +49,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "0.1.13",
+      "version": "0.2.0",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
@@ -166,7 +166,7 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "0.1.13",
+      "version": "0.2.0",
       "dependencies": {
         "polygon-clipping": "^0.15.7",
         "zustand": "^5",

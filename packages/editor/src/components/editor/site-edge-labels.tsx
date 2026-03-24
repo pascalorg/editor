@@ -56,7 +56,7 @@ export function SiteEdgeLabels() {
           zIndexRange={[10, 0]}
         >
           <div className="whitespace-nowrap rounded bg-black/75 px-1.5 py-0.5 font-mono text-white text-xs backdrop-blur-sm">
-            {edge.dist.toFixed(2)}m
+            {edge.dist.toFixed(2)}ft
           </div>
         </Html>
       ))}

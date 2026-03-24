@@ -13,23 +13,8 @@ const nextConfig: NextConfig = {
       '@react-three/drei': './node_modules/@react-three/drei',
     },
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '100mb',
-    },
-  },
   images: {
-    unoptimized: process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false,
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-      {
-        protocol: 'http',
-        hostname: '**',
-      },
-    ],
+    unoptimized: true,
   },
 }
 

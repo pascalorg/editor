@@ -44,22 +44,22 @@ export function RoofPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Length"
-          max={20}
-          min={0.5}
+          max={100}
+          min={1}
           onChange={(v) => handleUpdate({ length: v })}
           precision={2}
-          step={0.5}
-          unit="m"
+          step={0.1}
+          unit="ft"
           value={Math.round(node.length * 100) / 100}
         />
         <SliderControl
           label="Height"
-          max={10}
-          min={0.1}
+          max={40}
+          min={0.5}
           onChange={(v) => handleUpdate({ height: v })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.height * 100) / 100}
         />
       </PanelSection>
@@ -67,26 +67,26 @@ export function RoofPanel() {
       <PanelSection title="Slope Widths">
         <div className="flex items-center justify-between px-2 pb-2 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           <span>Widths</span>
-          <span>Total: {totalWidth.toFixed(1)}m</span>
+          <span>Total: {totalWidth.toFixed(2)} ft</span>
         </div>
         <SliderControl
           label="Left"
-          max={10}
-          min={0.1}
+          max={80}
+          min={0.5}
           onChange={(v) => handleUpdate({ leftWidth: v })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.leftWidth * 100) / 100}
         />
         <SliderControl
           label="Right"
-          max={10}
-          min={0.1}
+          max={80}
+          min={0.5}
           onChange={(v) => handleUpdate({ rightWidth: v })}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.rightWidth * 100) / 100}
         />
       </PanelSection>
@@ -128,8 +128,8 @@ export function RoofPanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
+          max={200}
+          min={-200}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -137,7 +137,7 @@ export function RoofPanel() {
           }}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
@@ -146,8 +146,8 @@ export function RoofPanel() {
               Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
+          max={200}
+          min={-200}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -155,7 +155,7 @@ export function RoofPanel() {
           }}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
@@ -164,8 +164,8 @@ export function RoofPanel() {
               Z<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={50}
-          min={-50}
+          max={200}
+          min={-200}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v
@@ -173,7 +173,7 @@ export function RoofPanel() {
           }}
           precision={2}
           step={0.1}
-          unit="m"
+          unit="ft"
           value={Math.round(node.position[2] * 100) / 100}
         />
       </PanelSection>
