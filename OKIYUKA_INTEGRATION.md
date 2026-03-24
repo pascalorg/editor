@@ -68,6 +68,23 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 - confirming the coordinate conversion path
 - validating a future richer bridge for panels, pedestals, and rails
 
+## Real Data Validation (2026-03-25)
+
+An end-to-end validation was completed with a real Okiyuka export generated from `normal_plan2.dxf`.
+
+- Okiyuka export file: `C:\dev\pascal-editor\okiyuka_layout_20260325_074418.json`
+- Source drawing recorded in export: `normal_plan2.dxf`
+- Converted Pascal scene file: `C:\dev\pascal-editor\okiyuka_layout_20260325_074418_pascal_scene.json`
+- Conversion result: success
+- Generated scene size: 55 nodes, 1 root node
+- Pascal load result: success through `Settings -> Load Build`
+
+Observed result in Pascal Editor:
+
+- six rooms were visible after loading
+- room names `_0-2_ROOM_OUTLINE-1` through `_0-2_ROOM_OUTLINE-6` appeared in the scene
+- the current bridge was sufficient for real room polygon import without adding any new Pascal-side importer code
+
 ## Current Limitations
 
 - panels are not yet mapped into Pascal item nodes
