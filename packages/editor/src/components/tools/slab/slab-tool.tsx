@@ -120,7 +120,34 @@ export const SlabTool: React.FC = () => {
     setDistanceInput({ open: false, value: '' })
   }, [])
 
-  const applyDistanceInput = (rawValue: string, options?: { ignoreNextGridClick?: boolean }) => {
+  const commitDraftPoint = useCallback(
+    (point: PlanPoint) => {
+      if (!currentLevelId) return
+
+      const firstPoint = pointsRef.current[0]
+      if (
+        pointsRef.current.length >= 3 &&
+        firstPoint &&
+        Math.abs(point[0] - firstPoint[0]) < CLOSE_LOOP_TOLERANCE &&
+        Math.abs(point[1] - firstPoint[1]) < CLOSE_LOOP_TOLERANCE
+      ) {
+        const slabId = commitSlabDrawing(currentLevelId, pointsRef.current)
+        setSelection({ selectedIds: [slabId] })
+        updatePoints([])
+        previousSnappedPointRef.current = null
+        closeDistanceInput()
+        return
+      }
+
+      updatePoints([...pointsRef.current, point])
+    },
+    [closeDistanceInput, currentLevelId, setSelection, updatePoints],
+  )
+
+  const applyDistanceInput = (
+    rawValue: string,
+    options?: { commitAfterApply?: boolean; ignoreNextGridClick?: boolean },
+  ) => {
     const lastPoint = pointsRef.current[pointsRef.current.length - 1]
     if (!lastPoint) {
       closeDistanceInput(options)
@@ -143,6 +170,13 @@ export const SlabTool: React.FC = () => {
     previousSnappedPointRef.current = projected
     setSnappedCursorPosition(projected)
     cursorRef.current?.position.set(projected[0], levelYRef.current, projected[1])
+
+    if (options?.commitAfterApply) {
+      closeDistanceInput()
+      commitDraftPoint(projected)
+      return
+    }
+
     closeDistanceInput(options)
   }
 
@@ -205,23 +239,7 @@ export const SlabTool: React.FC = () => {
       const clickPoint = previousSnappedPointRef.current ?? cursorPositionRef.current
 
       // Check if clicking on the first point to close the shape
-      const firstPoint = pointsRef.current[0]
-      if (
-        pointsRef.current.length >= 3 &&
-        firstPoint &&
-        Math.abs(clickPoint[0] - firstPoint[0]) < CLOSE_LOOP_TOLERANCE &&
-        Math.abs(clickPoint[1] - firstPoint[1]) < CLOSE_LOOP_TOLERANCE
-      ) {
-        // Create the slab and select it
-        const slabId = commitSlabDrawing(currentLevelId, pointsRef.current)
-        setSelection({ selectedIds: [slabId] })
-        updatePoints([])
-        previousSnappedPointRef.current = null
-        closeDistanceInput()
-      } else {
-        // Add point to polygon
-        updatePoints([...pointsRef.current, clickPoint])
-      }
+      commitDraftPoint(clickPoint)
     }
 
     const onGridDoubleClick = (_event: GridEvent) => {
@@ -286,7 +304,7 @@ export const SlabTool: React.FC = () => {
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [currentLevelId, setSelection, closeDistanceInput, updatePoints, unitSystem])
+  }, [commitDraftPoint, currentLevelId, setSelection, closeDistanceInput, updatePoints, unitSystem])
 
   // Update line geometries when points change
   useEffect(() => {
@@ -440,13 +458,13 @@ export const SlabTool: React.FC = () => {
 
       {currentSegment && (
         <DrawingDimensionLabel
-          hint="Enter to apply, Esc to cancel"
+          hint="Enter to place, Esc to cancel"
           inputLabel="Segment length"
           inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
-            if (!distanceInput.open) return
+            if (!inputOpenRef.current) return
             applyDistanceInput(distanceInput.value, { ignoreNextGridClick: true })
           }}
           onInputChange={(value) => {
@@ -455,7 +473,7 @@ export const SlabTool: React.FC = () => {
           onInputKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
-              applyDistanceInput(distanceInput.value)
+              applyDistanceInput(distanceInput.value, { commitAfterApply: true })
             } else if (event.key === 'Escape') {
               event.preventDefault()
               closeDistanceInput()

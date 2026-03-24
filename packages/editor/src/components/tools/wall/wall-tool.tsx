@@ -126,7 +126,34 @@ export const WallTool: React.FC = () => {
     })
   }, [])
 
-  const applyDistanceInput = (rawValue: string, options?: { ignoreNextGridClick?: boolean }) => {
+  const clearDraft = useCallback(
+    (options?: { ignoreNextGridClick?: boolean }) => {
+      buildingState.current = 0
+      wallPreviewRef.current.visible = false
+      closeDistanceInput(options)
+      setDraft({ start: null, end: null, levelY: 0 })
+    },
+    [closeDistanceInput],
+  )
+
+  const commitCurrentWall = useCallback(() => {
+    if (buildingState.current !== 1) return
+
+    const dx = endingPoint.current.x - startingPoint.current.x
+    const dz = endingPoint.current.z - startingPoint.current.z
+    if (dx * dx + dz * dz < MIN_DRAW_DISTANCE * MIN_DRAW_DISTANCE) return
+
+    commitWallDrawing(
+      [startingPoint.current.x, startingPoint.current.z],
+      [endingPoint.current.x, endingPoint.current.z],
+    )
+    clearDraft()
+  }, [clearDraft])
+
+  const applyDistanceInput = (
+    rawValue: string,
+    options?: { commitAfterApply?: boolean; ignoreNextGridClick?: boolean },
+  ) => {
     if (buildingState.current !== 1) {
       closeDistanceInput(options)
       return
@@ -146,6 +173,12 @@ export const WallTool: React.FC = () => {
     cursorRef.current?.position.set(projected[0], levelYRef.current, projected[1])
     updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
     syncDraftState()
+
+    if (options?.commitAfterApply) {
+      commitCurrentWall()
+      return
+    }
+
     closeDistanceInput(options)
   }
 
@@ -223,17 +256,7 @@ export const WallTool: React.FC = () => {
         wallPreviewRef.current.visible = true
         syncDraftState()
       } else if (buildingState.current === 1) {
-        const dx = endingPoint.current.x - startingPoint.current.x
-        const dz = endingPoint.current.z - startingPoint.current.z
-        if (dx * dx + dz * dz < MIN_DRAW_DISTANCE * MIN_DRAW_DISTANCE) return
-        commitWallDrawing(
-          [startingPoint.current.x, startingPoint.current.z],
-          [endingPoint.current.x, endingPoint.current.z],
-        )
-        wallPreviewRef.current.visible = false
-        buildingState.current = 0
-        closeDistanceInput()
-        setDraft({ start: null, end: null, levelY: 0 })
+        commitCurrentWall()
       }
     }
 
@@ -270,10 +293,7 @@ export const WallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
-        buildingState.current = 0
-        wallPreviewRef.current.visible = false
-        closeDistanceInput()
-        setDraft({ start: null, end: null, levelY: 0 })
+        clearDraft()
       }
     }
 
@@ -290,7 +310,7 @@ export const WallTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [closeDistanceInput, currentLevelId, syncDraftState, unitSystem])
+  }, [clearDraft, commitCurrentWall, currentLevelId, syncDraftState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(draft.start && draft.end)) return 0
@@ -323,13 +343,13 @@ export const WallTool: React.FC = () => {
 
       {labelPosition && currentDistance >= MIN_DRAW_DISTANCE && (
         <DrawingDimensionLabel
-          hint="Enter to apply, Esc to cancel"
+          hint="Enter to place, Esc to cancel"
           inputLabel="Wall length"
           inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
-            if (!distanceInput.open) return
+            if (!inputOpenRef.current) return
             applyDistanceInput(distanceInput.value, { ignoreNextGridClick: true })
           }}
           onInputChange={(value) => {
@@ -338,7 +358,7 @@ export const WallTool: React.FC = () => {
           onInputKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
-              applyDistanceInput(distanceInput.value)
+              applyDistanceInput(distanceInput.value, { commitAfterApply: true })
             } else if (event.key === 'Escape') {
               event.preventDefault()
               closeDistanceInput()

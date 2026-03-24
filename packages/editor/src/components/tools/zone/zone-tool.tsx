@@ -1,21 +1,39 @@
-import { emitter, type GridEvent, type LevelNode, useScene, ZoneNode } from '@pascal-app/core'
+import {
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  useScene,
+  type WallNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { PALETTE_COLORS } from './../../../components/ui/primitives/color-dot'
 import { EDITOR_LAYER } from './../../../lib/constants'
-import useEditor from './../../../store/use-editor'
+import { formatLengthInputValue, getLengthInputUnitLabel } from './../../../lib/measurements'
+import { sfxEmitter } from './../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
+import {
+  CLOSE_LOOP_TOLERANCE,
+  formatDistance,
+  getPlanDistance,
+  getPlanMidpoint,
+  getWallSnapPoint,
+  MIN_DRAW_DISTANCE,
+  type PlanPoint,
+  parseDistanceInput,
+  projectPointAtDistance,
+  snapToGrid,
+} from '../shared/drawing-utils'
 
 const Y_OFFSET = 0.02
 
 /**
  * Snaps a point to the nearest axis-aligned or 45-degree diagonal from the last point
  */
-const calculateSnapPoint = (
-  lastPoint: [number, number],
-  currentPoint: [number, number],
-): [number, number] => {
+const calculateSnapPoint = (lastPoint: PlanPoint, currentPoint: PlanPoint): PlanPoint => {
   const [x1, y1] = lastPoint
   const [x, y] = currentPoint
 
@@ -24,38 +42,29 @@ const calculateSnapPoint = (
   const absDx = Math.abs(dx)
   const absDy = Math.abs(dy)
 
-  // Calculate distances to horizontal, vertical, and diagonal lines
   const horizontalDist = absDy
   const verticalDist = absDx
   const diagonalDist = Math.abs(absDx - absDy)
-
-  // Find the minimum distance to determine which axis to snap to
   const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
 
   if (minDist === diagonalDist) {
-    // Snap to 45° diagonal
     const diagonalLength = Math.min(absDx, absDy)
     return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
   }
   if (minDist === horizontalDist) {
-    // Snap to horizontal
     return [x, y1]
   }
-  // Snap to vertical
   return [x1, y]
 }
 
 /**
  * Creates a zone with the given polygon points
  */
-const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
+const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<PlanPoint>) => {
   const { createNode, nodes } = useScene.getState()
 
-  // Count existing zones for naming and color cycling
   const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
   const name = `Zone ${zoneCount + 1}`
-
-  // Cycle through colors
   const color = PALETTE_COLORS[zoneCount % PALETTE_COLORS.length]
 
   const zone = ZoneNode.parse({
@@ -65,236 +74,304 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
   })
 
   createNode(zone, levelId)
-
-  // Select the newly created zone
   useViewer.getState().setSelection({ zoneId: zone.id })
 }
 
-type PreviewState = {
-  points: Array<[number, number]>
-  cursorPoint: [number, number] | null
-  levelY: number
-}
-
-// Helper to validate point values (no NaN or Infinity)
-const isValidPoint = (pt: [number, number] | null | undefined): pt is [number, number] => {
-  if (!pt) return false
-  return Number.isFinite(pt[0]) && Number.isFinite(pt[1])
-}
-
 export const ZoneTool: React.FC = () => {
+  const currentLevelId = useViewer((state) => state.selection.levelId)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
-  const pointsRef = useRef<Array<[number, number]>>([])
-  const levelYRef = useRef(0) // Track current level Y position
-  const currentLevelId = useViewer((state) => state.selection.levelId)
-  const setTool = useEditor((state) => state.setTool)
+  const pointsRef = useRef<Array<PlanPoint>>([])
+  const levelYRef = useRef(0)
+  const cursorPositionRef = useRef<PlanPoint>([0, 0])
+  const snappedCursorPositionRef = useRef<PlanPoint>([0, 0])
+  const previousSnappedPointRef = useRef<PlanPoint | null>(null)
+  const shiftPressed = useRef(false)
+  const inputOpenRef = useRef(false)
+  const ignoreNextGridClickRef = useRef(false)
 
-  // Preview state for reactive rendering (for shape and point markers)
-  const [preview, setPreview] = useState<PreviewState>({
-    points: [],
-    cursorPoint: null,
-    levelY: 0,
-  })
+  const [points, setPoints] = useState<Array<PlanPoint>>([])
+  const [snappedCursorPosition, setSnappedCursorPosition] = useState<PlanPoint>([0, 0])
+  const [levelY, setLevelY] = useState(0)
+  const [distanceInput, setDistanceInput] = useState({ open: false, value: '' })
 
-  useEffect(() => {
-    if (!currentLevelId) return
+  const updatePoints = useCallback((nextPoints: Array<PlanPoint>) => {
+    pointsRef.current = nextPoints
+    setPoints(nextPoints)
+  }, [])
 
-    let cursorPosition: [number, number] = [0, 0]
-
-    // Initialize line geometries
-    mainLineRef.current.geometry = new BufferGeometry()
-    closingLineRef.current.geometry = new BufferGeometry()
-
-    const updateLines = () => {
-      const points = pointsRef.current
-      const y = levelYRef.current + Y_OFFSET
-
-      if (points.length === 0) {
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
-        return
-      }
-
-      // Build main line points
-      const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, y, z))
-
-      // Add cursor point
-      const lastPoint = points[points.length - 1]
-      if (lastPoint) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
-        if (isValidPoint(snapped)) {
-          linePoints.push(new Vector3(snapped[0], y, snapped[1]))
-        }
-      }
-
-      // Update main line geometry
-      if (linePoints.length >= 2) {
-        mainLineRef.current.geometry.dispose()
-        mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints)
-        mainLineRef.current.visible = true
-      } else {
-        mainLineRef.current.visible = false
-      }
-
-      // Update closing line (from cursor back to first point)
-      const firstPoint = points[0]
-      if (points.length >= 2 && lastPoint && isValidPoint(firstPoint)) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
-        if (isValidPoint(snapped)) {
-          const closingPoints = [
-            new Vector3(snapped[0], y, snapped[1]),
-            new Vector3(firstPoint[0], y, firstPoint[1]),
-          ]
-          closingLineRef.current.geometry.dispose()
-          closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
-          closingLineRef.current.visible = true
-        }
-      } else {
-        closingLineRef.current.visible = false
-      }
+  const closeDistanceInput = useCallback((options?: { ignoreNextGridClick?: boolean }) => {
+    inputOpenRef.current = false
+    shiftPressed.current = false
+    if (options?.ignoreNextGridClick) {
+      ignoreNextGridClickRef.current = true
     }
+    setDistanceInput({ open: false, value: '' })
+  }, [])
 
-    const updatePreview = () => {
-      const points = pointsRef.current
-      const lastPoint = points[points.length - 1]
-
-      let cursorPt: [number, number] | null = null
-      if (lastPoint) {
-        cursorPt = calculateSnapPoint(lastPoint, cursorPosition)
-      } else if (points.length === 0) {
-        cursorPt = cursorPosition
-      }
-
-      setPreview({ points: [...points], cursorPoint: cursorPt, levelY: levelYRef.current })
-      updateLines()
+  const clearDraft = useCallback(() => {
+    updatePoints([])
+    previousSnappedPointRef.current = null
+    closeDistanceInput()
+    if (mainLineRef.current.geometry) {
+      mainLineRef.current.visible = false
+      closingLineRef.current.visible = false
     }
+  }, [closeDistanceInput, updatePoints])
 
-    const onGridMove = (event: GridEvent) => {
-      if (!cursorRef.current) return
-
-      // Snap to 0.5 grid
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
-      cursorPosition = [gridX, gridZ]
-      levelYRef.current = event.position[1]
-
-      // If we have points, snap to axis from last point
-      const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      if (lastPoint) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
-        cursorRef.current.position.set(snapped[0], event.position[1], snapped[1])
-      } else {
-        cursorRef.current.position.set(gridX, event.position[1], gridZ)
-      }
-
-      updatePreview()
-    }
-
-    const onGridClick = (event: GridEvent) => {
+  const commitDraftPoint = useCallback(
+    (point: PlanPoint) => {
       if (!currentLevelId) return
 
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
-      let clickPoint: [number, number] = [gridX, gridZ]
-
-      // Snap to axis from last point
-      const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      if (lastPoint) {
-        clickPoint = calculateSnapPoint(lastPoint, clickPoint)
-      }
-
-      // Check if clicking on the first point to close the shape
       const firstPoint = pointsRef.current[0]
       if (
         pointsRef.current.length >= 3 &&
         firstPoint &&
-        Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
-        Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
+        Math.abs(point[0] - firstPoint[0]) < CLOSE_LOOP_TOLERANCE &&
+        Math.abs(point[1] - firstPoint[1]) < CLOSE_LOOP_TOLERANCE
       ) {
-        // Create the zone
         commitZoneDrawing(currentLevelId, pointsRef.current)
-
-        // Reset state
-        pointsRef.current = []
-        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current })
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
-      } else {
-        // Add point to polygon
-        pointsRef.current = [...pointsRef.current, clickPoint]
-        updatePreview()
+        clearDraft()
+        return
       }
+
+      updatePoints([...pointsRef.current, point])
+    },
+    [clearDraft, currentLevelId, updatePoints],
+  )
+
+  const applyDistanceInput = (
+    rawValue: string,
+    options?: { commitAfterApply?: boolean; ignoreNextGridClick?: boolean },
+  ) => {
+    const lastPoint = pointsRef.current[pointsRef.current.length - 1]
+    if (!lastPoint) {
+      closeDistanceInput(options)
+      return
+    }
+
+    const parsedDistance = parseDistanceInput(rawValue, unitSystem)
+    if (!(parsedDistance && parsedDistance >= MIN_DRAW_DISTANCE)) {
+      closeDistanceInput(options)
+      return
+    }
+
+    const projected = projectPointAtDistance(
+      lastPoint,
+      snappedCursorPositionRef.current,
+      parsedDistance,
+    )
+    cursorPositionRef.current = projected
+    snappedCursorPositionRef.current = projected
+    previousSnappedPointRef.current = projected
+    setSnappedCursorPosition(projected)
+    cursorRef.current?.position.set(projected[0], levelYRef.current, projected[1])
+
+    if (options?.commitAfterApply) {
+      closeDistanceInput()
+      commitDraftPoint(projected)
+      return
+    }
+
+    closeDistanceInput(options)
+  }
+
+  useEffect(() => {
+    if (!currentLevelId) return
+
+    mainLineRef.current.geometry = new BufferGeometry()
+    closingLineRef.current.geometry = new BufferGeometry()
+
+    const getLevelWalls = () =>
+      Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
+      )
+
+    const onGridMove = (event: GridEvent) => {
+      if (!cursorRef.current) return
+      if (inputOpenRef.current) return
+
+      const gridPosition: PlanPoint = [snapToGrid(event.position[0]), snapToGrid(event.position[2])]
+
+      cursorPositionRef.current = gridPosition
+      levelYRef.current = event.position[1]
+      setLevelY(event.position[1])
+
+      const lastPoint = pointsRef.current[pointsRef.current.length - 1]
+      const basePoint =
+        shiftPressed.current || !lastPoint
+          ? gridPosition
+          : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint = shiftPressed.current
+        ? basePoint
+        : (getWallSnapPoint(basePoint, getLevelWalls()) ?? basePoint)
+
+      snappedCursorPositionRef.current = displayPoint
+      setSnappedCursorPosition(displayPoint)
+
+      if (
+        pointsRef.current.length > 0 &&
+        previousSnappedPointRef.current &&
+        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
+          displayPoint[1] !== previousSnappedPointRef.current[1])
+      ) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousSnappedPointRef.current = displayPoint
+      cursorRef.current.position.set(displayPoint[0], event.position[1], displayPoint[1])
+    }
+
+    const onGridClick = (_event: GridEvent) => {
+      if (!currentLevelId) return
+      if (ignoreNextGridClickRef.current) {
+        ignoreNextGridClickRef.current = false
+        return
+      }
+      if (inputOpenRef.current) return
+
+      const clickPoint = previousSnappedPointRef.current ?? cursorPositionRef.current
+      commitDraftPoint(clickPoint)
     }
 
     const onGridDoubleClick = (_event: GridEvent) => {
       if (!currentLevelId) return
 
-      // Need at least 3 points to form a polygon
       if (pointsRef.current.length >= 3) {
         commitZoneDrawing(currentLevelId, pointsRef.current)
-
-        // Reset state
-        pointsRef.current = []
-        setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current })
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
+        clearDraft()
       }
     }
 
-    // Subscribe to events
+    const onCancel = () => {
+      clearDraft()
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      if (event.key === 'Shift') {
+        shiftPressed.current = true
+        return
+      }
+
+      if (event.key !== 'Tab' || pointsRef.current.length === 0) return
+
+      const lastPoint = pointsRef.current[pointsRef.current.length - 1]
+      if (!lastPoint) return
+
+      const currentDistance = getPlanDistance(lastPoint, snappedCursorPositionRef.current)
+      if (currentDistance < MIN_DRAW_DISTANCE) return
+
+      event.preventDefault()
+      shiftPressed.current = false
+      inputOpenRef.current = true
+      setDistanceInput({
+        open: true,
+        value: formatLengthInputValue(currentDistance, unitSystem),
+      })
+    }
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        shiftPressed.current = false
+      }
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
-
-      // Reset state on unmount
-      pointsRef.current = []
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
     }
-  }, [currentLevelId, setTool])
+  }, [clearDraft, commitDraftPoint, currentLevelId, unitSystem])
 
-  const { points, cursorPoint, levelY } = preview
+  useEffect(() => {
+    if (!(mainLineRef.current && closingLineRef.current)) return
 
-  // Create preview shape when we have 3+ points
+    if (points.length === 0) {
+      mainLineRef.current.visible = false
+      closingLineRef.current.visible = false
+      return
+    }
+
+    const y = levelY + Y_OFFSET
+    const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, y, z))
+    linePoints.push(new Vector3(snappedCursorPosition[0], y, snappedCursorPosition[1]))
+
+    if (linePoints.length >= 2) {
+      mainLineRef.current.geometry.dispose()
+      mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints)
+      mainLineRef.current.visible = true
+    } else {
+      mainLineRef.current.visible = false
+    }
+
+    const firstPoint = points[0]
+    if (points.length >= 2 && firstPoint) {
+      const closingPoints = [
+        new Vector3(snappedCursorPosition[0], y, snappedCursorPosition[1]),
+        new Vector3(firstPoint[0], y, firstPoint[1]),
+      ]
+      closingLineRef.current.geometry.dispose()
+      closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
+      closingLineRef.current.visible = true
+    } else {
+      closingLineRef.current.visible = false
+    }
+  }, [levelY, points, snappedCursorPosition])
+
   const previewShape = useMemo(() => {
     if (points.length < 3) return null
 
-    const allPoints = [...points]
-    if (isValidPoint(cursorPoint)) {
-      allPoints.push(cursorPoint)
-    }
-
-    // THREE.Shape is in X-Y plane. After rotation of -PI/2 around X:
-    // - Shape X -> World X
-    // - Shape Y -> World -Z (so we negate Z to get correct orientation)
+    const allPoints = [...points, snappedCursorPosition]
     const firstPt = allPoints[0]
-    if (!isValidPoint(firstPt)) return null
+    if (!firstPt) return null
 
     const shape = new Shape()
     shape.moveTo(firstPt[0], -firstPt[1])
 
     for (let i = 1; i < allPoints.length; i++) {
       const pt = allPoints[i]
-      if (isValidPoint(pt)) {
+      if (pt) {
         shape.lineTo(pt[0], -pt[1])
       }
     }
     shape.closePath()
 
     return shape
-  }, [points, cursorPoint])
+  }, [points, snappedCursorPosition])
+
+  const currentSegment = useMemo(() => {
+    const lastPoint = points[points.length - 1]
+    if (!lastPoint) return null
+
+    const distance = getPlanDistance(lastPoint, snappedCursorPosition)
+    if (distance < MIN_DRAW_DISTANCE) return null
+
+    return {
+      distance,
+      midpoint: getPlanMidpoint(lastPoint, snappedCursorPosition),
+    }
+  }, [points, snappedCursorPosition])
 
   return (
     <group>
-      {/* Cursor */}
       <CursorSphere ref={cursorRef} />
 
-      {/* Preview fill */}
       {previewShape && (
         <mesh
           frustumCulled={false}
@@ -313,7 +390,6 @@ export const ZoneTool: React.FC = () => {
         </mesh>
       )}
 
-      {/* Main line - uses native line element with TSL-compatible material */}
       {/* @ts-ignore */}
       <line
         frustumCulled={false}
@@ -326,7 +402,6 @@ export const ZoneTool: React.FC = () => {
         <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
       </line>
 
-      {/* Closing line - uses native line element with TSL-compatible material */}
       {/* @ts-ignore */}
       <line
         frustumCulled={false}
@@ -346,17 +421,42 @@ export const ZoneTool: React.FC = () => {
         />
       </line>
 
-      {/* Point markers */}
-      {points.map(([x, z], index) =>
-        isValidPoint([x, z]) ? (
-          <CursorSphere
-            color="#818cf8"
-            height={0}
-            key={index}
-            position={[x, levelY + Y_OFFSET + 0.01, z]}
-            showTooltip={false}
-          />
-        ) : null,
+      {points.map(([x, z], index) => (
+        <CursorSphere
+          color="#818cf8"
+          height={0}
+          key={index}
+          position={[x, levelY + Y_OFFSET + 0.01, z]}
+          showTooltip={false}
+        />
+      ))}
+
+      {currentSegment && (
+        <DrawingDimensionLabel
+          hint="Enter to place, Esc to cancel"
+          inputLabel="Segment length"
+          inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
+          inputValue={distanceInput.value}
+          isEditing={distanceInput.open}
+          onInputBlur={() => {
+            if (!inputOpenRef.current) return
+            applyDistanceInput(distanceInput.value, { ignoreNextGridClick: true })
+          }}
+          onInputChange={(value) => {
+            setDistanceInput((current) => ({ ...current, value }))
+          }}
+          onInputKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              applyDistanceInput(distanceInput.value, { commitAfterApply: true })
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              closeDistanceInput()
+            }
+          }}
+          position={[currentSegment.midpoint[0], levelY + 0.18, currentSegment.midpoint[1]]}
+          value={formatDistance(currentSegment.distance, unitSystem)}
+        />
       )}
     </group>
   )

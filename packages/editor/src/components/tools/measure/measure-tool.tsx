@@ -91,7 +91,22 @@ export const MeasureTool: React.FC = () => {
     })
   }, [])
 
-  const applyDistanceInput = (rawValue: string, options?: { ignoreNextGridClick?: boolean }) => {
+  const lockMeasurement = useCallback(
+    (levelY: number) => {
+      if (!(startRef.current && endRef.current)) return
+      if (getPlanDistance(startRef.current, endRef.current) < MIN_DRAW_DISTANCE) return
+
+      isLockedRef.current = true
+      syncLineGeometry(lineRef.current, startRef.current, endRef.current, levelY)
+      syncMeasurementState(levelY)
+    },
+    [syncMeasurementState],
+  )
+
+  const applyDistanceInput = (
+    rawValue: string,
+    options?: { commitAfterApply?: boolean; ignoreNextGridClick?: boolean },
+  ) => {
     if (!(startRef.current && endRef.current)) {
       closeDistanceInput(options)
       return
@@ -109,6 +124,13 @@ export const MeasureTool: React.FC = () => {
     cursorRef.current?.position.set(nextEnd[0], levelYRef.current, nextEnd[1])
     syncLineGeometry(lineRef.current, startRef.current, nextEnd, levelYRef.current)
     syncMeasurementState(levelYRef.current)
+
+    if (options?.commitAfterApply) {
+      closeDistanceInput()
+      lockMeasurement(levelYRef.current)
+      return
+    }
+
     closeDistanceInput(options)
   }
 
@@ -190,12 +212,8 @@ export const MeasureTool: React.FC = () => {
       }
 
       const finalEnd = endRef.current ?? gridPosition
-      if (getPlanDistance(startRef.current, finalEnd) < MIN_DRAW_DISTANCE) return
-
       endRef.current = finalEnd
-      isLockedRef.current = true
-      syncLineGeometry(lineRef.current, startRef.current, finalEnd, levelY)
-      syncMeasurementState(levelY)
+      lockMeasurement(levelY)
     }
 
     const onCancel = () => {
@@ -256,7 +274,7 @@ export const MeasureTool: React.FC = () => {
       window.removeEventListener('keyup', onKeyUp)
       closeDistanceInput()
     }
-  }, [closeDistanceInput, currentLevelId, syncMeasurementState, unitSystem])
+  }, [closeDistanceInput, currentLevelId, lockMeasurement, syncMeasurementState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(measurement.start && measurement.end)) return 0
@@ -312,13 +330,13 @@ export const MeasureTool: React.FC = () => {
 
       {labelPosition && currentDistance >= MIN_DRAW_DISTANCE && (
         <DrawingDimensionLabel
-          hint="Enter to apply, Esc to cancel"
+          hint="Enter to lock, Esc to cancel"
           inputLabel="Measure"
           inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
-            if (!distanceInput.open) return
+            if (!inputOpenRef.current) return
             applyDistanceInput(distanceInput.value, { ignoreNextGridClick: true })
           }}
           onInputChange={(value) => {
@@ -327,7 +345,7 @@ export const MeasureTool: React.FC = () => {
           onInputKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
-              applyDistanceInput(distanceInput.value)
+              applyDistanceInput(distanceInput.value, { commitAfterApply: true })
             } else if (event.key === 'Escape') {
               event.preventDefault()
               closeDistanceInput()
