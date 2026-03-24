@@ -4,6 +4,7 @@ import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { formatLength } from '../../../lib/measurements'
+import { getRoofDimensions } from '../../../lib/roof-dimensions'
 import { ActionButton } from '../controls/action-button'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
@@ -34,7 +35,7 @@ export function RoofPanel() {
 
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
-  const totalWidth = node.leftWidth + node.rightWidth
+  const { height, leftWidth, length, rightWidth, totalWidth } = getRoofDimensions(node, nodes)
 
   return (
     <PanelWrapper
@@ -52,7 +53,7 @@ export function RoofPanel() {
           precision={2}
           step={0.5}
           unit="m"
-          value={Math.round(node.length * 100) / 100}
+          value={Math.round(length * 100) / 100}
         />
         <SliderControl
           label="Height"
@@ -62,7 +63,7 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={Math.round(height * 100) / 100}
         />
       </PanelSection>
 
@@ -79,7 +80,7 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.leftWidth * 100) / 100}
+          value={Math.round(leftWidth * 100) / 100}
         />
         <SliderControl
           label="Right"
@@ -89,7 +90,7 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.rightWidth * 100) / 100}
+          value={Math.round(rightWidth * 100) / 100}
         />
       </PanelSection>
 
