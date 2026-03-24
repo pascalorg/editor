@@ -112,6 +112,94 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 - wall thickness and height are placeholder visualization values
 - shared room edges are deduplicated only by exact segment match
 
+## Richer Mapping Plan
+
+The next phase should expand the bridge in stages instead of trying to map every Okiyuka concept at once.
+
+### Phase 1: Pedestal Metadata Preservation
+
+Goal:
+
+- preserve pedestal data in a way that survives Pascal import immediately
+- avoid blocking on a new Pascal node type before the data is usable
+
+Approach:
+
+- keep room and wall mapping as-is
+- copy `geometry.pedestals` into level or zone metadata keyed by room
+- verify that pedestal count and height distribution remain inspectable after `Load Build`
+
+Why first:
+
+- pedestal records already exist in the real validation fixture
+- this adds value without requiring renderer or schema changes in Pascal
+
+### Phase 2: Panel Mapping Strategy
+
+Goal:
+
+- make Okiyuka panel layout visible as explicit scene elements instead of only room metadata
+
+Preferred direction:
+
+- map Okiyuka panels to Pascal item-like nodes only after confirming the correct existing node type and renderer path in the current checkout
+- preserve panel label, source label, type, and polygon coordinates
+
+Open design questions:
+
+- whether panels should map to an existing item node type or a new dedicated node type
+- whether panel geometry should render as flat polygons, boxes, or overlay-only helpers
+- whether rejected panels should be imported or filtered out at conversion time
+
+Acceptance target:
+
+- at least one room from the real fixture shows individual panel elements in Pascal Editor
+- full, cut, reused, and rejected panels remain distinguishable in metadata or appearance
+
+### Phase 3: Edge Rail Mapping
+
+Goal:
+
+- carry Okiyuka edge rail geometry into Pascal for perimeter inspection
+
+Approach options:
+
+- if Pascal already has a compatible linear node type, map rails there
+- otherwise store rails in metadata first and only promote them to dedicated nodes when rendering needs are clear
+
+Required data from Okiyuka:
+
+- start point
+- end point
+- length_mm
+
+Acceptance target:
+
+- rails from exports with non-empty `geometry.edge_rails` can be inspected in Pascal without losing source measurements
+
+### Phase 4: Schema and Viewer Promotion
+
+This phase should only start after metadata-first validation shows stable demand for richer rendering.
+
+Potential work:
+
+- add or confirm Pascal node schemas for imported panel-like and rail-like elements
+- add renderer support in the correct package without violating viewer isolation
+- keep conversion logic aligned with current core schema contracts instead of inventing ad-hoc shapes in the editor layer
+
+### Recommended Order
+
+1. pedestal metadata preservation
+2. panel element prototype for one room from the real fixture
+3. edge rail import path
+4. schema and renderer promotion only where the prototype proves useful
+
+### Non-Goals For The Next Step
+
+- rebuilding Okiyuka export schema
+- adding a new Pascal-side importer UI
+- mixing auth or database restoration work into the geometry bridge
+
 ## Progress Snapshot (2026-03-25)
 
 - Pascal Editor was cloned into `C:\dev\pascal-editor` and brought up for local development with Bun.
