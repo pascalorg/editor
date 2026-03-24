@@ -3,6 +3,7 @@
 import useEditor from '../../../store/use-editor'
 import { CeilingHelper } from './ceiling-helper'
 import { ItemHelper } from './item-helper'
+import { MeasureHelper } from './measure-helper'
 import { RoofHelper } from './roof-helper'
 import { SlabHelper } from './slab-helper'
 import { WallHelper } from './wall-helper'
@@ -19,6 +20,8 @@ export function HelperManager() {
   switch (tool) {
     case 'wall':
       return <WallHelper />
+    case 'measure':
+      return <MeasureHelper />
     case 'item':
       return <ItemHelper />
     case 'slab':

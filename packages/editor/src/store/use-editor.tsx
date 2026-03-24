@@ -19,6 +19,7 @@ export type Mode = 'select' | 'edit' | 'delete' | 'build'
 
 // Structure mode tools (building elements)
 export type StructureTool =
+  | 'measure'
   | 'wall'
   | 'room'
   | 'custom-room'
@@ -50,6 +51,16 @@ export type CatalogCategory =
 
 export type StructureLayer = 'zones' | 'elements'
 
+export type MeasurementGuide = {
+  id: string
+  name?: string
+  levelId: LevelNode['id']
+  levelY: number
+  start: [number, number]
+  end: [number, number]
+  visible?: boolean
+}
+
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
@@ -70,6 +81,15 @@ type EditorState = {
   setMovingNode: (node: ItemNode | WindowNode | DoorNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  selectedMeasurementGuideId: string | null
+  setSelectedMeasurementGuideId: (id: string | null) => void
+  hoveredMeasurementGuideId: string | null
+  setHoveredMeasurementGuideId: (id: string | null) => void
+  measurementGuides: MeasurementGuide[]
+  addMeasurementGuide: (guide: Omit<MeasurementGuide, 'id'> & { id?: string }) => void
+  updateMeasurementGuide: (id: string, updates: Partial<MeasurementGuide>) => void
+  deleteMeasurementGuide: (id: string) => void
+  clearMeasurementGuides: (levelId?: LevelNode['id']) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -79,6 +99,14 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
+}
+
+const createMeasurementGuideId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `measure-guide-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 const useEditor = create<EditorState>()((set, get) => ({
@@ -174,6 +202,7 @@ const useEditor = create<EditorState>()((set, get) => ({
         selectedIds: [],
         zoneId: null,
       })
+      set({ selectedMeasurementGuideId: null })
 
       // Ensure a tool is selected in build mode
       if (!tool) {
@@ -209,6 +238,7 @@ const useEditor = create<EditorState>()((set, get) => ({
       selectedIds: [],
       zoneId: null,
     })
+    set({ selectedMeasurementGuideId: null })
   },
   catalogCategory: null,
   setCatalogCategory: (category) => set({ catalogCategory: category }),
@@ -218,6 +248,57 @@ const useEditor = create<EditorState>()((set, get) => ({
   setMovingNode: (node) => set({ movingNode: node }),
   selectedReferenceId: null,
   setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+  selectedMeasurementGuideId: null,
+  setSelectedMeasurementGuideId: (id) => set({ selectedMeasurementGuideId: id }),
+  hoveredMeasurementGuideId: null,
+  setHoveredMeasurementGuideId: (id) => set({ hoveredMeasurementGuideId: id }),
+  measurementGuides: [],
+  addMeasurementGuide: (guide) =>
+    set((state) => ({
+      measurementGuides: [
+        ...state.measurementGuides,
+        {
+          ...guide,
+          id: guide.id ?? createMeasurementGuideId(),
+          name: guide.name ?? `Measurement ${state.measurementGuides.length + 1}`,
+          visible: guide.visible ?? true,
+        },
+      ],
+    })),
+  updateMeasurementGuide: (id, updates) =>
+    set((state) => ({
+      measurementGuides: state.measurementGuides.map((guide) =>
+        guide.id === id ? { ...guide, ...updates } : guide,
+      ),
+    })),
+  deleteMeasurementGuide: (id) =>
+    set((state) => ({
+      measurementGuides: state.measurementGuides.filter((guide) => guide.id !== id),
+      selectedMeasurementGuideId:
+        state.selectedMeasurementGuideId === id ? null : state.selectedMeasurementGuideId,
+      hoveredMeasurementGuideId:
+        state.hoveredMeasurementGuideId === id ? null : state.hoveredMeasurementGuideId,
+    })),
+  clearMeasurementGuides: (levelId) =>
+    set((state) => {
+      const remainingGuides = levelId
+        ? state.measurementGuides.filter((guide) => guide.levelId !== levelId)
+        : []
+
+      return {
+        measurementGuides: remainingGuides,
+        selectedMeasurementGuideId: remainingGuides.some(
+          (guide) => guide.id === state.selectedMeasurementGuideId,
+        )
+          ? state.selectedMeasurementGuideId
+          : null,
+        hoveredMeasurementGuideId: remainingGuides.some(
+          (guide) => guide.id === state.hoveredMeasurementGuideId,
+        )
+          ? state.hoveredMeasurementGuideId
+          : null,
+      }
+    }),
   spaces: {},
   setSpaces: (spaces) => set({ spaces }),
   editingHole: null,
@@ -225,7 +306,13 @@ const useEditor = create<EditorState>()((set, get) => ({
   isPreviewMode: false,
   setPreviewMode: (preview) => {
     if (preview) {
-      set({ isPreviewMode: true, mode: 'select', tool: null, catalogCategory: null })
+      set({
+        isPreviewMode: true,
+        mode: 'select',
+        tool: null,
+        catalogCategory: null,
+        selectedMeasurementGuideId: null,
+      })
       // Clear zone/item selection for clean viewer drill-down hierarchy
       useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
     } else {

@@ -6,6 +6,10 @@ export function SlabHelper() {
         <span className="text-muted-foreground">Allow non-45° angles</span>
       </div>
       <div className="flex items-center gap-2 text-sm">
+        <kbd className="rounded bg-muted px-2 py-1 font-medium text-xs">Tab</kbd>
+        <span className="text-muted-foreground">Type an exact segment length</span>
+      </div>
+      <div className="flex items-center gap-2 text-sm">
         <kbd className="rounded bg-muted px-2 py-1 font-medium text-xs">Esc</kbd>
         <span className="text-muted-foreground">Cancel</span>
       </div>

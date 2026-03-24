@@ -4,6 +4,7 @@ import {
   type GridEvent,
   type LevelNode,
   RoofNode,
+  RoofSegmentNode,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -11,12 +12,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 // Default roof dimensions
 const DEFAULT_HEIGHT = 1.5
-const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
 
 /**
@@ -27,7 +26,7 @@ const commitRoofPlacement = (
   corner1: [number, number, number],
   corner2: [number, number, number],
 ): RoofNode['id'] => {
-  const { createNode, nodes } = useScene.getState()
+  const { createNodes, nodes } = useScene.getState()
 
   // Calculate center position and dimensions from corners
   const centerX = (corner1[0] + corner2[0]) / 2
@@ -36,9 +35,6 @@ const commitRoofPlacement = (
   const length = Math.abs(corner2[0] - corner1[0])
   const width = Math.abs(corner2[2] - corner1[2])
 
-  // Split width evenly between left and right slopes
-  const slopeWidth = Math.max(width / 2, 0.5)
-
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
   const name = `Roof ${roofCount + 1}`
@@ -46,13 +42,21 @@ const commitRoofPlacement = (
   const roof = RoofNode.parse({
     name,
     position: [centerX, 0, centerZ], // Y is always 0
-    length: Math.max(length, 0.5),
-    height: DEFAULT_HEIGHT,
-    leftWidth: slopeWidth,
-    rightWidth: slopeWidth,
   })
 
-  createNode(roof, levelId)
+  const segment = RoofSegmentNode.parse({
+    position: [0, 0, 0],
+    roofType: 'gable',
+    width: Math.max(length, 0.5),
+    depth: Math.max(width, 0.5),
+    wallHeight: 0,
+    roofHeight: DEFAULT_HEIGHT,
+  })
+
+  createNodes([
+    { node: roof, parentId: levelId },
+    { node: segment, parentId: roof.id },
+  ])
   sfxEmitter.emit('sfx:structure-build')
   return roof.id
 }
@@ -68,8 +72,6 @@ export const RoofTool: React.FC = () => {
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
-  const setTool = useEditor((state) => state.setTool)
-  const setMode = useEditor((state) => state.setMode)
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -190,7 +192,7 @@ export const RoofTool: React.FC = () => {
       // Reset state on unmount
       corner1Ref.current = null
     }
-  }, [currentLevelId, setTool, setSelection, setMode])
+  }, [currentLevelId, setSelection])
 
   const { corner1, cursorPosition, levelY } = preview
 

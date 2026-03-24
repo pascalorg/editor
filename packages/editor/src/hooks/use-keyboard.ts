@@ -19,6 +19,8 @@ export const useKeyboard = () => {
         // Clear selections to close UI panels, but KEEP the active building and level context
         useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         useEditor.getState().setSelectedReferenceId(null)
+        useEditor.getState().setSelectedMeasurementGuideId(null)
+        useEditor.getState().setHoveredMeasurementGuideId(null)
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
@@ -38,6 +40,12 @@ export const useKeyboard = () => {
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
+      } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('build')
+        useEditor.getState().setTool('measure')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('structure')
@@ -49,12 +57,12 @@ export const useKeyboard = () => {
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('build')
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        useScene.temporal.getState().undo()
-      } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+      } else if (e.key.toLowerCase() === 'z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         useScene.temporal.getState().redo()
+      } else if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        useScene.temporal.getState().undo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection
@@ -91,6 +99,7 @@ export const useKeyboard = () => {
         e.preventDefault()
 
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        const { deleteMeasurementGuide, selectedMeasurementGuideId } = useEditor.getState()
 
         if (selectedNodeIds.length > 0) {
           // Play appropriate SFX based on what's being deleted
@@ -106,6 +115,9 @@ export const useKeyboard = () => {
           }
 
           useScene.getState().deleteNodes(selectedNodeIds)
+        } else if (selectedMeasurementGuideId) {
+          sfxEmitter.emit('sfx:structure-delete')
+          deleteMeasurementGuide(selectedMeasurementGuideId)
         }
       }
     }

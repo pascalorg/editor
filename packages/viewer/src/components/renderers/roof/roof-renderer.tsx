@@ -1,6 +1,6 @@
 import { type RoofNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
-import type * as THREE from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
@@ -13,6 +13,17 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
 
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
+  const placeholderGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    return geometry
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      placeholderGeometry.dispose()
+    }
+  }, [placeholderGeometry])
 
   return (
     <group
@@ -24,12 +35,11 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     >
       <mesh
         castShadow
+        geometry={placeholderGeometry}
         material={debugColors ? roofDebugMaterials : roofMaterials}
         name="merged-roof"
         receiveShadow
-      >
-        <boxGeometry args={[0, 0, 0]} />
-      </mesh>
+      />
       <group name="segments-wrapper" visible={false}>
         {(node.children ?? []).map((childId) => (
           <NodeRenderer key={childId} nodeId={childId} />

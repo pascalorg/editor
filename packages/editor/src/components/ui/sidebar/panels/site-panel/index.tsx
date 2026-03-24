@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { formatArea, formatLength } from '../../../../../lib/measurements'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -38,6 +39,7 @@ import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { InlineRenameInput } from './inline-rename-input'
+import { MeasurementGuideTreeNode } from './measurement-guide-tree-node'
 import { TreeNode } from './tree-node'
 
 // ============================================================================
@@ -82,6 +84,7 @@ function useSiteNode(): SiteNode | null {
 function PropertyLineSection() {
   const siteNode = useSiteNode()
   const updateNode = useScene((state) => state.updateNode)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const mode = useEditor((state) => state.mode)
   const setMode = useEditor((state) => state.setMode)
 
@@ -157,10 +160,10 @@ function PropertyLineSection() {
       {/* Measurements */}
       <div className="relative flex gap-3 pr-3 pb-2 pl-10">
         <div className="text-muted-foreground text-xs">
-          Area: <span className="text-foreground">{area.toFixed(1)} m²</span>
+          Area: <span className="text-foreground">{formatArea(area, unitSystem)}</span>
         </div>
         <div className="text-muted-foreground text-xs">
-          Perimeter: <span className="text-foreground">{perimeter.toFixed(1)} m</span>
+          Perimeter: <span className="text-foreground">{formatLength(perimeter, unitSystem)}</span>
         </div>
       </div>
 
@@ -986,6 +989,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   const updateNode = useScene((state) => state.updateNode)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const setPhase = useEditor((state) => state.setPhase)
@@ -1002,8 +1006,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
     }
   }, [isSelected])
 
-  const area = calculatePolygonArea(zone.polygon).toFixed(1)
-  const defaultName = `Zone (${area}m²)`
+  const defaultName = `Zone (${formatArea(calculatePolygonArea(zone.polygon), unitSystem)})`
 
   const handleClick = () => {
     setSelection({ zoneId: zone.id })
@@ -1168,6 +1171,7 @@ function ContentSection() {
   const nodes = useScene((state) => state.nodes)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
+  const measurementGuides = useEditor((state) => state.measurementGuides)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
@@ -1224,19 +1228,34 @@ function ContentSection() {
     return true
   })
 
-  if (elementChildren.length === 0) {
+  const levelMeasurementGuides = measurementGuides.filter((guide) => guide.levelId === selectedLevelId)
+  const rows = [
+    ...levelMeasurementGuides.map((guide) => ({ type: 'measurement' as const, guide })),
+    ...elementChildren.map((childId) => ({ type: 'node' as const, childId })),
+  ]
+
+  if (rows.length === 0) {
     return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
   }
 
   return (
     <div className="flex flex-col">
-      {elementChildren.map((childId, index) => (
-        <TreeNode
-          depth={0}
-          isLast={index === elementChildren.length - 1}
-          key={childId}
-          nodeId={childId}
-        />
+      {rows.map((row, index) => (
+        row.type === 'measurement' ? (
+          <MeasurementGuideTreeNode
+            depth={0}
+            guide={row.guide}
+            isLast={index === rows.length - 1}
+            key={row.guide.id}
+          />
+        ) : (
+          <TreeNode
+            depth={0}
+            isLast={index === rows.length - 1}
+            key={row.childId}
+            nodeId={row.childId}
+          />
+        )
       ))}
     </div>
   )

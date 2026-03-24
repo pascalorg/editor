@@ -19,7 +19,7 @@ import {
   calculateItemRotation,
   getSideFromNormal,
   isValidWallSideFace,
-  snapToHalf,
+  snapToInch,
 } from '../item/placement-math'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
@@ -104,7 +104,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = snapToInch(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -157,7 +157,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = snapToInch(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -209,7 +209,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = snapToInch(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,

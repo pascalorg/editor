@@ -19,6 +19,7 @@ export type ToolConfig = {
 }
 
 export const tools: ToolConfig[] = [
+  { id: 'measure', iconSrc: '/icons/measure.svg', label: 'Measure' },
   { id: 'wall', iconSrc: '/icons/wall.png', label: 'Wall' },
   // { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
   // { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },

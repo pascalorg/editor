@@ -1,7 +1,8 @@
-import type { RoofNode } from '@pascal-app/core'
+import { type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useState } from 'react'
+import { getRoofDimensions } from './../../../../../lib/roof-dimensions'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -15,6 +16,7 @@ interface RoofTreeNodeProps {
 
 export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const nodes = useScene((state) => state.nodes)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const isSelected = selectedIds.includes(node.id)
   const isHovered = useViewer((state) => state.hoveredId === node.id)
@@ -41,9 +43,8 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
     setHoveredId(null)
   }
 
-  // Calculate dimensions: length × total width (leftWidth + rightWidth)
-  const totalWidth = node.leftWidth + node.rightWidth
-  const sizeLabel = `${node.length.toFixed(1)}×${totalWidth.toFixed(1)}m`
+  const { length, totalWidth } = getRoofDimensions(node, nodes)
+  const sizeLabel = `${length.toFixed(1)}×${totalWidth.toFixed(1)}m`
   const defaultName = `Roof (${sizeLabel})`
 
   return (

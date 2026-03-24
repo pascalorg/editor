@@ -19,6 +19,14 @@ const _quaternion = new THREE.Quaternion()
 const _scale = new THREE.Vector3(1, 1, 1)
 const _yAxis = new THREE.Vector3(0, 1, 0)
 
+function createEmptyRoofGeometry() {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  geometry.computeBoundsTree = computeBoundsTree
+  geometry.computeBoundsTree({ maxLeafSize: 10 })
+  return geometry
+}
+
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
@@ -68,11 +76,7 @@ export const RoofSystem = () => {
             // so MeshBVH hits groups[4].materialIndex → undefined.side → crash.
             if (mesh.geometry.type === 'BoxGeometry') {
               mesh.geometry.dispose()
-              const placeholder = new THREE.BufferGeometry()
-              placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-              placeholder.computeBoundsTree = computeBoundsTree
-              placeholder.computeBoundsTree({ maxLeafSize: 10 })
-              mesh.geometry = placeholder
+              mesh.geometry = createEmptyRoofGeometry()
             }
             mesh.position.set(node.position[0], node.position[1], node.position[2])
             mesh.rotation.y = node.rotation
@@ -145,8 +149,7 @@ function updateMergedRoofGeometry(
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
-    // Keep a valid position attribute so Drei's BVH can index safely.
-    mergedMesh.geometry = new THREE.BoxGeometry(0, 0, 0)
+    mergedMesh.geometry = createEmptyRoofGeometry()
     return
   }
 

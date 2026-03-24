@@ -1,29 +1,64 @@
 'use client'
 
-import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
+import { formatLength } from '../../../lib/measurements'
+import { getRoofDimensions } from '../../../lib/roof-dimensions'
 import { ActionButton } from '../controls/action-button'
-import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function RoofPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
-  const updateNode = useScene((s) => s.updateNode)
+  const updateNodes = useScene((s) => s.updateNodes)
 
   const selectedId = selectedIds[0]
   const node = selectedId ? (nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined
 
   const handleUpdate = useCallback(
-    (updates: Partial<RoofNode>) => {
+    (
+      updates: Partial<RoofNode> & {
+        length?: number
+        height?: number
+        leftWidth?: number
+        rightWidth?: number
+      },
+    ) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+
+      const roof = nodes[selectedId as AnyNode['id']] as RoofNode | undefined
+      if (!roof) return
+
+      const dimensions = getRoofDimensions(roof, nodes)
+      const nextLeftWidth = updates.leftWidth ?? dimensions.leftWidth
+      const nextRightWidth = updates.rightWidth ?? dimensions.rightWidth
+
+      const batchedUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = [
+        {
+          id: selectedId as AnyNodeId,
+          data: updates as Partial<AnyNode>,
+        },
+      ]
+
+      if (dimensions.primarySegment) {
+        batchedUpdates.push({
+          id: dimensions.primarySegment.id as AnyNodeId,
+          data: {
+            width: updates.length ?? dimensions.primarySegment.width,
+            depth: nextLeftWidth + nextRightWidth,
+            roofHeight: updates.height ?? dimensions.primarySegment.roofHeight,
+          } as Partial<AnyNode>,
+        })
+      }
+
+      updateNodes(batchedUpdates)
     },
-    [selectedId, updateNode],
+    [nodes, selectedId, updateNodes],
   )
 
   const handleClose = useCallback(() => {
@@ -32,7 +67,7 @@ export function RoofPanel() {
 
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
-  const totalWidth = node.leftWidth + node.rightWidth
+  const { height, leftWidth, length, rightWidth, totalWidth } = getRoofDimensions(node, nodes)
 
   return (
     <PanelWrapper
@@ -50,7 +85,7 @@ export function RoofPanel() {
           precision={2}
           step={0.5}
           unit="m"
-          value={Math.round(node.length * 100) / 100}
+          value={Math.round(length * 100) / 100}
         />
         <SliderControl
           label="Height"
@@ -60,14 +95,14 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={Math.round(height * 100) / 100}
         />
       </PanelSection>
 
       <PanelSection title="Slope Widths">
         <div className="flex items-center justify-between px-2 pb-2 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           <span>Widths</span>
-          <span>Total: {totalWidth.toFixed(1)}m</span>
+          <span>Total: {formatLength(totalWidth, unitSystem)}</span>
         </div>
         <SliderControl
           label="Left"
@@ -77,7 +112,7 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.leftWidth * 100) / 100}
+          value={Math.round(leftWidth * 100) / 100}
         />
         <SliderControl
           label="Right"
@@ -87,7 +122,7 @@ export function RoofPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.rightWidth * 100) / 100}
+          value={Math.round(rightWidth * 100) / 100}
         />
       </PanelSection>
 
