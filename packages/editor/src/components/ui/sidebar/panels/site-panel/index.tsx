@@ -12,12 +12,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
-  Box,
-  Building2,
   Camera,
   ChevronDown,
-  Image as ImageIcon,
-  Layers,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -34,11 +30,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
+import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { InlineRenameInput } from './inline-rename-input'
-import { TreeNode } from './tree-node'
+import { focusTreeNode, TreeNode } from './tree-node'
+import { TreeNodeDragProvider } from './tree-node-drag'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -61,8 +59,10 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]![0] * polygon[j]![1]
-    area -= polygon[j]![0] * polygon[i]![1]
+    const [currentX, currentY] = polygon[i]!
+    const [nextX, nextY] = polygon[j]!
+    area += currentX * nextY
+    area -= nextX * currentY
   }
   return Math.abs(area) / 2
 }
@@ -316,9 +316,20 @@ function ReferenceItem({
   handleDelete: (id: string, e: React.MouseEvent) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
+  const handleSelect = () => {
+    setSelectedReferenceId(refNode.id)
+  }
+
+  const handleDoubleClick = () => {
+    focusTreeNode(refNode.id as AnyNodeId)
+  }
 
   return (
-    <div className="group/ref relative flex h-8 select-none items-center border-border/50 border-b pr-2 text-xs transition-colors hover:bg-accent/30">
+    <div
+      className="group/ref relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b pr-2 text-xs transition-colors hover:bg-accent/30"
+      onClick={handleSelect}
+      onDoubleClick={handleDoubleClick}
+    >
       <div
         className={cn(
           'pointer-events-none absolute z-10 w-px bg-border/50',
@@ -331,11 +342,7 @@ function ReferenceItem({
         style={{ left: 45, width: 8 }}
       />
 
-      <div
-        className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-[60px] text-muted-foreground group-hover/ref:text-foreground"
-        onClick={() => setSelectedReferenceId(refNode.id)}
-        onDoubleClick={() => setIsEditing(true)}
-      >
+      <div className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-[60px] text-muted-foreground group-hover/ref:text-foreground">
         {refNode.type === 'scan' ? (
           <img
             alt="Scan"
@@ -547,7 +554,6 @@ function LevelItem({
   level,
   selectedLevelId,
   setSelection,
-  deleteNode,
   updateNode,
   isLast,
   projectId,
@@ -557,7 +563,6 @@ function LevelItem({
   level: LevelNode
   selectedLevelId: string | null
   setSelection: (selection: any) => void
-  deleteNode: (id: AnyNodeId) => void
   updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void
   isLast?: boolean
   projectId?: string
@@ -568,6 +573,7 @@ function LevelItem({
   const [isEditing, setIsEditing] = useState(false)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
+  const canDeleteLevel = level.level !== 0
   const [isExpanded, setIsExpanded] = useState(isSelected)
 
   useEffect(() => {
@@ -580,15 +586,25 @@ function LevelItem({
     }
   }, [isSelected])
 
+  const handleSelect = () => {
+    setSelection({ levelId: level.id })
+  }
+
+  const handleDoubleClick = () => {
+    focusTreeNode(level.id)
+  }
+
   return (
     <div className="relative flex flex-col">
       <div
         className={cn(
-          'group/level relative flex h-8 select-none items-center border-border/50 border-b pr-2 transition-all duration-200',
+          'group/level relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b pr-2 transition-all duration-200',
           isSelected
             ? 'bg-accent/50 text-foreground'
             : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
         )}
+        onClick={handleSelect}
+        onDoubleClick={handleDoubleClick}
         ref={itemRef}
       >
         {/* Vertical tree line */}
@@ -631,11 +647,7 @@ function LevelItem({
           </button>
         </div>
 
-        <div
-          className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-0.5 text-sm"
-          onClick={() => setSelection({ levelId: level.id })}
-          onDoubleClick={() => setIsEditing(true)}
-        >
+        <div className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-0.5 text-sm">
           <img
             alt="Level"
             className={cn(
@@ -733,15 +745,15 @@ function LevelItem({
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-40 p-1" side="right">
-            {level.level !== 0 && (
-              <button
-                className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-sm hover:bg-accent hover:text-red-600"
-                onClick={() => deleteNode(level.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
-            )}
+            <button
+              className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canDeleteLevel}
+              onClick={() => deleteLevelWithFallbackSelection(level.id)}
+              title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
           </PopoverContent>
         </Popover>
       </div>
@@ -780,7 +792,6 @@ function LevelsSection({
   const nodes = useScene((state) => state.nodes)
   const createNode = useScene((state) => state.createNode)
   const updateNode = useScene((state) => state.updateNode)
-  const deleteNode = useScene((state) => state.deleteNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -832,7 +843,6 @@ function LevelsSection({
         )}
         {[...levels].reverse().map((level, index) => (
           <LevelItem
-            deleteNode={deleteNode}
             isLast={index === levels.length - 1}
             key={level.id}
             level={level}
@@ -1012,7 +1022,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   }
 
   const handleDoubleClick = () => {
-    setIsEditing(true)
+    focusTreeNode(zone.id)
   }
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -1229,16 +1239,18 @@ function ContentSection() {
   }
 
   return (
-    <div className="flex flex-col">
-      {elementChildren.map((childId, index) => (
-        <TreeNode
-          depth={0}
-          isLast={index === elementChildren.length - 1}
-          key={childId}
-          nodeId={childId}
-        />
-      ))}
-    </div>
+    <TreeNodeDragProvider>
+      <div className="flex flex-col">
+        {elementChildren.map((childId, index) => (
+          <TreeNode
+            depth={0}
+            isLast={index === elementChildren.length - 1}
+            key={childId}
+            nodeId={childId}
+          />
+        ))}
+      </div>
+    </TreeNodeDragProvider>
   )
 }
 
@@ -1271,6 +1283,17 @@ function BuildingItem({
     }
   }, [isBuildingActive])
 
+  const handleSelect = () => {
+    setSelection({ buildingId: building.id })
+    if (phase === 'site') {
+      setPhase('structure')
+    }
+  }
+
+  const handleDoubleClick = () => {
+    focusTreeNode(building.id)
+  }
+
   return (
     <motion.div
       className={cn('flex shrink-0 flex-col overflow-hidden', isBuildingActive && 'min-h-0 flex-1')}
@@ -1279,23 +1302,17 @@ function BuildingItem({
     >
       <motion.div
         className={cn(
-          'group/building flex h-10 shrink-0 items-center border-border/50 border-b pr-2 transition-all duration-200',
+          'group/building flex h-10 shrink-0 cursor-pointer items-center border-border/50 border-b pr-2 transition-all duration-200',
           isBuildingActive
             ? 'bg-accent/50 text-foreground'
             : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
         )}
         layout="position"
+        onClick={handleSelect}
+        onDoubleClick={handleDoubleClick}
         ref={itemRef}
       >
-        <button
-          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 py-2 pl-3"
-          onClick={() => {
-            setSelection({ buildingId: building.id })
-            if (phase === 'site') {
-              setPhase('structure')
-            }
-          }}
-        >
+        <div className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 py-2 pl-3">
           <img
             alt="Building"
             className={cn(
@@ -1305,7 +1322,7 @@ function BuildingItem({
             src="/icons/building.png"
           />
           <span className="truncate font-medium text-sm">{building.name || 'Building'}</span>
-        </button>
+        </div>
         <Popover
           onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
           open={buildingCameraOpen === building.id}
@@ -1395,7 +1412,7 @@ function BuildingItem({
                 />
                 <LayerToggle />
               </div>
-              <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                 <MultiSelectionBadge />
                 <ContentSection />
               </div>

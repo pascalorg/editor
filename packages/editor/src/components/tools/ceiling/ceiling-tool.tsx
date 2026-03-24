@@ -377,6 +377,7 @@ export const CeilingTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={mainLineRef}
         renderOrder={1}
         visible={false}
@@ -390,6 +391,7 @@ export const CeilingTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={closingLineRef}
         renderOrder={1}
         visible={false}
@@ -410,6 +412,7 @@ export const CeilingTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={groundMainLineRef}
         renderOrder={1}
         visible={false}
@@ -430,6 +433,7 @@ export const CeilingTool: React.FC = () => {
       <line
         frustumCulled={false}
         layers={EDITOR_LAYER}
+        // @ts-expect-error
         ref={groundClosingLineRef}
         renderOrder={1}
         visible={false}

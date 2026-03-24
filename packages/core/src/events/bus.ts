@@ -76,6 +76,7 @@ export interface ThumbnailGenerateEvent {
 
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
+  'camera-controls:focus': CameraControlEvent
   'camera-controls:capture': CameraControlEvent
   'camera-controls:top-view': undefined
   'camera-controls:orbit-cw': undefined

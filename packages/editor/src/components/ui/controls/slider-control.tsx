@@ -172,7 +172,7 @@ export function SliderControl({
       document.addEventListener('pointermove', handlePointerMove)
       document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, min, max, step, precision, clamp, onChange],
+    [isEditing, min, max, step, precision, clamp, onChange, dragStartValue, value],
   )
 
   const handleValueClick = useCallback(() => {

@@ -1,41 +1,13 @@
-import { emitter, type GridEvent, useScene, WallNode } from '@pascal-app/core'
+import { emitter, type GridEvent, type LevelNode, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { createWallOnCurrentLevel, snapWallDraftPoint, type WallPlanPoint } from './wall-drafting'
 
 const WALL_HEIGHT = 2.5
-const WALL_THICKNESS = 0.15
-
-/**
- * Snap point to 45° angle increments relative to start point
- * Also snaps end point to 0.5 grid
- */
-const snapTo45Degrees = (start: Vector3, cursor: Vector3): Vector3 => {
-  const dx = cursor.x - start.x
-  const dz = cursor.z - start.z
-
-  // Calculate angle in radians
-  const angle = Math.atan2(dz, dx)
-
-  // Round to nearest 45° (π/4 radians)
-  const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
-
-  // Calculate distance from start to cursor
-  const distance = Math.sqrt(dx * dx + dz * dz)
-
-  // Project end point along snapped angle
-  let snappedX = start.x + Math.cos(snappedAngle) * distance
-  let snappedZ = start.z + Math.sin(snappedAngle) * distance
-
-  // Snap to 0.5 grid
-  snappedX = Math.round(snappedX * 2) / 2
-  snappedZ = Math.round(snappedZ * 2) / 2
-
-  return new Vector3(snappedX, cursor.y, snappedZ)
-}
 
 /**
  * Update wall preview mesh geometry to create a vertical plane between two points
@@ -52,9 +24,6 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
 
   mesh.visible = true
   direction.normalize()
-
-  // Perpendicular vector for thickness
-  const perpendicular = new Vector3(-direction.z, 0, direction.x).multiplyScalar(WALL_THICKNESS / 2)
 
   // Create wall shape (vertical rectangle in XY plane)
   const shape = new Shape()
@@ -82,19 +51,18 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
   mesh.geometry = geometry
 }
 
-const commitWallDrawing = (start: [number, number], end: [number, number]) => {
+const getCurrentLevelWalls = (): WallNode[] => {
   const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, nodes } = useScene.getState()
+  const { nodes } = useScene.getState()
 
-  if (!currentLevelId) return
+  if (!currentLevelId) return []
 
-  const wallCount = Object.values(nodes).filter((n) => n.type === 'wall').length
-  const name = `Wall ${wallCount + 1}`
+  const levelNode = nodes[currentLevelId]
+  if (!levelNode || levelNode.type !== 'level') return []
 
-  const wall = WallNode.parse({ name, start, end })
-
-  createNode(wall, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
+  return (levelNode as LevelNode).children
+    .map((childId) => nodes[childId])
+    .filter((node): node is WallNode => node?.type === 'wall')
 }
 
 export const WallTool: React.FC = () => {
@@ -106,20 +74,27 @@ export const WallTool: React.FC = () => {
   const shiftPressed = useRef(false)
 
   useEffect(() => {
-    let gridPosition: [number, number] = [0, 0]
+    let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
-      gridPosition = [Math.round(event.position[0] * 2) / 2, Math.round(event.position[2] * 2) / 2]
-      const cursorPosition = new Vector3(gridPosition[0], event.position[1], gridPosition[1])
+      const walls = getCurrentLevelWalls()
+      const cursorPoint: WallPlanPoint = [event.position[0], event.position[2]]
+      gridPosition = snapWallDraftPoint({
+        point: cursorPoint,
+        walls,
+      })
 
       if (buildingState.current === 1) {
-        // Snap to 45° angles only if shift is not pressed
-        const snapped = shiftPressed.current
-          ? cursorPosition
-          : snapTo45Degrees(startingPoint.current, cursorPosition)
+        const snappedPoint = snapWallDraftPoint({
+          point: cursorPoint,
+          walls,
+          start: [startingPoint.current.x, startingPoint.current.z],
+          angleSnap: !shiftPressed.current,
+        })
+        const snapped = new Vector3(snappedPoint[0], event.position[1], snappedPoint[1])
         endingPoint.current.copy(snapped)
 
         // Position the cursor at the end of the wall being drawn
@@ -138,21 +113,37 @@ export const WallTool: React.FC = () => {
         // Update wall preview geometry
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
       } else {
-        // Not drawing a wall, just follow the grid position
+        // Not drawing a wall yet, show the snapped anchor point.
         cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
       }
     }
 
     const onGridClick = (event: GridEvent) => {
+      const walls = getCurrentLevelWalls()
+      const clickPoint: WallPlanPoint = [event.position[0], event.position[2]]
+
       if (buildingState.current === 0) {
-        startingPoint.current.set(gridPosition[0], event.position[1], gridPosition[1])
+        const snappedStart = snapWallDraftPoint({
+          point: clickPoint,
+          walls,
+        })
+        gridPosition = snappedStart
+        startingPoint.current.set(snappedStart[0], event.position[1], snappedStart[1])
+        endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         wallPreviewRef.current.visible = true
       } else if (buildingState.current === 1) {
+        const snappedEnd = snapWallDraftPoint({
+          point: clickPoint,
+          walls,
+          start: [startingPoint.current.x, startingPoint.current.z],
+          angleSnap: !shiftPressed.current,
+        })
+        endingPoint.current.set(snappedEnd[0], event.position[1], snappedEnd[1])
         const dx = endingPoint.current.x - startingPoint.current.x
         const dz = endingPoint.current.z - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
-        commitWallDrawing(
+        createWallOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           [endingPoint.current.x, endingPoint.current.z],
         )

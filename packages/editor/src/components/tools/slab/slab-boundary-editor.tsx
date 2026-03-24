@@ -27,7 +27,7 @@ export const SlabBoundaryEditor: React.FC<SlabBoundaryEditorProps> = ({ slabId }
     [slabId, updateNode, setSelection],
   )
 
-  if (!(slab && slab.polygon) || slab.polygon.length < 3) return null
+  if (!slab?.polygon || slab.polygon.length < 3) return null
 
   return (
     <PolygonEditor

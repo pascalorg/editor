@@ -1,8 +1,7 @@
-import { type AnyNodeId, useScene } from '@pascal-app/core'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, useEffect, useRef } from 'react'
-import { cn } from './../../../../../lib/utils'
 
 export function handleTreeSelection(
   e: React.MouseEvent,
@@ -50,6 +49,11 @@ export function handleTreeSelection(
   return false
 }
 
+export function focusTreeNode(nodeId: AnyNodeId) {
+  emitter.emit('camera-controls:focus', { nodeId })
+}
+
+import { cn } from '../../../../../lib/utils'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { DoorTreeNode } from './door-tree-node'
@@ -110,12 +114,15 @@ interface TreeNodeWrapperProps {
   onDoubleClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
+  onPointerDown?: (e: React.PointerEvent) => void
   actions?: React.ReactNode
   children?: React.ReactNode
   isSelected?: boolean
   isHovered?: boolean
   isVisible?: boolean
   isLast?: boolean
+  isDraggable?: boolean
+  isDropTarget?: boolean
 }
 
 export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
@@ -132,12 +139,15 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       onDoubleClick,
       onMouseEnter,
       onMouseLeave,
+      onPointerDown,
       actions,
       children,
       isSelected,
       isHovered,
       isVisible = true,
       isLast,
+      isDraggable,
+      isDropTarget,
     },
     ref,
   ) {
@@ -156,13 +166,19 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-r border-r-transparent border-b text-sm transition-all duration-200',
             isSelected
               ? 'border-r-3 border-r-white bg-accent/50 text-foreground'
-              : isHovered
-                ? 'bg-accent/30 text-foreground'
-                : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
+              : isDropTarget
+                ? 'bg-blue-500/15 text-foreground ring-1 ring-blue-500/40 ring-inset'
+                : isHovered
+                  ? 'bg-accent/30 text-foreground'
+                  : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
             !isVisible && 'opacity-50',
+            isDraggable && 'cursor-grab active:cursor-grabbing',
           )}
+          onClick={onClick}
+          onDoubleClick={onDoubleClick}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
+          onPointerDown={onPointerDown}
           ref={rowRef}
           style={{ paddingLeft: depth * 12 + 12, paddingRight: 12 }}
         >
@@ -195,18 +211,16 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             }}
           >
             {hasChildren ? (
-              expanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
+              <motion.div
+                animate={{ rotate: expanded ? 90 : 0 }}
+                initial={false}
+                transition={{ duration: 0.2 }}
+              >
                 <ChevronRight className="h-3 w-3" />
-              )
+              </motion.div>
             ) : null}
           </button>
-          <div
-            className="flex min-w-0 flex-1 items-center gap-1.5"
-            onClick={onClick}
-            onDoubleClick={onDoubleClick}
-          >
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <span
               className={cn(
                 'flex h-4 w-4 shrink-0 items-center justify-center transition-all duration-200',

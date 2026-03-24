@@ -23,7 +23,7 @@ export function TreeNodeActions({ node }: TreeNodeActionsProps) {
   const toggleVisibility = (e: React.MouseEvent) => {
     e.stopPropagation()
     const newVisibility = !isVisible
-    if (selectedIds && selectedIds.includes(node.id)) {
+    if (selectedIds?.includes(node.id)) {
       updateNodes(
         selectedIds.map((id) => ({
           id: id as AnyNodeId,

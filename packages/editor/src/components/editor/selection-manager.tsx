@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   type BuildingNode,
   emitter,
   type ItemNode,
@@ -11,7 +12,7 @@ import {
 
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
-import useEditor from './../../store/use-editor'
+import useEditor, { type Phase, type StructureLayer } from './../../store/use-editor'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   const currentLevelId = useViewer.getState().selection.levelId
@@ -28,6 +29,7 @@ type SelectableNodeType =
   | 'slab'
   | 'ceiling'
   | 'roof'
+  | 'roof-segment'
   | 'window'
   | 'door'
 
@@ -41,6 +43,11 @@ interface SelectionStrategy {
   handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
+}
+
+type SelectionTarget = {
+  phase: Phase
+  structureLayer?: StructureLayer
 }
 
 export const resolveBuildingId = (
@@ -63,16 +70,6 @@ const computeNextIds = (
 ): string[] => {
   const isMeta = event?.metaKey || event?.nativeEvent?.metaKey || modifierKeys?.meta
   const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey || modifierKeys?.ctrl
-
-  console.log('computeNextIds:', {
-    nodeId: node.id,
-    selectedIds,
-    isMeta,
-    isCtrl,
-    eventMeta: event?.metaKey,
-    nativeMeta: event?.nativeEvent?.metaKey,
-    modMeta: modifierKeys?.meta,
-  })
 
   if (isMeta || isCtrl) {
     if (selectedIds.includes(node.id)) {
@@ -98,7 +95,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ['wall', 'item', 'zone', 'slab', 'ceiling', 'roof', 'window', 'door'],
+    types: ['wall', 'item', 'zone', 'slab', 'ceiling', 'roof', 'roof-segment', 'window', 'door'],
     handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
@@ -142,7 +139,8 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         node.type === 'wall' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
-        node.type === 'roof'
+        node.type === 'roof' ||
+        node.type === 'roof-segment'
       )
         return true
       if (node.type === 'item') {
@@ -186,6 +184,46 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       return item.asset.category !== 'door' && item.asset.category !== 'window'
     },
   },
+}
+
+const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
+  if (node.type === 'zone') {
+    return {
+      phase: 'structure',
+      structureLayer: 'zones',
+    }
+  }
+
+  if (
+    node.type === 'wall' ||
+    node.type === 'slab' ||
+    node.type === 'ceiling' ||
+    node.type === 'roof' ||
+    node.type === 'roof-segment' ||
+    node.type === 'window' ||
+    node.type === 'door'
+  ) {
+    return {
+      phase: 'structure',
+      structureLayer: 'elements',
+    }
+  }
+
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    if (item.asset.category === 'door' || item.asset.category === 'window') {
+      return {
+        phase: 'structure',
+        structureLayer: 'elements',
+      }
+    }
+
+    return {
+      phase: 'furnish',
+    }
+  }
+
+  return null
 }
 
 export const SelectionManager = () => {
@@ -233,35 +271,26 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       const node = event.node
       let currentPhase = useEditor.getState().phase
-      let targetPhase = currentPhase
+      let currentStructureLayer = useEditor.getState().structureLayer
 
-      // Auto-switch between structure and furnish phases when clicking elements on the same level
+      // Auto-switch between zones, structure, and furnish when clicking elements on the same level.
       if (currentPhase === 'structure' || currentPhase === 'furnish') {
         if (isNodeInCurrentLevel(node)) {
-          if (
-            node.type === 'wall' ||
-            node.type === 'slab' ||
-            node.type === 'ceiling' ||
-            node.type === 'roof' ||
-            node.type === 'window' ||
-            node.type === 'door'
-          ) {
-            targetPhase = 'structure'
-          } else if (node.type === 'item') {
-            const item = node as ItemNode
-            if (item.asset.category === 'door' || item.asset.category === 'window') {
-              targetPhase = 'structure'
-            } else {
-              targetPhase = 'furnish'
+          const target = getSelectionTarget(node)
+          if (target) {
+            if (target.phase !== currentPhase) {
+              useEditor.getState().setPhase(target.phase)
+              currentPhase = target.phase
             }
-          }
 
-          if (targetPhase !== currentPhase) {
-            useEditor.getState().setPhase(targetPhase)
-            if (targetPhase === 'structure' && useEditor.getState().structureLayer === 'zones') {
-              useEditor.getState().setStructureLayer('elements')
+            if (
+              target.phase === 'structure' &&
+              target.structureLayer &&
+              target.structureLayer !== currentStructureLayer
+            ) {
+              useEditor.getState().setStructureLayer(target.structureLayer)
+              currentStructureLayer = target.structureLayer
             }
-            currentPhase = targetPhase
           }
         }
       }
@@ -271,14 +300,15 @@ export const SelectionManager = () => {
         event.stopPropagation()
         clickHandledRef.current = true
 
-        console.log(
-          '[SelectionManager] Valid click on:',
-          node.type,
-          node.id,
-          'Shift:',
-          event.nativeEvent.shiftKey,
-        )
-        activeStrategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current)
+        let nodeToSelect = node
+        if (node.type === 'roof-segment' && node.parentId) {
+          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+          if (parentNode && parentNode.type === 'roof') {
+            nodeToSelect = parentNode
+          }
+        }
+
+        activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
 
         // Reset the handled flag after a short delay to allow grid:click to be ignored
         setTimeout(() => {
@@ -295,6 +325,7 @@ export const SelectionManager = () => {
       'slab',
       'ceiling',
       'roof',
+      'roof-segment',
       'window',
       'door',
     ]
@@ -304,7 +335,6 @@ export const SelectionManager = () => {
 
     const onGridClick = () => {
       if (clickHandledRef.current) return
-      console.log('onGridClick triggered! Deselecting.')
       const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase]
       if (activeStrategy) activeStrategy.handleDeselect()
     }
@@ -351,7 +381,8 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
-      if (useViewer.getState().hoveredId === event.node.id) {
+      const nodeId = event?.node?.id
+      if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
@@ -361,6 +392,7 @@ export const SelectionManager = () => {
       const currentPhase = useEditor.getState().phase
 
       let targetPhase: 'site' | 'structure' | 'furnish' | null = null
+      let forceSelect = false
 
       if (node.type === 'building' || node.type === 'site') {
         if (currentPhase === 'structure' || currentPhase === 'furnish') {
@@ -374,10 +406,14 @@ export const SelectionManager = () => {
         node.type === 'slab' ||
         node.type === 'ceiling' ||
         node.type === 'roof' ||
+        node.type === 'roof-segment' ||
         node.type === 'window' ||
         node.type === 'door'
       ) {
         targetPhase = 'structure'
+        if (node.type === 'roof-segment' && currentPhase === 'structure') {
+          forceSelect = true // allow double click to dive into roof-segment even if already in structure phase
+        }
       } else if (node.type === 'item') {
         const item = node as ItemNode
         if (item.asset.category === 'door' || item.asset.category === 'window') {
@@ -391,16 +427,18 @@ export const SelectionManager = () => {
         return
       }
 
-      if (targetPhase && targetPhase !== useEditor.getState().phase) {
+      if ((targetPhase && targetPhase !== useEditor.getState().phase) || forceSelect) {
         event.stopPropagation()
 
-        useEditor.getState().setPhase(targetPhase)
+        if (targetPhase && targetPhase !== useEditor.getState().phase) {
+          useEditor.getState().setPhase(targetPhase)
+        }
 
         if (targetPhase === 'structure' && useEditor.getState().structureLayer === 'zones') {
           useEditor.getState().setStructureLayer('elements')
         }
 
-        const strategy = SELECTION_STRATEGIES[targetPhase]
+        const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase]
         if (strategy) {
           strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current)
         }
@@ -414,6 +452,7 @@ export const SelectionManager = () => {
       'slab',
       'ceiling',
       'roof',
+      'roof-segment',
       'window',
       'door',
       'zone',
@@ -434,7 +473,44 @@ export const SelectionManager = () => {
     }
   }, [mode, movingNode])
 
-  return <EditorOutlinerSync />
+  return (
+    <>
+      <SelectionStateSync />
+      <EditorOutlinerSync />
+    </>
+  )
+}
+
+const SelectionStateSync = () => {
+  useEffect(() => {
+    return useScene.subscribe((state) => {
+      const { buildingId, levelId, zoneId, selectedIds } = useViewer.getState().selection
+
+      if (buildingId && !state.nodes[buildingId as AnyNodeId]) {
+        useViewer.getState().setSelection({ buildingId: null })
+        return
+      }
+
+      if (levelId && !state.nodes[levelId as AnyNodeId]) {
+        useViewer.getState().setSelection({ levelId: null })
+        return
+      }
+
+      if (zoneId && !state.nodes[zoneId as AnyNodeId]) {
+        useViewer.getState().setSelection({ zoneId: null })
+        return
+      }
+
+      if (selectedIds.length === 0) return
+
+      const nextSelectedIds = selectedIds.filter((id) => state.nodes[id as AnyNodeId])
+      if (nextSelectedIds.length !== selectedIds.length) {
+        useViewer.getState().setSelection({ selectedIds: nextSelectedIds })
+      }
+    })
+  }, [])
+
+  return null
 }
 
 const EditorOutlinerSync = () => {

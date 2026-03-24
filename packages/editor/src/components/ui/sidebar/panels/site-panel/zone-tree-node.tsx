@@ -3,7 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { InlineRenameInput } from './inline-rename-input'
-import { TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface ZoneTreeNodeProps {
@@ -25,7 +25,7 @@ export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   }
 
   const handleDoubleClick = () => {
-    setIsEditing(true)
+    focusTreeNode(node.id)
   }
 
   const handleMouseEnter = () => {
@@ -79,8 +79,8 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
 
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]![0] * polygon[j]![1]
-    area -= polygon[j]![0] * polygon[i]![1]
+    area += polygon[i]?.[0] * polygon[j]?.[1]
+    area -= polygon[j]?.[0] * polygon[i]?.[1]
   }
 
   return Math.abs(area) / 2

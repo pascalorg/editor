@@ -343,7 +343,18 @@ useScene.temporal.subscribe((state) => {
         // Nodes that were deleted (exist in prev but not current)
         for (const [id, node] of Object.entries(snapshotBefore) as [AnyNodeId, AnyNode][]) {
           if (!currentNodes[id]) {
-            if (node.parentId) markDirty(node.parentId as AnyNodeId)
+            const parentId = node.parentId as AnyNodeId | undefined
+            if (parentId) {
+              markDirty(parentId)
+              // Mark sibling nodes dirty so they can update their geometry
+              // (e.g. adjacent walls need to recalculate miter/junction geometry)
+              const parent = currentNodes[parentId]
+              if (parent && 'children' in parent) {
+                for (const childId of (parent as AnyNode & { children: string[] }).children) {
+                  markDirty(childId as AnyNodeId)
+                }
+              }
+            }
           }
         }
       } else {

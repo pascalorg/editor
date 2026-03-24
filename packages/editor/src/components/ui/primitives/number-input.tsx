@@ -95,7 +95,7 @@ export function NumberInput({
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
     },
-    [isEditing, value, onChange, clamp, precision],
+    [isEditing, value, onChange, clamp, precision, step],
   )
 
   const handleValueClick = useCallback(() => {

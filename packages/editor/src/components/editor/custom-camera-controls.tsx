@@ -1,7 +1,7 @@
 'use client'
 
 import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -12,21 +12,29 @@ import useEditor from '../../store/use-editor'
 const currentTarget = new Vector3()
 const tempBox = new Box3()
 const tempCenter = new Vector3()
+const tempDelta = new Vector3()
+const tempPosition = new Vector3()
 const tempSize = new Vector3()
+const tempTarget = new Vector3()
+const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
+const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
+  const maxPolarAngle =
+    !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
   const raycaster = useThree((state) => state.raycaster)
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     raycaster.layers.enable(EDITOR_LAYER)
-    raycaster.layers.enable(2)
+    raycaster.layers.enable(ZONE_LAYER)
   }, [camera, raycaster])
 
   useEffect(() => {
@@ -50,6 +58,45 @@ export const CustomCameraControls = () => {
       true,
     )
   }, [currentLevelId, isPreviewMode])
+
+  useEffect(() => {
+    if (!controls.current) return
+
+    controls.current.maxPolarAngle = maxPolarAngle
+    controls.current.minPolarAngle = 0
+
+    if (controls.current.polarAngle > maxPolarAngle) {
+      controls.current.rotateTo(controls.current.azimuthAngle, maxPolarAngle, true)
+    }
+  }, [maxPolarAngle])
+
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      if (isPreviewMode || !controls.current) return
+
+      const object3D = sceneRegistry.nodes.get(nodeId)
+      if (!object3D) return
+
+      tempBox.setFromObject(object3D)
+      if (tempBox.isEmpty()) return
+
+      tempBox.getCenter(tempCenter)
+      controls.current.getPosition(tempPosition)
+      controls.current.getTarget(tempTarget)
+      tempDelta.copy(tempCenter).sub(tempTarget)
+
+      controls.current.setLookAt(
+        tempPosition.x + tempDelta.x,
+        tempPosition.y + tempDelta.y,
+        tempPosition.z + tempDelta.z,
+        tempCenter.x,
+        tempCenter.y,
+        tempCenter.z,
+        true,
+      )
+    },
+    [isPreviewMode],
+  )
 
   // Configure mouse buttons based on control mode and camera mode
   const cameraMode = useViewer((state) => state.cameraMode)
@@ -233,7 +280,7 @@ export const CustomCameraControls = () => {
       if (!controls.current) return
 
       const node = useScene.getState().nodes[nodeId]
-      if (!(node && node.camera)) return
+      if (!node?.camera) return
       const { position, target } = node.camera
 
       controls.current.setLookAt(
@@ -283,7 +330,12 @@ export const CustomCameraControls = () => {
       controls.current.rotateTo(target, currentPolar, true)
     }
 
+    const handleNodeFocus = ({ nodeId }: CameraControlEvent) => {
+      focusNode(nodeId)
+    }
+
     emitter.on('camera-controls:capture', handleNodeCapture)
+    emitter.on('camera-controls:focus', handleNodeFocus)
     emitter.on('camera-controls:view', handleNodeView)
     emitter.on('camera-controls:top-view', handleTopView)
     emitter.on('camera-controls:orbit-cw', handleOrbitCW)
@@ -291,12 +343,13 @@ export const CustomCameraControls = () => {
 
     return () => {
       emitter.off('camera-controls:capture', handleNodeCapture)
+      emitter.off('camera-controls:focus', handleNodeFocus)
       emitter.off('camera-controls:view', handleNodeView)
       emitter.off('camera-controls:top-view', handleTopView)
       emitter.off('camera-controls:orbit-cw', handleOrbitCW)
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
     }
-  }, [])
+  }, [focusNode])
 
   const onTransitionStart = useCallback(() => {
     useViewer.getState().setCameraDragging(true)
@@ -310,7 +363,7 @@ export const CustomCameraControls = () => {
     <CameraControls
       makeDefault
       maxDistance={100}
-      maxPolarAngle={Math.PI / 2 - 0.1}
+      maxPolarAngle={maxPolarAngle}
       minDistance={10}
       minPolarAngle={0}
       mouseButtons={mouseButtons}

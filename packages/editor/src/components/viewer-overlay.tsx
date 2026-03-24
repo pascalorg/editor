@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@iconify/react'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -10,7 +11,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Layers2, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'lucide-react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { cn } from '../lib/utils'
@@ -26,6 +27,13 @@ type ProjectOwner = {
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
   stacked: 'Stacked',
+  exploded: 'Exploded',
+  solo: 'Solo',
+}
+
+const levelModeBadgeLabels: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
+  manual: 'Stack',
+  stacked: 'Stack',
   exploded: 'Exploded',
   solo: 'Solo',
 }
@@ -58,6 +66,7 @@ const getNodeName = (node: AnyNode): string => {
   if (node.type === 'slab') return 'Slab'
   if (node.type === 'ceiling') return 'Ceiling'
   if (node.type === 'roof') return 'Roof'
+  if (node.type === 'roof-segment') return 'Roof Segment'
   return node.type
 }
 
@@ -378,11 +387,12 @@ export const ViewerOverlay = ({
 
             {/* Level Mode */}
             <ActionButton
-              className={
-                levelMode !== 'stacked'
-                  ? 'bg-amber-500/20 text-amber-400'
-                  : 'hover:bg-white/5 hover:text-amber-400'
-              }
+              className={cn(
+                'p-0',
+                levelMode === 'stacked' || levelMode === 'manual'
+                  ? 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
+                  : 'bg-white/10 text-foreground',
+              )}
               label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
               onClick={() => {
                 if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
@@ -394,11 +404,21 @@ export const ViewerOverlay = ({
               tooltipSide="top"
               variant="ghost"
             >
-              {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
-              {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
-              {(levelMode === 'stacked' || levelMode === 'manual') && (
-                <Layers className="h-6 w-6" />
-              )}
+              <span className="relative flex h-full w-full items-center justify-center pb-1">
+                {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
+                {levelMode === 'exploded' && (
+                  <Icon color="currentColor" height={24} icon="charm:stack-pop" width={24} />
+                )}
+                {(levelMode === 'stacked' || levelMode === 'manual') && (
+                  <Icon color="currentColor" height={24} icon="charm:stack-push" width={24} />
+                )}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-1 bottom-1 left-1 rounded border border-border/50 bg-background/70 px-0.5 py-[2px] text-center font-medium font-pixel text-[8px] text-foreground/85 leading-none tracking-[-0.02em] backdrop-blur-sm"
+                >
+                  {levelModeBadgeLabels[levelMode]}
+                </span>
+              </span>
             </ActionButton>
 
             {/* Wall Mode */}

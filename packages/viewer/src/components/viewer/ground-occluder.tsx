@@ -1,4 +1,4 @@
-import { useScene } from '@pascal-app/core'
+import { type LevelNode, useScene } from '@pascal-app/core'
 import polygonClipping from 'polygon-clipping'
 import { useMemo } from 'react'
 import * as THREE from 'three'
@@ -20,13 +20,39 @@ export const GroundOccluder = () => {
     s.lineTo(-size, size)
     s.closePath()
 
-    // Collect all polygons for slabs and zones
+    const levelIndexById = new Map<LevelNode['id'], number>()
+    let lowestLevelIndex = Number.POSITIVE_INFINITY
+
+    Object.values(nodes).forEach((node) => {
+      if (node.type !== 'level') {
+        return
+      }
+
+      levelIndexById.set(node.id, node.level)
+      lowestLevelIndex = Math.min(lowestLevelIndex, node.level)
+    })
+
+    // Only the lowest level should punch through the ground plane.
+    // Upper-level slabs should still cast shadows, but they should not
+    // reveal their footprint on the level-zero ground material.
     const polygons: [number, number][][] = []
 
     Object.values(nodes).forEach((node) => {
-      if (node.type === 'slab' && node.polygon && node.polygon.length >= 3) {
-        polygons.push(node.polygon as [number, number][])
+      if (!(node.type === 'slab' && node.visible && node.polygon.length >= 3)) {
+        return
       }
+
+      if (Number.isFinite(lowestLevelIndex)) {
+        const parentLevelIndex = node.parentId
+          ? levelIndexById.get(node.parentId as LevelNode['id'])
+          : undefined
+
+        if (parentLevelIndex !== lowestLevelIndex) {
+          return
+        }
+      }
+
+      polygons.push(node.polygon as [number, number][])
     })
 
     if (polygons.length > 0) {

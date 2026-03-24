@@ -8,7 +8,7 @@ import {
   type WallEvent,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
@@ -33,9 +33,9 @@ const edgeMaterial = new LineBasicNodeMaterial({
 export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) => {
   const cursorGroupRef = useRef<Group>(null!)
 
-  const exitMoveMode = () => {
+  const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
-  }
+  }, [])
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -352,7 +352,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       emitter.off('wall:leave', onWallLeave)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [movingDoorNode])
+  }, [movingDoorNode, exitMoveMode])
 
   const edgesGeo = useMemo(() => {
     const boxGeo = new BoxGeometry(

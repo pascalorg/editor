@@ -29,6 +29,9 @@ type ViewerState = {
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
+  unit: 'metric' | 'imperial'
+  setUnit: (unit: 'metric' | 'imperial') => void
+
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
@@ -80,6 +83,9 @@ const useViewer = create<ViewerState>()(
 
       theme: 'light',
       setTheme: (theme) => set({ theme }),
+
+      unit: 'metric',
+      setUnit: (unit) => set({ unit }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -187,6 +193,7 @@ const useViewer = create<ViewerState>()(
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         theme: state.theme,
+        unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,

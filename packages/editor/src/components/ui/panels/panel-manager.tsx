@@ -8,6 +8,7 @@ import { DoorPanel } from './door-panel'
 import { ItemPanel } from './item-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
+import { RoofSegmentPanel } from './roof-segment-panel'
 import { SlabPanel } from './slab-panel'
 import { WallPanel } from './wall-panel'
 import { WindowPanel } from './window-panel'
@@ -32,6 +33,8 @@ export function PanelManager() {
           return <ItemPanel />
         case 'roof':
           return <RoofPanel />
+        case 'roof-segment':
+          return <RoofSegmentPanel />
         case 'slab':
           return <SlabPanel />
         case 'ceiling':

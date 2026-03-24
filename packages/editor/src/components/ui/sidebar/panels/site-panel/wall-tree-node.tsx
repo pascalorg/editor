@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface WallTreeNodeProps {
@@ -28,7 +28,7 @@ export function WallTreeNode({ node, depth, isLast }: WallTreeNodeProps) {
     let isDescendant = false
     for (const id of selectedIds) {
       let current = nodes[id as AnyNodeId]
-      while (current && current.parentId) {
+      while (current?.parentId) {
         if (current.parentId === node.id) {
           isDescendant = true
           break
@@ -51,7 +51,7 @@ export function WallTreeNode({ node, depth, isLast }: WallTreeNodeProps) {
   }
 
   const handleDoubleClick = () => {
-    setIsEditing(true)
+    focusTreeNode(node.id)
   }
 
   const handleMouseEnter = () => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useViewer } from '@pascal-app/viewer'
-import { Moon, Sun } from 'lucide-react'
+import { Moon, Ruler, Sun } from 'lucide-react'
 import { motion } from 'motion/react'
 import { type ReactNode, useEffect, useState } from 'react'
 import {
@@ -28,6 +28,8 @@ const panels: { id: PanelId; iconSrc: string; label: string }[] = [
 export function IconRail({ activePanel, onPanelChange, appMenuButton, className }: IconRailProps) {
   const theme = useViewer((state) => state.theme)
   const setTheme = useViewer((state) => state.setTheme)
+  const unit = useViewer((state) => state.unit)
+  const setUnit = useViewer((state) => state.setUnit)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -77,6 +79,24 @@ export function IconRail({ activePanel, onPanelChange, appMenuButton, className 
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Unit Toggle */}
+      {mounted && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="mb-1 flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-accent/40 text-foreground transition-all hover:bg-accent"
+              onClick={() => setUnit(unit === 'metric' ? 'imperial' : 'metric')}
+              type="button"
+            >
+              <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 font-medium text-[10px] leading-none">
+                {unit === 'metric' ? 'm' : 'ft'}
+              </div>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Toggle units (metric/imperial)</TooltipContent>
+        </Tooltip>
+      )}
 
       {/* Theme Toggle */}
       {mounted && (

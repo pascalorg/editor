@@ -15,12 +15,13 @@ interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
 }
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
-  { color = '#818cf8', showTooltip = true, height = 2.5, ...props },
+  { color = '#818cf8', showTooltip = true, height = 2.5, visible = true, ...props },
   ref,
 ) {
   const tool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
+  const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
 
   // Find the icon for the current tool
   let activeToolConfig = null
@@ -32,8 +33,10 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
     }
   }
 
+  const isVisible = visible && !isFloorplanHovered
+
   return (
-    <group ref={ref} {...props}>
+    <group ref={ref} {...props} visible={isVisible}>
       {/* Flat marker on the ground */}
       <group rotation={[-Math.PI / 2, 0, 0]}>
         {/* Center dot */}
@@ -76,7 +79,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       )}
 
       {/* Tool Icon Tooltip at the top of the line */}
-      {showTooltip && activeToolConfig && (
+      {isVisible && showTooltip && activeToolConfig && (
         <Html
           center
           position={[0, height > 0 ? height + 0.2 : 0.6, 0]}

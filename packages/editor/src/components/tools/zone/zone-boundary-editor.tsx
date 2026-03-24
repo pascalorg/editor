@@ -23,7 +23,7 @@ export const ZoneBoundaryEditor: React.FC<ZoneBoundaryEditorProps> = ({ zoneId }
     [zoneId, updateNode],
   )
 
-  if (!(zone && zone.polygon) || zone.polygon.length < 3) return null
+  if (!zone?.polygon || zone.polygon.length < 3) return null
 
   const zoneColor = zone.color || '#3b82f6'
 

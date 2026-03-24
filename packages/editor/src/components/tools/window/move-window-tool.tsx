@@ -8,7 +8,7 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
@@ -45,9 +45,9 @@ const edgeMaterial = new LineBasicNodeMaterial({
 export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode }) => {
   const cursorGroupRef = useRef<Group>(null!)
 
-  const exitMoveMode = () => {
+  const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
-  }
+  }, [])
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -389,7 +389,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       emitter.off('wall:leave', onWallLeave)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [movingWindowNode])
+  }, [movingWindowNode, exitMoveMode])
 
   const edgesGeo = useMemo(() => {
     const boxGeo = new BoxGeometry(
