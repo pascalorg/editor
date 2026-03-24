@@ -1,8 +1,8 @@
 {
   "nodes": {
-    "site_1gsd0rohsqq63cm7": {
+    "site_082b4a9ad2b8a6c5": {
       "object": "node",
-      "id": "site_1gsd0rohsqq63cm7",
+      "id": "site_082b4a9ad2b8a6c5",
       "type": "site",
       "parentId": null,
       "visible": true,
@@ -496,16 +496,16 @@
       "children": [
         {
           "object": "node",
-          "id": "building_gnpdi132xypepzr1",
+          "id": "building_ddf7e312f8cdedf9",
           "type": "building",
-          "parentId": "site_1gsd0rohsqq63cm7",
+          "parentId": "site_082b4a9ad2b8a6c5",
           "visible": true,
           "metadata": {
             "source": "okiyuka",
             "generator": "Okiyuka V1.0"
           },
           "children": [
-            "level_ufd95awjprkaajy2"
+            "level_ce867928f3b4b5eb"
           ],
           "position": [
             0,
@@ -520,18 +520,18 @@
         }
       ]
     },
-    "building_gnpdi132xypepzr1": {
+    "building_ddf7e312f8cdedf9": {
       "object": "node",
-      "id": "building_gnpdi132xypepzr1",
+      "id": "building_ddf7e312f8cdedf9",
       "type": "building",
-      "parentId": "site_1gsd0rohsqq63cm7",
+      "parentId": "site_082b4a9ad2b8a6c5",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
         "generator": "Okiyuka V1.0"
       },
       "children": [
-        "level_ufd95awjprkaajy2"
+        "level_ce867928f3b4b5eb"
       ],
       "position": [
         0,
@@ -544,78 +544,2253 @@
         0
       ]
     },
-    "level_ufd95awjprkaajy2": {
+    "level_ce867928f3b4b5eb": {
       "object": "node",
-      "id": "level_ufd95awjprkaajy2",
+      "id": "level_ce867928f3b4b5eb",
       "type": "level",
-      "parentId": "building_gnpdi132xypepzr1",
+      "parentId": "building_ddf7e312f8cdedf9",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
         "room_count": 6,
-        "schema_version": "1.1"
+        "schema_version": "1.1",
+        "pedestal_count": 150,
+        "pedestal_room_count": 6,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 0,
+            "count": 6
+          },
+          {
+            "height_mm": 70,
+            "count": 28
+          },
+          {
+            "height_mm": 100,
+            "count": 47
+          },
+          {
+            "height_mm": 300,
+            "count": 69
+          }
+        ],
+        "pedestals_by_room": {
+          "_0-2_ROOM_OUTLINE-1": [
+            {
+              "x_mm": 5383.6,
+              "y_mm": 10469.7,
+              "height_mm": 0,
+              "position_m": [
+                5.3836,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 5840.4,
+              "y_mm": 10469.7,
+              "height_mm": 0,
+              "position_m": [
+                5.8404,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 5840.4,
+              "y_mm": 11076.7,
+              "height_mm": 0,
+              "position_m": [
+                5.8404,
+                11.0767
+              ]
+            },
+            {
+              "x_mm": 6297.1,
+              "y_mm": 10469.7,
+              "height_mm": 0,
+              "position_m": [
+                6.2971,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 6297.1,
+              "y_mm": 11076.7,
+              "height_mm": 0,
+              "position_m": [
+                6.2971,
+                11.0767
+              ]
+            },
+            {
+              "x_mm": 6753.9,
+              "y_mm": 10469.7,
+              "height_mm": 0,
+              "position_m": [
+                6.7539,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 7210.6,
+              "y_mm": 10469.7,
+              "height_mm": 100,
+              "position_m": [
+                7.2106,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 7667.4,
+              "y_mm": 10469.7,
+              "height_mm": 100,
+              "position_m": [
+                7.6674,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 8124.1,
+              "y_mm": 10469.7,
+              "height_mm": 100,
+              "position_m": [
+                8.1241,
+                10.4697
+              ]
+            },
+            {
+              "x_mm": 8580.9,
+              "y_mm": 10469.7,
+              "height_mm": 100,
+              "position_m": [
+                8.5809,
+                10.4697
+              ]
+            }
+          ],
+          "_0-2_ROOM_OUTLINE-2": [
+            {
+              "x_mm": 8028.6,
+              "y_mm": 11480.7,
+              "height_mm": 100,
+              "position_m": [
+                8.0286,
+                11.4807
+              ]
+            },
+            {
+              "x_mm": 8485.4,
+              "y_mm": 11480.7,
+              "height_mm": 100,
+              "position_m": [
+                8.4854,
+                11.4807
+              ]
+            }
+          ],
+          "_0-2_ROOM_OUTLINE-3": [
+            {
+              "x_mm": 12444.6,
+              "y_mm": 7930.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                7.9307
+              ]
+            },
+            {
+              "x_mm": 12444.6,
+              "y_mm": 8537.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                8.5377
+              ]
+            },
+            {
+              "x_mm": 12444.6,
+              "y_mm": 9144.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                9.1447
+              ]
+            },
+            {
+              "x_mm": 12444.6,
+              "y_mm": 9751.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                9.7517
+              ]
+            },
+            {
+              "x_mm": 12444.6,
+              "y_mm": 10358.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                10.3587
+              ]
+            },
+            {
+              "x_mm": 12444.6,
+              "y_mm": 10965.7,
+              "height_mm": 70,
+              "position_m": [
+                12.4446,
+                10.9657
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 7930.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                7.9307
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 8537.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                8.5377
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 9144.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                9.1447
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 9751.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                9.7517
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 10358.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                10.3587
+              ]
+            },
+            {
+              "x_mm": 12901.4,
+              "y_mm": 10965.7,
+              "height_mm": 70,
+              "position_m": [
+                12.9014,
+                10.9657
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 7930.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                7.9307
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 8537.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                8.5377
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 9144.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                9.1447
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 9751.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                9.7517
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 10358.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                10.3587
+              ]
+            },
+            {
+              "x_mm": 13358.1,
+              "y_mm": 10965.7,
+              "height_mm": 70,
+              "position_m": [
+                13.3581,
+                10.9657
+              ]
+            },
+            {
+              "x_mm": 13814.9,
+              "y_mm": 7930.7,
+              "height_mm": 70,
+              "position_m": [
+                13.8149,
+                7.9307
+              ]
+            },
+            {
+              "x_mm": 13814.9,
+              "y_mm": 8537.7,
+              "height_mm": 70,
+              "position_m": [
+                13.8149,
+                8.5377
+              ]
+            },
+            {
+              "x_mm": 13814.9,
+              "y_mm": 9144.7,
+              "height_mm": 70,
+              "position_m": [
+                13.8149,
+                9.1447
+              ]
+            },
+            {
+              "x_mm": 13814.9,
+              "y_mm": 9751.7,
+              "height_mm": 70,
+              "position_m": [
+                13.8149,
+                9.7517
+              ]
+            },
+            {
+              "x_mm": 13814.9,
+              "y_mm": 10358.7,
+              "height_mm": 70,
+              "position_m": [
+                13.8149,
+                10.3587
+              ]
+            },
+            {
+              "x_mm": 14271.6,
+              "y_mm": 7930.7,
+              "height_mm": 70,
+              "position_m": [
+                14.2716,
+                7.9307
+              ]
+            },
+            {
+              "x_mm": 14271.6,
+              "y_mm": 8537.7,
+              "height_mm": 70,
+              "position_m": [
+                14.2716,
+                8.5377
+              ]
+            },
+            {
+              "x_mm": 14271.6,
+              "y_mm": 9144.7,
+              "height_mm": 70,
+              "position_m": [
+                14.2716,
+                9.1447
+              ]
+            },
+            {
+              "x_mm": 14271.6,
+              "y_mm": 9751.7,
+              "height_mm": 70,
+              "position_m": [
+                14.2716,
+                9.7517
+              ]
+            },
+            {
+              "x_mm": 14271.6,
+              "y_mm": 10358.7,
+              "height_mm": 70,
+              "position_m": [
+                14.2716,
+                10.3587
+              ]
+            }
+          ],
+          "_0-2_ROOM_OUTLINE-4": [
+            {
+              "x_mm": 11504.6,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                11.5046,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 11504.6,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                11.5046,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 11504.6,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                11.5046,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 11504.6,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                11.5046,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 11961.4,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                11.9614,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 11961.4,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                11.9614,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 11961.4,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                11.9614,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 11961.4,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                11.9614,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 12418.1,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                12.4181,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 12418.1,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                12.4181,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 12418.1,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                12.4181,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 12418.1,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                12.4181,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 12874.9,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                12.8749,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 12874.9,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                12.8749,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 12874.9,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                12.8749,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 12874.9,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                12.8749,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 13331.6,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                13.3316,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 13331.6,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                13.3316,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 13331.6,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                13.3316,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 13331.6,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                13.3316,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 13788.4,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                13.7884,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 13788.4,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                13.7884,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 13788.4,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                13.7884,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 13788.4,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                13.7884,
+                7.0357
+              ]
+            },
+            {
+              "x_mm": 14245.1,
+              "y_mm": 5214.7,
+              "height_mm": 300,
+              "position_m": [
+                14.2451,
+                5.2147
+              ]
+            },
+            {
+              "x_mm": 14245.1,
+              "y_mm": 5821.7,
+              "height_mm": 300,
+              "position_m": [
+                14.2451,
+                5.8217
+              ]
+            },
+            {
+              "x_mm": 14245.1,
+              "y_mm": 6428.7,
+              "height_mm": 300,
+              "position_m": [
+                14.2451,
+                6.4287
+              ]
+            },
+            {
+              "x_mm": 14245.1,
+              "y_mm": 7035.7,
+              "height_mm": 300,
+              "position_m": [
+                14.2451,
+                7.0357
+              ]
+            }
+          ],
+          "_0-2_ROOM_OUTLINE-5": [
+            {
+              "x_mm": 7983.6,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                7.9836,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                7.9836,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                7.9836,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                7.9836,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                7.9836,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                7.9836,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                7.9836,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                7.9836,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 7983.6,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                7.9836,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                8.4404,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                8.4404,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                8.4404,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                8.4404,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 8440.4,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                8.4404,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                8.8971,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                8.8971,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                8.8971,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                8.8971,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 8897.1,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                8.8971,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                9.3539,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                9.3539,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                9.3539,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                9.3539,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 9353.9,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                9.3539,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                9.8106,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                9.8106,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                9.8106,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                9.8106,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 9810.6,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                9.8106,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                10.2674,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                10.2674,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                10.2674,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                10.2674,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 10267.4,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                10.2674,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 3914.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                3.9147
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 4521.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                4.5217
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 5128.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                5.1287
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 5735.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                5.7357
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 6342.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                6.3427
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 6949.7,
+              "height_mm": 300,
+              "position_m": [
+                10.7241,
+                6.9497
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                10.7241,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                10.7241,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                10.7241,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 10724.1,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                10.7241,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 11180.9,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                11.1809,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 11180.9,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                11.1809,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 11180.9,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                11.1809,
+                8.7707
+              ]
+            },
+            {
+              "x_mm": 11180.9,
+              "y_mm": 9377.7,
+              "height_mm": 100,
+              "position_m": [
+                11.1809,
+                9.3777
+              ]
+            },
+            {
+              "x_mm": 11637.6,
+              "y_mm": 7556.7,
+              "height_mm": 100,
+              "position_m": [
+                11.6376,
+                7.5567
+              ]
+            },
+            {
+              "x_mm": 11637.6,
+              "y_mm": 8163.7,
+              "height_mm": 100,
+              "position_m": [
+                11.6376,
+                8.1637
+              ]
+            },
+            {
+              "x_mm": 11637.6,
+              "y_mm": 8770.7,
+              "height_mm": 100,
+              "position_m": [
+                11.6376,
+                8.7707
+              ]
+            }
+          ],
+          "_0-2_ROOM_OUTLINE-6": [
+            {
+              "x_mm": 9244.6,
+              "y_mm": 10470.7,
+              "height_mm": 100,
+              "position_m": [
+                9.2446,
+                10.4707
+              ]
+            },
+            {
+              "x_mm": 9244.6,
+              "y_mm": 11077.7,
+              "height_mm": 100,
+              "position_m": [
+                9.2446,
+                11.0777
+              ]
+            },
+            {
+              "x_mm": 9701.4,
+              "y_mm": 10470.7,
+              "height_mm": 100,
+              "position_m": [
+                9.7014,
+                10.4707
+              ]
+            },
+            {
+              "x_mm": 9701.4,
+              "y_mm": 11077.7,
+              "height_mm": 100,
+              "position_m": [
+                9.7014,
+                11.0777
+              ]
+            },
+            {
+              "x_mm": 10158.1,
+              "y_mm": 10470.7,
+              "height_mm": 100,
+              "position_m": [
+                10.1581,
+                10.4707
+              ]
+            },
+            {
+              "x_mm": 10158.1,
+              "y_mm": 11077.7,
+              "height_mm": 100,
+              "position_m": [
+                10.1581,
+                11.0777
+              ]
+            }
+          ]
+        },
+        "panel_prototype_room_id": "_0-2_ROOM_OUTLINE-1"
       },
       "children": [
-        "wall_ly3wos4ksf6v1dei",
-        "wall_xxek49gxv0poq4if",
-        "wall_lmcd2woxr2bitiko",
-        "wall_pbib3qjutg238wi1",
-        "wall_734w0ctmwhl12o00",
-        "wall_pxx4tya69w06w0jj",
-        "wall_axeexdqmzvhzl8tr",
-        "wall_skben5kkmwbxbflt",
-        "wall_htje6runvc8mt8zh",
-        "wall_7k7lkc0bh2qbca96",
-        "wall_xph3fqwmqcjk9e8p",
-        "wall_5bzus9rxe6os6kdz",
-        "wall_08lazw8h1252vgp4",
-        "wall_0u8g9ab0hwci0qlg",
-        "wall_gy5ihnev7ku3mlzv",
-        "wall_wzjy5wkao0hcg0c1",
-        "wall_p8u0ykt73kt65494",
-        "wall_sczrkrz0i5fi0tnn",
-        "wall_m0shdqo1eerfyjog",
-        "wall_epvujm8qvogl024m",
-        "wall_23sfv7jmt66danar",
-        "wall_shs0igpwk6aljrkt",
-        "wall_u9sh7d4rltep68lf",
-        "wall_hjxs8tfiyjmbdxsc",
-        "wall_n61a0iyby9ucpwf6",
-        "wall_sqbfdmjlrg8z455e",
-        "wall_e3nitcap3sofmdns",
-        "wall_jduk7hjbsmm2igxr",
-        "wall_xgftmb55q7hjb6ui",
-        "wall_lmfsymuw88y05swv",
-        "wall_6u80l5p6moyqc0fx",
-        "wall_qkjx55xfulj8laa5",
-        "wall_qu831q4jehzf0s0c",
-        "wall_8i72fwd98efxrp5m",
-        "wall_zovoe353usgzvmkv",
-        "wall_81hnh98dyvm5jtz0",
-        "wall_p0az1j0auqqyyyyz",
-        "wall_fihlaiaf9iajzb3r",
-        "wall_w88jbx62pp381j8v",
-        "wall_lq57xwn2liwmzqbh",
-        "wall_k0v8vqckav8pse1o",
-        "wall_owh40p61wrmoe7yp",
-        "wall_x4hcyjqvnzk915y1",
-        "wall_qsokpyzk1z86agk6",
-        "wall_q41b19x7xjvq06yp",
-        "wall_oxfu3g9crdto8e7m",
-        "zone_72rca9zizqnokcay",
-        "zone_nck3ux2dcyz5y60x",
-        "zone_s2rmqzis4c3vu6me",
-        "zone_up5xtckol1wohrpf",
-        "zone_86k469bbbdlb68ep",
-        "zone_3rmxlqeikmcg47rj"
+        "wall_eb8a9a52e0160958",
+        "wall_4a577aed73393a78",
+        "wall_836ccec43e0b15ac",
+        "wall_da2eb686d9005114",
+        "wall_2527249e41322a8e",
+        "wall_f95e4202b6f44649",
+        "wall_78f8cb5cf105c07b",
+        "wall_881d9fd45af150a9",
+        "wall_a5897dd79cb813e7",
+        "wall_212febcc546ad821",
+        "wall_9f2c0d4b85e92c0a",
+        "wall_d435d3cc9eddaf93",
+        "wall_14434cac5e2feb39",
+        "wall_a0a4b331def32be4",
+        "wall_01b58a83697b1eb7",
+        "wall_23090f32bef5e33f",
+        "wall_f0a5bc59df66b2b0",
+        "wall_ffac09f43fea95f6",
+        "wall_efdd8f94258b31a7",
+        "wall_c0b7257b9f564fad",
+        "wall_ca2cf1cb904b1448",
+        "wall_8f221008d2177a21",
+        "wall_9d0477a395740e51",
+        "wall_7bba85636b36c9a1",
+        "wall_a969b71a722fc3aa",
+        "wall_99320fc078fcee1b",
+        "wall_03bc3e12b215ca22",
+        "wall_1a3e52799a4beb5e",
+        "wall_4d96b528444cd10d",
+        "wall_e033d7886ea7a7a0",
+        "wall_b8bdebc2607dad11",
+        "wall_708abe63dc93df04",
+        "wall_177ec1254015efb6",
+        "wall_b17f72d32de0e173",
+        "wall_6699842e05149fce",
+        "wall_822831155eff809c",
+        "wall_571fef15826c9a86",
+        "wall_de1aab77c175ff05",
+        "wall_8d42a41bdc7a6084",
+        "wall_b8edc1f088964fbe",
+        "wall_b3a44a205cff9dfc",
+        "wall_7120424ba27762e7",
+        "wall_ae15f6e79893e42c",
+        "wall_87de90c84e402ce0",
+        "wall_df10a11940dc021a",
+        "wall_354ebfbb383bb464",
+        "zone_4d48e9959ff57fa0",
+        "zone_ff801f8588425836",
+        "zone_66910c050a58294c",
+        "zone_ee82e535e997765f",
+        "zone_f9fca0a01ffebec3",
+        "zone_ec025366655be2bc",
+        "item_37aa84cdd88a51ee",
+        "item_f0c71b3beab800f1",
+        "item_ee955137cb4d528f",
+        "item_bf273a3cbc89c403",
+        "item_a860419384d19189",
+        "item_66dbc2718d9a7816",
+        "item_525902a5aa76c601"
       ],
       "level": 0
     },
-    "zone_72rca9zizqnokcay": {
+    "item_37aa84cdd88a51ee": {
       "object": "node",
-      "id": "zone_72rca9zizqnokcay",
+      "id": "item_37aa84cdd88a51ee",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-1",
+      "position": [
+        5.8454,
+        0,
+        10.1714
+      ],
+      "rotation": [
+        0,
+        -3.141373715443319,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.8271,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.91355,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 0,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            6758.9,
+            10474.7
+          ],
+          [
+            6758.9,
+            9868.1
+          ],
+          [
+            4931.9,
+            9867.7
+          ],
+          [
+            4931.9,
+            10474.7
+          ]
+        ],
+        "coords_m": [
+          [
+            6.7589,
+            10.4747
+          ],
+          [
+            6.7589,
+            9.8681
+          ],
+          [
+            4.9319,
+            9.8677
+          ],
+          [
+            4.9319,
+            10.4747
+          ]
+        ],
+        "width_mm": 1827.133,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": -3.141374
+      }
+    },
+    "item_f0c71b3beab800f1": {
+      "object": "node",
+      "id": "item_f0c71b3beab800f1",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-2",
+      "position": [
+        7.6724,
+        0,
+        10.1716
+      ],
+      "rotation": [
+        0,
+        -3.1413189809091597,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.8272,
+          0.012,
+          0.6066
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9136,
+          0.75825,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "full"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 1,
+        "panel_type": "full",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            6758.9,
+            10474.7
+          ],
+          [
+            8585.9,
+            10474.7
+          ],
+          [
+            8585.9,
+            9868.6
+          ],
+          [
+            6758.9,
+            9868.1
+          ]
+        ],
+        "coords_m": [
+          [
+            6.7589,
+            10.4747
+          ],
+          [
+            8.5859,
+            10.4747
+          ],
+          [
+            8.5859,
+            9.8686
+          ],
+          [
+            6.7589,
+            9.8681
+          ]
+        ],
+        "width_mm": 1827.166,
+        "depth_mm": 606.6,
+        "thickness_mm": 12.0,
+        "rotation_rad": -3.141319
+      }
+    },
+    "item_ee955137cb4d528f": {
+      "object": "node",
+      "id": "item_ee955137cb4d528f",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-3",
+      "position": [
+        8.6384,
+        0,
+        10.1717
+      ],
+      "rotation": [
+        0,
+        -1.5707963267948966,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.6061,
+          0.012,
+          0.105
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.30305,
+          0.13124999999999998,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "rejected"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 2,
+        "panel_type": "rejected",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            8585.9,
+            10474.7
+          ],
+          [
+            8690.9,
+            10474.7
+          ],
+          [
+            8690.9,
+            9868.6
+          ],
+          [
+            8585.9,
+            9868.6
+          ]
+        ],
+        "coords_m": [
+          [
+            8.5859,
+            10.4747
+          ],
+          [
+            8.6909,
+            10.4747
+          ],
+          [
+            8.6909,
+            9.8686
+          ],
+          [
+            8.5859,
+            9.8686
+          ]
+        ],
+        "width_mm": 606.1,
+        "depth_mm": 105.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": -1.570796
+      }
+    },
+    "item_bf273a3cbc89c403": {
+      "object": "node",
+      "id": "item_bf273a3cbc89c403",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-4",
+      "position": [
+        5.3886,
+        0,
+        10.7782
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          0.9135,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.45675,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 3,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            5845.4,
+            11081.7
+          ],
+          [
+            5845.4,
+            10474.7
+          ],
+          [
+            4931.9,
+            10474.7
+          ],
+          [
+            4931.9,
+            10887.7
+          ],
+          [
+            5476.9,
+            10887.7
+          ],
+          [
+            5476.9,
+            11081.7
+          ]
+        ],
+        "coords_m": [
+          [
+            5.8454,
+            11.0817
+          ],
+          [
+            5.8454,
+            10.4747
+          ],
+          [
+            4.9319,
+            10.4747
+          ],
+          [
+            4.9319,
+            10.8877
+          ],
+          [
+            5.4769,
+            10.8877
+          ],
+          [
+            5.4769,
+            11.0817
+          ]
+        ],
+        "width_mm": 913.5,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_a860419384d19189": {
+      "object": "node",
+      "id": "item_a860419384d19189",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-5",
+      "position": [
+        6.7589,
+        0,
+        10.7782
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.827,
+          0.012,
+          0.607
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.9135,
+          0.7587499999999999,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 4,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            7672.4,
+            10474.7
+          ],
+          [
+            5845.4,
+            10474.7
+          ],
+          [
+            5845.4,
+            11081.7
+          ],
+          [
+            6599.9,
+            11081.7
+          ],
+          [
+            6599.9,
+            10922.7
+          ],
+          [
+            7502.7,
+            10922.7
+          ],
+          [
+            7511.7,
+            10776.7
+          ],
+          [
+            7672.4,
+            10776.7
+          ]
+        ],
+        "coords_m": [
+          [
+            7.6724,
+            10.4747
+          ],
+          [
+            5.8454,
+            10.4747
+          ],
+          [
+            5.8454,
+            11.0817
+          ],
+          [
+            6.5999,
+            11.0817
+          ],
+          [
+            6.5999,
+            10.9227
+          ],
+          [
+            7.5027,
+            10.9227
+          ],
+          [
+            7.5117,
+            10.7767
+          ],
+          [
+            7.6724,
+            10.7767
+          ]
+        ],
+        "width_mm": 1827.0,
+        "depth_mm": 607.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 3.141593
+      }
+    },
+    "item_66dbc2718d9a7816": {
+      "object": "node",
+      "id": "item_66dbc2718d9a7816",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-6",
+      "position": [
+        8.1816,
+        0,
+        10.6257
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.0185,
+          0.012,
+          0.302
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.50925,
+          0.37749999999999995,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 5,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            7672.4,
+            10474.7
+          ],
+          [
+            7672.4,
+            10776.7
+          ],
+          [
+            8690.9,
+            10776.7
+          ],
+          [
+            8690.9,
+            10474.7
+          ]
+        ],
+        "coords_m": [
+          [
+            7.6724,
+            10.4747
+          ],
+          [
+            7.6724,
+            10.7767
+          ],
+          [
+            8.6909,
+            10.7767
+          ],
+          [
+            8.6909,
+            10.4747
+          ]
+        ],
+        "width_mm": 1018.5,
+        "depth_mm": 302.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "item_525902a5aa76c601": {
+      "object": "node",
+      "id": "item_525902a5aa76c601",
+      "type": "item",
+      "parentId": "level_ce867928f3b4b5eb",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1 Panel 1-7",
+      "position": [
+        6.0384,
+        0,
+        11.3622
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [],
+      "asset": {
+        "id": "okiyuka-panel-proxy",
+        "category": "okiyuka-panel",
+        "name": "Okiyuka Panel Proxy",
+        "thumbnail": "/items/low-fence/thumbnail.webp",
+        "src": "/items/low-fence/model.glb",
+        "dimensions": [
+          1.123,
+          0.012,
+          0.561
+        ],
+        "offset": [
+          0.0,
+          0.01,
+          0.0
+        ],
+        "rotation": [
+          -1.5708,
+          0,
+          0
+        ],
+        "scale": [
+          0.5615,
+          0.70125,
+          0.024
+        ],
+        "tags": [
+          "okiyuka",
+          "panel",
+          "cut"
+        ]
+      },
+      "metadata": {
+        "source": "okiyuka",
+        "prototype_scope": "phase-2-panel-room",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_index": 6,
+        "panel_type": "cut",
+        "label": "",
+        "source_label": "",
+        "coords_mm": [
+          [
+            5476.9,
+            11081.7
+          ],
+          [
+            5476.9,
+            11642.7
+          ],
+          [
+            6599.9,
+            11642.7
+          ],
+          [
+            6599.9,
+            11081.7
+          ]
+        ],
+        "coords_m": [
+          [
+            5.4769,
+            11.0817
+          ],
+          [
+            5.4769,
+            11.6427
+          ],
+          [
+            6.5999,
+            11.6427
+          ],
+          [
+            6.5999,
+            11.0817
+          ]
+        ],
+        "width_mm": 1123.0,
+        "depth_mm": 561.0,
+        "thickness_mm": 12.0,
+        "rotation_rad": 0.0
+      }
+    },
+    "zone_4d48e9959ff57fa0": {
+      "object": "node",
+      "id": "zone_4d48e9959ff57fa0",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-1",
       "polygon": [
@@ -664,14 +2839,27 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-1",
-        "panel_count": 7
+        "panel_count": 7,
+        "pedestal_count": 10,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 0,
+            "count": 6
+          },
+          {
+            "height_mm": 100,
+            "count": 4
+          }
+        ],
+        "panel_item_count": 7,
+        "panel_prototype_enabled": true
       }
     },
-    "wall_ly3wos4ksf6v1dei": {
+    "wall_eb8a9a52e0160958": {
       "object": "node",
-      "id": "wall_ly3wos4ksf6v1dei",
+      "id": "wall_eb8a9a52e0160958",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -691,11 +2879,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_xxek49gxv0poq4if": {
+    "wall_4a577aed73393a78": {
       "object": "node",
-      "id": "wall_xxek49gxv0poq4if",
+      "id": "wall_4a577aed73393a78",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -715,11 +2903,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_lmcd2woxr2bitiko": {
+    "wall_836ccec43e0b15ac": {
       "object": "node",
-      "id": "wall_lmcd2woxr2bitiko",
+      "id": "wall_836ccec43e0b15ac",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -739,11 +2927,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_pbib3qjutg238wi1": {
+    "wall_da2eb686d9005114": {
       "object": "node",
-      "id": "wall_pbib3qjutg238wi1",
+      "id": "wall_da2eb686d9005114",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -763,11 +2951,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_734w0ctmwhl12o00": {
+    "wall_2527249e41322a8e": {
       "object": "node",
-      "id": "wall_734w0ctmwhl12o00",
+      "id": "wall_2527249e41322a8e",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -787,11 +2975,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_pxx4tya69w06w0jj": {
+    "wall_f95e4202b6f44649": {
       "object": "node",
-      "id": "wall_pxx4tya69w06w0jj",
+      "id": "wall_f95e4202b6f44649",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -811,11 +2999,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_axeexdqmzvhzl8tr": {
+    "wall_78f8cb5cf105c07b": {
       "object": "node",
-      "id": "wall_axeexdqmzvhzl8tr",
+      "id": "wall_78f8cb5cf105c07b",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -835,11 +3023,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_skben5kkmwbxbflt": {
+    "wall_881d9fd45af150a9": {
       "object": "node",
-      "id": "wall_skben5kkmwbxbflt",
+      "id": "wall_881d9fd45af150a9",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -859,11 +3047,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_htje6runvc8mt8zh": {
+    "wall_a5897dd79cb813e7": {
       "object": "node",
-      "id": "wall_htje6runvc8mt8zh",
+      "id": "wall_a5897dd79cb813e7",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -883,11 +3071,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_7k7lkc0bh2qbca96": {
+    "wall_212febcc546ad821": {
       "object": "node",
-      "id": "wall_7k7lkc0bh2qbca96",
+      "id": "wall_212febcc546ad821",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -907,11 +3095,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "zone_nck3ux2dcyz5y60x": {
+    "zone_ff801f8588425836": {
       "object": "node",
-      "id": "zone_nck3ux2dcyz5y60x",
+      "id": "zone_ff801f8588425836",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-2",
       "polygon": [
@@ -936,14 +3124,23 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-2",
-        "panel_count": 4
+        "panel_count": 4,
+        "pedestal_count": 2,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 100,
+            "count": 2
+          }
+        ],
+        "panel_item_count": 0,
+        "panel_prototype_enabled": false
       }
     },
-    "wall_xph3fqwmqcjk9e8p": {
+    "wall_9f2c0d4b85e92c0a": {
       "object": "node",
-      "id": "wall_xph3fqwmqcjk9e8p",
+      "id": "wall_9f2c0d4b85e92c0a",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -963,11 +3160,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_5bzus9rxe6os6kdz": {
+    "wall_d435d3cc9eddaf93": {
       "object": "node",
-      "id": "wall_5bzus9rxe6os6kdz",
+      "id": "wall_d435d3cc9eddaf93",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -987,11 +3184,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_08lazw8h1252vgp4": {
+    "wall_14434cac5e2feb39": {
       "object": "node",
-      "id": "wall_08lazw8h1252vgp4",
+      "id": "wall_14434cac5e2feb39",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1011,11 +3208,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_0u8g9ab0hwci0qlg": {
+    "wall_a0a4b331def32be4": {
       "object": "node",
-      "id": "wall_0u8g9ab0hwci0qlg",
+      "id": "wall_a0a4b331def32be4",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1035,11 +3232,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "zone_s2rmqzis4c3vu6me": {
+    "zone_66910c050a58294c": {
       "object": "node",
-      "id": "zone_s2rmqzis4c3vu6me",
+      "id": "zone_66910c050a58294c",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-3",
       "polygon": [
@@ -1072,14 +3269,23 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-3",
-        "panel_count": 15
+        "panel_count": 15,
+        "pedestal_count": 28,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 70,
+            "count": 28
+          }
+        ],
+        "panel_item_count": 0,
+        "panel_prototype_enabled": false
       }
     },
-    "wall_gy5ihnev7ku3mlzv": {
+    "wall_01b58a83697b1eb7": {
       "object": "node",
-      "id": "wall_gy5ihnev7ku3mlzv",
+      "id": "wall_01b58a83697b1eb7",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1099,11 +3305,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_wzjy5wkao0hcg0c1": {
+    "wall_23090f32bef5e33f": {
       "object": "node",
-      "id": "wall_wzjy5wkao0hcg0c1",
+      "id": "wall_23090f32bef5e33f",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1123,11 +3329,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_p8u0ykt73kt65494": {
+    "wall_f0a5bc59df66b2b0": {
       "object": "node",
-      "id": "wall_p8u0ykt73kt65494",
+      "id": "wall_f0a5bc59df66b2b0",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1147,11 +3353,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_sczrkrz0i5fi0tnn": {
+    "wall_ffac09f43fea95f6": {
       "object": "node",
-      "id": "wall_sczrkrz0i5fi0tnn",
+      "id": "wall_ffac09f43fea95f6",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1171,11 +3377,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_m0shdqo1eerfyjog": {
+    "wall_efdd8f94258b31a7": {
       "object": "node",
-      "id": "wall_m0shdqo1eerfyjog",
+      "id": "wall_efdd8f94258b31a7",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1195,11 +3401,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_epvujm8qvogl024m": {
+    "wall_c0b7257b9f564fad": {
       "object": "node",
-      "id": "wall_epvujm8qvogl024m",
+      "id": "wall_c0b7257b9f564fad",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1219,11 +3425,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "zone_up5xtckol1wohrpf": {
+    "zone_ee82e535e997765f": {
       "object": "node",
-      "id": "zone_up5xtckol1wohrpf",
+      "id": "zone_ee82e535e997765f",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-4",
       "polygon": [
@@ -1248,14 +3454,23 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-4",
-        "panel_count": 12
+        "panel_count": 12,
+        "pedestal_count": 28,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 300,
+            "count": 28
+          }
+        ],
+        "panel_item_count": 0,
+        "panel_prototype_enabled": false
       }
     },
-    "wall_23sfv7jmt66danar": {
+    "wall_ca2cf1cb904b1448": {
       "object": "node",
-      "id": "wall_23sfv7jmt66danar",
+      "id": "wall_ca2cf1cb904b1448",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1275,11 +3490,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_shs0igpwk6aljrkt": {
+    "wall_8f221008d2177a21": {
       "object": "node",
-      "id": "wall_shs0igpwk6aljrkt",
+      "id": "wall_8f221008d2177a21",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1299,11 +3514,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_u9sh7d4rltep68lf": {
+    "wall_9d0477a395740e51": {
       "object": "node",
-      "id": "wall_u9sh7d4rltep68lf",
+      "id": "wall_9d0477a395740e51",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1323,11 +3538,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_hjxs8tfiyjmbdxsc": {
+    "wall_7bba85636b36c9a1": {
       "object": "node",
-      "id": "wall_hjxs8tfiyjmbdxsc",
+      "id": "wall_7bba85636b36c9a1",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1347,11 +3562,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "zone_86k469bbbdlb68ep": {
+    "zone_f9fca0a01ffebec3": {
       "object": "node",
-      "id": "zone_86k469bbbdlb68ep",
+      "id": "zone_f9fca0a01ffebec3",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-5",
       "polygon": [
@@ -1432,14 +3647,27 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-5",
-        "panel_count": 30
+        "panel_count": 30,
+        "pedestal_count": 76,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 100,
+            "count": 35
+          },
+          {
+            "height_mm": 300,
+            "count": 41
+          }
+        ],
+        "panel_item_count": 0,
+        "panel_prototype_enabled": false
       }
     },
-    "wall_n61a0iyby9ucpwf6": {
+    "wall_a969b71a722fc3aa": {
       "object": "node",
-      "id": "wall_n61a0iyby9ucpwf6",
+      "id": "wall_a969b71a722fc3aa",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1459,11 +3687,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_sqbfdmjlrg8z455e": {
+    "wall_99320fc078fcee1b": {
       "object": "node",
-      "id": "wall_sqbfdmjlrg8z455e",
+      "id": "wall_99320fc078fcee1b",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1483,11 +3711,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_e3nitcap3sofmdns": {
+    "wall_03bc3e12b215ca22": {
       "object": "node",
-      "id": "wall_e3nitcap3sofmdns",
+      "id": "wall_03bc3e12b215ca22",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1507,11 +3735,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_jduk7hjbsmm2igxr": {
+    "wall_1a3e52799a4beb5e": {
       "object": "node",
-      "id": "wall_jduk7hjbsmm2igxr",
+      "id": "wall_1a3e52799a4beb5e",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1531,11 +3759,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_xgftmb55q7hjb6ui": {
+    "wall_4d96b528444cd10d": {
       "object": "node",
-      "id": "wall_xgftmb55q7hjb6ui",
+      "id": "wall_4d96b528444cd10d",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1555,11 +3783,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_lmfsymuw88y05swv": {
+    "wall_e033d7886ea7a7a0": {
       "object": "node",
-      "id": "wall_lmfsymuw88y05swv",
+      "id": "wall_e033d7886ea7a7a0",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1579,11 +3807,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_6u80l5p6moyqc0fx": {
+    "wall_b8bdebc2607dad11": {
       "object": "node",
-      "id": "wall_6u80l5p6moyqc0fx",
+      "id": "wall_b8bdebc2607dad11",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1603,11 +3831,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_qkjx55xfulj8laa5": {
+    "wall_708abe63dc93df04": {
       "object": "node",
-      "id": "wall_qkjx55xfulj8laa5",
+      "id": "wall_708abe63dc93df04",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1627,11 +3855,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_qu831q4jehzf0s0c": {
+    "wall_177ec1254015efb6": {
       "object": "node",
-      "id": "wall_qu831q4jehzf0s0c",
+      "id": "wall_177ec1254015efb6",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1651,11 +3879,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_8i72fwd98efxrp5m": {
+    "wall_b17f72d32de0e173": {
       "object": "node",
-      "id": "wall_8i72fwd98efxrp5m",
+      "id": "wall_b17f72d32de0e173",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1675,11 +3903,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_zovoe353usgzvmkv": {
+    "wall_6699842e05149fce": {
       "object": "node",
-      "id": "wall_zovoe353usgzvmkv",
+      "id": "wall_6699842e05149fce",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1699,11 +3927,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_81hnh98dyvm5jtz0": {
+    "wall_822831155eff809c": {
       "object": "node",
-      "id": "wall_81hnh98dyvm5jtz0",
+      "id": "wall_822831155eff809c",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1723,11 +3951,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_p0az1j0auqqyyyyz": {
+    "wall_571fef15826c9a86": {
       "object": "node",
-      "id": "wall_p0az1j0auqqyyyyz",
+      "id": "wall_571fef15826c9a86",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1747,11 +3975,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_fihlaiaf9iajzb3r": {
+    "wall_de1aab77c175ff05": {
       "object": "node",
-      "id": "wall_fihlaiaf9iajzb3r",
+      "id": "wall_de1aab77c175ff05",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1771,11 +3999,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_w88jbx62pp381j8v": {
+    "wall_8d42a41bdc7a6084": {
       "object": "node",
-      "id": "wall_w88jbx62pp381j8v",
+      "id": "wall_8d42a41bdc7a6084",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1795,11 +4023,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_lq57xwn2liwmzqbh": {
+    "wall_b8edc1f088964fbe": {
       "object": "node",
-      "id": "wall_lq57xwn2liwmzqbh",
+      "id": "wall_b8edc1f088964fbe",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1819,11 +4047,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_k0v8vqckav8pse1o": {
+    "wall_b3a44a205cff9dfc": {
       "object": "node",
-      "id": "wall_k0v8vqckav8pse1o",
+      "id": "wall_b3a44a205cff9dfc",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1843,11 +4071,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_owh40p61wrmoe7yp": {
+    "wall_7120424ba27762e7": {
       "object": "node",
-      "id": "wall_owh40p61wrmoe7yp",
+      "id": "wall_7120424ba27762e7",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1867,11 +4095,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "zone_3rmxlqeikmcg47rj": {
+    "zone_ec025366655be2bc": {
       "object": "node",
-      "id": "zone_3rmxlqeikmcg47rj",
+      "id": "zone_ec025366655be2bc",
       "type": "zone",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "name": "_0-2_ROOM_OUTLINE-6",
       "polygon": [
@@ -1896,14 +4124,23 @@
       "metadata": {
         "source": "okiyuka",
         "room_id": "_0-2_ROOM_OUTLINE-6",
-        "panel_count": 4
+        "panel_count": 4,
+        "pedestal_count": 6,
+        "pedestal_height_distribution_mm": [
+          {
+            "height_mm": 100,
+            "count": 6
+          }
+        ],
+        "panel_item_count": 0,
+        "panel_prototype_enabled": false
       }
     },
-    "wall_x4hcyjqvnzk915y1": {
+    "wall_ae15f6e79893e42c": {
       "object": "node",
-      "id": "wall_x4hcyjqvnzk915y1",
+      "id": "wall_ae15f6e79893e42c",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1923,11 +4160,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_qsokpyzk1z86agk6": {
+    "wall_87de90c84e402ce0": {
       "object": "node",
-      "id": "wall_qsokpyzk1z86agk6",
+      "id": "wall_87de90c84e402ce0",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1947,11 +4184,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_q41b19x7xjvq06yp": {
+    "wall_df10a11940dc021a": {
       "object": "node",
-      "id": "wall_q41b19x7xjvq06yp",
+      "id": "wall_df10a11940dc021a",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1971,11 +4208,11 @@
       "frontSide": "unknown",
       "backSide": "unknown"
     },
-    "wall_oxfu3g9crdto8e7m": {
+    "wall_354ebfbb383bb464": {
       "object": "node",
-      "id": "wall_oxfu3g9crdto8e7m",
+      "id": "wall_354ebfbb383bb464",
       "type": "wall",
-      "parentId": "level_ufd95awjprkaajy2",
+      "parentId": "level_ce867928f3b4b5eb",
       "visible": true,
       "metadata": {
         "source": "okiyuka",
@@ -1997,6 +4234,6 @@
     }
   },
   "rootNodeIds": [
-    "site_1gsd0rohsqq63cm7"
+    "site_082b4a9ad2b8a6c5"
   ]
 }

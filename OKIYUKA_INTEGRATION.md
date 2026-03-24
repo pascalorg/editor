@@ -55,6 +55,9 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 - Okiyuka room boundary edges -> Pascal wall
 - all rooms -> one site / one building / one level
 - Okiyuka summary and offcut pool -> node metadata
+- Okiyuka pedestals -> level metadata plus per-zone pedestal summaries
+- one prototype room's panels -> Pascal item nodes with proxy item assets
+- stable input-derived IDs -> site, building, level, wall, zone, and imported item nodes
 
 ## Current Load Procedure
 
@@ -67,6 +70,7 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 
 - checking room geometry in the Pascal viewer
 - confirming the coordinate conversion path
+- preserving pedestal counts and height distributions for later promotion
 - validating a future richer bridge for panels, pedestals, and rails
 
 ## Real Data Validation (2026-03-25)
@@ -77,7 +81,7 @@ An end-to-end validation was completed with a real Okiyuka export generated from
 - Source drawing recorded in export: `normal_plan2.dxf`
 - Converted Pascal scene file: `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\pascal_scene.json`
 - Conversion result: success
-- Generated scene size: 55 nodes, 1 root node
+- Generated scene size: 62 nodes, 1 root node
 - Pascal load result: success through `Settings -> Load Build`
 
 Observed result in Pascal Editor:
@@ -106,8 +110,9 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 
 ## Current Limitations
 
-- panels are not yet mapped into Pascal item nodes
-- pedestals are not yet mapped
+- only one prototype room currently maps panels into Pascal item nodes
+- imported panel items currently use a proxy asset and metadata-rich box approximation
+- pedestals are preserved as metadata only and do not render as explicit scene elements
 - edge rails are not yet mapped
 - wall thickness and height are placeholder visualization values
 - shared room edges are deduplicated only by exact segment match
@@ -118,6 +123,10 @@ The next phase should expand the bridge in stages instead of trying to map every
 
 ### Phase 1: Pedestal Metadata Preservation
 
+Status:
+
+- implemented in the current converter
+
 Goal:
 
 - preserve pedestal data in a way that survives Pascal import immediately
@@ -126,7 +135,8 @@ Goal:
 Approach:
 
 - keep room and wall mapping as-is
-- copy `geometry.pedestals` into level or zone metadata keyed by room
+- copy `geometry.pedestals` into level metadata keyed by room
+- add per-zone pedestal count and height distribution summaries
 - verify that pedestal count and height distribution remain inspectable after `Load Build`
 
 Why first:
@@ -134,7 +144,17 @@ Why first:
 - pedestal records already exist in the real validation fixture
 - this adds value without requiring renderer or schema changes in Pascal
 
+Current result:
+
+- level metadata now carries `pedestal_count`, `pedestal_room_count`, `pedestal_height_distribution_mm`, and `pedestals_by_room`
+- each zone metadata now carries `pedestal_count` and `pedestal_height_distribution_mm`
+- regenerated fixture import continues to load successfully in Pascal Editor
+
 ### Phase 2: Panel Mapping Strategy
+
+Status:
+
+- prototype implemented for one room from the real fixture
 
 Goal:
 
@@ -144,6 +164,13 @@ Preferred direction:
 
 - map Okiyuka panels to Pascal item-like nodes only after confirming the correct existing node type and renderer path in the current checkout
 - preserve panel label, source label, type, and polygon coordinates
+
+Current prototype result:
+
+- the converter selects one room with panels from the real fixture and maps its panels to level child `item` nodes
+- each imported panel item carries source coordinates, panel type, dimensions, and rotation in metadata
+- each imported panel item uses a proxy asset so the current viewer can render it without adding a new renderer
+- the real fixture now imports 7 panel items for `_0-2_ROOM_OUTLINE-1`
 
 Open design questions:
 
@@ -194,6 +221,23 @@ Potential work:
 3. edge rail import path
 4. schema and renderer promotion only where the prototype proves useful
 
+## Stable ID Strategy
+
+The converter now derives IDs from input content instead of generating random IDs.
+
+Current scope:
+
+- site, building, and level IDs are derived from source scene identity
+- zone IDs are derived from room identity and polygon shape
+- wall IDs are derived from normalized segment coordinates
+- panel item IDs are derived from room identity, panel index, panel type, and panel coordinates
+
+Why this changed:
+
+- fixture regeneration should produce the same scene JSON for the same Okiyuka export
+- git diffs become smaller and easier to review after the first stable-ID migration
+- follow-up work on panel and rail promotion can rely on consistent imported node IDs
+
 ### Non-Goals For The Next Step
 
 - rebuilding Okiyuka export schema
@@ -207,6 +251,9 @@ Potential work:
 - The current scene import seam was confirmed: `Settings -> Load Build` accepts a JSON scene graph with `nodes` and `rootNodeIds`.
 - A minimal bridge now exists on the Okiyuka side at `C:\Okiyuka_V1.0\tools\okiyuka_to_pascal_scene.py`.
 - The bridge currently converts room polygons into Pascal zones and room perimeter segments into Pascal walls under one site, one building, and one level.
+- Phase 1 pedestal preservation is now in place: the converter stores full pedestal records in level metadata and room-level summaries in zone metadata.
+- Phase 2 panel prototyping is now in place for one room from the real fixture: 7 panel items are imported as level child item nodes using a proxy asset.
+- Converter output IDs are now deterministic for identical inputs, which keeps fixture regeneration stable.
 - Synthetic import validation succeeded in Pascal Editor, confirming that the current conversion shape can be loaded by the existing UI.
 - Local setup and architecture notes in this repository were updated to reflect the current checkout instead of the older auth / db / Supabase-oriented documentation.
 - Repository drift was verified from git history: the current checkout does not contain `packages/auth`, `packages/db`, or `supabase/`, so the historical full local backend setup cannot be reproduced from this revision alone.
