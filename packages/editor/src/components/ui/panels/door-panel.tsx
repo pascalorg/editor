@@ -79,9 +79,10 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    const numSegs = node?.segments.length
-    const totalH = node?.segments.reduce((sum, s) => sum + s.heightRatio, 0)
-    const normH = node?.segments.map((s) => s.heightRatio / totalH)
+    if (!node) return
+    const numSegs = node.segments.length
+    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node.segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
     const delta = clamped - normH[segIdx]!

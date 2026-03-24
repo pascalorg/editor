@@ -20,6 +20,14 @@ type PersistedSelectionPath = {
   selectedIds: string[]
 }
 
+/**
+ * IDs are stored as plain strings in localStorage. Cast them back to their
+ * branded template-literal types before passing to the viewer store.
+ */
+function toViewerSelection(s: PersistedSelectionPath) {
+  return s as unknown as Parameters<ReturnType<typeof useViewer.getState>['setSelection']>[0]
+}
+
 const EMPTY_PERSISTED_SELECTION: PersistedSelectionPath = {
   buildingId: null,
   levelId: null,
@@ -265,7 +273,7 @@ export function syncEditorSelectionFromCurrentScene() {
   if (firstBuilding && firstLevel) {
     if (shouldRestoreEditorUiState) {
       if (restoredSelection) {
-        useViewer.getState().setSelection(restoredSelection)
+        useViewer.getState().setSelection(toViewerSelection(restoredSelection))
         useEditor.setState(
           restoredEditorUiState.phase === 'site'
             ? (selectionDrivenEditorUiState ?? restoredEditorUiState)
@@ -287,7 +295,7 @@ export function syncEditorSelectionFromCurrentScene() {
     }
 
     if (restoredSelection) {
-      useViewer.getState().setSelection(restoredSelection)
+      useViewer.getState().setSelection(toViewerSelection(restoredSelection))
       if (selectionDrivenEditorUiState) {
         useEditor.setState(selectionDrivenEditorUiState)
       }

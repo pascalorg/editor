@@ -102,8 +102,12 @@ export function CeilingPanel() {
     const n = polygon.length
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
-      area += polygon[i]?.[0] * polygon[j]?.[1]
-      area -= polygon[j]?.[0] * polygon[i]?.[1]
+      const pi = polygon[i]
+      const pj = polygon[j]
+      if (pi && pj) {
+        area += pi[0] * pj[1]
+        area -= pj[0] * pi[1]
+      }
     }
     return Math.abs(area) / 2
   }
