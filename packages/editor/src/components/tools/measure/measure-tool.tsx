@@ -1,4 +1,4 @@
-import { emitter, type GridEvent } from '@pascal-app/core'
+import { emitter, type GridEvent, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, type Group, type Line, Vector3 } from 'three'
@@ -11,6 +11,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
+  getWallSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -50,6 +51,7 @@ const syncLineGeometry = (
 }
 
 export const MeasureTool: React.FC = () => {
+  const currentLevelId = useViewer((state) => state.selection.levelId)
   const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const lineRef = useRef<Line>(null!)
@@ -112,12 +114,23 @@ export const MeasureTool: React.FC = () => {
 
   useEffect(() => {
     lineRef.current.geometry = new BufferGeometry()
+    const getLevelWalls = () =>
+      Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
+      )
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
       const levelY = event.position[1]
-      const gridPosition: PlanPoint = [snapToGrid(event.position[0]), snapToGrid(event.position[2])]
+      const rawGridPosition: PlanPoint = [
+        snapToGrid(event.position[0]),
+        snapToGrid(event.position[2]),
+      ]
+      const gridPosition =
+        shiftPressed.current || !currentLevelId
+          ? rawGridPosition
+          : (getWallSnapPoint(rawGridPosition, getLevelWalls()) ?? rawGridPosition)
 
       if (!(startRef.current && !isLockedRef.current)) {
         cursorRef.current.position.set(gridPosition[0], levelY, gridPosition[1])
@@ -126,9 +139,13 @@ export const MeasureTool: React.FC = () => {
 
       if (inputOpenRef.current) return
 
-      const nextEnd = shiftPressed.current
+      const angleSnapped = shiftPressed.current
         ? gridPosition
         : snapSegmentTo45Degrees(startRef.current, gridPosition)
+      const nextEnd =
+        shiftPressed.current || !currentLevelId
+          ? angleSnapped
+          : (getWallSnapPoint(angleSnapped, getLevelWalls()) ?? angleSnapped)
 
       if (
         previousEndRef.current &&
@@ -152,7 +169,14 @@ export const MeasureTool: React.FC = () => {
       if (inputOpenRef.current) return
 
       const levelY = event.position[1]
-      const gridPosition: PlanPoint = [snapToGrid(event.position[0]), snapToGrid(event.position[2])]
+      const rawGridPosition: PlanPoint = [
+        snapToGrid(event.position[0]),
+        snapToGrid(event.position[2]),
+      ]
+      const gridPosition =
+        shiftPressed.current || !currentLevelId
+          ? rawGridPosition
+          : (getWallSnapPoint(rawGridPosition, getLevelWalls()) ?? rawGridPosition)
 
       if (!startRef.current || isLockedRef.current) {
         startRef.current = gridPosition
@@ -232,7 +256,7 @@ export const MeasureTool: React.FC = () => {
       window.removeEventListener('keyup', onKeyUp)
       closeDistanceInput()
     }
-  }, [closeDistanceInput, syncMeasurementState, unitSystem])
+  }, [closeDistanceInput, currentLevelId, syncMeasurementState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(measurement.start && measurement.end)) return 0

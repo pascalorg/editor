@@ -1,4 +1,11 @@
-import { emitter, type GridEvent, type LevelNode, SlabNode, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  SlabNode,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -12,6 +19,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
+  getWallSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -141,6 +149,10 @@ export const SlabTool: React.FC = () => {
   // Update cursor position and lines on grid move
   useEffect(() => {
     if (!currentLevelId) return
+    const getLevelWalls = () =>
+      Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
+      )
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
@@ -157,10 +169,13 @@ export const SlabTool: React.FC = () => {
 
       // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      const displayPoint =
+      const basePoint =
         shiftPressed.current || !lastPoint
           ? gridPosition
           : calculateSnapPoint(lastPoint, gridPosition)
+      const displayPoint = shiftPressed.current
+        ? basePoint
+        : (getWallSnapPoint(basePoint, getLevelWalls()) ?? basePoint)
       snappedCursorPositionRef.current = displayPoint
       setSnappedCursorPosition(displayPoint)
 

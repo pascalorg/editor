@@ -11,6 +11,7 @@ import {
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
+  getWallSnapPoint,
   MIN_DRAW_DISTANCE,
   type PlanPoint,
   parseDistanceInput,
@@ -89,6 +90,7 @@ const commitWallDrawing = (start: [number, number], end: [number, number]) => {
 }
 
 export const WallTool: React.FC = () => {
+  const currentLevelId = useViewer((state) => state.selection.levelId)
   const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
@@ -150,21 +152,32 @@ export const WallTool: React.FC = () => {
   useEffect(() => {
     let gridPosition: PlanPoint = [0, 0]
     let previousWallEnd: PlanPoint | null = null
+    const getLevelWalls = () =>
+      Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === currentLevelId,
+      )
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
-      gridPosition = [snapToGrid(event.position[0]), snapToGrid(event.position[2])]
+      const rawGridPosition: PlanPoint = [
+        snapToGrid(event.position[0]),
+        snapToGrid(event.position[2]),
+      ]
       levelYRef.current = event.position[1]
-      const cursorPosition: PlanPoint = [gridPosition[0], gridPosition[1]]
+      const cursorPosition: PlanPoint = rawGridPosition
 
       if (buildingState.current === 1) {
         if (inputOpenRef.current) return
 
         const start: PlanPoint = [startingPoint.current.x, startingPoint.current.z]
-        const snapped = shiftPressed.current
+        const angleSnapped = shiftPressed.current
           ? cursorPosition
           : snapSegmentTo45Degrees(start, cursorPosition)
+        const snapped =
+          shiftPressed.current || !currentLevelId
+            ? angleSnapped
+            : (getWallSnapPoint(angleSnapped, getLevelWalls()) ?? angleSnapped)
 
         endingPoint.current.set(snapped[0], event.position[1], snapped[1])
 
@@ -185,6 +198,10 @@ export const WallTool: React.FC = () => {
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
         syncDraftState()
       } else {
+        gridPosition =
+          shiftPressed.current || !currentLevelId
+            ? rawGridPosition
+            : (getWallSnapPoint(rawGridPosition, getLevelWalls()) ?? rawGridPosition)
         // Not drawing a wall, just follow the grid position
         cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
       }
@@ -273,7 +290,7 @@ export const WallTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [closeDistanceInput, syncDraftState, unitSystem])
+  }, [closeDistanceInput, currentLevelId, syncDraftState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(draft.start && draft.end)) return 0
