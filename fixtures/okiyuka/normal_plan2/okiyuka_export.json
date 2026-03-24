@@ -1,0 +1,3721 @@
+{
+  "schema_version": "1.1",
+  "generator": "Okiyuka V1.0",
+  "timestamp": "2026-03-25T07:44:46.953749",
+  "dxf_file": "normal_plan2.dxf",
+  "summary": {
+    "room_count": 6,
+    "total_full_boards": 18,
+    "total_cut_boards": 36,
+    "total_boards": 54,
+    "total_reuse_saved": 13,
+    "stock_consumed": 37,
+    "offcut_utilization_rate": 0.26,
+    "offcut_weighted_ratio": 0.5948,
+    "stagger_mode": true
+  },
+  "rooms": [
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-1",
+      "area_m2": 4.75,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 2,
+      "cut_boards": 4,
+      "reuse_saved": 0,
+      "offcut_ratio": 0.4846
+    },
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-2",
+      "area_m2": 0.91,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 0,
+      "cut_boards": 2,
+      "reuse_saved": 1,
+      "offcut_ratio": 0.937
+    },
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-3",
+      "area_m2": 10.44,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 3,
+      "cut_boards": 7,
+      "reuse_saved": 3,
+      "offcut_ratio": 0.6507
+    },
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-4",
+      "area_m2": 9.21,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 4,
+      "cut_boards": 6,
+      "reuse_saved": 2,
+      "offcut_ratio": 0.4986
+    },
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-5",
+      "area_m2": 24.2,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 9,
+      "cut_boards": 14,
+      "reuse_saved": 7,
+      "offcut_ratio": 0.5725
+    },
+    {
+      "room_id": "_0-2_ROOM_OUTLINE-6",
+      "area_m2": 2.85,
+      "orientation_deg": 0,
+      "phase_x_mm": 0,
+      "full_boards": 0,
+      "cut_boards": 3,
+      "reuse_saved": 1,
+      "offcut_ratio": 0.9647
+    }
+  ],
+  "offcut_pool": [
+    {
+      "offcut_id": "OFF-20260325-001",
+      "piece_label": "S1-A",
+      "cut_size_mm": "1827.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-1",
+      "target_room": "_0-2_ROOM_OUTLINE-1",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-002",
+      "piece_label": "S2-A",
+      "cut_size_mm": "1123.0 x 561.0",
+      "source_room": "_0-2_ROOM_OUTLINE-1",
+      "target_room": "_0-2_ROOM_OUTLINE-1",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-003",
+      "piece_label": "S3-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-1",
+      "target_room": "_0-2_ROOM_OUTLINE-1",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-004",
+      "piece_label": "S4-A",
+      "cut_size_mm": "1018.5 x 302.0",
+      "source_room": "_0-2_ROOM_OUTLINE-1",
+      "target_room": "_0-2_ROOM_OUTLINE-1",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-005",
+      "piece_label": "S5-A",
+      "cut_size_mm": "1114.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-2",
+      "target_room": "_0-2_ROOM_OUTLINE-2",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-006",
+      "piece_label": "S6-A",
+      "cut_size_mm": "913.5 x 157.0",
+      "source_room": "_0-2_ROOM_OUTLINE-2",
+      "target_room": "_0-2_ROOM_OUTLINE-2",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-007",
+      "piece_label": "S5-R-1",
+      "cut_size_mm": "200.5 x 157.0",
+      "source_room": "_0-2_ROOM_OUTLINE-2",
+      "target_room": "_0-2_ROOM_OUTLINE-2",
+      "reuse_from": "S5-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-008",
+      "piece_label": "S7-A",
+      "cut_size_mm": "1770.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-009",
+      "piece_label": "S8-A",
+      "cut_size_mm": "1600.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-010",
+      "piece_label": "S9-A",
+      "cut_size_mm": "1600.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-011",
+      "piece_label": "S10-A",
+      "cut_size_mm": "1600.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-012",
+      "piece_label": "S11-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-013",
+      "piece_label": "S11-R-1",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "S11-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-014",
+      "piece_label": "S12-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-015",
+      "piece_label": "S12-R-1",
+      "cut_size_mm": "687.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "S12-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-016",
+      "piece_label": "S13-A",
+      "cut_size_mm": "687.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-017",
+      "piece_label": "S13-R-1",
+      "cut_size_mm": "687.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-3",
+      "target_room": "_0-2_ROOM_OUTLINE-3",
+      "reuse_from": "S13-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-018",
+      "piece_label": "S14-A",
+      "cut_size_mm": "1627.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-019",
+      "piece_label": "S15-A",
+      "cut_size_mm": "1627.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-020",
+      "piece_label": "S16-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-021",
+      "piece_label": "S16-R-1",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "S16-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-022",
+      "piece_label": "S17-A",
+      "cut_size_mm": "713.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-023",
+      "piece_label": "S17-R-1",
+      "cut_size_mm": "713.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "S17-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-024",
+      "piece_label": "S18-A",
+      "cut_size_mm": "1827.0 x 186.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-025",
+      "piece_label": "S19-A",
+      "cut_size_mm": "1627.0 x 186.0",
+      "source_room": "_0-2_ROOM_OUTLINE-4",
+      "target_room": "_0-2_ROOM_OUTLINE-4",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-026",
+      "piece_label": "S20-A",
+      "cut_size_mm": "1827.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-027",
+      "piece_label": "S21-A",
+      "cut_size_mm": "1827.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-028",
+      "piece_label": "S22-A",
+      "cut_size_mm": "1782.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-029",
+      "piece_label": "S23-A",
+      "cut_size_mm": "1620.2 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-030",
+      "piece_label": "S24-A",
+      "cut_size_mm": "1618.8 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-031",
+      "piece_label": "S25-A",
+      "cut_size_mm": "1592.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-032",
+      "piece_label": "S26-A",
+      "cut_size_mm": "1592.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-033",
+      "piece_label": "S27-A",
+      "cut_size_mm": "1548.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-034",
+      "piece_label": "S28-A",
+      "cut_size_mm": "1827.0 x 384.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-035",
+      "piece_label": "S29-A",
+      "cut_size_mm": "1827.0 x 384.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-036",
+      "piece_label": "S30-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-037",
+      "piece_label": "S30-R-1",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S30-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-038",
+      "piece_label": "S31-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-039",
+      "piece_label": "S31-R-1",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S31-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-040",
+      "piece_label": "S32-A",
+      "cut_size_mm": "868.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-041",
+      "piece_label": "S32-R-1",
+      "cut_size_mm": "706.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S32-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-042",
+      "piece_label": "S33-A",
+      "cut_size_mm": "678.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-043",
+      "piece_label": "S33-R-1",
+      "cut_size_mm": "678.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S33-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-044",
+      "piece_label": "S34-A",
+      "cut_size_mm": "634.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-045",
+      "piece_label": "S34-R-1",
+      "cut_size_mm": "707.0 x 233.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S34-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-046",
+      "piece_label": "S33-R-R-1",
+      "cut_size_mm": "405.0 x 384.0",
+      "source_room": "_0-2_ROOM_OUTLINE-5",
+      "target_room": "_0-2_ROOM_OUTLINE-5",
+      "reuse_from": "S33-R-R",
+      "status": "reused"
+    },
+    {
+      "offcut_id": "OFF-20260325-047",
+      "piece_label": "S35-A",
+      "cut_size_mm": "1548.0 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-6",
+      "target_room": "_0-2_ROOM_OUTLINE-6",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-048",
+      "piece_label": "S36-A",
+      "cut_size_mm": "1548.0 x 560.0",
+      "source_room": "_0-2_ROOM_OUTLINE-6",
+      "target_room": "_0-2_ROOM_OUTLINE-6",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-049",
+      "piece_label": "S37-A",
+      "cut_size_mm": "913.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-6",
+      "target_room": "_0-2_ROOM_OUTLINE-6",
+      "reuse_from": "-",
+      "status": "new_cut"
+    },
+    {
+      "offcut_id": "OFF-20260325-050",
+      "piece_label": "S37-R-1",
+      "cut_size_mm": "634.5 x 607.0",
+      "source_room": "_0-2_ROOM_OUTLINE-6",
+      "target_room": "_0-2_ROOM_OUTLINE-6",
+      "reuse_from": "S37-R",
+      "status": "reused"
+    }
+  ],
+  "geometry": {
+    "rooms": [
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "polygon_coords": [
+          [
+            4916.9,
+            9852.7
+          ],
+          [
+            4916.9,
+            10902.7
+          ],
+          [
+            5461.9,
+            10902.7
+          ],
+          [
+            5461.9,
+            11657.7
+          ],
+          [
+            6614.9,
+            11657.7
+          ],
+          [
+            6614.9,
+            10937.7
+          ],
+          [
+            7516.9,
+            10937.7
+          ],
+          [
+            7525.9,
+            10791.7
+          ],
+          [
+            8705.9,
+            10791.7
+          ],
+          [
+            8705.9,
+            9853.7
+          ],
+          [
+            4916.9,
+            9852.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "full",
+            "coords": [
+              [
+                6758.9,
+                10474.7
+              ],
+              [
+                6758.9,
+                9868.1
+              ],
+              [
+                4931.9,
+                9867.7
+              ],
+              [
+                4931.9,
+                10474.7
+              ],
+              [
+                6758.9,
+                10474.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                6758.9,
+                10474.7
+              ],
+              [
+                8585.9,
+                10474.7
+              ],
+              [
+                8585.9,
+                9868.6
+              ],
+              [
+                6758.9,
+                9868.1
+              ],
+              [
+                6758.9,
+                10474.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "rejected",
+            "coords": [
+              [
+                8585.9,
+                10474.7
+              ],
+              [
+                8690.9,
+                10474.7
+              ],
+              [
+                8690.9,
+                9868.6
+              ],
+              [
+                8585.9,
+                9868.6
+              ],
+              [
+                8585.9,
+                10474.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                5845.4,
+                11081.7
+              ],
+              [
+                5845.4,
+                10474.7
+              ],
+              [
+                4931.9,
+                10474.7
+              ],
+              [
+                4931.9,
+                10887.7
+              ],
+              [
+                5476.9,
+                10887.7
+              ],
+              [
+                5476.9,
+                11081.7
+              ],
+              [
+                5845.4,
+                11081.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                7672.4,
+                10474.7
+              ],
+              [
+                5845.4,
+                10474.7
+              ],
+              [
+                5845.4,
+                11081.7
+              ],
+              [
+                6599.9,
+                11081.7
+              ],
+              [
+                6599.9,
+                10922.7
+              ],
+              [
+                7502.7,
+                10922.7
+              ],
+              [
+                7511.7,
+                10776.7
+              ],
+              [
+                7672.4,
+                10776.7
+              ],
+              [
+                7672.4,
+                10474.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                7672.4,
+                10474.7
+              ],
+              [
+                7672.4,
+                10776.7
+              ],
+              [
+                8690.9,
+                10776.7
+              ],
+              [
+                8690.9,
+                10474.7
+              ],
+              [
+                7672.4,
+                10474.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                5476.9,
+                11081.7
+              ],
+              [
+                5476.9,
+                11642.7
+              ],
+              [
+                6599.9,
+                11642.7
+              ],
+              [
+                6599.9,
+                11081.7
+              ],
+              [
+                5476.9,
+                11081.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      },
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "polygon_coords": [
+          [
+            7561.9,
+            10863.7
+          ],
+          [
+            7561.9,
+            11657.7
+          ],
+          [
+            8705.9,
+            11657.7
+          ],
+          [
+            8705.9,
+            10863.7
+          ],
+          [
+            7561.9,
+            10863.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "rejected",
+            "coords": [
+              [
+                7576.9,
+                11485.7
+              ],
+              [
+                7576.9,
+                10878.7
+              ],
+              [
+                7576.9,
+                10878.7
+              ],
+              [
+                7576.9,
+                11485.7
+              ],
+              [
+                7576.9,
+                11485.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                7576.9,
+                11485.7
+              ],
+              [
+                8690.9,
+                11485.7
+              ],
+              [
+                8690.9,
+                10878.7
+              ],
+              [
+                7576.9,
+                10878.7
+              ],
+              [
+                7576.9,
+                11485.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8490.4,
+                11485.7
+              ],
+              [
+                7576.9,
+                11485.7
+              ],
+              [
+                7576.9,
+                11642.7
+              ],
+              [
+                8490.4,
+                11642.7
+              ],
+              [
+                8490.4,
+                11485.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8490.4,
+                11485.7
+              ],
+              [
+                8490.4,
+                11642.7
+              ],
+              [
+                8690.9,
+                11642.7
+              ],
+              [
+                8690.9,
+                11485.7
+              ],
+              [
+                8490.4,
+                11485.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      },
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "polygon_coords": [
+          [
+            11977.9,
+            11657.7
+          ],
+          [
+            13777.9,
+            11657.7
+          ],
+          [
+            13777.9,
+            10841.7
+          ],
+          [
+            14521.9,
+            10841.7
+          ],
+          [
+            14521.9,
+            7313.7
+          ],
+          [
+            11977.9,
+            7313.7
+          ],
+          [
+            11977.9,
+            11657.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "full",
+            "coords": [
+              [
+                13819.9,
+                7935.7
+              ],
+              [
+                13819.9,
+                7328.7
+              ],
+              [
+                11992.9,
+                7328.7
+              ],
+              [
+                11992.9,
+                7935.7
+              ],
+              [
+                13819.9,
+                7935.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13819.9,
+                7935.7
+              ],
+              [
+                14506.9,
+                7935.7
+              ],
+              [
+                14506.9,
+                7328.7
+              ],
+              [
+                13819.9,
+                7328.7
+              ],
+              [
+                13819.9,
+                7935.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                8542.7
+              ],
+              [
+                12906.4,
+                7935.7
+              ],
+              [
+                11992.9,
+                7935.7
+              ],
+              [
+                11992.9,
+                8542.7
+              ],
+              [
+                12906.4,
+                8542.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                7935.7
+              ],
+              [
+                12906.4,
+                8542.7
+              ],
+              [
+                14506.9,
+                8542.7
+              ],
+              [
+                14506.9,
+                7935.7
+              ],
+              [
+                12906.4,
+                7935.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                13819.9,
+                8542.7
+              ],
+              [
+                13819.9,
+                9149.7
+              ],
+              [
+                11992.9,
+                9149.7
+              ],
+              [
+                11992.9,
+                8542.7
+              ],
+              [
+                13819.9,
+                8542.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13819.9,
+                8542.7
+              ],
+              [
+                13819.9,
+                9149.7
+              ],
+              [
+                14506.9,
+                9149.7
+              ],
+              [
+                14506.9,
+                8542.7
+              ],
+              [
+                13819.9,
+                8542.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                9756.7
+              ],
+              [
+                12906.4,
+                9149.7
+              ],
+              [
+                11992.9,
+                9149.7
+              ],
+              [
+                11992.9,
+                9756.7
+              ],
+              [
+                12906.4,
+                9756.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                9149.7
+              ],
+              [
+                12906.4,
+                9756.7
+              ],
+              [
+                14506.9,
+                9756.7
+              ],
+              [
+                14506.9,
+                9149.7
+              ],
+              [
+                12906.4,
+                9149.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                13819.9,
+                9756.7
+              ],
+              [
+                13819.9,
+                10363.7
+              ],
+              [
+                11992.9,
+                10363.7
+              ],
+              [
+                11992.9,
+                9756.7
+              ],
+              [
+                13819.9,
+                9756.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13819.9,
+                9756.7
+              ],
+              [
+                13819.9,
+                10363.7
+              ],
+              [
+                14506.9,
+                10363.7
+              ],
+              [
+                14506.9,
+                9756.7
+              ],
+              [
+                13819.9,
+                9756.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                10970.7
+              ],
+              [
+                12906.4,
+                10363.7
+              ],
+              [
+                11992.9,
+                10363.7
+              ],
+              [
+                11992.9,
+                10970.7
+              ],
+              [
+                12906.4,
+                10970.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12906.4,
+                10363.7
+              ],
+              [
+                12906.4,
+                10970.7
+              ],
+              [
+                13762.9,
+                10970.7
+              ],
+              [
+                13762.9,
+                10826.7
+              ],
+              [
+                14506.9,
+                10826.7
+              ],
+              [
+                14506.9,
+                10363.7
+              ],
+              [
+                12906.4,
+                10363.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13762.9,
+                11577.7
+              ],
+              [
+                13762.9,
+                10970.7
+              ],
+              [
+                11992.9,
+                10970.7
+              ],
+              [
+                11992.9,
+                11577.7
+              ],
+              [
+                13762.9,
+                11577.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "rejected",
+            "coords": [
+              [
+                12906.4,
+                11577.7
+              ],
+              [
+                11992.9,
+                11577.7
+              ],
+              [
+                11992.9,
+                11642.7
+              ],
+              [
+                12906.4,
+                11642.7
+              ],
+              [
+                12906.4,
+                11577.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "rejected",
+            "coords": [
+              [
+                12906.4,
+                11577.7
+              ],
+              [
+                12906.4,
+                11642.7
+              ],
+              [
+                13762.9,
+                11642.7
+              ],
+              [
+                13762.9,
+                11577.7
+              ],
+              [
+                12906.4,
+                11577.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      },
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "polygon_coords": [
+          [
+            11037.9,
+            7241.7
+          ],
+          [
+            14521.9,
+            7241.7
+          ],
+          [
+            14521.9,
+            4597.7
+          ],
+          [
+            11037.9,
+            4597.7
+          ],
+          [
+            11037.9,
+            7241.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "full",
+            "coords": [
+              [
+                12879.9,
+                5219.7
+              ],
+              [
+                12879.9,
+                4612.7
+              ],
+              [
+                11052.9,
+                4612.7
+              ],
+              [
+                11052.9,
+                5219.7
+              ],
+              [
+                12879.9,
+                5219.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12879.9,
+                5219.7
+              ],
+              [
+                14506.9,
+                5219.7
+              ],
+              [
+                14506.9,
+                4612.7
+              ],
+              [
+                12879.9,
+                4612.7
+              ],
+              [
+                12879.9,
+                5219.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11966.4,
+                5826.7
+              ],
+              [
+                11966.4,
+                5219.7
+              ],
+              [
+                11052.9,
+                5219.7
+              ],
+              [
+                11052.9,
+                5826.7
+              ],
+              [
+                11966.4,
+                5826.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                13793.4,
+                5219.7
+              ],
+              [
+                13793.4,
+                5826.7
+              ],
+              [
+                11966.4,
+                5826.7
+              ],
+              [
+                11966.4,
+                5219.7
+              ],
+              [
+                13793.4,
+                5219.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13793.4,
+                5219.7
+              ],
+              [
+                13793.4,
+                5826.7
+              ],
+              [
+                14506.9,
+                5826.7
+              ],
+              [
+                14506.9,
+                5219.7
+              ],
+              [
+                13793.4,
+                5219.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                12879.9,
+                5826.7
+              ],
+              [
+                12879.9,
+                6433.7
+              ],
+              [
+                11052.9,
+                6433.7
+              ],
+              [
+                11052.9,
+                5826.7
+              ],
+              [
+                12879.9,
+                5826.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12879.9,
+                5826.7
+              ],
+              [
+                12879.9,
+                6433.7
+              ],
+              [
+                14506.9,
+                6433.7
+              ],
+              [
+                14506.9,
+                5826.7
+              ],
+              [
+                12879.9,
+                5826.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11966.4,
+                7040.7
+              ],
+              [
+                11966.4,
+                6433.7
+              ],
+              [
+                11052.9,
+                6433.7
+              ],
+              [
+                11052.9,
+                7040.7
+              ],
+              [
+                11966.4,
+                7040.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                13793.4,
+                6433.7
+              ],
+              [
+                13793.4,
+                7040.7
+              ],
+              [
+                11966.4,
+                7040.7
+              ],
+              [
+                11966.4,
+                6433.7
+              ],
+              [
+                13793.4,
+                6433.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                13793.4,
+                6433.7
+              ],
+              [
+                13793.4,
+                7040.7
+              ],
+              [
+                14506.9,
+                7040.7
+              ],
+              [
+                14506.9,
+                6433.7
+              ],
+              [
+                13793.4,
+                6433.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12879.9,
+                7040.7
+              ],
+              [
+                11052.9,
+                7040.7
+              ],
+              [
+                11052.9,
+                7226.7
+              ],
+              [
+                12879.9,
+                7226.7
+              ],
+              [
+                12879.9,
+                7040.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                12879.9,
+                7040.7
+              ],
+              [
+                12879.9,
+                7226.7
+              ],
+              [
+                14506.9,
+                7226.7
+              ],
+              [
+                14506.9,
+                7040.7
+              ],
+              [
+                12879.9,
+                7040.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      },
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "polygon_coords": [
+          [
+            11905.9,
+            9081.7
+          ],
+          [
+            11907.9,
+            7313.7
+          ],
+          [
+            10965.9,
+            7313.7
+          ],
+          [
+            10965.9,
+            4597.7
+          ],
+          [
+            10921.9,
+            4597.7
+          ],
+          [
+            10921.9,
+            3297.7
+          ],
+          [
+            7561.9,
+            3297.7
+          ],
+          [
+            7561.9,
+            4841.7
+          ],
+          [
+            8071.9,
+            4841.7
+          ],
+          [
+            8071.9,
+            4913.7
+          ],
+          [
+            7516.9,
+            4913.7
+          ],
+          [
+            7516.9,
+            6383.7
+          ],
+          [
+            8345.9,
+            6383.7
+          ],
+          [
+            8345.9,
+            6513.7
+          ],
+          [
+            7516.9,
+            6513.7
+          ],
+          [
+            7516.9,
+            9781.7
+          ],
+          [
+            11605.9,
+            9781.7
+          ],
+          [
+            11605.9,
+            9081.7
+          ],
+          [
+            11905.9,
+            9081.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                3919.7
+              ],
+              [
+                9358.9,
+                3312.7
+              ],
+              [
+                7576.9,
+                3312.7
+              ],
+              [
+                7576.9,
+                3919.7
+              ],
+              [
+                9358.9,
+                3919.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                3919.7
+              ],
+              [
+                10906.9,
+                3919.7
+              ],
+              [
+                10906.9,
+                3312.7
+              ],
+              [
+                9358.9,
+                3312.7
+              ],
+              [
+                9358.9,
+                3919.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8445.4,
+                4526.7
+              ],
+              [
+                8445.4,
+                3919.7
+              ],
+              [
+                7576.9,
+                3919.7
+              ],
+              [
+                7576.9,
+                4526.7
+              ],
+              [
+                8445.4,
+                4526.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                10272.4,
+                3919.7
+              ],
+              [
+                10272.4,
+                4526.7
+              ],
+              [
+                8445.4,
+                4526.7
+              ],
+              [
+                8445.4,
+                3919.7
+              ],
+              [
+                10272.4,
+                3919.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10272.4,
+                3919.7
+              ],
+              [
+                10272.4,
+                4526.7
+              ],
+              [
+                10906.9,
+                4526.7
+              ],
+              [
+                10906.9,
+                3919.7
+              ],
+              [
+                10272.4,
+                3919.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                5133.7
+              ],
+              [
+                9358.9,
+                4526.7
+              ],
+              [
+                7576.9,
+                4526.7
+              ],
+              [
+                7576.9,
+                4826.7
+              ],
+              [
+                8086.9,
+                4826.7
+              ],
+              [
+                8086.9,
+                4928.7
+              ],
+              [
+                7531.9,
+                4928.7
+              ],
+              [
+                7531.9,
+                5133.7
+              ],
+              [
+                9358.9,
+                5133.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                4526.7
+              ],
+              [
+                9358.9,
+                5133.7
+              ],
+              [
+                10950.9,
+                5133.7
+              ],
+              [
+                10950.9,
+                4612.7
+              ],
+              [
+                10906.9,
+                4612.7
+              ],
+              [
+                10906.9,
+                4526.7
+              ],
+              [
+                9358.9,
+                4526.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8445.4,
+                5740.7
+              ],
+              [
+                8445.4,
+                5133.7
+              ],
+              [
+                7531.9,
+                5133.7
+              ],
+              [
+                7531.9,
+                5740.7
+              ],
+              [
+                8445.4,
+                5740.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                10272.4,
+                5133.7
+              ],
+              [
+                10272.4,
+                5740.7
+              ],
+              [
+                8445.4,
+                5740.7
+              ],
+              [
+                8445.4,
+                5133.7
+              ],
+              [
+                10272.4,
+                5133.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10272.4,
+                5133.7
+              ],
+              [
+                10272.4,
+                5740.7
+              ],
+              [
+                10950.9,
+                5740.7
+              ],
+              [
+                10950.9,
+                5133.7
+              ],
+              [
+                10272.4,
+                5133.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                9358.9,
+                5740.7
+              ],
+              [
+                9358.9,
+                6347.7
+              ],
+              [
+                7531.9,
+                6347.7
+              ],
+              [
+                7531.9,
+                5740.7
+              ],
+              [
+                9358.9,
+                5740.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                5740.7
+              ],
+              [
+                9358.9,
+                6347.7
+              ],
+              [
+                10950.9,
+                6347.7
+              ],
+              [
+                10950.9,
+                5740.7
+              ],
+              [
+                9358.9,
+                5740.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8445.4,
+                6954.7
+              ],
+              [
+                8445.4,
+                6347.7
+              ],
+              [
+                7531.9,
+                6347.7
+              ],
+              [
+                7531.9,
+                6368.7
+              ],
+              [
+                8360.9,
+                6368.7
+              ],
+              [
+                8360.9,
+                6528.7
+              ],
+              [
+                7531.9,
+                6528.7
+              ],
+              [
+                7531.9,
+                6954.7
+              ],
+              [
+                8445.4,
+                6954.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                10272.4,
+                6347.7
+              ],
+              [
+                10272.4,
+                6954.7
+              ],
+              [
+                8445.4,
+                6954.7
+              ],
+              [
+                8445.4,
+                6347.7
+              ],
+              [
+                10272.4,
+                6347.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10272.4,
+                6347.7
+              ],
+              [
+                10272.4,
+                6954.7
+              ],
+              [
+                10950.9,
+                6954.7
+              ],
+              [
+                10950.9,
+                6347.7
+              ],
+              [
+                10272.4,
+                6347.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                9358.9,
+                6954.7
+              ],
+              [
+                9358.9,
+                7561.7
+              ],
+              [
+                7531.9,
+                7561.7
+              ],
+              [
+                7531.9,
+                6954.7
+              ],
+              [
+                9358.9,
+                6954.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                6954.7
+              ],
+              [
+                9358.9,
+                7561.7
+              ],
+              [
+                11185.9,
+                7561.7
+              ],
+              [
+                11185.9,
+                7328.7
+              ],
+              [
+                10950.9,
+                7328.7
+              ],
+              [
+                10950.9,
+                6954.7
+              ],
+              [
+                9358.9,
+                6954.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11185.9,
+                7561.7
+              ],
+              [
+                11892.6,
+                7561.7
+              ],
+              [
+                11892.8,
+                7328.7
+              ],
+              [
+                11185.9,
+                7328.7
+              ],
+              [
+                11185.9,
+                7561.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8445.4,
+                8168.7
+              ],
+              [
+                8445.4,
+                7561.7
+              ],
+              [
+                7531.9,
+                7561.7
+              ],
+              [
+                7531.9,
+                8168.7
+              ],
+              [
+                8445.4,
+                8168.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                10272.4,
+                7561.7
+              ],
+              [
+                10272.4,
+                8168.7
+              ],
+              [
+                8445.4,
+                8168.7
+              ],
+              [
+                8445.4,
+                7561.7
+              ],
+              [
+                10272.4,
+                7561.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10272.4,
+                7561.7
+              ],
+              [
+                10272.4,
+                8168.7
+              ],
+              [
+                11891.9,
+                8168.7
+              ],
+              [
+                11892.6,
+                7561.7
+              ],
+              [
+                10272.4,
+                7561.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                9358.9,
+                8168.7
+              ],
+              [
+                9358.9,
+                8775.7
+              ],
+              [
+                7531.9,
+                8775.7
+              ],
+              [
+                7531.9,
+                8168.7
+              ],
+              [
+                9358.9,
+                8168.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                11185.9,
+                8168.7
+              ],
+              [
+                11185.9,
+                8775.7
+              ],
+              [
+                9358.9,
+                8775.7
+              ],
+              [
+                9358.9,
+                8168.7
+              ],
+              [
+                11185.9,
+                8168.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11185.9,
+                8168.7
+              ],
+              [
+                11185.9,
+                8775.7
+              ],
+              [
+                11891.2,
+                8775.7
+              ],
+              [
+                11891.9,
+                8168.7
+              ],
+              [
+                11185.9,
+                8168.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8445.4,
+                9382.7
+              ],
+              [
+                8445.4,
+                8775.7
+              ],
+              [
+                7531.9,
+                8775.7
+              ],
+              [
+                7531.9,
+                9382.7
+              ],
+              [
+                8445.4,
+                9382.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "full",
+            "coords": [
+              [
+                10272.4,
+                8775.7
+              ],
+              [
+                10272.4,
+                9382.7
+              ],
+              [
+                8445.4,
+                9382.7
+              ],
+              [
+                8445.4,
+                8775.7
+              ],
+              [
+                10272.4,
+                8775.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10272.4,
+                8775.7
+              ],
+              [
+                10272.4,
+                9382.7
+              ],
+              [
+                11590.9,
+                9382.7
+              ],
+              [
+                11590.9,
+                9066.7
+              ],
+              [
+                11890.9,
+                9066.7
+              ],
+              [
+                11891.2,
+                8775.7
+              ],
+              [
+                10272.4,
+                8775.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9358.9,
+                9382.7
+              ],
+              [
+                7531.9,
+                9382.7
+              ],
+              [
+                7531.9,
+                9766.7
+              ],
+              [
+                9358.9,
+                9766.7
+              ],
+              [
+                9358.9,
+                9382.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11185.9,
+                9382.7
+              ],
+              [
+                9358.9,
+                9382.7
+              ],
+              [
+                9358.9,
+                9766.7
+              ],
+              [
+                11185.9,
+                9766.7
+              ],
+              [
+                11185.9,
+                9382.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                11185.9,
+                9382.7
+              ],
+              [
+                11185.9,
+                9766.7
+              ],
+              [
+                11590.9,
+                9766.7
+              ],
+              [
+                11590.9,
+                9382.7
+              ],
+              [
+                11185.9,
+                9382.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      },
+      {
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "polygon_coords": [
+          [
+            8777.9,
+            11657.7
+          ],
+          [
+            10355.9,
+            11657.7
+          ],
+          [
+            10355.9,
+            9853.7
+          ],
+          [
+            8777.9,
+            9853.7
+          ],
+          [
+            8777.9,
+            11657.7
+          ]
+        ],
+        "panels": [
+          {
+            "type": "cut",
+            "coords": [
+              [
+                10340.9,
+                10475.7
+              ],
+              [
+                10340.9,
+                9868.7
+              ],
+              [
+                8792.9,
+                9868.7
+              ],
+              [
+                8792.9,
+                10475.7
+              ],
+              [
+                10340.9,
+                10475.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9706.4,
+                11082.7
+              ],
+              [
+                9706.4,
+                10475.7
+              ],
+              [
+                8792.9,
+                10475.7
+              ],
+              [
+                8792.9,
+                11082.7
+              ],
+              [
+                9706.4,
+                11082.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                9706.4,
+                10475.7
+              ],
+              [
+                9706.4,
+                11082.7
+              ],
+              [
+                10340.9,
+                11082.7
+              ],
+              [
+                10340.9,
+                10475.7
+              ],
+              [
+                9706.4,
+                10475.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          },
+          {
+            "type": "cut",
+            "coords": [
+              [
+                8792.9,
+                11642.7
+              ],
+              [
+                10340.9,
+                11642.7
+              ],
+              [
+                10340.9,
+                11082.7
+              ],
+              [
+                8792.9,
+                11082.7
+              ],
+              [
+                8792.9,
+                11642.7
+              ]
+            ],
+            "label": "",
+            "source_label": ""
+          }
+        ]
+      }
+    ],
+    "pedestals": [
+      {
+        "x": 5383.6,
+        "y": 10469.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 5840.4,
+        "y": 10469.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 5840.4,
+        "y": 11076.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 6297.1,
+        "y": 10469.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 6297.1,
+        "y": 11076.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 6753.9,
+        "y": 10469.7,
+        "height_mm": 0,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 7210.6,
+        "y": 10469.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 7667.4,
+        "y": 10469.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 8124.1,
+        "y": 10469.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 8580.9,
+        "y": 10469.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      {
+        "x": 8028.6,
+        "y": 11480.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      {
+        "x": 8485.4,
+        "y": 11480.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      {
+        "x": 12444.6,
+        "y": 7930.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12444.6,
+        "y": 8537.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12444.6,
+        "y": 9144.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12444.6,
+        "y": 9751.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12444.6,
+        "y": 10358.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12444.6,
+        "y": 10965.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 7930.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 8537.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 9144.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 9751.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 10358.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 12901.4,
+        "y": 10965.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 7930.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 8537.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 9144.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 9751.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 10358.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13358.1,
+        "y": 10965.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13814.9,
+        "y": 7930.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13814.9,
+        "y": 8537.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13814.9,
+        "y": 9144.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13814.9,
+        "y": 9751.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 13814.9,
+        "y": 10358.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 14271.6,
+        "y": 7930.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 14271.6,
+        "y": 8537.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 14271.6,
+        "y": 9144.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 14271.6,
+        "y": 9751.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 14271.6,
+        "y": 10358.7,
+        "height_mm": 70,
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      {
+        "x": 11504.6,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11504.6,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11504.6,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11504.6,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11961.4,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11961.4,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11961.4,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 11961.4,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12418.1,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12418.1,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12418.1,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12418.1,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12874.9,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12874.9,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12874.9,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 12874.9,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13331.6,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13331.6,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13331.6,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13331.6,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13788.4,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13788.4,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13788.4,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 13788.4,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 14245.1,
+        "y": 5214.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 14245.1,
+        "y": 5821.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 14245.1,
+        "y": 6428.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 14245.1,
+        "y": 7035.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      {
+        "x": 7983.6,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 7983.6,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8440.4,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 8897.1,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9353.9,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9810.6,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10267.4,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 3914.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 4521.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 5128.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 5735.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 6342.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 6949.7,
+        "height_mm": 300,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 10724.1,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11180.9,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11180.9,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11180.9,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11180.9,
+        "y": 9377.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11637.6,
+        "y": 7556.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11637.6,
+        "y": 8163.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 11637.6,
+        "y": 8770.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      {
+        "x": 9244.6,
+        "y": 10470.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      {
+        "x": 9244.6,
+        "y": 11077.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      {
+        "x": 9701.4,
+        "y": 10470.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      {
+        "x": 9701.4,
+        "y": 11077.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      {
+        "x": 10158.1,
+        "y": 10470.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      {
+        "x": 10158.1,
+        "y": 11077.7,
+        "height_mm": 100,
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      }
+    ],
+    "edge_rails": []
+  },
+  "system_edge_joists": {}
+}

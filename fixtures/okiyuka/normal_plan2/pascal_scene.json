@@ -1,0 +1,2002 @@
+{
+  "nodes": {
+    "site_1gsd0rohsqq63cm7": {
+      "object": "node",
+      "id": "site_1gsd0rohsqq63cm7",
+      "type": "site",
+      "parentId": null,
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "summary": {
+          "room_count": 6,
+          "total_full_boards": 18,
+          "total_cut_boards": 36,
+          "total_boards": 54,
+          "total_reuse_saved": 13,
+          "stock_consumed": 37,
+          "offcut_utilization_rate": 0.26,
+          "offcut_weighted_ratio": 0.5948,
+          "stagger_mode": true
+        },
+        "offcut_pool": [
+          {
+            "offcut_id": "OFF-20260325-001",
+            "piece_label": "S1-A",
+            "cut_size_mm": "1827.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-1",
+            "target_room": "_0-2_ROOM_OUTLINE-1",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-002",
+            "piece_label": "S2-A",
+            "cut_size_mm": "1123.0 x 561.0",
+            "source_room": "_0-2_ROOM_OUTLINE-1",
+            "target_room": "_0-2_ROOM_OUTLINE-1",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-003",
+            "piece_label": "S3-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-1",
+            "target_room": "_0-2_ROOM_OUTLINE-1",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-004",
+            "piece_label": "S4-A",
+            "cut_size_mm": "1018.5 x 302.0",
+            "source_room": "_0-2_ROOM_OUTLINE-1",
+            "target_room": "_0-2_ROOM_OUTLINE-1",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-005",
+            "piece_label": "S5-A",
+            "cut_size_mm": "1114.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-2",
+            "target_room": "_0-2_ROOM_OUTLINE-2",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-006",
+            "piece_label": "S6-A",
+            "cut_size_mm": "913.5 x 157.0",
+            "source_room": "_0-2_ROOM_OUTLINE-2",
+            "target_room": "_0-2_ROOM_OUTLINE-2",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-007",
+            "piece_label": "S5-R-1",
+            "cut_size_mm": "200.5 x 157.0",
+            "source_room": "_0-2_ROOM_OUTLINE-2",
+            "target_room": "_0-2_ROOM_OUTLINE-2",
+            "reuse_from": "S5-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-008",
+            "piece_label": "S7-A",
+            "cut_size_mm": "1770.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-009",
+            "piece_label": "S8-A",
+            "cut_size_mm": "1600.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-010",
+            "piece_label": "S9-A",
+            "cut_size_mm": "1600.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-011",
+            "piece_label": "S10-A",
+            "cut_size_mm": "1600.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-012",
+            "piece_label": "S11-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-013",
+            "piece_label": "S11-R-1",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "S11-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-014",
+            "piece_label": "S12-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-015",
+            "piece_label": "S12-R-1",
+            "cut_size_mm": "687.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "S12-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-016",
+            "piece_label": "S13-A",
+            "cut_size_mm": "687.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-017",
+            "piece_label": "S13-R-1",
+            "cut_size_mm": "687.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-3",
+            "target_room": "_0-2_ROOM_OUTLINE-3",
+            "reuse_from": "S13-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-018",
+            "piece_label": "S14-A",
+            "cut_size_mm": "1627.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-019",
+            "piece_label": "S15-A",
+            "cut_size_mm": "1627.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-020",
+            "piece_label": "S16-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-021",
+            "piece_label": "S16-R-1",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "S16-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-022",
+            "piece_label": "S17-A",
+            "cut_size_mm": "713.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-023",
+            "piece_label": "S17-R-1",
+            "cut_size_mm": "713.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "S17-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-024",
+            "piece_label": "S18-A",
+            "cut_size_mm": "1827.0 x 186.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-025",
+            "piece_label": "S19-A",
+            "cut_size_mm": "1627.0 x 186.0",
+            "source_room": "_0-2_ROOM_OUTLINE-4",
+            "target_room": "_0-2_ROOM_OUTLINE-4",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-026",
+            "piece_label": "S20-A",
+            "cut_size_mm": "1827.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-027",
+            "piece_label": "S21-A",
+            "cut_size_mm": "1827.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-028",
+            "piece_label": "S22-A",
+            "cut_size_mm": "1782.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-029",
+            "piece_label": "S23-A",
+            "cut_size_mm": "1620.2 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-030",
+            "piece_label": "S24-A",
+            "cut_size_mm": "1618.8 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-031",
+            "piece_label": "S25-A",
+            "cut_size_mm": "1592.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-032",
+            "piece_label": "S26-A",
+            "cut_size_mm": "1592.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-033",
+            "piece_label": "S27-A",
+            "cut_size_mm": "1548.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-034",
+            "piece_label": "S28-A",
+            "cut_size_mm": "1827.0 x 384.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-035",
+            "piece_label": "S29-A",
+            "cut_size_mm": "1827.0 x 384.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-036",
+            "piece_label": "S30-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-037",
+            "piece_label": "S30-R-1",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S30-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-038",
+            "piece_label": "S31-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-039",
+            "piece_label": "S31-R-1",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S31-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-040",
+            "piece_label": "S32-A",
+            "cut_size_mm": "868.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-041",
+            "piece_label": "S32-R-1",
+            "cut_size_mm": "706.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S32-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-042",
+            "piece_label": "S33-A",
+            "cut_size_mm": "678.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-043",
+            "piece_label": "S33-R-1",
+            "cut_size_mm": "678.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S33-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-044",
+            "piece_label": "S34-A",
+            "cut_size_mm": "634.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-045",
+            "piece_label": "S34-R-1",
+            "cut_size_mm": "707.0 x 233.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S34-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-046",
+            "piece_label": "S33-R-R-1",
+            "cut_size_mm": "405.0 x 384.0",
+            "source_room": "_0-2_ROOM_OUTLINE-5",
+            "target_room": "_0-2_ROOM_OUTLINE-5",
+            "reuse_from": "S33-R-R",
+            "status": "reused"
+          },
+          {
+            "offcut_id": "OFF-20260325-047",
+            "piece_label": "S35-A",
+            "cut_size_mm": "1548.0 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-6",
+            "target_room": "_0-2_ROOM_OUTLINE-6",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-048",
+            "piece_label": "S36-A",
+            "cut_size_mm": "1548.0 x 560.0",
+            "source_room": "_0-2_ROOM_OUTLINE-6",
+            "target_room": "_0-2_ROOM_OUTLINE-6",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-049",
+            "piece_label": "S37-A",
+            "cut_size_mm": "913.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-6",
+            "target_room": "_0-2_ROOM_OUTLINE-6",
+            "reuse_from": "-",
+            "status": "new_cut"
+          },
+          {
+            "offcut_id": "OFF-20260325-050",
+            "piece_label": "S37-R-1",
+            "cut_size_mm": "634.5 x 607.0",
+            "source_room": "_0-2_ROOM_OUTLINE-6",
+            "target_room": "_0-2_ROOM_OUTLINE-6",
+            "reuse_from": "S37-R",
+            "status": "reused"
+          }
+        ]
+      },
+      "polygon": {
+        "type": "polygon",
+        "points": [
+          [
+            3.9169,
+            2.2977
+          ],
+          [
+            15.5219,
+            2.2977
+          ],
+          [
+            15.5219,
+            12.6577
+          ],
+          [
+            3.9169,
+            12.6577
+          ]
+        ]
+      },
+      "children": [
+        {
+          "object": "node",
+          "id": "building_gnpdi132xypepzr1",
+          "type": "building",
+          "parentId": "site_1gsd0rohsqq63cm7",
+          "visible": true,
+          "metadata": {
+            "source": "okiyuka",
+            "generator": "Okiyuka V1.0"
+          },
+          "children": [
+            "level_ufd95awjprkaajy2"
+          ],
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "building_gnpdi132xypepzr1": {
+      "object": "node",
+      "id": "building_gnpdi132xypepzr1",
+      "type": "building",
+      "parentId": "site_1gsd0rohsqq63cm7",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "generator": "Okiyuka V1.0"
+      },
+      "children": [
+        "level_ufd95awjprkaajy2"
+      ],
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "level_ufd95awjprkaajy2": {
+      "object": "node",
+      "id": "level_ufd95awjprkaajy2",
+      "type": "level",
+      "parentId": "building_gnpdi132xypepzr1",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_count": 6,
+        "schema_version": "1.1"
+      },
+      "children": [
+        "wall_ly3wos4ksf6v1dei",
+        "wall_xxek49gxv0poq4if",
+        "wall_lmcd2woxr2bitiko",
+        "wall_pbib3qjutg238wi1",
+        "wall_734w0ctmwhl12o00",
+        "wall_pxx4tya69w06w0jj",
+        "wall_axeexdqmzvhzl8tr",
+        "wall_skben5kkmwbxbflt",
+        "wall_htje6runvc8mt8zh",
+        "wall_7k7lkc0bh2qbca96",
+        "wall_xph3fqwmqcjk9e8p",
+        "wall_5bzus9rxe6os6kdz",
+        "wall_08lazw8h1252vgp4",
+        "wall_0u8g9ab0hwci0qlg",
+        "wall_gy5ihnev7ku3mlzv",
+        "wall_wzjy5wkao0hcg0c1",
+        "wall_p8u0ykt73kt65494",
+        "wall_sczrkrz0i5fi0tnn",
+        "wall_m0shdqo1eerfyjog",
+        "wall_epvujm8qvogl024m",
+        "wall_23sfv7jmt66danar",
+        "wall_shs0igpwk6aljrkt",
+        "wall_u9sh7d4rltep68lf",
+        "wall_hjxs8tfiyjmbdxsc",
+        "wall_n61a0iyby9ucpwf6",
+        "wall_sqbfdmjlrg8z455e",
+        "wall_e3nitcap3sofmdns",
+        "wall_jduk7hjbsmm2igxr",
+        "wall_xgftmb55q7hjb6ui",
+        "wall_lmfsymuw88y05swv",
+        "wall_6u80l5p6moyqc0fx",
+        "wall_qkjx55xfulj8laa5",
+        "wall_qu831q4jehzf0s0c",
+        "wall_8i72fwd98efxrp5m",
+        "wall_zovoe353usgzvmkv",
+        "wall_81hnh98dyvm5jtz0",
+        "wall_p0az1j0auqqyyyyz",
+        "wall_fihlaiaf9iajzb3r",
+        "wall_w88jbx62pp381j8v",
+        "wall_lq57xwn2liwmzqbh",
+        "wall_k0v8vqckav8pse1o",
+        "wall_owh40p61wrmoe7yp",
+        "wall_x4hcyjqvnzk915y1",
+        "wall_qsokpyzk1z86agk6",
+        "wall_q41b19x7xjvq06yp",
+        "wall_oxfu3g9crdto8e7m",
+        "zone_72rca9zizqnokcay",
+        "zone_nck3ux2dcyz5y60x",
+        "zone_s2rmqzis4c3vu6me",
+        "zone_up5xtckol1wohrpf",
+        "zone_86k469bbbdlb68ep",
+        "zone_3rmxlqeikmcg47rj"
+      ],
+      "level": 0
+    },
+    "zone_72rca9zizqnokcay": {
+      "object": "node",
+      "id": "zone_72rca9zizqnokcay",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-1",
+      "polygon": [
+        [
+          4.9169,
+          9.8527
+        ],
+        [
+          4.9169,
+          10.9027
+        ],
+        [
+          5.4619,
+          10.9027
+        ],
+        [
+          5.4619,
+          11.6577
+        ],
+        [
+          6.6149,
+          11.6577
+        ],
+        [
+          6.6149,
+          10.9377
+        ],
+        [
+          7.5169,
+          10.9377
+        ],
+        [
+          7.5259,
+          10.7917
+        ],
+        [
+          8.7059,
+          10.7917
+        ],
+        [
+          8.7059,
+          9.8537
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1",
+        "panel_count": 7
+      }
+    },
+    "wall_ly3wos4ksf6v1dei": {
+      "object": "node",
+      "id": "wall_ly3wos4ksf6v1dei",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        4.9169,
+        9.8527
+      ],
+      "end": [
+        4.9169,
+        10.9027
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_xxek49gxv0poq4if": {
+      "object": "node",
+      "id": "wall_xxek49gxv0poq4if",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        4.9169,
+        10.9027
+      ],
+      "end": [
+        5.4619,
+        10.9027
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_lmcd2woxr2bitiko": {
+      "object": "node",
+      "id": "wall_lmcd2woxr2bitiko",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        5.4619,
+        10.9027
+      ],
+      "end": [
+        5.4619,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_pbib3qjutg238wi1": {
+      "object": "node",
+      "id": "wall_pbib3qjutg238wi1",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        5.4619,
+        11.6577
+      ],
+      "end": [
+        6.6149,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_734w0ctmwhl12o00": {
+      "object": "node",
+      "id": "wall_734w0ctmwhl12o00",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        6.6149,
+        11.6577
+      ],
+      "end": [
+        6.6149,
+        10.9377
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_pxx4tya69w06w0jj": {
+      "object": "node",
+      "id": "wall_pxx4tya69w06w0jj",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        6.6149,
+        10.9377
+      ],
+      "end": [
+        7.5169,
+        10.9377
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_axeexdqmzvhzl8tr": {
+      "object": "node",
+      "id": "wall_axeexdqmzvhzl8tr",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5169,
+        10.9377
+      ],
+      "end": [
+        7.5259,
+        10.7917
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_skben5kkmwbxbflt": {
+      "object": "node",
+      "id": "wall_skben5kkmwbxbflt",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5259,
+        10.7917
+      ],
+      "end": [
+        8.7059,
+        10.7917
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_htje6runvc8mt8zh": {
+      "object": "node",
+      "id": "wall_htje6runvc8mt8zh",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7059,
+        10.7917
+      ],
+      "end": [
+        8.7059,
+        9.8537
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_7k7lkc0bh2qbca96": {
+      "object": "node",
+      "id": "wall_7k7lkc0bh2qbca96",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-1"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7059,
+        9.8537
+      ],
+      "end": [
+        4.9169,
+        9.8527
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "zone_nck3ux2dcyz5y60x": {
+      "object": "node",
+      "id": "zone_nck3ux2dcyz5y60x",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-2",
+      "polygon": [
+        [
+          7.5619,
+          10.8637
+        ],
+        [
+          7.5619,
+          11.6577
+        ],
+        [
+          8.7059,
+          11.6577
+        ],
+        [
+          8.7059,
+          10.8637
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-2",
+        "panel_count": 4
+      }
+    },
+    "wall_xph3fqwmqcjk9e8p": {
+      "object": "node",
+      "id": "wall_xph3fqwmqcjk9e8p",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5619,
+        10.8637
+      ],
+      "end": [
+        7.5619,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_5bzus9rxe6os6kdz": {
+      "object": "node",
+      "id": "wall_5bzus9rxe6os6kdz",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5619,
+        11.6577
+      ],
+      "end": [
+        8.7059,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_08lazw8h1252vgp4": {
+      "object": "node",
+      "id": "wall_08lazw8h1252vgp4",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7059,
+        11.6577
+      ],
+      "end": [
+        8.7059,
+        10.8637
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_0u8g9ab0hwci0qlg": {
+      "object": "node",
+      "id": "wall_0u8g9ab0hwci0qlg",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-2"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7059,
+        10.8637
+      ],
+      "end": [
+        7.5619,
+        10.8637
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "zone_s2rmqzis4c3vu6me": {
+      "object": "node",
+      "id": "zone_s2rmqzis4c3vu6me",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-3",
+      "polygon": [
+        [
+          11.9779,
+          11.6577
+        ],
+        [
+          13.7779,
+          11.6577
+        ],
+        [
+          13.7779,
+          10.8417
+        ],
+        [
+          14.5219,
+          10.8417
+        ],
+        [
+          14.5219,
+          7.3137
+        ],
+        [
+          11.9779,
+          7.3137
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3",
+        "panel_count": 15
+      }
+    },
+    "wall_gy5ihnev7ku3mlzv": {
+      "object": "node",
+      "id": "wall_gy5ihnev7ku3mlzv",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.9779,
+        11.6577
+      ],
+      "end": [
+        13.7779,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_wzjy5wkao0hcg0c1": {
+      "object": "node",
+      "id": "wall_wzjy5wkao0hcg0c1",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        13.7779,
+        11.6577
+      ],
+      "end": [
+        13.7779,
+        10.8417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_p8u0ykt73kt65494": {
+      "object": "node",
+      "id": "wall_p8u0ykt73kt65494",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        13.7779,
+        10.8417
+      ],
+      "end": [
+        14.5219,
+        10.8417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_sczrkrz0i5fi0tnn": {
+      "object": "node",
+      "id": "wall_sczrkrz0i5fi0tnn",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        14.5219,
+        10.8417
+      ],
+      "end": [
+        14.5219,
+        7.3137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_m0shdqo1eerfyjog": {
+      "object": "node",
+      "id": "wall_m0shdqo1eerfyjog",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        14.5219,
+        7.3137
+      ],
+      "end": [
+        11.9779,
+        7.3137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_epvujm8qvogl024m": {
+      "object": "node",
+      "id": "wall_epvujm8qvogl024m",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-3"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.9779,
+        7.3137
+      ],
+      "end": [
+        11.9779,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "zone_up5xtckol1wohrpf": {
+      "object": "node",
+      "id": "zone_up5xtckol1wohrpf",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-4",
+      "polygon": [
+        [
+          11.0379,
+          7.2417
+        ],
+        [
+          14.5219,
+          7.2417
+        ],
+        [
+          14.5219,
+          4.5977
+        ],
+        [
+          11.0379,
+          4.5977
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-4",
+        "panel_count": 12
+      }
+    },
+    "wall_23sfv7jmt66danar": {
+      "object": "node",
+      "id": "wall_23sfv7jmt66danar",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.0379,
+        7.2417
+      ],
+      "end": [
+        14.5219,
+        7.2417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_shs0igpwk6aljrkt": {
+      "object": "node",
+      "id": "wall_shs0igpwk6aljrkt",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        14.5219,
+        7.2417
+      ],
+      "end": [
+        14.5219,
+        4.5977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_u9sh7d4rltep68lf": {
+      "object": "node",
+      "id": "wall_u9sh7d4rltep68lf",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        14.5219,
+        4.5977
+      ],
+      "end": [
+        11.0379,
+        4.5977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_hjxs8tfiyjmbdxsc": {
+      "object": "node",
+      "id": "wall_hjxs8tfiyjmbdxsc",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-4"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.0379,
+        4.5977
+      ],
+      "end": [
+        11.0379,
+        7.2417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "zone_86k469bbbdlb68ep": {
+      "object": "node",
+      "id": "zone_86k469bbbdlb68ep",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-5",
+      "polygon": [
+        [
+          11.9059,
+          9.0817
+        ],
+        [
+          11.9079,
+          7.3137
+        ],
+        [
+          10.9659,
+          7.3137
+        ],
+        [
+          10.9659,
+          4.5977
+        ],
+        [
+          10.9219,
+          4.5977
+        ],
+        [
+          10.9219,
+          3.2977
+        ],
+        [
+          7.5619,
+          3.2977
+        ],
+        [
+          7.5619,
+          4.8417
+        ],
+        [
+          8.0719,
+          4.8417
+        ],
+        [
+          8.0719,
+          4.9137
+        ],
+        [
+          7.5169,
+          4.9137
+        ],
+        [
+          7.5169,
+          6.3837
+        ],
+        [
+          8.3459,
+          6.3837
+        ],
+        [
+          8.3459,
+          6.5137
+        ],
+        [
+          7.5169,
+          6.5137
+        ],
+        [
+          7.5169,
+          9.7817
+        ],
+        [
+          11.6059,
+          9.7817
+        ],
+        [
+          11.6059,
+          9.0817
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5",
+        "panel_count": 30
+      }
+    },
+    "wall_n61a0iyby9ucpwf6": {
+      "object": "node",
+      "id": "wall_n61a0iyby9ucpwf6",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.9059,
+        9.0817
+      ],
+      "end": [
+        11.9079,
+        7.3137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_sqbfdmjlrg8z455e": {
+      "object": "node",
+      "id": "wall_sqbfdmjlrg8z455e",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.9079,
+        7.3137
+      ],
+      "end": [
+        10.9659,
+        7.3137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_e3nitcap3sofmdns": {
+      "object": "node",
+      "id": "wall_e3nitcap3sofmdns",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.9659,
+        7.3137
+      ],
+      "end": [
+        10.9659,
+        4.5977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_jduk7hjbsmm2igxr": {
+      "object": "node",
+      "id": "wall_jduk7hjbsmm2igxr",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.9659,
+        4.5977
+      ],
+      "end": [
+        10.9219,
+        4.5977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_xgftmb55q7hjb6ui": {
+      "object": "node",
+      "id": "wall_xgftmb55q7hjb6ui",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.9219,
+        4.5977
+      ],
+      "end": [
+        10.9219,
+        3.2977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_lmfsymuw88y05swv": {
+      "object": "node",
+      "id": "wall_lmfsymuw88y05swv",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.9219,
+        3.2977
+      ],
+      "end": [
+        7.5619,
+        3.2977
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_6u80l5p6moyqc0fx": {
+      "object": "node",
+      "id": "wall_6u80l5p6moyqc0fx",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5619,
+        3.2977
+      ],
+      "end": [
+        7.5619,
+        4.8417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_qkjx55xfulj8laa5": {
+      "object": "node",
+      "id": "wall_qkjx55xfulj8laa5",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5619,
+        4.8417
+      ],
+      "end": [
+        8.0719,
+        4.8417
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_qu831q4jehzf0s0c": {
+      "object": "node",
+      "id": "wall_qu831q4jehzf0s0c",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.0719,
+        4.8417
+      ],
+      "end": [
+        8.0719,
+        4.9137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_8i72fwd98efxrp5m": {
+      "object": "node",
+      "id": "wall_8i72fwd98efxrp5m",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.0719,
+        4.9137
+      ],
+      "end": [
+        7.5169,
+        4.9137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_zovoe353usgzvmkv": {
+      "object": "node",
+      "id": "wall_zovoe353usgzvmkv",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5169,
+        4.9137
+      ],
+      "end": [
+        7.5169,
+        6.3837
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_81hnh98dyvm5jtz0": {
+      "object": "node",
+      "id": "wall_81hnh98dyvm5jtz0",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5169,
+        6.3837
+      ],
+      "end": [
+        8.3459,
+        6.3837
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_p0az1j0auqqyyyyz": {
+      "object": "node",
+      "id": "wall_p0az1j0auqqyyyyz",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.3459,
+        6.3837
+      ],
+      "end": [
+        8.3459,
+        6.5137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_fihlaiaf9iajzb3r": {
+      "object": "node",
+      "id": "wall_fihlaiaf9iajzb3r",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.3459,
+        6.5137
+      ],
+      "end": [
+        7.5169,
+        6.5137
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_w88jbx62pp381j8v": {
+      "object": "node",
+      "id": "wall_w88jbx62pp381j8v",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5169,
+        6.5137
+      ],
+      "end": [
+        7.5169,
+        9.7817
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_lq57xwn2liwmzqbh": {
+      "object": "node",
+      "id": "wall_lq57xwn2liwmzqbh",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        7.5169,
+        9.7817
+      ],
+      "end": [
+        11.6059,
+        9.7817
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_k0v8vqckav8pse1o": {
+      "object": "node",
+      "id": "wall_k0v8vqckav8pse1o",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.6059,
+        9.7817
+      ],
+      "end": [
+        11.6059,
+        9.0817
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_owh40p61wrmoe7yp": {
+      "object": "node",
+      "id": "wall_owh40p61wrmoe7yp",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-5"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        11.6059,
+        9.0817
+      ],
+      "end": [
+        11.9059,
+        9.0817
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "zone_3rmxlqeikmcg47rj": {
+      "object": "node",
+      "id": "zone_3rmxlqeikmcg47rj",
+      "type": "zone",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "name": "_0-2_ROOM_OUTLINE-6",
+      "polygon": [
+        [
+          8.7779,
+          11.6577
+        ],
+        [
+          10.3559,
+          11.6577
+        ],
+        [
+          10.3559,
+          9.8537
+        ],
+        [
+          8.7779,
+          9.8537
+        ]
+      ],
+      "color": "#3b82f6",
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-6",
+        "panel_count": 4
+      }
+    },
+    "wall_x4hcyjqvnzk915y1": {
+      "object": "node",
+      "id": "wall_x4hcyjqvnzk915y1",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7779,
+        11.6577
+      ],
+      "end": [
+        10.3559,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_qsokpyzk1z86agk6": {
+      "object": "node",
+      "id": "wall_qsokpyzk1z86agk6",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.3559,
+        11.6577
+      ],
+      "end": [
+        10.3559,
+        9.8537
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_q41b19x7xjvq06yp": {
+      "object": "node",
+      "id": "wall_q41b19x7xjvq06yp",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        10.3559,
+        9.8537
+      ],
+      "end": [
+        8.7779,
+        9.8537
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_oxfu3g9crdto8e7m": {
+      "object": "node",
+      "id": "wall_oxfu3g9crdto8e7m",
+      "type": "wall",
+      "parentId": "level_ufd95awjprkaajy2",
+      "visible": true,
+      "metadata": {
+        "source": "okiyuka",
+        "room_id": "_0-2_ROOM_OUTLINE-6"
+      },
+      "children": [],
+      "thickness": 0.1,
+      "height": 2.4,
+      "start": [
+        8.7779,
+        9.8537
+      ],
+      "end": [
+        8.7779,
+        11.6577
+      ],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    }
+  },
+  "rootNodeIds": [
+    "site_1gsd0rohsqq63cm7"
+  ]
+}

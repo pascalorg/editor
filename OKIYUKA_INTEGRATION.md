@@ -17,6 +17,7 @@ Use Okiyuka as the layout calculation tool and Pascal Editor as the local visual
 
 - Okiyuka converter: `C:\Okiyuka_V1.0\tools\okiyuka_to_pascal_scene.py`
 - Okiyuka workflow memo: `C:\Okiyuka_V1.0\docs\pascal_editor_local_setup.md`
+- Tracked validation fixtures: `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\`
 
 ## Pascal Editor Local URL
 
@@ -72,9 +73,9 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 
 An end-to-end validation was completed with a real Okiyuka export generated from `normal_plan2.dxf`.
 
-- Okiyuka export file: `C:\dev\pascal-editor\okiyuka_layout_20260325_074418.json`
+- Okiyuka export file: `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\okiyuka_export.json`
 - Source drawing recorded in export: `normal_plan2.dxf`
-- Converted Pascal scene file: `C:\dev\pascal-editor\okiyuka_layout_20260325_074418_pascal_scene.json`
+- Converted Pascal scene file: `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\pascal_scene.json`
 - Conversion result: success
 - Generated scene size: 55 nodes, 1 root node
 - Pascal load result: success through `Settings -> Load Build`
