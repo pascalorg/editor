@@ -1,7 +1,9 @@
 import { emitter, type GridEvent } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, type Group, type Line, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
@@ -48,6 +50,7 @@ const syncLineGeometry = (
 }
 
 export const MeasureTool: React.FC = () => {
+  const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const lineRef = useRef<Line>(null!)
   const startRef = useRef<PlanPoint | null>(null)
@@ -92,7 +95,7 @@ export const MeasureTool: React.FC = () => {
       return
     }
 
-    const parsedDistance = parseDistanceInput(rawValue)
+    const parsedDistance = parseDistanceInput(rawValue, unitSystem)
     if (!(parsedDistance && parsedDistance >= MIN_DRAW_DISTANCE)) {
       closeDistanceInput(options)
       return
@@ -205,7 +208,7 @@ export const MeasureTool: React.FC = () => {
       inputOpenRef.current = true
       setDistanceInput({
         open: true,
-        value: currentDistance.toFixed(2),
+        value: formatLengthInputValue(currentDistance, unitSystem),
       })
     }
 
@@ -229,7 +232,7 @@ export const MeasureTool: React.FC = () => {
       window.removeEventListener('keyup', onKeyUp)
       closeDistanceInput()
     }
-  }, [closeDistanceInput, syncMeasurementState])
+  }, [closeDistanceInput, syncMeasurementState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(measurement.start && measurement.end)) return 0
@@ -287,6 +290,7 @@ export const MeasureTool: React.FC = () => {
         <DrawingDimensionLabel
           hint="Enter to apply, Esc to cancel"
           inputLabel="Measure"
+          inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
@@ -306,7 +310,7 @@ export const MeasureTool: React.FC = () => {
             }
           }}
           position={labelPosition}
-          value={formatDistance(currentDistance)}
+          value={formatDistance(currentDistance, unitSystem)}
         />
       )}
     </group>

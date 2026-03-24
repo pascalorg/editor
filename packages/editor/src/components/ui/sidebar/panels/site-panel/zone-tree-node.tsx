@@ -1,7 +1,9 @@
 import { useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useState } from 'react'
+import { formatArea } from '../../../../../lib/measurements'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
+import { calculatePolygonArea } from './polygon-math'
 import { InlineRenameInput } from './inline-rename-input'
 import { TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -15,6 +17,7 @@ interface ZoneTreeNodeProps {
 export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const isSelected = useViewer((state) => state.selection.zoneId === node.id)
   const isHovered = useViewer((state) => state.hoveredId === node.id)
   const setSelection = useViewer((state) => state.setSelection)
@@ -37,8 +40,7 @@ export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
   }
 
   // Calculate approximate area from polygon
-  const area = calculatePolygonArea(node.polygon).toFixed(1)
-  const defaultName = `Zone (${area}m²)`
+  const defaultName = `Zone (${formatArea(calculatePolygonArea(node.polygon), unitSystem)})`
 
   return (
     <TreeNodeWrapper
@@ -66,22 +68,4 @@ export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
       onToggle={() => {}}
     />
   )
-}
-
-/**
- * Calculate the area of a polygon using the shoelace formula
- */
-function calculatePolygonArea(polygon: Array<[number, number]>): number {
-  if (polygon.length < 3) return 0
-
-  let area = 0
-  const n = polygon.length
-
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    area += polygon[i]![0] * polygon[j]![1]
-    area -= polygon[j]![0] * polygon[i]![1]
-  }
-
-  return Math.abs(area) / 2
 }

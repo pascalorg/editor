@@ -1,7 +1,15 @@
+import {
+  formatLength,
+  METERS_PER_INCH,
+  parseLengthInput,
+  type UnitSystem,
+} from '../../../lib/measurements'
+
 export type PlanPoint = [number, number]
 
-export const GRID_STEP = 0.5
+export const GRID_STEP = METERS_PER_INCH
 export const MIN_DRAW_DISTANCE = 0.01
+export const CLOSE_LOOP_TOLERANCE = GRID_STEP * 4
 
 export const snapToGrid = (value: number) => Math.round(value / GRID_STEP) * GRID_STEP
 
@@ -35,26 +43,11 @@ export const projectPointAtDistance = (
   return [start[0] + unitX * distance, start[1] + unitZ * distance]
 }
 
-export const formatDistance = (distance: number) => {
-  if (!Number.isFinite(distance)) return '--'
-  const precision = distance >= 10 ? 1 : 2
-  return `${distance.toFixed(precision)}m`
-}
+export const formatDistance = (distance: number, unitSystem: UnitSystem) =>
+  formatLength(distance, unitSystem, { compact: unitSystem === 'metric' })
 
-export const parseDistanceInput = (value: string) => {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/meters?$/, '')
-    .replace(/m$/, '')
-    .trim()
-  if (!normalized) return null
-
-  const parsed = Number.parseFloat(normalized)
-  if (!Number.isFinite(parsed)) return null
-
-  return parsed
-}
+export const parseDistanceInput = (value: string, unitSystem: UnitSystem) =>
+  parseLengthInput(value, unitSystem)
 
 export const snapSegmentTo45Degrees = (start: PlanPoint, cursor: PlanPoint): PlanPoint => {
   const dx = cursor[0] - start[0]

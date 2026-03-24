@@ -1,7 +1,13 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  formatLength,
+  formatLengthInputValue,
+  parseLengthInput,
+} from '../../../lib/measurements'
 import { cn } from '../../../lib/utils'
 
 interface MetricControlProps {
@@ -27,6 +33,8 @@ export function MetricControl({
   className,
   unit = '',
 }: MetricControlProps) {
+  const unitSystem = useViewer((state) => state.unitSystem)
+  const isLengthMeasurement = unit === 'm'
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -37,6 +45,12 @@ export function MetricControl({
 
   const valueRef = useRef(value)
   valueRef.current = value
+  const formattedInputValue = isLengthMeasurement
+    ? formatLengthInputValue(value, unitSystem)
+    : value.toFixed(precision)
+  const formattedDisplayValue = isLengthMeasurement
+    ? formatLength(value, unitSystem)
+    : Number(value.toFixed(precision)).toFixed(precision)
 
   const clamp = useCallback(
     (val: number) => {
@@ -47,9 +61,9 @@ export function MetricControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(value.toFixed(precision))
+      setInputValue(formattedInputValue)
     }
-  }, [value, precision, isEditing])
+  }, [formattedInputValue, isEditing])
 
   useEffect(() => {
     const container = containerRef.current
@@ -155,22 +169,24 @@ export function MetricControl({
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
-    setInputValue(value.toFixed(precision))
-  }, [value, precision])
+    setInputValue(formattedInputValue)
+  }, [formattedInputValue])
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
   }, [])
 
   const submitValue = useCallback(() => {
-    const numValue = Number.parseFloat(inputValue)
-    if (Number.isNaN(numValue)) {
-      setInputValue(value.toFixed(precision))
+    const numValue = isLengthMeasurement
+      ? parseLengthInput(inputValue, unitSystem)
+      : Number.parseFloat(inputValue)
+    if (numValue === null || Number.isNaN(numValue)) {
+      setInputValue(formattedInputValue)
     } else {
       onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
     }
     setIsEditing(false)
-  }, [inputValue, onChange, clamp, precision, value])
+  }, [inputValue, isLengthMeasurement, unitSystem, formattedInputValue, onChange, clamp, precision])
 
   const handleInputBlur = useCallback(() => {
     submitValue()
@@ -181,21 +197,25 @@ export function MetricControl({
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(value.toFixed(precision))
+        setInputValue(formattedInputValue)
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         const newV = clamp(value + step)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(
+          isLengthMeasurement ? formatLengthInputValue(newV, unitSystem) : newV.toFixed(precision),
+        )
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         const newV = clamp(value - step)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(
+          isLengthMeasurement ? formatLengthInputValue(newV, unitSystem) : newV.toFixed(precision),
+        )
       }
     },
-    [submitValue, value, precision, step, clamp, onChange],
+    [submitValue, formattedInputValue, value, step, clamp, isLengthMeasurement, onChange, unitSystem, precision],
   )
 
   return (
@@ -221,7 +241,7 @@ export function MetricControl({
         {label}
       </div>
 
-      <div className="flex shrink-0 justify-end">
+      <div className={cn('flex shrink-0 justify-end', isLengthMeasurement ? 'w-[88px]' : 'w-auto')}>
         {isEditing ? (
           <div className="flex items-center">
             <input
@@ -233,17 +253,19 @@ export function MetricControl({
               type="text"
               value={inputValue}
             />
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {!isLengthMeasurement && unit && (
+              <span className="ml-[1px] text-muted-foreground">{unit}</span>
+            )}
           </div>
         ) : (
           <div
             className="flex w-full cursor-text items-center justify-end text-foreground transition-colors hover:text-primary"
             onClick={handleValueClick}
           >
-            <span className="font-mono tabular-nums tracking-tight">
-              {Number(value.toFixed(precision)).toFixed(precision)}
-            </span>
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            <span className="font-mono tabular-nums tracking-tight">{formattedDisplayValue}</span>
+            {!isLengthMeasurement && unit && (
+              <span className="ml-[1px] text-muted-foreground">{unit}</span>
+            )}
           </div>
         )}
       </div>

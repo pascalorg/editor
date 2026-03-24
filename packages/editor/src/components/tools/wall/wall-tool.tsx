@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
@@ -88,6 +89,7 @@ const commitWallDrawing = (start: [number, number], end: [number, number]) => {
 }
 
 export const WallTool: React.FC = () => {
+  const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -128,7 +130,7 @@ export const WallTool: React.FC = () => {
       return
     }
 
-    const parsedDistance = parseDistanceInput(rawValue)
+    const parsedDistance = parseDistanceInput(rawValue, unitSystem)
     if (!(parsedDistance && parsedDistance >= MIN_DRAW_DISTANCE)) {
       closeDistanceInput(options)
       return
@@ -239,7 +241,7 @@ export const WallTool: React.FC = () => {
       inputOpenRef.current = true
       setDistanceInput({
         open: true,
-        value: currentDistance.toFixed(2),
+        value: formatLengthInputValue(currentDistance, unitSystem),
       })
     }
 
@@ -271,7 +273,7 @@ export const WallTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [closeDistanceInput, syncDraftState])
+  }, [closeDistanceInput, syncDraftState, unitSystem])
 
   const currentDistance = useMemo(() => {
     if (!(draft.start && draft.end)) return 0
@@ -306,6 +308,7 @@ export const WallTool: React.FC = () => {
         <DrawingDimensionLabel
           hint="Enter to apply, Esc to cancel"
           inputLabel="Wall length"
+          inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
@@ -325,7 +328,7 @@ export const WallTool: React.FC = () => {
             }
           }}
           position={labelPosition}
-          value={formatDistance(currentDistance)}
+          value={formatDistance(currentDistance, unitSystem)}
         />
       )}
     </group>

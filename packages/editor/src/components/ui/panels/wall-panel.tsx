@@ -3,12 +3,14 @@
 import { type AnyNode, type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
+import { formatLength } from '../../../lib/measurements'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function WallPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
@@ -71,7 +73,7 @@ export function WallPanel() {
       <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Length</span>
-          <span className="font-mono text-white">{length.toFixed(2)} m</span>
+          <span className="font-mono text-white">{formatLength(length, unitSystem)}</span>
         </div>
       </PanelSection>
     </PanelWrapper>

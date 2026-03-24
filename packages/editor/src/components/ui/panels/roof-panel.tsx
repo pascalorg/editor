@@ -3,6 +3,7 @@
 import { type AnyNode, type RoofNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
+import { formatLength } from '../../../lib/measurements'
 import { ActionButton } from '../controls/action-button'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
@@ -11,6 +12,7 @@ import { PanelWrapper } from './panel-wrapper'
 
 export function RoofPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const unitSystem = useViewer((s) => s.unitSystem)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
@@ -67,7 +69,7 @@ export function RoofPanel() {
       <PanelSection title="Slope Widths">
         <div className="flex items-center justify-between px-2 pb-2 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           <span>Widths</span>
-          <span>Total: {totalWidth.toFixed(1)}m</span>
+          <span>Total: {formatLength(totalWidth, unitSystem)}</span>
         </div>
         <SliderControl
           label="Left"

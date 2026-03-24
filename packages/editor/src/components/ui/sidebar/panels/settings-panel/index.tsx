@@ -19,6 +19,7 @@ import {
 } from './../../../../../components/ui/primitives/dialog'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import useEditor from './../../../../../store/use-editor'
+import { SegmentedControl } from '../../../controls/segmented-control'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 
@@ -182,6 +183,8 @@ export function SettingsPanel({
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
+  const unitSystem = useViewer((state) => state.unitSystem)
+  const setUnitSystem = useViewer((state) => state.setUnitSystem)
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const sceneGraphValue = useMemo(
@@ -313,6 +316,31 @@ export function SettingsPanel({
           </div>
         </div>
       )}
+
+      <div className="space-y-2">
+        <label className="font-medium text-muted-foreground text-xs uppercase">Preferences</label>
+        <div className="space-y-2 rounded-lg border border-border/50 bg-[#2C2C2E] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="font-medium text-sm">Units</div>
+              <div className="text-muted-foreground text-xs">
+                Live dimensions, manual entry, and panel readouts
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-muted-foreground uppercase tracking-[0.16em]">
+              Snap: 1 in
+            </div>
+          </div>
+          <SegmentedControl
+            onChange={setUnitSystem}
+            options={[
+              { label: 'Metric', value: 'metric' },
+              { label: 'Imperial', value: 'imperial' },
+            ]}
+            value={unitSystem}
+          />
+        </div>
+      </div>
 
       {/* Export Section */}
       <div className="space-y-2">

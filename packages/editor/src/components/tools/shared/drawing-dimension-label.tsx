@@ -7,6 +7,7 @@ interface DrawingDimensionLabelProps {
   isEditing?: boolean
   inputValue?: string
   inputLabel?: string
+  inputUnitLabel?: string
   hint?: string
   onInputBlur?: () => void
   onInputChange?: (value: string) => void
@@ -19,6 +20,7 @@ export function DrawingDimensionLabel({
   isEditing = false,
   inputValue = '',
   inputLabel = 'Distance',
+  inputUnitLabel = 'm',
   hint = 'Enter to apply',
   onInputBlur,
   onInputChange,
@@ -58,7 +60,7 @@ export function DrawingDimensionLabel({
             <div className="flex items-center gap-1.5">
               <input
                 aria-label={inputLabel}
-                className="h-8 w-20 rounded-md border border-white/10 bg-white/5 px-2 text-center font-mono text-sm text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
+                className="h-8 w-28 rounded-md border border-white/10 bg-white/5 px-2 text-center font-mono text-sm text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
                 onBlur={onInputBlur}
                 onChange={(event) => onInputChange?.(event.target.value)}
                 onKeyDown={onInputKeyDown}
@@ -66,7 +68,7 @@ export function DrawingDimensionLabel({
                 type="text"
                 value={inputValue}
               />
-              <span className="font-mono text-xs text-zinc-400">m</span>
+              <span className="font-mono text-xs text-zinc-400">{inputUnitLabel}</span>
             </div>
             <div className="text-[10px] text-zinc-400">{hint}</div>
           </div>

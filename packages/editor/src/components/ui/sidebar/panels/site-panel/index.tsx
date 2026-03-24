@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { formatArea, formatLength } from '../../../../../lib/measurements'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -82,6 +83,7 @@ function useSiteNode(): SiteNode | null {
 function PropertyLineSection() {
   const siteNode = useSiteNode()
   const updateNode = useScene((state) => state.updateNode)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const mode = useEditor((state) => state.mode)
   const setMode = useEditor((state) => state.setMode)
 
@@ -157,10 +159,10 @@ function PropertyLineSection() {
       {/* Measurements */}
       <div className="relative flex gap-3 pr-3 pb-2 pl-10">
         <div className="text-muted-foreground text-xs">
-          Area: <span className="text-foreground">{area.toFixed(1)} m²</span>
+          Area: <span className="text-foreground">{formatArea(area, unitSystem)}</span>
         </div>
         <div className="text-muted-foreground text-xs">
-          Perimeter: <span className="text-foreground">{perimeter.toFixed(1)} m</span>
+          Perimeter: <span className="text-foreground">{formatLength(perimeter, unitSystem)}</span>
         </div>
       </div>
 
@@ -986,6 +988,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   const updateNode = useScene((state) => state.updateNode)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
+  const unitSystem = useViewer((state) => state.unitSystem)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const setPhase = useEditor((state) => state.setPhase)
@@ -1002,8 +1005,7 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
     }
   }, [isSelected])
 
-  const area = calculatePolygonArea(zone.polygon).toFixed(1)
-  const defaultName = `Zone (${area}m²)`
+  const defaultName = `Zone (${formatArea(calculatePolygonArea(zone.polygon), unitSystem)})`
 
   const handleClick = () => {
     setSelection({ zoneId: zone.id })

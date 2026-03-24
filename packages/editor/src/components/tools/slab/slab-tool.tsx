@@ -3,10 +3,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatLengthInputValue, getLengthInputUnitLabel } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DrawingDimensionLabel } from '../shared/drawing-dimension-label'
 import {
+  CLOSE_LOOP_TOLERANCE,
   formatDistance,
   getPlanDistance,
   getPlanMidpoint,
@@ -76,6 +78,7 @@ const commitSlabDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 }
 
 export const SlabTool: React.FC = () => {
+  const unitSystem = useViewer((state) => state.unitSystem)
   const cursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
@@ -116,7 +119,7 @@ export const SlabTool: React.FC = () => {
       return
     }
 
-    const parsedDistance = parseDistanceInput(rawValue)
+    const parsedDistance = parseDistanceInput(rawValue, unitSystem)
     if (!(parsedDistance && parsedDistance >= MIN_DRAW_DISTANCE)) {
       closeDistanceInput(options)
       return
@@ -191,8 +194,8 @@ export const SlabTool: React.FC = () => {
       if (
         pointsRef.current.length >= 3 &&
         firstPoint &&
-        Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
-        Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
+        Math.abs(clickPoint[0] - firstPoint[0]) < CLOSE_LOOP_TOLERANCE &&
+        Math.abs(clickPoint[1] - firstPoint[1]) < CLOSE_LOOP_TOLERANCE
       ) {
         // Create the slab and select it
         const slabId = commitSlabDrawing(currentLevelId, pointsRef.current)
@@ -246,7 +249,7 @@ export const SlabTool: React.FC = () => {
       inputOpenRef.current = true
       setDistanceInput({
         open: true,
-        value: currentDistance.toFixed(2),
+        value: formatLengthInputValue(currentDistance, unitSystem),
       })
     }
     const onKeyUp = (e: KeyboardEvent) => {
@@ -268,7 +271,7 @@ export const SlabTool: React.FC = () => {
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [currentLevelId, setSelection, closeDistanceInput, updatePoints])
+  }, [currentLevelId, setSelection, closeDistanceInput, updatePoints, unitSystem])
 
   // Update line geometries when points change
   useEffect(() => {
@@ -424,6 +427,7 @@ export const SlabTool: React.FC = () => {
         <DrawingDimensionLabel
           hint="Enter to apply, Esc to cancel"
           inputLabel="Segment length"
+          inputUnitLabel={getLengthInputUnitLabel(unitSystem)}
           inputValue={distanceInput.value}
           isEditing={distanceInput.open}
           onInputBlur={() => {
@@ -443,7 +447,7 @@ export const SlabTool: React.FC = () => {
             }
           }}
           position={[currentSegment.midpoint[0], levelY + 0.18, currentSegment.midpoint[1]]}
-          value={formatDistance(currentSegment.distance)}
+          value={formatDistance(currentSegment.distance, unitSystem)}
         />
       )}
     </group>
