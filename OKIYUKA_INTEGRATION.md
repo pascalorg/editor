@@ -86,6 +86,24 @@ Observed result in Pascal Editor:
 - room names `_0-2_ROOM_OUTLINE-1` through `_0-2_ROOM_OUTLINE-6` appeared in the scene
 - the current bridge was sufficient for real room polygon import without adding any new Pascal-side importer code
 
+## Fixture Reproduction
+
+Use the tracked fixture pair for a quick local repro without re-exporting from Okiyuka UI.
+
+1. Start Pascal Editor locally on `http://127.0.0.1:3002`
+2. Open `Settings`
+3. Click `Load Build`
+4. Select `C:\dev\pascal-editor\fixtures\okiyuka\normal_plan2\pascal_scene.json`
+
+If you want to regenerate the Pascal scene from the saved Okiyuka export fixture:
+
+```powershell
+Set-Location -LiteralPath C:\Okiyuka_V1.0
+c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
+  --input C:/dev/pascal-editor/fixtures/okiyuka/normal_plan2/okiyuka_export.json \
+  --output C:/dev/pascal-editor/fixtures/okiyuka/normal_plan2/pascal_scene.json
+```
+
 ## Current Limitations
 
 - panels are not yet mapped into Pascal item nodes
