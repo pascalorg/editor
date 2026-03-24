@@ -34,9 +34,10 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@types/node": "^25.5.0",
     "@types/react": "^19.2.2",
-    "typescript": "5.9.3",
-    "@types/three": "^0.183.0"
+    "@types/three": "^0.183.0",
+    "typescript": "5.9.3"
   },
   "keywords": [
     "3d",
