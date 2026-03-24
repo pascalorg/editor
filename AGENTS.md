@@ -1,17 +1,31 @@
 # Pascal Editor V2 — Architecture
 
+> [!WARNING]
+> Repository Drift Notice (2026-03-25)
+>
+> This architecture note still references `packages/auth` and `packages/db`, but
+> those directories are not present in the current `main` checkout.
+>
+> Verified facts in the current clone:
+> - `packages/` contains `core`, `editor`, `eslint-config`, `typescript-config`, `ui`, `viewer`
+> - `packages/auth` is absent
+> - `packages/db` is absent
+> - `supabase/` is absent
+>
+> Treat the auth / db references below as historical or planned architecture,
+> not as a description of the current working tree.
+
 ## Project Structure
 
 Monorepo managed with Turborepo. Packages are shared libraries; apps are deployable applications.
 
 ```
 apps/
-  editor/          # Main Next.js app (editor + public routes)
+  editor/          # Thin Next.js shell app for local and deployed usage
 packages/
   core/            # Scene schema, state, systems, spatial logic
+  editor/          # Reusable editor package consumed by apps/editor
   viewer/          # 3D canvas component (React Three Fiber)
-  auth/            # Authentication (better-auth + Supabase)
-  db/              # Database layer (Drizzle ORM + Supabase)
   ui/              # Shared React UI components
 ```
 
@@ -45,16 +59,29 @@ The viewer accepts external props and callbacks (`onSelect`, `onExport`, childre
 
 ---
 
+## packages/editor
+
+Reusable editor package. This is where the editing experience actually lives.
+
+- **components/editor/** — main editor composition
+- **components/tools/** — build and edit tools coordinated by `ToolManager`
+- **components/ui/** — sidebars, panels, action menu, scene import/export hooks
+- **hooks/** — autosave and editor lifecycle helpers
+- **lib/scene.ts** — `SceneGraph` shape plus `applySceneGraphToEditor()`
+
+The package consumes `@pascal-app/core` and `@pascal-app/viewer` and is then mounted by the Next.js shell app.
+
+---
+
 ## apps/editor
 
-Next.js 16 app. Composes `@pascal-app/viewer` and `@pascal-app/core` into a full editing experience.
+Thin Next.js 16 wrapper around `@pascal-app/editor`.
 
-- **app/editor/[projectId]/** — Main editor route
-- **app/viewer/[id]/** — Read-only preview route
-- **store/use-editor.tsx** — `useEditor`: phase (`site | structure | furnish`), mode (`select | edit | delete | build`), active tool
-- **components/tools/** — One component per tool, coordinated by `ToolManager`
-- **components/systems/** — Editor-side systems that integrate with viewer (e.g. space detection for cutaway)
-- **components/editor/** — Camera controls, export, menus, panels
+- **app/page.tsx** — mounts the editor package into a full-screen route
+- **env.mjs** — runtime environment validation
+- **next.config.ts** — Next.js configuration and transpile settings
+
+Treat this app as the host shell, not the primary location of editing logic.
 
 ---
 
@@ -90,6 +117,10 @@ User input (pointer/keyboard)
 | Framework | Next.js 16, React 19 |
 | State | Zustand + Zundo |
 | UI | Radix UI, Tailwind CSS 4 |
-| Database | Supabase PostgreSQL + Drizzle ORM |
-| Auth | better-auth |
 | Tooling | Biome, TypeScript 5.9, Turborepo |
+
+## Historical Note
+
+Older documentation and commits referenced Supabase, Drizzle, and better-auth packages.
+Those packages are not part of the current working tree. If you need that stack,
+consult git history rather than assuming those directories still exist.
