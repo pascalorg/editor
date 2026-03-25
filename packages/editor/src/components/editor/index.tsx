@@ -2,7 +2,7 @@
 
 import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
 import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
@@ -10,6 +10,8 @@ import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
   applySceneGraphToEditor,
+  importSceneGraphToEditor,
+  isSceneGraph,
   loadSceneFromLocalStorage,
   type SceneGraph,
 } from '../../lib/scene'
@@ -22,6 +24,7 @@ import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
 import { HelperManager } from '../ui/helpers/helper-manager'
 import { PanelManager } from '../ui/panels/panel-manager'
+import { CommandPalette } from '../ui/command-palette'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { SidebarProvider } from '../ui/primitives/sidebar'
 import { SceneLoader } from '../ui/scene-loader'
@@ -97,6 +100,16 @@ export interface EditorProps {
   presetsAdapter?: PresetsAdapter
 }
 
+const PASCAL_IMPORT_SCENE_MESSAGE = 'pascal:import-scene'
+const PASCAL_IMPORT_SCENE_RESULT_MESSAGE = 'pascal:import-scene-result'
+
+type PascalImportSceneMessage = {
+  type: typeof PASCAL_IMPORT_SCENE_MESSAGE
+  requestId?: unknown
+  scene?: unknown
+  sourceName?: unknown
+}
+
 function EditorSceneCrashFallback() {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-background/95 p-4 text-foreground">
@@ -150,11 +163,17 @@ export default function Editor({
   })
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
+  const externalImportNonceRef = useRef(0)
+  const handledImportRequestIdsRef = useRef<Set<string>>(new Set())
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const showFloatingUi = useEditor((s) => s.showFloatingUi)
+  const showSidebarUi = useEditor((s) => s.showSidebarUi)
+  const showInspectorPanels = useEditor((s) => s.showInspectorPanels)
 
   // Load scene on mount (or when onLoad identity changes, e.g. project switch)
   useEffect(() => {
     let cancelled = false
+    const loadNonce = externalImportNonceRef.current
 
     async function load() {
       isLoadingSceneRef.current = true
@@ -162,11 +181,11 @@ export default function Editor({
 
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
-        if (!cancelled) {
+        if (!cancelled && loadNonce === externalImportNonceRef.current) {
           applySceneGraphToEditor(sceneGraph)
         }
       } catch {
-        if (!cancelled) applySceneGraphToEditor(null)
+        if (!cancelled && loadNonce === externalImportNonceRef.current) applySceneGraphToEditor(null)
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
@@ -198,6 +217,106 @@ export default function Editor({
     }
   }, [])
 
+  useEffect(() => {
+    const respondToImportSource = (
+      event: MessageEvent<unknown>,
+      payload: {
+        requestId: string
+        status: 'ok' | 'error'
+        message: string
+        rootCount?: number
+        nodeCount?: number
+        sourceName?: string
+      },
+    ) => {
+      const sourceWindow = event.source as Window | null
+      if (!sourceWindow || typeof sourceWindow.postMessage !== 'function') {
+        return
+      }
+
+      try {
+        sourceWindow.postMessage(
+          {
+            type: PASCAL_IMPORT_SCENE_RESULT_MESSAGE,
+            ...payload,
+          },
+          event.origin || '*',
+        )
+      } catch {
+      }
+    }
+
+    const handleExternalSceneImport = (event: MessageEvent<unknown>) => {
+      const payload = event.data as PascalImportSceneMessage | null
+      if (!payload || payload.type !== PASCAL_IMPORT_SCENE_MESSAGE) {
+        return
+      }
+
+      const requestId = String(payload.requestId || '').trim()
+      const sourceName = String(payload.sourceName || '').trim()
+
+      if (!requestId) {
+        respondToImportSource(event, {
+          requestId: '',
+          status: 'error',
+          message: 'requestId がありません',
+          sourceName,
+        })
+        return
+      }
+
+      if (!isSceneGraph(payload.scene)) {
+        respondToImportSource(event, {
+          requestId,
+          status: 'error',
+          message: 'scene JSON の形式が不正です',
+          sourceName,
+        })
+        return
+      }
+
+      if (handledImportRequestIdsRef.current.has(requestId)) {
+        respondToImportSource(event, {
+          requestId,
+          status: 'ok',
+          message: sourceName ? `${sourceName} は既に反映済みです` : 'scene は既に反映済みです',
+          rootCount: payload.scene.rootNodeIds.length,
+          nodeCount: Object.keys(payload.scene.nodes).length,
+          sourceName,
+        })
+        return
+      }
+
+      try {
+        externalImportNonceRef.current += 1
+        handledImportRequestIdsRef.current.add(requestId)
+        useEditor.getState().setPreviewMode(false)
+        importSceneGraphToEditor(payload.scene)
+        respondToImportSource(event, {
+          requestId,
+          status: 'ok',
+          message: sourceName ? `${sourceName} を Pascal に反映しました` : 'scene を Pascal に反映しました',
+          rootCount: payload.scene.rootNodeIds.length,
+          nodeCount: Object.keys(payload.scene.nodes).length,
+          sourceName,
+        })
+      } catch (error) {
+        handledImportRequestIdsRef.current.delete(requestId)
+        respondToImportSource(event, {
+          requestId,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'scene import に失敗しました',
+          sourceName,
+        })
+      }
+    }
+
+    window.addEventListener('message', handleExternalSceneImport)
+    return () => {
+      window.removeEventListener('message', handleExternalSceneImport)
+    }
+  }, [])
+
   const showLoader = isLoading || isSceneLoading
 
   return (
@@ -209,25 +328,28 @@ export default function Editor({
           <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
         ) : (
           <>
-            <ActionMenu />
-            <PanelManager />
-            <HelperManager />
+            {showFloatingUi && <ActionMenu />}
+            {showInspectorPanels && <PanelManager />}
+            {showFloatingUi && <HelperManager />}
+            <CommandPalette />
 
-            <SidebarProvider className="fixed z-20">
-              <AppSidebar
-                appMenuButton={appMenuButton}
-                settingsPanelProps={settingsPanelProps}
-                sidebarTop={sidebarTop}
-                sitePanelProps={sitePanelProps}
-              />
-            </SidebarProvider>
+            {showSidebarUi && (
+              <SidebarProvider className="fixed z-20">
+                <AppSidebar
+                  appMenuButton={appMenuButton}
+                  settingsPanelProps={settingsPanelProps}
+                  sidebarTop={sidebarTop}
+                  sitePanelProps={sitePanelProps}
+                />
+              </SidebarProvider>
+            )}
           </>
         )}
 
         <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
           <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
             {!isPreviewMode && <SelectionManager />}
-            {!isPreviewMode && <FloatingActionMenu />}
+            {!isPreviewMode && showFloatingUi && <FloatingActionMenu />}
             <ExportManager />
             {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
             <CeilingSystem />

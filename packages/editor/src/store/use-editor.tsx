@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -49,6 +50,7 @@ export type CatalogCategory =
   | 'door'
 
 export type StructureLayer = 'zones' | 'elements'
+export type UiStartupPreset = 'default' | 'minimal'
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
@@ -79,159 +81,220 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
+  enablePreviewTrackpadControls: boolean
+  setEnablePreviewTrackpadControls: (enabled: boolean) => void
+  showPreviewCameraHints: boolean
+  setShowPreviewCameraHints: (show: boolean) => void
+  showFloatingUi: boolean
+  setShowFloatingUi: (show: boolean) => void
+  showSidebarUi: boolean
+  setShowSidebarUi: (show: boolean) => void
+  showInspectorPanels: boolean
+  setShowInspectorPanels: (show: boolean) => void
+  setCompactMode: (compact: boolean) => void
+  uiStartupPreset: UiStartupPreset
+  setUiStartupPreset: (preset: UiStartupPreset) => void
+  applyUiStartupPreset: (preset?: UiStartupPreset) => void
 }
 
-const useEditor = create<EditorState>()((set, get) => ({
-  phase: 'site',
-  setPhase: (phase) => {
-    const currentPhase = get().phase
-    if (currentPhase === phase) return
+const useEditor = create<EditorState>()(
+  persist(
+    (set, get) => ({
+      phase: 'site',
+      setPhase: (phase) => {
+        const currentPhase = get().phase
+        if (currentPhase === phase) return
 
-    set({ phase })
+        set({ phase })
 
-    const { mode, structureLayer } = get()
+        const { mode, structureLayer } = get()
 
-    if (mode === 'build') {
-      // Stay in build mode, select the first tool for the new phase
-      if (phase === 'site') {
-        set({ tool: 'property-line', catalogCategory: null })
-      } else if (phase === 'structure' && structureLayer === 'zones') {
-        set({ tool: 'zone', catalogCategory: null })
-      } else if (phase === 'structure') {
-        set({ tool: 'wall', catalogCategory: null })
-      } else if (phase === 'furnish') {
-        set({ tool: 'item', catalogCategory: 'furniture' })
-      }
-    } else {
-      // Reset to select mode and clear tool/catalog when switching phases
-      set({ mode: 'select', tool: null, catalogCategory: null })
-    }
+        if (mode === 'build') {
+          // Stay in build mode, select the first tool for the new phase
+          if (phase === 'site') {
+            set({ tool: 'property-line', catalogCategory: null })
+          } else if (phase === 'structure' && structureLayer === 'zones') {
+            set({ tool: 'zone', catalogCategory: null })
+          } else if (phase === 'structure') {
+            set({ tool: 'wall', catalogCategory: null })
+          } else if (phase === 'furnish') {
+            set({ tool: 'item', catalogCategory: 'furniture' })
+          }
+        } else {
+          // Reset to select mode and clear tool/catalog when switching phases
+          set({ mode: 'select', tool: null, catalogCategory: null })
+        }
 
-    const viewer = useViewer.getState()
-    const scene = useScene.getState()
+        const viewer = useViewer.getState()
+        const scene = useScene.getState()
 
-    // Helper to find building and level 0
-    const selectBuildingAndLevel0 = () => {
-      let buildingId = viewer.selection.buildingId
+        // Helper to find building and level 0
+        const selectBuildingAndLevel0 = () => {
+          let buildingId = viewer.selection.buildingId
 
-      // If no building selected, find the first one from site's children
-      if (!buildingId) {
-        const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
-        if (siteNode?.type === 'site') {
-          const firstBuilding = siteNode.children
-            .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
-            .find((node) => node?.type === 'building')
-          if (firstBuilding) {
-            buildingId = firstBuilding.id as BuildingNode['id']
-            viewer.setSelection({ buildingId })
+          // If no building selected, find the first one from site's children
+          if (!buildingId) {
+            const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
+            if (siteNode?.type === 'site') {
+              const firstBuilding = siteNode.children
+                .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
+                .find((node) => node?.type === 'building')
+              if (firstBuilding) {
+                buildingId = firstBuilding.id as BuildingNode['id']
+                viewer.setSelection({ buildingId })
+              }
+            }
+          }
+
+          // If no level selected, find level 0 in the building
+          if (buildingId && !viewer.selection.levelId) {
+            const buildingNode = scene.nodes[buildingId] as BuildingNode
+            const level0Id = buildingNode.children.find((childId) => {
+              const levelNode = scene.nodes[childId] as LevelNode
+              return levelNode?.type === 'level' && levelNode.level === 0
+            })
+            if (level0Id) {
+              viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
+            } else if (buildingNode.children[0]) {
+              // Fallback to first level if level 0 doesn't exist
+              viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
+            }
           }
         }
-      }
 
-      // If no level selected, find level 0 in the building
-      if (buildingId && !viewer.selection.levelId) {
-        const buildingNode = scene.nodes[buildingId] as BuildingNode
-        const level0Id = buildingNode.children.find((childId) => {
-          const levelNode = scene.nodes[childId] as LevelNode
-          return levelNode?.type === 'level' && levelNode.level === 0
+        switch (phase) {
+          case 'site':
+            // In Site mode, we zoom out and deselect specific levels/buildings
+            viewer.resetSelection()
+            break
+
+          case 'structure':
+            selectBuildingAndLevel0()
+            break
+
+          case 'furnish':
+            selectBuildingAndLevel0()
+            // Furnish mode only supports elements layer, not zones
+            set({ structureLayer: 'elements' })
+            break
+        }
+      },
+      mode: 'select',
+      setMode: (mode) => {
+        set({ mode })
+
+        const { phase, structureLayer, tool } = get()
+
+        if (mode === 'build') {
+          // Clear selection when entering build mode
+          const viewer = useViewer.getState()
+          viewer.setSelection({
+            selectedIds: [],
+            zoneId: null,
+          })
+
+          // Ensure a tool is selected in build mode
+          if (!tool) {
+            if (phase === 'structure' && structureLayer === 'zones') {
+              set({ tool: 'zone' })
+            } else if (phase === 'structure' && structureLayer === 'elements') {
+              set({ tool: 'wall' })
+            } else if (phase === 'furnish') {
+              set({ tool: 'item', catalogCategory: 'furniture' })
+            }
+          }
+        }
+        // When leaving build mode, clear tool
+        else if (tool) {
+          set({ tool: null })
+        }
+      },
+      tool: null,
+      setTool: (tool) => set({ tool }),
+      structureLayer: 'elements',
+      setStructureLayer: (layer) => {
+        const { mode } = get()
+
+        if (mode === 'build') {
+          const tool = layer === 'zones' ? 'zone' : 'wall'
+          set({ structureLayer: layer, tool })
+        } else {
+          set({ structureLayer: layer, mode: 'select', tool: null })
+        }
+
+        const viewer = useViewer.getState()
+        viewer.setSelection({
+          selectedIds: [],
+          zoneId: null,
         })
-        if (level0Id) {
-          viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
-        } else if (buildingNode.children[0]) {
-          // Fallback to first level if level 0 doesn't exist
-          viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
+      },
+      catalogCategory: null,
+      setCatalogCategory: (category) => set({ catalogCategory: category }),
+      selectedItem: null,
+      setSelectedItem: (item) => set({ selectedItem: item }),
+      movingNode: null as ItemNode | WindowNode | DoorNode | null,
+      setMovingNode: (node) => set({ movingNode: node }),
+      selectedReferenceId: null,
+      setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      spaces: {},
+      setSpaces: (spaces) => set({ spaces }),
+      editingHole: null,
+      setEditingHole: (hole) => set({ editingHole: hole }),
+      isPreviewMode: false,
+      setPreviewMode: (preview) => {
+        if (preview) {
+          set({ isPreviewMode: true, mode: 'select', tool: null, catalogCategory: null })
+          // Clear zone/item selection for clean viewer drill-down hierarchy
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        } else {
+          set({ isPreviewMode: false })
         }
-      }
-    }
-
-    switch (phase) {
-      case 'site':
-        // In Site mode, we zoom out and deselect specific levels/buildings
-        viewer.resetSelection()
-        break
-
-      case 'structure':
-        selectBuildingAndLevel0()
-        break
-
-      case 'furnish':
-        selectBuildingAndLevel0()
-        // Furnish mode only supports elements layer, not zones
-        set({ structureLayer: 'elements' })
-        break
-    }
-  },
-  mode: 'select',
-  setMode: (mode) => {
-    set({ mode })
-
-    const { phase, structureLayer, tool } = get()
-
-    if (mode === 'build') {
-      // Clear selection when entering build mode
-      const viewer = useViewer.getState()
-      viewer.setSelection({
-        selectedIds: [],
-        zoneId: null,
-      })
-
-      // Ensure a tool is selected in build mode
-      if (!tool) {
-        if (phase === 'structure' && structureLayer === 'zones') {
-          set({ tool: 'zone' })
-        } else if (phase === 'structure' && structureLayer === 'elements') {
-          set({ tool: 'wall' })
-        } else if (phase === 'furnish') {
-          set({ tool: 'item', catalogCategory: 'furniture' })
-        }
-      }
-    }
-    // When leaving build mode, clear tool
-    else if (tool) {
-      set({ tool: null })
-    }
-  },
-  tool: null,
-  setTool: (tool) => set({ tool }),
-  structureLayer: 'elements',
-  setStructureLayer: (layer) => {
-    const { mode } = get()
-
-    if (mode === 'build') {
-      const tool = layer === 'zones' ? 'zone' : 'wall'
-      set({ structureLayer: layer, tool })
-    } else {
-      set({ structureLayer: layer, mode: 'select', tool: null })
-    }
-
-    const viewer = useViewer.getState()
-    viewer.setSelection({
-      selectedIds: [],
-      zoneId: null,
-    })
-  },
-  catalogCategory: null,
-  setCatalogCategory: (category) => set({ catalogCategory: category }),
-  selectedItem: null,
-  setSelectedItem: (item) => set({ selectedItem: item }),
-  movingNode: null as ItemNode | WindowNode | DoorNode | null,
-  setMovingNode: (node) => set({ movingNode: node }),
-  selectedReferenceId: null,
-  setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
-  spaces: {},
-  setSpaces: (spaces) => set({ spaces }),
-  editingHole: null,
-  setEditingHole: (hole) => set({ editingHole: hole }),
-  isPreviewMode: false,
-  setPreviewMode: (preview) => {
-    if (preview) {
-      set({ isPreviewMode: true, mode: 'select', tool: null, catalogCategory: null })
-      // Clear zone/item selection for clean viewer drill-down hierarchy
-      useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-    } else {
-      set({ isPreviewMode: false })
-    }
-  },
-}))
+      },
+      enablePreviewTrackpadControls: true,
+      setEnablePreviewTrackpadControls: (enabled) => set({ enablePreviewTrackpadControls: enabled }),
+      showPreviewCameraHints: true,
+      setShowPreviewCameraHints: (show) => set({ showPreviewCameraHints: show }),
+      showFloatingUi: true,
+      setShowFloatingUi: (show) => set({ showFloatingUi: show }),
+      showSidebarUi: true,
+      setShowSidebarUi: (show) => set({ showSidebarUi: show }),
+      showInspectorPanels: true,
+      setShowInspectorPanels: (show) => set({ showInspectorPanels: show }),
+      setCompactMode: (compact) =>
+        set({
+          showFloatingUi: !compact,
+          showSidebarUi: !compact,
+          showInspectorPanels: !compact,
+        }),
+      uiStartupPreset: 'default',
+      setUiStartupPreset: (preset) => {
+        set({ uiStartupPreset: preset })
+        get().applyUiStartupPreset(preset)
+      },
+      applyUiStartupPreset: (preset = get().uiStartupPreset) => {
+        const isMinimal = preset === 'minimal'
+        set({
+          showFloatingUi: !isMinimal,
+          showSidebarUi: !isMinimal,
+          showInspectorPanels: !isMinimal,
+        })
+      },
+    }),
+    {
+      name: 'pascal-editor-ui-settings',
+      partialize: (state) => ({
+        enablePreviewTrackpadControls: state.enablePreviewTrackpadControls,
+        showPreviewCameraHints: state.showPreviewCameraHints,
+        showFloatingUi: state.showFloatingUi,
+        showSidebarUi: state.showSidebarUi,
+        showInspectorPanels: state.showInspectorPanels,
+        uiStartupPreset: state.uiStartupPreset,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.applyUiStartupPreset()
+      },
+    },
+  ),
+)
 
 export default useEditor

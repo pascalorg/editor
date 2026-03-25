@@ -6,9 +6,9 @@ import { cn } from '../../../lib/utils'
 import { ActionButton } from './action-button'
 
 const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
-  stacked: 'Stacked',
-  exploded: 'Exploded',
-  solo: 'Solo',
+  stacked: '積層',
+  exploded: '分解',
+  solo: '単独',
 }
 
 const levelModeOrder: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
@@ -21,19 +21,19 @@ const wallModeConfig: Record<
 > = {
   up: {
     icon: (props) => (
-      <img alt="Full Height" height={20} src="/icons/room.png" width={20} {...props} />
+      <img alt="フルハイト" height={20} src="/icons/room.png" width={20} {...props} />
     ),
-    label: 'Full Height',
+    label: 'フルハイト',
   },
   cutaway: {
     icon: (props) => (
-      <img alt="Cutaway" height={20} src="/icons/wallcut.png" width={20} {...props} />
+      <img alt="カットアウェイ" height={20} src="/icons/wallcut.png" width={20} {...props} />
     ),
-    label: 'Cutaway',
+    label: 'カットアウェイ',
   },
   down: {
-    icon: (props) => <img alt="Low" height={20} src="/icons/walllow.png" width={20} {...props} />,
-    label: 'Low',
+    icon: (props) => <img alt="ロー" height={20} src="/icons/walllow.png" width={20} {...props} />,
+    label: 'ロー',
   },
 }
 
@@ -82,7 +82,7 @@ export function ViewToggles() {
             ? 'bg-violet-500/20 text-violet-400'
             : 'hover:text-violet-400',
         )}
-        label={`Camera: ${cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}`}
+        label={`カメラ: ${cameraMode === 'perspective' ? '透視' : '平行投影'}`}
         onClick={toggleCameraMode}
         size="icon"
         variant="ghost"
@@ -95,7 +95,7 @@ export function ViewToggles() {
         className={cn(
           levelMode !== 'stacked' ? 'bg-amber-500/20 text-amber-400' : 'hover:text-amber-400',
         )}
-        label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
+        label={`レベル: ${levelMode === 'manual' ? '手動' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
         onClick={cycleLevelMode}
         size="icon"
         variant="ghost"
@@ -113,7 +113,7 @@ export function ViewToggles() {
             ? 'bg-white/10'
             : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
-        label={`Walls: ${wallModeConfig[wallMode].label}`}
+        label={`壁: ${wallModeConfig[wallMode].label}`}
         onClick={cycleWallMode}
         size="icon"
         variant="ghost"
@@ -132,12 +132,12 @@ export function ViewToggles() {
             ? 'bg-white/10'
             : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
-        label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
+        label={`スキャン: ${showScans ? '表示' : '非表示'}`}
         onClick={() => setShowScans(!showScans)}
         size="icon"
         variant="ghost"
       >
-        <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+        <img alt="スキャン" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
       </ActionButton>
 
       {/* Show Guides */}
@@ -148,12 +148,12 @@ export function ViewToggles() {
             ? 'bg-white/10'
             : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
         )}
-        label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
+        label={`ガイド: ${showGuides ? '表示' : '非表示'}`}
         onClick={() => setShowGuides(!showGuides)}
         size="icon"
         variant="ghost"
       >
-        <img alt="Guides" className="h-[28px] w-[28px] object-contain" src="/icons/floorplan.png" />
+        <img alt="ガイド" className="h-[28px] w-[28px] object-contain" src="/icons/floorplan.png" />
       </ActionButton>
     </div>
   )

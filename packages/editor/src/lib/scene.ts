@@ -9,6 +9,26 @@ export type SceneGraph = {
   rootNodeIds: string[]
 }
 
+export const isSceneGraph = (value: unknown): value is SceneGraph => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as {
+    nodes?: unknown
+    rootNodeIds?: unknown
+  }
+
+  if (!candidate.nodes || typeof candidate.nodes !== 'object' || Array.isArray(candidate.nodes)) {
+    return false
+  }
+
+  return (
+    Array.isArray(candidate.rootNodeIds) &&
+    candidate.rootNodeIds.every((entry) => typeof entry === 'string')
+  )
+}
+
 export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
@@ -43,7 +63,7 @@ export function syncEditorSelectionFromCurrentScene() {
 }
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  if (sceneGraph?.nodes && sceneGraph.rootNodeIds) {
+  if (isSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds } = sceneGraph
     useScene.getState().setScene(nodes as any, rootNodeIds as any)
   } else {
@@ -51,6 +71,10 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   }
 
   syncEditorSelectionFromCurrentScene()
+}
+
+export function importSceneGraphToEditor(sceneGraph?: SceneGraph | null) {
+  applySceneGraphToEditor(sceneGraph)
 }
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'

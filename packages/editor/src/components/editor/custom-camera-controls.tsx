@@ -17,6 +17,7 @@ const tempSize = new Vector3()
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const enablePreviewTrackpadControls = useEditor((s) => s.enablePreviewTrackpadControls)
   const selection = useViewer((s) => s.selection)
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
@@ -70,6 +71,8 @@ export const CustomCameraControls = () => {
 
   useEffect(() => {
     const keyState = {
+      altLeft: false,
+      altRight: false,
       shiftRight: false,
       shiftLeft: false,
       controlRight: false,
@@ -80,14 +83,20 @@ export const CustomCameraControls = () => {
     const updateConfig = () => {
       if (!controls.current) return
 
+      const alt = keyState.altLeft || keyState.altRight
       const shift = keyState.shiftRight || keyState.shiftLeft
-      const control = keyState.controlRight || keyState.controlLeft
       const space = keyState.space
-
-      const wheelAction =
+      const defaultWheelAction =
         cameraMode === 'orthographic'
           ? CameraControlsImpl.ACTION.ZOOM
           : CameraControlsImpl.ACTION.DOLLY
+
+      const wheelAction =
+        isPreviewMode && enablePreviewTrackpadControls && alt
+          ? CameraControlsImpl.ACTION.ROTATE
+          : isPreviewMode && enablePreviewTrackpadControls && shift
+            ? CameraControlsImpl.ACTION.SCREEN_PAN
+            : defaultWheelAction
       controls.current.mouseButtons.wheel = wheelAction
       controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
       controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
@@ -102,6 +111,12 @@ export const CustomCameraControls = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'AltLeft') {
+        keyState.altLeft = true
+      }
+      if (event.code === 'AltRight') {
+        keyState.altRight = true
+      }
       if (event.code === 'Space') {
         keyState.space = true
         document.body.style.cursor = 'grab'
@@ -122,6 +137,12 @@ export const CustomCameraControls = () => {
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'AltLeft') {
+        keyState.altLeft = false
+      }
+      if (event.code === 'AltRight') {
+        keyState.altRight = false
+      }
       if (event.code === 'Space') {
         keyState.space = false
         document.body.style.cursor = ''
@@ -149,7 +170,7 @@ export const CustomCameraControls = () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
     }
-  }, [cameraMode, isPreviewMode])
+  }, [cameraMode, enablePreviewTrackpadControls, isPreviewMode])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode
@@ -313,6 +334,7 @@ export const CustomCameraControls = () => {
       maxPolarAngle={Math.PI / 2 - 0.1}
       minDistance={10}
       minPolarAngle={0}
+      smoothTime={0.12}
       mouseButtons={mouseButtons}
       onRest={onRest}
       onSleep={onRest}

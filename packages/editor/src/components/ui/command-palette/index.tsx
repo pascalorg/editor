@@ -171,6 +171,10 @@ export function CommandPalette() {
 
   const { setPhase, setMode, setTool, setStructureLayer, isPreviewMode, setPreviewMode } =
     useEditor()
+  const showSidebarUi = useEditor((s) => s.showSidebarUi)
+  const setShowSidebarUi = useEditor((s) => s.setShowSidebarUi)
+  const showInspectorPanels = useEditor((s) => s.showInspectorPanels)
+  const setShowInspectorPanels = useEditor((s) => s.setShowInspectorPanels)
 
   const cameraMode = useViewer((s) => s.cameraMode)
   const setCameraMode = useViewer((s) => s.setCameraMode)
@@ -599,6 +603,20 @@ export function CommandPalette() {
                     label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
                     onSelect={toggleFullscreen}
                   />
+                  <Item
+                    disabled={showSidebarUi}
+                    icon={<ArrowRight className="h-4 w-4" />}
+                    keywords={['sidebar', 'show', 'left panel', 'ui']}
+                    label="Show Sidebar"
+                    onSelect={() => run(() => setShowSidebarUi(true))}
+                  />
+                  <Item
+                    disabled={showInspectorPanels}
+                    icon={<SquareStack className="h-4 w-4" />}
+                    keywords={['inspector', 'panel', 'show', 'properties', 'ui']}
+                    label="Show Inspector Panels"
+                    onSelect={() => run(() => setShowInspectorPanels(true))}
+                  />
                 </Command.Group>
 
                 {/* History */}
@@ -722,41 +740,41 @@ export function CommandPalette() {
 
             {/* ── Camera Snapshot: scope picker ─────────────────────────── */}
             {page === 'camera-view' && (
-              <Command.Group heading="Camera Snapshot — Select Scope">
+              <Command.Group heading="カメラスナップショット - 範囲を選択">
                 <OptionItem
                   icon={<Map className="h-4 w-4" />}
-                  label="Site"
+                  label="敷地"
                   onSelect={() => {
                     const { rootNodeIds } = useScene.getState()
                     const siteId = rootNodeIds[0]
-                    if (siteId) navigateToCameraScope(siteId, 'Site')
+                    if (siteId) navigateToCameraScope(siteId, '敷地')
                   }}
                 />
                 <OptionItem
                   icon={<Building2 className="h-4 w-4" />}
-                  label="Building"
+                  label="建物"
                   onSelect={() => {
                     const building = Object.values(useScene.getState().nodes).find(
                       (n) => n.type === 'building',
                     )
-                    if (building) navigateToCameraScope(building.id, 'Building')
+                    if (building) navigateToCameraScope(building.id, '建物')
                   }}
                 />
                 <OptionItem
                   disabled={!activeLevelId}
                   icon={<Layers className="h-4 w-4" />}
-                  label="Level"
+                  label="レベル"
                   onSelect={() => {
-                    if (activeLevelId) navigateToCameraScope(activeLevelId, 'Level')
+                    if (activeLevelId) navigateToCameraScope(activeLevelId, 'レベル')
                   }}
                 />
                 <OptionItem
                   disabled={!hasSelection}
                   icon={<MousePointer2 className="h-4 w-4" />}
-                  label="Selection"
+                  label="選択中"
                   onSelect={() => {
                     const firstId = selection.selectedIds[0]
-                    if (firstId) navigateToCameraScope(firstId, 'Selection')
+                    if (firstId) navigateToCameraScope(firstId, '選択中')
                   }}
                 />
               </Command.Group>

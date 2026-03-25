@@ -26,6 +26,11 @@ export function ItemPanel() {
 
   const [uniformScale, setUniformScale] = useState(true)
 
+  const isOkiyukaPanel =
+    node?.metadata?.source === 'okiyuka' &&
+    Array.isArray(node?.asset.tags) &&
+    node.asset.tags.includes('panel')
+
   const handleUpdate = useCallback(
     (updates: Partial<ItemNode>) => {
       if (!(selectedId && node)) return
@@ -38,6 +43,20 @@ export function ItemPanel() {
       }
     },
     [selectedId, node, updateNode],
+  )
+
+  const handleDimensionUpdate = useCallback(
+    (axis: 0 | 1 | 2, value: number) => {
+      if (!node) return
+
+      const baseDimension = node.asset.dimensions[axis]
+      if (Math.abs(baseDimension) < 0.0001) return
+
+      const nextScale = [...node.scale] as [number, number, number]
+      nextScale[axis] = Math.max(0.01, value) / baseDimension
+      handleUpdate({ scale: nextScale })
+    },
+    [node, handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -76,6 +95,8 @@ export function ItemPanel() {
   }, [selectedId, deleteNode, setSelection])
 
   if (!node || node.type !== 'item' || selectedIds.length !== 1) return null
+
+  const [width, height, depth] = getScaledDimensions(node)
 
   return (
     <PanelWrapper
@@ -260,17 +281,46 @@ export function ItemPanel() {
         )}
       </PanelSection>
 
+      <PanelSection title={isOkiyukaPanel ? 'Panel Dimensions' : 'Dimensions'}>
+        <SliderControl
+          label={isOkiyukaPanel ? 'Width' : 'Width'}
+          max={10}
+          min={0.01}
+          onChange={(value) => handleDimensionUpdate(0, value)}
+          precision={2}
+          step={0.01}
+          unit="m"
+          value={Math.round(width * 100) / 100}
+        />
+        <SliderControl
+          label={isOkiyukaPanel ? 'Thickness' : 'Height'}
+          max={10}
+          min={0.01}
+          onChange={(value) => handleDimensionUpdate(1, value)}
+          precision={3}
+          step={0.01}
+          unit="m"
+          value={Math.round(height * 1000) / 1000}
+        />
+        <SliderControl
+          label="Depth"
+          max={10}
+          min={0.01}
+          onChange={(value) => handleDimensionUpdate(2, value)}
+          precision={2}
+          step={0.01}
+          unit="m"
+          value={Math.round(depth * 100) / 100}
+        />
+      </PanelSection>
+
       <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Dimensions</span>
-          {(() => {
-            const [w, h, d] = getScaledDimensions(node)
-            return (
-              <span className="font-mono text-white">
-                {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
-              </span>
-            )
-          })()}
+          <span className="font-mono text-white">
+            {Math.round(width * 100) / 100}×{Math.round(height * 100) / 100}×
+            {Math.round(depth * 100) / 100}
+          </span>
         </div>
       </PanelSection>
 

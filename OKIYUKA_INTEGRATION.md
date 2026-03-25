@@ -113,6 +113,7 @@ c:/Okiyuka_V1.0/.venv/Scripts/python.exe tools/okiyuka_to_pascal_scene.py \
 
 - all rooms with panel geometry now map panels into Pascal item nodes
 - imported panel items currently use a proxy asset and metadata-rich box approximation
+- imported panel items can now be resized from the existing item panel using width / thickness / depth sliders
 - pedestals are preserved as metadata only and do not render as explicit scene elements
 - edge rails are not yet mapped
 - wall thickness and height are placeholder visualization values
@@ -171,6 +172,7 @@ Current prototype result:
 - the converter maps panels from every room in the real fixture to level child `item` nodes
 - each imported panel item carries source coordinates, panel type, dimensions, and rotation in metadata
 - each imported panel item uses a proxy asset so the current viewer can render it without adding a new renderer
+- imported panel items can be edited in meters through the existing Pascal item property panel, which updates effective dimensions via item scale
 - the real fixture now imports 72 panel items across 6 rooms that expose Okiyuka panel geometry
 
 Open design questions:
@@ -254,6 +256,7 @@ Why this changed:
 - The bridge currently converts room polygons into Pascal zones and room perimeter segments into Pascal walls under one site, one building, and one level.
 - Phase 1 pedestal preservation is now in place: the converter stores full pedestal records in level metadata and room-level summaries in zone metadata.
 - Phase 2 panel prototyping is now in place across the real fixture: 72 panel items are imported as level child item nodes using a proxy asset for all 6 rooms that carry panel geometry.
+- Imported Okiyuka panel items now expose width, thickness, and depth sliders in the existing Pascal item panel, providing a minimal editable-dimension path without introducing a dedicated panel node type.
 - Converter output IDs are now deterministic for identical inputs, which keeps fixture regeneration stable.
 - Synthetic import validation succeeded in Pascal Editor, confirming that the current conversion shape can be loaded by the existing UI.
 - Local setup and architecture notes in this repository were updated to reflect the current checkout instead of the older auth / db / Supabase-oriented documentation.

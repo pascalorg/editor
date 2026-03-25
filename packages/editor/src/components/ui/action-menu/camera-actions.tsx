@@ -22,13 +22,13 @@ export function CameraActions() {
       {/* Orbit CCW */}
       <ActionButton
         className="group hover:bg-white/5"
-        label="Orbit Left"
+        label="左回転"
         onClick={orbitCCW}
         size="icon"
         variant="ghost"
       >
         <Image
-          alt="Orbit Left"
+          alt="左回転"
           className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
           height={28}
           src="/icons/rotate.png"
@@ -39,13 +39,13 @@ export function CameraActions() {
       {/* Orbit CW */}
       <ActionButton
         className="group hover:bg-white/5"
-        label="Orbit Right"
+        label="右回転"
         onClick={orbitCW}
         size="icon"
         variant="ghost"
       >
         <Image
-          alt="Orbit Right"
+          alt="右回転"
           className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
           height={28}
           src="/icons/rotate.png"
@@ -56,13 +56,13 @@ export function CameraActions() {
       {/* Top View */}
       <ActionButton
         className="group hover:bg-white/5"
-        label="Top View"
+        label="上面図"
         onClick={goToTopView}
         size="icon"
         variant="ghost"
       >
         <Image
-          alt="Top View"
+          alt="上面図"
           className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
           height={28}
           src="/icons/topview.png"

@@ -19,6 +19,14 @@ export const useKeyboard = () => {
         // Clear selections to close UI panels, but KEEP the active building and level context
         useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         useEditor.getState().setSelectedReferenceId(null)
+      } else if ((e.key === 'B' || e.key === 'b') && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        const { showSidebarUi, setShowSidebarUi } = useEditor.getState()
+        setShowSidebarUi(!showSidebarUi)
+      } else if ((e.key === 'P' || e.key === 'p') && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        const { showInspectorPanels, setShowInspectorPanels } = useEditor.getState()
+        setShowInspectorPanels(!showInspectorPanels)
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')

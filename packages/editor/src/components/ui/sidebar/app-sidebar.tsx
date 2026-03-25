@@ -1,7 +1,6 @@
 'use client'
 
 import { type ReactNode, useEffect, useState } from 'react'
-import { CommandPalette } from './../../../components/ui/command-palette'
 import {
   Sidebar,
   SidebarContent,
@@ -48,31 +47,28 @@ export function AppSidebar({
   }
 
   return (
-    <>
-      <Sidebar className={cn('dark text-white')} variant="floating">
-        <div className="flex h-full">
-          {/* Icon Rail */}
-          <IconRail
-            activePanel={activePanel}
-            appMenuButton={appMenuButton}
-            onPanelChange={setActivePanel}
-          />
+    <Sidebar className={cn('dark text-white')} variant="floating">
+      <div className="flex h-full">
+        {/* Icon Rail */}
+        <IconRail
+          activePanel={activePanel}
+          appMenuButton={appMenuButton}
+          onPanelChange={setActivePanel}
+        />
 
-          {/* Panel Content */}
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {sidebarTop && (
-              <SidebarHeader className="relative flex-col items-start justify-center gap-1 border-border/50 border-b px-3 py-3">
-                {sidebarTop}
-              </SidebarHeader>
-            )}
+        {/* Panel Content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {sidebarTop && (
+            <SidebarHeader className="relative flex-col items-start justify-center gap-1 border-border/50 border-b px-3 py-3">
+              {sidebarTop}
+            </SidebarHeader>
+          )}
 
-            <SidebarContent className={cn('no-scrollbar flex flex-1 flex-col overflow-hidden')}>
-              {renderPanelContent()}
-            </SidebarContent>
-          </div>
+          <SidebarContent className={cn('no-scrollbar flex flex-1 flex-col overflow-hidden')}>
+            {renderPanelContent()}
+          </SidebarContent>
         </div>
-      </Sidebar>
-      <CommandPalette />
-    </>
+      </div>
+    </Sidebar>
   )
 }

@@ -31,78 +31,92 @@ const KEY_DISPLAY_MAP: Record<string, string> = {
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
-    title: 'Editor Navigation',
+    title: 'エディタ移動',
     shortcuts: [
-      { keys: ['1'], action: 'Switch to Site phase' },
-      { keys: ['2'], action: 'Switch to Structure phase' },
-      { keys: ['3'], action: 'Switch to Furnish phase' },
-      { keys: ['S'], action: 'Switch to Structure layer' },
-      { keys: ['F'], action: 'Switch to Furnish layer' },
-      { keys: ['Z'], action: 'Switch to Zones layer' },
+      { keys: ['1'], action: 'Site フェーズに切り替え' },
+      { keys: ['2'], action: 'Structure フェーズに切り替え' },
+      { keys: ['3'], action: 'Furnish フェーズに切り替え' },
+      { keys: ['S'], action: 'Structure レイヤーに切り替え' },
+      { keys: ['F'], action: 'Furnish レイヤーに切り替え' },
+      { keys: ['Z'], action: 'Zones レイヤーに切り替え' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
-        action: 'Select next level in the active building',
+        action: '現在の建物で次のレベルを選択',
       },
       {
         keys: ['Cmd/Ctrl', 'Arrow Down'],
-        action: 'Select previous level in the active building',
+        action: '現在の建物で前のレベルを選択',
       },
-      { keys: ['Cmd/Ctrl', 'B'], action: 'Toggle sidebar' },
+      { keys: ['Cmd/Ctrl', 'B'], action: 'サイドバーを切り替え' },
+      { keys: ['Cmd/Ctrl', 'Shift', 'B'], action: 'サイドバー UI の表示を切り替え' },
+      { keys: ['Cmd/Ctrl', 'Shift', 'P'], action: 'インスペクターパネルの表示を切り替え' },
     ],
   },
   {
-    title: 'Modes & History',
+    title: 'モードと履歴',
     shortcuts: [
-      { keys: ['V'], action: 'Switch to Select mode' },
-      { keys: ['B'], action: 'Switch to Build mode' },
+      { keys: ['V'], action: 'Select モードに切り替え' },
+      { keys: ['B'], action: 'Build モードに切り替え' },
       {
         keys: ['Esc'],
-        action: 'Cancel active tool, clear selection, and exit build mode',
+        action: 'ツールを中止し、選択を解除して Build モードを終了',
       },
-      { keys: ['Delete / Backspace'], action: 'Delete selected objects' },
-      { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
-      { keys: ['Cmd/Ctrl', 'Shift', 'Z'], action: 'Redo' },
+      { keys: ['Delete / Backspace'], action: '選択中のオブジェクトを削除' },
+      { keys: ['Cmd/Ctrl', 'Z'], action: '元に戻す' },
+      { keys: ['Cmd/Ctrl', 'Shift', 'Z'], action: 'やり直す' },
     ],
   },
   {
-    title: 'Selection',
+    title: '選択',
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'Click'],
-        action: 'Add or remove an object from multi-selection',
-        note: 'Works while in Select mode.',
+        action: '複数選択にオブジェクトを追加または削除',
+        note: 'Select モードで動作します。',
       },
     ],
   },
   {
-    title: 'Drawing Tools',
+    title: '作図ツール',
     shortcuts: [
       {
         keys: ['Shift'],
-        action: 'Temporarily disable angle snapping while drawing walls, slabs, and ceilings',
-        note: 'Hold while drawing.',
+        action: 'wall、slab、ceiling 作図中の角度スナップを一時的に無効化',
+        note: '作図中に押し続けます。',
       },
     ],
   },
   {
-    title: 'Item Placement',
+    title: 'アイテム配置',
     shortcuts: [
-      { keys: ['R'], action: 'Rotate item clockwise by 90 degrees' },
-      { keys: ['T'], action: 'Rotate item counter-clockwise by 90 degrees' },
+      { keys: ['R'], action: 'アイテムを 90 度時計回りに回転' },
+      { keys: ['T'], action: 'アイテムを 90 度反時計回りに回転' },
       {
         keys: ['Shift'],
-        action: 'Temporarily bypass placement validation constraints',
-        note: 'Hold while placing.',
+        action: '配置制約チェックを一時的に無効化',
+        note: '配置中に押し続けます。',
       },
     ],
   },
   {
-    title: 'Camera',
+    title: 'カメラ',
     shortcuts: [
       {
         keys: ['Space', 'Drag'],
-        action: 'Pan camera',
-        note: 'Hold Space while dragging with the mouse.',
+        action: 'カメラを移動',
+        note: 'マウスドラッグ中に Space を押し続けます。',
+      },
+      {
+        keys: ['Trackpad scroll'],
+        action: 'プレビューでズーム',
+      },
+      {
+        keys: ['Shift', 'Trackpad scroll'],
+        action: 'プレビューで移動',
+      },
+      {
+        keys: ['Alt/Option', 'Trackpad scroll'],
+        action: 'プレビューで回転',
       },
     ],
   },
@@ -144,14 +158,14 @@ export function KeyboardShortcutsDialog() {
       <DialogTrigger asChild>
         <Button className="w-full justify-start gap-2" variant="outline">
           <Keyboard className="size-4" />
-          Keyboard Shortcuts
+          キーボードショートカット
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-6 py-4">
-          <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          <DialogTitle>キーボードショートカット</DialogTitle>
           <DialogDescription>
-            Shortcuts are context-aware and depend on the current phase or tool.
+            ショートカットは現在のフェーズやツールに応じて変わります。
           </DialogDescription>
         </DialogHeader>
 
