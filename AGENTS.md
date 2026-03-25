@@ -1,7 +1,7 @@
 # Pascal Editor V2 — Architecture
 
 ## Project Structure
-
+NEW
 Monorepo managed with Turborepo. Packages are shared libraries; apps are deployable applications.
 
 ```
