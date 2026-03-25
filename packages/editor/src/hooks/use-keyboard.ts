@@ -12,6 +12,11 @@ export const useKeyboard = () => {
         return
       }
 
+      // In first-person mode, all shortcuts are handled by FirstPersonControls
+      if (useEditor.getState().isFirstPersonMode) {
+        return
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault()
         emitter.emit('tool:cancel')

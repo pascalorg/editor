@@ -93,6 +93,9 @@ type EditorState = {
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
+  // First-person walkthrough mode (street view)
+  isFirstPersonMode: boolean
+  setFirstPersonMode: (enabled: boolean) => void
 }
 
 export type PersistedEditorUiState = Pick<
@@ -347,6 +350,23 @@ const useEditor = create<EditorState>()(
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
+      isFirstPersonMode: false,
+      setFirstPersonMode: (enabled) => {
+        if (enabled) {
+          // Force perspective camera and full-height walls for immersive walkthrough
+          useViewer.getState().setCameraMode('perspective')
+          useViewer.getState().setWallMode('up')
+          set({
+            isFirstPersonMode: true,
+            mode: 'select',
+            tool: null,
+            catalogCategory: null,
+          })
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        } else {
+          set({ isFirstPersonMode: false })
+        }
+      },
     }),
     {
       name: 'pascal-editor-ui-preferences',
