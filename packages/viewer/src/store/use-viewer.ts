@@ -61,8 +61,8 @@ type ViewerState = {
   outliner: Outliner // No setter as we will manipulate directly the arrays
 
   // Export functionality
-  exportScene: (() => Promise<void>) | null
-  setExportScene: (fn: (() => Promise<void>) | null) => void
+  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
