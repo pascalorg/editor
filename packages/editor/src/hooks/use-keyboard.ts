@@ -4,6 +4,13 @@ import { useEffect } from 'react'
 import { sfxEmitter } from '../lib/sfx-bus'
 import useEditor from '../store/use-editor'
 
+// Tools call this in their onCancel handler when they have an active mid-action to cancel,
+// so that the global Escape handler knows not to also switch to select mode.
+let _toolCancelConsumed = false
+export const markToolCancelConsumed = () => {
+  _toolCancelConsumed = true
+}
+
 export const useKeyboard = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -14,15 +21,20 @@ export const useKeyboard = () => {
 
       if (e.key === 'Escape') {
         e.preventDefault()
+        _toolCancelConsumed = false
         emitter.emit('tool:cancel')
 
-        // Return to the default select tool while keeping the active building/level context.
-        useEditor.getState().setEditingHole(null)
-        useEditor.getState().setMode('select')
+        // Only switch to select mode if no tool had an active mid-action to cancel.
+        // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
+        if (!_toolCancelConsumed) {
+          // Return to the default select tool while keeping the active building/level context.
+          useEditor.getState().setEditingHole(null)
+          useEditor.getState().setMode('select')
 
-        // Clear selections to close UI panels, but KEEP the active building and level context.
-        useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-        useEditor.getState().setSelectedReferenceId(null)
+          // Clear selections to close UI panels, but KEEP the active building and level context.
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+          useEditor.getState().setSelectedReferenceId(null)
+        }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')

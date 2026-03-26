@@ -209,8 +209,6 @@ export function WindowPanel() {
               X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={10}
-          min={-10}
           onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
           precision={2}
           step={0.1}
@@ -223,8 +221,6 @@ export function WindowPanel() {
               Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
-          max={10}
-          min={-10}
           onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
           precision={2}
           step={0.1}
@@ -244,8 +240,7 @@ export function WindowPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={5}
-          min={0.2}
+          min={0}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
           step={0.1}
@@ -254,8 +249,7 @@ export function WindowPanel() {
         />
         <SliderControl
           label="Height"
-          max={5}
-          min={0.2}
+          min={0}
           onChange={(v) => handleUpdate({ height: v })}
           precision={2}
           step={0.1}
@@ -267,8 +261,7 @@ export function WindowPanel() {
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
-          max={0.2}
-          min={0.01}
+          min={0}
           onChange={(v) => handleUpdate({ frameThickness: v })}
           precision={3}
           step={0.01}
@@ -277,8 +270,7 @@ export function WindowPanel() {
         />
         <SliderControl
           label="Depth"
-          max={0.3}
-          min={0.01}
+          min={0}
           onChange={(v) => handleUpdate({ frameDepth: v })}
           precision={3}
           step={0.01}
@@ -390,8 +382,7 @@ export function WindowPanel() {
           <div className="mt-1 flex flex-col gap-1">
             <SliderControl
               label="Depth"
-              max={0.5}
-              min={0.01}
+              min={0}
               onChange={(v) => handleUpdate({ sillDepth: v })}
               precision={3}
               step={0.01}
@@ -400,8 +391,7 @@ export function WindowPanel() {
             />
             <SliderControl
               label="Thickness"
-              max={0.2}
-              min={0.005}
+              min={0}
               onChange={(v) => handleUpdate({ sillThickness: v })}
               precision={3}
               step={0.01}

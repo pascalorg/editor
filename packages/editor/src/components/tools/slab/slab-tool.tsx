@@ -2,6 +2,7 @@ import { emitter, type GridEvent, type LevelNode, SlabNode, useScene } from '@pa
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -150,6 +151,7 @@ export const SlabTool: React.FC = () => {
     }
 
     const onCancel = () => {
+      if (points.length > 0) markToolCancelConsumed()
       setPoints([])
     }
 
