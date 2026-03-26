@@ -20,7 +20,8 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
-const ALLOWED_TYPES = ['item', 'door', 'window', 'roof', 'roof-segment']
+const ALLOWED_TYPES = ['item', 'door', 'window', 'roof', 'roof-segment', 'wall', 'slab']
+const DELETE_ONLY_TYPES = ['wall', 'slab']
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -174,8 +175,8 @@ export function FloatingActionMenu() {
       >
         <NodeActionMenu
           onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-          onMove={handleMove}
+          onDuplicate={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleDuplicate : undefined}
+          onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
