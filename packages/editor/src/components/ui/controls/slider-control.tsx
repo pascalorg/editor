@@ -20,8 +20,8 @@ export function SliderControl({
   label,
   value,
   onChange,
-  min = 0,
-  max = 100,
+  min = Number.NEGATIVE_INFINITY,
+  max = Number.POSITIVE_INFINITY,
   precision = 0,
   step = 1,
   className,
@@ -32,23 +32,12 @@ export function SliderControl({
   const [isHovered, setIsHovered] = useState(false)
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
 
-  // Track the original value and bounds when dragging starts
-  const [dragStartValue, setDragStartValue] = useState<number | null>(null)
-  const [dragMin, setDragMin] = useState<number | null>(null)
-  const [dragMax, setDragMax] = useState<number | null>(null)
-
-  const trackRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
+  const dragRef = useRef<{ startX: number; startValue: number } | null>(null)
+  const labelRef = useRef<HTMLDivElement>(null)
   const valueRef = useRef(value)
   valueRef.current = value
 
-  const clamp = useCallback(
-    (val: number) => {
-      return Math.min(Math.max(val, min), max)
-    },
-    [min, max],
-  )
+  const clamp = useCallback((val: number) => Math.min(Math.max(val, min), max), [min, max])
 
   useEffect(() => {
     if (!isEditing) {
@@ -56,133 +45,97 @@ export function SliderControl({
     }
   }, [value, precision, isEditing])
 
+  // Wheel support on the label
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
+    const el = labelRef.current
+    if (!el) return
     const handleWheel = (e: WheelEvent) => {
       if (isEditing) return
-
       e.preventDefault()
-
       const direction = e.deltaY < 0 ? 1 : -1
-      let scrollStep = step
-      if (e.shiftKey) scrollStep = step * 10
-      else if (e.altKey) scrollStep = step * 0.1
-
-      const newValue = clamp(valueRef.current + direction * scrollStep)
-      const finalValue = Number.parseFloat(newValue.toFixed(precision))
-
-      if (finalValue !== valueRef.current) {
-        onChange(finalValue)
-      }
+      let s = step
+      if (e.shiftKey) s = step * 10
+      else if (e.altKey) s = step * 0.1
+      const newValue = clamp(valueRef.current + direction * s)
+      const final = Number.parseFloat(newValue.toFixed(precision))
+      if (final !== valueRef.current) onChange(final)
     }
-
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
   }, [isEditing, step, clamp, onChange, precision])
 
+  // Arrow key support while hovered
   useEffect(() => {
     if (!isHovered || isEditing) return
-
     const handleKeyDown = (e: KeyboardEvent) => {
       let direction = 0
-      if (e.key === 'ArrowUp') direction = 1
-      else if (e.key === 'ArrowDown') direction = -1
-
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') direction = 1
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') direction = -1
       if (direction !== 0) {
         e.preventDefault()
-        let scrollStep = step
-        if (e.shiftKey) scrollStep = step * 10
-        else if (e.altKey) scrollStep = step * 0.1
-
-        const newValue = clamp(valueRef.current + direction * scrollStep)
-        const finalValue = Number.parseFloat(newValue.toFixed(precision))
-
-        if (finalValue !== valueRef.current) {
-          onChange(finalValue)
-        }
+        let s = step
+        if (e.shiftKey) s = step * 10
+        else if (e.metaKey || e.ctrlKey) s = step * 0.1
+        const newValue = clamp(valueRef.current + direction * s)
+        const final = Number.parseFloat(newValue.toFixed(precision))
+        if (final !== valueRef.current) onChange(final)
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isHovered, isEditing, step, clamp, onChange, precision])
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
+  const handleLabelPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (isEditing) return
       e.preventDefault()
-
-      const track = trackRef.current
-      if (!track) return
-
+      e.currentTarget.setPointerCapture(e.pointerId)
+      dragRef.current = { startX: e.clientX, startValue: valueRef.current }
       setIsDragging(true)
-      setDragStartValue(value)
-      setDragMin(min)
-      setDragMax(max)
       useScene.temporal.getState().pause()
-
-      const rect = track.getBoundingClientRect()
-      const updateValueFromEvent = (clientX: number) => {
-        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-        const rawValue = min + percent * (max - min)
-        // snap to step
-        const snapped = Math.round(rawValue / step) * step
-        const finalValue = Number.parseFloat(clamp(snapped).toFixed(precision))
-        onChange(finalValue)
-      }
-
-      updateValueFromEvent(e.clientX)
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        updateValueFromEvent(moveEvent.clientX)
-      }
-
-      const handlePointerUp = (e: PointerEvent) => {
-        // Only stop dragging if we didn't release on the reset button
-        // Let the reset button's onPointerDown handle its own cleanup
-        if ((e.target as HTMLElement).closest('button')) {
-          return
-        }
-
-        setIsDragging(false)
-        const startVal = dragStartValue
-        const finalVal = valueRef.current
-
-        setDragStartValue(null)
-        setDragMin(null)
-        setDragMax(null)
-        document.removeEventListener('pointermove', handlePointerMove)
-        document.removeEventListener('pointerup', handlePointerUp)
-
-        if (startVal !== null && startVal !== finalVal) {
-          // Revert to start value while paused so the undo baseline is clean
-          onChange(startVal)
-
-          useScene.temporal.getState().resume()
-
-          // Apply final value while recording
-          onChange(finalVal)
-        } else {
-          useScene.temporal.getState().resume()
-        }
-      }
-
-      document.addEventListener('pointermove', handlePointerMove)
-      document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, min, max, step, precision, clamp, onChange, dragStartValue, value],
+    [isEditing],
+  )
+
+  const handleLabelPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragRef.current) return
+      const { startX, startValue } = dragRef.current
+      const dx = e.clientX - startX
+      let s = step
+      if (e.shiftKey) s = step * 10
+      else if (e.metaKey || e.ctrlKey) s = step * 0.1
+      // 4 px per step at default sensitivity
+      const newValue = clamp(Number.parseFloat((startValue + (dx / 4) * s).toFixed(precision)))
+      onChange(newValue)
+    },
+    [step, precision, clamp, onChange],
+  )
+
+  const handleLabelPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragRef.current) return
+      const { startValue } = dragRef.current
+      const finalVal = valueRef.current
+      dragRef.current = null
+      setIsDragging(false)
+      e.currentTarget.releasePointerCapture(e.pointerId)
+
+      if (startValue !== finalVal) {
+        onChange(startValue)
+        useScene.temporal.getState().resume()
+        onChange(finalVal)
+      } else {
+        useScene.temporal.getState().resume()
+      }
+    },
+    [onChange],
   )
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
     setInputValue(value.toFixed(precision))
   }, [value, precision])
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value)
-  }, [])
 
   const submitValue = useCallback(() => {
     const numValue = Number.parseFloat(inputValue)
@@ -193,10 +146,6 @@ export function SliderControl({
     }
     setIsEditing(false)
   }, [inputValue, onChange, clamp, precision, value])
-
-  const handleInputBlur = useCallback(() => {
-    submitValue()
-  }, [submitValue])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -220,104 +169,61 @@ export function SliderControl({
     [submitValue, value, precision, step, clamp, onChange],
   )
 
-  const currentMin = isDragging && dragMin !== null ? dragMin : min
-  const currentMax = isDragging && dragMax !== null ? dragMax : max
-
-  const percent = Math.max(
-    0,
-    Math.min(100, ((value - currentMin) / (currentMax - currentMin)) * 100),
-  )
-  const startPercent =
-    dragStartValue !== null
-      ? Math.max(
-          0,
-          Math.min(100, ((dragStartValue - currentMin) / (currentMax - currentMin)) * 100),
-        )
-      : null
-
   return (
     <div
       className={cn(
-        'group relative flex h-12 w-full items-center rounded-lg border border-border/50 px-3 text-sm transition-colors',
-        isDragging ? 'bg-[#3e3e3e]' : 'bg-[#2C2C2E] hover:bg-[#3e3e3e]',
+        'group flex h-7 w-full select-none items-center rounded-lg px-2 transition-colors',
+        isDragging ? 'bg-white/5' : 'hover:bg-white/5',
         className,
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      ref={containerRef}
     >
-      {/* Reset button that appears when dragged away from start */}
-      {isDragging && dragStartValue !== null && dragStartValue !== value && (
-        <button
-          className="pointer-events-auto absolute -top-10 right-0 z-50 cursor-pointer rounded-md bg-[#2C2C2E] px-2 py-1 font-medium text-[10px] text-muted-foreground shadow-sm ring-1 ring-border/50 hover:bg-[#3e3e3e] hover:text-foreground"
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onChange(dragStartValue)
-            setDragStartValue(null)
-            setDragMin(null)
-            setDragMax(null)
-            setIsDragging(false)
-            useScene.temporal.getState().resume()
-          }}
-        >
-          Reset
-        </button>
-      )}
-
-      <div className="w-[80px] shrink-0 select-none truncate text-muted-foreground">{label}</div>
-
+      {/* Label — drag handle */}
       <div
         className={cn(
-          'relative mx-2 flex h-full flex-1 touch-none items-center justify-center',
-          isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          'flex shrink-0 cursor-ew-resize items-center gap-1.5 text-xs transition-colors',
+          isDragging ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/80',
         )}
-        onPointerDown={handlePointerDown}
-        ref={trackRef}
+        onPointerDown={handleLabelPointerDown}
+        onPointerMove={handleLabelPointerMove}
+        onPointerUp={handleLabelPointerUp}
+        ref={labelRef}
       >
-        {/* Track dots background */}
-        <div className="pointer-events-none absolute inset-x-0 flex items-center justify-between px-1 opacity-30">
-          {[...Array(9)].map((_, i) => (
-            <div className="h-[3px] w-[3px] rounded-full bg-current" key={i} />
-          ))}
-        </div>
-
-        {/* Original Thumb Ghost */}
-        {isDragging && startPercent !== null && (
-          <div
-            className="pointer-events-none absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/20 shadow-sm"
-            style={{ left: `${startPercent}%` }}
-          />
-        )}
-
-        {/* Active Thumb */}
+        {/* Grip dots — 2×3 grid */}
         <div
           className={cn(
-            'pointer-events-none absolute top-1/2 h-6 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-sm transition',
-            isDragging
-              ? 'scale-y-110 bg-foreground'
-              : 'bg-foreground/60 group-hover:bg-foreground/80',
+            'grid grid-cols-2 gap-[2.5px] transition-opacity',
+            isDragging ? 'opacity-70' : 'opacity-25 group-hover:opacity-50',
           )}
-          style={{ left: `${percent}%` }}
-        />
+        >
+          {[...Array(6)].map((_, i) => (
+            <div className="h-[2px] w-[2px] rounded-full bg-current" key={i} />
+          ))}
+        </div>
+        <span className="font-medium">{label}</span>
       </div>
 
-      <div className="flex w-[50px] shrink-0 justify-end">
+      <div className="flex-1" />
+
+      {/* Value — click to edit */}
+      <div className="flex items-center text-xs">
         {isEditing ? (
-          <div className="flex items-center">
+          <>
             <input
               autoFocus
-              className="w-full bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
-              onBlur={handleInputBlur}
-              onChange={handleInputChange}
+              className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
+              onBlur={submitValue}
+              onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleInputKeyDown}
               type="text"
               value={inputValue}
             />
             {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
-          </div>
+          </>
         ) : (
           <div
-            className="flex w-full cursor-text items-center justify-end text-foreground/60 transition-colors hover:text-foreground"
+            className="flex cursor-text items-center text-foreground/60 transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight">

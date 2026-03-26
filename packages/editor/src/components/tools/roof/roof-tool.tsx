@@ -13,6 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -232,6 +233,7 @@ export const RoofTool: React.FC = () => {
 
     const onCancel = () => {
       if (corner1Ref.current) {
+        markToolCancelConsumed()
         corner1Ref.current = null
         outlineRef.current.visible = false
         setPreview((prev) => ({ ...prev, corner1: null }))

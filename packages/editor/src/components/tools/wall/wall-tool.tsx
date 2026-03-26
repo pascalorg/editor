@@ -2,10 +2,11 @@ import { emitter, type GridEvent, type LevelNode, useScene, type WallNode } from
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { createWallOnCurrentLevel, snapWallDraftPoint, WALL_MIN_LENGTH, type WallPlanPoint } from './wall-drafting'
+import { createWallOnCurrentLevel, snapWallDraftPoint, type WallPlanPoint } from './wall-drafting'
 
 const WALL_HEIGHT = 2.5
 
@@ -17,7 +18,7 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
   const length = direction.length()
 
-  if (length < WALL_MIN_LENGTH) {
+  if (length < 0.01) {
     mesh.visible = false
     return
   }
@@ -142,7 +143,7 @@ export const WallTool: React.FC = () => {
         endingPoint.current.set(snappedEnd[0], event.position[1], snappedEnd[1])
         const dx = endingPoint.current.x - startingPoint.current.x
         const dz = endingPoint.current.z - startingPoint.current.z
-        if (dx * dx + dz * dz < WALL_MIN_LENGTH * WALL_MIN_LENGTH) return
+        if (dx * dx + dz * dz < 0.01 * 0.01) return
         createWallOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           [endingPoint.current.x, endingPoint.current.z],
@@ -166,6 +167,7 @@ export const WallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
+        markToolCancelConsumed()
         buildingState.current = 0
         wallPreviewRef.current.visible = false
       }

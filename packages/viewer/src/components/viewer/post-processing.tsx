@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Color, Layers, UnsignedByteType } from 'three'
 import { outline } from 'three/addons/tsl/display/OutlineNode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
-import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
@@ -21,7 +20,6 @@ import {
   time,
   uniform,
   vec4,
-  velocity,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
@@ -129,67 +127,11 @@ const PostProcessingPasses = () => {
     outliner.hoveredObjects.length = 0
 
     try {
-      // Scene pass with MRT for SSGI
       const scenePass = pass(scene, camera)
-      scenePass.setMRT(
-        mrt({
-          output,
-          diffuseColor,
-          normal: directionToColor(normalView),
-          velocity,
-        }),
-      )
-
-      // Get texture outputs
-      const scenePassColor = scenePass.getTextureNode('output')
-      const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
-      const scenePassDepth = scenePass.getTextureNode('depth')
-      const scenePassNormal = scenePass.getTextureNode('normal')
-      const scenePassVelocity = scenePass.getTextureNode('velocity')
-
-      // Optimize texture bandwidth
-      const diffuseTexture = scenePass.getTexture('diffuseColor')
-      diffuseTexture.type = UnsignedByteType
-
-      const normalTexture = scenePass.getTexture('normal')
-      normalTexture.type = UnsignedByteType
-
-      // Extract normal from color-encoded texture
-      const sceneNormal = sample((uv) => {
-        return colorToDirection(scenePassNormal.sample(uv))
-      })
-
       const zonePass = pass(scene, camera)
       zonePass.setLayers(zoneLayers)
-      // SSGI Pass (cast to PerspectiveCamera for SSGI)
-      const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
 
-      giPass.sliceCount.value = SSGI_PARAMS.sliceCount
-      giPass.stepCount.value = SSGI_PARAMS.stepCount
-      giPass.radius.value = SSGI_PARAMS.radius
-      giPass.expFactor.value = SSGI_PARAMS.expFactor
-      giPass.thickness.value = SSGI_PARAMS.thickness
-      giPass.backfaceLighting.value = SSGI_PARAMS.backfaceLighting
-      giPass.aoIntensity.value = SSGI_PARAMS.aoIntensity
-      giPass.giIntensity.value = SSGI_PARAMS.giIntensity
-      giPass.useLinearThickness.value = SSGI_PARAMS.useLinearThickness
-      giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
-      giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
-
-      const giTexture = (giPass as any).getTextureNode()
-
-      // DenoiseNode only denoises RGB — alpha is passed through unchanged.
-      // SSGI packs AO into alpha, so we remap it into RGB before denoising.
-      // convertToTexture() inside denoise() will call rtt() on this vec4 node automatically.
-      const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
-      const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
-      denoisePass.index.value = 0
-      denoisePass.radius.value = 4
-
-      const gi = giPass.rgb
-      const ao = (denoisePass as any).r
-      // const gi = giPass.rgb;
-      // const ao = giPass.a;
+      const scenePassColor = scenePass.getTextureNode('output')
 
       // Background detection via alpha: renderer clears with alpha=0 (setClearAlpha(0) in useFrame),
       // so background pixels have scenePassColor.a=0 while geometry pixels have output.a=1.
@@ -198,11 +140,62 @@ const PostProcessingPasses = () => {
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
-      // Composite: scene * AO + diffuse * GI
-      const compositePass = vec4(
-        add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
-        contentAlpha,
-      )
+      let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
+
+      if (SSGI_PARAMS.enabled) {
+        // MRT only needed for SSGI (diffuse for GI, normal for SSGI sampling)
+        scenePass.setMRT(
+          mrt({
+            output,
+            diffuseColor,
+            normal: directionToColor(normalView),
+          }),
+        )
+
+        const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
+        const scenePassDepth = scenePass.getTextureNode('depth')
+        const scenePassNormal = scenePass.getTextureNode('normal')
+
+        // Optimize texture bandwidth
+        const diffuseTexture = scenePass.getTexture('diffuseColor')
+        diffuseTexture.type = UnsignedByteType
+        const normalTexture = scenePass.getTexture('normal')
+        normalTexture.type = UnsignedByteType
+
+        // Extract normal from color-encoded texture
+        const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+
+        const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
+        giPass.sliceCount.value = SSGI_PARAMS.sliceCount
+        giPass.stepCount.value = SSGI_PARAMS.stepCount
+        giPass.radius.value = SSGI_PARAMS.radius
+        giPass.expFactor.value = SSGI_PARAMS.expFactor
+        giPass.thickness.value = SSGI_PARAMS.thickness
+        giPass.backfaceLighting.value = SSGI_PARAMS.backfaceLighting
+        giPass.aoIntensity.value = SSGI_PARAMS.aoIntensity
+        giPass.giIntensity.value = SSGI_PARAMS.giIntensity
+        giPass.useLinearThickness.value = SSGI_PARAMS.useLinearThickness
+        giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
+        giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
+
+        const giTexture = (giPass as any).getTextureNode()
+
+        // DenoiseNode only denoises RGB — alpha is passed through unchanged.
+        // SSGI packs AO into alpha, so we remap it into RGB before denoising.
+        const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+        const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
+        denoisePass.index.value = 0
+        denoisePass.radius.value = 4
+
+        const gi = giPass.rgb
+        const ao = (denoisePass as any).r
+
+        // Composite: scene * AO + diffuse * GI
+        sceneColor = vec4(
+          add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
+          contentAlpha,
+        )
+      }
 
       function generateSelectedOutlinePass() {
         const edgeStrength = uniform(3)
@@ -256,20 +249,15 @@ const PostProcessingPasses = () => {
       const selectedOutlinePass = generateSelectedOutlinePass()
       const hoverOutlinePass = generateHoverOutlinePass()
 
-      // Combine composite with outlines BEFORE applying TRAA
-      const compositeWithOutlines = SSGI_PARAMS.enabled
-        ? vec4(add(compositePass.rgb, selectedOutlinePass.add(hoverOutlinePass)), compositePass.a)
-        : vec4(add(scenePassColor.rgb, selectedOutlinePass.add(hoverOutlinePass)), scenePassColor.a)
+      const compositeWithOutlines = vec4(
+        add(sceneColor.rgb, selectedOutlinePass.add(hoverOutlinePass)),
+        sceneColor.a,
+      )
 
-      // TRAA (Temporal Reprojection Anti-Aliasing) - applied AFTER combining everything
-      const traaOutput = traa(compositeWithOutlines, scenePassDepth, scenePassVelocity, camera)
-
-      // For zone-over-background pixels, scenePassDepth=1.0 (no scene geometry) causes TRAA
-      // to output black. Use hasGeometry to blend: geometry pixels use traaRgb, all others
-      // (zones over background, pure background) use compositePass.rgb directly.
-      const traaRgb = (traaOutput as any).rgb
-      const colorSource = mix(compositePass.rgb, traaRgb, hasGeometry)
-      const finalOutput = vec4(mix(bgUniform.current, colorSource, contentAlpha), float(1))
+      const finalOutput = vec4(
+        mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha),
+        float(1),
+      )
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput
