@@ -1,6 +1,6 @@
 import type { AnyNode, AnyNodeId } from '../schema'
-import type { Collection, CollectionId } from '../schema/collections'
 import { generateId } from '../schema/base'
+import type { Collection, CollectionId } from '../schema/collections'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
