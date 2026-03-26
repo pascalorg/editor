@@ -17,6 +17,25 @@ function extractIdPrefix(id: string): string {
 }
 
 /**
+ * Resolves a child reference to a node ID.
+ * Supports both string IDs and embedded child node objects with an `id` field.
+ */
+function resolveChildRefId(child: unknown): string | undefined {
+  if (typeof child === 'string') {
+    return child
+  }
+
+  if (child && typeof child === 'object' && 'id' in child) {
+    const id = (child as { id?: unknown }).id
+    if (typeof id === 'string') {
+      return id
+    }
+  }
+
+  return undefined
+}
+
+/**
  * Deep clones a scene graph with all node IDs regenerated while preserving
  * parent-child relationships and other internal references.
  *
@@ -52,7 +71,10 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     // Remap children array (walls, levels, buildings, sites, items can have children)
     if ('children' in clonedNode && Array.isArray(clonedNode.children)) {
       ;(clonedNode as Record<string, unknown>).children = clonedNode.children
-        .map((childId) => idMap.get(childId as string))
+        .map((childRef) => {
+          const childId = resolveChildRefId(childRef)
+          return childId ? idMap.get(childId) : undefined
+        })
         .filter((id): id is string => id !== undefined) as string[]
     }
 
