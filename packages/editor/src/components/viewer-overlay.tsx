@@ -11,10 +11,11 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Footprints, Sun } from 'lucide-react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { cn } from '../lib/utils'
+import useEditor from '../store/use-editor'
 import { ActionButton } from './ui/action-menu/action-button'
 import { TooltipProvider } from './ui/primitives/tooltip'
 
@@ -490,6 +491,20 @@ export const ViewerOverlay = ({
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
                 src="/icons/topview.png"
               />
+            </ActionButton>
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* Street View */}
+            <ActionButton
+              className="group hover:bg-white/5"
+              label="Street View"
+              onClick={() => useEditor.getState().setFirstPersonMode(true)}
+              size="icon"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <Footprints className="h-5 w-5 opacity-70 transition-opacity group-hover:opacity-100" />
             </ActionButton>
           </div>
         </TooltipProvider>
