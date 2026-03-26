@@ -69,3 +69,6 @@ export {
 export { WallSystem } from './systems/wall/wall-system'
 export { WindowSystem } from './systems/window/window-system'
 export { isObject } from './utils/types'
+export {
+  cloneSceneGraph,
+} from './utils/clone-scene-graph'
