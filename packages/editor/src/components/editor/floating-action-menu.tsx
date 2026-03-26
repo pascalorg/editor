@@ -47,8 +47,10 @@ export function FloatingActionMenu() {
       const box = new THREE.Box3().setFromObject(obj)
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
-        // Position slightly above the object
-        groupRef.current.position.set(center.x, box.max.y + 0.3, center.z)
+        // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
+        const isDeleteOnly = node && DELETE_ONLY_TYPES.includes(node.type)
+        const yOffset = isDeleteOnly ? 0.8 : 0.3
+        groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
     }
   })
