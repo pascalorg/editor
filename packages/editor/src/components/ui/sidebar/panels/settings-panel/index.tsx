@@ -1,7 +1,7 @@
-import { cloneSceneGraph, emitter, useScene } from '@pascal-app/core'
+import { emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Copy, Download, Save, Trash2, Upload } from 'lucide-react'
+import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -250,29 +250,6 @@ export function SettingsPanel({
     setPhase('site')
   }
 
-  const handleTestClone = () => {
-    const collections = useScene.getState().collections
-    const sceneGraph = { nodes, rootNodeIds, ...(collections && { collections }) }
-    const cloned = cloneSceneGraph(sceneGraph)
-
-    // Show before/after comparison
-    const oldIds = Object.keys(nodes).slice(0, 5)
-    const newIds = Object.keys(cloned.nodes).slice(0, 5)
-    const comparison = oldIds.map((oldId, i) => `${oldId} → ${newIds[i]}`).join('\n')
-
-    // Apply cloned scene (setScene clears collections, so apply them after)
-    setScene(cloned.nodes, cloned.rootNodeIds)
-    if (cloned.collections) {
-      useScene.setState({ collections: cloned.collections })
-    }
-    resetSelection()
-    setPhase('site')
-
-    alert(
-      `Scene cloned successfully!\n\nNode count: ${Object.keys(nodes).length} → ${Object.keys(cloned.nodes).length}\n\nSample ID mapping:\n${comparison}\n\nCheck the Scene Graph explorer to verify new IDs.`
-    )
-  }
-
   const handleGenerateThumbnail = () => {
     if (!projectId) return
     setIsGeneratingThumbnail(true)
@@ -379,11 +356,6 @@ export function SettingsPanel({
         >
           <Upload className="size-4" />
           Load Build
-        </Button>
-
-        <Button className="w-full justify-start gap-2" onClick={handleTestClone} variant="outline">
-          <Copy className="size-4" />
-          Test Clone Scene
         </Button>
 
         <input
