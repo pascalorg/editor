@@ -29,7 +29,7 @@ export function SliderControl({
 }: SliderControlProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
 
   // Track the original value and bounds when dragging starts
@@ -58,7 +58,7 @@ export function SliderControl({
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || !isFocused) return
 
     const handleWheel = (e: WheelEvent) => {
       if (isEditing) return
@@ -80,12 +80,26 @@ export function SliderControl({
 
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, onChange, precision])
+  }, [isFocused, isEditing, step, clamp, onChange, precision])
 
+  // Unfocus when clicking outside or pressing Escape
   useEffect(() => {
-    if (!isHovered || isEditing) return
+    if (!isFocused) return
+
+    const handlePointerDownOutside = (e: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsFocused(false)
+      }
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFocused(false)
+        return
+      }
+
+      if (isEditing) return
+
       let direction = 0
       if (e.key === 'ArrowUp') direction = 1
       else if (e.key === 'ArrowDown') direction = -1
@@ -105,9 +119,13 @@ export function SliderControl({
       }
     }
 
+    window.addEventListener('pointerdown', handlePointerDownOutside)
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, clamp, onChange, precision])
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDownOutside)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isFocused, isEditing, step, clamp, onChange, precision])
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -238,12 +256,15 @@ export function SliderControl({
   return (
     <div
       className={cn(
-        'group relative flex h-12 w-full items-center rounded-lg border border-border/50 px-3 text-sm transition-colors',
-        isDragging ? 'bg-[#3e3e3e]' : 'bg-[#2C2C2E] hover:bg-[#3e3e3e]',
+        'group relative flex h-12 w-full items-center rounded-lg border px-3 text-sm transition-colors',
+        isDragging
+          ? 'border-border/50 bg-[#3e3e3e]'
+          : isFocused
+            ? 'border-primary/50 bg-[#3e3e3e]'
+            : 'border-border/50 bg-[#2C2C2E] hover:bg-[#3e3e3e]',
         className,
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onClick={() => setIsFocused(true)}
       ref={containerRef}
     >
       {/* Reset button that appears when dragged away from start */}
