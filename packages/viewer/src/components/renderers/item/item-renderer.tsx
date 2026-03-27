@@ -23,6 +23,9 @@ import { useItemLightPool } from '../../../store/use-item-light-pool'
 import { ErrorBoundary } from '../../error-boundary'
 import { NodeRenderer } from '../node-renderer'
 
+// Cache for processed GLTF scenes — prevents redundant traverse() calls
+const processedScenes = new Set<Group>()
+
 // Shared materials to avoid creating new instances for every mesh
 const defaultMaterial = new MeshStandardNodeMaterial({
   color: 0xff_ff_ff,
@@ -131,6 +134,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   }, [node.id])
 
   useMemo(() => {
+    if (processedScenes.has(scene)) return
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
@@ -153,6 +157,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         mesh.receiveShadow = !hasGlass
       }
     })
+    processedScenes.add(scene)
   }, [scene])
 
   const interactive = interactiveRef.current

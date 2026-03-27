@@ -51,7 +51,8 @@ export function useRegistry(
     // 4. Cleanup when component unmounts
     return () => {
       sceneRegistry.nodes.delete(id)
-      sceneRegistry.byType[type].delete(id)
+      const bucket = sceneRegistry.byType[type]
+      if (bucket) bucket.delete(id)
     }
   }, [id, type, ref])
 }
