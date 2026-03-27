@@ -1,0 +1,343 @@
+{
+  "common": {
+    "cancel": "ביטול",
+    "delete": "מחיקה",
+    "move": "הזזה",
+    "duplicate": "שכפול",
+    "close": "סגירה",
+    "save": "שמירה",
+    "done": "סיום",
+    "edit": "עריכה",
+    "add": "הוספה",
+    "remove": "הסרה",
+    "presets": "תצורות מוגדרות",
+    "untitled": "ללא שם",
+    "noHoles": "אין חורים",
+    "addHole": "הוסף חור",
+    "hole": "חור",
+    "editing": "עריכה",
+    "area": "שטח",
+    "length": "אורך",
+    "dimensions": "ממדים",
+    "info": "מידע",
+    "actions": "פעולות",
+    "position": "מיקום",
+    "rotation": "סיבוב",
+    "scale": "קנה מידה",
+    "height": "גובה",
+    "width": "רוחב",
+    "depth": "עומק",
+    "thickness": "עובי",
+    "opacity": "אטימות",
+    "flipSide": "היפוך צד",
+    "manageCollections": "ניהול אוספים…"
+  },
+  "locale": {
+    "en": "English",
+    "he": "עברית"
+  },
+  "viewer": {
+    "levelModes": {
+      "stacked": "מוצב",
+      "exploded": "מפורק",
+      "solo": "יחיד"
+    },
+    "levelModeBadges": {
+      "manual": "ערום",
+      "stacked": "ערום",
+      "exploded": "מפורק",
+      "solo": "יחיד"
+    },
+    "wallModes": {
+      "up": "גובה מלא",
+      "cutaway": "חתך",
+      "down": "נמוך"
+    },
+    "nodeTypes": {
+      "wall": "קיר",
+      "item": "פריט",
+      "slab": "רצפה",
+      "ceiling": "תקרה",
+      "roof": "גג",
+      "roofSegment": "מקטע גג"
+    },
+    "scans": {
+      "visible": "סריקות: גלוי",
+      "hidden": "סריקות: מוסתר"
+    },
+    "guides": {
+      "visible": "מדריכים: גלוי",
+      "hidden": "מדריכים: מוסתר"
+    },
+    "camera": {
+      "perspective": "מצלמה: פרספקטיבה",
+      "orthographic": "מצלמה: אורתוגרפי"
+    },
+    "levels": {
+      "label": "קומות",
+      "manual": "קומות: ידני",
+      "stacked": "קומות: מוצב",
+      "exploded": "קומות: מפורק",
+      "solo": "קומות: יחיד"
+    },
+    "walls": "קירות: {mode}",
+    "orbitLeft": "סיבוב שמאלה",
+    "orbitRight": "סיבוב ימינה",
+    "topView": "מבט מלמעלה",
+    "toggleTheme": "החלף ערכת נושא",
+    "site": "אתר",
+    "building": "בניין",
+    "level": "קומה"
+  },
+  "tools": {
+    "wall": "קיר",
+    "slab": "רצפה",
+    "ceiling": "תקרה",
+    "gableRoof": "גג משולש",
+    "door": "דלת",
+    "window": "חלון",
+    "zone": "אזור",
+    "furniture": "ריהוט",
+    "appliances": "מכשירים",
+    "kitchen": "מטבח",
+    "bathroom": "אמבטיה",
+    "outdoor": "חוץ"
+  },
+  "commands": {
+    "placeholder": {
+      "renamePage": "הקלד שם חדש…",
+      "filterPage": "סנן אפשרויות…",
+      "default": "חפש פעולות…"
+    },
+    "noResults": "לא נמצאו פקודות.",
+    "groups": {
+      "scene": "סצנה",
+      "levels": "קומות",
+      "viewerControls": "בקרות תצוגה",
+      "view": "תצוגה",
+      "history": "היסטוריה",
+      "exportShare": "ייצוא ושיתוף"
+    },
+    "pageTitles": {
+      "wallMode": "מצב קיר",
+      "levelMode": "מצב קומות",
+      "renameLevel": "שינוי שם קומה",
+      "gotoLevel": "עבור לקומה",
+      "cameraView": "צילום מצלמה",
+      "cameraSnapshot": "צילום מצלמה — בחר טווח"
+    },
+    "actions": {
+      "wallTool": "כלי קיר",
+      "slabTool": "כלי רצפה",
+      "ceilingTool": "כלי תקרה",
+      "doorTool": "כלי דלת",
+      "windowTool": "כלי חלון",
+      "itemTool": "כלי פריט",
+      "zoneTool": "כלי אזור",
+      "deleteSelection": "מחק בחירה",
+      "gotoLevel": "עבור לקומה",
+      "addLevel": "הוסף קומה",
+      "renameLevel": "שנה שם לקומה",
+      "deleteLevel": "מחק קומה",
+      "wallMode": "מצב קיר",
+      "levelMode": "מצב קומות",
+      "cameraSwitchOrtho": "מצלמה: עבור לאורתוגרפי",
+      "cameraSwitchPerspective": "מצלמה: עבור לפרספקטיבה",
+      "switchLightTheme": "עבור לערכת בהירה",
+      "switchDarkTheme": "עבור לערכת כהה",
+      "cameraSnapshot": "צילום מצלמה",
+      "exitPreview": "יציאה מתצוגה מקדימה",
+      "enterPreview": "כניסה לתצוגה מקדימה",
+      "toggleFullscreen": "מסך מלא",
+      "undo": "בטל",
+      "redo": "חזור",
+      "exportJson": "ייצוא סצנה (JSON)",
+      "exportGlb": "ייצוא מודל תלת-ממד (GLB)",
+      "copyShareLink": "העתק קישור שיתוף",
+      "takeScreenshot": "צלם מסך",
+      "takeSnapshot": "צלם",
+      "updateSnapshot": "עדכן צילום",
+      "viewSnapshot": "צפה בצילום",
+      "clearSnapshot": "נקה צילום"
+    },
+    "wallModeOptions": {
+      "cutaway": "חתך",
+      "up": "מלא",
+      "down": "נמוך"
+    },
+    "levelModeOptions": {
+      "manual": "ידני",
+      "stacked": "מוצב",
+      "exploded": "מפורק",
+      "solo": "יחיד"
+    },
+    "cameraScopes": {
+      "site": "אתר",
+      "building": "בניין",
+      "level": "קומה",
+      "selection": "בחירה"
+    },
+    "renameLevel": {
+      "renameTo": "שנה שם ל\"{name}\"",
+      "typeAbove": "הקלד שם חדש למעלה…"
+    },
+    "badges": {
+      "cutaway": "חתך",
+      "up": "מלא",
+      "down": "נמוך",
+      "manual": "ידני",
+      "stacked": "מוצב",
+      "exploded": "מפורק",
+      "solo": "יחיד"
+    }
+  },
+  "feedback": {
+    "button": "משוב",
+    "dialogTitle": "שלח משוב",
+    "dialogDescription": "נשמח לשמוע את דעתך",
+    "label": "המשוב שלך",
+    "placeholder": "שתף את מחשבותיך, הצעות, בקשות תכונות, או דווח על בעיות...",
+    "cancel": "ביטול",
+    "submit": "שלח משוב",
+    "submitting": "שולח...",
+    "success": "תודה על המשוב שלך!",
+    "dropImages": "שחרר תמונות כאן",
+    "attach": "צרף"
+  },
+  "panels": {
+    "wall": {
+      "title": "קיר",
+      "dimensions": "ממדים",
+      "info": "מידע"
+    },
+    "ceiling": {
+      "title": "תקרה",
+      "height": "גובה",
+      "presets": {
+        "low": "נמוך (2.4m)",
+        "standard": "סטנדרטי (2.5m)",
+        "high": "גבוה (3.0m)"
+      },
+      "info": "מידע",
+      "holes": "חורים"
+    },
+    "slab": {
+      "title": "רצפה",
+      "elevation": "גובה",
+      "presets": {
+        "sunken": "שקוע (-15cm)",
+        "ground": "קרקע (0m)",
+        "raised": "מורם (+5cm)",
+        "step": "מדרגה (+15cm)"
+      },
+      "info": "מידע",
+      "holes": "חורים"
+    },
+    "window": {
+      "title": "חלון",
+      "position": "מיקום",
+      "dimensions": "ממדים",
+      "frame": "מסגרת",
+      "grid": "רשת",
+      "colWidths": "רוחב עמודות",
+      "rowHeights": "גובה שורות",
+      "columns": "עמודות",
+      "rows": "שורות",
+      "divider": "מפריד",
+      "sill": "אדן",
+      "enableSill": "הפעל אדן",
+      "actions": "פעולות"
+    },
+    "item": {
+      "position": "מיקום",
+      "rotation": "סיבוב",
+      "scale": "קנה מידה",
+      "uniformScale": "קנה מידה אחיד",
+      "info": "מידע",
+      "collections": "אוספים",
+      "actions": "פעולות"
+    },
+    "roof": {
+      "title": "גג",
+      "segments": "מקטעים",
+      "addSegment": "הוסף מקטע",
+      "position": "מיקום",
+      "actions": "פעולות",
+      "segment": "מקטע {n}"
+    },
+    "roofSegment": {
+      "title": "מקטע גג",
+      "roofType": "סוג גג",
+      "types": {
+        "hip": "צַלעָה",
+        "gable": "משולש",
+        "shed": "מחסן",
+        "flat": "שטוח",
+        "gambrel": "גמבל",
+        "dutch": "הולנדי",
+        "mansard": "מנסרד"
+      },
+      "footprint": "שטח בסיס",
+      "heights": "גבהים",
+      "wallHeight": "גובה קיר",
+      "roofHeight": "גובה גג",
+      "structure": "מבנה",
+      "wallThick": "עובי קיר",
+      "deckThick": "עובי פלטה",
+      "overhang": "בלט",
+      "shingleThick": "עובי רעפים",
+      "position": "מיקום",
+      "actions": "פעולות"
+    },
+    "door": {
+      "title": "דלת",
+      "position": "מיקום",
+      "dimensions": "ממדים",
+      "frame": "מסגרת",
+      "contentPadding": "ריפוד תוכן",
+      "horizontal": "אופקי",
+      "vertical": "אנכי",
+      "swing": "תנודה",
+      "hingesSide": "צד ציר",
+      "direction": "כיוון",
+      "left": "שמאל",
+      "right": "ימין",
+      "inward": "פנימה",
+      "outward": "החוצה",
+      "threshold": "סף",
+      "enableThreshold": "הפעל סף",
+      "handle": "ידית",
+      "enableHandle": "הפעל ידית",
+      "handleSide": "צד ידית",
+      "hardware": "חומרה",
+      "doorCloser": "סוגר דלת",
+      "panicBar": "מוט פניקה",
+      "barHeight": "גובה מוט",
+      "segments": "מקטעים",
+      "segment": "מקטע {n}",
+      "panel": "פנל",
+      "glass": "זכוכית",
+      "empty": "ריק",
+      "addSegment": "+ הוסף מקטע",
+      "removeSegment": "- הסר",
+      "columns": "עמודות",
+      "divider": "מפריד",
+      "inset": "הזחה",
+      "actions": "פעולות"
+    },
+    "reference": {
+      "position": "מיקום",
+      "rotation": "סיבוב",
+      "scale": "קנה מידה",
+      "opacity": "אטימות",
+      "actions": "פעולות",
+      "scan3d": "סריקה תלת-ממדית",
+      "guideImage": "תמונת מדריך"
+    }
+  },
+  "nodeActions": {
+    "move": "הזזה",
+    "duplicate": "שכפול",
+    "delete": "מחיקה"
+  }
+}

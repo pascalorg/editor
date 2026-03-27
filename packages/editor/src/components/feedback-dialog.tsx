@@ -2,6 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { ImageIcon, MessageSquare, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useCallback, useRef, useState } from 'react'
 import { Button } from './ui/primitives/button'
 import {
@@ -30,6 +31,7 @@ export function FeedbackDialog({
   }) => Promise<{ success: boolean; error?: string }>
 }) {
   const projectId = projectIdProp
+  const t = useTranslations('feedback')
 
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
@@ -148,7 +150,7 @@ export function FeedbackDialog({
         onClick={handleOpen}
       >
         <MessageSquare className="h-4 w-4" />
-        Feedback
+        {t('button')}
       </button>
 
       <Dialog onOpenChange={handleClose} open={open}>
@@ -164,25 +166,25 @@ export function FeedbackDialog({
             <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-primary/50 border-dashed bg-primary/5 backdrop-blur-sm transition-all">
               <div className="flex flex-col items-center gap-2 text-primary/70">
                 <ImageIcon className="h-8 w-8" />
-                <p className="font-medium text-sm">Drop images here</p>
+                <p className="font-medium text-sm">{t('dropImages')}</p>
               </div>
             </div>
           )}
 
           <DialogHeader>
-            <DialogTitle>Send Feedback</DialogTitle>
-            <DialogDescription>We&apos;d love to hear your thoughts</DialogDescription>
+            <DialogTitle>{t('dialogTitle')}</DialogTitle>
+            <DialogDescription>{t('dialogDescription')}</DialogDescription>
           </DialogHeader>
 
           {sent ? (
             <p className="py-4 text-center text-muted-foreground text-sm">
-              Thanks for your feedback!
+              {t('success')}
             </p>
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="font-medium text-sm" htmlFor="feedback-message">
-                  Your feedback
+                  {t('label')}
                 </label>
                 <textarea
                   autoFocus
@@ -190,7 +192,7 @@ export function FeedbackDialog({
                   disabled={isSubmitting}
                   id="feedback-message"
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Share your thoughts, suggestions, feature requests, or report issues..."
+                  placeholder={t('placeholder')}
                   rows={5}
                   value={message}
                 />
@@ -228,7 +230,7 @@ export function FeedbackDialog({
                   type="button"
                 >
                   <ImageIcon className="h-3.5 w-3.5" />
-                  {images.length > 0 ? `${images.length}/${MAX_IMAGES}` : 'Attach'}
+                  {images.length > 0 ? `${images.length}/${MAX_IMAGES}` : t('attach')}
                 </button>
                 <input
                   accept="image/*"
@@ -249,10 +251,10 @@ export function FeedbackDialog({
                     type="button"
                     variant="outline"
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button disabled={isSubmitting || !message.trim() || !onSubmit} type="submit">
-                    {isSubmitting ? 'Sending...' : 'Send Feedback'}
+                    {isSubmitting ? t('submitting') : t('submit')}
                   </Button>
                 </div>
               </div>

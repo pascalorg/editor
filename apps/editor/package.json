@@ -26,6 +26,7 @@
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
+    "next-intl": "^4.8.3",
     "three": "^0.183.1"
   },
   "devDependencies": {

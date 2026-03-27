@@ -1,6 +1,7 @@
 'use client'
 
 import { Copy, Move, Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
@@ -22,6 +23,8 @@ export function NodeActionMenu({
   onPointerEnter,
   onPointerLeave,
 }: NodeActionMenuProps) {
+  const t = useTranslations('nodeActions')
+
   return (
     <div
       className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
@@ -31,28 +34,28 @@ export function NodeActionMenu({
       onPointerUp={onPointerUp}
     >
       <button
-        aria-label="Move"
+        aria-label={t('move')}
         className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         onClick={onMove}
-        title="Move"
+        title={t('move')}
         type="button"
       >
         <Move className="h-4 w-4" />
       </button>
       <button
-        aria-label="Duplicate"
+        aria-label={t('duplicate')}
         className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         onClick={onDuplicate}
-        title="Duplicate"
+        title={t('duplicate')}
         type="button"
       >
         <Copy className="h-4 w-4" />
       </button>
       <button
-        aria-label="Delete"
+        aria-label={t('delete')}
         className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
         onClick={onDelete}
-        title="Delete"
+        title={t('delete')}
         type="button"
       >
         <Trash2 className="h-4 w-4" />
