@@ -12,41 +12,16 @@ import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useRef } from 'react'
-import type { AnimationAction, Group, Material } from 'three'
+import type { AnimationAction, Group } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
-import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useCachedGLTF } from '../../../hooks/use-cached-gltf'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useItemLightPool } from '../../../store/use-item-light-pool'
 import { ErrorBoundary } from '../../error-boundary'
 import { NodeRenderer } from '../node-renderer'
-
-// Shared materials to avoid creating new instances for every mesh
-const defaultMaterial = new MeshStandardNodeMaterial({
-  color: 0xff_ff_ff,
-  roughness: 1,
-  metalness: 0,
-})
-
-const glassMaterial = new MeshStandardNodeMaterial({
-  name: 'glass',
-  color: 'lightgray',
-  roughness: 0.8,
-  metalness: 0,
-  transparent: true,
-  opacity: 0.35,
-  side: DoubleSide,
-  depthWrite: false,
-})
-
-const getMaterialForOriginal = (original: Material): MeshStandardNodeMaterial => {
-  if (original.name.toLowerCase() === 'glass') {
-    return glassMaterial
-  }
-  return defaultMaterial
-}
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   const handlers = useNodeEvents(node, 'item')
@@ -111,10 +86,6 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const { actions } = useAnimations(animations, ref)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
-
-  if (nodes.cutout) {
-    nodes.cutout.visible = false
-  }
 
   const handlers = useNodeEvents(node, 'item')
 
