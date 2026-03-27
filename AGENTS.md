@@ -36,6 +36,7 @@ Node storage is a flat dictionary (`nodes: Record<id, AnyNode>`). Systems are pu
 
 - **components/viewer/** — Root `<Viewer>` canvas, camera, lights, post-processing, selection manager
 - **components/renderers/** — One renderer per node type (`WallRenderer`, `SlabRenderer`, …), dispatched by `NodeRenderer` → `SceneRenderer`
+- **hooks/** — `useCachedGLTF` (URL-level GLTF caching to avoid redundant loads)
 - **systems/** — Viewer-specific systems: `LevelSystem` (stacked/exploded/solo), `WallCutout`, `ZoneSystem`, `InteractiveSystem`
 - **store/** — `useViewer`: selection path, camera mode, level mode, wall mode, theme, display toggles
 
