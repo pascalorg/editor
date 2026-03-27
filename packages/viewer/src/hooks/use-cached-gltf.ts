@@ -1,13 +1,17 @@
 import { useGLTF } from '@react-three/drei/core/Gltf'
+import type { ObjectMap } from '@react-three/fiber'
 import { useMemo } from 'react'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const gltfCache = new Map<string, any>()
+interface GLTFWithObjectMap extends ObjectMap {
+  scene: import('three').Group
+  nodes: Record<string, import('three').Object3D>
+  animations: import('three').AnimationClip[]
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useCachedGLTF(url: string): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gltf: any = useGLTF(url)
+const gltfCache = new Map<string, GLTFWithObjectMap>()
+
+export function useCachedGLTF(url: string): GLTFWithObjectMap {
+  const gltf = useGLTF(url) as GLTFWithObjectMap
 
   return useMemo(() => {
     if (!gltfCache.has(url)) {
