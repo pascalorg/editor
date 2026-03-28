@@ -1,0 +1,343 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "move": "Move",
+    "duplicate": "Duplicate",
+    "close": "Close",
+    "save": "Save",
+    "done": "Done",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "presets": "Presets",
+    "untitled": "Untitled",
+    "noHoles": "No holes",
+    "addHole": "Add Hole",
+    "hole": "Hole",
+    "editing": "Editing",
+    "area": "Area",
+    "length": "Length",
+    "dimensions": "Dimensions",
+    "info": "Info",
+    "actions": "Actions",
+    "position": "Position",
+    "rotation": "Rotation",
+    "scale": "Scale",
+    "height": "Height",
+    "width": "Width",
+    "depth": "Depth",
+    "thickness": "Thickness",
+    "opacity": "Opacity",
+    "flipSide": "Flip Side",
+    "manageCollections": "Manage collections…"
+  },
+  "locale": {
+    "en": "English",
+    "he": "Hebrew"
+  },
+  "viewer": {
+    "levelModes": {
+      "stacked": "Stacked",
+      "exploded": "Exploded",
+      "solo": "Solo"
+    },
+    "levelModeBadges": {
+      "manual": "Stack",
+      "stacked": "Stack",
+      "exploded": "Exploded",
+      "solo": "Solo"
+    },
+    "wallModes": {
+      "up": "Full Height",
+      "cutaway": "Cutaway",
+      "down": "Low"
+    },
+    "nodeTypes": {
+      "wall": "Wall",
+      "item": "Item",
+      "slab": "Slab",
+      "ceiling": "Ceiling",
+      "roof": "Roof",
+      "roofSegment": "Roof Segment"
+    },
+    "scans": {
+      "visible": "Scans: Visible",
+      "hidden": "Scans: Hidden"
+    },
+    "guides": {
+      "visible": "Guides: Visible",
+      "hidden": "Guides: Hidden"
+    },
+    "camera": {
+      "perspective": "Camera: Perspective",
+      "orthographic": "Camera: Orthographic"
+    },
+    "levels": {
+      "label": "Levels",
+      "manual": "Levels: Manual",
+      "stacked": "Levels: Stacked",
+      "exploded": "Levels: Exploded",
+      "solo": "Levels: Solo"
+    },
+    "walls": "Walls: {mode}",
+    "orbitLeft": "Orbit Left",
+    "orbitRight": "Orbit Right",
+    "topView": "Top View",
+    "toggleTheme": "Toggle theme",
+    "site": "Site",
+    "building": "Building",
+    "level": "Level"
+  },
+  "tools": {
+    "wall": "Wall",
+    "slab": "Slab",
+    "ceiling": "Ceiling",
+    "gableRoof": "Gable Roof",
+    "door": "Door",
+    "window": "Window",
+    "zone": "Zone",
+    "furniture": "Furniture",
+    "appliances": "Appliances",
+    "kitchen": "Kitchen",
+    "bathroom": "Bathroom",
+    "outdoor": "Outdoor"
+  },
+  "commands": {
+    "placeholder": {
+      "renamePage": "Type a new name…",
+      "filterPage": "Filter options…",
+      "default": "Search actions…"
+    },
+    "noResults": "No commands found.",
+    "groups": {
+      "scene": "Scene",
+      "levels": "Levels",
+      "viewerControls": "Viewer Controls",
+      "view": "View",
+      "history": "History",
+      "exportShare": "Export & Share"
+    },
+    "pageTitles": {
+      "wallMode": "Wall Mode",
+      "levelMode": "Level Mode",
+      "renameLevel": "Rename Level",
+      "gotoLevel": "Go to Level",
+      "cameraView": "Camera Snapshot",
+      "cameraSnapshot": "Camera Snapshot — Select Scope"
+    },
+    "actions": {
+      "wallTool": "Wall Tool",
+      "slabTool": "Slab Tool",
+      "ceilingTool": "Ceiling Tool",
+      "doorTool": "Door Tool",
+      "windowTool": "Window Tool",
+      "itemTool": "Item Tool",
+      "zoneTool": "Zone Tool",
+      "deleteSelection": "Delete Selection",
+      "gotoLevel": "Go to Level",
+      "addLevel": "Add Level",
+      "renameLevel": "Rename Level",
+      "deleteLevel": "Delete Level",
+      "wallMode": "Wall Mode",
+      "levelMode": "Level Mode",
+      "cameraSwitchOrtho": "Camera: Switch to Orthographic",
+      "cameraSwitchPerspective": "Camera: Switch to Perspective",
+      "switchLightTheme": "Switch to Light Theme",
+      "switchDarkTheme": "Switch to Dark Theme",
+      "cameraSnapshot": "Camera Snapshot",
+      "exitPreview": "Exit Preview",
+      "enterPreview": "Enter Preview",
+      "toggleFullscreen": "Toggle Fullscreen",
+      "undo": "Undo",
+      "redo": "Redo",
+      "exportJson": "Export Scene (JSON)",
+      "exportGlb": "Export 3D Model (GLB)",
+      "copyShareLink": "Copy Share Link",
+      "takeScreenshot": "Take Screenshot",
+      "takeSnapshot": "Take Snapshot",
+      "updateSnapshot": "Update Snapshot",
+      "viewSnapshot": "View Snapshot",
+      "clearSnapshot": "Clear Snapshot"
+    },
+    "wallModeOptions": {
+      "cutaway": "Cutaway",
+      "up": "Up",
+      "down": "Down"
+    },
+    "levelModeOptions": {
+      "manual": "Manual",
+      "stacked": "Stacked",
+      "exploded": "Exploded",
+      "solo": "Solo"
+    },
+    "cameraScopes": {
+      "site": "Site",
+      "building": "Building",
+      "level": "Level",
+      "selection": "Selection"
+    },
+    "renameLevel": {
+      "renameTo": "Rename to \"{name}\"",
+      "typeAbove": "Type a new name above…"
+    },
+    "badges": {
+      "cutaway": "Cutaway",
+      "up": "Up",
+      "down": "Down",
+      "manual": "Manual",
+      "stacked": "Stacked",
+      "exploded": "Exploded",
+      "solo": "Solo"
+    }
+  },
+  "feedback": {
+    "button": "Feedback",
+    "dialogTitle": "Send Feedback",
+    "dialogDescription": "We'd love to hear your thoughts",
+    "label": "Your feedback",
+    "placeholder": "Share your thoughts, suggestions, feature requests, or report issues...",
+    "cancel": "Cancel",
+    "submit": "Send Feedback",
+    "submitting": "Sending...",
+    "success": "Thanks for your feedback!",
+    "dropImages": "Drop images here",
+    "attach": "Attach"
+  },
+  "panels": {
+    "wall": {
+      "title": "Wall",
+      "dimensions": "Dimensions",
+      "info": "Info"
+    },
+    "ceiling": {
+      "title": "Ceiling",
+      "height": "Height",
+      "presets": {
+        "low": "Low (2.4m)",
+        "standard": "Standard (2.5m)",
+        "high": "High (3.0m)"
+      },
+      "info": "Info",
+      "holes": "Holes"
+    },
+    "slab": {
+      "title": "Slab",
+      "elevation": "Elevation",
+      "presets": {
+        "sunken": "Sunken (-15cm)",
+        "ground": "Ground (0m)",
+        "raised": "Raised (+5cm)",
+        "step": "Step (+15cm)"
+      },
+      "info": "Info",
+      "holes": "Holes"
+    },
+    "window": {
+      "title": "Window",
+      "position": "Position",
+      "dimensions": "Dimensions",
+      "frame": "Frame",
+      "grid": "Grid",
+      "colWidths": "Col Widths",
+      "rowHeights": "Row Heights",
+      "columns": "Columns",
+      "rows": "Rows",
+      "divider": "Divider",
+      "sill": "Sill",
+      "enableSill": "Enable Sill",
+      "actions": "Actions"
+    },
+    "item": {
+      "position": "Position",
+      "rotation": "Rotation",
+      "scale": "Scale",
+      "uniformScale": "Uniform Scale",
+      "info": "Info",
+      "collections": "Collections",
+      "actions": "Actions"
+    },
+    "roof": {
+      "title": "Roof",
+      "segments": "Segments",
+      "addSegment": "Add Segment",
+      "position": "Position",
+      "actions": "Actions",
+      "segment": "Segment {n}"
+    },
+    "roofSegment": {
+      "title": "Roof Segment",
+      "roofType": "Roof Type",
+      "types": {
+        "hip": "Hip",
+        "gable": "Gable",
+        "shed": "Shed",
+        "flat": "Flat",
+        "gambrel": "Gambrel",
+        "dutch": "Dutch",
+        "mansard": "Mansard"
+      },
+      "footprint": "Footprint",
+      "heights": "Heights",
+      "wallHeight": "Wall Height",
+      "roofHeight": "Roof Height",
+      "structure": "Structure",
+      "wallThick": "Wall Thick.",
+      "deckThick": "Deck Thick.",
+      "overhang": "Overhang",
+      "shingleThick": "Shingle Thick.",
+      "position": "Position",
+      "actions": "Actions"
+    },
+    "door": {
+      "title": "Door",
+      "position": "Position",
+      "dimensions": "Dimensions",
+      "frame": "Frame",
+      "contentPadding": "Content Padding",
+      "horizontal": "Horizontal",
+      "vertical": "Vertical",
+      "swing": "Swing",
+      "hingesSide": "Hinges Side",
+      "direction": "Direction",
+      "left": "Left",
+      "right": "Right",
+      "inward": "Inward",
+      "outward": "Outward",
+      "threshold": "Threshold",
+      "enableThreshold": "Enable Threshold",
+      "handle": "Handle",
+      "enableHandle": "Enable Handle",
+      "handleSide": "Handle Side",
+      "hardware": "Hardware",
+      "doorCloser": "Door Closer",
+      "panicBar": "Panic Bar",
+      "barHeight": "Bar Height",
+      "segments": "Segments",
+      "segment": "Segment {n}",
+      "panel": "Panel",
+      "glass": "Glass",
+      "empty": "Empty",
+      "addSegment": "+ Add Segment",
+      "removeSegment": "- Remove",
+      "columns": "Columns",
+      "divider": "Divider",
+      "inset": "Inset",
+      "actions": "Actions"
+    },
+    "reference": {
+      "position": "Position",
+      "rotation": "Rotation",
+      "scale": "Scale",
+      "opacity": "Opacity",
+      "actions": "Actions",
+      "scan3d": "3D Scan",
+      "guideImage": "Guide Image"
+    }
+  },
+  "nodeActions": {
+    "move": "Move",
+    "duplicate": "Duplicate",
+    "delete": "Delete"
+  }
+}

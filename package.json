@@ -19,6 +19,7 @@
     "release:major": "gh workflow run release.yml -f package=both -f bump=major"
   },
   "dependencies": {
+    "next-intl": "^4.8.3",
     "portless": "^0.4.2"
   },
   "devDependencies": {
