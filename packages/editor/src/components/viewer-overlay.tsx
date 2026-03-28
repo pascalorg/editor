@@ -15,6 +15,7 @@ import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'luc
 import { motion } from 'motion/react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
+import { useCallback, useMemo } from 'react'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
 import { TooltipProvider } from './ui/primitives/tooltip'
@@ -71,50 +72,62 @@ export const ViewerOverlay = ({
       .filter((n): n is LevelNode => n?.type === 'level')
       .sort((a, b) => a.level - b.level) ?? []
 
-  const getNodeName = (node: AnyNode): string => {
-    if ('name' in node && node.name) return node.name
-    if (node.type === 'wall') return t('nodeTypes.wall')
-    if (node.type === 'item') return (node as { asset: { name: string } }).asset?.name || t('nodeTypes.item')
-    if (node.type === 'slab') return t('nodeTypes.slab')
-    if (node.type === 'ceiling') return t('nodeTypes.ceiling')
-    if (node.type === 'roof') return t('nodeTypes.roof')
-    if (node.type === 'roof-segment') return t('nodeTypes.roofSegment')
-    return node.type
-  }
-
-  const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
-    stacked: t('levelModes.stacked'),
-    exploded: t('levelModes.exploded'),
-    solo: t('levelModes.solo'),
-  }
-
-  const levelModeBadgeLabels: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
-    manual: t('levelModeBadges.manual'),
-    stacked: t('levelModeBadges.stacked'),
-    exploded: t('levelModeBadges.exploded'),
-    solo: t('levelModeBadges.solo'),
-  }
-
-  const wallModeConfig = {
-    up: {
-      icon: (props: any) => (
-        <img alt={t('wallModes.up')} height={28} src="/icons/room.png" width={28} {...props} />
-      ),
-      label: t('wallModes.up'),
+  const getNodeName = useCallback(
+    (node: AnyNode): string => {
+      if ('name' in node && node.name) return node.name
+      if (node.type === 'wall') return t('nodeTypes.wall')
+      if (node.type === 'item') return (node as { asset: { name: string } }).asset?.name || t('nodeTypes.item')
+      if (node.type === 'slab') return t('nodeTypes.slab')
+      if (node.type === 'ceiling') return t('nodeTypes.ceiling')
+      if (node.type === 'roof') return t('nodeTypes.roof')
+      if (node.type === 'roof-segment') return t('nodeTypes.roofSegment')
+      return node.type
     },
-    cutaway: {
-      icon: (props: any) => (
-        <img alt={t('wallModes.cutaway')} height={28} src="/icons/wallcut.png" width={28} {...props} />
-      ),
-      label: t('wallModes.cutaway'),
-    },
-    down: {
-      icon: (props: any) => (
-        <img alt={t('wallModes.down')} height={28} src="/icons/walllow.png" width={28} {...props} />
-      ),
-      label: t('wallModes.down'),
-    },
-  }
+    [t],
+  )
+
+  const levelModeLabels = useMemo<Record<'stacked' | 'exploded' | 'solo', string>>(
+    () => ({
+      stacked: t('levelModes.stacked'),
+      exploded: t('levelModes.exploded'),
+      solo: t('levelModes.solo'),
+    }),
+    [t],
+  )
+
+  const levelModeBadgeLabels = useMemo<Record<'manual' | 'stacked' | 'exploded' | 'solo', string>>(
+    () => ({
+      manual: t('levelModeBadges.manual'),
+      stacked: t('levelModeBadges.stacked'),
+      exploded: t('levelModeBadges.exploded'),
+      solo: t('levelModeBadges.solo'),
+    }),
+    [t],
+  )
+
+  const wallModeConfig = useMemo(
+    () => ({
+      up: {
+        icon: (props: any) => (
+          <img alt={t('wallModes.up')} height={28} src="/icons/room.png" width={28} {...props} />
+        ),
+        label: t('wallModes.up'),
+      },
+      cutaway: {
+        icon: (props: any) => (
+          <img alt={t('wallModes.cutaway')} height={28} src="/icons/wallcut.png" width={28} {...props} />
+        ),
+        label: t('wallModes.cutaway'),
+      },
+      down: {
+        icon: (props: any) => (
+          <img alt={t('wallModes.down')} height={28} src="/icons/walllow.png" width={28} {...props} />
+        ),
+        label: t('wallModes.down'),
+      },
+    }),
+    [t],
+  )
 
   const handleLevelClick = (levelId: LevelNode['id']) => {
     // When switching levels, deselect zone and items
