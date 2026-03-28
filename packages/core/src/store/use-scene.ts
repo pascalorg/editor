@@ -141,6 +141,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           nodes: patchedNodes,
           rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
+          collections: {},
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(patchedNodes).forEach((node) => {
