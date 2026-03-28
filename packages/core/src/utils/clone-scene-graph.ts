@@ -17,25 +17,6 @@ function extractIdPrefix(id: string): string {
 }
 
 /**
- * Resolves a child reference to a node ID.
- * Supports both string IDs and embedded child node objects with an `id` field.
- */
-function resolveChildRefId(child: unknown): string | undefined {
-  if (typeof child === 'string') {
-    return child
-  }
-
-  if (child && typeof child === 'object' && 'id' in child) {
-    const id = (child as { id?: unknown }).id
-    if (typeof id === 'string') {
-      return id
-    }
-  }
-
-  return undefined
-}
-
-/**
  * Deep clones a scene graph with all node IDs regenerated while preserving
  * parent-child relationships and other internal references.
  *
@@ -56,12 +37,13 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     idMap.set(nodeId, generateId(prefix))
   }
 
-  // Pass 2: Clone nodes with remapped references
+  // Pass 2: Deep clone nodes with remapped references
   const clonedNodes = {} as Record<AnyNodeId, AnyNode>
 
   for (const [oldId, node] of Object.entries(nodes)) {
     const newId = idMap.get(oldId)! as AnyNodeId
-    const clonedNode = { ...node, id: newId } as AnyNode
+    // structuredClone to avoid shared references between original and clone
+    const clonedNode = structuredClone({ ...node, id: newId }) as AnyNode
 
     // Remap parentId
     if (clonedNode.parentId && typeof clonedNode.parentId === 'string') {
@@ -70,12 +52,11 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
 
     // Remap children array (walls, levels, buildings, sites, items can have children)
     if ('children' in clonedNode && Array.isArray(clonedNode.children)) {
-      ;(clonedNode as Record<string, unknown>).children = clonedNode.children
-        .map((childRef) => {
-          const childId = resolveChildRefId(childRef)
-          return childId ? idMap.get(childId) : undefined
-        })
-        .filter((id): id is string => id !== undefined) as string[]
+      ;(clonedNode as Record<string, unknown>).children = (
+        clonedNode.children as string[]
+      )
+        .map((childId) => idMap.get(childId))
+        .filter((id): id is string => id !== undefined)
     }
 
     // Remap wallId (items/doors/windows attached to walls)
