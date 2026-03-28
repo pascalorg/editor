@@ -6,7 +6,27 @@ export const metadata: Metadata = {
   description: 'Privacy Policy for Pascal Editor and the Pascal platform.',
 }
 
-export default function PrivacyPage() {
+interface PrivacyPageProps {
+  params: Promise<{ locale: string }>
+}
+
+export default async function PrivacyPage({ params }: PrivacyPageProps) {
+  const { locale } = await params
+  const isHebrew = locale === 'he'
+  const copy = isHebrew
+    ? {
+        home: 'דף הבית',
+        terms: 'תנאי שירות',
+        title: 'מדיניות פרטיות',
+        effectiveDate: 'תאריך תחילה: 20 בפברואר 2026',
+      }
+    : {
+        home: 'Home',
+        terms: 'Terms of Service',
+        title: 'Privacy Policy',
+        effectiveDate: 'Effective Date: February 20, 2026',
+      }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
@@ -14,27 +34,27 @@ export default function PrivacyPage() {
           <nav className="flex items-center gap-4 text-sm">
             <Link
               className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/"
+              href={`/${locale}`}
             >
-              Home
+              {copy.home}
             </Link>
             <span className="text-muted-foreground">/</span>
             <Link
               className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/terms"
+              href={`/${locale}/terms`}
             >
-              Terms of Service
+              {copy.terms}
             </Link>
             <span className="text-muted-foreground">|</span>
-            <span className="font-medium text-foreground">Privacy Policy</span>
+            <span className="font-medium text-foreground">{copy.title}</span>
           </nav>
         </div>
       </header>
 
       <main className="container mx-auto max-w-3xl px-6 py-12">
         <article className="prose prose-neutral dark:prose-invert max-w-none">
-          <h1 className="mb-2 font-bold text-3xl">Privacy Policy</h1>
-          <p className="mb-8 text-muted-foreground text-sm">Effective Date: February 20, 2026</p>
+          <h1 className="mb-2 font-bold text-3xl">{copy.title}</h1>
+          <p className="mb-8 text-muted-foreground text-sm">{copy.effectiveDate}</p>
 
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">1. Introduction</h2>
