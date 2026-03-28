@@ -11,7 +11,9 @@ import {
 } from '@pascal-app/core'
 
 import { useViewer } from '@pascal-app/viewer'
+import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
+import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, { type Phase, type StructureLayer } from './../../store/use-editor'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -264,6 +266,79 @@ export const SelectionManager = () => {
     }
   }, [])
 
+  // Delete mode: click-to-delete (sledgehammer tool)
+  useEffect(() => {
+    if (mode !== 'delete') return
+
+    const onClick = (event: NodeEvent) => {
+      const node = event.node
+      if (!isNodeInCurrentLevel(node)) return
+
+      event.stopPropagation()
+
+      // Play appropriate SFX
+      if (node.type === 'item') {
+        sfxEmitter.emit('sfx:item-delete')
+      } else {
+        sfxEmitter.emit('sfx:structure-delete')
+      }
+
+      useScene.getState().deleteNode(node.id as AnyNodeId)
+      if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+
+      // Clear hover since the node is gone
+      if (useViewer.getState().hoveredId === node.id) {
+        useViewer.setState({ hoveredId: null })
+      }
+    }
+
+    const onEnter = (event: NodeEvent) => {
+      const node = event.node
+      if (!isNodeInCurrentLevel(node)) return
+      if (node.type === 'building' || node.type === 'site') return
+      event.stopPropagation()
+      useViewer.setState({ hoveredId: node.id })
+    }
+
+    const onLeave = (event: NodeEvent) => {
+      const nodeId = event?.node?.id
+      if (nodeId && useViewer.getState().hoveredId === nodeId) {
+        useViewer.setState({ hoveredId: null })
+      }
+    }
+
+    const onGridClick = () => {
+      // Clicking empty space in delete mode does nothing (stay in delete mode)
+    }
+
+    const allTypes = [
+      'wall',
+      'item',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'window',
+      'door',
+      'zone',
+    ]
+    allTypes.forEach((type) => {
+      emitter.on(`${type}:click` as any, onClick as any)
+      emitter.on(`${type}:enter` as any, onEnter as any)
+      emitter.on(`${type}:leave` as any, onLeave as any)
+    })
+    emitter.on('grid:click', onGridClick)
+
+    return () => {
+      allTypes.forEach((type) => {
+        emitter.off(`${type}:click` as any, onClick as any)
+        emitter.off(`${type}:enter` as any, onEnter as any)
+        emitter.off(`${type}:leave` as any, onLeave as any)
+      })
+      emitter.off('grid:click', onGridClick)
+    }
+  }, [mode])
+
   useEffect(() => {
     if (mode !== 'select') return
     if (movingNode) return
@@ -475,10 +550,28 @@ export const SelectionManager = () => {
 
   return (
     <>
+      <DeleteModeCursor />
       <SelectionStateSync />
       <EditorOutlinerSync />
     </>
   )
+}
+
+const DeleteModeCursor = () => {
+  const mode = useEditor((s) => s.mode)
+  const gl = useThree((s) => s.gl)
+
+  useEffect(() => {
+    const canvas = gl.domElement
+    if (mode === 'delete') {
+      canvas.style.cursor = 'crosshair'
+      return () => {
+        canvas.style.cursor = ''
+      }
+    }
+  }, [mode, gl])
+
+  return null
 }
 
 const SelectionStateSync = () => {

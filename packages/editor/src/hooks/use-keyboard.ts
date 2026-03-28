@@ -50,6 +50,13 @@ export const useKeyboard = () => {
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
+      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        const phase = useEditor.getState().phase
+        if (phase === 'structure' || phase === 'furnish') {
+          useEditor.getState().setMode('delete')
+          useViewer.getState().setSelection({ selectedIds: [] })
+        }
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('build')

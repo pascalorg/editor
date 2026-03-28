@@ -26,7 +26,8 @@ const DELETE_ONLY_TYPES = ['wall', 'slab']
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const nodes = useScene((s) => s.nodes)
-  const deleteNode = useScene((s) => s.deleteNode)
+  const mode = useEditor((s) => s.mode)
+  const setMode = useEditor((s) => s.setMode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
@@ -154,16 +155,14 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!(selectedId && node)) return
-      sfxEmitter.emit('sfx:item-delete')
-      deleteNode(selectedId as AnyNodeId)
-      if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+      // Activate delete mode (sledgehammer tool) instead of deleting directly
       setSelection({ selectedIds: [] })
+      setMode('delete')
     },
-    [selectedId, node, deleteNode, setSelection],
+    [setSelection, setMode],
   )
 
-  if (!(selectedId && node && isValidType && !isFloorplanHovered)) return null
+  if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null
 
   return (
     <group ref={groupRef}>
