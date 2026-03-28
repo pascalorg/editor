@@ -12,6 +12,7 @@ import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
+import { DeleteTool } from './delete-tool'
 import { WallTool } from './wall/wall-tool'
 import { WindowTool } from './window/window-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
@@ -97,6 +98,9 @@ export const ToolManager: React.FC = () => {
 
   const BuildToolComponent = showBuildTool ? tools[phase]?.[tool] : null
 
+  // Show delete tool when in delete mode
+  const showDeleteTool = mode === 'delete'
+
   return (
     <>
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
@@ -111,6 +115,7 @@ export const ToolManager: React.FC = () => {
       {showCeilingHoleEditor && selectedCeilingId && editingHole && (
         <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
       )}
+      {showDeleteTool && <DeleteTool />}
       {movingNode && <MoveTool />}
       {!movingNode && BuildToolComponent && <BuildToolComponent />}
     </>
