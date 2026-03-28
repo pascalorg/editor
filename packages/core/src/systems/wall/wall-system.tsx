@@ -22,7 +22,6 @@ const csgEvaluator = new Evaluator()
 // WALL SYSTEM
 // ============================================================================
 
-let useFrameNb = 0
 export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
@@ -35,7 +34,6 @@ export const WallSystem = () => {
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
-    useFrameNb += 1
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'wall') return
