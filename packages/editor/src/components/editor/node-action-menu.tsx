@@ -5,8 +5,8 @@ import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
   onDelete: MouseEventHandler<HTMLButtonElement>
-  onDuplicate: MouseEventHandler<HTMLButtonElement>
-  onMove: MouseEventHandler<HTMLButtonElement>
+  onDuplicate?: MouseEventHandler<HTMLButtonElement>
+  onMove?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onPointerUp?: PointerEventHandler<HTMLDivElement>
   onPointerEnter?: PointerEventHandler<HTMLDivElement>
@@ -30,24 +30,28 @@ export function NodeActionMenu({
       onPointerLeave={onPointerLeave}
       onPointerUp={onPointerUp}
     >
-      <button
-        aria-label="Move"
-        className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        onClick={onMove}
-        title="Move"
-        type="button"
-      >
-        <Move className="h-4 w-4" />
-      </button>
-      <button
-        aria-label="Duplicate"
-        className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        onClick={onDuplicate}
-        title="Duplicate"
-        type="button"
-      >
-        <Copy className="h-4 w-4" />
-      </button>
+      {onMove && (
+        <button
+          aria-label="Move"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onMove}
+          title="Move"
+          type="button"
+        >
+          <Move className="h-4 w-4" />
+        </button>
+      )}
+      {onDuplicate && (
+        <button
+          aria-label="Duplicate"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onDuplicate}
+          title="Duplicate"
+          type="button"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
+      )}
       <button
         aria-label="Delete"
         className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
