@@ -126,6 +126,25 @@ export const useKeyboard = () => {
             sfxEmitter.emit('sfx:item-rotate') // Play a sound for feedback
           }
         }
+      } else if (e.key === 't' || e.key === 'T') {
+        // Rotate selected node counter-clockwise
+        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        if (selectedNodeIds.length === 1) {
+          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          if (node && 'rotation' in node) {
+            e.preventDefault()
+            const ROTATION_STEP = Math.PI / 4
+
+            if (typeof node.rotation === 'number') {
+              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+            } else if (Array.isArray(node.rotation)) {
+              useScene.getState().updateNode(node.id, {
+                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
+              })
+            }
+            sfxEmitter.emit('sfx:item-rotate')
+          }
+        }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
 
