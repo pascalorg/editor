@@ -17,8 +17,10 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
   const handlers = useNodeEvents(node, 'wall')
 
   const material = useMemo(() => {
-    return node.material ? createMaterial(node.material) : DEFAULT_WALL_MATERIAL
-  }, [node.material])
+    const mat = node.material
+    if (!mat) return DEFAULT_WALL_MATERIAL
+    return createMaterial(mat)
+  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
 
   return (
     <mesh castShadow receiveShadow ref={ref} visible={node.visible} material={material}>

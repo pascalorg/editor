@@ -12,8 +12,10 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const handlers = useNodeEvents(node, 'slab')
 
   const material = useMemo(() => {
-    return node.material ? createMaterial(node.material) : DEFAULT_SLAB_MATERIAL
-  }, [node.material])
+    const mat = node.material
+    if (!mat) return DEFAULT_SLAB_MATERIAL
+    return createMaterial(mat)
+  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
 
   return (
     <mesh castShadow receiveShadow ref={ref} {...handlers} visible={node.visible} material={material}>
