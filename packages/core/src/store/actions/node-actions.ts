@@ -104,11 +104,17 @@ export const updateNodesAction = (
   })
 
   // Collect all IDs that need to be marked dirty
-  updates.forEach((u) => idsToMarkDirty.add(u.id))
-  parentsToUpdate.forEach((pId) => idsToMarkDirty.add(pId))
+  for (const u of updates) {
+    idsToMarkDirty.add(u.id)
+  }
+  for (const pId of parentsToUpdate) {
+    idsToMarkDirty.add(pId)
+  }
 
   // Add to pending updates set
-  idsToMarkDirty.forEach((id) => pendingUpdates.add(id))
+  for (const id of idsToMarkDirty) {
+    pendingUpdates.add(id)
+  }
 
   // Cancel any pending RAF and schedule a new one
   if (pendingRafId !== null) {

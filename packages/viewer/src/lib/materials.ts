@@ -34,7 +34,10 @@ export function createMaterial(material?: MaterialSchema): THREE.MeshStandardMat
   return threeMaterial
 }
 
-export function createDefaultMaterial(color: string = '#ffffff', roughness: number = 0.9): THREE.MeshStandardMaterial {
+export function createDefaultMaterial(
+  color: string = '#ffffff',
+  roughness: number = 0.9,
+): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
     roughness,

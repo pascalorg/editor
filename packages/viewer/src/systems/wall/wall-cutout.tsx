@@ -103,7 +103,12 @@ function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   return result
 }
 
-function getWallHideState(wallNode: WallNode, wallMesh: Mesh, wallMode: string, cameraDir: Vector3): boolean {
+function getWallHideState(
+  wallNode: WallNode,
+  wallMesh: Mesh,
+  wallMode: string,
+  cameraDir: Vector3,
+): boolean {
   let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
 
   if (wallMode === 'up') {
@@ -167,7 +172,10 @@ export const WallCutout = () => {
       } else {
         const currentMaterial = (wallMesh as Mesh).material
         const materials = wallMaterialCache.get(wallId)
-        if (!materials || currentMaterial !== (hideWall ? materials.invisible : materials.visible)) {
+        if (
+          !materials ||
+          currentMaterial !== (hideWall ? materials.invisible : materials.visible)
+        ) {
           const newMaterials = getMaterialsForWall(wallNode)
           ;(wallMesh as Mesh).material = hideWall ? newMaterials.invisible : newMaterials.visible
         }

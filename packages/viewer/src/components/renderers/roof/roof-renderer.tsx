@@ -2,7 +2,7 @@ import { type RoofNode, useRegistry } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial, DEFAULT_ROOF_MATERIAL } from '../../../lib/materials'
+import { createMaterial } from '../../../lib/materials'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 import { roofDebugMaterials, roofMaterials } from './roof-materials'
@@ -31,12 +31,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        material={material}
-        name="merged-roof"
-        receiveShadow
-      >
+      <mesh castShadow material={material} name="merged-roof" receiveShadow>
         <boxGeometry args={[0, 0, 0]} />
       </mesh>
       <group name="segments-wrapper" visible={false}>

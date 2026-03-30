@@ -4,8 +4,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
