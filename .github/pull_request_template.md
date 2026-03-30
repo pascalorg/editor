@@ -10,9 +10,14 @@
 2. 
 3. 
 
-## Screenshots / recordings
+## Screenshots / screen recording
 
-<!-- If this is a visual change, add before/after screenshots or a short recording -->
+<!--
+🎥 Screen recordings are strongly encouraged for any visual or interactive change.
+Even a quick 15-second clip helps reviewers understand the change far better than screenshots alone.
+
+Drag and drop a video or paste a link here.
+-->
 
 ## Checklist
 
