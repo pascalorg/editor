@@ -14,6 +14,7 @@ import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@re
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
+import { ExportSystem } from '../../systems/export/export-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { LevelSystem } from '../../systems/level/level-system'
@@ -144,6 +145,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <WallSystem />
       <WindowSystem />
       <ZoneSystem />
+      <ExportSystem />
       <PostProcessing />
       {/* <DebugRenderer /> */}
       <GPUDeviceWatcher />
