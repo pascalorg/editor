@@ -52,9 +52,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
 
     // Remap children array (walls, levels, buildings, sites, items can have children)
     if ('children' in clonedNode && Array.isArray(clonedNode.children)) {
-      ;(clonedNode as Record<string, unknown>).children = (
-        clonedNode.children as string[]
-      )
+      ;(clonedNode as Record<string, unknown>).children = (clonedNode.children as string[])
         .map((childId) => idMap.get(childId))
         .filter((id): id is string => id !== undefined)
     }

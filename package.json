@@ -18,9 +18,6 @@
     "release:minor": "gh workflow run release.yml -f package=both -f bump=minor",
     "release:major": "gh workflow run release.yml -f package=both -f bump=major"
   },
-  "dependencies": {
-    "portless": "^0.4.2"
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
     "dotenv-cli": "^11.0.0",

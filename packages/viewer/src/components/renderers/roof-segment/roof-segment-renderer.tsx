@@ -1,7 +1,8 @@
 import { type RoofSegmentNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { createMaterial } from '../../../lib/materials'
 import useViewer from '../../../store/use-viewer'
 import { roofDebugMaterials, roofMaterials } from '../roof/roof-materials'
 
@@ -13,9 +14,17 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const handlers = useNodeEvents(node, 'roof-segment')
   const debugColors = useViewer((s) => s.debugColors)
 
+  const customMaterial = useMemo(() => {
+    const mat = node.material
+    if (!mat) return null
+    return createMaterial(mat)
+  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+
+  const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
+
   return (
     <mesh
-      material={debugColors ? roofDebugMaterials : roofMaterials}
+      material={material}
       position={node.position}
       ref={ref}
       rotation-y={node.rotation}

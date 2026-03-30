@@ -1,7 +1,8 @@
 import { type DoorNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { createMaterial, DEFAULT_DOOR_MATERIAL } from '../../../lib/materials'
 
 export const DoorRenderer = ({ node }: { node: DoorNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -10,9 +11,16 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
   const handlers = useNodeEvents(node, 'door')
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
+  const material = useMemo(() => {
+    const mat = node.material
+    if (!mat) return DEFAULT_DOOR_MATERIAL
+    return createMaterial(mat)
+  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+
   return (
     <mesh
       castShadow
+      material={material}
       position={node.position}
       receiveShadow
       ref={ref}
@@ -20,9 +28,7 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
       visible={node.visible}
       {...(isTransient ? {} : handlers)}
     >
-      {/* DoorSystem replaces this geometry each time the node is dirty */}
       <boxGeometry args={[0, 0, 0]} />
-      <meshStandardMaterial color="#d1d5db" />
     </mesh>
   )
 }

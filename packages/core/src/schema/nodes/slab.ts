@@ -1,12 +1,12 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
   type: nodeType('slab'),
-  // Specific props
-  // Polygon boundary - array of [x, z] coordinates defining the slab
+  material: MaterialSchema.optional(),
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   elevation: z.number().default(0.05), // Elevation in meters

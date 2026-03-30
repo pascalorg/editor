@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 
 export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
 
@@ -9,7 +10,7 @@ export type RoofType = z.infer<typeof RoofType>
 export const RoofSegmentNode = BaseNode.extend({
   id: objectId('rseg'),
   type: nodeType('roof-segment'),
-  // Position relative to parent roof group
+  material: MaterialSchema.optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),

@@ -1,9 +1,17 @@
 // Base
-export { BaseNode, generateId, Material, nodeType, objectId } from './base'
+export { BaseNode, generateId, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Material
+export {
+  DEFAULT_MATERIALS,
+  MaterialPreset,
+  MaterialProperties,
+  MaterialSchema,
+  resolveMaterial,
+} from './material'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 export { DoorNode, DoorSegment } from './nodes/door'
