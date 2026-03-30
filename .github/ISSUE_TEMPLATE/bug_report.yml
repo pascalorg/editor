@@ -49,7 +49,9 @@ body:
     id: screenshots
     attributes:
       label: Screenshots or screen recordings
-      description: If applicable, add screenshots or a short video to help explain the problem.
+      description: |
+        A short screen recording is the fastest way to show us the bug.
+        Drag and drop a video file or paste a link — even a quick clip helps a lot.
     validations:
       required: false
 
