@@ -34,6 +34,7 @@ import type { SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import type { SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import { CustomCameraControls } from './custom-camera-controls'
 import { ExportManager } from './export-manager'
+import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
@@ -334,6 +335,7 @@ export default function Editor({
     null,
   )
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
 
   useEffect(() => {
@@ -415,14 +417,18 @@ export default function Editor({
           </div>
         )}
 
-        {!showLoader && isCameraControlsHintVisible ? (
+        {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
           <ViewerCanvasControlsHint
             isPreviewMode={isPreviewMode}
             onDismiss={dismissCameraControlsHint}
           />
         ) : null}
 
-        {!isLoading && isPreviewMode ? (
+        {isFirstPersonMode ? (
+          <FirstPersonOverlay
+            onExit={() => useEditor.getState().setFirstPersonMode(false)}
+          />
+        ) : !isLoading && isPreviewMode ? (
           <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
         ) : (
           <>
@@ -445,24 +451,27 @@ export default function Editor({
         <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
           <div className="h-full w-full">
             <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-            <Viewer selectionManager={isPreviewMode ? 'default' : 'custom'}>
-              {!isPreviewMode && <SelectionManager />}
-              {!isPreviewMode && <FloatingActionMenu />}
-              {!isPreviewMode && <WallMeasurementLabel />}
+            <Viewer selectionManager={isPreviewMode || isFirstPersonMode ? 'default' : 'custom'}>
+              {!isPreviewMode && !isFirstPersonMode && <SelectionManager />}
+              {!isPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
+              {!isPreviewMode && !isFirstPersonMode && <WallMeasurementLabel />}
               <ExportManager />
-              {isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+              {isPreviewMode || isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
               <CeilingSystem />
               <RoofEditSystem />
-              {!isPreviewMode && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
-              {!(isPreviewMode || isLoading) && <ToolManager />}
+              {!isPreviewMode && !isFirstPersonMode && (
+                <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
+              )}
+              {!(isPreviewMode || isFirstPersonMode || isLoading) && <ToolManager />}
               <CustomCameraControls />
+              {isFirstPersonMode && <FirstPersonControls />}
               <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
               <PresetThumbnailGenerator />
-              {!isPreviewMode && <SiteEdgeLabels />}
-              {isPreviewMode && <InteractiveSystem />}
+              {!isPreviewMode && !isFirstPersonMode && <SiteEdgeLabels />}
+              {(isPreviewMode || isFirstPersonMode) && <InteractiveSystem />}
             </Viewer>
           </div>
-          {!(isPreviewMode || isLoading) && <ZoneLabelEditorSystem />}
+          {!(isPreviewMode || isFirstPersonMode || isLoading) && <ZoneLabelEditorSystem />}
         </ErrorBoundary>
       </div>
     </PresetsProvider>

@@ -22,6 +22,7 @@ const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
   const currentLevelId = selection.levelId
@@ -38,7 +39,7 @@ export const CustomCameraControls = () => {
   }, [camera, raycaster])
 
   useEffect(() => {
-    if (isPreviewMode) return // Preview mode uses auto-navigate instead
+    if (isPreviewMode || isFirstPersonMode) return
     let targetY = 0
     if (currentLevelId) {
       const levelMesh = sceneRegistry.nodes.get(currentLevelId)
@@ -57,10 +58,10 @@ export const CustomCameraControls = () => {
       currentTarget.z,
       true,
     )
-  }, [currentLevelId, isPreviewMode])
+  }, [currentLevelId, isPreviewMode, isFirstPersonMode])
 
   useEffect(() => {
-    if (!controls.current) return
+    if (!controls.current || isFirstPersonMode) return
 
     controls.current.maxPolarAngle = maxPolarAngle
     controls.current.minPolarAngle = 0
@@ -68,7 +69,7 @@ export const CustomCameraControls = () => {
     if (controls.current.polarAngle > maxPolarAngle) {
       controls.current.rotateTo(controls.current.azimuthAngle, maxPolarAngle, true)
     }
-  }, [maxPolarAngle])
+  }, [maxPolarAngle, isFirstPersonMode])
 
   const focusNode = useCallback(
     (nodeId: string) => {
@@ -116,6 +117,8 @@ export const CustomCameraControls = () => {
   }, [cameraMode, isPreviewMode])
 
   useEffect(() => {
+    if (isFirstPersonMode) return
+
     const keyState = {
       shiftRight: false,
       shiftLeft: false,
@@ -196,7 +199,7 @@ export const CustomCameraControls = () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
     }
-  }, [cameraMode, isPreviewMode])
+  }, [cameraMode, isPreviewMode, isFirstPersonMode])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode
@@ -258,6 +261,8 @@ export const CustomCameraControls = () => {
   }, [isPreviewMode, previewTargetNodeId])
 
   useEffect(() => {
+    if (isFirstPersonMode) return
+
     const handleNodeCapture = ({ nodeId }: CameraControlEvent) => {
       if (!controls.current) return
 
@@ -349,7 +354,7 @@ export const CustomCameraControls = () => {
       emitter.off('camera-controls:orbit-cw', handleOrbitCW)
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
     }
-  }, [focusNode])
+  }, [focusNode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
     useViewer.getState().setCameraDragging(true)
@@ -358,6 +363,11 @@ export const CustomCameraControls = () => {
   const onRest = useCallback(() => {
     useViewer.getState().setCameraDragging(false)
   }, [])
+
+  // In first-person mode, don't render orbit controls — FirstPersonControls takes over
+  if (isFirstPersonMode) {
+    return null
+  }
 
   return (
     <CameraControls
