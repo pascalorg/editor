@@ -1,8 +1,9 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type MaterialSchema, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
+import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -25,7 +26,6 @@ export function WallPanel() {
     [selectedId, updateNode],
   )
 
-  // Função mágica para a Issue #191: Atualiza o comprimento via cálculo vetorial
   const handleUpdateLength = useCallback((newLength: number) => {
     if (!node || newLength <= 0) return
 
@@ -35,11 +35,9 @@ export function WallPanel() {
 
     if (currentLength === 0) return
 
-    // Calcula a direção (vetor unitário)
     const dirX = dx / currentLength
     const dirZ = dz / currentLength
 
-    // Define o novo ponto final baseado no novo comprimento
     const newEnd: [number, number] = [
       node.start[0] + dirX * newLength,
       node.start[1] + dirZ * newLength
@@ -47,6 +45,10 @@ export function WallPanel() {
 
     handleUpdate({ end: newEnd })
   }, [node, handleUpdate])
+
+  const handleMaterialChange = useCallback((material: MaterialSchema) => {
+    handleUpdate({ material })
+  }, [handleUpdate])
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -69,7 +71,6 @@ export function WallPanel() {
       width={280}
     >
       <PanelSection title="Dimensions">
-        {/* Adicionando o controle de Length solicitado na Issue #191 */}
         <SliderControl
           label="Length"
           max={20}
@@ -99,6 +100,13 @@ export function WallPanel() {
           step={0.01}
           unit="m"
           value={Math.round(thickness * 1000) / 1000}
+        />
+      </PanelSection>
+
+      <PanelSection title="Material">
+        <MaterialPicker
+          onChange={handleMaterialChange}
+          value={node.material}
         />
       </PanelSection>
     </PanelWrapper>

@@ -1,7 +1,8 @@
 import { useRegistry, type WindowNode } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { createMaterial, DEFAULT_WINDOW_MATERIAL } from '../../../lib/materials'
 
 export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -10,9 +11,14 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const handlers = useNodeEvents(node, 'window')
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
+  const material = useMemo(() => {
+    return node.material ? createMaterial(node.material) : DEFAULT_WINDOW_MATERIAL
+  }, [node.material])
+
   return (
     <mesh
       castShadow
+      material={material}
       position={node.position}
       receiveShadow
       ref={ref}
@@ -20,9 +26,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
       visible={node.visible}
       {...(isTransient ? {} : handlers)}
     >
-      {/* WindowSystem replaces this geometry each time the node is dirty */}
       <boxGeometry args={[0, 0, 0]} />
-      <meshStandardMaterial color="#d1d5db" />
     </mesh>
   )
 }

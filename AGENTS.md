@@ -89,3 +89,99 @@ User input (pointer/keyboard)
 | State | Zustand + Zundo |
 | UI | Radix UI, Tailwind CSS 4 |
 | Tooling | Biome, TypeScript 5.9, Turborepo |
+
+---
+
+## Material System
+
+The editor supports a flexible material system for all node types.
+
+### Schema Definition
+
+Materials are defined in `packages/core/src/schema/material.ts`:
+
+```typescript
+// Preset materials
+type MaterialPreset = 'white' | 'brick' | 'concrete' | 'wood' | 'glass' | 'metal' | 'plaster' | 'tile' | 'marble' | 'custom'
+
+// Material properties
+type MaterialProperties = {
+  color: string        // Hex color
+  roughness: number    // 0-1
+  metalness: number    // 0-1
+  opacity: number      // 0-1
+  transparent: boolean
+  side: 'front' | 'back' | 'double'
+}
+
+// Full material schema
+type MaterialSchema = {
+  preset?: MaterialPreset
+  properties?: MaterialProperties
+  texture?: { url: string, repeat?: [number, number] }
+}
+```
+
+### Supported Nodes
+
+All major node types support the `material` field:
+
+| Node Type | Schema File | Panel Component |
+|-----------|-------------|-----------------|
+| Wall | `nodes/wall.ts` | `WallPanel` |
+| Slab | `nodes/slab.ts` | `SlabPanel` |
+| Door | `nodes/door.ts` | `DoorPanel` |
+| Window | `nodes/window.ts` | `WindowPanel` |
+| Ceiling | `nodes/ceiling.ts` | `CeilingPanel` |
+| Roof | `nodes/roof.ts` | `RoofPanel` |
+| RoofSegment | `nodes/roof-segment.ts` | `RoofSegmentPanel` |
+
+### Usage
+
+**In Editor UI:**
+1. Select a node (wall, slab, door, etc.)
+2. Find the "Material" section in the right panel
+3. Click a preset color or select "Custom" to adjust properties
+
+**Programmatically:**
+
+```typescript
+import { WallNode } from '@pascal-app/core'
+
+// Using preset
+const wall = WallNode.parse({
+  start: [0, 0],
+  end: [5, 0],
+  material: { preset: 'brick' }
+})
+
+// Custom material
+const slab = SlabNode.parse({
+  polygon: [[0,0], [5,0], [5,5], [0,5]],
+  material: {
+    preset: 'custom',
+    properties: {
+      color: '#8b4513',
+      roughness: 0.7,
+      metalness: 0.1,
+      opacity: 1,
+      transparent: false,
+      side: 'front'
+    }
+  }
+})
+```
+
+### Renderer Integration
+
+Renderers use `createMaterial()` from `packages/viewer/src/lib/materials.ts`:
+
+```typescript
+import { createMaterial, DEFAULT_WALL_MATERIAL } from '@pascal-app/viewer'
+
+const material = useMemo(() => {
+  return node.material ? createMaterial(node.material) : DEFAULT_WALL_MATERIAL
+}, [node.material])
+
+return <mesh material={material} />
+```

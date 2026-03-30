@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 import { ItemNode } from './item'
 // import { DoorNode } from "./door";
 // import { ItemNode } from "./item";
@@ -10,7 +11,7 @@ export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
   children: z.array(ItemNode.shape.id).default([]),
-  // Specific props
+  material: MaterialSchema.optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
   // e.g., start/end points for path

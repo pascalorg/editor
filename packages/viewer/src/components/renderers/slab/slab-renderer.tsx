@@ -1,7 +1,8 @@
 import { type SlabNode, useRegistry } from '@pascal-app/core'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { createMaterial, DEFAULT_SLAB_MATERIAL } from '../../../lib/materials'
 
 export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -10,11 +11,13 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
 
   const handlers = useNodeEvents(node, 'slab')
 
+  const material = useMemo(() => {
+    return node.material ? createMaterial(node.material) : DEFAULT_SLAB_MATERIAL
+  }, [node.material])
+
   return (
-    <mesh castShadow receiveShadow ref={ref} {...handlers} visible={node.visible}>
-      {/* SlabSystem will replace this geometry in the next frame */}
+    <mesh castShadow receiveShadow ref={ref} {...handlers} visible={node.visible} material={material}>
       <boxGeometry args={[0, 0, 0]} />
-      <meshStandardMaterial color="#e5e5e5" />
     </mesh>
   )
 }

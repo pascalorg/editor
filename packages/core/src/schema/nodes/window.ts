@@ -1,12 +1,13 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 
 export const WindowNode = BaseNode.extend({
   id: objectId('window'),
   type: nodeType('window'),
+  material: MaterialSchema.optional(),
 
-  // Position in wall-local coordinate system (center of window)
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),

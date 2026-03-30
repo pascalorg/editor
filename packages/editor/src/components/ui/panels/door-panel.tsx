@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, DoorNode, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type MaterialSchema, DoorNode, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -8,6 +8,7 @@ import { usePresetsAdapter } from '../../../contexts/presets-context'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -560,6 +561,13 @@ export function DoorPanel() {
             />
           )}
         </div>
+      </PanelSection>
+
+      <PanelSection title="Material">
+        <MaterialPicker
+          onChange={(material) => handleUpdate({ material })}
+          value={node.material}
+        />
       </PanelSection>
 
       <PanelSection title="Actions">

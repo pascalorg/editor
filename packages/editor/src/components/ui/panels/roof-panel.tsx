@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type MaterialSchema,
   type RoofNode,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
@@ -15,6 +16,7 @@ import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
@@ -122,6 +124,10 @@ export function RoofPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
+  const handleMaterialChange = useCallback((material: MaterialSchema) => {
+    handleUpdate({ material })
+  }, [handleUpdate])
+
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
   const segments = (node.children ?? [])
@@ -227,6 +233,13 @@ export function RoofPanel() {
             }}
           />
         </div>
+      </PanelSection>
+
+      <PanelSection title="Material">
+        <MaterialPicker
+          onChange={handleMaterialChange}
+          value={node.material}
+        />
       </PanelSection>
 
       <PanelSection title="Actions">
