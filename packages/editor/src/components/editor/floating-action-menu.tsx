@@ -20,12 +20,14 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
-const ALLOWED_TYPES = ['item', 'door', 'window', 'roof', 'roof-segment']
+const ALLOWED_TYPES = ['item', 'door', 'window', 'roof', 'roof-segment', 'wall', 'slab']
+const DELETE_ONLY_TYPES = ['wall', 'slab']
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const nodes = useScene((s) => s.nodes)
-  const deleteNode = useScene((s) => s.deleteNode)
+  const mode = useEditor((s) => s.mode)
+  const setMode = useEditor((s) => s.setMode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
@@ -46,8 +48,10 @@ export function FloatingActionMenu() {
       const box = new THREE.Box3().setFromObject(obj)
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
-        // Position slightly above the object
-        groupRef.current.position.set(center.x, box.max.y + 0.3, center.z)
+        // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
+        const isDeleteOnly = node && DELETE_ONLY_TYPES.includes(node.type)
+        const yOffset = isDeleteOnly ? 0.8 : 0.3
+        groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
     }
   })
@@ -151,16 +155,14 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!(selectedId && node)) return
-      sfxEmitter.emit('sfx:item-delete')
-      deleteNode(selectedId as AnyNodeId)
-      if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+      // Activate delete mode (sledgehammer tool) instead of deleting directly
       setSelection({ selectedIds: [] })
+      setMode('delete')
     },
-    [selectedId, node, deleteNode, setSelection],
+    [setSelection, setMode],
   )
 
-  if (!(selectedId && node && isValidType && !isFloorplanHovered)) return null
+  if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null
 
   return (
     <group ref={groupRef}>
@@ -174,8 +176,8 @@ export function FloatingActionMenu() {
       >
         <NodeActionMenu
           onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-          onMove={handleMove}
+          onDuplicate={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleDuplicate : undefined}
+          onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />

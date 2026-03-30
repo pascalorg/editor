@@ -115,6 +115,11 @@ const useScene: UseSceneStore = create<SceneState>()(
       collections: {} as Record<CollectionId, Collection>,
 
       unloadScene: () => {
+        // Clear temporal tracking to prevent memory leaks from stale node references
+        prevPastLength = 0
+        prevFutureLength = 0
+        prevNodesSnapshot = null
+
         set({
           nodes: {},
           rootNodeIds: [],
@@ -136,6 +141,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           nodes: patchedNodes,
           rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
+          collections: {},
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(patchedNodes).forEach((node) => {
@@ -305,11 +311,19 @@ let prevPastLength = 0
 let prevFutureLength = 0
 let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
-export function clearSceneHistory() {
-  useScene.temporal.getState().clear()
+/**
+ * Clears temporal history tracking variables to prevent memory leaks.
+ * Should be called when unloading a scene to release node references.
+ */
+export function clearTemporalTracking() {
   prevPastLength = 0
   prevFutureLength = 0
   prevNodesSnapshot = null
+}
+
+export function clearSceneHistory() {
+  useScene.temporal.getState().clear()
+  clearTemporalTracking()
 }
 
 // Subscribe to the temporal store (Undo/Redo events)

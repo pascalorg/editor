@@ -4,6 +4,13 @@ import { useEffect } from 'react'
 import { sfxEmitter } from '../lib/sfx-bus'
 import useEditor from '../store/use-editor'
 
+// Tools call this in their onCancel handler when they have an active mid-action to cancel,
+// so that the global Escape handler knows not to also switch to select mode.
+let _toolCancelConsumed = false
+export const markToolCancelConsumed = () => {
+  _toolCancelConsumed = true
+}
+
 export const useKeyboard = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -19,15 +26,20 @@ export const useKeyboard = () => {
 
       if (e.key === 'Escape') {
         e.preventDefault()
+        _toolCancelConsumed = false
         emitter.emit('tool:cancel')
 
-        // Return to the default select tool while keeping the active building/level context.
-        useEditor.getState().setEditingHole(null)
-        useEditor.getState().setMode('select')
+        // Only switch to select mode if no tool had an active mid-action to cancel.
+        // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
+        if (!_toolCancelConsumed) {
+          // Return to the default select tool while keeping the active building/level context.
+          useEditor.getState().setEditingHole(null)
+          useEditor.getState().setMode('select')
 
-        // Clear selections to close UI panels, but KEEP the active building and level context.
-        useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-        useEditor.getState().setSelectedReferenceId(null)
+          // Clear selections to close UI panels, but KEEP the active building and level context.
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+          useEditor.getState().setSelectedReferenceId(null)
+        }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
@@ -55,6 +67,13 @@ export const useKeyboard = () => {
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
+      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        const phase = useEditor.getState().phase
+        if (phase === 'structure' || phase === 'furnish') {
+          useEditor.getState().setMode('delete')
+          useViewer.getState().setSelection({ selectedIds: [] })
+        }
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('build')
@@ -117,6 +136,25 @@ export const useKeyboard = () => {
               })
             }
             sfxEmitter.emit('sfx:item-rotate') // Play a sound for feedback
+          }
+        }
+      } else if (e.key === 't' || e.key === 'T') {
+        // Rotate selected node counter-clockwise
+        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        if (selectedNodeIds.length === 1) {
+          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          if (node && 'rotation' in node) {
+            e.preventDefault()
+            const ROTATION_STEP = Math.PI / 4
+
+            if (typeof node.rotation === 'number') {
+              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+            } else if (Array.isArray(node.rotation)) {
+              useScene.getState().updateNode(node.id, {
+                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
+              })
+            }
+            sfxEmitter.emit('sfx:item-rotate')
           }
         }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {

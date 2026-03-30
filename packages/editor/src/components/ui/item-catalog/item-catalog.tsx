@@ -190,6 +190,8 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
                     alt={item.name}
                     className="rounded-lg object-cover"
                     fill
+                    loading="eager"
+                    sizes="56px"
                     src={resolveCdnUrl(item.thumbnail) || ''}
                   />
                   {attachmentIcon && (

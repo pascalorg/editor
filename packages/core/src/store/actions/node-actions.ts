@@ -4,6 +4,10 @@ import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
 
+// Track pending RAF for updateNodesAction to prevent multiple queued callbacks
+let pendingRafId: number | null = null
+let pendingUpdates: Set<AnyNodeId> = new Set()
+
 export const createNodesAction = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
@@ -58,6 +62,7 @@ export const updateNodesAction = (
   updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
 ) => {
   const parentsToUpdate = new Set<AnyNodeId>()
+  const idsToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -98,14 +103,25 @@ export const updateNodesAction = (
     return { nodes: nextNodes }
   })
 
-  // Mark dirty after the next frame to ensure React renders complete
-  requestAnimationFrame(() => {
-    updates.forEach((u) => {
-      get().markDirty(u.id)
+  // Collect all IDs that need to be marked dirty
+  updates.forEach((u) => idsToMarkDirty.add(u.id))
+  parentsToUpdate.forEach((pId) => idsToMarkDirty.add(pId))
+
+  // Add to pending updates set
+  idsToMarkDirty.forEach((id) => pendingUpdates.add(id))
+
+  // Cancel any pending RAF and schedule a new one
+  if (pendingRafId !== null) {
+    cancelAnimationFrame(pendingRafId)
+  }
+
+  pendingRafId = requestAnimationFrame(() => {
+    // Mark all pending updates as dirty
+    pendingUpdates.forEach((id) => {
+      get().markDirty(id)
     })
-    parentsToUpdate.forEach((pId) => {
-      get().markDirty(pId)
-    })
+    pendingUpdates.clear()
+    pendingRafId = null
   })
 }
 
@@ -121,7 +137,26 @@ export const deleteNodesAction = (
     const nextCollections = { ...state.collections }
     let nextRootIds = [...state.rootNodeIds]
 
+    // Collect all IDs to delete (including descendants) in a first pass
+    // This avoids issues with recursive calls during state mutation
+    const allIdsToDelete = new Set<AnyNodeId>()
+    const collectDescendants = (id: AnyNodeId) => {
+      const node = nextNodes[id]
+      if (!node) return
+      allIdsToDelete.add(id)
+      if ('children' in node && node.children) {
+        for (const childId of node.children as AnyNodeId[]) {
+          collectDescendants(childId)
+        }
+      }
+    }
+
     for (const id of ids) {
+      collectDescendants(id)
+    }
+
+    // Now process all nodes for deletion
+    for (const id of allIdsToDelete) {
       const node = nextNodes[id]
       if (!node) continue
 
@@ -153,12 +188,6 @@ export const deleteNodesAction = (
 
       // 4. Delete the node itself
       delete nextNodes[id]
-
-      // Inside the deleteNodes loop
-      if ('children' in node && node.children.length > 0) {
-        // Recursively delete all children first
-        get().deleteNodes(node.children as AnyNodeId[])
-      }
     }
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }

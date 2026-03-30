@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -183,6 +184,7 @@ export const CeilingTool: React.FC = () => {
     }
 
     const onCancel = () => {
+      if (points.length > 0) markToolCancelConsumed()
       setPoints([])
     }
 

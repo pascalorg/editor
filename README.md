@@ -2,7 +2,11 @@
 
 A 3D building editor built with React Three Fiber and WebGPU.
 
-
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
+[![npm @pascal-app/viewer](https://img.shields.io/npm/v/@pascal-app/viewer?label=%40pascal-app%2Fviewer)](https://www.npmjs.com/package/@pascal-app/viewer)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/SaBRA9t2)
+[![X (Twitter)](https://img.shields.io/badge/follow-%40pascal__app-black?logo=x&logoColor=white)](https://x.com/pascal_app)
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
@@ -401,3 +405,14 @@ npm publish --workspace=@pascal-app/viewer --access public
 | `packages/viewer/src/components/viewer/` | Main Viewer component |
 | `apps/editor/components/tools/` | Editor tools |
 | `apps/editor/store/` | Editor-specific state |
+
+---
+
+## Contributors
+
+<a href="https://github.com/Aymericr"><img src="https://avatars.githubusercontent.com/u/4444492?v=4" width="60" height="60" alt="Aymeric Rabot" style="border-radius:50%"></a>
+<a href="https://github.com/wass08"><img src="https://avatars.githubusercontent.com/u/6551176?v=4" width="60" height="60" alt="Wassim Samad" style="border-radius:50%"></a>
+
+---
+
+<a href="https://trendshift.io/repositories/23831" target="_blank"><img src="https://trendshift.io/api/badge/repositories/23831" alt="pascalorg/editor | Trendshift" width="250" height="55"/></a>

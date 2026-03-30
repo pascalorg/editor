@@ -25,6 +25,29 @@ export function WallPanel() {
     [selectedId, updateNode],
   )
 
+  // Função mágica para a Issue #191: Atualiza o comprimento via cálculo vetorial
+  const handleUpdateLength = useCallback((newLength: number) => {
+    if (!node || newLength <= 0) return
+
+    const dx = node.end[0] - node.start[0]
+    const dz = node.end[1] - node.start[1]
+    const currentLength = Math.sqrt(dx * dx + dz * dz)
+
+    if (currentLength === 0) return
+
+    // Calcula a direção (vetor unitário)
+    const dirX = dx / currentLength
+    const dirZ = dz / currentLength
+
+    // Define o novo ponto final baseado no novo comprimento
+    const newEnd: [number, number] = [
+      node.start[0] + dirX * newLength,
+      node.start[1] + dirZ * newLength
+    ]
+
+    handleUpdate({ end: newEnd })
+  }, [node, handleUpdate])
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -46,6 +69,17 @@ export function WallPanel() {
       width={280}
     >
       <PanelSection title="Dimensions">
+        {/* Adicionando o controle de Length solicitado na Issue #191 */}
+        <SliderControl
+          label="Length"
+          max={20}
+          min={0.1}
+          onChange={handleUpdateLength}
+          precision={2}
+          step={0.01}
+          unit="m"
+          value={length}
+        />
         <SliderControl
           label="Height"
           max={6}
@@ -66,13 +100,6 @@ export function WallPanel() {
           unit="m"
           value={Math.round(thickness * 1000) / 1000}
         />
-      </PanelSection>
-
-      <PanelSection title="Info">
-        <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Length</span>
-          <span className="font-mono text-white">{length.toFixed(2)} m</span>
-        </div>
       </PanelSection>
     </PanelWrapper>
   )
