@@ -14,5 +14,6 @@ export {
   disposeMaterial,
 } from './lib/materials'
 export { default as useViewer } from './store/use-viewer'
+export { ExportSystem } from './systems/export/export-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
