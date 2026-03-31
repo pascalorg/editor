@@ -6,7 +6,12 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { createWallOnCurrentLevel, snapWallDraftPoint, WALL_MIN_LENGTH, type WallPlanPoint } from './wall-drafting'
+import {
+  createWallOnCurrentLevel,
+  snapWallDraftPoint,
+  WALL_MIN_LENGTH,
+  type WallPlanPoint,
+} from './wall-drafting'
 
 const WALL_HEIGHT = 2.5
 
@@ -14,7 +19,6 @@ const WALL_HEIGHT = 2.5
  * Update wall preview mesh geometry to create a vertical plane between two points
  */
 const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
-  // Calculate direction and perpendicular for wall thickness
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
   const length = direction.length()
 
@@ -26,7 +30,6 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
   mesh.visible = true
   direction.normalize()
 
-  // Create wall shape (vertical rectangle in XY plane)
   const shape = new Shape()
   shape.moveTo(0, 0)
   shape.lineTo(length, 0)
@@ -34,18 +37,12 @@ const updateWallPreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
   shape.lineTo(0, WALL_HEIGHT)
   shape.closePath()
 
-  // Create geometry
   const geometry = new ShapeGeometry(shape)
-
-  // Calculate rotation angle
-  // Negate the angle to fix the opposite direction issue
   const angle = -Math.atan2(direction.z, direction.x)
 
-  // Position at start point and rotate
   mesh.position.set(start.x, start.y, start.z)
   mesh.rotation.y = angle
 
-  // Dispose old geometry and assign new one
   if (mesh.geometry) {
     mesh.geometry.dispose()
   }
@@ -98,10 +95,8 @@ export const WallTool: React.FC = () => {
         const snapped = new Vector3(snappedPoint[0], event.position[1], snappedPoint[1])
         endingPoint.current.copy(snapped)
 
-        // Position the cursor at the end of the wall being drawn
         cursorRef.current.position.set(snapped.x, snapped.y, snapped.z)
 
-        // Play snap sound only when the actual wall end position changes
         const currentWallEnd: [number, number] = [endingPoint.current.x, endingPoint.current.z]
         if (
           previousWallEnd &&
@@ -111,10 +106,8 @@ export const WallTool: React.FC = () => {
         }
         previousWallEnd = currentWallEnd
 
-        // Update wall preview geometry
         updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
       } else {
-        // Not drawing a wall yet, show the snapped anchor point.
         cursorRef.current.position.set(gridPosition[0], event.position[1], gridPosition[1])
       }
     }
@@ -154,15 +147,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftPressed.current = true
-      }
+      if (e.key === 'Shift') shiftPressed.current = true
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftPressed.current = false
-      }
+      if (e.key === 'Shift') shiftPressed.current = false
     }
 
     const onCancel = () => {
@@ -190,10 +179,7 @@ export const WallTool: React.FC = () => {
 
   return (
     <group>
-      {/* Cursor indicator */}
       <CursorSphere ref={cursorRef} />
-
-      {/* Wall preview */}
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial
