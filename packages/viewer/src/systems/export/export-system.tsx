@@ -2,6 +2,8 @@
 
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
+import type { Scene } from 'three'
+import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
@@ -30,8 +32,8 @@ export const ExportSystem = () => {
       const filename = `pascal-export-${date}`
 
       // Clone scene and strip editor-only objects (layer 1 = EDITOR_LAYER)
-      const exportRoot = scene.clone(true)
-      const toRemove: typeof exportRoot[] = []
+      const exportRoot = scene.clone(true) as Scene
+      const toRemove: THREE.Object3D[] = []
       exportRoot.traverse((obj) => {
         if (obj.layers.isEnabled(EDITOR_LAYER)) {
           toRemove.push(obj)
@@ -55,7 +57,7 @@ export const ExportSystem = () => {
       } else if (format === 'stl') {
         const exporter = new STLExporter()
         const result = exporter.parse(exportRoot, { binary: true }) as DataView
-        downloadBlob(new Blob([result], { type: 'model/stl' }), `${filename}.stl`)
+        downloadBlob(new Blob([result.buffer as ArrayBuffer], { type: 'model/stl' }), `${filename}.stl`)
       } else if (format === 'obj') {
         const exporter = new OBJExporter()
         const result = exporter.parse(exportRoot)
