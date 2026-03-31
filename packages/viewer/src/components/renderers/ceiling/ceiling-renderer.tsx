@@ -1,9 +1,8 @@
-import { type CeilingNode, useRegistry } from '@pascal-app/core'
+import { type CeilingNode, resolveMaterial, useRegistry } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { DEFAULT_CEILING_MATERIAL } from '../../../lib/materials'
 import { NodeRenderer } from '../node-renderer'
 
 const gridScale = 5
@@ -40,16 +39,9 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const handlers = useNodeEvents(node, 'ceiling')
 
   const materials = useMemo(() => {
-    const mat = node.material
-    if (mat) {
-      const props = mat.properties
-      const color = props?.color || '#999999'
-      return createCeilingMaterials(color)
-    }
-    return {
-      topMaterial: createCeilingMaterials().topMaterial,
-      bottomMaterial: DEFAULT_CEILING_MATERIAL,
-    }
+    const props = resolveMaterial(node.material)
+    const color = props.color || '#999999'
+    return createCeilingMaterials(color)
   }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
 
   return (
