@@ -42,6 +42,7 @@ import {
   isWallLongEnough,
   snapWallDraftPoint,
   WALL_GRID_STEP,
+  WALL_MIN_LENGTH,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
 import { furnishTools } from '../ui/action-menu/furnish-tools'
@@ -122,6 +123,9 @@ const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_Y = 48
 const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 45
 const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
 const FLOORPLAN_SITE_COLOR = '#10b981'
+const FLOORPLAN_DRAFT_OVERLAY_OFFSET_PX = 22
+const FLOORPLAN_DRAFT_OVERLAY_PADDING_X = 96
+const FLOORPLAN_DRAFT_OVERLAY_PADDING_Y = 56
 
 type FloorplanViewport = {
   centerX: number
@@ -184,6 +188,21 @@ type FloorplanCursorIndicator =
       kind: 'icon'
       icon: string
     }
+
+type DraftSegment = {
+  end: WallPlanPoint
+  kind: 'polygon' | 'wall'
+  length: number
+  start: WallPlanPoint
+}
+
+type DraftLengthInputState = {
+  end: WallPlanPoint
+  error: string | null
+  kind: DraftSegment['kind']
+  start: WallPlanPoint
+  value: string
+}
 
 const FLOORPLAN_QUICK_BUILD_TOOL_IDS = ['wall', 'door', 'window', 'slab', 'zone'] as const
 
@@ -1152,6 +1171,14 @@ function calculatePolygonSnapPoint(
   return [x1, y]
 }
 
+function snapPlanDraftValue(value: number) {
+  return Math.round(value / WALL_GRID_STEP) * WALL_GRID_STEP
+}
+
+function snapPlanDraftPoint(point: WallPlanPoint): WallPlanPoint {
+  return [snapPlanDraftValue(point[0]), snapPlanDraftValue(point[1])]
+}
+
 function snapPolygonDraftPoint({
   point,
   start,
@@ -1161,7 +1188,7 @@ function snapPolygonDraftPoint({
   start?: WallPlanPoint
   angleSnap: boolean
 }): WallPlanPoint {
-  const snappedPoint: WallPlanPoint = [snapToHalf(point[0]), snapToHalf(point[1])]
+  const snappedPoint = snapPlanDraftPoint(point)
 
   if (!(start && angleSnap)) {
     return snappedPoint
@@ -1311,6 +1338,77 @@ function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
     return `${wholeFeet}'${inches}"`
   }
   return `${Number.parseFloat(value.toFixed(2))}m`
+}
+
+function formatDraftLengthInputValue(value: number, unit: 'metric' | 'imperial') {
+  if (unit === 'imperial') {
+    return formatMeasurement(value, unit)
+  }
+
+  return Number.parseFloat(value.toFixed(2)).toString()
+}
+
+function parseDraftLengthInput(input: string, unit: 'metric' | 'imperial') {
+  const trimmed = input.trim().toLowerCase()
+  if (!trimmed) {
+    return null
+  }
+
+  if (unit === 'metric') {
+    const normalized = trimmed.endsWith('m') ? trimmed.slice(0, -1).trim() : trimmed
+    const value = Number.parseFloat(normalized)
+    return Number.isFinite(value) && value > 0 ? value : null
+  }
+
+  const feetInchesMatch = trimmed.match(
+    /^(-?\d+(?:\.\d+)?)\s*(?:ft|feet|')\s*(\d+(?:\.\d+)?)?\s*(?:(?:in|inch|inches|")\s*)?$/,
+  )
+  if (feetInchesMatch) {
+    const feet = Number.parseFloat(feetInchesMatch[1] ?? '0')
+    const inches = Number.parseFloat(feetInchesMatch[2] ?? '0')
+    const meters = feet * 0.3048 + inches * 0.0254
+    return Number.isFinite(meters) && meters > 0 ? meters : null
+  }
+
+  const feetAndInchesWordsMatch = trimmed.match(
+    /^(-?\d+(?:\.\d+)?)\s*(?:ft|feet)\s+(\d+(?:\.\d+)?)\s*(?:in|inch|inches)$/,
+  )
+  if (feetAndInchesWordsMatch) {
+    const feet = Number.parseFloat(feetAndInchesWordsMatch[1] ?? '0')
+    const inches = Number.parseFloat(feetAndInchesWordsMatch[2] ?? '0')
+    const meters = feet * 0.3048 + inches * 0.0254
+    return Number.isFinite(meters) && meters > 0 ? meters : null
+  }
+
+  const inchesOnlyMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(?:in|inch|inches|")$/)
+  if (inchesOnlyMatch) {
+    const meters = Number.parseFloat(inchesOnlyMatch[1] ?? '0') * 0.0254
+    return Number.isFinite(meters) && meters > 0 ? meters : null
+  }
+
+  const plainValue = Number.parseFloat(trimmed)
+  if (Number.isFinite(plainValue) && plainValue > 0) {
+    return plainValue * 0.3048
+  }
+
+  return null
+}
+
+function projectDraftPointToLength(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  length: number,
+): WallPlanPoint | null {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const directionLength = Math.hypot(dx, dz)
+
+  if (!(Number.isFinite(directionLength) && directionLength > 1e-6 && Number.isFinite(length))) {
+    return null
+  }
+
+  const scale = length / directionLength
+  return [start[0] + dx * scale, start[1] + dz * scale]
 }
 
 function getPolygonAreaAndCentroid(polygon: Point2D[]) {
@@ -3021,6 +3119,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
 export function FloorplanPanel() {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const draftLengthInputRef = useRef<HTMLInputElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
@@ -3195,6 +3294,7 @@ export function FloorplanPanel() {
   const [zoneBoundaryDraft, setZoneBoundaryDraft] = useState<ZoneBoundaryDraft | null>(null)
   const [zoneVertexDragState, setZoneVertexDragState] = useState<ZoneVertexDragState | null>(null)
   const [guideTransformDraft, setGuideTransformDraft] = useState<GuideTransformDraft | null>(null)
+  const [draftLengthInput, setDraftLengthInput] = useState<DraftLengthInputState | null>(null)
   const [cursorPoint, setCursorPoint] = useState<WallPlanPoint | null>(null)
   const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
@@ -3821,6 +3921,43 @@ export function FloorplanPanel() {
       y2: toSvgY(firstPoint[1]),
     }
   }, [activePolygonDraftPoints, cursorPoint, isPolygonBuildActive])
+  const activeDraftSegment = useMemo<DraftSegment | null>(() => {
+    if (isWallBuildActive && draftStart && draftEnd) {
+      const length = Math.hypot(draftEnd[0] - draftStart[0], draftEnd[1] - draftStart[1])
+      if (length > 1e-6) {
+        return {
+          end: draftEnd,
+          kind: 'wall',
+          length,
+          start: draftStart,
+        }
+      }
+    }
+
+    if (isPolygonBuildActive && cursorPoint && activePolygonDraftPoints.length > 0) {
+      const start = activePolygonDraftPoints[activePolygonDraftPoints.length - 1]
+      if (start) {
+        const length = Math.hypot(cursorPoint[0] - start[0], cursorPoint[1] - start[1])
+        if (length > 1e-6) {
+          return {
+            end: cursorPoint,
+            kind: 'polygon',
+            length,
+            start,
+          }
+        }
+      }
+    }
+
+    return null
+  }, [
+    activePolygonDraftPoints,
+    cursorPoint,
+    draftEnd,
+    draftStart,
+    isPolygonBuildActive,
+    isWallBuildActive,
+  ])
 
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
 
@@ -4029,6 +4166,63 @@ export function FloorplanPanel() {
       y: Math.max(anchorY, FLOORPLAN_ACTION_MENU_MIN_ANCHOR_Y),
     }
   }, [selectedOpeningEntry, surfaceSize.height, surfaceSize.width, viewBox])
+  const draftSegmentOverlay = useMemo(() => {
+    const segment = draftLengthInput ?? activeDraftSegment
+    if (!(segment && surfaceSize.width > 0 && surfaceSize.height > 0)) {
+      return null
+    }
+
+    const startSvg = toSvgPlanPoint(segment.start)
+    const endSvg = toSvgPlanPoint(segment.end)
+    const startX = ((startSvg.x - viewBox.minX) / viewBox.width) * surfaceSize.width
+    const startY = ((startSvg.y - viewBox.minY) / viewBox.height) * surfaceSize.height
+    const endX = ((endSvg.x - viewBox.minX) / viewBox.width) * surfaceSize.width
+    const endY = ((endSvg.y - viewBox.minY) / viewBox.height) * surfaceSize.height
+
+    if (
+      !(
+        Number.isFinite(startX) &&
+        Number.isFinite(startY) &&
+        Number.isFinite(endX) &&
+        Number.isFinite(endY)
+      )
+    ) {
+      return null
+    }
+
+    const midpointX = (startX + endX) / 2
+    const midpointY = (startY + endY) / 2
+    const dx = endX - startX
+    const dy = endY - startY
+    const distance = Math.hypot(dx, dy)
+    const perpX = distance > 1e-6 ? -dy / distance : 0
+    const perpY = distance > 1e-6 ? dx / distance : -1
+
+    const minX = Math.min(FLOORPLAN_DRAFT_OVERLAY_PADDING_X, surfaceSize.width / 2)
+    const maxX = Math.max(surfaceSize.width - FLOORPLAN_DRAFT_OVERLAY_PADDING_X, minX)
+    const minY = Math.min(FLOORPLAN_DRAFT_OVERLAY_PADDING_Y, surfaceSize.height / 2)
+    const maxY = Math.max(surfaceSize.height - FLOORPLAN_DRAFT_OVERLAY_PADDING_Y, minY)
+
+    return {
+      kind: segment.kind,
+      length: Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
+      x: clamp(midpointX + perpX * FLOORPLAN_DRAFT_OVERLAY_OFFSET_PX, minX, maxX),
+      y: clamp(midpointY + perpY * FLOORPLAN_DRAFT_OVERLAY_OFFSET_PX, minY, maxY),
+    }
+  }, [activeDraftSegment, draftLengthInput, surfaceSize.height, surfaceSize.width, viewBox])
+
+  useEffect(() => {
+    if (!draftLengthInput) {
+      return
+    }
+
+    const focusInput = window.requestAnimationFrame(() => {
+      draftLengthInputRef.current?.focus()
+      draftLengthInputRef.current?.select()
+    })
+
+    return () => window.cancelAnimationFrame(focusInput)
+  }, [draftLengthInput])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset hovered corner when selected guide changes
   useEffect(() => {
@@ -4548,6 +4742,7 @@ export function FloorplanPanel() {
     clearSiteBoundaryInteraction()
     clearSlabBoundaryInteraction()
     clearZoneBoundaryInteraction()
+    setDraftLengthInput(null)
     setCursorPoint(null)
   }, [
     clearSiteBoundaryInteraction,
@@ -4566,6 +4761,24 @@ export function FloorplanPanel() {
 
     clearDraft()
   }, [clearDraft, isPolygonBuildActive, isWallBuildActive])
+
+  const closeDraftLengthInput = useCallback(() => {
+    setDraftLengthInput(null)
+  }, [])
+
+  const openDraftLengthInput = useCallback(() => {
+    if (!activeDraftSegment) {
+      return
+    }
+
+    setDraftLengthInput({
+      end: [...activeDraftSegment.end] as WallPlanPoint,
+      error: null,
+      kind: activeDraftSegment.kind,
+      start: [...activeDraftSegment.start] as WallPlanPoint,
+      value: formatDraftLengthInputValue(activeDraftSegment.length, unit),
+    })
+  }, [activeDraftSegment, unit])
 
   useEffect(() => {
     const handleCancel = () => {
@@ -4652,6 +4865,53 @@ export function FloorplanPanel() {
       window.removeEventListener('blur', handleBlur)
     }
   }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        Boolean(target?.isContentEditable)
+
+      if (
+        isEditableTarget ||
+        !isFloorplanHovered ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      ) {
+        return
+      }
+
+      if (event.key === 'Tab') {
+        if (!activeDraftSegment) {
+          return
+        }
+
+        event.preventDefault()
+        openDraftLengthInput()
+        return
+      }
+
+      if (event.key === 'Escape' && draftLengthInput) {
+        event.preventDefault()
+        closeDraftLengthInput()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [
+    activeDraftSegment,
+    closeDraftLengthInput,
+    draftLengthInput,
+    isFloorplanHovered,
+    openDraftLengthInput,
+  ])
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -4892,7 +5152,7 @@ export function FloorplanPanel() {
         return
       }
 
-      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint = snapPlanDraftPoint(planPoint)
       setCursorPoint(snappedPoint)
 
       setSiteBoundaryDraft((currentDraft) => {
@@ -4996,7 +5256,7 @@ export function FloorplanPanel() {
         return
       }
 
-      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint = snapPlanDraftPoint(planPoint)
       setCursorPoint(snappedPoint)
 
       setSlabBoundaryDraft((currentDraft) => {
@@ -5093,7 +5353,7 @@ export function FloorplanPanel() {
         return
       }
 
-      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint = snapPlanDraftPoint(planPoint)
       setCursorPoint(snappedPoint)
 
       setZoneBoundaryDraft((currentDraft) => {
@@ -5484,6 +5744,67 @@ export function FloorplanPanel() {
     },
     [clearDraft, draftStart],
   )
+  const submitDraftLengthInput = useCallback(() => {
+    if (!draftLengthInput) {
+      return
+    }
+
+    const parsedLength = parseDraftLengthInput(draftLengthInput.value, unit)
+    if (!(parsedLength && parsedLength > 0)) {
+      setDraftLengthInput((currentState) =>
+        currentState ? { ...currentState, error: 'Enter a valid length.' } : currentState,
+      )
+      return
+    }
+
+    if (draftLengthInput.kind === 'wall' && parsedLength < WALL_MIN_LENGTH) {
+      setDraftLengthInput((currentState) =>
+        currentState
+          ? {
+              ...currentState,
+              error: `Walls must be at least ${formatMeasurement(WALL_MIN_LENGTH, unit)}.`,
+            }
+          : currentState,
+      )
+      return
+    }
+
+    const nextPoint = projectDraftPointToLength(
+      draftLengthInput.start,
+      draftLengthInput.end,
+      parsedLength,
+    )
+    if (!nextPoint) {
+      setDraftLengthInput((currentState) =>
+        currentState
+          ? { ...currentState, error: 'Move the cursor to set a direction first.' }
+          : null,
+      )
+      return
+    }
+
+    if (draftLengthInput.kind === 'wall') {
+      createWallOnCurrentLevel(draftLengthInput.start, nextPoint)
+      clearDraft()
+      return
+    }
+
+    if (isZoneBuildActive) {
+      handleZonePlacementPoint(nextPoint)
+    } else {
+      handleSlabPlacementPoint(nextPoint)
+    }
+
+    closeDraftLengthInput()
+  }, [
+    clearDraft,
+    closeDraftLengthInput,
+    draftLengthInput,
+    handleSlabPlacementPoint,
+    handleZonePlacementPoint,
+    isZoneBuildActive,
+    unit,
+  ])
 
   const handleBackgroundClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -7262,6 +7583,77 @@ export function FloorplanPanel() {
               onPointerDown={(event) => event.stopPropagation()}
               onPointerUp={(event) => event.stopPropagation()}
             />
+          </div>
+        )}
+        {draftSegmentOverlay && (
+          <div
+            className="absolute z-30"
+            style={{
+              left: draftSegmentOverlay.x,
+              top: draftSegmentOverlay.y,
+              transform: 'translate(-50%, -50%)',
+            }}
+          >
+            {draftLengthInput ? (
+              <div
+                className="pointer-events-auto min-w-[180px] rounded-xl border border-border/55 bg-background/96 p-2 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-lg border border-border/55 bg-background px-2.5 py-1.5 font-mono text-foreground text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
+                    onBlur={closeDraftLengthInput}
+                    onChange={(event) =>
+                      setDraftLengthInput((currentState) =>
+                        currentState
+                          ? {
+                              ...currentState,
+                              error: null,
+                              value: event.target.value,
+                            }
+                          : currentState,
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        submitDraftLengthInput()
+                      } else if (event.key === 'Escape') {
+                        event.preventDefault()
+                        closeDraftLengthInput()
+                      }
+                    }}
+                    placeholder={unit === 'imperial' ? `8'0"` : '2.40'}
+                    ref={draftLengthInputRef}
+                    value={draftLengthInput.value}
+                  />
+                  <button
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-primary px-3 font-medium text-primary-foreground text-sm transition-opacity hover:opacity-90"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={submitDraftLengthInput}
+                    type="button"
+                  >
+                    Place
+                  </button>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>{unit === 'imperial' ? 'Feet/inches or inches' : 'Meters'}</span>
+                  <span>Enter to place</span>
+                </div>
+                {draftLengthInput.error ? (
+                  <div className="mt-1 text-[11px] text-red-400">{draftLengthInput.error}</div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/95 px-3 py-1.5 text-white shadow-[0_10px_24px_-16px_rgba(0,0,0,0.8)]">
+                <span className="font-mono text-[12px] leading-none tabular-nums">
+                  {formatMeasurement(draftSegmentOverlay.length, unit)}
+                </span>
+                <span className="rounded bg-white/10 px-1.5 py-0.5 font-medium text-[10px] leading-none text-white/75">
+                  Tab
+                </span>
+              </div>
+            )}
           </div>
         )}
 

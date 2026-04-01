@@ -2,7 +2,8 @@ import { useScene, type WallNode, WallNode as WallSchema } from '@pascal-app/cor
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 export type WallPlanPoint = [number, number]
-export const WALL_GRID_STEP = 0.5
+// Drafting snaps at 1 inch in world-meter units for finer floorplan precision.
+export const WALL_GRID_STEP = 0.0254
 export const WALL_JOIN_SNAP_RADIUS = 0.35
 export const WALL_MIN_LENGTH = 0.5
 function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
