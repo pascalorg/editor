@@ -41,6 +41,7 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
+import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
@@ -480,6 +481,7 @@ export default function Editor({
     null,
   )
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
@@ -590,20 +592,22 @@ export default function Editor({
   // ── Shared viewer scene content ──
   const viewerSceneContent = (
     <>
-      <SelectionManager />
-      <BoxSelectTool />
-      <FloatingActionMenu />
-      <WallMeasurementLabel />
+      {!isFirstPersonMode && <SelectionManager />}
+      {!isFirstPersonMode && <BoxSelectTool />}
+      {!isFirstPersonMode && <FloatingActionMenu />}
+      {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
-      <ZoneSystem />
+      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <RoofEditSystem />
-      {!isLoading && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
-      {!isLoading && <ToolManager />}
+      {!isLoading && !isFirstPersonMode && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
+      {!isLoading && !isFirstPersonMode && <ToolManager />}
       <CustomCameraControls />
+      {isFirstPersonMode && <FirstPersonControls />}
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <SiteEdgeLabels />
+      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {isFirstPersonMode && <InteractiveSystem />}
     </>
   )
 
@@ -655,14 +659,14 @@ export default function Editor({
           className="relative min-w-0 flex-1 overflow-hidden"
           style={{ display: show3d ? undefined : 'none' }}
         >
-          {!showLoader && isCameraControlsHintVisible ? (
+          {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
               isPreviewMode={isPreviewMode}
               onDismiss={dismissCameraControlsHint}
             />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-          <Viewer selectionManager="custom">{viewerSceneContent}</Viewer>
+          <Viewer selectionManager={isFirstPersonMode ? 'default' : 'custom'}>{viewerSceneContent}</Viewer>
         </div>
       </div>
       {!isLoading && <ZoneLabelEditorSystem />}
@@ -698,10 +702,18 @@ export default function Editor({
           </div>
         )}
 
-        {!isLoading && isPreviewMode ? (
+        {!isLoading && (isPreviewMode || isFirstPersonMode) ? (
           <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
-            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            <div className="h-full w-full">{previewViewerContent}</div>
+            {isFirstPersonMode ? (
+              <FirstPersonOverlay
+                onExit={() => useEditor.getState().setFirstPersonMode(false)}
+              />
+            ) : (
+              <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+            )}
+            <div className="h-full w-full">
+              {isFirstPersonMode ? viewerCanvas : previewViewerContent}
+            </div>
           </div>
         ) : (
           <>
