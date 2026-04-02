@@ -702,21 +702,23 @@ export default function Editor({
           </div>
         )}
 
-        {!isLoading && (isPreviewMode || isFirstPersonMode) ? (
+        {!isLoading && isPreviewMode ? (
           <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
-            {isFirstPersonMode ? (
-              <FirstPersonOverlay
-                onExit={() => useEditor.getState().setFirstPersonMode(false)}
-              />
-            ) : (
-              <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            )}
-            <div className="h-full w-full">
-              {isFirstPersonMode ? viewerCanvas : previewViewerContent}
-            </div>
+            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
+            <div className="h-full w-full">{previewViewerContent}</div>
           </div>
         ) : (
           <>
+            {/* First-person overlay — rendered on top of normal layout */}
+            {isFirstPersonMode && (
+              <div className="fixed inset-0 z-50 pointer-events-none">
+                <div className="pointer-events-auto h-full w-full">
+                  <FirstPersonOverlay
+                    onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                  />
+                </div>
+              </div>
+            )}
             <EditorLayoutV2
               navbarSlot={navbarSlot}
               overlays={
