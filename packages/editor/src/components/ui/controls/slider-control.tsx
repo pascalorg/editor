@@ -32,7 +32,7 @@ export function SliderControl({
   const [isHovered, setIsHovered] = useState(false)
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
 
-  const dragRef = useRef<{ startX: number; startValue: number } | null>(null)
+  const dragRef = useRef<{ accumulatedDx: number; startValue: number } | null>(null)
   const labelRef = useRef<HTMLDivElement>(null)
   const valueRef = useRef(value)
   valueRef.current = value
@@ -89,8 +89,15 @@ export function SliderControl({
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (isEditing) return
       e.preventDefault()
-      e.currentTarget.setPointerCapture(e.pointerId)
-      dragRef.current = { startX: e.clientX, startValue: valueRef.current }
+      // Use PointerLock for infinite dragging (Unity3D-style).
+      // Falls back to pointer capture if lock is denied.
+      const el = e.currentTarget
+      if (el.requestPointerLock) {
+        el.requestPointerLock()
+      } else {
+        el.setPointerCapture(e.pointerId)
+      }
+      dragRef.current = { accumulatedDx: 0, startValue: valueRef.current }
       setIsDragging(true)
       useScene.temporal.getState().pause()
     },
@@ -100,13 +107,15 @@ export function SliderControl({
   const handleLabelPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragRef.current) return
-      const { startX, startValue } = dragRef.current
-      const dx = e.clientX - startX
+      // Accumulate movementX for infinite dragging. movementX gives the
+      // delta since the last event, independent of screen bounds.
+      dragRef.current.accumulatedDx += e.movementX
+      const { accumulatedDx, startValue } = dragRef.current
       let s = step
       if (e.shiftKey) s = step * 10
       else if (e.metaKey || e.ctrlKey) s = step * 0.1
       // 4 px per step at default sensitivity
-      const newValue = clamp(Number.parseFloat((startValue + (dx / 4) * s).toFixed(precision)))
+      const newValue = clamp(Number.parseFloat((startValue + (accumulatedDx / 4) * s).toFixed(precision)))
       onChange(newValue)
     },
     [step, precision, clamp, onChange],
@@ -119,7 +128,12 @@ export function SliderControl({
       const finalVal = valueRef.current
       dragRef.current = null
       setIsDragging(false)
-      e.currentTarget.releasePointerCapture(e.pointerId)
+
+      if (document.pointerLockElement) {
+        document.exitPointerLock()
+      } else {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
 
       if (startValue !== finalVal) {
         onChange(startValue)
@@ -131,6 +145,28 @@ export function SliderControl({
     },
     [onChange],
   )
+
+  // Clean up drag state if pointer lock is lost unexpectedly (e.g. Escape key)
+  useEffect(() => {
+    const handlePointerLockChange = () => {
+      if (!document.pointerLockElement && dragRef.current) {
+        const { startValue } = dragRef.current
+        const finalVal = valueRef.current
+        dragRef.current = null
+        setIsDragging(false)
+
+        if (startValue !== finalVal) {
+          onChange(startValue)
+          useScene.temporal.getState().resume()
+          onChange(finalVal)
+        } else {
+          useScene.temporal.getState().resume()
+        }
+      }
+    }
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
+    return () => document.removeEventListener('pointerlockchange', handlePointerLockChange)
+  }, [onChange])
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
