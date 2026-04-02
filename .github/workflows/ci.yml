@@ -25,5 +25,8 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Build workspace packages
+        run: bun run build
+
       - name: Type check
         run: bun run check-types
