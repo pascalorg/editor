@@ -12,10 +12,12 @@ interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   depthWrite?: boolean
   showTooltip?: boolean
   height?: number
+  /** Custom tooltip content — overrides the auto-detected build tool icon */
+  tooltipContent?: React.ReactNode
 }
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
-  { color = '#818cf8', showTooltip = true, height = 2.5, visible = true, ...props },
+  { color = '#818cf8', showTooltip = true, height = 2.5, visible = true, tooltipContent, ...props },
   ref,
 ) {
   const tool = useEditor((s) => s.tool)
@@ -79,7 +81,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       )}
 
       {/* Tool Icon Tooltip at the top of the line */}
-      {isVisible && showTooltip && activeToolConfig && (
+      {isVisible && showTooltip && (activeToolConfig || tooltipContent) && (
         <Html
           center
           position={[0, height > 0 ? height + 0.2 : 0.6, 0]}
@@ -97,17 +99,19 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
             height: '36px',
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt={activeToolConfig.label}
-            src={activeToolConfig.iconSrc}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
-            }}
-          />
+          {tooltipContent || (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt={activeToolConfig!.label}
+              src={activeToolConfig!.iconSrc}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+              }}
+            />
+          )}
         </Html>
       )}
     </group>

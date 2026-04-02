@@ -21,7 +21,7 @@ import {
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ChevronDown, Command, X } from 'lucide-react'
+import { Command } from 'lucide-react'
 import {
   memo,
   type MouseEvent as ReactMouseEvent,
@@ -46,15 +46,8 @@ import {
 } from '../tools/wall/wall-drafting'
 import { furnishTools } from '../ui/action-menu/furnish-tools'
 import { tools as structureTools } from '../ui/action-menu/structure-tools'
-import { SliderControl } from '../ui/controls/slider-control'
+
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '../ui/primitives/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { NodeActionMenu } from './node-action-menu'
@@ -109,7 +102,7 @@ const FLOORPLAN_ACTION_MENU_HORIZONTAL_PADDING = 60
 const FLOORPLAN_ACTION_MENU_MIN_ANCHOR_Y = 56
 const FLOORPLAN_ACTION_MENU_OFFSET_Y = 10
 const FLOORPLAN_DEFAULT_WINDOW_LOCAL_Y = 1.5
-const FLOORPLAN_LEVEL_MENU_CLOSE_DELAY_MS = 120
+
 // Match the guide plane footprint used in the 3D renderer so the 2D overlay aligns.
 const FLOORPLAN_GUIDE_BASE_WIDTH = 10
 const FLOORPLAN_GUIDE_MIN_SCALE = 0.01
@@ -173,8 +166,6 @@ type OpeningNode = WindowNode | DoorNode
 
 type WallEndpoint = 'start' | 'end'
 
-type FloorplanSelectionTool = 'click' | 'marquee'
-
 type FloorplanCursorIndicator =
   | {
       kind: 'asset'
@@ -184,40 +175,6 @@ type FloorplanCursorIndicator =
       kind: 'icon'
       icon: string
     }
-
-const FLOORPLAN_QUICK_BUILD_TOOL_IDS = ['wall', 'door', 'window', 'slab', 'zone'] as const
-
-type FloorplanQuickBuildTool = (typeof FLOORPLAN_QUICK_BUILD_TOOL_IDS)[number]
-
-const FLOORPLAN_QUICK_BUILD_TOOL_LABELS: Record<FloorplanQuickBuildTool, string> = {
-  wall: 'Wall',
-  door: 'Door',
-  window: 'Window',
-  slab: 'Floor',
-  zone: 'Zone',
-}
-
-const FLOORPLAN_QUICK_BUILD_TOOL_FALLBACK_ICONS: Record<FloorplanQuickBuildTool, string> = {
-  wall: '/icons/wall.png',
-  door: '/icons/door.png',
-  window: '/icons/window.png',
-  slab: '/icons/floor.png',
-  zone: '/icons/zone.png',
-}
-
-const FLOORPLAN_QUICK_BUILD_TOOLS = FLOORPLAN_QUICK_BUILD_TOOL_IDS.map((id) => {
-  const toolConfig = structureTools.find((entry) => entry.id === id)
-
-  return {
-    id,
-    iconSrc: toolConfig?.iconSrc ?? FLOORPLAN_QUICK_BUILD_TOOL_FALLBACK_ICONS[id],
-    label: FLOORPLAN_QUICK_BUILD_TOOL_LABELS[id],
-  }
-})
-
-function getLevelDisplayLabel(level: LevelNode) {
-  return level.name || `Level ${level.level}`
-}
 
 type PersistedPanelLayout = {
   rect: PanelRect
@@ -2116,6 +2073,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   onSlabSelect,
   onOpeningDoubleClick,
   onOpeningHoverChange,
+  onOpeningPointerDown,
   onOpeningSelect,
   onWallClick,
   onWallDoubleClick,
@@ -2134,6 +2092,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   onSlabSelect: (slabId: SlabNode['id'], event: ReactMouseEvent<SVGElement>) => void
   onOpeningDoubleClick: (opening: OpeningNode) => void
   onOpeningHoverChange: (openingId: OpeningNode['id'] | null) => void
+  onOpeningPointerDown: (openingId: OpeningNode['id'], event: ReactPointerEvent<SVGElement>) => void
   onOpeningSelect: (openingId: OpeningNode['id'], event: ReactMouseEvent<SVGElement>) => void
   hoveredWallId: WallNode['id'] | null
   onWallClick: (wall: WallNode, event: ReactMouseEvent<SVGElement>) => void
@@ -2368,6 +2327,15 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                     }
                   : undefined
               }
+              onPointerDown={
+                canSelectGeometry && isSelected
+                  ? (event) => {
+                      if (event.button === 0) {
+                        onOpeningPointerDown(opening.id, event)
+                      }
+                    }
+                  : undefined
+              }
               onPointerEnter={
                 canSelectGeometry
                   ? () => {
@@ -2496,6 +2464,15 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                   ? (event) => {
                       event.stopPropagation()
                       onOpeningDoubleClick(opening)
+                    }
+                  : undefined
+              }
+              onPointerDown={
+                canSelectGeometry && isSelected
+                  ? (event) => {
+                      if (event.button === 0) {
+                        onOpeningPointerDown(opening.id, event)
+                      }
                     }
                   : undefined
               }
@@ -3031,9 +3008,9 @@ export function FloorplanPanel() {
   const gestureScaleRef = useRef(1)
   const panelInteractionRef = useRef<PanelInteractionState | null>(null)
   const panelBoundsRef = useRef<ViewportBounds | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const hasUserAdjustedViewportRef = useRef(false)
   const previousLevelIdRef = useRef<string | null>(null)
-  const levelMenuCloseTimeoutRef = useRef<number | null>(null)
   const levelId = useViewer((state) => state.selection.levelId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -3046,7 +3023,7 @@ export function FloorplanPanel() {
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const catalogCategory = useEditor((state) => state.catalogCategory)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
-  const setFloorplanOpen = useEditor((state) => state.setFloorplanOpen)
+
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const setFloorplanHovered = useEditor((state) => state.setFloorplanHovered)
   const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
@@ -3205,8 +3182,8 @@ export function FloorplanPanel() {
   const [hoveredSlabHandleId, setHoveredSlabHandleId] = useState<string | null>(null)
   const [hoveredZoneHandleId, setHoveredZoneHandleId] = useState<string | null>(null)
   const [hoveredGuideCorner, setHoveredGuideCorner] = useState<GuideCorner | null>(null)
-  const [floorplanSelectionTool, setFloorplanSelectionTool] =
-    useState<FloorplanSelectionTool>('click')
+  const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
+  const setFloorplanSelectionTool = useEditor((s) => s.setFloorplanSelectionTool)
   const [floorplanMarqueeState, setFloorplanMarqueeState] = useState<FloorplanMarqueeState | null>(
     null,
   )
@@ -3222,8 +3199,7 @@ export function FloorplanPanel() {
     width: PANEL_DEFAULT_WIDTH,
     height: PANEL_DEFAULT_HEIGHT,
   })
-  const [isLevelMenuOpen, setIsLevelMenuOpen] = useState(false)
-  const [isGuideQuickAccessOpen, setIsGuideQuickAccessOpen] = useState(false)
+
   const [isPanelReady, setIsPanelReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState({ width: 1, height: 1 })
   const [viewport, setViewport] = useState<FloorplanViewport | null>(null)
@@ -3237,11 +3213,6 @@ export function FloorplanPanel() {
   useEffect(() => {
     setIsMacPlatform(navigator.platform.toUpperCase().includes('MAC'))
   }, [])
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset guide panel when level changes
-  useEffect(() => {
-    setIsGuideQuickAccessOpen(false)
-  }, [levelId])
 
   const sitePolygonEntry = useMemo(() => {
     const polygonPoints = site?.polygon?.points
@@ -3356,20 +3327,6 @@ export function FloorplanPanel() {
   const activeGuideInteractionMode = guideTransformDraft
     ? (guideInteractionRef.current?.mode ?? null)
     : null
-  const hasGuideImages = levelGuides.length > 0
-  const guideImagesDescription = hasGuideImages
-    ? `${levelGuides.length} guide image${levelGuides.length === 1 ? '' : 's'} on this level`
-    : 'No guide images on this level'
-
-  const handleGuideOpacityChange = useCallback(
-    (guideId: GuideNode['id'], opacity: number) => {
-      updateNode(guideId, {
-        opacity: Math.round(clamp(opacity, 0, 100)),
-      })
-    },
-    [updateNode],
-  )
-
   const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
@@ -3559,7 +3516,7 @@ export function FloorplanPanel() {
     return displayZonePolygons.find(({ zone }) => zone.id === selectedZoneId) ?? null
   }, [displayZonePolygons, selectedZoneId])
 
-  const isSiteEditActive = phase === 'site' && mode === 'edit'
+  const isSiteEditActive = phase === 'site'
   const isWallBuildActive = phase === 'structure' && mode === 'build' && tool === 'wall'
   const isSlabBuildActive = phase === 'structure' && mode === 'build' && tool === 'slab'
   const isZoneBuildActive = phase === 'structure' && mode === 'build' && tool === 'zone'
@@ -3891,45 +3848,24 @@ export function FloorplanPanel() {
     }
   }, [])
 
+  // Track actual container position and size for SVG coordinate transforms
   useEffect(() => {
-    const currentBounds = getViewportBounds()
-    const persistedRect = readPersistedPanelLayout(currentBounds)
-    setPanelRect(persistedRect ?? getInitialPanelRect(currentBounds))
-    panelBoundsRef.current = currentBounds
-    setIsPanelReady(true)
-  }, [])
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      const nextBounds = getViewportBounds()
-      const previousBounds = panelBoundsRef.current ?? nextBounds
-      setPanelRect((currentRect) => adaptPanelRectToBounds(currentRect, previousBounds, nextBounds))
-      panelBoundsRef.current = nextBounds
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const rect = el.getBoundingClientRect()
+      setPanelRect({ x: rect.left, y: rect.top, width: rect.width, height: rect.height })
+      setIsPanelReady(true)
     }
-
-    window.addEventListener('resize', handleWindowResize)
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    window.addEventListener('resize', update)
+    update()
     return () => {
-      window.removeEventListener('resize', handleWindowResize)
+      observer.disconnect()
+      window.removeEventListener('resize', update)
     }
   }, [])
-
-  useEffect(() => {
-    if (!isPanelReady) {
-      return
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      const currentBounds = panelBoundsRef.current ?? getViewportBounds()
-      writePersistedPanelLayout({
-        rect: panelRect,
-        viewport: currentBounds,
-      })
-    }, 120)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [isPanelReady, panelRect])
 
   useEffect(() => {
     const levelChanged = previousLevelIdRef.current !== (levelId ?? null)
@@ -4030,7 +3966,6 @@ export function FloorplanPanel() {
     }
   }, [selectedOpeningEntry, surfaceSize.height, surfaceSize.width, viewBox])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset hovered corner when selected guide changes
   useEffect(() => {
     setHoveredGuideCorner(null)
   }, [selectedGuide?.id])
@@ -4182,12 +4117,6 @@ export function FloorplanPanel() {
           },
     [theme],
   )
-  const floorplanLevelLabel =
-    levelNode?.type === 'level' ? getLevelDisplayLabel(levelNode) : 'Select a level'
-  const isGroundFloorSelected = levelNode?.type === 'level' && levelNode.level === 0
-  const isSiteEditShortcutActive = phase === 'site' && mode === 'edit'
-  const canUseSiteEditShortcut = isGroundFloorSelected
-  const hasFloorplanLevelSwitcher = floorplanLevels.length > 1
   const gridSteps = useMemo(
     () => getVisibleGridSteps(viewBox.width, surfaceSize.width),
     [surfaceSize.width, viewBox.width],
@@ -4277,50 +4206,6 @@ export function FloorplanPanel() {
     document.body.style.cursor = ''
   }, [])
 
-  const clearLevelMenuCloseTimeout = useCallback(() => {
-    if (levelMenuCloseTimeoutRef.current !== null) {
-      window.clearTimeout(levelMenuCloseTimeoutRef.current)
-      levelMenuCloseTimeoutRef.current = null
-    }
-  }, [])
-
-  const openLevelMenu = useCallback(() => {
-    if (!hasFloorplanLevelSwitcher) {
-      return
-    }
-
-    clearLevelMenuCloseTimeout()
-    setIsLevelMenuOpen(true)
-  }, [clearLevelMenuCloseTimeout, hasFloorplanLevelSwitcher])
-
-  const scheduleLevelMenuClose = useCallback(() => {
-    clearLevelMenuCloseTimeout()
-
-    levelMenuCloseTimeoutRef.current = window.setTimeout(() => {
-      setIsLevelMenuOpen(false)
-      levelMenuCloseTimeoutRef.current = null
-    }, FLOORPLAN_LEVEL_MENU_CLOSE_DELAY_MS)
-  }, [clearLevelMenuCloseTimeout])
-
-  const handleFloorplanLevelSelect = useCallback(
-    (nextLevelId: string) => {
-      const resolvedLevelId = nextLevelId as LevelNode['id']
-
-      if (currentBuildingId) {
-        setSelection({
-          buildingId: currentBuildingId,
-          levelId: resolvedLevelId,
-        })
-      } else {
-        setSelection({ levelId: resolvedLevelId })
-      }
-
-      clearLevelMenuCloseTimeout()
-      setIsLevelMenuOpen(false)
-    },
-    [clearLevelMenuCloseTimeout, currentBuildingId, setSelection],
-  )
-
   const finishPanelInteraction = useCallback(() => {
     panelInteractionRef.current = null
     setIsDraggingPanel(false)
@@ -4392,12 +4277,6 @@ export function FloorplanPanel() {
   }, [finishPanelInteraction])
 
   useEffect(() => {
-    return () => {
-      clearLevelMenuCloseTimeout()
-    }
-  }, [clearLevelMenuCloseTimeout])
-
-  useEffect(() => {
     const interaction = guideInteractionRef.current
     if (interaction && !guideById.has(interaction.guideId)) {
       clearGuideInteraction()
@@ -4415,12 +4294,6 @@ export function FloorplanPanel() {
       clearGuideInteraction()
     }
   }, [clearGuideInteraction])
-
-  useEffect(() => {
-    if (!hasFloorplanLevelSwitcher) {
-      setIsLevelMenuOpen(false)
-    }
-  }, [hasFloorplanLevelSwitcher])
 
   const handlePanelDragStart = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -4845,7 +4718,6 @@ export function FloorplanPanel() {
     walls,
   ])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear drag state when level changes
   useEffect(() => {
     clearWallEndpointDrag()
   }, [clearWallEndpointDrag, levelId])
@@ -5955,6 +5827,38 @@ export function FloorplanPanel() {
     },
     [emitFloorplanNodeClick],
   )
+  const handleOpeningPointerDown = useCallback(
+    (openingId: OpeningNode['id'], event: ReactPointerEvent<SVGElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      const opening = selectedOpeningEntry?.opening
+      if (!opening || opening.id !== openingId) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      // Suppress the click event that follows this pointer interaction so it
+      // doesn't re-select or interfere with placement.
+      const suppressClick = (clickEvent: MouseEvent) => {
+        clickEvent.stopImmediatePropagation()
+        clickEvent.preventDefault()
+        window.removeEventListener('click', suppressClick, true)
+      }
+      window.addEventListener('click', suppressClick, true)
+      requestAnimationFrame(() => {
+        window.removeEventListener('click', suppressClick, true)
+      })
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(opening)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedOpeningEntry, setMovingNode, setSelection],
+  )
   const handleSlabSelect = useCallback(
     (slabId: SlabNode['id'], event: ReactMouseEvent<SVGElement>) => {
       emitFloorplanNodeClick(slabId, event)
@@ -5988,32 +5892,34 @@ export function FloorplanPanel() {
     },
     [selectedOpeningEntry, setMovingNode, setSelection],
   )
+  const duplicateSelectedOpening = useCallback(() => {
+    const opening = selectedOpeningEntry?.opening
+    if (!opening?.parentId) {
+      return
+    }
+
+    sfxEmitter.emit('sfx:item-pick')
+    useScene.temporal.getState().pause()
+
+    const cloned = structuredClone(opening) as Record<string, unknown>
+    delete cloned.id
+    cloned.metadata = {
+      ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
+      isNew: true,
+    }
+
+    const duplicate = opening.type === 'door' ? DoorNode.parse(cloned) : WindowNode.parse(cloned)
+
+    useScene.getState().createNode(duplicate, opening.parentId as AnyNodeId)
+    setMovingNode(duplicate)
+    setSelection({ selectedIds: [] })
+  }, [selectedOpeningEntry, setMovingNode, setSelection])
   const handleSelectedOpeningDuplicate = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-
-      const opening = selectedOpeningEntry?.opening
-      if (!opening?.parentId) {
-        return
-      }
-
-      sfxEmitter.emit('sfx:item-pick')
-      useScene.temporal.getState().pause()
-
-      const cloned = structuredClone(opening) as Record<string, unknown>
-      delete cloned.id
-      cloned.metadata = {
-        ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
-        isNew: true,
-      }
-
-      const duplicate = opening.type === 'door' ? DoorNode.parse(cloned) : WindowNode.parse(cloned)
-
-      useScene.getState().createNode(duplicate, opening.parentId as AnyNodeId)
-      setMovingNode(duplicate)
-      setSelection({ selectedIds: [] })
+      duplicateSelectedOpening()
     },
-    [selectedOpeningEntry, setMovingNode, setSelection],
+    [duplicateSelectedOpening],
   )
   const handleSelectedOpeningDelete = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -6718,68 +6624,6 @@ export function FloorplanPanel() {
     setStructureLayer,
     site,
   ])
-  const handleFloorplanSelectionToolChange = useCallback(
-    (nextTool: FloorplanSelectionTool) => {
-      setFloorplanSelectionTool(nextTool)
-
-      if (phase === 'site') {
-        restoreGroundLevelStructureSelection()
-        return
-      }
-
-      if (mode !== 'select') {
-        setMode('select')
-      }
-    },
-    [mode, phase, restoreGroundLevelStructureSelection, setMode],
-  )
-  const handleQuickBuildToolSelect = useCallback(
-    (nextTool: FloorplanQuickBuildTool) => {
-      setPhase('structure')
-      setStructureLayer(nextTool === 'zone' ? 'zones' : 'elements')
-      setMode('build')
-      setTool(nextTool)
-      setCatalogCategory(null)
-    },
-    [setCatalogCategory, setMode, setPhase, setStructureLayer, setTool],
-  )
-  const handleSiteEditShortcutSelect = useCallback(() => {
-    if (!(levelNode?.type === 'level' && levelNode.level === 0)) {
-      return
-    }
-
-    if (isSiteEditShortcutActive) {
-      restoreGroundLevelStructureSelection()
-      return
-    }
-
-    setPhase('site')
-    setMode('edit')
-
-    if (currentBuildingId) {
-      setSelection({
-        buildingId: currentBuildingId,
-        levelId: levelNode.id,
-        selectedIds: [],
-        zoneId: null,
-      })
-      return
-    }
-
-    setSelection({
-      levelId: levelNode.id,
-      selectedIds: [],
-      zoneId: null,
-    })
-  }, [
-    currentBuildingId,
-    isSiteEditShortcutActive,
-    levelNode,
-    setMode,
-    setPhase,
-    setSelection,
-    restoreGroundLevelStructureSelection,
-  ])
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -6810,6 +6654,36 @@ export function FloorplanPanel() {
       window.removeEventListener('keydown', handleKeyDown, true)
     }
   }, [isFloorplanHovered, phase, restoreGroundLevelStructureSelection])
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'c') {
+        return
+      }
+
+      if (!(isFloorplanHovered && selectedOpeningEntry)) {
+        return
+      }
+
+      const target = event.target as HTMLElement | null
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        Boolean(target?.isContentEditable)
+
+      if (isEditableTarget) {
+        return
+      }
+
+      event.preventDefault()
+      duplicateSelectedOpening()
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [duplicateSelectedOpening, isFloorplanHovered, selectedOpeningEntry])
   const activeDraftAnchorPoint = draftStart ?? activePolygonDraftPoints[0] ?? null
   const floorplanCursorColor = wallEndpointDraft
     ? palette.editCursor
@@ -6819,396 +6693,14 @@ export function FloorplanPanel() {
 
   return (
     <div
-      className="pointer-events-auto fixed z-50 flex flex-col overflow-hidden rounded-smooth-xl bg-background/95 shadow-[0_24px_48px_rgba(15,23,42,0.16),0_8px_20px_rgba(15,23,42,0.08)] ring-1 ring-border/35 backdrop-blur-md"
+      className="pointer-events-auto flex h-full w-full flex-col overflow-hidden bg-background/95"
       onPointerEnter={() => setFloorplanHovered(true)}
       onPointerLeave={() => {
         setFloorplanHovered(false)
         setFloorplanCursorPosition(null)
       }}
-      style={{
-        cursor: activeResizeDirection ? resizeCursorByDirection[activeResizeDirection] : undefined,
-        height: panelRect.height,
-        left: panelRect.x,
-        top: panelRect.y,
-        visibility: isPanelReady ? 'visible' : 'hidden',
-        width: panelRect.width,
-      }}
+      ref={containerRef}
     >
-      {resizeHandleConfigurations.map((handle) => (
-        <div
-          aria-hidden="true"
-          className={handle.className}
-          key={handle.direction}
-          onPointerDown={(event) => handleResizeStart(handle.direction, event)}
-        />
-      ))}
-
-      <div
-        className={cn(
-          'flex h-11 shrink-0 select-none items-center justify-between border-border/20 border-b bg-background/80 px-3',
-          isDraggingPanel ? 'cursor-grabbing' : 'cursor-grab',
-        )}
-        onPointerDown={handlePanelDragStart}
-      >
-        <div className="flex min-w-0 items-center pr-3">
-          <div
-            className="min-w-0"
-            data-floorplan-panel-control="true"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <DropdownMenu
-              modal={false}
-              onOpenChange={(open) => {
-                clearLevelMenuCloseTimeout()
-                setIsLevelMenuOpen(hasFloorplanLevelSwitcher ? open : false)
-              }}
-              open={isLevelMenuOpen}
-            >
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    'group/level-switcher flex min-w-0 items-center gap-2 rounded-xl border border-border/45 bg-background/92 py-1 pr-2 pl-1.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color,color,box-shadow] duration-150 focus-visible:outline-none',
-                    hasFloorplanLevelSwitcher
-                      ? 'hover:border-border/60 hover:bg-background focus-visible:border-border/60 focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-border/60'
-                      : 'cursor-default',
-                  )}
-                  disabled={!hasFloorplanLevelSwitcher}
-                  onPointerEnter={openLevelMenu}
-                  onPointerLeave={scheduleLevelMenuClose}
-                  type="button"
-                >
-                  <span className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg bg-background/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <img
-                      alt=""
-                      aria-hidden="true"
-                      className="h-4 w-4 object-contain"
-                      src="/icons/blueprint.png"
-                    />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-medium text-foreground text-sm tabular-nums">
-                    {floorplanLevelLabel}
-                  </span>
-                  {hasFloorplanLevelSwitcher ? (
-                    <ChevronDown
-                      className={cn(
-                        'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-[transform,opacity,color] duration-150',
-                        isLevelMenuOpen
-                          ? 'rotate-180 text-foreground/70 opacity-100'
-                          : 'opacity-45 group-hover/level-switcher:opacity-70 group-focus-visible/level-switcher:opacity-70',
-                      )}
-                    />
-                  ) : null}
-                </button>
-              </DropdownMenuTrigger>
-              {hasFloorplanLevelSwitcher ? (
-                <DropdownMenuContent
-                  align="start"
-                  className="min-w-52 rounded-xl border-border/45 bg-background/96 p-1 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
-                  onPointerEnter={openLevelMenu}
-                  onPointerLeave={scheduleLevelMenuClose}
-                  side="bottom"
-                  sideOffset={10}
-                >
-                  <DropdownMenuRadioGroup
-                    onValueChange={handleFloorplanLevelSelect}
-                    value={levelId ?? ''}
-                  >
-                    {floorplanLevels.map((level) => (
-                      <DropdownMenuRadioItem
-                        className="rounded-lg py-2 pr-3 pl-8 data-[state=checked]:bg-accent/60"
-                        key={level.id}
-                        value={level.id}
-                      >
-                        <span className="truncate">{getLevelDisplayLabel(level)}</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              ) : null}
-            </DropdownMenu>
-          </div>
-        </div>
-
-        <div
-          className="flex items-center gap-1.5"
-          data-floorplan-panel-control="true"
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div className="flex items-center gap-1 rounded-xl border border-border/45 bg-background/92 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex">
-                  <button
-                    aria-label={isSiteEditShortcutActive ? 'Exit site editing' : 'Edit site'}
-                    aria-pressed={isSiteEditShortcutActive}
-                    className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,filter,opacity,transform] duration-200 active:scale-[0.96]',
-                      isSiteEditShortcutActive
-                        ? 'bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                        : canUseSiteEditShortcut
-                          ? 'opacity-75 grayscale hover:bg-accent hover:opacity-100 hover:grayscale-0'
-                          : 'cursor-not-allowed opacity-35 grayscale',
-                    )}
-                    disabled={!canUseSiteEditShortcut}
-                    onClick={handleSiteEditShortcutSelect}
-                    type="button"
-                  >
-                    <img
-                      alt=""
-                      aria-hidden="true"
-                      className="h-4.5 w-4.5 object-contain"
-                      src="/icons/site.png"
-                    />
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8}>
-                {canUseSiteEditShortcut
-                  ? isSiteEditShortcutActive
-                    ? 'Exit site editing'
-                    : 'Edit site'
-                  : 'Site editing is only available on ground level'}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          <div className="flex items-center rounded-xl border border-border/45 bg-background/92 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <Popover onOpenChange={setIsGuideQuickAccessOpen} open={isGuideQuickAccessOpen}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label={showGuides ? 'Hide guide images' : 'Show guide images'}
-                    aria-pressed={showGuides}
-                    className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,filter,opacity,transform] duration-200 active:scale-[0.96]',
-                      showGuides
-                        ? 'bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                        : hasGuideImages
-                          ? 'opacity-75 grayscale hover:bg-accent hover:opacity-100 hover:grayscale-0'
-                          : 'opacity-45 grayscale hover:bg-accent/60 hover:opacity-70',
-                    )}
-                    onClick={() => setShowGuides(!showGuides)}
-                    type="button"
-                  >
-                    <img
-                      alt=""
-                      aria-hidden="true"
-                      className="h-4.5 w-4.5 object-contain"
-                      src="/icons/floorplan.png"
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={8}>
-                  {showGuides ? 'Hide guide images' : 'Show guide images'}
-                </TooltipContent>
-              </Tooltip>
-
-              <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-border/50" />
-
-              <PopoverTrigger asChild>
-                <button
-                  aria-expanded={isGuideQuickAccessOpen}
-                  aria-haspopup="dialog"
-                  aria-label="Adjust guide image opacity"
-                  className={cn(
-                    'flex h-8 w-7 items-center justify-center rounded-lg transition-[background-color,opacity,transform] duration-200 active:scale-[0.96]',
-                    isGuideQuickAccessOpen
-                      ? 'bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                      : hasGuideImages
-                        ? 'opacity-75 hover:bg-accent hover:opacity-100'
-                        : 'opacity-45 hover:bg-accent/60 hover:opacity-70',
-                  )}
-                  type="button"
-                >
-                  <ChevronDown
-                    className={cn(
-                      'h-3.5 w-3.5 shrink-0 transition-[transform,opacity,color] duration-150',
-                      isGuideQuickAccessOpen
-                        ? 'rotate-180 text-foreground/70 opacity-100'
-                        : 'text-muted-foreground opacity-70',
-                    )}
-                  />
-                </button>
-              </PopoverTrigger>
-
-              <PopoverContent
-                align="end"
-                className="w-80 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
-                side="bottom"
-                sideOffset={10}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <img
-                        alt=""
-                        aria-hidden="true"
-                        className="h-4 w-4 object-contain"
-                        src="/icons/floorplan.png"
-                      />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground text-sm">Guide images</p>
-                      <p className="text-muted-foreground text-xs">{guideImagesDescription}</p>
-                    </div>
-                  </div>
-
-                  {hasGuideImages ? (
-                    <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                      {levelGuides.map((guide, index) => (
-                        <div
-                          className="space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
-                          key={guide.id}
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <img
-                              alt=""
-                              aria-hidden="true"
-                              className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
-                              src="/icons/floorplan.png"
-                            />
-                            <p className="truncate font-medium text-foreground text-sm">
-                              {guide.name || `Guide image ${index + 1}`}
-                            </p>
-                          </div>
-
-                          <SliderControl
-                            label="Opacity"
-                            max={100}
-                            min={0}
-                            onChange={(value) => handleGuideOpacityChange(guide.id, value)}
-                            precision={0}
-                            step={1}
-                            unit="%"
-                            value={guide.opacity}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-                      No guide images on this level yet.
-                    </div>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-xl border border-border/45 bg-background/92 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            {FLOORPLAN_QUICK_BUILD_TOOLS.map((quickTool) => {
-              const isActive = phase === 'structure' && mode === 'build' && tool === quickTool.id
-
-              return (
-                <Tooltip key={quickTool.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      aria-label={`Activate ${quickTool.label.toLowerCase()} tool`}
-                      aria-pressed={isActive}
-                      className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,filter,opacity,transform] duration-200 active:scale-[0.96]',
-                        isActive
-                          ? 'bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                          : 'opacity-75 grayscale hover:bg-accent hover:opacity-100 hover:grayscale-0',
-                      )}
-                      onClick={() => handleQuickBuildToolSelect(quickTool.id)}
-                      type="button"
-                    >
-                      <img
-                        alt=""
-                        aria-hidden="true"
-                        className="h-4.5 w-4.5 object-contain"
-                        src={quickTool.iconSrc}
-                      />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={8}>
-                    {quickTool.label}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </div>
-
-          <div
-            className={cn(
-              'flex items-center gap-1 rounded-xl border border-border/45 bg-background/92 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]',
-              mode !== 'select' && 'opacity-60',
-            )}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  aria-label="Click select"
-                  aria-pressed={floorplanSelectionTool === 'click'}
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,transform] duration-200 active:scale-[0.96]',
-                    floorplanSelectionTool === 'click'
-                      ? 'bg-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                      : 'hover:bg-accent',
-                  )}
-                  onClick={() => handleFloorplanSelectionToolChange('click')}
-                  type="button"
-                >
-                  <img
-                    alt=""
-                    aria-hidden="true"
-                    className={cn(
-                      'h-[18px] w-[18px] object-contain transition-[opacity,filter] duration-200',
-                      floorplanSelectionTool === 'click'
-                        ? 'opacity-100 grayscale-0'
-                        : 'opacity-60 grayscale',
-                    )}
-                    src="/icons/select.png"
-                  />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8}>
-                Click select
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  aria-label="Box select"
-                  aria-pressed={floorplanSelectionTool === 'marquee'}
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-200 active:scale-[0.96]',
-                    floorplanSelectionTool === 'marquee'
-                      ? 'bg-accent text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                      : 'hover:bg-accent hover:text-foreground',
-                  )}
-                  onClick={() => handleFloorplanSelectionToolChange('marquee')}
-                  type="button"
-                >
-                  <Icon color="currentColor" height={18} icon="mdi:select-drag" width={18} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8}>
-                Box select
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                aria-label="Close floorplan"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/45 bg-background/92 text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,color,transform] duration-200 hover:bg-accent hover:text-foreground active:scale-[0.96]"
-                onClick={() => setFloorplanOpen(false)}
-                type="button"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8}>
-              Close floorplan
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
         {activeFloorplanCursorIndicator && floorplanCursorPosition && !isPanning && (
           <div
@@ -7318,6 +6810,7 @@ export function FloorplanPanel() {
               hoveredWallId={hoveredWallId}
               onOpeningDoubleClick={handleOpeningDoubleClick}
               onOpeningHoverChange={setHoveredOpeningId}
+              onOpeningPointerDown={handleOpeningPointerDown}
               onOpeningSelect={handleOpeningSelect}
               onSlabDoubleClick={handleSlabDoubleClick}
               onSlabSelect={handleSlabSelect}

@@ -56,8 +56,8 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
-  // Show site boundary editor when in site phase and edit mode
-  const showSiteBoundaryEditor = phase === 'site' && mode === 'edit'
+  // Show site boundary editor when in site phase (toggle controls entry/exit)
+  const showSiteBoundaryEditor = phase === 'site'
 
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =

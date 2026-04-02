@@ -2,17 +2,35 @@
 
 import type { SiteNode } from '@pascal-app/core'
 import { sceneRegistry, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import type { Object3D } from 'three'
 
+function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
+  if (unit === 'imperial') {
+    const feet = value * 3.280_84
+    const wholeFeet = Math.floor(feet)
+    const inches = Math.round((feet - wholeFeet) * 12)
+    if (inches === 12) return `${wholeFeet + 1}'0"`
+    return `${wholeFeet}'${inches}"`
+  }
+  return `${Number.parseFloat(value.toFixed(2))}m`
+}
+
 export function SiteEdgeLabels() {
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const nodes = useScene((state) => state.nodes)
+  const unit = useViewer((state) => state.unit)
+  const theme = useViewer((state) => state.theme)
 
   const siteNode = rootNodeIds[0] ? (nodes[rootNodeIds[0]] as SiteNode) : null
   const siteNodeId = siteNode?.id
+
+  const isNight = theme === 'dark'
+  const color = isNight ? '#ffffff' : '#111111'
+  const shadowColor = isNight ? '#111111' : '#ffffff'
 
   const [siteObj, setSiteObj] = useState<Object3D | null>(null)
   const prevSiteNodeIdRef = useRef<string | undefined>(undefined)
@@ -55,8 +73,14 @@ export function SiteEdgeLabels() {
           style={{ pointerEvents: 'none', userSelect: 'none' }}
           zIndexRange={[10, 0]}
         >
-          <div className="whitespace-nowrap rounded bg-black/75 px-1.5 py-0.5 font-mono text-white text-xs backdrop-blur-sm">
-            {edge.dist.toFixed(2)}m
+          <div
+            className="whitespace-nowrap font-bold font-mono text-[15px]"
+            style={{
+              color,
+              textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
+            }}
+          >
+            {formatMeasurement(edge.dist, unit)}
           </div>
         </Html>
       ))}
