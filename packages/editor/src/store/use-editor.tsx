@@ -110,6 +110,9 @@ type EditorState = {
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
+  // First-person walkthrough mode (street view)
+  isFirstPersonMode: boolean
+  setFirstPersonMode: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
   floorplanPaneRatio: number
@@ -433,6 +436,23 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
+      isFirstPersonMode: false,
+      setFirstPersonMode: (enabled) => {
+        if (enabled) {
+          // Force perspective camera and full-height walls for immersive walkthrough
+          useViewer.getState().setCameraMode('perspective')
+          useViewer.getState().setWallMode('up')
+          set({
+            isFirstPersonMode: true,
+            mode: 'select',
+            tool: null,
+            catalogCategory: null,
+          })
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        } else {
+          set({ isFirstPersonMode: false })
+        }
+      },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
