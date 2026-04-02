@@ -15,6 +15,7 @@ export {
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
+export { ViewerToolbarLeft, ViewerToolbarRight } from './components/ui/viewer-toolbar'
 export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
 export { PresetsProvider } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'

@@ -1,6 +1,11 @@
 'use client'
 
-import { Editor, type SidebarTab } from '@pascal-app/editor'
+import {
+  Editor,
+  type SidebarTab,
+  ViewerToolbarLeft,
+  ViewerToolbarRight,
+} from '@pascal-app/editor'
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   {
@@ -17,6 +22,8 @@ export default function Home() {
         layoutVersion="v2"
         projectId="local-editor"
         sidebarTabs={SIDEBAR_TABS}
+        viewerToolbarLeft={<ViewerToolbarLeft />}
+        viewerToolbarRight={<ViewerToolbarRight />}
       />
     </div>
   )
