@@ -33,9 +33,14 @@ const SIDEBAR_WIDTH_MOBILE = '18rem'
 const SIDEBAR_WIDTH_ICON = '3rem'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
+const SIDEBAR_COLLAPSE_THRESHOLD = 220
+const SIDEBAR_MAX_WIDTH = 800
+
 type SidebarStore = {
   width: number
   setWidth: (width: number) => void
+  isCollapsed: boolean
+  setIsCollapsed: (collapsed: boolean) => void
   isDragging: boolean
   setIsDragging: (isDragging: boolean) => void
 }
@@ -44,13 +49,21 @@ export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
       width: 288, // 18rem = 288px
-      setWidth: (width) => set({ width: Math.max(288, Math.min(width, 800)) }),
+      setWidth: (width) => {
+        if (width < SIDEBAR_COLLAPSE_THRESHOLD) {
+          set({ isCollapsed: true })
+        } else {
+          set({ width: Math.min(width, SIDEBAR_MAX_WIDTH), isCollapsed: false })
+        }
+      },
+      isCollapsed: false,
+      setIsCollapsed: (collapsed) => set({ isCollapsed: collapsed }),
       isDragging: false,
       setIsDragging: (isDragging) => set({ isDragging }),
     }),
     {
       name: 'sidebar-preferences',
-      partialize: (state) => ({ width: state.width }), // Only persist width
+      partialize: (state) => ({ width: state.width, isCollapsed: state.isCollapsed }),
     },
   ),
 )

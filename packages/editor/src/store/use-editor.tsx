@@ -16,6 +16,14 @@ import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
+const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
+const MIN_FLOORPLAN_PANE_RATIO = 0.15
+const MAX_FLOORPLAN_PANE_RATIO = 0.85
+
+export type ViewMode = '3d' | '2d' | 'split'
+export type SplitOrientation = 'horizontal' | 'vertical'
+
 export type Phase = 'site' | 'structure' | 'furnish'
 
 export type Mode = 'select' | 'edit' | 'delete' | 'build'
@@ -53,6 +61,8 @@ export type CatalogCategory =
 
 export type StructureLayer = 'zones' | 'elements'
 
+export type FloorplanSelectionTool = 'click' | 'marquee'
+
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
@@ -84,24 +94,41 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
-  // Toggleable 2D floorplan overlay
+  // View mode (3D only, 2D only, or split 2D+3D)
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+  splitOrientation: SplitOrientation
+  setSplitOrientation: (orientation: SplitOrientation) => void
+  // Toggleable 2D floorplan overlay (backward compat — derived from viewMode)
   isFloorplanOpen: boolean
   setFloorplanOpen: (open: boolean) => void
   toggleFloorplanOpen: () => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  floorplanSelectionTool: FloorplanSelectionTool
+  setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   setFirstPersonMode: (enabled: boolean) => void
+  activeSidebarPanel: string
+  setActiveSidebarPanel: (id: string) => void
+  floorplanPaneRatio: number
+  setFloorplanPaneRatio: (ratio: number) => void
 }
 
 export type PersistedEditorUiState = Pick<
   EditorState,
-  'phase' | 'mode' | 'tool' | 'structureLayer' | 'catalogCategory' | 'isFloorplanOpen'
+  'phase' | 'mode' | 'tool' | 'structureLayer' | 'catalogCategory' | 'isFloorplanOpen' | 'viewMode'
 >
+
+type PersistedEditorLayoutState = Pick<
+  EditorState,
+  'activeSidebarPanel' | 'floorplanPaneRatio' | 'splitOrientation' | 'floorplanSelectionTool'
+>
+type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
 export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
   phase: 'site',
@@ -110,14 +137,30 @@ export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
   structureLayer: 'elements',
   catalogCategory: null,
   isFloorplanOpen: false,
+  viewMode: '3d',
+}
+
+export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState = {
+  activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
+  floorplanPaneRatio: DEFAULT_FLOORPLAN_PANE_RATIO,
+  splitOrientation: 'horizontal',
+  floorplanSelectionTool: 'click',
 }
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   if (phase === 'site') {
-    return mode === 'edit' ? 'edit' : 'select'
+    return 'select'
   }
 
   return mode === 'build' || mode === 'delete' ? mode : 'select'
+}
+
+function normalizeFloorplanPaneRatio(value: unknown): number {
+  if (!(typeof value === 'number' && Number.isFinite(value))) {
+    return DEFAULT_FLOORPLAN_PANE_RATIO
+  }
+
+  return Math.min(MAX_FLOORPLAN_PANE_RATIO, Math.max(MIN_FLOORPLAN_PANE_RATIO, value))
 }
 
 export function normalizePersistedEditorUiState(
@@ -125,13 +168,22 @@ export function normalizePersistedEditorUiState(
 ): PersistedEditorUiState {
   const phase = state?.phase === 'structure' || state?.phase === 'furnish' ? state.phase : 'site'
   const mode = normalizeModeForPhase(phase, state?.mode)
-  const isFloorplanOpen = Boolean(state?.isFloorplanOpen)
+
+  // Migrate old isFloorplanOpen to viewMode
+  let viewMode: ViewMode = '3d'
+  if (state?.viewMode === '2d' || state?.viewMode === '3d' || state?.viewMode === 'split') {
+    viewMode = state.viewMode
+  } else if (state?.isFloorplanOpen) {
+    viewMode = 'split'
+  }
+  const isFloorplanOpen = viewMode !== '3d'
 
   if (phase === 'site') {
     return {
       ...DEFAULT_PERSISTED_EDITOR_UI_STATE,
       phase,
       mode,
+      viewMode,
       isFloorplanOpen,
     }
   }
@@ -143,6 +195,7 @@ export function normalizePersistedEditorUiState(
       tool: mode === 'build' ? 'item' : null,
       structureLayer: 'elements',
       catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'furniture') : null,
+      viewMode,
       isFloorplanOpen,
     }
   }
@@ -156,6 +209,7 @@ export function normalizePersistedEditorUiState(
       tool: null,
       structureLayer,
       catalogCategory: null,
+      viewMode,
       isFloorplanOpen,
     }
   }
@@ -167,6 +221,7 @@ export function normalizePersistedEditorUiState(
       tool: 'zone',
       structureLayer,
       catalogCategory: null,
+      viewMode,
       isFloorplanOpen,
     }
   }
@@ -178,7 +233,22 @@ export function normalizePersistedEditorUiState(
       state?.tool && state.tool !== 'property-line' && state.tool !== 'zone' ? state.tool : 'wall',
     structureLayer,
     catalogCategory: state?.tool === 'item' ? (state.catalogCategory ?? null) : null,
+    viewMode,
     isFloorplanOpen,
+  }
+}
+
+function normalizePersistedEditorLayoutState(
+  state: Partial<PersistedEditorLayoutState> | null | undefined,
+): PersistedEditorLayoutState {
+  return {
+    activeSidebarPanel:
+      typeof state?.activeSidebarPanel === 'string' && state.activeSidebarPanel.trim()
+        ? state.activeSidebarPanel
+        : DEFAULT_ACTIVE_SIDEBAR_PANEL,
+    floorplanPaneRatio: normalizeFloorplanPaneRatio(state?.floorplanPaneRatio),
+    splitOrientation: state?.splitOrientation === 'vertical' ? 'vertical' : 'horizontal',
+    floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
   }
 }
 
@@ -193,8 +263,49 @@ export function hasCustomPersistedEditorUiState(
     normalizedState.tool !== DEFAULT_PERSISTED_EDITOR_UI_STATE.tool ||
     normalizedState.structureLayer !== DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer ||
     normalizedState.catalogCategory !== DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory ||
-    normalizedState.isFloorplanOpen !== DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen
+    normalizedState.isFloorplanOpen !== DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen ||
+    normalizedState.viewMode !== DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode
   )
+}
+
+/**
+ * Selects the first building and level 0 in the scene.
+ * Safe to call any time — no-ops if already selected or scene is empty.
+ */
+export function selectDefaultBuildingAndLevel() {
+  const viewer = useViewer.getState()
+  const scene = useScene.getState()
+
+  let buildingId = viewer.selection.buildingId
+
+  // If no building selected, find the first one from site's children
+  if (!buildingId) {
+    const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
+    if (siteNode?.type === 'site') {
+      const firstBuilding = siteNode.children
+        .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
+        .find((node) => node?.type === 'building')
+      if (firstBuilding) {
+        buildingId = firstBuilding.id as BuildingNode['id']
+        viewer.setSelection({ buildingId })
+      }
+    }
+  }
+
+  // If no level selected, find level 0 in the building
+  if (buildingId && !viewer.selection.levelId) {
+    const buildingNode = scene.nodes[buildingId] as BuildingNode
+    const level0Id = buildingNode.children.find((childId) => {
+      const levelNode = scene.nodes[childId] as LevelNode
+      return levelNode?.type === 'level' && levelNode.level === 0
+    })
+    if (level0Id) {
+      viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
+    } else if (buildingNode.children[0]) {
+      // Fallback to first level if level 0 doesn't exist
+      viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
+    }
+  }
 }
 
 const useEditor = create<EditorState>()(
@@ -226,41 +337,6 @@ const useEditor = create<EditorState>()(
         }
 
         const viewer = useViewer.getState()
-        const scene = useScene.getState()
-
-        // Helper to find building and level 0
-        const selectBuildingAndLevel0 = () => {
-          let buildingId = viewer.selection.buildingId
-
-          // If no building selected, find the first one from site's children
-          if (!buildingId) {
-            const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
-            if (siteNode?.type === 'site') {
-              const firstBuilding = siteNode.children
-                .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
-                .find((node) => node?.type === 'building')
-              if (firstBuilding) {
-                buildingId = firstBuilding.id as BuildingNode['id']
-                viewer.setSelection({ buildingId })
-              }
-            }
-          }
-
-          // If no level selected, find level 0 in the building
-          if (buildingId && !viewer.selection.levelId) {
-            const buildingNode = scene.nodes[buildingId] as BuildingNode
-            const level0Id = buildingNode.children.find((childId) => {
-              const levelNode = scene.nodes[childId] as LevelNode
-              return levelNode?.type === 'level' && levelNode.level === 0
-            })
-            if (level0Id) {
-              viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
-            } else if (buildingNode.children[0]) {
-              // Fallback to first level if level 0 doesn't exist
-              viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
-            }
-          }
-        }
 
         switch (phase) {
           case 'site':
@@ -269,11 +345,11 @@ const useEditor = create<EditorState>()(
             break
 
           case 'structure':
-            selectBuildingAndLevel0()
+            selectDefaultBuildingAndLevel()
             break
 
           case 'furnish':
-            selectBuildingAndLevel0()
+            selectDefaultBuildingAndLevel()
             // Furnish mode only supports elements layer, not zones
             set({ structureLayer: 'elements' })
             break
@@ -343,36 +419,64 @@ const useEditor = create<EditorState>()(
           set({ isPreviewMode: false })
         }
       },
+      viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
+      setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
+      splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
+      setSplitOrientation: (orientation) => set({ splitOrientation: orientation }),
       isFloorplanOpen: DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen,
-      setFloorplanOpen: (open) => set({ isFloorplanOpen: open }),
-      toggleFloorplanOpen: () => set((state) => ({ isFloorplanOpen: !state.isFloorplanOpen })),
+      setFloorplanOpen: (open) => set({ isFloorplanOpen: open, viewMode: open ? 'split' : '3d' }),
+      toggleFloorplanOpen: () =>
+        set((state) => {
+          const open = !state.isFloorplanOpen
+          return { isFloorplanOpen: open, viewMode: open ? 'split' : '3d' }
+        }),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      floorplanSelectionTool: 'click' as FloorplanSelectionTool,
+      setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
+      _viewModeBeforeFirstPerson: null as ViewMode | null,
       setFirstPersonMode: (enabled) => {
         if (enabled) {
+          // Save current view mode and force 3D for immersive walkthrough
+          const currentViewMode = get().viewMode
           // Force perspective camera and full-height walls for immersive walkthrough
           useViewer.getState().setCameraMode('perspective')
           useViewer.getState().setWallMode('up')
           set({
             isFirstPersonMode: true,
+            _viewModeBeforeFirstPerson: currentViewMode,
+            viewMode: '3d',
+            isFloorplanOpen: false,
             mode: 'select',
             tool: null,
             catalogCategory: null,
           })
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
-          set({ isFirstPersonMode: false })
+          // Restore previous view mode
+          const prevMode = get()._viewModeBeforeFirstPerson
+          set({
+            isFirstPersonMode: false,
+            _viewModeBeforeFirstPerson: null,
+            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
+          })
         }
       },
+      activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
+      setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
+      floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
+      setFloorplanPaneRatio: (ratio) =>
+        set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
     }),
     {
       name: 'pascal-editor-ui-preferences',
       merge: (persistedState, currentState) => ({
         ...currentState,
-        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorUiState>),
+        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
+        ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
       }),
       partialize: (state) => ({
         phase: state.phase,
@@ -381,6 +485,11 @@ const useEditor = create<EditorState>()(
         structureLayer: state.structureLayer,
         catalogCategory: state.catalogCategory,
         isFloorplanOpen: state.isFloorplanOpen,
+        viewMode: state.viewMode,
+        activeSidebarPanel: state.activeSidebarPanel,
+        floorplanPaneRatio: state.floorplanPaneRatio,
+        splitOrientation: state.splitOrientation,
+        floorplanSelectionTool: state.floorplanSelectionTool,
       }),
     },
   ),

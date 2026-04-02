@@ -19,12 +19,10 @@ export const useKeyboard = () => {
         return
       }
 
-      // In first-person mode, all shortcuts are handled by FirstPersonControls
-      if (useEditor.getState().isFirstPersonMode) {
-        return
-      }
-
       if (e.key === 'Escape') {
+        // If in walkthrough mode, let WalkthroughControls handle ESC
+        if (useViewer.getState().walkthroughMode) return
+
         e.preventDefault()
         _toolCancelConsumed = false
         emitter.emit('tool:cancel')
@@ -35,6 +33,7 @@ export const useKeyboard = () => {
           // Return to the default select tool while keeping the active building/level context.
           useEditor.getState().setEditingHole(null)
           useEditor.getState().setMode('select')
+          useEditor.getState().setFloorplanSelectionTool('click')
 
           // Clear selections to close UI panels, but KEEP the active building and level context.
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
@@ -67,13 +66,7 @@ export const useKeyboard = () => {
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
-      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        const phase = useEditor.getState().phase
-        if (phase === 'structure' || phase === 'furnish') {
-          useEditor.getState().setMode('delete')
-          useViewer.getState().setSelection({ selectedIds: [] })
-        }
+        useEditor.getState().setFloorplanSelectionTool('click')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('build')
@@ -116,26 +109,23 @@ export const useKeyboard = () => {
           }
         }
       } else if (e.key === 'r' || e.key === 'R') {
-        // Rotate selected node if it supports rotation (items, roofs, etc.)
+        // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node && 'rotation' in node) {
             e.preventDefault()
             const ROTATION_STEP = Math.PI / 4
-            let newRotationY = 0
 
             // Handle different rotation types (number for roof, array for items/windows/doors)
             if (typeof node.rotation === 'number') {
-              newRotationY = node.rotation + ROTATION_STEP
-              useScene.getState().updateNode(node.id, { rotation: newRotationY })
+              useScene.getState().updateNode(node.id, { rotation: node.rotation + ROTATION_STEP })
             } else if (Array.isArray(node.rotation)) {
-              newRotationY = node.rotation[1] + ROTATION_STEP
               useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], newRotationY, node.rotation[2]],
+                rotation: [node.rotation[0], node.rotation[1] + ROTATION_STEP, node.rotation[2]],
               })
             }
-            sfxEmitter.emit('sfx:item-rotate') // Play a sound for feedback
+            sfxEmitter.emit('sfx:item-rotate')
           }
         }
       } else if (e.key === 't' || e.key === 'T') {

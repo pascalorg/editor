@@ -1,23 +1,29 @@
 'use client'
 
-import { type LucideIcon, Pencil, Trash2 } from 'lucide-react'
+import { Icon } from '@iconify/react'
+import { type LevelNode, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
-import useEditor, { type Mode, type Phase } from './../../../store/use-editor'
+import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
-type ModeConfig = {
-  id: Mode
+type ControlId = 'select' | 'box-select' | 'site-edit' | 'build' | 'delete'
+
+type ControlConfig = {
+  id: ControlId
   icon?: LucideIcon
+  iconifyIcon?: string
   imageSrc?: string
   label: string
-  shortcut: string
+  shortcut?: string
   color: string
   activeColor: string
 }
 
-// All available control modes
-const allModes: ModeConfig[] = [
+// Fixed set of controls — always visible, never morphs
+const controls: ControlConfig[] = [
   {
     id: 'select',
     imageSrc: '/icons/select.png',
@@ -27,12 +33,18 @@ const allModes: ModeConfig[] = [
     activeColor: 'bg-blue-500/20 text-blue-400',
   },
   {
-    id: 'edit',
-    icon: Pencil,
-    label: 'Edit',
-    shortcut: 'E',
-    color: 'hover:bg-orange-500/20 hover:text-orange-400',
-    activeColor: 'bg-orange-500/20 text-orange-400',
+    id: 'box-select',
+    iconifyIcon: 'mdi:select-drag',
+    label: 'Box select',
+    color: 'hover:bg-white/5',
+    activeColor: 'bg-white/10 hover:bg-white/10',
+  },
+  {
+    id: 'site-edit',
+    imageSrc: '/icons/site.png',
+    label: 'Edit site',
+    color: 'hover:bg-white/5',
+    activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
     id: 'build',
@@ -50,80 +62,128 @@ const allModes: ModeConfig[] = [
     color: 'hover:bg-red-500/20 hover:text-red-400',
     activeColor: 'bg-red-500/20 text-red-400',
   },
-  // {
-  //   id: 'painting',
-  //   icon: Paintbrush,
-  //   label: 'Painting',
-  //   shortcut: 'P',
-  //   color: 'hover:bg-cyan-500/20 hover:text-cyan-400',
-  //   activeColor: 'bg-cyan-500/20 text-cyan-400',
-  // },
-  // {
-  //   id: 'guide',
-  //   icon: Image,
-  //   label: 'Guide',
-  //   shortcut: 'G',
-  //   color: 'hover:bg-purple-500/20 hover:text-purple-400',
-  //   activeColor: 'bg-purple-500/20 text-purple-400',
-  // },
 ]
-
-// Define which modes are available in each editor mode
-const modesByPhase: Record<Phase, Mode[]> = {
-  site: ['select', 'edit'],
-  structure: ['select', 'delete', 'build'],
-  furnish: ['select', 'delete', 'build'],
-}
 
 export function ControlModes() {
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
+  const selectionTool = useEditor((state) => state.floorplanSelectionTool)
   const setMode = useEditor((state) => state.setMode)
+  const setPhase = useEditor((state) => state.setPhase)
+  const setStructureLayer = useEditor((state) => state.setStructureLayer)
+  const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
+  const levelId = useViewer((s) => s.selection.levelId)
 
-  const availableModeIds = modesByPhase[phase]
-  const availableModes = allModes.filter((m) => availableModeIds.includes(m.id))
+  const levelNode = useScene((state) =>
+    levelId ? (state.nodes[levelId] as LevelNode | undefined) : undefined,
+  )
 
-  const handleModeClick = (mode: Mode) => {
-    setMode(mode)
+  const isSiteEditing = phase === 'site'
+  const isGroundFloor = levelNode?.type === 'level' && levelNode.level === 0
+  const canEnterSiteEdit = isGroundFloor || isSiteEditing
+
+  const getIsActive = (id: ControlId): boolean => {
+    if (isSiteEditing) return id === 'site-edit'
+    if (id === 'select') return mode === 'select' && selectionTool === 'click'
+    if (id === 'box-select') return mode === 'select' && selectionTool === 'marquee'
+    if (id === 'site-edit') return false
+    return mode === id
+  }
+
+  const handleClick = (id: ControlId) => {
+    if (id === 'site-edit') {
+      if (isSiteEditing) {
+        // Toggle off → back to structure/select
+        setPhase('structure')
+        setMode('select')
+        setStructureLayer('elements')
+      } else if (isGroundFloor) {
+        // Enter site editing — set state directly to preserve level selection.
+        // setPhase('site') calls viewer.resetSelection() which clears levelId,
+        // breaking the 2D floorplan (it needs a level to render the SVG).
+        useEditor.setState({ phase: 'site', mode: 'select', tool: null, catalogCategory: null })
+      }
+      return
+    }
+
+    // Exit site editing first if needed
+    if (isSiteEditing) {
+      setPhase('structure')
+      setStructureLayer('elements')
+    }
+
+    if (id === 'select') {
+      setMode('select')
+      setSelectionTool('click')
+    } else if (id === 'box-select') {
+      setMode('select')
+      setSelectionTool('marquee')
+    } else {
+      setMode(id)
+    }
   }
 
   return (
     <div className="flex items-center gap-1">
-      {availableModes.map((m) => {
-        const Icon = m.icon
-        const isActive = mode === m.id
-        const isImageMode = Boolean(m.imageSrc)
+      {controls.map((c) => {
+        const ModeIcon = c.icon
+        const isImageMode = Boolean(c.imageSrc)
+        const isSiteButton = c.id === 'site-edit'
+        const isActive = getIsActive(c.id)
+        const isDisabled = isSiteButton && !canEnterSiteEdit
 
         return (
           <ActionButton
             className={cn(
-              'text-muted-foreground',
-              !(isImageMode || isActive) && m.color,
-              !isImageMode && isActive && m.activeColor,
-              isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-              isImageMode && !isActive && 'hover:bg-white/5',
+              'group text-muted-foreground',
+              isSiteButton
+                ? isActive
+                  ? c.activeColor
+                  : canEnterSiteEdit
+                    ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
+                    : 'cursor-not-allowed opacity-35 grayscale'
+                : !(isImageMode || isActive) && c.color,
+              !(isSiteButton || isImageMode) && isActive && c.activeColor,
+              !isSiteButton && isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
+              !isSiteButton && isImageMode && !isActive && 'hover:bg-white/5',
             )}
-            key={m.id}
-            label={m.label}
-            onClick={() => handleModeClick(m.id)}
-            shortcut={m.shortcut}
+            disabled={isDisabled}
+            key={c.id}
+            label={
+              isSiteButton
+                ? isActive
+                  ? 'Exit site editing'
+                  : canEnterSiteEdit
+                    ? 'Edit site'
+                    : 'Site editing (ground level only)'
+                : c.label
+            }
+            onClick={() => handleClick(c.id)}
+            shortcut={c.shortcut}
             size="icon"
             variant="ghost"
           >
-            {m.imageSrc ? (
+            {c.imageSrc ? (
               <Image
-                alt={m.label}
+                alt={c.label}
                 className={cn(
                   'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
-                  !isActive && 'opacity-60 grayscale',
-                  isActive && 'opacity-100 grayscale-0',
+                  isSiteButton
+                    ? isActive
+                      ? 'opacity-100 grayscale-0'
+                      : ''
+                    : isActive
+                      ? 'opacity-100 grayscale-0'
+                      : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0',
                 )}
                 height={28}
-                src={m.imageSrc}
+                src={c.imageSrc}
                 width={28}
               />
+            ) : c.iconifyIcon ? (
+              <Icon color="currentColor" height={18} icon={c.iconifyIcon} width={18} />
             ) : (
-              Icon && <Icon className="h-5 w-5" />
+              ModeIcon && <ModeIcon className="h-5 w-5" />
             )}
           </ActionButton>
         )
