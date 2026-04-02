@@ -712,11 +712,9 @@ export default function Editor({
             {/* First-person overlay — rendered on top of normal layout */}
             {isFirstPersonMode && (
               <div className="fixed inset-0 z-50 pointer-events-none">
-                <div className="pointer-events-auto h-full w-full">
-                  <FirstPersonOverlay
-                    onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                  />
-                </div>
+                <FirstPersonOverlay
+                  onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                />
               </div>
             )}
             <EditorLayoutV2
