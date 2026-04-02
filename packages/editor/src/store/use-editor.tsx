@@ -437,20 +437,32 @@ const useEditor = create<EditorState>()(
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
+      _viewModeBeforeFirstPerson: null as ViewMode | null,
       setFirstPersonMode: (enabled) => {
         if (enabled) {
+          // Save current view mode and force 3D for immersive walkthrough
+          const currentViewMode = get().viewMode
           // Force perspective camera and full-height walls for immersive walkthrough
           useViewer.getState().setCameraMode('perspective')
           useViewer.getState().setWallMode('up')
           set({
             isFirstPersonMode: true,
+            _viewModeBeforeFirstPerson: currentViewMode,
+            viewMode: '3d',
+            isFloorplanOpen: false,
             mode: 'select',
             tool: null,
             catalogCategory: null,
           })
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
-          set({ isFirstPersonMode: false })
+          // Restore previous view mode
+          const prevMode = get()._viewModeBeforeFirstPerson
+          set({
+            isFirstPersonMode: false,
+            _viewModeBeforeFirstPerson: null,
+            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
+          })
         }
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
