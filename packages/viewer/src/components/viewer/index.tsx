@@ -1,5 +1,11 @@
 'use client'
 
+// Side-effect import: must run before @react-three/fiber's Canvas mounts
+// and instantiates `new THREE.Clock()`, which logs a deprecation warning
+// in three r183+. See `lib/suppress-three-deprecation-warnings.ts` for
+// rationale and the removal condition.
+import '../../lib/suppress-three-deprecation-warnings'
+
 import {
   CeilingSystem,
   DoorSystem,
