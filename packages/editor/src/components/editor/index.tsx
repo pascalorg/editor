@@ -1,7 +1,12 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { initSpaceDetectionSync, initSpatialGridSync, useScene } from '@pascal-app/core'
+import {
+  initSpaceDetectionSync,
+  initSpatialGridSync,
+  spatialGridManager,
+  useScene,
+} from '@pascal-app/core'
 import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
@@ -52,16 +57,39 @@ import { SiteEdgeLabels } from './site-edge-labels'
 import { ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
 
-let hasInitializedEditorRuntime = false
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 
-function initializeEditorRuntime() {
-  if (hasInitializedEditorRuntime) return
-  initSpatialGridSync()
-  initSpaceDetectionSync(useScene, useEditor)
+/**
+ * Wire up module-level singletons (spatial grid, space detection, SFX) for
+ * an Editor mount. Returns a teardown function that detaches the scene-store
+ * subscriptions and resets the shared singletons so a subsequent remount —
+ * including hot navigation back to the editor in the same tab — starts from
+ * a clean slate. Without this, the spatial-grid manager and viewer outliner
+ * accumulate stale references from the previous Editor instance and can
+ * freeze the app on re-entry.
+ */
+function initializeEditorRuntime(): () => void {
+  const unsubscribeSpatialGrid = initSpatialGridSync()
+  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
   initSFXBus()
 
-  hasInitializedEditorRuntime = true
+  return () => {
+    unsubscribeSpatialGrid()
+    unsubscribeSpaceDetection?.()
+
+    // Drop all entries the spatial-grid singleton accumulated for the
+    // previous scene so the next mount re-syncs from current state instead
+    // of layering on top of stale data.
+    spatialGridManager.clear()
+
+    // The viewer outliner holds direct Object3D references used by the
+    // post-processing selection pass. Clearing the underlying arrays (we
+    // intentionally mutate in place — there is no setter by design) releases
+    // those refs so the disposed Three.js scene graph can be GC'd.
+    const outliner = useViewer.getState().outliner
+    outliner.selectedObjects.length = 0
+    outliner.hoveredObjects.length = 0
+  }
 }
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
@@ -521,7 +549,8 @@ export default function Editor({
   }, [])
 
   useEffect(() => {
-    initializeEditorRuntime()
+    const teardown = initializeEditorRuntime()
+    return teardown
   }, [])
 
   useEffect(() => {
