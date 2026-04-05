@@ -19,6 +19,7 @@ import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
+import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
@@ -600,6 +601,7 @@ export default function Editor({
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <RoofEditSystem />
+      <StairEditSystem />
       {!isLoading && !isFirstPersonMode && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
       {!isLoading && !isFirstPersonMode && <ToolManager />}
       <CustomCameraControls />
@@ -617,6 +619,7 @@ export default function Editor({
       <ViewerZoneSystem />
       <CeilingSystem />
       <RoofEditSystem />
+      <StairEditSystem />
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />

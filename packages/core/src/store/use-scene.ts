@@ -67,6 +67,10 @@ export type SceneState = {
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
 
+  // 5. Read-only lock — when true all create/update/delete operations are no-ops
+  readOnly: boolean
+  setReadOnly: (readOnly: boolean) => void
+
   // Actions
   loadScene: () => void
   clearScene: () => void
@@ -113,6 +117,10 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
+
+      // 5. Read-only lock
+      readOnly: false,
+      setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
         // Clear temporal tracking to prevent memory leaks from stale node references
@@ -208,6 +216,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       // --- COLLECTIONS ---
 
       createCollection: (name, nodeIds = []) => {
+        if (get().readOnly) return '' as CollectionId
         const id = generateCollectionId()
         const collection: Collection = { id, name, nodeIds }
         set((state) => {
@@ -227,6 +236,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       deleteCollection: (id) => {
+        if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
           const nextCollections = { ...state.collections }
@@ -246,6 +256,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       updateCollection: (id, data) => {
+        if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
           if (!col) return state
@@ -254,6 +265,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       addToCollection: (id, nodeId) => {
+        if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
           if (!col || col.nodeIds.includes(nodeId)) return state
@@ -274,12 +286,13 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       removeFromCollection: (id, nodeId) => {
+        if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
           if (!col) return state
           const nextCollections = {
             ...state.collections,
-            [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
+            [id]: { ...col, nodeIds: col.nodeIds.filter((n: AnyNodeId) => n !== nodeId) },
           }
           const node = state.nodes[nodeId]
           if (!(node && 'collectionIds' in node)) return { collections: nextCollections }

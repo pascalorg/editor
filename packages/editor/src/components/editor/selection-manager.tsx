@@ -32,6 +32,8 @@ type SelectableNodeType =
   | 'ceiling'
   | 'roof'
   | 'roof-segment'
+  | 'stair'
+  | 'stair-segment'
   | 'window'
   | 'door'
 

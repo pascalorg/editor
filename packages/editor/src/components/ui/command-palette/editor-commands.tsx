@@ -116,6 +116,14 @@ export function EditorCommands() {
         execute: () => activateTool('item'),
       },
       {
+        id: 'editor.tool.stair',
+        label: 'Stair Tool',
+        group: 'Scene',
+        icon: <ArrowRight className="h-4 w-4" />,
+        keywords: ['stairs', 'staircase', 'flight', 'landing', 'steps'],
+        execute: () => activateTool('stair'),
+      },
+      {
         id: 'editor.tool.zone',
         label: 'Zone Tool',
         group: 'Scene',
@@ -342,7 +350,7 @@ export function EditorCommands() {
               icon: <Box className="h-4 w-4" />,
               keywords: ['export', 'glb', 'gltf', '3d', 'model', 'download'],
               execute: () => run(() => exportScene()),
-            },
+            } as const,
           ]
         : []),
       {

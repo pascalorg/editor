@@ -13,6 +13,7 @@ export const createNodesAction = (
   get: () => SceneState,
   ops: { node: AnyNode; parentId?: AnyNodeId }[],
 ) => {
+  if (get().readOnly) return
   set((state) => {
     const nextNodes = { ...state.nodes }
     const nextRootIds = [...state.rootNodeIds]
@@ -61,6 +62,7 @@ export const updateNodesAction = (
   get: () => SceneState,
   updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
 ) => {
+  if (get().readOnly) return
   const parentsToUpdate = new Set<AnyNodeId>()
   const idsToMarkDirty = new Set<AnyNodeId>()
 
@@ -136,6 +138,7 @@ export const deleteNodesAction = (
   get: () => SceneState,
   ids: AnyNodeId[],
 ) => {
+  if (get().readOnly) return
   const parentsToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {

@@ -6,6 +6,7 @@ import { GuideNode } from './guide'
 import { RoofNode } from './roof'
 import { ScanNode } from './scan'
 import { SlabNode } from './slab'
+import { StairNode } from './stair'
 import { WallNode } from './wall'
 import { ZoneNode } from './zone'
 
@@ -20,6 +21,7 @@ export const LevelNode = BaseNode.extend({
         SlabNode.shape.id,
         CeilingNode.shape.id,
         RoofNode.shape.id,
+        StairNode.shape.id,
         ScanNode.shape.id,
         GuideNode.shape.id,
       ]),

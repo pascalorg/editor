@@ -9,6 +9,8 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   type Space,
+  type StairNode,
+  type StairSegmentNode,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
@@ -79,7 +81,7 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode: ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | null
+  movingNode: ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | StairNode | StairSegmentNode | null
   setMovingNode: (
     node: ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | null,
   ) => void

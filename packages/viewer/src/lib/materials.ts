@@ -35,8 +35,8 @@ export function createMaterial(material?: MaterialSchema): THREE.MeshStandardMat
 }
 
 export function createDefaultMaterial(
-  color: string = '#ffffff',
-  roughness: number = 0.9,
+  color = '#ffffff',
+  roughness = 0.9,
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
@@ -59,6 +59,7 @@ export const DEFAULT_WINDOW_MATERIAL = new THREE.MeshStandardMaterial({
 })
 export const DEFAULT_CEILING_MATERIAL = createDefaultMaterial('#f5f5dc', 0.95)
 export const DEFAULT_ROOF_MATERIAL = createDefaultMaterial('#808080', 0.85)
+export const DEFAULT_STAIR_MATERIAL = createDefaultMaterial('#ffffff', 0.9)
 
 export function disposeMaterial(material: THREE.Material): void {
   material.dispose()

@@ -14,6 +14,8 @@ export type {
   RoofSegmentEvent,
   SiteEvent,
   SlabEvent,
+  StairEvent,
+  StairSegmentEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -54,6 +56,7 @@ export { DoorSystem } from './systems/door/door-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'
+export { StairSystem } from './systems/stair/stair-system'
 export {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
@@ -68,5 +71,5 @@ export {
 } from './systems/wall/wall-mitering'
 export { WallSystem } from './systems/wall/wall-system'
 export { WindowSystem } from './systems/window/window-system'
-export { cloneSceneGraph } from './utils/clone-scene-graph'
+export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
