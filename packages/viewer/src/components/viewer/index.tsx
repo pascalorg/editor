@@ -6,6 +6,7 @@ import {
   ItemSystem,
   RoofSystem,
   SlabSystem,
+  StairSystem,
   WallSystem,
   WindowSystem,
 } from '@pascal-app/core'
@@ -142,6 +143,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <ItemSystem />
       <RoofSystem />
       <SlabSystem />
+      <StairSystem />
       <WallSystem />
       <WindowSystem />
       <ZoneSystem />

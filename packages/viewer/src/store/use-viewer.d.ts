@@ -12,6 +12,10 @@ type Outliner = {
 }
 type ViewerState = {
   selection: SelectionPath
+  previewSelectedIds: BaseNode['id'][]
+  setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  hoverHighlightMode: 'default' | 'delete'
+  setHoverHighlightMode: (mode: 'default' | 'delete') => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'

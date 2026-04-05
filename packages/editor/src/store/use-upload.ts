@@ -11,8 +11,18 @@ export interface UploadEntry {
   resultUrl: string | null
 }
 
+export type UploadHandler = (
+  projectId: string,
+  levelId: string,
+  file: File,
+  type: 'scan' | 'guide',
+) => void
+
 interface UploadState {
   uploads: Record<string, UploadEntry>
+  uploadHandler: UploadHandler | null
+  registerUploadHandler: (handler: UploadHandler) => void
+  unregisterUploadHandler: () => void
   startUpload: (levelId: string, assetType: 'scan' | 'guide', fileName: string) => void
   setProgress: (levelId: string, progress: number) => void
   setStatus: (levelId: string, status: UploadStatus) => void
@@ -23,6 +33,9 @@ interface UploadState {
 
 export const useUploadStore = create<UploadState>((set) => ({
   uploads: {},
+  uploadHandler: null,
+  registerUploadHandler: (handler) => set({ uploadHandler: handler }),
+  unregisterUploadHandler: () => set({ uploadHandler: null }),
 
   startUpload: (levelId, assetType, fileName) =>
     set((s) => ({

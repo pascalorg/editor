@@ -19,6 +19,10 @@ import {
   type SiteNode,
   type SlabEvent,
   type SlabNode,
+  type StairEvent,
+  type StairNode,
+  type StairSegmentEvent,
+  type StairSegmentNode,
   type WallEvent,
   type WallNode,
   type WindowEvent,
@@ -40,6 +44,8 @@ type NodeConfig = {
   ceiling: { node: CeilingNode; event: CeilingEvent }
   roof: { node: RoofNode; event: RoofEvent }
   'roof-segment': { node: RoofSegmentNode; event: RoofSegmentEvent }
+  stair: { node: StairNode; event: StairEvent }
+  'stair-segment': { node: StairSegmentNode; event: StairSegmentEvent }
   window: { node: WindowNode; event: WindowEvent }
   door: { node: DoorNode; event: DoorEvent }
 }

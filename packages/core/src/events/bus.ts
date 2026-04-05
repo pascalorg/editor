@@ -10,6 +10,8 @@ import type {
   RoofSegmentNode,
   SiteNode,
   SlabNode,
+  StairNode,
+  StairSegmentNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -41,6 +43,8 @@ export type SlabEvent = NodeEvent<SlabNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
+export type StairEvent = NodeEvent<StairNode>
+export type StairSegmentEvent = NodeEvent<StairSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 
@@ -104,6 +108,8 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
+  NodeEvents<'stair', StairEvent> &
+  NodeEvents<'stair-segment', StairSegmentEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   CameraControlEvents &

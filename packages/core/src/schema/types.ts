@@ -10,6 +10,8 @@ import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
 import { SiteNode } from './nodes/site'
 import { SlabNode } from './nodes/slab'
+import { StairNode } from './nodes/stair'
+import { StairSegmentNode } from './nodes/stair-segment'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -25,6 +27,8 @@ export const AnyNode = z.discriminatedUnion('type', [
   CeilingNode,
   RoofNode,
   RoofSegmentNode,
+  StairNode,
+  StairSegmentNode,
   ScanNode,
   GuideNode,
   WindowNode,
