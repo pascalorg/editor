@@ -1,5 +1,9 @@
 'use client'
 
+// Must run before @react-three/fiber's Canvas instantiates new THREE.Clock().
+// See lib/suppress-three-clock-warning.ts for rationale and removal condition.
+import '../../lib/suppress-three-clock-warning'
+
 import {
   CeilingSystem,
   DoorSystem,
