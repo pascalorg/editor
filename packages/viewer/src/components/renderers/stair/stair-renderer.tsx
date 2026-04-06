@@ -24,7 +24,8 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
 
   return (
     <group
-      position={node.position}
+      position-x={node.position[0]}
+      position-z={node.position[2]}
       ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}

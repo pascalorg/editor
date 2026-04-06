@@ -124,7 +124,7 @@ function arraysEqual(a: number[], b: number[]): boolean {
 }
 
 /**
- * Mark all floor items and walls that overlap a slab polygon as dirty.
+ * Mark all floor items, walls, and stairs that may be affected by a slab change as dirty.
  */
 function markNodesOverlappingSlab(
   slab: SlabNode,
@@ -157,6 +157,9 @@ function markNodesOverlappingSlab(
       if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
         markDirty(node.id)
       }
+    } else if (node.type === 'stair') {
+      if (resolveLevelId(node, nodes) !== slabLevelId) continue
+      markDirty(node.id)
     }
   }
 }
