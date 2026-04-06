@@ -20,11 +20,15 @@ type SFXEvents = {
  */
 export const sfxEmitter = mitt<SFXEvents>()
 
+let sfxBusInitialized = false
+
 /**
- * Initialize SFX Bus - connects SFX events to actual sound playback
- * Call once in your app initialization
+ * Initialize SFX Bus - connects SFX events to actual sound playback.
+ * Safe to call multiple times; re-registration is a no-op once initialized.
  */
 export function initSFXBus() {
+  if (sfxBusInitialized) return
+  sfxBusInitialized = true
   // Map SFX events to sound playback
   sfxEmitter.on('sfx:grid-snap', () => playSFX('gridSnap'))
   sfxEmitter.on('sfx:item-delete', () => playSFX('itemDelete'))
