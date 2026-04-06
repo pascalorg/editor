@@ -2,6 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
+import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
+import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
@@ -75,6 +77,10 @@ export const StairSystem = () => {
     for (const stairId of parentsNeedingSegmentSync) {
       const stairNode = nodes[stairId]
       if (!stairNode || stairNode.type !== 'stair') continue
+      const group = sceneRegistry.nodes.get(stairId) as THREE.Group | undefined
+      if (group) {
+        syncStairGroupElevation(stairNode as StairNode, group, nodes)
+      }
       syncSegmentMeshTransforms(stairNode as StairNode, nodes)
     }
 
@@ -224,6 +230,62 @@ function syncSegmentMeshTransforms(stairNode: StairNode, nodes: Record<string, A
   }
 }
 
+function syncStairGroupElevation(
+  stairNode: StairNode,
+  group: THREE.Group,
+  nodes: Record<string, AnyNode>,
+) {
+  const levelId = resolveLevelId(stairNode, nodes)
+  const slabElevation = getStairSlabElevation(levelId, stairNode, nodes)
+  group.position.y = stairNode.position[1] + slabElevation
+}
+
+function getStairSlabElevation(
+  levelId: string,
+  stairNode: StairNode,
+  nodes: Record<string, AnyNode>,
+): number {
+  const segments = (stairNode.children ?? [])
+    .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
+    .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+
+  if (segments.length === 0) return 0
+
+  const transforms = computeSegmentTransforms(segments)
+  let maxElevation = Number.NEGATIVE_INFINITY
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i]!
+    const transform = transforms[i]!
+
+    const [centerOffsetX, centerOffsetZ] = rotateXZ(0, segment.length / 2, transform.rotation)
+    const centerInGroupX = transform.position[0] + centerOffsetX
+    const centerInGroupZ = transform.position[2] + centerOffsetZ
+    const [centerOffsetWorldX, centerOffsetWorldZ] = rotateXZ(
+      centerInGroupX,
+      centerInGroupZ,
+      stairNode.rotation,
+    )
+
+    const slabElevation = spatialGridManager.getSlabElevationForItem(
+      levelId,
+      [
+        stairNode.position[0] + centerOffsetWorldX,
+        stairNode.position[1] + transform.position[1],
+        stairNode.position[2] + centerOffsetWorldZ,
+      ],
+      [segment.width, Math.max(segment.height, segment.thickness, 0.01), segment.length],
+      [0, stairNode.rotation + transform.rotation, 0],
+    )
+
+    if (slabElevation > maxElevation) {
+      maxElevation = slabElevation
+    }
+  }
+
+  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+}
+
 // ============================================================================
 // MERGED STAIR GEOMETRY
 // ============================================================================
@@ -346,6 +408,12 @@ function computeSegmentTransforms(segments: StairSegmentNode[]): SegmentTransfor
   }
 
   return transforms
+}
+
+function rotateXZ(x: number, z: number, angle: number): [number, number] {
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return [x * cos + z * sin, -x * sin + z * cos]
 }
 
 /**
