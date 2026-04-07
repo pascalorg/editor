@@ -58,7 +58,6 @@ export function WallMeasurementLabel() {
 
   const [wallObject, setWallObject] = useState<THREE.Object3D | null>(null)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset cached object when selection changes
   useEffect(() => {
     setWallObject(null)
   }, [selectedId])

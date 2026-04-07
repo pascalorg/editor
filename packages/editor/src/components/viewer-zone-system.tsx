@@ -3,10 +3,13 @@
 import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
+import type { Mesh } from 'three'
+import useEditor from '../store/use-editor'
 
 export const ViewerZoneSystem = () => {
   useFrame(() => {
     const { levelId, zoneId } = useViewer.getState().selection
+    const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
 
     sceneRegistry.byType.zone.forEach((id) => {
@@ -16,16 +19,24 @@ export const ViewerZoneSystem = () => {
       const zone = nodes[id as ZoneNode['id']] as ZoneNode | undefined
       if (!zone) return
 
-      // Hide zones if:
-      // 1. No level is selected
-      // 2. Zone is not on the selected level
-      // 3. A zone is already selected (hide all zones to show zone contents)
       const isOnSelectedLevel = zone.parentId === levelId
-      const shouldShow = !!levelId && isOnSelectedLevel && !zoneId
 
-      obj.visible = shouldShow
+      // Keep group visible (so <Html> labels stay active), hide/show meshes only.
+      // Zone geometry: visible in zone mode on the right level, OR when this zone is selected.
+      // The editor ZoneSystem handles the selected zone's opacity animation.
+      const isSelected = id === zoneId
+      const shouldShowGeometry =
+        (structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected
+      if (!obj.visible) obj.visible = true
+      obj.traverse((child) => {
+        if ((child as Mesh).isMesh) {
+          child.visible = shouldShowGeometry
+        }
+      })
 
-      const targetOpacity = shouldShow ? '1' : '0'
+      // Labels: always visible on the current level (regardless of mode or zone selection)
+      const showLabel = !!levelId && isOnSelectedLevel
+      const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {
         labelEl.style.opacity = targetOpacity

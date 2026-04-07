@@ -20,14 +20,6 @@ type PersistedSelectionPath = {
   selectedIds: string[]
 }
 
-/**
- * IDs are stored as plain strings in localStorage. Cast them back to their
- * branded template-literal types before passing to the viewer store.
- */
-function toViewerSelection(s: PersistedSelectionPath) {
-  return s as unknown as Parameters<ReturnType<typeof useViewer.getState>['setSelection']>[0]
-}
-
 const EMPTY_PERSISTED_SELECTION: PersistedSelectionPath = {
   buildingId: null,
   levelId: null,
@@ -271,9 +263,27 @@ export function syncEditorSelectionFromCurrentScene() {
     : null
 
   if (firstBuilding && firstLevel) {
+    const isEmptyLevel = !firstLevel.children || firstLevel.children.length === 0
+
+    // For empty projects (new/blank), always start in structure/build/wall
+    // regardless of persisted state from a previous project
+    if (isEmptyLevel) {
+      useViewer.getState().setSelection({
+        buildingId: firstBuilding.id,
+        levelId: firstLevel.id,
+        selectedIds: [],
+        zoneId: null,
+      })
+      useEditor.getState().setPhase('structure')
+      useEditor.getState().setStructureLayer('elements')
+      useEditor.getState().setMode('build')
+      useEditor.getState().setTool('wall')
+      return
+    }
+
     if (shouldRestoreEditorUiState) {
       if (restoredSelection) {
-        useViewer.getState().setSelection(toViewerSelection(restoredSelection))
+        useViewer.getState().setSelection(restoredSelection)
         useEditor.setState(
           restoredEditorUiState.phase === 'site'
             ? (selectionDrivenEditorUiState ?? restoredEditorUiState)
@@ -295,7 +305,7 @@ export function syncEditorSelectionFromCurrentScene() {
     }
 
     if (restoredSelection) {
-      useViewer.getState().setSelection(toViewerSelection(restoredSelection))
+      useViewer.getState().setSelection(restoredSelection)
       if (selectionDrivenEditorUiState) {
         useEditor.setState(selectionDrivenEditorUiState)
       }
@@ -310,11 +320,6 @@ export function syncEditorSelectionFromCurrentScene() {
     })
     useEditor.getState().setPhase('structure')
     useEditor.getState().setStructureLayer('elements')
-
-    if (!firstLevel.children || firstLevel.children.length === 0) {
-      useEditor.getState().setMode('build')
-      useEditor.getState().setTool('wall')
-    }
   } else {
     useEditor.getState().setPhase('site')
     useViewer.getState().setSelection({

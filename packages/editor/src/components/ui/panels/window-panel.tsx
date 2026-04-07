@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, emitter, type MaterialSchema, useScene, WindowNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  type MaterialSchema,
+  useScene,
+  WindowNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -38,6 +45,13 @@ export function WindowPanel() {
       useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
+  )
+
+  const handleMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      handleUpdate({ material })
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -138,10 +152,6 @@ export function WindowPanel() {
     },
     [handleUpdate],
   )
-
-  const handleMaterialChange = useCallback((material: MaterialSchema) => {
-    handleUpdate({ material })
-  }, [handleUpdate])
 
   if (!node || node.type !== 'window' || selectedIds.length !== 1) return null
 
@@ -407,13 +417,6 @@ export function WindowPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          onChange={handleMaterialChange}
-          value={node.material}
-        />
-      </PanelSection>
-
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
@@ -429,6 +432,9 @@ export function WindowPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
+      </PanelSection>
+      <PanelSection title="Material">
+        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )

@@ -1,4 +1,12 @@
-import type { DoorNode, ItemNode, RoofNode, RoofSegmentNode, WindowNode } from '@pascal-app/core'
+import type {
+  DoorNode,
+  ItemNode,
+  RoofNode,
+  RoofSegmentNode,
+  StairNode,
+  StairSegmentNode,
+  WindowNode,
+} from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -76,5 +84,7 @@ export const MoveTool: React.FC = () => {
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
+  if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
+    return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
   return <MoveItemContent movingNode={movingNode as ItemNode} />
 }

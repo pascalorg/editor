@@ -1,9 +1,7 @@
 'use client'
 
-import { Icon } from '@iconify/react'
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
-import useEditor from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 export function CameraActions() {
@@ -17,10 +15,6 @@ export function CameraActions() {
 
   const orbitCCW = () => {
     emitter.emit('camera-controls:orbit-ccw')
-  }
-
-  const enterStreetView = () => {
-    useEditor.getState().setFirstPersonMode(true)
   }
 
   return (
@@ -73,23 +67,6 @@ export function CameraActions() {
           height={28}
           src="/icons/topview.png"
           width={28}
-        />
-      </ActionButton>
-
-      {/* Street View */}
-      <ActionButton
-        className="group hover:bg-white/5"
-        label="Street View"
-        onClick={enterStreetView}
-        size="icon"
-        variant="ghost"
-      >
-        <Icon
-          className="opacity-70 transition-opacity group-hover:opacity-100"
-          color="currentColor"
-          height={22}
-          icon="mdi:walk"
-          width={22}
         />
       </ActionButton>
     </div>

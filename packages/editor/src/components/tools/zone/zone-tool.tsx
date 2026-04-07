@@ -2,7 +2,6 @@ import { emitter, type GridEvent, type LevelNode, useScene, ZoneNode } from '@pa
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
-import { PALETTE_COLORS } from './../../../components/ui/primitives/color-dot'
 import { EDITOR_LAYER } from './../../../lib/constants'
 import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -55,8 +54,8 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
   const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
   const name = `Zone ${zoneCount + 1}`
 
-  // Cycle through colors
-  const color = PALETTE_COLORS[zoneCount % PALETTE_COLORS.length]
+  // Default to blue, cycle through palette for subsequent zones
+  const color = '#3b82f6'
 
   const zone = ZoneNode.parse({
     name,

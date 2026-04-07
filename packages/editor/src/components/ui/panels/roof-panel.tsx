@@ -41,6 +41,13 @@ export function RoofPanel() {
     [selectedId, updateNode],
   )
 
+  const handleMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      handleUpdate({ material })
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -123,10 +130,6 @@ export function RoofPanel() {
     }
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
-
-  const handleMaterialChange = useCallback((material: MaterialSchema) => {
-    handleUpdate({ material })
-  }, [handleUpdate])
 
   if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
 
@@ -235,13 +238,6 @@ export function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          onChange={handleMaterialChange}
-          value={node.material}
-        />
-      </PanelSection>
-
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
@@ -257,6 +253,9 @@ export function RoofPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
+      </PanelSection>
+      <PanelSection title="Material">
+        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )

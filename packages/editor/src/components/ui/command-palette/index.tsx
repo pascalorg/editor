@@ -3,8 +3,9 @@
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Command } from 'cmdk'
+import { Command, useCommandState } from 'cmdk'
 import { ChevronRight, Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
@@ -161,9 +162,40 @@ const PAGE_LABEL: Record<string, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Empty state fallback (force-mounted, visible only when no results)
+// ---------------------------------------------------------------------------
+export interface CommandPaletteEmptyAction {
+  icon: ReactNode
+  label: (query: string) => string
+  onSelect: (query: string) => void
+}
+
+function EmptyActionItem({ action }: { action: CommandPaletteEmptyAction }) {
+  const count = useCommandState((s) => s.filtered.count)
+  const search = useCommandState((s) => s.search)
+  if (count > 0) return null
+  // No Command.Group wrapper — groups hide themselves when not in filtered.groups (which is
+  // empty when nothing matches), swallowing the force-mounted item even with forceMount on
+  // the item itself.
+  return (
+    <Command.Item
+      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground text-sm transition-colors data-[selected=true]:bg-accent"
+      forceMount
+      onSelect={() => action.onSelect(search)}
+      value="__empty_action__"
+    >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+        {action.icon}
+      </span>
+      <span className="flex-1 truncate">{action.label(search)}</span>
+    </Command.Item>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export function CommandPalette() {
+export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEmptyAction }) {
   const {
     open,
     setOpen,
@@ -353,9 +385,12 @@ export function CommandPalette() {
             </div>
 
             <Command.List className="max-h-100 overflow-y-auto p-1.5">
-              <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
-                No commands found.
-              </Command.Empty>
+              {(!emptyAction || page) && (
+                <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
+                  No commands found.
+                </Command.Empty>
+              )}
+              {emptyAction && !page && <EmptyActionItem action={emptyAction} />}
 
               {/* ── Registered page view (e.g. 'ai') ─────────────────────── */}
               {page &&

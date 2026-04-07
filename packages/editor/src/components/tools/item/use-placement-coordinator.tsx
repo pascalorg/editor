@@ -9,6 +9,7 @@ import {
   resolveLevelId,
   sceneRegistry,
   spatialGridManager,
+  useLiveTransforms,
   useScene,
   useSpatialQuery,
   type WallEvent,
@@ -219,6 +220,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
 
+      // Publish live transform for 2D floorplan
+      if (draft) {
+        useLiveTransforms.getState().set(draft.id, {
+          position: result.gridPosition,
+          rotation: cursorGroupRef.current.rotation.y,
+        })
+      }
+
       revalidate()
     }
 
@@ -228,6 +237,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Preserve cursor rotation for the next draft
       const currentRotation: [number, number, number] = [0, cursorGroupRef.current.rotation.y, 0]
+
+      // Clear live transform before commit
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
 
       draftNode.commit(result.nodeUpdate)
       if (configRef.current.onCommitted()) {
@@ -353,6 +367,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (result.dirtyNodeId && posChanged) {
           useScene.getState().dirtyNodes.add(result.dirtyNodeId)
         }
+
+        // Publish live transform for 2D floorplan
+        useLiveTransforms.getState().set(draft.id, {
+          position: result.cursorPosition,
+          rotation: result.cursorRotationY,
+        })
       }
     }
 
@@ -361,6 +381,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
+      // Clear live transform before commit
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
       draftNode.commit(result.nodeUpdate)
       if (result.dirtyNodeId) {
         useScene.getState().dirtyNodes.add(result.dirtyNodeId)
@@ -470,6 +494,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         draft.position = result.gridPosition
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.position.set(...result.gridPosition)
+
+        // Publish live transform for 2D floorplan
+        useLiveTransforms.getState().set(draft.id, {
+          position: result.cursorPosition,
+          rotation: result.cursorRotationY,
+        })
       }
 
       revalidate()
@@ -508,6 +538,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
+      // Clear live transform before commit
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
       draftNode.commit(result.nodeUpdate)
 
       if (configRef.current.onCommitted()) {
@@ -578,6 +612,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         draft.position = result.gridPosition
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.position.copy(gridPosition.current)
+
+        // Publish live transform for 2D floorplan
+        useLiveTransforms.getState().set(draft.id, {
+          position: result.cursorPosition,
+          rotation: cursorGroupRef.current.rotation.y,
+        })
       }
     }
 
@@ -586,6 +626,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
+      // Clear live transform before commit
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
       draftNode.commit(result.nodeUpdate)
 
       if (configRef.current.onCommitted()) {
@@ -657,6 +701,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         cursorGroupRef.current.rotation.y = newRotationY
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.rotation.y = newRotationY
+
+        // Update live transform rotation for 2D floorplan
+        const currentLive = useLiveTransforms.getState().get(draft.id)
+        if (currentLive) {
+          useLiveTransforms.getState().set(draft.id, {
+            ...currentLive,
+            rotation: newRotationY,
+          })
+        }
+
         revalidate()
       }
     }
@@ -693,7 +747,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const draft = draftNode.current
     const dims = draft ? getScaledDimensions(draft) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
     const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
-    boxGeometry.translate(0, dims[1] / 2, 0)
+    const wallSideZOffset = asset.attachTo === 'wall-side' ? -dims[2] / 2 : 0
+    boxGeometry.translate(0, dims[1] / 2, wallSideZOffset)
     const edgesGeometry = new EdgesGeometry(boxGeometry)
     edgesRef.current.geometry = edgesGeometry
 
@@ -715,6 +770,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:leave', onCeilingLeave)
 
     return () => {
+      // Clear live transform for any remaining draft
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
       draftNode.destroy()
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
@@ -793,16 +852,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ? getScaledDimensions(initialDraft)
     : (config.asset.dimensions ?? DEFAULT_DIMENSIONS)
   const initialBoxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
-  initialBoxGeometry.translate(0, dims[1] / 2, 0)
+  const wallSideZOffset = config.asset.attachTo === 'wall-side' ? -dims[2] / 2 : 0
+  initialBoxGeometry.translate(0, dims[1] / 2, wallSideZOffset)
 
   // Base plane geometry (colored rectangle on the ground)
   const basePlaneGeometry = new PlaneGeometry(dims[0], dims[2])
   basePlaneGeometry.rotateX(-Math.PI / 2) // Make it horizontal
-  basePlaneGeometry.translate(0, 0.01, 0) // Slightly above ground to avoid z-fighting
+  basePlaneGeometry.translate(0, 0.01, wallSideZOffset) // Slightly above ground to avoid z-fighting
 
   return (
     <group ref={cursorGroupRef}>
-      <lineSegments layers={EDITOR_LAYER} material={edgeMaterial} ref={edgesRef}>
+      <lineSegments layers={EDITOR_LAYER} material={edgeMaterial} ref={edgesRef} renderOrder={999}>
         <edgesGeometry args={[initialBoxGeometry]} />
       </lineSegments>
       <mesh
@@ -810,6 +870,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         layers={EDITOR_LAYER}
         material={basePlaneMaterial}
         ref={basePlaneRef}
+        renderOrder={999}
       />
     </group>
   )

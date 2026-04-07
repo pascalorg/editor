@@ -10,7 +10,14 @@ import useScene from '../../store/use-scene'
 
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
+;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
 csgEvaluator.attributes = ['position', 'normal']
+
+function prepareBrushForCSG(brush: Brush) {
+  brush.geometry.computeBoundsTree = computeBoundsTree
+  brush.geometry.computeBoundsTree({ maxLeafSize: 10 })
+  brush.updateMatrixWorld()
+}
 
 // Pooled objects to avoid per-frame allocation in updateMergedRoofGeometry
 const _matrix = new THREE.Matrix4()
@@ -77,6 +84,8 @@ export const RoofSystem = () => {
             mesh.position.set(node.position[0], node.position[1], node.position[2])
             mesh.rotation.y = node.rotation
           }
+          clearDirty(id as AnyNodeId)
+        } else {
           clearDirty(id as AnyNodeId)
         }
         // Queue the parent roof for a merged geometry update
@@ -179,6 +188,7 @@ function updateMergedRoofGeometry(
       const next: Brush = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION) as Brush
       totalShinSlab.geometry.dispose()
       brushes.shinSlab.geometry.dispose()
+      prepareBrushForCSG(next)
       totalShinSlab = next
     } else {
       totalShinSlab = brushes.shinSlab
@@ -188,6 +198,7 @@ function updateMergedRoofGeometry(
       const next: Brush = csgEvaluator.evaluate(totalDeckSlab, brushes.deckSlab, ADDITION) as Brush
       totalDeckSlab.geometry.dispose()
       brushes.deckSlab.geometry.dispose()
+      prepareBrushForCSG(next)
       totalDeckSlab = next
     } else {
       totalDeckSlab = brushes.deckSlab
@@ -197,6 +208,7 @@ function updateMergedRoofGeometry(
       const next: Brush = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION) as Brush
       totalWall.geometry.dispose()
       brushes.wallBrush.geometry.dispose()
+      prepareBrushForCSG(next)
       totalWall = next
     } else {
       totalWall = brushes.wallBrush
@@ -206,6 +218,7 @@ function updateMergedRoofGeometry(
       const next: Brush = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION) as Brush
       totalInner.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
+      prepareBrushForCSG(next)
       totalInner = next
     } else {
       totalInner = brushes.innerBrush
@@ -505,6 +518,10 @@ export function getRoofSegmentBrushes(
   const toBrush = (geo: THREE.BufferGeometry): Brush | null => {
     if (!geo?.attributes.position || geo.attributes.position.count === 0) return null
     if (!geo.index) return null
+    // Strip zero-count groups — three-bvh-csg crashes with groupIndices[i] undefined
+    // when a group exists but covers no triangles (can happen after mergeVertices)
+    geo.groups = geo.groups.filter((g) => g.count > 0)
+    if (geo.groups.length === 0) return null
     geo.computeBoundsTree = computeBoundsTree
     geo.computeBoundsTree({ maxLeafSize: 10 })
     const brush = new Brush(geo, dummyMats)

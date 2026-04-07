@@ -11,7 +11,8 @@ import {
 } from '@pascal-app/core'
 
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { Color, type Material, type Mesh, type Object3D } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, { type Phase, type StructureLayer } from './../../store/use-editor'
 import { boxSelectHandled } from '../tools/select/box-select-tool'
@@ -66,6 +67,88 @@ export const resolveBuildingId = (
   return null
 }
 
+const HIGHLIGHT_PROFILES = {
+  delete: {
+    color: new Color('#dc2626'),
+    blend: 0.76,
+    emissiveBlend: 0.92,
+    emissiveIntensity: 0.46,
+  },
+  selection: {
+    color: new Color('#818cf8'),
+    blend: 0.32,
+    emissiveBlend: 0.7,
+    emissiveIntensity: 0.42,
+  },
+} as const
+
+type HighlightKind = keyof typeof HIGHLIGHT_PROFILES
+
+type HighlightableMaterial = Material & {
+  color?: Color
+  emissive?: Color
+  emissiveIntensity?: number
+  opacity?: number
+  transparent?: boolean
+  needsUpdate?: boolean
+}
+
+function isHighlightableMesh(object: Object3D): object is Mesh {
+  return Boolean(
+    (object as Mesh).isMesh &&
+      (object as Mesh).material &&
+      object.visible &&
+      object.name !== 'collision-mesh',
+  )
+}
+
+function createHighlightedMaterial(material: Material, kind: HighlightKind): Material {
+  const highlightedMaterial = material.clone() as HighlightableMaterial
+  const profile = HIGHLIGHT_PROFILES[kind]
+
+  if (highlightedMaterial.color instanceof Color) {
+    highlightedMaterial.color = highlightedMaterial.color.clone().lerp(profile.color, profile.blend)
+  }
+
+  if (highlightedMaterial.emissive instanceof Color) {
+    highlightedMaterial.emissive = highlightedMaterial.emissive
+      .clone()
+      .lerp(profile.color, profile.emissiveBlend)
+    highlightedMaterial.emissiveIntensity = Math.max(
+      highlightedMaterial.emissiveIntensity ?? 0,
+      profile.emissiveIntensity,
+    )
+  }
+
+  if (typeof highlightedMaterial.opacity === 'number' && highlightedMaterial.opacity < 1) {
+    highlightedMaterial.transparent = true
+    highlightedMaterial.opacity = Math.min(1, highlightedMaterial.opacity + 0.08)
+  }
+
+  highlightedMaterial.needsUpdate = true
+  return highlightedMaterial
+}
+
+function createHighlightedMaterials(
+  material: Material | Material[],
+  kind: HighlightKind,
+): Material | Material[] {
+  if (Array.isArray(material)) {
+    return material.map((entry) => createHighlightedMaterial(entry, kind))
+  }
+
+  return createHighlightedMaterial(material, kind)
+}
+
+function disposeHighlightedMaterials(material: Material | Material[]) {
+  if (Array.isArray(material)) {
+    material.forEach((entry) => entry.dispose())
+    return
+  }
+
+  material.dispose()
+}
+
 const computeNextIds = (
   node: AnyNode,
   selectedIds: string[],
@@ -99,7 +182,19 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   },
 
   structure: {
-    types: ['wall', 'item', 'zone', 'slab', 'ceiling', 'roof', 'roof-segment', 'window', 'door'],
+    types: [
+      'wall',
+      'item',
+      'zone',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'stair',
+      'stair-segment',
+      'window',
+      'door',
+    ],
     handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
@@ -144,7 +239,9 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         node.type === 'slab' ||
         node.type === 'ceiling' ||
         node.type === 'roof' ||
-        node.type === 'roof-segment'
+        node.type === 'roof-segment' ||
+        node.type === 'stair' ||
+        node.type === 'stair-segment'
       )
         return true
       if (node.type === 'item') {
@@ -204,6 +301,8 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'ceiling' ||
     node.type === 'roof' ||
     node.type === 'roof-segment' ||
+    node.type === 'stair' ||
+    node.type === 'stair-segment' ||
     node.type === 'window' ||
     node.type === 'door'
   ) {
@@ -233,6 +332,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
+  const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<ModifierKeys>({
     meta: false,
     ctrl: false,
@@ -240,6 +340,14 @@ export const SelectionManager = () => {
   const clickHandledRef = useRef(false)
 
   const movingNode = useEditor((s) => s.movingNode)
+
+  useEffect(() => {
+    setHoverHighlightMode(mode === 'delete' ? 'delete' : 'default')
+
+    return () => {
+      setHoverHighlightMode('default')
+    }
+  }, [mode, setHoverHighlightMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -314,6 +422,12 @@ export const SelectionManager = () => {
             nodeToSelect = parentNode
           }
         }
+        if (node.type === 'stair-segment' && node.parentId) {
+          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+          if (parentNode && parentNode.type === 'stair') {
+            nodeToSelect = parentNode
+          }
+        }
 
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
 
@@ -333,6 +447,8 @@ export const SelectionManager = () => {
       'ceiling',
       'roof',
       'roof-segment',
+      'stair',
+      'stair-segment',
       'window',
       'door',
     ]
@@ -343,8 +459,15 @@ export const SelectionManager = () => {
     const onGridClick = () => {
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
-      const activeStrategy = SELECTION_STRATEGIES[useEditor.getState().phase]
+      const { phase, structureLayer } = useEditor.getState()
+      const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
+
+      // When deselecting from zone mode, return to structure select
+      if (phase === 'structure' && structureLayer === 'zones') {
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('select')
+      }
     }
     emitter.on('grid:click', onGridClick)
 
@@ -415,12 +538,17 @@ export const SelectionManager = () => {
         node.type === 'ceiling' ||
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
+        node.type === 'stair' ||
+        node.type === 'stair-segment' ||
         node.type === 'window' ||
         node.type === 'door'
       ) {
         targetPhase = 'structure'
         if (node.type === 'roof-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into roof-segment even if already in structure phase
+        }
+        if (node.type === 'stair-segment' && currentPhase === 'structure') {
+          forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
         }
       } else if (node.type === 'item') {
         const item = node as ItemNode
@@ -461,6 +589,8 @@ export const SelectionManager = () => {
       'ceiling',
       'roof',
       'roof-segment',
+      'stair',
+      'stair-segment',
       'window',
       'door',
       'zone',
@@ -529,6 +659,8 @@ export const SelectionManager = () => {
       'ceiling',
       'roof',
       'roof-segment',
+      'stair',
+      'stair-segment',
       'window',
       'door',
       'zone',
@@ -553,6 +685,7 @@ export const SelectionManager = () => {
   return (
     <>
       <SelectionStateSync />
+      <SelectionMaterialSync />
       <EditorOutlinerSync />
     </>
   )
@@ -590,9 +723,127 @@ const SelectionStateSync = () => {
   return null
 }
 
+const SelectionMaterialSync = () => {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
+  const hoveredId = useViewer((s) => s.hoveredId)
+  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
+  const highlightedMaterialsRef = useRef(
+    new Map<
+      Mesh,
+      {
+        originalMaterial: Material | Material[]
+        highlightedMaterial: Material | Material[]
+        kind: HighlightKind
+      }
+    >(),
+  )
+
+  const syncSelectionMaterials = useCallback(() => {
+    const activeMeshes = new Set<Mesh>()
+
+    for (const [id, kind] of activeHighlightKindsRef.current.entries()) {
+      const node = useScene.getState().nodes[id as AnyNodeId]
+      if (node?.type === 'wall') {
+        continue
+      }
+
+      const rootObject = sceneRegistry.nodes.get(id)
+      if (!rootObject) {
+        continue
+      }
+
+      rootObject.traverse((child) => {
+        if (!isHighlightableMesh(child)) {
+          return
+        }
+
+        activeMeshes.add(child)
+        const existingEntry = highlightedMaterialsRef.current.get(child)
+        if (existingEntry) {
+          const materialWasOverwritten = child.material !== existingEntry.highlightedMaterial
+          if (materialWasOverwritten || existingEntry.kind !== kind) {
+            disposeHighlightedMaterials(existingEntry.highlightedMaterial)
+            const originalMaterial = materialWasOverwritten
+              ? child.material
+              : existingEntry.originalMaterial
+            const highlightedMaterial = createHighlightedMaterials(originalMaterial, kind)
+            child.material = highlightedMaterial
+            highlightedMaterialsRef.current.set(child, {
+              originalMaterial,
+              highlightedMaterial,
+              kind,
+            })
+          }
+          return
+        }
+
+        const originalMaterial = child.material
+        const highlightedMaterial = createHighlightedMaterials(originalMaterial, kind)
+        child.material = highlightedMaterial
+        highlightedMaterialsRef.current.set(child, {
+          originalMaterial,
+          highlightedMaterial,
+          kind,
+        })
+      })
+    }
+
+    for (const [mesh, entry] of highlightedMaterialsRef.current.entries()) {
+      if (activeMeshes.has(mesh)) {
+        continue
+      }
+
+      if (mesh.material === entry.highlightedMaterial) {
+        mesh.material = entry.originalMaterial
+      }
+      disposeHighlightedMaterials(entry.highlightedMaterial)
+      highlightedMaterialsRef.current.delete(mesh)
+    }
+  }, [])
+
+  useEffect(() => {
+    const nextHighlightKinds = new Map<string, HighlightKind>()
+
+    for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
+      nextHighlightKinds.set(id, 'selection')
+    }
+
+    if (hoverHighlightMode === 'delete' && hoveredId) {
+      nextHighlightKinds.set(hoveredId, 'delete')
+    }
+
+    activeHighlightKindsRef.current = nextHighlightKinds
+    syncSelectionMaterials()
+  }, [hoverHighlightMode, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
+
+  useEffect(() => {
+    return useScene.subscribe(() => {
+      syncSelectionMaterials()
+    })
+  }, [syncSelectionMaterials])
+
+  useEffect(() => {
+    return () => {
+      for (const [mesh, entry] of highlightedMaterialsRef.current.entries()) {
+        if (mesh.material === entry.highlightedMaterial) {
+          mesh.material = entry.originalMaterial
+        }
+        disposeHighlightedMaterials(entry.highlightedMaterial)
+      }
+
+      highlightedMaterialsRef.current.clear()
+    }
+  }, [])
+
+  return null
+}
+
 const EditorOutlinerSync = () => {
   const phase = useEditor((s) => s.phase)
   const selection = useViewer((s) => s.selection)
+  const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const outliner = useViewer((s) => s.outliner)
 
@@ -609,19 +860,23 @@ const EditorOutlinerSync = () => {
       case 'structure':
         // Highlight selected items (walls/slabs)
         // We IGNORE buildingId even if it's set in the store
-        idsToHighlight = selection.selectedIds
+        idsToHighlight = Array.from(new Set([...selection.selectedIds, ...previewSelectedIds]))
         break
 
       case 'furnish':
         // Highlight selected furniture/items
-        idsToHighlight = selection.selectedIds
+        idsToHighlight = Array.from(new Set([...selection.selectedIds, ...previewSelectedIds]))
         break
 
       default:
         // Pure Viewer mode: Highlight based on the "deepest" selection
-        if (selection.selectedIds.length > 0) idsToHighlight = selection.selectedIds
-        else if (selection.levelId) idsToHighlight = [selection.levelId]
-        else if (selection.buildingId) idsToHighlight = [selection.buildingId]
+        if (selection.selectedIds.length > 0 || previewSelectedIds.length > 0) {
+          idsToHighlight = Array.from(new Set([...selection.selectedIds, ...previewSelectedIds]))
+        } else if (selection.levelId) {
+          idsToHighlight = [selection.levelId]
+        } else if (selection.buildingId) {
+          idsToHighlight = [selection.buildingId]
+        }
     }
 
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
@@ -636,7 +891,7 @@ const EditorOutlinerSync = () => {
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [phase, selection, hoveredId, outliner])
+  }, [phase, previewSelectedIds, selection, hoveredId, outliner])
 
   return null
 }

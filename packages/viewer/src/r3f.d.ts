@@ -78,18 +78,21 @@ interface ThreeJSXElements {
 }
 
 declare module 'react' {
+  // biome-ignore lint/style/noNamespace: Required for JSX module augmentation
   namespace JSX {
     interface IntrinsicElements extends ThreeJSXElements {}
   }
 }
 
 declare module 'react/jsx-runtime' {
+  // biome-ignore lint/style/noNamespace: Required for JSX module augmentation
   namespace JSX {
     interface IntrinsicElements extends ThreeJSXElements {}
   }
 }
 
 declare module 'react/jsx-dev-runtime' {
+  // biome-ignore lint/style/noNamespace: Required for JSX module augmentation
   namespace JSX {
     interface IntrinsicElements extends ThreeJSXElements {}
   }

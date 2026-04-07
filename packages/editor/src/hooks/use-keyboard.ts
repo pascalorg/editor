@@ -11,7 +11,7 @@ export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
 }
 
-export const useKeyboard = () => {
+export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
@@ -30,9 +30,20 @@ export const useKeyboard = () => {
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         if (!_toolCancelConsumed) {
-          // Return to the default select tool while keeping the active building/level context.
+          const currentPhase = useEditor.getState().phase
+          const currentStructureLayer = useEditor.getState().structureLayer
+
           useEditor.getState().setEditingHole(null)
-          useEditor.getState().setMode('select')
+
+          // From zone mode, return to structure select
+          if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
+            useEditor.getState().setStructureLayer('elements')
+            useEditor.getState().setMode('select')
+          } else {
+            // Return to the default select tool while keeping the active building/level context.
+            useEditor.getState().setMode('select')
+          }
+
           useEditor.getState().setFloorplanSelectionTool('click')
 
           // Clear selections to close UI panels, but KEEP the active building and level context.
@@ -51,29 +62,34 @@ export const useKeyboard = () => {
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('select')
-      } else if (e.key === 's' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('elements')
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
+        useEditor.getState().setMode('build')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('zones')
+        useEditor.getState().setMode('build')
       }
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setMode('select')
         useEditor.getState().setFloorplanSelectionTool('click')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
         e.preventDefault()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+        if (isVersionPreviewMode) return
         e.preventDefault()
         useScene.temporal.getState().undo()
       } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        if (isVersionPreviewMode) return
         e.preventDefault()
         useScene.temporal.getState().redo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
@@ -108,7 +124,7 @@ export const useKeyboard = () => {
             }
           }
         }
-      } else if (e.key === 'r' || e.key === 'R') {
+      } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode) {
         // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
@@ -128,7 +144,7 @@ export const useKeyboard = () => {
             sfxEmitter.emit('sfx:item-rotate')
           }
         }
-      } else if (e.key === 't' || e.key === 'T') {
+      } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode) {
         // Rotate selected node counter-clockwise
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
@@ -147,8 +163,29 @@ export const useKeyboard = () => {
             sfxEmitter.emit('sfx:item-rotate')
           }
         }
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isVersionPreviewMode) {
         e.preventDefault()
+
+        // Check for a selected reference (guide/scan) first
+        const selectedRefId = useEditor.getState().selectedReferenceId
+        if (selectedRefId) {
+          const refNode = useScene.getState().nodes[selectedRefId as AnyNodeId]
+          if (refNode && (refNode.type === 'guide' || refNode.type === 'scan')) {
+            sfxEmitter.emit('sfx:structure-delete')
+            useScene.getState().deleteNode(selectedRefId as AnyNodeId)
+            useEditor.getState().setSelectedReferenceId(null)
+            return
+          }
+        }
+
+        // Delete selected zone
+        const selectedZoneId = useViewer.getState().selection.zoneId
+        if (selectedZoneId) {
+          sfxEmitter.emit('sfx:structure-delete')
+          useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
+          useViewer.getState().setSelection({ zoneId: null })
+          return
+        }
 
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
@@ -171,7 +208,7 @@ export const useKeyboard = () => {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [isVersionPreviewMode])
 
   return null
 }

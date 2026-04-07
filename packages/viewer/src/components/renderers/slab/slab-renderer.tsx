@@ -23,8 +23,8 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
       receiveShadow
       ref={ref}
       {...handlers}
-      visible={node.visible}
       material={material}
+      visible={node.visible}
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>

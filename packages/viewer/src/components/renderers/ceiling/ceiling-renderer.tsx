@@ -14,7 +14,7 @@ const lineY = smoothstep(lineWidth, 0, gridY).add(smoothstep(1.0 - lineWidth, 1.
 const gridPattern = lineX.max(lineY)
 const gridOpacity = mix(float(0.2), float(0.6), gridPattern)
 
-function createCeilingMaterials(color: string = '#999999') {
+function createCeilingMaterials(color = '#999999') {
   const topMaterial = new MeshBasicNodeMaterial({
     color,
     transparent: true,

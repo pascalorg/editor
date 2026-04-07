@@ -30,9 +30,12 @@ export function SlabPanel() {
     [selectedId, updateNode],
   )
 
-  const handleMaterialChange = useCallback((material: MaterialSchema) => {
-    handleUpdate({ material })
-  }, [handleUpdate])
+  const handleMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      handleUpdate({ material })
+    },
+    [handleUpdate],
+  )
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -105,12 +108,8 @@ export function SlabPanel() {
     const n = polygon.length
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
-      const pi = polygon[i]
-      const pj = polygon[j]
-      if (pi && pj) {
-        area += pi[0] * pj[1]
-        area -= pj[0] * pi[1]
-      }
+      area += polygon[i]?.[0] * polygon[j]?.[1]
+      area -= polygon[j]?.[0] * polygon[i]?.[1]
     }
     return Math.abs(area) / 2
   }
@@ -221,12 +220,8 @@ export function SlabPanel() {
           />
         </div>
       </PanelSection>
-
       <PanelSection title="Material">
-        <MaterialPicker
-          onChange={handleMaterialChange}
-          value={node.material}
-        />
+        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )
