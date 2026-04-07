@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/editor",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Pascal building editor component",
   "type": "module",
   "exports": {
