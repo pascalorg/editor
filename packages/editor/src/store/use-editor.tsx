@@ -127,6 +127,7 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
+  _viewModeBeforeFirstPerson: ViewMode | null
   setFirstPersonMode: (enabled: boolean) => void
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
