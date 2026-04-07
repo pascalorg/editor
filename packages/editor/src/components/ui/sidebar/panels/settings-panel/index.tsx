@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from './../../../../../components/ui/primitives/dialog'
 import { Switch } from './../../../../../components/ui/primitives/switch'
-import useEditor from './../../../../../store/use-editor'
+import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 
@@ -202,12 +202,6 @@ export function SettingsPanel({
 
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
-  const handleExport = async (format: 'glb' | 'stl' | 'obj' = 'glb') => {
-    if (exportScene) {
-      await exportScene(format)
-    }
-  }
-
   const handleSaveBuild = () => {
     const sceneData = { nodes, rootNodeIds }
     const json = JSON.stringify(sceneData, null, 2)
@@ -247,7 +241,8 @@ export function SettingsPanel({
   const handleResetToDefault = () => {
     clearScene()
     resetSelection()
-    setPhase('site')
+    setPhase('structure')
+    selectDefaultBuildingAndLevel()
   }
 
   const handleGenerateThumbnail = () => {
@@ -318,17 +313,29 @@ export function SettingsPanel({
       {/* Export Section */}
       <div className="space-y-2">
         <label className="font-medium text-muted-foreground text-xs uppercase">Export</label>
-        <Button className="w-full justify-start gap-2" onClick={() => handleExport('glb')} variant="outline">
+        <Button
+          className="w-full justify-start gap-2"
+          onClick={() => exportScene?.('glb')}
+          variant="outline"
+        >
           <Download className="size-4" />
-          Export as GLB
+          Export GLB
         </Button>
-        <Button className="w-full justify-start gap-2" onClick={() => handleExport('stl')} variant="outline">
+        <Button
+          className="w-full justify-start gap-2"
+          onClick={() => exportScene?.('stl')}
+          variant="outline"
+        >
           <Download className="size-4" />
-          Export as STL
+          Export STL
         </Button>
-        <Button className="w-full justify-start gap-2" onClick={() => handleExport('obj')} variant="outline">
+        <Button
+          className="w-full justify-start gap-2"
+          onClick={() => exportScene?.('obj')}
+          variant="outline"
+        >
           <Download className="size-4" />
-          Export as OBJ
+          Export OBJ
         </Button>
       </div>
 

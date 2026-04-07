@@ -35,7 +35,9 @@ type MaterialPickerProps = {
 }
 
 export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
-  const [showCustom, setShowCustom] = useState<boolean>(value?.preset === 'custom' || !!value?.properties)
+  const [showCustom, setShowCustom] = useState<boolean>(
+    value?.preset === 'custom' || !!value?.properties,
+  )
 
   const currentPreset = value?.preset || 'white'
   const currentProps = value?.properties || DEFAULT_MATERIALS[currentPreset]
@@ -60,7 +62,10 @@ export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
     }
   }
 
-  const handlePropertyChange = (prop: keyof typeof currentProps, val: typeof currentProps[keyof typeof currentProps]) => {
+  const handlePropertyChange = (
+    prop: keyof typeof currentProps,
+    val: (typeof currentProps)[keyof typeof currentProps],
+  ) => {
     onChange({
       preset: showCustom ? 'custom' : currentPreset,
       properties: {
@@ -84,7 +89,10 @@ export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
             onClick={() => handlePresetChange(preset)}
             style={{
               backgroundColor: PRESET_COLORS[preset],
-              backgroundImage: preset === 'glass' ? 'linear-gradient(135deg, rgba(255,255,255,0.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.3) 75%, transparent 75%, transparent)' : undefined,
+              backgroundImage:
+                preset === 'glass'
+                  ? 'linear-gradient(135deg, rgba(255,255,255,0.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.3) 75%, transparent 75%, transparent)'
+                  : undefined,
               backgroundSize: preset === 'glass' ? '8px 8px' : undefined,
             }}
             title={PRESET_LABELS[preset]}
@@ -96,15 +104,15 @@ export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
       {showCustom && (
         <div className="space-y-2 pt-2">
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 w-16">Color</label>
+            <label className="w-16 text-gray-500 text-xs">Color</label>
             <input
-              className="h-7 w-12 rounded border border-gray-300 cursor-pointer"
+              className="h-7 w-12 cursor-pointer rounded border border-gray-300"
               onChange={(e) => handlePropertyChange('color', e.target.value)}
               type="color"
               value={currentProps.color}
             />
             <input
-              className="flex-1 h-7 px-2 text-xs border border-gray-300 rounded"
+              className="h-7 flex-1 rounded border border-gray-300 px-2 text-xs"
               onChange={(e) => handlePropertyChange('color', e.target.value)}
               type="text"
               value={currentProps.color}
@@ -112,41 +120,45 @@ export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 w-16">Roughness</label>
+            <label className="w-16 text-gray-500 text-xs">Roughness</label>
             <input
-              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
               max={1}
               min={0}
-              onChange={(e) => handlePropertyChange('roughness', parseFloat(e.target.value))}
+              onChange={(e) => handlePropertyChange('roughness', Number.parseFloat(e.target.value))}
               step={0.01}
               type="range"
               value={currentProps.roughness}
             />
-            <span className="text-xs text-gray-400 w-8 text-right">{currentProps.roughness.toFixed(2)}</span>
+            <span className="w-8 text-right text-gray-400 text-xs">
+              {currentProps.roughness.toFixed(2)}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 w-16">Metalness</label>
+            <label className="w-16 text-gray-500 text-xs">Metalness</label>
             <input
-              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
               max={1}
               min={0}
-              onChange={(e) => handlePropertyChange('metalness', parseFloat(e.target.value))}
+              onChange={(e) => handlePropertyChange('metalness', Number.parseFloat(e.target.value))}
               step={0.01}
               type="range"
               value={currentProps.metalness}
             />
-            <span className="text-xs text-gray-400 w-8 text-right">{currentProps.metalness.toFixed(2)}</span>
+            <span className="w-8 text-right text-gray-400 text-xs">
+              {currentProps.metalness.toFixed(2)}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 w-16">Opacity</label>
+            <label className="w-16 text-gray-500 text-xs">Opacity</label>
             <input
-              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
               max={1}
               min={0}
               onChange={(e) => {
-                const opacity = parseFloat(e.target.value)
+                const opacity = Number.parseFloat(e.target.value)
                 handlePropertyChange('opacity', opacity)
                 if (opacity < 1 && !currentProps.transparent) {
                   handlePropertyChange('transparent', true)
@@ -156,14 +168,18 @@ export function MaterialPicker({ value, onChange }: MaterialPickerProps) {
               type="range"
               value={currentProps.opacity}
             />
-            <span className="text-xs text-gray-400 w-8 text-right">{currentProps.opacity.toFixed(2)}</span>
+            <span className="w-8 text-right text-gray-400 text-xs">
+              {currentProps.opacity.toFixed(2)}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 w-16">Side</label>
+            <label className="w-16 text-gray-500 text-xs">Side</label>
             <select
-              className="flex-1 h-7 px-2 text-xs border border-gray-300 rounded"
-              onChange={(e) => handlePropertyChange('side', e.target.value as 'front' | 'back' | 'double')}
+              className="h-7 flex-1 rounded border border-gray-300 px-2 text-xs"
+              onChange={(e) =>
+                handlePropertyChange('side', e.target.value as 'front' | 'back' | 'double')
+              }
               value={currentProps.side}
             >
               <option value="front">Front</option>

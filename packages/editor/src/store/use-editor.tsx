@@ -81,9 +81,25 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode: ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | StairNode | StairSegmentNode | null
+  movingNode:
+    | ItemNode
+    | WindowNode
+    | DoorNode
+    | RoofNode
+    | RoofSegmentNode
+    | StairNode
+    | StairSegmentNode
+    | null
   setMovingNode: (
-    node: ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | null,
+    node:
+      | ItemNode
+      | WindowNode
+      | DoorNode
+      | RoofNode
+      | RoofSegmentNode
+      | StairNode
+      | StairSegmentNode
+      | null,
   ) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
@@ -109,12 +125,12 @@ type EditorState = {
   setFloorplanHovered: (hovered: boolean) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
-  // Development-only camera debug flag for inspecting underside geometry
-  allowUndergroundCamera: boolean
-  setAllowUndergroundCamera: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   setFirstPersonMode: (enabled: boolean) => void
+  // Development-only camera debug flag for inspecting underside geometry
+  allowUndergroundCamera: boolean
+  setAllowUndergroundCamera: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
   floorplanPaneRatio: number
@@ -403,7 +419,15 @@ const useEditor = create<EditorState>()(
       setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
-      movingNode: null as ItemNode | WindowNode | DoorNode | RoofNode | RoofSegmentNode | null,
+      movingNode: null as
+        | ItemNode
+        | WindowNode
+        | DoorNode
+        | RoofNode
+        | RoofSegmentNode
+        | StairNode
+        | StairSegmentNode
+        | null,
       setMovingNode: (node) => set({ movingNode: node }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
@@ -442,9 +466,7 @@ const useEditor = create<EditorState>()(
       _viewModeBeforeFirstPerson: null as ViewMode | null,
       setFirstPersonMode: (enabled) => {
         if (enabled) {
-          // Save current view mode and force 3D for immersive walkthrough
           const currentViewMode = get().viewMode
-          // Force perspective camera and full-height walls for immersive walkthrough
           useViewer.getState().setCameraMode('perspective')
           useViewer.getState().setWallMode('up')
           set({
@@ -458,7 +480,6 @@ const useEditor = create<EditorState>()(
           })
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
-          // Restore previous view mode
           const prevMode = get()._viewModeBeforeFirstPerson
           set({
             isFirstPersonMode: false,

@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type MaterialSchema, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type MaterialSchema,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { MaterialPicker } from '../controls/material-picker'
@@ -26,29 +32,35 @@ export function WallPanel() {
     [selectedId, updateNode],
   )
 
-  const handleUpdateLength = useCallback((newLength: number) => {
-    if (!node || newLength <= 0) return
+  const handleUpdateLength = useCallback(
+    (newLength: number) => {
+      if (!node || newLength <= 0) return
 
-    const dx = node.end[0] - node.start[0]
-    const dz = node.end[1] - node.start[1]
-    const currentLength = Math.sqrt(dx * dx + dz * dz)
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      const currentLength = Math.sqrt(dx * dx + dz * dz)
 
-    if (currentLength === 0) return
+      if (currentLength === 0) return
 
-    const dirX = dx / currentLength
-    const dirZ = dz / currentLength
+      const dirX = dx / currentLength
+      const dirZ = dz / currentLength
 
-    const newEnd: [number, number] = [
-      node.start[0] + dirX * newLength,
-      node.start[1] + dirZ * newLength
-    ]
+      const newEnd: [number, number] = [
+        node.start[0] + dirX * newLength,
+        node.start[1] + dirZ * newLength,
+      ]
 
-    handleUpdate({ end: newEnd })
-  }, [node, handleUpdate])
+      handleUpdate({ end: newEnd })
+    },
+    [node, handleUpdate],
+  )
 
-  const handleMaterialChange = useCallback((material: MaterialSchema) => {
-    handleUpdate({ material })
-  }, [handleUpdate])
+  const handleMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      handleUpdate({ material })
+    },
+    [handleUpdate],
+  )
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -104,10 +116,7 @@ export function WallPanel() {
       </PanelSection>
 
       <PanelSection title="Material">
-        <MaterialPicker
-          onChange={handleMaterialChange}
-          value={node.material}
-        />
+        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )

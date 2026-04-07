@@ -64,7 +64,6 @@ export const updateNodesAction = (
 ) => {
   if (get().readOnly) return
   const parentsToUpdate = new Set<AnyNodeId>()
-  const idsToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -105,26 +104,19 @@ export const updateNodesAction = (
     return { nodes: nextNodes }
   })
 
-  // Collect all IDs that need to be marked dirty
+  // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
   for (const u of updates) {
-    idsToMarkDirty.add(u.id)
+    pendingUpdates.add(u.id)
   }
   for (const pId of parentsToUpdate) {
-    idsToMarkDirty.add(pId)
+    pendingUpdates.add(pId)
   }
 
-  // Add to pending updates set
-  for (const id of idsToMarkDirty) {
-    pendingUpdates.add(id)
-  }
-
-  // Cancel any pending RAF and schedule a new one
   if (pendingRafId !== null) {
     cancelAnimationFrame(pendingRafId)
   }
 
   pendingRafId = requestAnimationFrame(() => {
-    // Mark all pending updates as dirty
     pendingUpdates.forEach((id) => {
       get().markDirty(id)
     })
@@ -146,32 +138,26 @@ export const deleteNodesAction = (
     const nextCollections = { ...state.collections }
     let nextRootIds = [...state.rootNodeIds]
 
-    // Collect all IDs to delete (including descendants) in a first pass
-    // This avoids issues with recursive calls during state mutation
-    const allIdsToDelete = new Set<AnyNodeId>()
-    const collectDescendants = (id: AnyNodeId) => {
+    // Collect all ids to delete (the requested ids + all their descendants) before
+    // mutating anything, so the recursive walk reads consistent state.
+    const allIds = new Set<AnyNodeId>()
+    const collect = (id: AnyNodeId) => {
+      if (allIds.has(id)) return
+      allIds.add(id)
       const node = nextNodes[id]
-      if (!node) return
-      allIdsToDelete.add(id)
-      if ('children' in node && node.children) {
-        for (const childId of node.children as AnyNodeId[]) {
-          collectDescendants(childId)
-        }
+      if (node && 'children' in node) {
+        for (const cid of node.children as AnyNodeId[]) collect(cid)
       }
     }
+    for (const id of ids) collect(id)
 
-    for (const id of ids) {
-      collectDescendants(id)
-    }
-
-    // Now process all nodes for deletion
-    for (const id of allIdsToDelete) {
+    for (const id of allIds) {
       const node = nextNodes[id]
       if (!node) continue
 
-      // 1. Remove reference from Parent
+      // 1. Remove reference from parent — only if the parent itself is NOT also being deleted
       const parentId = node.parentId as AnyNodeId | null
-      if (parentId && nextNodes[parentId]) {
+      if (parentId && nextNodes[parentId] && !allIds.has(parentId)) {
         const parent = nextNodes[parentId] as AnyContainerNode
         if (parent.children) {
           nextNodes[parent.id] = {
@@ -182,7 +168,7 @@ export const deleteNodesAction = (
         }
       }
 
-      // 2. Remove from Root list
+      // 2. Remove from root list
       nextRootIds = nextRootIds.filter((rid) => rid !== id)
 
       // 3. Remove from any collections it belongs to

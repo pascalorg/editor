@@ -8,13 +8,17 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ChevronDown } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../../../lib/utils'
+import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+
+const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
+const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
 
 // ── Helper: get guide images for the current level ──────────────────────────
 
@@ -48,12 +52,67 @@ function useLevelScans(): ScanNode[] {
   )
 }
 
+// ── Shared upload button for dropdowns ──────────────────────────────────────
+
+function UploadButton() {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const levelId = useViewer((s) => s.selection.levelId)
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!(file && levelId)) return
+      e.target.value = ''
+
+      const { uploadHandler } = useUploadStore.getState()
+      if (!uploadHandler) return
+
+      if (file.size > MAX_FILE_SIZE) return
+
+      const isScan =
+        file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')
+      const isImage = file.type.startsWith('image/')
+      if (!(isScan || isImage)) return
+
+      const type = isScan ? 'scan' : 'guide'
+
+      const projectId = window.location.pathname.split('/editor/')[1]?.split('/')[0]
+      if (!projectId) return
+
+      useUploadStore.getState().clearUpload(levelId)
+      uploadHandler(projectId, levelId, file, type)
+    },
+    [levelId],
+  )
+
+  return (
+    <>
+      <button
+        aria-label="Upload scan or guide image"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        onClick={() => fileInputRef.current?.click()}
+        type="button"
+      >
+        <Plus className="h-3 w-3" />
+      </button>
+      <input
+        accept={ACCEPTED_FILE_TYPES}
+        className="hidden"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
+    </>
+  )
+}
+
 // ── Guides toggle + dropdown ────────────────────────────────────────────────
 
 function GuidesControl() {
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const updateNode = useScene((state) => state.updateNode)
+  const deleteNode = useScene((state) => state.deleteNode)
   const [isOpen, setIsOpen] = useState(false)
 
   const guides = useLevelGuides()
@@ -74,7 +133,7 @@ function GuidesControl() {
           className={cn(
             'rounded-r-none p-0',
             showGuides
-              ? 'bg-white/10'
+              ? 'bg-white/15'
               : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
           )}
           label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
@@ -82,11 +141,16 @@ function GuidesControl() {
           size="icon"
           variant="ghost"
         >
-          <img
-            alt="Guides"
-            className="h-[28px] w-[28px] object-contain"
-            src="/icons/floorplan.png"
-          />
+          <div className="relative">
+            <img
+              alt="Guides"
+              className="h-[28px] w-[28px] object-contain"
+              src="/icons/floorplan.png"
+            />
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+              {guides.length}
+            </span>
+          </div>
         </ActionButton>
 
         {/* Dropdown chevron */}
@@ -96,7 +160,13 @@ function GuidesControl() {
             aria-label="Guide image settings"
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
-              isOpen ? 'bg-white/10' : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+              showGuides
+                ? isOpen
+                  ? 'bg-white/10'
+                  : 'bg-white/5 hover:bg-white/8'
+                : isOpen
+                  ? 'bg-white/8'
+                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
             )}
             type="button"
           >
@@ -116,7 +186,7 @@ function GuidesControl() {
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background/80">
               <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.png" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground text-sm">Guide images</p>
               {hasGuides && (
                 <p className="text-muted-foreground text-xs">
@@ -124,13 +194,14 @@ function GuidesControl() {
                 </p>
               )}
             </div>
+            <UploadButton />
           </div>
 
           {hasGuides ? (
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {guides.map((guide, index) => (
                 <div
-                  className="space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
+                  className="group/item space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
                   key={guide.id}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -142,6 +213,14 @@ function GuidesControl() {
                     <p className="truncate font-medium text-foreground text-sm">
                       {guide.name || `Guide image ${index + 1}`}
                     </p>
+                    <button
+                      aria-label="Delete guide image"
+                      className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                      onClick={() => deleteNode(guide.id)}
+                      type="button"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
                   <SliderControl
                     label="Opacity"
@@ -173,6 +252,7 @@ function ScansControl() {
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
   const updateNode = useScene((state) => state.updateNode)
+  const deleteNode = useScene((state) => state.deleteNode)
   const [isOpen, setIsOpen] = useState(false)
 
   const scans = useLevelScans()
@@ -193,7 +273,7 @@ function ScansControl() {
           className={cn(
             'rounded-r-none p-0',
             showScans
-              ? 'bg-white/10'
+              ? 'bg-white/15'
               : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
           )}
           label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
@@ -201,7 +281,12 @@ function ScansControl() {
           size="icon"
           variant="ghost"
         >
-          <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+          <div className="relative">
+            <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.png" />
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+              {scans.length}
+            </span>
+          </div>
         </ActionButton>
 
         {/* Dropdown chevron */}
@@ -211,7 +296,13 @@ function ScansControl() {
             aria-label="Scan settings"
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
-              isOpen ? 'bg-white/10' : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+              showScans
+                ? isOpen
+                  ? 'bg-white/10'
+                  : 'bg-white/5 hover:bg-white/8'
+                : isOpen
+                  ? 'bg-white/8'
+                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
             )}
             type="button"
           >
@@ -231,7 +322,7 @@ function ScansControl() {
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background/80">
               <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.png" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground text-sm">Scans</p>
               {hasScans && (
                 <p className="text-muted-foreground text-xs">
@@ -239,13 +330,14 @@ function ScansControl() {
                 </p>
               )}
             </div>
+            <UploadButton />
           </div>
 
           {hasScans ? (
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {scans.map((scan, index) => (
                 <div
-                  className="space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
+                  className="group/item space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
                   key={scan.id}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -257,6 +349,14 @@ function ScansControl() {
                     <p className="truncate font-medium text-foreground text-sm">
                       {scan.name || `Scan ${index + 1}`}
                     </p>
+                    <button
+                      aria-label="Delete scan"
+                      className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                      onClick={() => deleteNode(scan.id)}
+                      type="button"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
                   <SliderControl
                     label="Opacity"

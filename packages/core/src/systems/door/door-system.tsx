@@ -1,27 +1,9 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
+import { baseMaterial, glassMaterial } from '../../materials'
 import type { AnyNodeId, DoorNode } from '../../schema'
 import useScene from '../../store/use-scene'
-
-const baseMaterial = new MeshStandardNodeMaterial({
-  name: 'door-base',
-  color: '#f2f0ed',
-  roughness: 0.5,
-  metalness: 0,
-})
-
-const glassMaterial = new MeshStandardNodeMaterial({
-  name: 'door-glass',
-  color: 'lightblue',
-  roughness: 0.05,
-  metalness: 0.1,
-  transparent: true,
-  opacity: 0.35,
-  side: DoubleSide,
-  depthWrite: false,
-})
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })

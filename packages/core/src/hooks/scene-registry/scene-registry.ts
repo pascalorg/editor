@@ -1,3 +1,5 @@
+'use client'
+
 import { useLayoutEffect } from 'react'
 import type * as THREE from 'three'
 

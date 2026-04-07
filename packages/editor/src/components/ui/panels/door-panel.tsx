@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type MaterialSchema, DoorNode, emitter, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  DoorNode,
+  emitter,
+  type MaterialSchema,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -37,6 +44,13 @@ export function DoorPanel() {
       useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
+  )
+
+  const handleMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      handleUpdate({ material })
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -80,10 +94,9 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    if (!node) return
-    const numSegs = node.segments.length
-    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
-    const normH = node.segments.map((s) => s.heightRatio / totalH)
+    const numSegs = node?.segments.length
+    const totalH = node?.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node?.segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
     const delta = clamped - normH[segIdx]!
@@ -563,13 +576,6 @@ export function DoorPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          onChange={(material) => handleUpdate({ material })}
-          value={node.material}
-        />
-      </PanelSection>
-
       <PanelSection title="Actions">
         <ActionGroup>
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
@@ -585,6 +591,9 @@ export function DoorPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
+      </PanelSection>
+      <PanelSection title="Material">
+        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )

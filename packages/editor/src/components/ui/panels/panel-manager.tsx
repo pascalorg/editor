@@ -37,12 +37,12 @@ export function PanelManager() {
           return <RoofPanel />
         case 'roof-segment':
           return <RoofSegmentPanel />
-        case 'slab':
-          return <SlabPanel />
         case 'stair':
           return <StairPanel />
         case 'stair-segment':
           return <StairSegmentPanel />
+        case 'slab':
+          return <SlabPanel />
         case 'ceiling':
           return <CeilingPanel />
         case 'wall':
