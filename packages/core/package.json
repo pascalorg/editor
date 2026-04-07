@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./clone-scene-graph": {
+      "types": "./dist/utils/clone-scene-graph.d.ts",
+      "import": "./dist/utils/clone-scene-graph.js",
+      "default": "./dist/utils/clone-scene-graph.js"
     }
   },
   "files": [

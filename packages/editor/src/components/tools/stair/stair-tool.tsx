@@ -12,45 +12,48 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import {
+  DEFAULT_STAIR_ATTACHMENT_SIDE,
+  DEFAULT_STAIR_FILL_TO_FLOOR,
+  DEFAULT_STAIR_HEIGHT,
+  DEFAULT_STAIR_LENGTH,
+  DEFAULT_STAIR_STEP_COUNT,
+  DEFAULT_STAIR_THICKNESS,
+  DEFAULT_STAIR_WIDTH,
+} from './stair-defaults'
 
 const GRID_OFFSET = 0.02
-
-// Default stair segment dimensions
-const DEFAULT_WIDTH = 1.0
-const DEFAULT_LENGTH = 3.0
-const DEFAULT_HEIGHT = 2.5
-const DEFAULT_STEP_COUNT = 10
 
 /**
  * Generates the step-profile geometry for the ghost preview.
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
 function createStairPreviewGeometry(): THREE.BufferGeometry {
-  const riserHeight = DEFAULT_HEIGHT / DEFAULT_STEP_COUNT
-  const treadDepth = DEFAULT_LENGTH / DEFAULT_STEP_COUNT
+  const riserHeight = DEFAULT_STAIR_HEIGHT / DEFAULT_STAIR_STEP_COUNT
+  const treadDepth = DEFAULT_STAIR_LENGTH / DEFAULT_STAIR_STEP_COUNT
 
   const shape = new THREE.Shape()
   shape.moveTo(0, 0)
 
-  for (let i = 0; i < DEFAULT_STEP_COUNT; i++) {
+  for (let i = 0; i < DEFAULT_STAIR_STEP_COUNT; i++) {
     shape.lineTo(i * treadDepth, (i + 1) * riserHeight)
     shape.lineTo((i + 1) * treadDepth, (i + 1) * riserHeight)
   }
 
   // Fill to floor (absoluteHeight = 0)
-  shape.lineTo(DEFAULT_LENGTH, 0)
+  shape.lineTo(DEFAULT_STAIR_LENGTH, 0)
   shape.lineTo(0, 0)
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     steps: 1,
-    depth: DEFAULT_WIDTH,
+    depth: DEFAULT_STAIR_WIDTH,
     bevelEnabled: false,
   })
 
   // Rotate so extrusion is along X (width), shape profile in XZ plane
   const matrix = new THREE.Matrix4()
   matrix.makeRotationY(-Math.PI / 2)
-  matrix.setPosition(DEFAULT_WIDTH / 2, 0, 0)
+  matrix.setPosition(DEFAULT_STAIR_WIDTH / 2, 0, 0)
   geometry.applyMatrix4(matrix)
 
   return geometry
@@ -71,12 +74,13 @@ function commitStairPlacement(
 
   const segment = StairSegmentNode.parse({
     segmentType: 'stair',
-    width: DEFAULT_WIDTH,
-    length: DEFAULT_LENGTH,
-    height: DEFAULT_HEIGHT,
-    stepCount: DEFAULT_STEP_COUNT,
-    attachmentSide: 'front',
-    fillToFloor: true,
+    width: DEFAULT_STAIR_WIDTH,
+    length: DEFAULT_STAIR_LENGTH,
+    height: DEFAULT_STAIR_HEIGHT,
+    stepCount: DEFAULT_STAIR_STEP_COUNT,
+    attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
+    fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
+    thickness: DEFAULT_STAIR_THICKNESS,
     position: [0, 0, 0],
   })
 

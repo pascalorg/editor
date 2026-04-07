@@ -4,7 +4,10 @@ import {
   type GridEvent,
   type RoofNode,
   type RoofSegmentNode,
+  type StairNode,
+  type StairSegmentNode,
   sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -14,9 +17,9 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
-  node: movingNode,
-}) => {
+export const MoveRoofTool: React.FC<{
+  node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
+}> = ({ node: movingNode }) => {
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
@@ -31,7 +34,10 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
       return [pos.x, pos.y, pos.z]
     }
     // Fallback if not registered (e.g. newly created duplicate without mesh yet)
-    if (movingNode.type === 'roof-segment' && movingNode.parentId) {
+    if (
+      (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') &&
+      movingNode.parentId
+    ) {
       const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
       if (parentNode && 'position' in parentNode && 'rotation' in parentNode) {
         const parentAngle = parentNode.rotation as number
@@ -95,13 +101,14 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
     // user sees the individual segment tracking the cursor.
     let segmentWrapperGroup: THREE.Object3D | null = null
     let mergedRoofMesh: THREE.Object3D | null = null
-    if (movingNode.type === 'roof-segment') {
+    if (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') {
       const segmentMesh = sceneRegistry.nodes.get(movingNode.id)
       if (segmentMesh?.parent) {
-        // segmentMesh.parent = <group visible={isSelected}> wrapper in RoofRenderer
-        // segmentMesh.parent.parent = the registered roof group
+        // segmentMesh.parent = <group visible={isSelected}> wrapper in Roof/StairRenderer
+        // segmentMesh.parent.parent = the registered roof/stair group
         segmentWrapperGroup = segmentMesh.parent
-        mergedRoofMesh = segmentMesh.parent.parent?.getObjectByName('merged-roof') ?? null
+        const mergedName = movingNode.type === 'stair-segment' ? 'merged-stair' : 'merged-roof'
+        mergedRoofMesh = segmentMesh.parent.parent?.getObjectByName(mergedName) ?? null
         segmentWrapperGroup.visible = true
         if (mergedRoofMesh) mergedRoofMesh.visible = false
       }
@@ -111,7 +118,10 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
       let localX = gridX
       let localZ = gridZ
 
-      if (movingNode.type === 'roof-segment' && movingNode.parentId) {
+      if (
+        (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') &&
+        movingNode.parentId
+      ) {
         const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
         if (parentNode && 'position' in parentNode && 'rotation' in parentNode) {
           const parentObj = sceneRegistry.nodes.get(movingNode.parentId)
@@ -156,6 +166,12 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
         mesh.position.x = localX
         mesh.position.z = localZ
       }
+
+      // Publish world-space position so the 2D floorplan can track the drag
+      useLiveTransforms.getState().set(movingNode.id, {
+        position: [gridX, y, gridZ],
+        rotation: pendingRotation,
+      })
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -181,11 +197,13 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
 
       sfxEmitter.emit('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [movingNode.id] })
+      useLiveTransforms.getState().clear(movingNode.id)
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
 
     const onCancel = () => {
+      useLiveTransforms.getState().clear(movingNode.id)
       if (isNew) {
         useScene.getState().deleteNode(movingNode.id)
       } else {
@@ -218,6 +236,15 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
         // Directly update the Three.js mesh — no store update during drag
         const mesh = sceneRegistry.nodes.get(movingNode.id)
         if (mesh) mesh.rotation.y = pendingRotation
+
+        // Update live transform rotation for 2D floorplan
+        const currentLive = useLiveTransforms.getState().get(movingNode.id)
+        if (currentLive) {
+          useLiveTransforms.getState().set(movingNode.id, {
+            ...currentLive,
+            rotation: pendingRotation,
+          })
+        }
       }
     }
 
@@ -230,6 +257,9 @@ export const MoveRoofTool: React.FC<{ node: RoofNode | RoofSegmentNode }> = ({
       // Restore segment wrapper visibility (React will re-sync on next render)
       if (segmentWrapperGroup) segmentWrapperGroup.visible = false
       if (mergedRoofMesh) mergedRoofMesh.visible = true
+
+      // Clear ephemeral live transform
+      useLiveTransforms.getState().clear(movingNode.id)
 
       if (!wasCommitted) {
         if (isNew) {

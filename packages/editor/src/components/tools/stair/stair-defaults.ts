@@ -1,0 +1,7 @@
+export const DEFAULT_STAIR_WIDTH = 1.0
+export const DEFAULT_STAIR_LENGTH = 3.0
+export const DEFAULT_STAIR_HEIGHT = 2.5
+export const DEFAULT_STAIR_STEP_COUNT = 10
+export const DEFAULT_STAIR_ATTACHMENT_SIDE = 'front' as const
+export const DEFAULT_STAIR_FILL_TO_FLOOR = true
+export const DEFAULT_STAIR_THICKNESS = 0.25

@@ -1,6 +1,8 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
+  baseMaterial,
+  glassMaterial,
   type Interactive,
   type ItemNode,
   type LightEffect,
@@ -16,36 +18,18 @@ import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
-import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useItemLightPool } from '../../../store/use-item-light-pool'
 import { ErrorBoundary } from '../../error-boundary'
 import { NodeRenderer } from '../node-renderer'
 
-// Shared materials to avoid creating new instances for every mesh
-const defaultMaterial = new MeshStandardNodeMaterial({
-  color: 0xff_ff_ff,
-  roughness: 1,
-  metalness: 0,
-})
-
-const glassMaterial = new MeshStandardNodeMaterial({
-  name: 'glass',
-  color: 'lightgray',
-  roughness: 0.8,
-  metalness: 0,
-  transparent: true,
-  opacity: 0.35,
-  side: DoubleSide,
-  depthWrite: false,
-})
-
 const getMaterialForOriginal = (original: Material): MeshStandardNodeMaterial => {
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
-  return defaultMaterial
+  return baseMaterial
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
@@ -145,6 +129,18 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         if (Array.isArray(mesh.material)) {
           mesh.material = mesh.material.map((mat) => getMaterialForOriginal(mat))
           hasGlass = mesh.material.some((mat) => mat.name === 'glass')
+
+          // Fix geometry groups that reference materialIndex beyond the material
+          // array length — this causes three-mesh-bvh to crash with
+          // "Cannot read properties of undefined (reading 'side')"
+          const matCount = mesh.material.length
+          if (mesh.geometry.groups.length > 0) {
+            for (const group of mesh.geometry.groups) {
+              if (group.materialIndex !== undefined && group.materialIndex >= matCount) {
+                group.materialIndex = 0
+              }
+            }
+          }
         } else {
           mesh.material = getMaterialForOriginal(mesh.material)
           hasGlass = mesh.material.name === 'glass'
