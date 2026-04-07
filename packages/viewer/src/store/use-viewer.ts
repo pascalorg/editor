@@ -73,6 +73,9 @@ type ViewerState = {
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+
+  walkthroughMode: boolean
+  setWalkthroughMode: (enabled: boolean) => void
 }
 
 const useViewer = create<ViewerState>()(
@@ -196,6 +199,9 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+
+      walkthroughMode: false,
+      setWalkthroughMode: (enabled) => set({ walkthroughMode: enabled }),
     }),
     {
       name: 'viewer-preferences',

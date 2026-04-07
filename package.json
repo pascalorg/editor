@@ -11,7 +11,7 @@
     "check": "biome check",
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
-    "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
+    "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null; lsof -c next | grep LISTEN | awk '{print $2}' | xargs kill -9 2>/dev/null || echo 'No Next.js processes found'",
     "release": "gh workflow run release.yml -f package=both -f bump=patch",
     "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
     "release:core": "gh workflow run release.yml -f package=core -f bump=patch",
