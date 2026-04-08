@@ -5664,7 +5664,7 @@ export function FloorplanPanel() {
   }, [fittedViewport, levelId])
 
   useEffect(() => {
-    if (!(phase === 'site' && levelNode?.type === 'level' && levelNode.level > 0)) {
+    if (!(phase === 'site' && levelNode?.type === 'level')) {
       return
     }
 

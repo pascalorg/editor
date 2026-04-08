@@ -389,7 +389,8 @@ export const SelectionManager = () => {
       let currentStructureLayer = useEditor.getState().structureLayer
 
       // Auto-switch between zones, structure, and furnish when clicking elements on the same level.
-      if (currentPhase === 'structure' || currentPhase === 'furnish') {
+      // Also auto-switch from site phase when clicking structural/furnish elements (e.g. 2D floorplan).
+      if (currentPhase === 'structure' || currentPhase === 'furnish' || currentPhase === 'site') {
         if (isNodeInCurrentLevel(node)) {
           const target = getSelectionTarget(node)
           if (target) {
