@@ -48,7 +48,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
@@ -75,7 +75,7 @@
     },
     "packages/editor": {
       "name": "@pascal-app/editor",
-      "version": "0.1.0",
+      "version": "0.4.0",
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.5.14",
@@ -166,7 +166,7 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "dependencies": {
         "polygon-clipping": "^0.15.7",
         "zustand": "^5",
@@ -652,9 +652,9 @@
 
     "@use-gesture/react": ["@use-gesture/react@10.3.1", "", { "dependencies": { "@use-gesture/core": "10.3.1" }, "peerDependencies": { "react": ">= 16.8.0" } }, "sha512-Yy19y6O2GJq8f7CHf7L0nxL8bf4PZCPaVOCgJrusOeFHY1LvHgYXnmnXg6N5iwAnbgbZCDjo60SiM6IPJi9C5g=="],
 
-    "@visual-json/core": ["@visual-json/core@0.3.1", "", {}, "sha512-rjRbcCbKBixuQpXqVPgzKl3Nfk0QLD1NJhuHittM0ASYETozxTsou4fL6g/IWz/BaYiAAjKnrkb8aasbzJGcvg=="],
+    "@visual-json/core": ["@visual-json/core@0.4.0", "", {}, "sha512-T/HvRIp7r6SehxVnO+akV72NLv2OMBEoQdYTFbpwMi6uU2TaXQOpIOHBG4r9XBz7OqC2e8aedOwal/NtqtzyCg=="],
 
-    "@visual-json/react": ["@visual-json/react@0.3.1", "", { "dependencies": { "@visual-json/core": "0.3.1" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-OoyKkhSs2MzS4embJZY3VPYUl8/gTn1BycWZskspHul/Sn4nfWjEUafWe6aWSeIKhuAw8HQwbw2krgTtuMM4Gg=="],
+    "@visual-json/react": ["@visual-json/react@0.4.0", "", { "dependencies": { "@visual-json/core": "0.4.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-qiDrXI7wu9VoTE0TaLoJp7kwRj8SQTpkS/wkts5sBPA8078zdrIKc+0u0Y8wAXGYd3udw9dNfD4kmpO48OEwXQ=="],
 
     "@webgpu/types": ["@webgpu/types@0.1.69", "", {}, "sha512-RPmm6kgRbI8e98zSD3RVACvnuktIja5+yLgDAkTmxLr90BEwdTXRQWNLF3ETTTyH/8mKhznZuN5AveXYFEsMGQ=="],
 
