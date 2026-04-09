@@ -20,7 +20,14 @@ import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
 export interface GridEvent {
+  /** World-space intersection point on the grid plane. */
   position: [number, number, number]
+  /**
+   * Building-local intersection point — relative to the currently selected building.
+   * Equals `position` when no building is selected.
+   * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
+   */
+  localPosition: [number, number, number]
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
@@ -97,6 +104,11 @@ type PresetEvents = {
   'preset:thumbnail-updated': { presetId: string; thumbnailUrl: string }
 }
 
+type ThumbnailEvents = {
+  'thumbnail:before-capture': undefined
+  'thumbnail:after-capture': undefined
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'item', ItemEvent> &
@@ -114,6 +126,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'door', DoorEvent> &
   CameraControlEvents &
   ToolEvents &
-  PresetEvents
+  PresetEvents &
+  ThumbnailEvents
 
 export const emitter = mitt<EditorEvents>()

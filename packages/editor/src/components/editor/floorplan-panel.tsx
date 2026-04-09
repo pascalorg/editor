@@ -4593,6 +4593,12 @@ export function FloorplanPanel() {
     levelNode?.type === 'level' && levelNode.parentId
       ? (levelNode.parentId as BuildingNode['id'])
       : (buildingId as BuildingNode['id'] | null)
+  const buildingRotationY = useScene((state) => {
+    if (!currentBuildingId) return 0
+    const node = state.nodes[currentBuildingId]
+    return node?.type === 'building' ? (node.rotation[1] ?? 0) : 0
+  })
+  const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
   const site = useScene((state) => {
     for (const rootNodeId of state.rootNodeIds) {
       const node = state.nodes[rootNodeId]
@@ -5963,9 +5969,14 @@ export function FloorplanPanel() {
         return null
       }
 
+      if (buildingRotationY !== 0) {
+        const [unrotX, unrotY] = rotatePlanVector(svgPoint.x, svgPoint.y, buildingRotationY)
+        return toPlanPointFromSvgPoint({ x: unrotX, y: unrotY })
+      }
+
       return toPlanPointFromSvgPoint(svgPoint)
     },
-    [getSvgPointFromClientPoint],
+    [getSvgPointFromClientPoint, buildingRotationY],
   )
   useEffect(() => {
     siteBoundaryDraftRef.current = siteBoundaryDraft
@@ -6973,6 +6984,7 @@ export function FloorplanPanel() {
       emitter.emit(`grid:${eventType}` as any, {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [snappedPoint[0], worldY, snappedPoint[1]],
+        localPosition: [snappedPoint[0], worldY, snappedPoint[1]],
       })
 
       return snappedPoint
@@ -9296,9 +9308,10 @@ export function FloorplanPanel() {
               y={viewBox.minY}
             />
 
-            <FloorplanGridLayer
-              majorGridPath={majorGridPath}
-              minorGridPath={minorGridPath}
+            <g transform={buildingRotationDeg !== 0 ? `rotate(${buildingRotationDeg})` : undefined}>
+              <FloorplanGridLayer
+                majorGridPath={majorGridPath}
+                minorGridPath={minorGridPath}
               palette={palette}
               showGrid={showGrid}
             />
@@ -9601,6 +9614,7 @@ export function FloorplanPanel() {
                 vectorEffect="non-scaling-stroke"
               />
             )}
+            </g>
           </svg>
         )}
       </div>

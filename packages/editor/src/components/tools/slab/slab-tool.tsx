@@ -86,12 +86,12 @@ export const SlabTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
       const gridPosition: [number, number] = [gridX, gridZ]
 
       setCursorPosition(gridPosition)
-      setLevelY(event.position[1])
+      setLevelY(event.localPosition[1])
 
       // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = points[points.length - 1]
@@ -112,7 +112,7 @@ export const SlabTool: React.FC = () => {
       }
 
       previousSnappedPointRef.current = displayPoint
-      cursorRef.current.position.set(displayPoint[0], event.position[1], displayPoint[1])
+      cursorRef.current.position.set(displayPoint[0], event.localPosition[1], displayPoint[1])
     }
 
     const onGridClick = (_event: GridEvent) => {

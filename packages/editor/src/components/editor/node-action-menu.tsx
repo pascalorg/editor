@@ -4,7 +4,7 @@ import { Copy, Move, Trash2 } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
-  onDelete: MouseEventHandler<HTMLButtonElement>
+  onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
@@ -52,15 +52,17 @@ export function NodeActionMenu({
           <Copy className="h-4 w-4" />
         </button>
       )}
-      <button
-        aria-label="Delete"
-        className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-        onClick={onDelete}
-        title="Delete"
-        type="button"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {onDelete && (
+        <button
+          aria-label="Delete"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          onClick={onDelete}
+          title="Delete"
+          type="button"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }

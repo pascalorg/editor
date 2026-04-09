@@ -156,7 +156,10 @@ export const MoveRoofTool: React.FC<{
       }
 
       previousGridPosRef.current = [gridX, gridZ]
-      setCursorWorldPos([gridX, y, gridZ])
+      // Cursor is inside the building-local ToolManager group — use local position
+      const lx = Math.round(event.localPosition[0] * 2) / 2
+      const lz = Math.round(event.localPosition[2] * 2) / 2
+      setCursorWorldPos([lx, event.localPosition[1], lz])
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y)
 
@@ -175,7 +178,7 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
+      const gridX = Math.round(event.position[0] * 2) / 2 // world, for computeLocal
       const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 

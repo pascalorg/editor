@@ -89,6 +89,7 @@ type EditorState = {
     | RoofSegmentNode
     | StairNode
     | StairSegmentNode
+    | BuildingNode
     | null
   setMovingNode: (
     node:
@@ -99,6 +100,7 @@ type EditorState = {
       | RoofSegmentNode
       | StairNode
       | StairSegmentNode
+      | BuildingNode
       | null,
   ) => void
   selectedReferenceId: string | null
@@ -428,6 +430,7 @@ const useEditor = create<EditorState>()(
         | RoofSegmentNode
         | StairNode
         | StairSegmentNode
+        | BuildingNode
         | null,
       setMovingNode: (node) => set({ movingNode: node }),
       selectedReferenceId: null,
