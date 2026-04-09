@@ -1,4 +1,10 @@
-import { type AnyNodeId, type CeilingNode, type SlabNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type BuildingNode,
+  type CeilingNode,
+  type SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
@@ -45,8 +51,17 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
+
+  // Building transform for the local group — all building-relative tools live inside this group
+  // so their cursor positions and committed data are naturally in building-local space.
+  const building = buildingId
+    ? (nodes[buildingId as AnyNodeId] as BuildingNode | undefined)
+    : undefined
+  const buildingPosition = building?.position ?? [0, 0, 0]
+  const buildingRotation = building?.rotation ?? [0, 0, 0]
 
   // Check if a slab is selected
   const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'slab') as
@@ -102,19 +117,30 @@ export const ToolManager: React.FC = () => {
   return (
     <>
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
-      {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
-      {showSlabHoleEditor && selectedSlabId && editingHole && (
-        <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
-      )}
-      {showCeilingBoundaryEditor && selectedCeilingId && (
-        <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
-      )}
-      {showCeilingHoleEditor && selectedCeilingId && editingHole && (
-        <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
-      )}
-      {movingNode && <MoveTool />}
-      {!movingNode && BuildToolComponent && <BuildToolComponent />}
+      {/* World-space tools: site boundary and building movement operate in world coordinates */}
+      {movingNode?.type === 'building' && <MoveTool />}
+
+      {/* Building-local group: all other tools are relative to the selected building.
+          Cursor visuals set positions in building-local space; this group applies the
+          building's world transform so they render at the correct world position. */}
+      <group
+        position={buildingPosition as [number, number, number]}
+        rotation={buildingRotation as [number, number, number]}
+      >
+        {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
+        {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
+        {showSlabHoleEditor && selectedSlabId && editingHole && (
+          <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
+        )}
+        {showCeilingBoundaryEditor && selectedCeilingId && (
+          <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
+        )}
+        {showCeilingHoleEditor && selectedCeilingId && editingHole && (
+          <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
+        )}
+        {movingNode && movingNode.type !== 'building' && <MoveTool />}
+        {!movingNode && BuildToolComponent && <BuildToolComponent />}
+      </group>
     </>
   )
 }

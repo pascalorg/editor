@@ -174,18 +174,18 @@ export const ZoneTool: React.FC = () => {
       if (!cursorRef.current) return
 
       // Snap to 0.5 grid
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
       cursorPosition = [gridX, gridZ]
-      levelYRef.current = event.position[1]
+      levelYRef.current = event.localPosition[1]
 
       // If we have points, snap to axis from last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
       if (lastPoint) {
         const snapped = calculateSnapPoint(lastPoint, cursorPosition)
-        cursorRef.current.position.set(snapped[0], event.position[1], snapped[1])
+        cursorRef.current.position.set(snapped[0], event.localPosition[1], snapped[1])
       } else {
-        cursorRef.current.position.set(gridX, event.position[1], gridZ)
+        cursorRef.current.position.set(gridX, event.localPosition[1], gridZ)
       }
 
       updatePreview()
@@ -194,8 +194,8 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
       let clickPoint: [number, number] = [gridX, gridZ]
 
       // Snap to axis from last point

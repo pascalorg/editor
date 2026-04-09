@@ -55,6 +55,7 @@ import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
 import { FloatingActionMenu } from './floating-action-menu'
+import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
@@ -676,6 +677,7 @@ export default function Editor({
       {!isFirstPersonMode && <SelectionManager />}
       {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
       {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
+      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}

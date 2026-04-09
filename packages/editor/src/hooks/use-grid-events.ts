@@ -1,4 +1,10 @@
-import { type EventSuffix, emitter, type GridEvent } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type EventSuffix,
+  emitter,
+  type GridEvent,
+  sceneRegistry,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -44,9 +50,15 @@ export function useGridEvents(gridY: number) {
       const point = getIntersection(nativeEvent)
       if (!point) return
 
+      // Convert world-space point to building-local for tools that live inside a building.
+      const buildingId = useViewer.getState().selection.buildingId
+      const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+      const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.clone()) : point
+
       const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`
       const payload: GridEvent = {
         position: [point.x, point.y, point.z],
+        localPosition: [localPoint.x, localPoint.y, localPoint.z],
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 
