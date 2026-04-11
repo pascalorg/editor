@@ -3,10 +3,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type CeilingNode,
   DoorNode,
   ItemNode,
   RoofNode,
   RoofSegmentNode,
+  type SlabNode,
   StairNode,
   StairSegmentNode,
   sceneRegistry,
@@ -32,17 +34,20 @@ const ALLOWED_TYPES = [
   'stair-segment',
   'wall',
   'slab',
+  'ceiling',
 ]
-const DELETE_ONLY_TYPES = ['wall', 'slab']
+const DELETE_ONLY_TYPES = ['wall']
+const HOLE_TYPES = ['slab', 'ceiling']
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const nodes = useScene((s) => s.nodes)
+  const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
-  const setMode = useEditor((s) => s.setMode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
+  const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
 
@@ -61,8 +66,8 @@ export function FloatingActionMenu() {
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
         // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
-        const isDeleteOnly = node && DELETE_ONLY_TYPES.includes(node.type)
-        const yOffset = isDeleteOnly ? 0.8 : 0.3
+        const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
+        const yOffset = isStructural ? 0.8 : 0.3
         groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
     }
@@ -196,14 +201,45 @@ export function FloatingActionMenu() {
     [node, setMovingNode, setSelection],
   )
 
+  const handleAddHole = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!(node && selectedId && (node.type === 'slab' || node.type === 'ceiling'))) return
+
+      const polygon = (node as SlabNode | CeilingNode).polygon
+      let cx = 0
+      let cz = 0
+      for (const [x, z] of polygon) {
+        cx += x
+        cz += z
+      }
+      cx /= polygon.length
+      cz /= polygon.length
+
+      const holeSize = 0.5
+      const newHole: Array<[number, number]> = [
+        [cx - holeSize, cz - holeSize],
+        [cx + holeSize, cz - holeSize],
+        [cx + holeSize, cz + holeSize],
+        [cx - holeSize, cz + holeSize],
+      ]
+      const currentHoles = (node as SlabNode | CeilingNode).holes || []
+      updateNode(selectedId as AnyNodeId, { holes: [...currentHoles, newHole] })
+      setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
+      // Re-assert selection so the node stays selected
+      setSelection({ selectedIds: [selectedId] })
+    },
+    [node, selectedId, updateNode, setEditingHole, setSelection],
+  )
+
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Activate delete mode (sledgehammer tool) instead of deleting directly
+      if (!selectedId) return
       setSelection({ selectedIds: [] })
-      setMode('delete')
+      useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [setSelection, setMode],
+    [selectedId, setSelection],
   )
 
   if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null
@@ -219,9 +255,18 @@ export function FloatingActionMenu() {
         zIndexRange={[100, 0]}
       >
         <NodeActionMenu
+          onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
           onDelete={handleDelete}
-          onDuplicate={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleDuplicate : undefined}
-          onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+          onDuplicate={
+            node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
+              ? handleDuplicate
+              : undefined
+          }
+          onMove={
+            node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
+              ? handleMove
+              : undefined
+          }
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
