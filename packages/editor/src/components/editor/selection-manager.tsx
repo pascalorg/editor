@@ -143,7 +143,9 @@ function createHighlightedMaterials(
 
 function disposeHighlightedMaterials(material: Material | Material[]) {
   if (Array.isArray(material)) {
-    material.forEach((entry) => entry.dispose())
+    material.forEach((entry) => {
+      entry.dispose()
+    })
     return
   }
 
@@ -832,6 +834,31 @@ const SelectionMaterialSync = () => {
       syncSelectionMaterials()
     })
   }, [syncSelectionMaterials])
+
+  useEffect(() => {
+    const restoreForCapture = () => {
+      for (const [mesh, entry] of highlightedMaterialsRef.current.entries()) {
+        if (mesh.material === entry.highlightedMaterial) {
+          mesh.material = entry.originalMaterial
+        }
+      }
+    }
+
+    const reapplyAfterCapture = () => {
+      for (const [mesh, entry] of highlightedMaterialsRef.current.entries()) {
+        if (mesh.material === entry.originalMaterial) {
+          mesh.material = entry.highlightedMaterial
+        }
+      }
+    }
+
+    emitter.on('thumbnail:before-capture', restoreForCapture)
+    emitter.on('thumbnail:after-capture', reapplyAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', restoreForCapture)
+      emitter.off('thumbnail:after-capture', reapplyAfterCapture)
+    }
+  }, [])
 
   useEffect(() => {
     return () => {

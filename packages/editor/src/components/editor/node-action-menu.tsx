@@ -1,9 +1,11 @@
 'use client'
 
+import { Icon } from '@iconify/react'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
+  onAddHole?: MouseEventHandler<HTMLButtonElement>
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
@@ -14,6 +16,7 @@ type NodeActionMenuProps = {
 }
 
 export function NodeActionMenu({
+  onAddHole,
   onDelete,
   onDuplicate,
   onMove,
@@ -50,6 +53,17 @@ export function NodeActionMenu({
           type="button"
         >
           <Copy className="h-4 w-4" />
+        </button>
+      )}
+      {onAddHole && (
+        <button
+          aria-label="Cut Out"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onAddHole}
+          title="Cut Out"
+          type="button"
+        >
+          <Icon height={16} icon="carbon:cut-out" width={16} />
         </button>
       )}
       {onDelete && (

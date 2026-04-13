@@ -84,6 +84,10 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
+      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        useEditor.getState().setMode('delete')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()

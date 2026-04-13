@@ -165,17 +165,26 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
         movingDoorNode.height,
       )
 
-      useScene.getState().updateNode(movingDoorNode.id, {
-        position: [clampedX, clampedY, 0],
-        rotation: [0, itemRotation, 0],
-        side,
-        parentId: event.node.id,
-        wallId: event.node.id,
-      })
-
       if (currentWallId !== event.node.id) {
+        // Wall changed mid-move: must updateNode to reparent
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          wallId: event.node.id,
+        })
         markWallDirty(currentWallId)
         currentWallId = event.node.id
+      } else {
+        // Same wall: update Three.js mesh directly to avoid store churn
+        // collectCutoutBrushes reads cutoutMesh.matrixWorld, not scene store positions
+        const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
+        if (doorMesh) {
+          doorMesh.position.set(clampedX, clampedY, 0)
+          doorMesh.rotation.set(0, itemRotation, 0)
+          doorMesh.updateMatrixWorld(true)
+        }
       }
       markWallDirty(event.node.id)
 

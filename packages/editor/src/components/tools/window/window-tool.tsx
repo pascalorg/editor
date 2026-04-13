@@ -151,13 +151,25 @@ export const WindowTool: React.FC = () => {
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
       if (draftRef.current) {
-        useScene.getState().updateNode(draftRef.current.id, {
-          position: [clampedX, clampedY, 0],
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          wallId: event.node.id,
-        })
+        if (event.node.id !== draftRef.current.parentId) {
+          // Wall changed without enter/leave: must updateNode to reparent
+          useScene.getState().updateNode(draftRef.current.id, {
+            position: [clampedX, clampedY, 0],
+            rotation: [0, itemRotation, 0],
+            side,
+            parentId: event.node.id,
+            wallId: event.node.id,
+          })
+        } else {
+          // Same wall: update Three.js mesh directly to avoid store churn
+          const draftMesh = sceneRegistry.nodes.get(draftRef.current.id as AnyNodeId)
+          if (draftMesh) {
+            draftMesh.position.set(clampedX, clampedY, 0)
+            draftMesh.rotation.set(0, itemRotation, 0)
+            draftMesh.updateMatrixWorld(true)
+          }
+          markWallDirty(event.node.id)
+        }
       }
 
       const valid = !hasWallChildOverlap(
