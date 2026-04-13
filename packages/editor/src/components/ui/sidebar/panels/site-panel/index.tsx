@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -393,8 +394,15 @@ function LevelReferences({
   onUploadAsset,
   onDeleteAsset,
 }: LevelReferencesProps) {
-  const nodes = useScene((s) => s.nodes)
   const deleteNode = useScene((s) => s.deleteNode)
+  const references = useScene(
+    useShallow((s) =>
+      Object.values(s.nodes).filter(
+        (node): node is ScanNode | GuideNode =>
+          (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
+      ),
+    ),
+  )
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const uploadState = useUploadStore((s) => s.uploads[levelId])
   const clearUpload = useUploadStore((s) => s.clearUpload)
@@ -408,11 +416,6 @@ function LevelReferences({
   const progress = uploadState?.progress ?? 0
 
   const scanInputRef = useRef<HTMLInputElement>(null)
-
-  const references = Object.values(nodes).filter(
-    (node): node is ScanNode | GuideNode =>
-      (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
-  )
 
   const handleAddAsset = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -457,7 +460,10 @@ function LevelReferences({
 
   const handleDelete = async (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    const refNode = nodes[nodeId as AnyNodeId] as ScanNode | GuideNode | undefined
+    const refNode = useScene.getState().nodes[nodeId as AnyNodeId] as
+      | ScanNode
+      | GuideNode
+      | undefined
 
     if (
       projectId &&
@@ -789,20 +795,27 @@ function LevelsSection({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 } = {}) {
-  const nodes = useScene((state) => state.nodes)
   const createNode = useScene((state) => state.createNode)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
 
-  const building = selectedBuildingId ? (nodes[selectedBuildingId] as BuildingNode) : null
+  const building = useScene((s) =>
+    selectedBuildingId ? ((s.nodes[selectedBuildingId] as BuildingNode | undefined) ?? null) : null,
+  )
+  const levels = useScene(
+    useShallow((s) => {
+      if (!selectedBuildingId) return []
+      const bldg = s.nodes[selectedBuildingId] as BuildingNode | undefined
+      if (!bldg) return []
+      return bldg.children
+        .map((id) => s.nodes[id])
+        .filter((node): node is LevelNode => node?.type === 'level')
+    }),
+  )
 
   if (!building) return null
-
-  const levels = building.children
-    .map((id) => nodes[id])
-    .filter((node): node is LevelNode => node?.type === 'level')
 
   const handleAddLevel = () => {
     const newLevel = LevelNode.parse({
@@ -1175,7 +1188,6 @@ function MultiSelectionBadge() {
 }
 
 function ContentSection() {
-  const nodes = useScene((state) => state.nodes)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
   const phase = useEditor((state) => state.phase)
@@ -1183,7 +1195,25 @@ function ContentSection() {
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
-  const level = selectedLevelId ? (nodes[selectedLevelId] as LevelNode) : null
+  const level = useScene((s) =>
+    selectedLevelId ? ((s.nodes[selectedLevelId] as LevelNode | undefined) ?? null) : null,
+  )
+  const levelZones = useScene(
+    useShallow((s) => {
+      if (!selectedLevelId) return []
+      return Object.values(s.nodes).filter(
+        (node): node is ZoneNode => node.type === 'zone' && node.parentId === selectedLevelId,
+      )
+    }),
+  )
+  const elementChildren = useScene(
+    useShallow((s) => {
+      if (!selectedLevelId) return []
+      const lvl = s.nodes[selectedLevelId] as LevelNode | undefined
+      if (!lvl) return []
+      return lvl.children.filter((childId) => s.nodes[childId]?.type !== 'zone')
+    }),
+  )
 
   if (!level) {
     return (
@@ -1192,11 +1222,6 @@ function ContentSection() {
   }
 
   if (structureLayer === 'zones') {
-    // Show zones for this level
-    const levelZones = Object.values(nodes).filter(
-      (node): node is ZoneNode => node.type === 'zone' && node.parentId === selectedLevelId,
-    )
-
     const handleAddZone = () => {
       setPhase('structure')
       setMode('build')
@@ -1223,21 +1248,9 @@ function ContentSection() {
     )
   }
 
-  // Filter elements based on phase
-  const elementChildren = level.children.filter((childId) => {
-    const childNode = nodes[childId]
-    if (!childNode || childNode.type === 'zone') return false
-
-    // We no longer filter out structural nodes in furnish mode or furnish nodes in structure mode
-    // This allows nested items (like lights in a ceiling or cabinetry on a wall) to remain visible
-    // and selectable in both modes, ensuring seamless transition in the tree view.
-    return true
-  })
-
   if (elementChildren.length === 0) {
     return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
   }
-
   return (
     <TreeNodeDragProvider>
       <div className="flex flex-col">
@@ -1431,7 +1444,6 @@ export interface SitePanelProps {
 }
 
 export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
-  const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
@@ -1442,13 +1454,20 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
   const [siteCameraOpen, setSiteCameraOpen] = useState(false)
   const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null)
 
-  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null
-  const buildings = (siteNode?.type === 'site' ? siteNode.children : [])
-    .map((child) => {
-      const id = typeof child === 'string' ? child : child.id
-      return nodes[id] as BuildingNode | undefined
-    })
-    .filter((node): node is BuildingNode => node?.type === 'building')
+  const siteNode = useScene((s) =>
+    rootNodeIds[0] ? ((s.nodes[rootNodeIds[0]] as SiteNode | undefined) ?? null) : null,
+  )
+  const buildings = useScene(
+    useShallow((s) => {
+      if (!siteNode) return []
+      return siteNode.children
+        .map((child) => {
+          const id = typeof child === 'string' ? child : child.id
+          return s.nodes[id] as BuildingNode | undefined
+        })
+        .filter((node): node is BuildingNode => node?.type === 'building')
+    }),
+  )
 
   return (
     <LayoutGroup>

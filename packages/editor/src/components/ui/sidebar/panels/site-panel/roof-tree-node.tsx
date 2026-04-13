@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
 import { useCallback, useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -10,47 +11,58 @@ import { TreeNodeActions } from './tree-node-actions'
 import { DropIndicatorLine, useTreeNodeDrag } from './tree-node-drag'
 
 interface RoofTreeNodeProps {
-  node: RoofNode
+  nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
+export function RoofTreeNode({ nodeId, depth, isLast }: RoofTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id)
-  const isHovered = useViewer((state) => state.hoveredId === node.id)
+  const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
+  const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
+  const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const nodes = useScene((state) => state.nodes)
   const { drag, dropTarget } = useTreeNodeDrag()
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection)
-    if (!handled && useEditor.getState().phase === 'furnish') {
-      useEditor.getState().setPhase('structure')
-    }
-  }
+  const segments = useScene(
+    useShallow((s) => {
+      const n = s.nodes[nodeId] as RoofNode | undefined
+      if (!n) return [] as RoofSegmentNode[]
+      return (n.children ?? [])
+        .map((childId) => s.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
+        .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
+    }),
+  )
 
-  const handleDoubleClick = () => {
-    focusTreeNode(node.id)
-  }
+  // Targeted selector — only re-renders when a segment of THIS roof is selected/deselected
+  const hasSelectedChild = useViewer((state) =>
+    segments.some((seg) => state.selection.selectedIds.includes(seg.id)),
+  )
 
-  const handleMouseEnter = () => {
-    setHoveredId(node.id)
-  }
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const handled = handleTreeSelection(
+        e,
+        nodeId,
+        useViewer.getState().selection.selectedIds,
+        setSelection,
+      )
+      if (!handled && useEditor.getState().phase === 'furnish') {
+        useEditor.getState().setPhase('structure')
+      }
+    },
+    [nodeId, setSelection],
+  )
 
-  const handleMouseLeave = () => {
-    setHoveredId(null)
-  }
-
-  const segments = (node.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
-    .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
-
-  const hasSelectedChild = segments.some((seg) => selectedIds.includes(seg.id))
+  const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
+  const handleMouseEnter = useCallback(() => setHoveredId(nodeId), [nodeId, setHoveredId])
+  const handleMouseLeave = useCallback(() => setHoveredId(null), [setHoveredId])
+  const handleToggle = useCallback(() => setExpanded((prev) => !prev), [])
+  const handleStartEditing = useCallback(() => setIsEditing(true), [])
+  const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
   useEffect(() => {
     if (isSelected || hasSelectedChild) {
@@ -59,7 +71,7 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   }, [isSelected, hasSelectedChild])
 
   // Auto-expand when a segment is being dragged over this roof
-  const isDropTarget = drag !== null && dropTarget?.parentId === node.id
+  const isDropTarget = drag !== null && dropTarget?.parentId === nodeId
   useEffect(() => {
     if (isDropTarget && !expanded) {
       setExpanded(true)
@@ -72,12 +84,12 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
   // Hide the dragged segment from every roof while dragging
   const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
 
-  const isValidDropTarget = drag !== null && drag.nodeId !== node.id
+  const isValidDropTarget = drag !== null && drag.nodeId !== nodeId
 
   return (
-    <div data-drop-target={node.id}>
+    <div data-drop-target={nodeId}>
       <TreeNodeWrapper
-        actions={<TreeNodeActions node={node} />}
+        actions={<TreeNodeActions nodeId={nodeId} />}
         depth={depth}
         expanded={expanded}
         hasChildren={segments.length > 0}
@@ -88,22 +100,22 @@ export function RoofTreeNode({ node, depth, isLast }: RoofTreeNodeProps) {
         isHovered={isHovered || isDropTarget}
         isLast={isLast && !expanded}
         isSelected={isSelected}
-        isVisible={node.visible !== false}
+        isVisible={isVisible}
         label={
           <InlineRenameInput
             defaultName={defaultName}
             isEditing={isEditing}
-            node={node}
-            onStartEditing={() => setIsEditing(true)}
-            onStopEditing={() => setIsEditing(false)}
+            nodeId={nodeId}
+            onStartEditing={handleStartEditing}
+            onStopEditing={handleStopEditing}
           />
         }
-        nodeId={node.id}
+        nodeId={nodeId}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onToggle={() => setExpanded(!expanded)}
+        onToggle={handleToggle}
       >
         {visibleSegments.map((seg, i) => {
           const showIndicatorBefore = isDropTarget && dropTarget?.insertIndex === i
@@ -147,18 +159,20 @@ function RoofSegmentTreeNode({
   isLast?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id)
+  const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id))
   const isHovered = useViewer((state) => state.hoveredId === node.id)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const { startDrag, isDragging } = useTreeNodeDrag()
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (isDragging) return
-    e.stopPropagation()
-    handleTreeSelection(e, node.id, selectedIds, setSelection)
-  }
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging) return
+      e.stopPropagation()
+      handleTreeSelection(e, node.id, useViewer.getState().selection.selectedIds, setSelection)
+    },
+    [node.id, isDragging, setSelection],
+  )
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -169,12 +183,15 @@ function RoofSegmentTreeNode({
     [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag],
   )
 
+  const handleStartEditing = useCallback(() => setIsEditing(true), [])
+  const handleStopEditing = useCallback(() => setIsEditing(false), [])
+
   const defaultName = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}x${node.depth.toFixed(1)}m)`
 
   return (
     <div data-drop-child={node.id}>
       <TreeNodeWrapper
-        actions={<TreeNodeActions node={node} />}
+        actions={<TreeNodeActions nodeId={node.id} />}
         depth={depth}
         expanded={false}
         hasChildren={false}
@@ -196,9 +213,9 @@ function RoofSegmentTreeNode({
           <InlineRenameInput
             defaultName={defaultName}
             isEditing={isEditing}
-            node={node}
-            onStartEditing={() => setIsEditing(true)}
-            onStopEditing={() => setIsEditing(false)}
+            nodeId={node.id}
+            onStartEditing={handleStartEditing}
+            onStopEditing={handleStopEditing}
           />
         }
         nodeId={node.id}

@@ -1,53 +1,52 @@
-import type { SlabNode } from '@pascal-app/core'
+import { type AnyNodeId, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface SlabTreeNodeProps {
-  node: SlabNode
+  nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export function SlabTreeNode({ node, depth, isLast }: SlabTreeNodeProps) {
+export function SlabTreeNode({ nodeId, depth, isLast }: SlabTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id)
-  const isHovered = useViewer((state) => state.hoveredId === node.id)
+  const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
+  const polygon = useScene((s) => (s.nodes[nodeId] as SlabNode | undefined)?.polygon ?? [])
+  const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
+  const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection)
-    if (!handled && useEditor.getState().phase === 'furnish') {
-      useEditor.getState().setPhase('structure')
-    }
-  }
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const handled = handleTreeSelection(
+        e,
+        nodeId,
+        useViewer.getState().selection.selectedIds,
+        setSelection,
+      )
+      if (!handled && useEditor.getState().phase === 'furnish') {
+        useEditor.getState().setPhase('structure')
+      }
+    },
+    [nodeId, setSelection],
+  )
 
-  const handleDoubleClick = () => {
-    focusTreeNode(node.id)
-  }
+  const handleStartEditing = useCallback(() => setIsEditing(true), [])
+  const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const handleMouseEnter = () => {
-    setHoveredId(node.id)
-  }
-
-  const handleMouseLeave = () => {
-    setHoveredId(null)
-  }
-
-  // Calculate approximate area from polygon
-  const area = calculatePolygonArea(node.polygon).toFixed(1)
+  const area = calculatePolygonArea(polygon).toFixed(1)
   const defaultName = `Slab (${area}m²)`
 
   return (
     <TreeNodeWrapper
-      actions={<TreeNodeActions node={node} />}
+      actions={<TreeNodeActions nodeId={nodeId} />}
       depth={depth}
       expanded={false}
       hasChildren={false}
@@ -57,21 +56,21 @@ export function SlabTreeNode({ node, depth, isLast }: SlabTreeNodeProps) {
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
-      isVisible={node.visible !== false}
+      isVisible={isVisible}
       label={
         <InlineRenameInput
           defaultName={defaultName}
           isEditing={isEditing}
-          node={node}
-          onStartEditing={() => setIsEditing(true)}
-          onStopEditing={() => setIsEditing(false)}
+          nodeId={nodeId}
+          onStartEditing={handleStartEditing}
+          onStopEditing={handleStopEditing}
         />
       }
-      nodeId={node.id}
+      nodeId={nodeId}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onDoubleClick={() => focusTreeNode(nodeId)}
+      onMouseEnter={() => setHoveredId(nodeId)}
+      onMouseLeave={() => setHoveredId(null)}
       onToggle={() => {}}
     />
   )

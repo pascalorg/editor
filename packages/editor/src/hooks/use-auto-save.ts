@@ -1,7 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react'
+import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
@@ -26,9 +26,7 @@ export function useAutoSave({
   onDirty,
   onSaveStatusChange,
   isVersionPreviewMode = false,
-}: UseAutoSaveOptions): { saveStatus: SaveStatus; isLoadingSceneRef: MutableRefObject<boolean> } {
-  const [saveStatus, _setSaveStatus] = useState<SaveStatus>('idle')
-
+}: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
   const isLoadingSceneRef = useRef(false)
@@ -56,7 +54,6 @@ export function useAutoSave({
   }, [isVersionPreviewMode])
 
   const setSaveStatus = useCallback((status: SaveStatus) => {
-    _setSaveStatus(status)
     onSaveStatusChangeRef.current?.(status)
   }, [])
 
@@ -190,5 +187,5 @@ export function useAutoSave({
     setSaveStatus('saved')
   }, [isVersionPreviewMode, setSaveStatus])
 
-  return { saveStatus, isLoadingSceneRef }
+  return { isLoadingSceneRef }
 }
