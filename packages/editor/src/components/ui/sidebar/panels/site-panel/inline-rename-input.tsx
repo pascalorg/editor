@@ -1,10 +1,10 @@
-import { type AnyNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from './../../../../../lib/utils'
 
 interface InlineRenameInputProps {
-  node: AnyNode
+  nodeId: AnyNodeId
   isEditing: boolean
   onStopEditing: () => void
   defaultName: string
@@ -12,8 +12,8 @@ interface InlineRenameInputProps {
   onStartEditing?: () => void
 }
 
-export function InlineRenameInput({
-  node,
+export const InlineRenameInput = memo(function InlineRenameInput({
+  nodeId,
   isEditing,
   onStopEditing,
   defaultName,
@@ -21,13 +21,14 @@ export function InlineRenameInput({
   onStartEditing,
 }: InlineRenameInputProps) {
   const updateNode = useScene((s) => s.updateNode)
-  const [value, setValue] = useState(node.name || '')
+  const name = useScene((s) => s.nodes[nodeId]?.name)
+  const [value, setValue] = useState(name || '')
   const inputRef = useRef<HTMLInputElement>(null)
   const inputSize = Math.max((value || defaultName).length, 1)
 
   useEffect(() => {
     if (isEditing) {
-      setValue(node.name || '')
+      setValue(name || '')
       // Focus and select all text after a short delay
       setTimeout(() => {
         if (inputRef.current) {
@@ -36,15 +37,15 @@ export function InlineRenameInput({
         }
       }, 0)
     }
-  }, [isEditing, node.name])
+  }, [isEditing, name])
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== node.name) {
-      updateNode(node.id, { name: trimmed || undefined })
+    if (trimmed !== name) {
+      updateNode(nodeId, { name: trimmed || undefined })
     }
     onStopEditing()
-  }, [value, node.id, node.name, updateNode, onStopEditing])
+  }, [value, nodeId, name, updateNode, onStopEditing])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -60,7 +61,7 @@ export function InlineRenameInput({
     return (
       <div className="group/rename flex h-5 min-w-0 items-center gap-1">
         <span className={cn('truncate border-transparent border-b', className)}>
-          {node.name || defaultName}
+          {name || defaultName}
         </span>
         {onStartEditing && (
           <button
@@ -95,4 +96,4 @@ export function InlineRenameInput({
       value={value}
     />
   )
-}
+})

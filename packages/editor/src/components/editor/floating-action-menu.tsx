@@ -39,7 +39,6 @@ export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const nodes = useScene((s) => s.nodes)
   const mode = useEditor((s) => s.mode)
-  const setMode = useEditor((s) => s.setMode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
@@ -199,11 +198,11 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Activate delete mode (sledgehammer tool) instead of deleting directly
+      if (!selectedId) return
       setSelection({ selectedIds: [] })
-      setMode('delete')
+      useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [setSelection, setMode],
+    [selectedId, setSelection],
   )
 
   if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null

@@ -1,12 +1,14 @@
 import {
   type AnyNodeId,
   baseMaterial,
+  emitter,
   sceneRegistry,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import type { Material } from 'three'
 import { Color } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
 import { type Mesh, MeshStandardNodeMaterial, Vector3 } from 'three/webgpu'
@@ -273,5 +275,41 @@ export const WallCutout = () => {
       lastHighlightKey.current = highlightKey
     }
   })
+
+  useEffect(() => {
+    const snapshot = new Map<Mesh, Material>()
+
+    const restoreForCapture = () => {
+      sceneRegistry.byType.wall.forEach((wallId) => {
+        const wallMesh = sceneRegistry.nodes.get(wallId) as Mesh | undefined
+        if (!wallMesh) return
+        const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
+        if (!wallNode || wallNode.type !== 'wall') return
+        const mats = getMaterialsForWall(wallNode)
+        const current = wallMesh.material as Material
+        snapshot.set(wallMesh, current)
+        if (current === mats.highlightedVisible || current === mats.deleteVisible) {
+          wallMesh.material = mats.visible
+        } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
+          wallMesh.material = mats.invisible
+        }
+      })
+    }
+
+    const reapplyAfterCapture = () => {
+      snapshot.forEach((mat, mesh) => {
+        mesh.material = mat
+      })
+      snapshot.clear()
+    }
+
+    emitter.on('thumbnail:before-capture', restoreForCapture)
+    emitter.on('thumbnail:after-capture', reapplyAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', restoreForCapture)
+      emitter.off('thumbnail:after-capture', reapplyAfterCapture)
+    }
+  }, [])
+
   return null
 }

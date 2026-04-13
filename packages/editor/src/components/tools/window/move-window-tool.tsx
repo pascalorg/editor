@@ -185,17 +185,26 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         movingWindowNode.height,
       )
 
-      useScene.getState().updateNode(movingWindowNode.id, {
-        position: [clampedX, clampedY, 0],
-        rotation: [0, itemRotation, 0],
-        side,
-        parentId: event.node.id,
-        wallId: event.node.id,
-      })
-
       if (currentWallId !== event.node.id) {
+        // Wall changed mid-move: must updateNode to reparent
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          wallId: event.node.id,
+        })
         markWallDirty(currentWallId)
         currentWallId = event.node.id
+      } else {
+        // Same wall: update Three.js mesh directly to avoid store churn
+        // collectCutoutBrushes reads cutoutMesh.matrixWorld, not scene store positions
+        const windowMesh = sceneRegistry.nodes.get(movingWindowNode.id as AnyNodeId)
+        if (windowMesh) {
+          windowMesh.position.set(clampedX, clampedY, 0)
+          windowMesh.rotation.set(0, itemRotation, 0)
+          windowMesh.updateMatrixWorld(true)
+        }
       }
       markWallDirty(event.node.id)
 
