@@ -118,6 +118,9 @@ export function FloatingActionMenu() {
         } else if (node.type === 'roof-segment') {
           duplicate = RoofSegmentNode.parse(duplicateInfo)
         } else if (node.type === 'stair') {
+          duplicateInfo.children = []
+          duplicateInfo.metadata = { ...duplicateInfo.metadata }
+          delete duplicateInfo.metadata?.isNew
           duplicate = StairNode.parse(duplicateInfo)
         } else if (node.type === 'stair-segment') {
           duplicate = StairSegmentNode.parse(duplicateInfo)
@@ -146,7 +149,35 @@ export function FloatingActionMenu() {
               duplicate.position[2] + 1,
             ]
           }
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          if (node.type === 'stair' && duplicate.type === 'stair') {
+            const nodesState = useScene.getState().nodes
+            const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
+              { node: duplicate, parentId: duplicate.parentId as AnyNodeId },
+            ]
+
+            for (const childId of node.children ?? []) {
+              const childNode = nodesState[childId]
+              if (childNode?.type !== 'stair-segment') {
+                continue
+              }
+
+              let childDuplicateInfo = structuredClone(childNode) as any
+              delete childDuplicateInfo.id
+              childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata }
+              delete childDuplicateInfo.metadata?.isNew
+
+              try {
+                const childDuplicate = StairSegmentNode.parse(childDuplicateInfo)
+                createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
+              } catch (e) {
+                console.error('Failed to duplicate stair segment', e)
+              }
+            }
+
+            useScene.getState().createNodes(createOps)
+          } else {
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          }
 
           // Duplicate children for roof nodes
           if (node.type === 'roof' && node.children) {
@@ -168,23 +199,6 @@ export function FloatingActionMenu() {
           }
 
           // Duplicate children for stair nodes
-          if (node.type === 'stair' && node.children) {
-            const nodesState = useScene.getState().nodes
-            for (const childId of node.children) {
-              const childNode = nodesState[childId]
-              if (childNode && childNode.type === 'stair-segment') {
-                let childDuplicateInfo = structuredClone(childNode) as any
-                delete childDuplicateInfo.id
-                childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
-                try {
-                  const childDuplicate = StairSegmentNode.parse(childDuplicateInfo)
-                  useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
-                } catch (e) {
-                  console.error('Failed to duplicate stair segment', e)
-                }
-              }
-            }
-          }
         }
         if (
           duplicate.type === 'item' ||
@@ -193,12 +207,15 @@ export function FloatingActionMenu() {
           duplicate.type === 'door' ||
           duplicate.type === 'roof' ||
           duplicate.type === 'roof-segment' ||
-          duplicate.type === 'stair' ||
           duplicate.type === 'stair-segment'
         ) {
           setMovingNode(duplicate as any)
+        } else if (duplicate.type === 'stair') {
+          setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }
-        setSelection({ selectedIds: [] })
+        if (duplicate.type !== 'stair') {
+          setSelection({ selectedIds: [] })
+        }
       }
     },
     [node, setMovingNode, setSelection],

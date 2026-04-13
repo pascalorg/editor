@@ -378,8 +378,8 @@ useScene.temporal.subscribe((state) => {
               // Mark sibling nodes dirty so they can update their geometry
               // (e.g. adjacent walls need to recalculate miter/junction geometry)
               const parent = currentNodes[parentId]
-              if (parent && 'children' in parent) {
-                for (const childId of (parent as AnyNode & { children: string[] }).children) {
+              if (parent && 'children' in parent && Array.isArray(parent.children)) {
+                for (const childId of parent.children) {
                   markDirty(childId as AnyNodeId)
                 }
               }

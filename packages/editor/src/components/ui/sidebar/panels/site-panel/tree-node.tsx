@@ -57,6 +57,7 @@ import { cn } from '../../../../../lib/utils'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { DoorTreeNode } from './door-tree-node'
+import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
@@ -88,6 +89,8 @@ export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
       return <SlabTreeNode depth={depth} isLast={isLast} node={node as any} />
     case 'wall':
       return <WallTreeNode depth={depth} isLast={isLast} node={node as any} />
+    case 'fence':
+      return <FenceTreeNode depth={depth} isLast={isLast} node={node as any} />
     case 'roof':
       return <RoofTreeNode depth={depth} isLast={isLast} node={node as any} />
     case 'stair':

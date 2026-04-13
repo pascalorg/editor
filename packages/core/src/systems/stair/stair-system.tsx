@@ -304,6 +304,11 @@ function updateMergedStairGeometry(
   const mergedMesh = group.getObjectByName('merged-stair') as THREE.Mesh | undefined
   if (!mergedMesh) return
 
+  if (stairNode.stairType === 'curved' || stairNode.stairType === 'spiral') {
+    replaceMeshGeometry(mergedMesh, createEmptyGeometry())
+    return
+  }
+
   const children = stairNode.children ?? []
   const segments = children
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)

@@ -6,6 +6,8 @@ import {
   type MaterialSchema,
   type StairNode,
   type StairRailingMode,
+  type StairTopLandingMode,
+  type StairType,
   StairNode as StairNodeSchema,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
@@ -16,12 +18,14 @@ import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
+import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
@@ -31,12 +35,24 @@ const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'Both', value: 'both' },
 ]
 
+const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
+  { label: 'Straight', value: 'straight' },
+  { label: 'Curved', value: 'curved' },
+  { label: 'Spiral', value: 'spiral' },
+]
+
+const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Integrated', value: 'integrated' },
+]
+
 export function StairPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
+  const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const selectedId = selectedIds[0]
@@ -123,7 +139,8 @@ export function StairPanel() {
 
     let duplicateInfo = structuredClone(node) as any
     delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+    duplicateInfo.metadata = { ...duplicateInfo.metadata }
+    duplicateInfo.children = []
     duplicateInfo.position = [
       duplicateInfo.position[0] + 1,
       duplicateInfo.position[1],
@@ -132,29 +149,31 @@ export function StairPanel() {
 
     try {
       const duplicate = StairNodeSchema.parse(duplicateInfo)
-      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
 
-      // Also duplicate all child segments
       const nodesState = useScene.getState().nodes
       const children = node.children || []
+      const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
+        { node: duplicate, parentId: duplicate.parentId as AnyNodeId },
+      ]
 
       for (const childId of children) {
         const childNode = nodesState[childId]
         if (childNode && childNode.type === 'stair-segment') {
           let childDuplicateInfo = structuredClone(childNode) as any
           delete childDuplicateInfo.id
-          childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
+          childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata }
           const childDuplicate = StairSegmentNodeSchema.parse(childDuplicateInfo)
-          useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
+          createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
         }
       }
 
-      setSelection({ selectedIds: [] })
-      setMovingNode(duplicate)
+      createNodes(createOps)
+
+      setSelection({ selectedIds: [duplicate.id as AnyNode['id']] })
     } catch (e) {
       console.error('Failed to duplicate stair', e)
     }
-  }, [node, setSelection, setMovingNode])
+  }, [createNodes, node, setSelection])
 
   const handleMove = useCallback(() => {
     if (node) {
@@ -188,33 +207,158 @@ export function StairPanel() {
       title={node.name || 'Staircase'}
       width={300}
     >
-      <PanelSection title="Segments">
-        <div className="flex flex-col gap-1">
-          {segments.map((seg, i) => (
-            <button
-              className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
-              key={seg.id}
-              onClick={() => handleSelectSegment(seg.id)}
-              type="button"
-            >
-              <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
-              <span className="text-muted-foreground text-xs capitalize">{seg.segmentType}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1.5">
-          <ActionButton
-            icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add flight"
-            onClick={handleAddFlight}
-          />
-          <ActionButton
-            icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add landing"
-            onClick={handleAddLanding}
-          />
-        </div>
+      <PanelSection title="Type">
+        <SegmentedControl
+          onChange={(value) =>
+            handleUpdate(
+              value === 'spiral' && node.stairType !== 'spiral'
+                ? {
+                    stairType: value,
+                    sweepAngle: DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
+                    position: [node.position[0], 0, node.position[2]],
+                  }
+                : { stairType: value },
+            )
+          }
+          options={STAIR_TYPE_OPTIONS}
+          value={node.stairType ?? 'straight'}
+        />
       </PanelSection>
+
+      {node.stairType === 'straight' && (
+        <PanelSection title="Segments">
+          <div className="flex flex-col gap-1">
+            {segments.map((seg, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={seg.id}
+                onClick={() => handleSelectSegment(seg.id)}
+                type="button"
+              >
+                <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs capitalize">{seg.segmentType}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <ActionButton
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label="Add flight"
+              onClick={handleAddFlight}
+            />
+            <ActionButton
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label="Add landing"
+              onClick={handleAddLanding}
+            />
+          </div>
+        </PanelSection>
+      )}
+
+      {(node.stairType === 'curved' || node.stairType === 'spiral') && (
+        <PanelSection title="Geometry">
+          <MetricControl
+            label="Width"
+            max={10}
+            min={0.4}
+            onChange={(value) => handleUpdate({ width: value })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round((node.width ?? 1) * 100) / 100}
+          />
+          <MetricControl
+            label="Rise"
+            max={10}
+            min={0.2}
+            onChange={(value) => handleUpdate({ totalRise: value })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
+          />
+          <MetricControl
+            label="Steps"
+            max={32}
+            min={2}
+            onChange={(value) => handleUpdate({ stepCount: Math.max(2, Math.round(value)) })}
+            precision={0}
+            step={1}
+            unit=""
+            value={Math.max(2, Math.round(node.stepCount ?? 10))}
+          />
+          {node.stairType !== 'spiral' && (
+            <ToggleControl
+              checked={node.fillToFloor ?? true}
+              label="Fit To Floor"
+              onChange={(checked) => handleUpdate({ fillToFloor: checked })}
+            />
+          )}
+          {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
+            <MetricControl
+              label="Thickness"
+              max={1}
+              min={0.02}
+              onChange={(value) => handleUpdate({ thickness: value })}
+              precision={2}
+              step={0.01}
+              unit="m"
+              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+            />
+          )}
+          <MetricControl
+            label="Inner Radius"
+            max={10}
+            min={node.stairType === 'spiral' ? 0.05 : 0.2}
+            onChange={(value) => handleUpdate({ innerRadius: value })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
+          />
+          <SliderControl
+            label="Sweep"
+            max={node.stairType === 'spiral' ? 720 : 270}
+            min={node.stairType === 'spiral' ? -720 : -270}
+            onChange={(degrees) => handleUpdate({ sweepAngle: (degrees * Math.PI) / 180 })}
+            precision={0}
+            step={1}
+            unit="°"
+            value={Math.round(((node.sweepAngle ?? Math.PI / 2) * 180) / Math.PI)}
+          />
+          {node.stairType === 'spiral' && (
+            <>
+              <SegmentedControl
+                onChange={(value) => handleUpdate({ topLandingMode: value })}
+                options={TOP_LANDING_MODE_OPTIONS}
+                value={node.topLandingMode ?? 'none'}
+              />
+              {(node.topLandingMode ?? 'none') === 'integrated' && (
+                <MetricControl
+                  label="Top Landing"
+                  max={5}
+                  min={0.3}
+                  onChange={(value) => handleUpdate({ topLandingDepth: value })}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                />
+              )}
+              <ToggleControl
+                checked={node.showCenterColumn ?? true}
+                label="Center Column"
+                onChange={(checked) => handleUpdate({ showCenterColumn: checked })}
+              />
+              <ToggleControl
+                checked={node.showStepSupports ?? true}
+                label="Step Supports"
+                onChange={(checked) => handleUpdate({ showStepSupports: checked })}
+              />
+            </>
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title="Position">
         <MetricControl

@@ -64,6 +64,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
       <mesh castShadow material={material} name="merged-stair" receiveShadow>
         <boxGeometry args={[0, 0, 0]} />
       </mesh>
+      {node.stairType === 'curved' || node.stairType === 'spiral' ? (
+        <CurvedStairBody material={material} stair={node} />
+      ) : null}
       <StairRailings material={material} stair={node} />
       <group name="segments-wrapper" visible={false}>
         {(node.children ?? []).map((childId) => (
@@ -92,7 +95,84 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
   const railRadius = 0.022
   const balusterRadius = 0.018
 
-  if ((stair.railingMode ?? 'none') === 'none' || railPaths.length === 0) {
+  if ((stair.railingMode ?? 'none') === 'none') {
+    return null
+  }
+
+  if (stair.stairType === 'curved' || stair.stairType === 'spiral') {
+    const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
+    const sweepAngle = stair.sweepAngle ?? (stair.stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
+    const stepSweep = sweepAngle / stepCount
+    const stepHeight = Math.max(stair.totalRise ?? 2.5, 0.1) / stepCount
+    const innerRadius = Math.max(stair.stairType === 'spiral' ? 0.05 : 0.2, stair.innerRadius ?? 0.9)
+    const outerRadius = innerRadius + Math.max(stair.width ?? 1, 0.4)
+    const leftRadius = sweepAngle >= 0 ? innerRadius + 0.04 : outerRadius - 0.04
+    const rightRadius = sweepAngle >= 0 ? outerRadius - 0.04 : innerRadius + 0.04
+    const radii =
+      stair.railingMode === 'both'
+        ? [leftRadius, rightRadius]
+        : stair.railingMode === 'left'
+          ? [leftRadius]
+          : stair.railingMode === 'right'
+            ? [rightRadius]
+            : []
+
+    return (
+      <group name="stair-railing">
+        {radii.map((radius, sideIndex) => {
+          const sidePoints = Array.from({ length: stepCount }).map((_, index) => {
+            const angle = -sweepAngle / 2 + stepSweep * index + stepSweep / 2
+            return [
+              Math.cos(angle) * radius,
+              stair.stairType === 'spiral'
+                ? stepHeight * index + Math.max(stair.thickness ?? 0.25, 0.02)
+                : stepHeight * (index + 1),
+              Math.sin(angle) * radius,
+            ] as [number, number, number]
+          })
+
+          return (
+            <group key={`${stair.id}-curved-railing-${sideIndex}`}>
+              {sidePoints.map((point, pointIndex) => (
+                <mesh
+                  castShadow
+                  geometry={BALUSTER_GEOMETRY}
+                  key={`${stair.id}-curved-baluster-${sideIndex}-${pointIndex}`}
+                  material={material}
+                  position={[point[0], point[1] + railHeight / 2, point[2]]}
+                  receiveShadow
+                  scale={[balusterRadius, railHeight, balusterRadius]}
+                />
+              ))}
+              {sidePoints.slice(0, -1).map((point, pointIndex) => {
+                const nextPoint = sidePoints[pointIndex + 1]
+                if (!nextPoint) return null
+
+                return (
+                  <group key={`${stair.id}-curved-rail-${sideIndex}-${pointIndex}`}>
+                    <RailSegment
+                      end={[nextPoint[0], nextPoint[1] + railHeight, nextPoint[2]]}
+                      material={material}
+                      radius={railRadius}
+                      start={[point[0], point[1] + railHeight, point[2]]}
+                    />
+                    <RailSegment
+                      end={[nextPoint[0], nextPoint[1] + midRailHeight, nextPoint[2]]}
+                      material={material}
+                      radius={railRadius * 0.8}
+                      start={[point[0], point[1] + midRailHeight, point[2]]}
+                    />
+                  </group>
+                )
+              })}
+            </group>
+          )
+        })}
+      </group>
+    )
+  }
+
+  if (railPaths.length === 0) {
     return null
   }
 
@@ -230,6 +310,218 @@ function RailSegment({
       scale={[Math.max(radius, 0.01), length, Math.max(radius, 0.01)]}
     />
   )
+}
+
+function CurvedStairBody({ stair, material }: { stair: StairNode; material: THREE.Material }) {
+  const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
+  const totalRise = Math.max(stair.totalRise ?? 2.5, 0.1)
+  const stepHeight = totalRise / stepCount
+  const isSpiral = stair.stairType === 'spiral'
+  const innerRadius = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? 0.9)
+  const outerRadius = innerRadius + Math.max(stair.width ?? 1, 0.4)
+  const sweepAngle = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
+  const stepSweep = sweepAngle / stepCount
+  const thickness = Math.max(stair.thickness ?? 0.25, 0.02)
+  const fillToFloor = stair.fillToFloor ?? true
+  const spiralColumnRadius = Math.max(0.05, Math.min(innerRadius * 0.72, innerRadius - 0.03))
+  const spiralColumnHeight = totalRise + thickness
+  const spiralLandingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max((stair.width ?? 1) * 0.9, 0.8))
+  const spiralLandingSweep =
+    isSpiral && (stair.topLandingMode ?? 'none') === 'integrated'
+      ? Math.min(Math.PI * 0.75, spiralLandingDepth / Math.max(innerRadius + (stair.width ?? 1) / 2, 0.1)) *
+        Math.sign(sweepAngle || 1)
+      : 0
+  const spiralLastStepTop = stepHeight * Math.max(stepCount - 1, 0) + thickness
+  const spiralLandingThickness =
+    isSpiral && (stair.topLandingMode ?? 'none') === 'integrated'
+      ? Math.max(0.02, totalRise - spiralLastStepTop)
+      : 0
+
+  return (
+    <group name={isSpiral ? 'spiral-stair' : 'curved-stair'}>
+      {isSpiral && (stair.showCenterColumn ?? true) ? (
+        <mesh castShadow receiveShadow material={material} position={[0, spiralColumnHeight / 2, 0]}>
+          <cylinderGeometry args={[spiralColumnRadius, spiralColumnRadius, spiralColumnHeight, 10]} />
+        </mesh>
+      ) : null}
+      {Array.from({ length: stepCount }).map((_, index) => {
+        const currentHeight = stepHeight * (index + 1)
+        const actualStepHeight = isSpiral ? thickness : fillToFloor ? Math.max(currentHeight, thickness) : thickness
+        const startAngle = -sweepAngle / 2 + stepSweep * index
+        const endAngle = startAngle + stepSweep
+        const stepY = isSpiral ? stepHeight * index : fillToFloor ? 0 : Math.max(currentHeight - thickness, 0)
+        const midAngle = startAngle + stepSweep / 2
+
+        return (
+          <group key={`${stair.id}-${isSpiral ? 'spiral' : 'curved'}-step-${index}`} position-y={stepY}>
+            {isSpiral && (stair.showStepSupports ?? true) ? (
+              <mesh
+                castShadow
+                material={material}
+                position={[
+                  Math.cos(midAngle) * (spiralColumnRadius + Math.max(0.04, innerRadius - spiralColumnRadius + 0.04) / 2 - 0.02),
+                  Math.max(thickness * 0.55, 0.025) / 2,
+                  Math.sin(midAngle) * (spiralColumnRadius + Math.max(0.04, innerRadius - spiralColumnRadius + 0.04) / 2 - 0.02),
+                ]}
+                receiveShadow
+                rotation-y={-midAngle}
+              >
+                <boxGeometry
+                  args={[
+                    Math.max(0.04, innerRadius - spiralColumnRadius + 0.04),
+                    Math.max(thickness * 0.55, 0.025),
+                    Math.max(0.04, Math.min(0.12, Math.max(thickness * 0.55, 0.025) * 1.5)),
+                  ]}
+                />
+              </mesh>
+            ) : null}
+            <CurvedStepMesh
+              endAngle={endAngle}
+              innerRadius={innerRadius}
+              material={material}
+              outerRadius={outerRadius}
+              positionY={0}
+              startAngle={startAngle}
+              stepHeight={actualStepHeight}
+              thickness={thickness}
+            />
+          </group>
+        )
+      })}
+      {isSpiral && (stair.topLandingMode ?? 'none') === 'integrated' ? (
+        <CurvedStepMesh
+          endAngle={sweepAngle / 2 + spiralLandingSweep}
+          innerRadius={innerRadius}
+          material={material}
+          outerRadius={outerRadius}
+          positionY={spiralLastStepTop}
+          startAngle={sweepAngle / 2}
+          stepHeight={spiralLandingThickness}
+          thickness={spiralLandingThickness}
+        />
+      ) : null}
+    </group>
+  )
+}
+
+function CurvedStepMesh({
+  innerRadius,
+  outerRadius,
+  startAngle,
+  endAngle,
+  stepHeight,
+  thickness,
+  positionY,
+  material,
+}: {
+  innerRadius: number
+  outerRadius: number
+  startAngle: number
+  endAngle: number
+  stepHeight: number
+  thickness: number
+  positionY: number
+  material: THREE.Material
+}) {
+  const geometry = useMemo(
+    () => buildCurvedStepGeometry(innerRadius, outerRadius, startAngle, endAngle, Math.max(stepHeight, thickness)),
+    [endAngle, innerRadius, outerRadius, startAngle, stepHeight, thickness],
+  )
+
+  return <mesh castShadow geometry={geometry} material={material} position-y={positionY} receiveShadow />
+}
+
+function buildCurvedStepGeometry(
+  innerRadius: number,
+  outerRadius: number,
+  startAngle: number,
+  endAngle: number,
+  height: number,
+) {
+  const clampedHeight = Math.max(height, 0.02)
+  const y0 = 0
+  const y1 = clampedHeight
+  const sweepAngle = endAngle - startAngle
+  const sweepDirection = Math.sign(sweepAngle) || 1
+  const segmentCount = Math.max(4, Math.min(24, Math.ceil(Math.abs(sweepAngle) / (Math.PI / 18) + Math.max(0, (outerRadius - innerRadius) * 3))))
+
+  const positions: number[] = []
+  const normals: number[] = []
+
+  const pointOnArc = (radius: number, angle: number, y: number) =>
+    new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius)
+
+  const pushTriangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, normal: THREE.Vector3) => {
+    const edgeAB = b.clone().sub(a)
+    const edgeAC = c.clone().sub(a)
+    const faceNormal = edgeAB.cross(edgeAC)
+    const ordered = faceNormal.dot(normal) >= 0 ? [a, b, c] : [a, c, b]
+    for (const point of ordered) {
+      positions.push(point.x, point.y, point.z)
+      normals.push(normal.x, normal.y, normal.z)
+    }
+  }
+
+  const pushQuad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, normal: THREE.Vector3) => {
+    pushTriangle(a, b, c, normal)
+    pushTriangle(a, c, d, normal)
+  }
+
+  const upNormal = new THREE.Vector3(0, 1, 0)
+  const downNormal = new THREE.Vector3(0, -1, 0)
+
+  for (let index = 0; index < segmentCount; index++) {
+    const t0 = index / segmentCount
+    const t1 = (index + 1) / segmentCount
+    const segStart = startAngle + sweepAngle * t0
+    const segEnd = startAngle + sweepAngle * t1
+    const midAngle = (segStart + segEnd) / 2
+
+    const innerStartBottom = pointOnArc(innerRadius, segStart, y0)
+    const innerEndBottom = pointOnArc(innerRadius, segEnd, y0)
+    const outerStartBottom = pointOnArc(outerRadius, segStart, y0)
+    const outerEndBottom = pointOnArc(outerRadius, segEnd, y0)
+    const innerStartTop = pointOnArc(innerRadius, segStart, y1)
+    const innerEndTop = pointOnArc(innerRadius, segEnd, y1)
+    const outerStartTop = pointOnArc(outerRadius, segStart, y1)
+    const outerEndTop = pointOnArc(outerRadius, segEnd, y1)
+
+    const outerNormal = new THREE.Vector3(Math.cos(midAngle), 0, Math.sin(midAngle)).normalize()
+    const innerNormal = new THREE.Vector3(-Math.cos(midAngle), 0, -Math.sin(midAngle)).normalize()
+
+    pushQuad(innerStartTop, outerStartTop, outerEndTop, innerEndTop, upNormal)
+    pushQuad(innerStartBottom, innerEndBottom, outerEndBottom, outerStartBottom, downNormal)
+    pushQuad(innerStartBottom, innerStartTop, innerEndTop, innerEndBottom, innerNormal)
+    pushQuad(outerStartBottom, outerEndBottom, outerEndTop, outerStartTop, outerNormal)
+  }
+
+  const startInnerBottom = pointOnArc(innerRadius, startAngle, y0)
+  const startOuterBottom = pointOnArc(outerRadius, startAngle, y0)
+  const startInnerTop = pointOnArc(innerRadius, startAngle, y1)
+  const startOuterTop = pointOnArc(outerRadius, startAngle, y1)
+  const endInnerBottom = pointOnArc(innerRadius, endAngle, y0)
+  const endOuterBottom = pointOnArc(outerRadius, endAngle, y0)
+  const endInnerTop = pointOnArc(innerRadius, endAngle, y1)
+  const endOuterTop = pointOnArc(outerRadius, endAngle, y1)
+  const startNormal = new THREE.Vector3(
+    sweepDirection * Math.sin(startAngle),
+    0,
+    -sweepDirection * Math.cos(startAngle),
+  ).normalize()
+  const endNormal = new THREE.Vector3(
+    -sweepDirection * Math.sin(endAngle),
+    0,
+    sweepDirection * Math.cos(endAngle),
+  ).normalize()
+
+  pushQuad(startInnerBottom, startOuterBottom, startOuterTop, startInnerTop, startNormal)
+  pushQuad(endInnerBottom, endInnerTop, endOuterTop, endOuterBottom, endNormal)
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 function buildStairRailPaths(

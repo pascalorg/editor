@@ -16,7 +16,7 @@ export const FenceNode = BaseNode.extend({
   postSpacing: z.number().default(2),
   postSize: z.number().default(0.1),
   topRailHeight: z.number().default(0.04),
-  groundClearance: z.number().default(0.04),
+  groundClearance: z.number().default(0),
   edgeInset: z.number().default(0.015),
   baseStyle: FenceBaseStyle.default('grounded'),
   color: z.string().default('#ffffff'),

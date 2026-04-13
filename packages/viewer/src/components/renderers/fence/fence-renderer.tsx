@@ -39,7 +39,7 @@ function createFenceParts(fence: FenceNode): FencePart[] {
   const edgeInset = Math.max(fence.edgeInset ?? 0.015, 0.005)
   const isFloating = fence.baseStyle === 'floating'
   const baseY = isFloating ? clearance : 0
-  const effectiveBaseHeight = isFloating ? baseHeight : baseHeight + clearance * 0.5
+  const effectiveBaseHeight = baseHeight
 
   if (!isFloating) {
     parts.push({

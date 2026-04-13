@@ -205,7 +205,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
           result.push(wall.id)
         }
         // Check wall children (doors/windows)
-        for (const itemId of wall.children) {
+        for (const itemId of Array.isArray(wall.children) ? wall.children : []) {
           const child = nodes[itemId as AnyNodeId]
           if (!child) continue
           if (

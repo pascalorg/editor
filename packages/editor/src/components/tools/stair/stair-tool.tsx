@@ -13,6 +13,12 @@ import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
+  DEFAULT_CURVED_STAIR_INNER_RADIUS,
+  DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
+  DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
+  DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
+  DEFAULT_SPIRAL_TOP_LANDING_DEPTH,
+  DEFAULT_SPIRAL_TOP_LANDING_MODE,
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
   DEFAULT_STAIR_HEIGHT,
@@ -21,6 +27,7 @@ import {
   DEFAULT_STAIR_RAILING_MODE,
   DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
+  DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './stair-defaults'
 
@@ -90,6 +97,18 @@ function commitStairPlacement(
     name,
     position,
     rotation,
+    stairType: DEFAULT_STAIR_TYPE,
+    width: DEFAULT_STAIR_WIDTH,
+    totalRise: DEFAULT_STAIR_HEIGHT,
+    stepCount: DEFAULT_STAIR_STEP_COUNT,
+    thickness: DEFAULT_STAIR_THICKNESS,
+    fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
+    innerRadius: DEFAULT_CURVED_STAIR_INNER_RADIUS,
+    sweepAngle: DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
+    topLandingMode: DEFAULT_SPIRAL_TOP_LANDING_MODE,
+    topLandingDepth: DEFAULT_SPIRAL_TOP_LANDING_DEPTH,
+    showCenterColumn: DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
+    showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
     railingMode: DEFAULT_STAIR_RAILING_MODE,
     children: [segment.id],
