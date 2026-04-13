@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type MaterialSchema,
   type StairNode,
+  type StairRailingMode,
   StairNode as StairNodeSchema,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
@@ -19,8 +20,16 @@ import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
+import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
+
+const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Left', value: 'left' },
+  { label: 'Right', value: 'right' },
+  { label: 'Both', value: 'both' },
+]
 
 export function StairPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -278,6 +287,26 @@ export function StairPanel() {
             }}
           />
         </div>
+      </PanelSection>
+
+      <PanelSection title="Railing">
+        <SegmentedControl
+          onChange={(value) => handleUpdate({ railingMode: value })}
+          options={RAILING_MODE_OPTIONS}
+          value={node.railingMode ?? 'none'}
+        />
+        {(node.railingMode ?? 'none') !== 'none' && (
+          <SliderControl
+            label="Height"
+            max={1.4}
+            min={0.7}
+            onChange={(value) => handleUpdate({ railingHeight: value })}
+            precision={2}
+            step={0.02}
+            unit="m"
+            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Actions">

@@ -17,6 +17,8 @@ import {
   DEFAULT_STAIR_FILL_TO_FLOOR,
   DEFAULT_STAIR_HEIGHT,
   DEFAULT_STAIR_LENGTH,
+  DEFAULT_STAIR_RAILING_HEIGHT,
+  DEFAULT_STAIR_RAILING_MODE,
   DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_WIDTH,
@@ -88,6 +90,8 @@ function commitStairPlacement(
     name,
     position,
     rotation,
+    railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
+    railingMode: DEFAULT_STAIR_RAILING_MODE,
     children: [segment.id],
   })
 

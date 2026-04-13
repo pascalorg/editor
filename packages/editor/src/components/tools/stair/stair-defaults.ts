@@ -5,3 +5,5 @@ export const DEFAULT_STAIR_STEP_COUNT = 10
 export const DEFAULT_STAIR_ATTACHMENT_SIDE = 'front' as const
 export const DEFAULT_STAIR_FILL_TO_FLOOR = true
 export const DEFAULT_STAIR_THICKNESS = 0.25
+export const DEFAULT_STAIR_RAILING_MODE = 'right' as const
+export const DEFAULT_STAIR_RAILING_HEIGHT = 0.92

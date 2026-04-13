@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   DoorNode,
+  FenceNode,
   ItemNode,
   RoofNode,
   RoofSegmentNode,
@@ -31,6 +32,7 @@ const ALLOWED_TYPES = [
   'stair',
   'stair-segment',
   'wall',
+  'fence',
   'slab',
 ]
 const DELETE_ONLY_TYPES = ['wall', 'slab']
@@ -77,6 +79,7 @@ export function FloatingActionMenu() {
         node.type === 'item' ||
         node.type === 'window' ||
         node.type === 'door' ||
+        node.type === 'fence' ||
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
@@ -108,6 +111,8 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+        } else if (node.type === 'fence') {
+          duplicate = FenceNode.parse(duplicateInfo)
         } else if (node.type === 'roof') {
           duplicate = RoofNode.parse(duplicateInfo)
         } else if (node.type === 'roof-segment') {
@@ -124,6 +129,8 @@ export function FloatingActionMenu() {
 
       if (duplicate) {
         if (duplicate.type === 'door' || duplicate.type === 'window') {
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+        } else if (duplicate.type === 'fence') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (
           duplicate.type === 'roof' ||
@@ -181,6 +188,7 @@ export function FloatingActionMenu() {
         }
         if (
           duplicate.type === 'item' ||
+          duplicate.type === 'fence' ||
           duplicate.type === 'window' ||
           duplicate.type === 'door' ||
           duplicate.type === 'roof' ||

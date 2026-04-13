@@ -197,7 +197,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
       const node = nodes[childId as AnyNodeId]
       if (!node) continue
 
-      if (node.type === 'wall') {
+      if (node.type === 'wall' || node.type === 'fence') {
         const wall = node as WallNode
         if (
           segmentIntersectsBounds(wall.start[0], wall.start[1], wall.end[0], wall.end[1], bounds)

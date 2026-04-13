@@ -7,6 +7,8 @@ import {
   type DoorNode,
   type EventSuffix,
   emitter,
+  type FenceEvent,
+  type FenceNode,
   type ItemEvent,
   type ItemNode,
   type LevelEvent,
@@ -37,6 +39,7 @@ type NodeConfig = {
   site: { node: SiteNode; event: SiteEvent }
   item: { node: ItemNode; event: ItemEvent }
   wall: { node: WallNode; event: WallEvent }
+  fence: { node: FenceNode; event: FenceEvent }
   building: { node: BuildingNode; event: BuildingEvent }
   level: { node: LevelNode; event: LevelEvent }
   zone: { node: ZoneNode; event: ZoneEvent }

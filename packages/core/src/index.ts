@@ -4,6 +4,7 @@ export type {
   CeilingEvent,
   DoorEvent,
   EventSuffix,
+  FenceEvent,
   GridEvent,
   ItemEvent,
   LevelEvent,
