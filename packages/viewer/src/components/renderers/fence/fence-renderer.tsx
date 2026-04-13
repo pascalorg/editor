@@ -1,4 +1,4 @@
-import { type FenceNode, useRegistry } from '@pascal-app/core'
+import { type FenceNode, useLiveFenceSegments, useRegistry } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
 import { BoxGeometry, Group } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -100,13 +100,18 @@ function createFenceParts(fence: FenceNode): FencePart[] {
 export const FenceRenderer = ({ node }: { node: FenceNode }) => {
   const ref = useRef<Group>(null!)
   const handlers = useNodeEvents(node, 'fence')
+  const liveSegment = useLiveFenceSegments((state) => state.segments.get(node.id))
+  const activeNode = liveSegment ? { ...node, start: liveSegment.start, end: liveSegment.end } : node
   const geometry = useMemo(() => new BoxGeometry(1, 1, 1), [])
-  const parts = useMemo(() => createFenceParts(node), [node])
-  const rotation = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
+  const parts = useMemo(() => createFenceParts(activeNode), [activeNode])
+  const rotation = Math.atan2(
+    activeNode.end[1] - activeNode.start[1],
+    activeNode.end[0] - activeNode.start[0],
+  )
   const center: [number, number, number] = [
-    (node.start[0] + node.end[0]) / 2,
+    (activeNode.start[0] + activeNode.end[0]) / 2,
     0,
-    (node.start[1] + node.end[1]) / 2,
+    (activeNode.start[1] + activeNode.end[1]) / 2,
   ]
 
   useRegistry(node.id, 'fence', ref)
@@ -115,7 +120,7 @@ export const FenceRenderer = ({ node }: { node: FenceNode }) => {
     <group
       ref={ref}
       rotation={[0, -rotation, 0]}
-      visible={node.visible}
+      visible={activeNode.visible}
       {...handlers}
       position={center}
     >

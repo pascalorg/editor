@@ -44,6 +44,7 @@ export {
   type ItemInteractiveState,
   useInteractive,
 } from './store/use-interactive'
+export { default as useLiveFenceSegments, type LiveFenceSegment } from './store/use-live-fence-segments'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

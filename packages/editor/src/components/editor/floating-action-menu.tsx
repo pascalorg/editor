@@ -113,6 +113,8 @@ export function FloatingActionMenu() {
           duplicate = ItemNode.parse(duplicateInfo)
         } else if (node.type === 'fence') {
           duplicate = FenceNode.parse(duplicateInfo)
+          duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
+          duplicate.end = [duplicate.end[0] + 1, duplicate.end[1] + 1]
         } else if (node.type === 'roof') {
           duplicate = RoofNode.parse(duplicateInfo)
         } else if (node.type === 'roof-segment') {
