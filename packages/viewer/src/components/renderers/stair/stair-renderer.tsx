@@ -630,17 +630,21 @@ function buildStairRailPaths(
     const sideCandidates =
       suppressLandingRailing
         ? ([] as StairRailPathSide[])
-        : layout.segment.segmentType !== 'landing'
+          : layout.segment.segmentType !== 'landing'
           ? [railingMode]
           : isTerminalLandingBeforeStair
             ? railingMode === 'left'
               ? terminalNextAttachmentSide === 'right'
                 ? (['front', 'left'] as const)
-                : ([] as StairRailPathSide[])
+                : terminalNextAttachmentSide === 'front' || terminalNextAttachmentSide == null
+                  ? (['left'] as const)
+                  : ([] as StairRailPathSide[])
               : railingMode === 'right'
                 ? terminalNextAttachmentSide === 'left'
                   ? (['front', 'right'] as const)
-                  : ([] as StairRailPathSide[])
+                  : terminalNextAttachmentSide === 'front' || terminalNextAttachmentSide == null
+                    ? (['right'] as const)
+                    : ([] as StairRailPathSide[])
                 : [railingMode]
           : isStraightLineDoubleLandingLayout
             ? [railingMode]
