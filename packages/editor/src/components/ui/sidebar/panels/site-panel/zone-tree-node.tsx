@@ -1,62 +1,57 @@
-import { useScene, type ZoneNode } from '@pascal-app/core'
+import { type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface ZoneTreeNodeProps {
-  node: ZoneNode
+  nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export function ZoneTreeNode({ node, depth, isLast }: ZoneTreeNodeProps) {
+export function ZoneTreeNode({ nodeId, depth, isLast }: ZoneTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
-  const isSelected = useViewer((state) => state.selection.zoneId === node.id)
-  const isHovered = useViewer((state) => state.hoveredId === node.id)
+  const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
+  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
+  const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
+  const isSelected = useViewer((state) => state.selection.zoneId === nodeId)
+  const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const handleClick = () => {
-    setSelection({ zoneId: node.id })
-  }
-
-  const handleDoubleClick = () => {
-    focusTreeNode(node.id)
-  }
-
-  const handleMouseEnter = () => {
-    setHoveredId(node.id)
-  }
-
-  const handleMouseLeave = () => {
-    setHoveredId(null)
-  }
+  const handleClick = useCallback(() => setSelection({ zoneId: nodeId }), [nodeId, setSelection])
+  const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
+  const handleMouseEnter = useCallback(() => setHoveredId(nodeId), [nodeId, setHoveredId])
+  const handleMouseLeave = useCallback(() => setHoveredId(null), [setHoveredId])
+  const handleStartEditing = useCallback(() => setIsEditing(true), [])
+  const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
   // Calculate approximate area from polygon
-  const area = calculatePolygonArea(node.polygon).toFixed(1)
+  const area = calculatePolygonArea(polygon).toFixed(1)
   const defaultName = `Zone (${area}m²)`
 
   return (
     <TreeNodeWrapper
-      actions={<TreeNodeActions node={node} />}
+      actions={<TreeNodeActions nodeId={nodeId} />}
       depth={depth}
       expanded={false}
       hasChildren={false}
-      icon={<ColorDot color={node.color} onChange={(color) => updateNode(node.id, { color })} />}
+      icon={<ColorDot color={color} onChange={(c) => updateNode(nodeId, { color: c })} />}
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
+      isVisible={isVisible}
       label={
         <InlineRenameInput
           defaultName={defaultName}
           isEditing={isEditing}
-          node={node}
-          onStartEditing={() => setIsEditing(true)}
-          onStopEditing={() => setIsEditing(false)}
+          nodeId={nodeId}
+          onStartEditing={handleStartEditing}
+          onStopEditing={handleStopEditing}
         />
       }
       onClick={handleClick}

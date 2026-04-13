@@ -9,6 +9,7 @@ export const BuildingRenderer = ({ node }: { node: BuildingNode }) => {
 
   useRegistry(node.id, node.type, ref)
   const handlers = useNodeEvents(node, 'building')
+
   return (
     <group
       position={node.position}

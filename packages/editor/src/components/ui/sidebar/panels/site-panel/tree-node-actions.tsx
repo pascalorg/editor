@@ -1,4 +1,4 @@
-import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Camera, Eye, EyeOff, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -9,21 +9,21 @@ import {
 } from './../../../../../components/ui/primitives/popover'
 
 interface TreeNodeActionsProps {
-  node: AnyNode
+  nodeId: AnyNodeId
 }
 
-export function TreeNodeActions({ node }: TreeNodeActionsProps) {
+export function TreeNodeActions({ nodeId }: TreeNodeActionsProps) {
   const [open, setOpen] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const updateNodes = useScene((state) => state.updateNodes)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const hasCamera = !!node.camera
-  const isVisible = node.visible !== false
+  const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
+  const hasCamera = useScene((s) => !!(s.nodes[nodeId] as any)?.camera)
 
   const toggleVisibility = (e: React.MouseEvent) => {
     e.stopPropagation()
     const newVisibility = !isVisible
-    if (selectedIds?.includes(node.id)) {
+    const selectedIds = useViewer.getState().selection.selectedIds
+    if (selectedIds?.includes(nodeId)) {
       updateNodes(
         selectedIds.map((id) => ({
           id: id as AnyNodeId,
@@ -31,24 +31,24 @@ export function TreeNodeActions({ node }: TreeNodeActionsProps) {
         })),
       )
     } else {
-      updateNode(node.id, { visible: newVisibility })
+      updateNode(nodeId, { visible: newVisibility })
     }
   }
 
   const handleCaptureCamera = (e: React.MouseEvent) => {
     e.stopPropagation()
-    emitter.emit('camera-controls:capture', { nodeId: node.id })
+    emitter.emit('camera-controls:capture', { nodeId })
     setOpen(false)
   }
   const handleViewCamera = (e: React.MouseEvent) => {
     e.stopPropagation()
-    emitter.emit('camera-controls:view', { nodeId: node.id })
+    emitter.emit('camera-controls:view', { nodeId })
     setOpen(false)
   }
 
   const handleClearCamera = (e: React.MouseEvent) => {
     e.stopPropagation()
-    updateNode(node.id, { camera: undefined })
+    updateNode(nodeId, { camera: undefined })
     setOpen(false)
   }
 

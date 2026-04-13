@@ -101,7 +101,6 @@ const Viewer: React.FC<ViewerProps> = ({
   perf = false,
 }) => {
   const theme = useViewer((state) => state.theme)
-
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}

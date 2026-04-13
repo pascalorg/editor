@@ -8,14 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
-import {
-  type ReactNode,
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react'
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
@@ -54,6 +47,7 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
+import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
@@ -61,9 +55,8 @@ import { Grid } from './grid'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
-import { ThumbnailGenerator } from './thumbnail-generator'
+import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
-import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
@@ -123,7 +116,7 @@ export interface EditorProps {
   isLoading?: boolean
 
   // Thumbnail
-  onThumbnailCapture?: (blob: Blob) => void
+  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 
   // Version preview overlays (rendered by host app)
   sidebarOverlay?: ReactNode
@@ -507,6 +500,210 @@ function DeleteCursorBadge({ position }: { position: { x: number; y: number } })
   )
 }
 
+// ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
+
+const ViewerSceneContent = memo(function ViewerSceneContent({
+  isVersionPreviewMode,
+  isLoading,
+  isFirstPersonMode,
+  onThumbnailCapture,
+}: {
+  isVersionPreviewMode: boolean
+  isLoading: boolean
+  isFirstPersonMode: boolean
+  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+}) {
+  return (
+    <>
+      {!isFirstPersonMode && <SelectionManager />}
+      {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
+      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
+      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingBuildingActionMenu />}
+      {!isFirstPersonMode && <WallMeasurementLabel />}
+      <ExportManager />
+      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+      <CeilingSystem />
+      <RoofEditSystem />
+      <StairEditSystem />
+      {!isLoading && !isFirstPersonMode && (
+        <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
+      )}
+      {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
+      {isFirstPersonMode && <FirstPersonControls />}
+      <CustomCameraControls />
+      <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+      <PresetThumbnailGenerator />
+      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {isFirstPersonMode && <InteractiveSystem />}
+    </>
+  )
+})
+
+// ── Delete cursor badge: isolated component so cursor moves don't re-render ViewerCanvas ──
+// Subscribes to mode itself and manages cursor position state independently.
+
+function DeleteCursorLayer({
+  containerRef,
+  isVersionPreviewMode,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>
+  isVersionPreviewMode: boolean
+}) {
+  const mode = useEditor((s) => s.mode)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const active = mode === 'delete' && !isVersionPreviewMode
+
+  useEffect(() => {
+    if (!active) {
+      setPosition(null)
+      return
+    }
+    const el = containerRef.current
+    if (!el) return
+    const onMove = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect()
+      setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    }
+    const onLeave = () => setPosition(null)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerleave', onLeave)
+    return () => {
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerleave', onLeave)
+    }
+  }, [active, containerRef])
+
+  if (!(active && position)) return null
+  return <DeleteCursorBadge position={position} />
+}
+
+// ── Viewer canvas: memoized, subscribes to viewMode/floorplanPaneRatio internally ──
+// This prevents Editor from re-rendering when those values change.
+
+const ViewerCanvas = memo(function ViewerCanvas({
+  isVersionPreviewMode,
+  isLoading,
+  hasLoadedInitialScene,
+  showLoader,
+  isFirstPersonMode,
+  onThumbnailCapture,
+}: {
+  isVersionPreviewMode: boolean
+  isLoading: boolean
+  hasLoadedInitialScene: boolean
+  showLoader: boolean
+  isFirstPersonMode: boolean
+  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+}) {
+  const viewMode = useEditor((s) => s.viewMode)
+  const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
+  const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
+
+  const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
+    null,
+  )
+
+  const viewerAreaRef = useRef<HTMLDivElement>(null)
+  const viewer3dRef = useRef<HTMLDivElement>(null)
+  const isResizingFloorplan = useRef(false)
+
+  const handleFloorplanDividerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    isResizingFloorplan.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isResizingFloorplan.current) return
+      if (!viewerAreaRef.current) return
+      const rect = viewerAreaRef.current.getBoundingClientRect()
+      const newRatio = (e.clientX - rect.left) / rect.width
+      setFloorplanPaneRatio(Math.max(0.15, Math.min(0.85, newRatio)))
+    }
+    const handlePointerUp = () => {
+      isResizingFloorplan.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [setFloorplanPaneRatio])
+
+  useEffect(() => {
+    setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
+  }, [])
+
+  const dismissCameraControlsHint = useCallback(() => {
+    setIsCameraControlsHintVisible(false)
+    writeCameraControlsHintDismissed(true)
+  }, [])
+
+  const show2d = viewMode === '2d' || viewMode === 'split'
+  const show3d = viewMode === '3d' || viewMode === 'split'
+
+  return (
+    <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
+      <div className="flex h-full" ref={viewerAreaRef}>
+        {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
+        <div
+          className="relative h-full flex-shrink-0"
+          style={{
+            width: viewMode === '2d' ? '100%' : `${floorplanPaneRatio * 100}%`,
+            display: show2d ? undefined : 'none',
+          }}
+        >
+          <div className="h-full w-full overflow-hidden">
+            <FloorplanPanel />
+          </div>
+          {viewMode === 'split' && (
+            <div
+              className="absolute inset-y-0 -right-3 z-10 flex w-6 cursor-col-resize items-center justify-center"
+              onPointerDown={handleFloorplanDividerDown}
+            >
+              <div className="h-8 w-1 rounded-full bg-neutral-400" />
+            </div>
+          )}
+        </div>
+
+        {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
+        <div
+          className="relative min-w-0 flex-1 overflow-hidden"
+          ref={viewer3dRef}
+          style={{ display: show3d ? undefined : 'none' }}
+        >
+          <DeleteCursorLayer
+            containerRef={viewer3dRef}
+            isVersionPreviewMode={isVersionPreviewMode}
+          />
+          {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
+            <ViewerCanvasControlsHint
+              isPreviewMode={isPreviewMode}
+              onDismiss={dismissCameraControlsHint}
+            />
+          ) : null}
+          <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
+          <Viewer selectionManager={isFirstPersonMode ? 'default' : 'custom'}>
+            <ViewerSceneContent
+              isFirstPersonMode={isFirstPersonMode}
+              isLoading={isLoading}
+              isVersionPreviewMode={isVersionPreviewMode}
+              onThumbnailCapture={onThumbnailCapture}
+            />
+          </Viewer>
+        </div>
+      </div>
+      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+    </ErrorBoundary>
+  )
+})
+
 export default function Editor({
   layoutVersion = 'v1',
   appMenuButton,
@@ -543,51 +740,11 @@ export default function Editor({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
-  const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
-    null,
-  )
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
-  const mode = useEditor((s) => s.mode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
-  const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
-  const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
-  const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
-  const [viewerCursorPosition, setViewerCursorPosition] = useState<{ x: number; y: number } | null>(
-    null,
-  )
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
-  const viewerAreaRef = useRef<HTMLDivElement>(null)
-  const isResizingFloorplan = useRef(false)
-
-  const handleFloorplanDividerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    isResizingFloorplan.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [])
-
-  useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!isResizingFloorplan.current) return
-      if (!viewerAreaRef.current) return
-      const rect = viewerAreaRef.current.getBoundingClientRect()
-      const newRatio = (e.clientX - rect.left) / rect.width
-      setFloorplanPaneRatio(Math.max(0.15, Math.min(0.85, newRatio)))
-    }
-    const handlePointerUp = () => {
-      isResizingFloorplan.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [])
 
   useEffect(() => {
     const teardown = initializeEditorRuntime()
@@ -661,39 +818,7 @@ export default function Editor({
     }
   }, [])
 
-  useEffect(() => {
-    setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
-  }, [])
-
   const showLoader = isLoading || isSceneLoading
-  const dismissCameraControlsHint = useCallback(() => {
-    setIsCameraControlsHintVisible(false)
-    writeCameraControlsHintDismissed(true)
-  }, [])
-
-  // ── Shared viewer scene content ──
-  const viewerSceneContent = (
-    <>
-      {!isFirstPersonMode && <SelectionManager />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingBuildingActionMenu />}
-      {!isFirstPersonMode && <WallMeasurementLabel />}
-      <ExportManager />
-      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
-      <CeilingSystem />
-      <RoofEditSystem />
-      <StairEditSystem />
-      {!isLoading && !isFirstPersonMode && <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />}
-      {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
-      {isFirstPersonMode && <FirstPersonControls />}
-      <CustomCameraControls />
-      <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      <PresetThumbnailGenerator />
-      {!isFirstPersonMode && <SiteEdgeLabels />}
-      {isFirstPersonMode && <InteractiveSystem />}
-    </>
-  )
 
   const previewViewerContent = (
     <Viewer selectionManager="default">
@@ -709,86 +834,15 @@ export default function Editor({
     </Viewer>
   )
 
-  // ── Shared viewer canvas (handles split/2d/3d) ──
-  const viewMode = useEditor((s) => s.viewMode)
-
-  const show2d = viewMode === '2d' || viewMode === 'split'
-  const show3d = viewMode === '3d' || viewMode === 'split'
-  const showDeleteCursorBadge = mode === 'delete' && !isVersionPreviewMode
-
-  useEffect(() => {
-    if (!(showDeleteCursorBadge && show3d)) {
-      setViewerCursorPosition(null)
-    }
-  }, [show3d, showDeleteCursorBadge])
-
-  const handleViewerPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!showDeleteCursorBadge) {
-        setViewerCursorPosition(null)
-        return
-      }
-
-      const rect = event.currentTarget.getBoundingClientRect()
-      setViewerCursorPosition({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      })
-    },
-    [showDeleteCursorBadge],
-  )
-
-  const handleViewerPointerLeave = useCallback(() => {
-    setViewerCursorPosition(null)
-  }, [])
-
   const viewerCanvas = (
-    <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
-      <div className="flex h-full" ref={viewerAreaRef}>
-        {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
-        <div
-          className="relative h-full flex-shrink-0"
-          style={{
-            width: viewMode === '2d' ? '100%' : `${floorplanPaneRatio * 100}%`,
-            display: show2d ? undefined : 'none',
-          }}
-        >
-          <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel />
-          </div>
-          {viewMode === 'split' && (
-            <div
-              className="absolute inset-y-0 -right-3 z-10 flex w-6 cursor-col-resize items-center justify-center"
-              onPointerDown={handleFloorplanDividerDown}
-            >
-              <div className="h-8 w-1 rounded-full bg-neutral-400" />
-            </div>
-          )}
-        </div>
-
-        {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
-        <div
-          className="relative min-w-0 flex-1 overflow-hidden"
-          onPointerEnter={handleViewerPointerMove}
-          onPointerLeave={handleViewerPointerLeave}
-          onPointerMove={handleViewerPointerMove}
-          style={{ display: show3d ? undefined : 'none' }}
-        >
-          {showDeleteCursorBadge && viewerCursorPosition ? (
-            <DeleteCursorBadge position={viewerCursorPosition} />
-          ) : null}
-          {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
-            <ViewerCanvasControlsHint
-              isPreviewMode={isPreviewMode}
-              onDismiss={dismissCameraControlsHint}
-            />
-          ) : null}
-          <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-          <Viewer selectionManager={isFirstPersonMode ? 'default' : 'custom'}>{viewerSceneContent}</Viewer>
-        </div>
-      </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
-    </ErrorBoundary>
+    <ViewerCanvas
+      hasLoadedInitialScene={hasLoadedInitialScene}
+      isFirstPersonMode={isFirstPersonMode}
+      isLoading={isLoading}
+      isVersionPreviewMode={isVersionPreviewMode}
+      onThumbnailCapture={onThumbnailCapture}
+      showLoader={showLoader}
+    />
   )
 
   // ── V2 layout ──
@@ -858,9 +912,7 @@ export default function Editor({
             {/* First-person overlay — rendered on top of normal layout */}
             {isFirstPersonMode && (
               <div className="fixed inset-0 z-50 pointer-events-none">
-                <FirstPersonOverlay
-                  onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                />
+                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
               </div>
             )}
             <EditorCommands />
@@ -906,9 +958,7 @@ export default function Editor({
             </SidebarSlot>
 
             {/* Viewer area */}
-            <div className="relative flex-1 overflow-hidden rounded-xl" ref={viewerAreaRef}>
-              {viewerCanvas}
-            </div>
+            <div className="relative flex-1 overflow-hidden rounded-xl">{viewerCanvas}</div>
 
             {/* Fixed UI overlays scoped to the viewer area */}
             <ViewerOverlays left={overlayLeft}>
