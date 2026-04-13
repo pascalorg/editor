@@ -3,6 +3,7 @@
 import {
   CeilingSystem,
   DoorSystem,
+  FenceSystem,
   ItemSystem,
   RoofSystem,
   SlabSystem,
@@ -139,6 +140,7 @@ const Viewer: React.FC<ViewerProps> = ({
       {/* Core systems */}
       <CeilingSystem />
       <DoorSystem />
+      <FenceSystem />
       <ItemSystem />
       <RoofSystem />
       <SlabSystem />

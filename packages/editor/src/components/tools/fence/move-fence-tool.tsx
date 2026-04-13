@@ -1,6 +1,6 @@
 'use client'
 
-import { type FenceNode, emitter, type GridEvent, useLiveFenceSegments, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type FenceNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
@@ -106,36 +106,37 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const nodeId = nodeIdRef.current
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
-    const { updateNode } = useScene.getState()
-    const liveSegments = useLiveFenceSegments.getState()
 
     useScene.temporal.getState().pause()
     let wasCommitted = false
+
+    const applyNodePreview = (updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>) => {
+      useScene.getState().updateNodes(
+        updates.map((entry) => ({
+          id: entry.id as AnyNodeId,
+          data: { start: entry.start, end: entry.end },
+        })),
+      )
+      for (const entry of updates) {
+        useScene.getState().markDirty(entry.id as AnyNodeId)
+      }
+    }
 
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
       previewRef.current = { start: nextStart, end: nextEnd }
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
       setCursorLocalPos([centerX, 0, centerZ])
-      liveSegments.set(nodeId, { start: nextStart, end: nextEnd })
-      updateNode(nodeId, { start: nextStart, end: nextEnd })
-
-      for (const linkedFence of getLinkedFenceUpdates(
-        linkedOriginalsRef.current,
-        originalStart,
-        originalEnd,
-        nextStart,
-        nextEnd,
-      )) {
-        liveSegments.set(linkedFence.id, {
-          start: linkedFence.start,
-          end: linkedFence.end,
-        })
-        updateNode(linkedFence.id, {
-          start: linkedFence.start,
-          end: linkedFence.end,
-        })
-      }
+      applyNodePreview([
+        { id: nodeId, start: nextStart, end: nextEnd },
+        ...getLinkedFenceUpdates(
+          linkedOriginalsRef.current,
+          originalStart,
+          originalEnd,
+          nextStart,
+          nextEnd,
+        ),
+      ])
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -167,23 +168,16 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
       wasCommitted = true
       useScene.temporal.getState().resume()
-      updateNode(nodeId, { start: preview.start, end: preview.end })
-      for (const linkedFence of getLinkedFenceUpdates(
-        linkedOriginalsRef.current,
-        originalStart,
-        originalEnd,
-        preview.start,
-        preview.end,
-      )) {
-        updateNode(linkedFence.id, {
-          start: linkedFence.start,
-          end: linkedFence.end,
-        })
-      }
-      liveSegments.clear(nodeId)
-      for (const linkedFence of linkedOriginalsRef.current) {
-        liveSegments.clear(linkedFence.id)
-      }
+      applyNodePreview([
+        { id: nodeId, start: preview.start, end: preview.end },
+        ...getLinkedFenceUpdates(
+          linkedOriginalsRef.current,
+          originalStart,
+          originalEnd,
+          preview.start,
+          preview.end,
+        ),
+      ])
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
@@ -193,15 +187,10 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
-      liveSegments.clear(nodeId)
-      updateNode(nodeId, { start: originalStart, end: originalEnd })
-      for (const linkedFence of linkedOriginalsRef.current) {
-        liveSegments.clear(linkedFence.id)
-        updateNode(linkedFence.id, {
-          start: linkedFence.start,
-          end: linkedFence.end,
-        })
-      }
+      applyNodePreview([
+        { id: nodeId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
@@ -214,15 +203,10 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        liveSegments.clear(nodeId)
-        updateNode(nodeId, { start: originalStart, end: originalEnd })
-        for (const linkedFence of linkedOriginalsRef.current) {
-          liveSegments.clear(linkedFence.id)
-          updateNode(linkedFence.id, {
-            start: linkedFence.start,
-            end: linkedFence.end,
-          })
-        }
+        applyNodePreview([
+          { id: nodeId, start: originalStart, end: originalEnd },
+          ...linkedOriginalsRef.current,
+        ])
       }
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
