@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/editor",
-  "version": "0.4.0",
+  "version": "0.5.1",
   "description": "Pascal building editor component",
   "type": "module",
   "exports": {
@@ -11,8 +11,8 @@
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@pascal-app/core": "*",
-    "@pascal-app/viewer": "*",
+    "@pascal-app/core": "^0.5.1",
+    "@pascal-app/viewer": "^0.5.1",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "next": ">=15",
@@ -50,8 +50,8 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@pascal-app/core": "*",
-    "@pascal-app/viewer": "*",
+    "@pascal-app/core": "^0.5.1",
+    "@pascal-app/viewer": "^0.5.1",
     "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/react": "19.2.2",

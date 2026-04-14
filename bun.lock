@@ -48,7 +48,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
@@ -75,7 +75,7 @@
     },
     "packages/editor": {
       "name": "@pascal-app/editor",
-      "version": "0.4.0",
+      "version": "0.5.1",
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.5.14",
@@ -106,8 +106,8 @@
         "zustand": "^5.0.11",
       },
       "devDependencies": {
-        "@pascal-app/core": "*",
-        "@pascal-app/viewer": "*",
+        "@pascal-app/core": "^0.5.1",
+        "@pascal-app/viewer": "^0.5.1",
         "@pascal/typescript-config": "*",
         "@types/howler": "^2.2.12",
         "@types/react": "19.2.2",
@@ -116,8 +116,8 @@
         "typescript": "5.9.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "*",
-        "@pascal-app/viewer": "*",
+        "@pascal-app/core": "^0.5.1",
+        "@pascal-app/viewer": "^0.5.1",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "next": ">=15",
@@ -166,7 +166,7 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "polygon-clipping": "^0.15.7",
         "zustand": "^5",
@@ -179,7 +179,7 @@
         "typescript": "5.9.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^0.1.4",
+        "@pascal-app/core": "^0.5.1",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",

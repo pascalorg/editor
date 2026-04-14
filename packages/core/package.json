@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
