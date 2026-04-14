@@ -33,6 +33,7 @@ import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { snapToGrid } from './placement-math'
 import {
   ceilingStrategy,
   checkCanPlace,
@@ -41,7 +42,6 @@ import {
   wallStrategy,
 } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
-import { snapToGrid } from './placement-math'
 import type { DraftNodeHandle } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
@@ -69,7 +69,7 @@ const radialOpacity = smoothstep(0, 0.7, dist).mul(0.6)
 basePlaneMaterial.opacityNode = radialOpacity
 
 export interface PlacementCoordinatorConfig {
-  asset: AssetInput
+  asset: AssetInput | null
   draftNode: DraftNodeHandle
   initDraft: (gridPosition: Vector3) => void
   onCommitted: () => boolean
@@ -98,6 +98,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const { asset, draftNode } = config
 
   useEffect(() => {
+    if (!asset) return
     useScene.temporal.getState().pause()
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
@@ -873,6 +874,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // Wall/ceiling items are managed by their own surface entry events (ensureDraft / reparent).
   const viewerLevelId = useViewer((s) => s.selection.levelId)
   useEffect(() => {
+    if (!asset) return
     const draft = draftNode.current
     if (!(draft && viewerLevelId) || asset.attachTo) return
     if (draft.parentId === viewerLevelId) return
@@ -881,6 +883,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   }, [viewerLevelId, draftNode, asset])
 
   useFrame((_, delta) => {
+    if (!asset) return
     if (!draftNode.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
