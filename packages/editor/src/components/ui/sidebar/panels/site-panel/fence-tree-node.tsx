@@ -1,4 +1,4 @@
-import { type FenceNode } from '@pascal-app/core'
+import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useState } from 'react'
@@ -8,22 +8,25 @@ import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node
 import { TreeNodeActions } from './tree-node-actions'
 
 interface FenceTreeNodeProps {
-  node: FenceNode
+  nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export function FenceTreeNode({ node, depth, isLast }: FenceTreeNodeProps) {
+export function FenceTreeNode({ nodeId, depth, isLast }: FenceTreeNodeProps) {
+  const node = useScene((state) => state.nodes[nodeId]) as FenceNode | undefined
   const [isEditing, setIsEditing] = useState(false)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const isSelected = selectedIds.includes(node.id)
-  const isHovered = useViewer((state) => state.hoveredId === node.id)
+  const isSelected = selectedIds.includes(nodeId)
+  const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
+  if (!node) return null
+
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const handled = handleTreeSelection(e, node.id, selectedIds, setSelection)
+    const handled = handleTreeSelection(e, nodeId, selectedIds, setSelection)
     if (!handled && useEditor.getState().phase === 'furnish') {
       useEditor.getState().setPhase('structure')
     }
@@ -51,10 +54,10 @@ export function FenceTreeNode({ node, depth, isLast }: FenceTreeNodeProps) {
           onStopEditing={() => setIsEditing(false)}
         />
       }
-      nodeId={node.id}
+      nodeId={nodeId}
       onClick={handleClick}
-      onDoubleClick={() => focusTreeNode(node.id)}
-      onMouseEnter={() => setHoveredId(node.id)}
+      onDoubleClick={() => focusTreeNode(nodeId)}
+      onMouseEnter={() => setHoveredId(nodeId)}
       onMouseLeave={() => setHoveredId(null)}
       onToggle={() => {}}
     />

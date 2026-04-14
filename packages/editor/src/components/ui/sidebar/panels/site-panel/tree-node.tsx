@@ -88,9 +88,9 @@ export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
     case 'slab':
       return <SlabTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'wall':
-      return <WallTreeNode depth={depth} isLast={isLast} node={node as any} />
+      return <WallTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'fence':
-      return <FenceTreeNode depth={depth} isLast={isLast} node={node as any} />
+      return <FenceTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'roof':
       return <RoofTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'stair':
