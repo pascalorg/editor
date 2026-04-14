@@ -4,6 +4,13 @@ import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import type { AnyNodeId, SlabNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
+function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
+}
+
 // ============================================================================
 // SLAB SYSTEM
 // ============================================================================
@@ -39,6 +46,7 @@ export const SlabSystem = () => {
  */
 function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
   const newGeo = generateSlabGeometry(node)
+  ensureUv2Attribute(newGeo)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
