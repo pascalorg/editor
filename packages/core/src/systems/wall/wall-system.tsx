@@ -18,6 +18,13 @@ import {
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
 
+function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
+}
+
 // ============================================================================
 // WALL SYSTEM
 // ============================================================================
@@ -205,6 +212,7 @@ export function generateExtrudedWall(
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
+  ensureUv2Attribute(geometry)
 
   // Apply CSG subtraction for cutouts (doors/windows)
   const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
@@ -239,6 +247,7 @@ export function generateExtrudedWall(
 
   const resultGeometry = resultBrush.geometry
   resultGeometry.computeVertexNormals()
+  ensureUv2Attribute(resultGeometry)
 
   return resultGeometry
 }

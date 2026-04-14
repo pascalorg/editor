@@ -38,6 +38,16 @@ export {
   wallTouchesOthers,
 } from './lib/space-detection'
 export { baseMaterial, glassMaterial } from './materials'
+export {
+  getCatalogMaterialById,
+  getLibraryMaterialIdFromRef,
+  getMaterialPresetByRef,
+  getMaterialsForTarget,
+  LIBRARY_MATERIAL_REF_PREFIX,
+  MATERIAL_CATALOG,
+  type MaterialCatalogItem,
+  toLibraryMaterialRef,
+} from './material-library'
 export * from './schema'
 export {
   type ControlValue,

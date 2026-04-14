@@ -30,9 +30,16 @@ export function SlabPanel() {
     [selectedId, updateNode],
   )
 
-  const handleMaterialChange = useCallback(
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleCustomMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
     },
     [handleUpdate],
   )
@@ -221,7 +228,13 @@ export function SlabPanel() {
         </div>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="slab"
+          onChange={handleCustomMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

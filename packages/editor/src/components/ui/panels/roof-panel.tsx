@@ -43,7 +43,14 @@ export function RoofPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -255,7 +262,13 @@ export function RoofPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="roof"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

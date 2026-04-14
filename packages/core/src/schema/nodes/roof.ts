@@ -8,6 +8,7 @@ export const RoofNode = BaseNode.extend({
   id: objectId('roof'),
   type: nodeType('roof'),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),

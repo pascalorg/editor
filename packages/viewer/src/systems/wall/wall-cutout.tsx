@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   baseMaterial,
   emitter,
+  getMaterialPresetByRef,
   sceneRegistry,
   useScene,
   type WallNode,
@@ -13,6 +14,7 @@ import { Color } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
 import { type Mesh, MeshStandardNodeMaterial, Vector3 } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
+import { createMaterialFromPresetRef } from '../../lib/materials'
 
 const tmpVec = new Vector3()
 const u = new Vector3()
@@ -75,6 +77,7 @@ const presetColors = {
 } as const
 
 function getMaterialHash(wallNode: WallNode): string {
+  if (wallNode.materialPreset) return `preset-ref-${wallNode.materialPreset}`
   if (!wallNode.material) return 'none'
   const mat = wallNode.material
   if (mat.preset && mat.preset !== 'custom') {
@@ -130,7 +133,10 @@ function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   }
 
   let userColor = DEFAULT_WALL_COLOR
-  if (wallNode.material?.properties?.color) {
+  const preset = getMaterialPresetByRef(wallNode.materialPreset)
+  if (preset?.mapProperties?.color) {
+    userColor = preset.mapProperties.color
+  } else if (wallNode.material?.properties?.color) {
     userColor = wallNode.material.properties.color
   } else if (wallNode.material?.preset && wallNode.material.preset !== 'custom') {
     userColor = getPresetColor(wallNode.material.preset)
@@ -168,6 +174,18 @@ function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   }
   wallMaterialCache.set(cacheKey, result)
   return result
+}
+
+function getVisibleWallMaterial(wallNode: WallNode): Material {
+  if (wallNode.materialPreset) {
+    return createMaterialFromPresetRef(wallNode.materialPreset) ?? baseMaterial
+  }
+
+  if (wallNode.material) {
+    return getMaterialsForWall(wallNode).visible
+  }
+
+  return baseMaterial
 }
 
 function getWallHideState(
@@ -261,13 +279,7 @@ export const WallCutout = () => {
               ? materials.highlightedInvisible
               : materials.invisible
         } else {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteVisible
-            : isSelectionHighlighted
-              ? materials.highlightedVisible
-              : wallNode.material
-                ? materials.visible
-                : baseMaterial
+          ;(wallMesh as Mesh).material = getVisibleWallMaterial(wallNode)
         }
       })
       lastWallMode.current = wallMode
@@ -289,7 +301,7 @@ export const WallCutout = () => {
         const current = wallMesh.material as Material
         snapshot.set(wallMesh, current)
         if (current === mats.highlightedVisible || current === mats.deleteVisible) {
-          wallMesh.material = mats.visible
+          wallMesh.material = getVisibleWallMaterial(wallNode)
         } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
         }

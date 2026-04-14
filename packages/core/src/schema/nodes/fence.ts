@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 
 export const FenceStyle = z.enum(['slat', 'rail', 'privacy'])
 export const FenceBaseStyle = z.enum(['floating', 'grounded'])
@@ -8,6 +9,8 @@ export const FenceBaseStyle = z.enum(['floating', 'grounded'])
 export const FenceNode = BaseNode.extend({
   id: objectId('fence'),
   type: nodeType('fence'),
+  material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
   height: z.number().default(1.8),
