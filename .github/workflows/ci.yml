@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: idelfonsog2/editor
+  IMAGE_NAME: binaryhandsllc/pascal-editor-sketchup
 
 jobs:
   build-and-push:
