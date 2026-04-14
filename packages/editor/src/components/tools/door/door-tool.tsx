@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   DoorNode,
   emitter,
+  isCurvedWall,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -84,6 +85,11 @@ export const DoorTool: React.FC = () => {
 
     const onWallEnter = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        hideCursor()
+        return
+      }
       const levelId = getLevelId()
       if (!levelId) return
       if (event.node.parentId !== levelId) return
@@ -130,6 +136,11 @@ export const DoorTool: React.FC = () => {
 
     const onWallMove = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        hideCursor()
+        return
+      }
       if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)
@@ -190,6 +201,7 @@ export const DoorTool: React.FC = () => {
     const onWallClick = (event: WallEvent) => {
       if (!draftRef.current) return
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
       if (event.node.parentId !== getLevelId()) return
 
       const side = getSideFromNormal(event.normal)

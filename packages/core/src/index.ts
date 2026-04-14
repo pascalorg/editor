@@ -70,6 +70,19 @@ export {
   getWallThickness,
 } from './systems/wall/wall-footprint'
 export {
+  getClampedWallCurveOffset,
+  getMaxWallCurveOffset,
+  getWallChordFrame,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  getWallMidpointHandlePoint,
+  getWallStraightSnapOffset,
+  getWallSurfacePolygon,
+  isCurvedWall,
+  normalizeWallCurveOffset,
+  sampleWallCenterline,
+} from './systems/wall/wall-curve'
+export {
   calculateLevelMiters,
   type Point2D,
   pointToKey,

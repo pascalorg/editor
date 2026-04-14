@@ -2,8 +2,9 @@
 
 import { type AnyNode, type MaterialSchema, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Edit, Plus, Trash2 } from 'lucide-react'
+import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
@@ -18,6 +19,7 @@ export function SlabPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const selectedId = selectedIds[0]
   const node = selectedId ? (nodes[selectedId as AnyNode['id']] as SlabNode | undefined) : undefined
@@ -106,6 +108,13 @@ export function SlabPanel() {
     },
     [selectedId, node?.holes, handleUpdate, editingHole, setEditingHole],
   )
+
+  const handleMove = useCallback(() => {
+    if (!node) return
+    sfxEmitter.emit('sfx:item-pick')
+    setMovingNode(node)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
 
   if (!node || node.type !== 'slab' || selectedIds.length !== 1) return null
 
@@ -236,6 +245,9 @@ export function SlabPanel() {
           value={node.material}
         />
       </PanelSection>
+      <ActionGroup>
+        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+      </ActionGroup>
     </PanelWrapper>
   )
 }

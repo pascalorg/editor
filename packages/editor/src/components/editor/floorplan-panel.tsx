@@ -6,11 +6,17 @@ import {
   type AnyNodeId,
   type BuildingNode,
   calculateLevelMiters,
+  type CeilingNode,
   DoorNode,
   emitter,
   type GridEvent,
   type GuideNode,
+  getWallChordFrame,
+  isCurvedWall,
+  getWallMidpointHandlePoint,
+  normalizeWallCurveOffset,
   getScaledDimensions,
+  getWallCurveLength,
   getWallPlanFootprint,
   type ItemNode,
   ItemNode as ItemNodeSchema,
@@ -235,6 +241,12 @@ type WallEndpointDragState = {
   currentPoint: WallPlanPoint
 }
 
+type WallCurveDragState = {
+  pointerId: number
+  wallId: WallNode['id']
+  currentCurveOffset: number
+}
+
 const GUIDE_CORNERS = ['nw', 'ne', 'se', 'sw'] as const
 
 type GuideCorner = (typeof GUIDE_CORNERS)[number]
@@ -274,6 +286,11 @@ type WallEndpointDraft = {
   endpoint: WallEndpoint
   start: WallPlanPoint
   end: WallPlanPoint
+}
+
+type WallCurveDraft = {
+  wallId: WallNode['id']
+  curveOffset: number
 }
 
 type SlabBoundaryDraft = {
@@ -2176,7 +2193,7 @@ function getWallMeasurementOverlay(
 ): WallMeasurementOverlay | null {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
-  const length = Math.hypot(dx, dz)
+  const length = getWallCurveLength(wall)
 
   if (length < 0.1) {
     return null
@@ -2425,13 +2442,19 @@ function buildGridPath(
 function findClosestWallPoint(
   point: WallPlanPoint,
   walls: WallNode[],
-  maxDistance = 0.5,
+  options?: {
+    maxDistance?: number
+    canUseWall?: (wall: WallNode) => boolean
+  },
 ): {
   wall: WallNode
   point: WallPlanPoint
   t: number
   normal: [number, number, number]
 } | null {
+  const maxDistance = options?.maxDistance ?? 0.5
+  const canUseWall = options?.canUseWall
+
   let best: {
     wall: WallNode
     point: WallPlanPoint
@@ -2441,6 +2464,10 @@ function findClosestWallPoint(
   let bestDistSq = maxDistance * maxDistance
 
   for (const wall of walls) {
+    if (canUseWall && !canUseWall(wall)) {
+      continue
+    }
+
     const [x1, z1] = wall.start
     const [x2, z2] = wall.end
     const dx = x2 - x1
@@ -4351,6 +4378,97 @@ const FloorplanWallEndpointLayer = memo(function FloorplanWallEndpointLayer({
   )
 })
 
+const FloorplanWallCurveHandleLayer = memo(function FloorplanWallCurveHandleLayer({
+  curveHandles,
+  hoveredHandleId,
+  onHandleHoverChange,
+  onWallCurvePointerDown,
+  palette,
+}: {
+  curveHandles: Array<{
+    wall: WallNode
+    point: WallPlanPoint
+    isActive: boolean
+  }>
+  hoveredHandleId: string | null
+  onHandleHoverChange: (handleId: string | null) => void
+  onWallCurvePointerDown: (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => void
+  palette: FloorplanPalette
+}) {
+  return (
+    <>
+      {curveHandles.map(({ wall, point, isActive }) => {
+        const handleId = `curve:${wall.id}`
+        const isHovered = hoveredHandleId === handleId
+        const stroke = isActive ? palette.endpointHandleActiveStroke : palette.endpointHandleStroke
+        const hoverStroke = isActive
+          ? palette.endpointHandleActiveStroke
+          : palette.endpointHandleHoverStroke
+        const svgPoint = toSvgPlanPoint(point)
+        const radius = isActive ? 0.16 : 0.14
+
+        return (
+          <g
+            key={handleId}
+            onClick={(event) => {
+              event.stopPropagation()
+            }}
+            onPointerEnter={() => onHandleHoverChange(handleId)}
+            onPointerLeave={() => onHandleHoverChange(null)}
+          >
+            <circle
+              cx={svgPoint.x}
+              cy={svgPoint.y}
+              fill="none"
+              pointerEvents="none"
+              r={radius}
+              stroke={hoverStroke}
+              strokeOpacity={isActive ? 0.24 : 0.16}
+              strokeWidth={FLOORPLAN_ENDPOINT_HOVER_GLOW_STROKE_WIDTH}
+              style={{
+                opacity: isHovered ? 1 : 0,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle
+              cx={svgPoint.x}
+              cy={svgPoint.y}
+              fill={isActive ? palette.endpointHandleActiveFill : palette.endpointHandleFill}
+              fillOpacity={0.96}
+              pointerEvents="none"
+              r={radius}
+              stroke={stroke}
+              strokeWidth="0.05"
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle
+              cx={svgPoint.x}
+              cy={svgPoint.y}
+              fill={stroke}
+              pointerEvents="none"
+              r={0.045}
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle
+              cx={svgPoint.x}
+              cy={svgPoint.y}
+              fill="transparent"
+              onPointerDown={(event) => onWallCurvePointerDown(wall, event)}
+              pointerEvents="all"
+              r={radius}
+              stroke="transparent"
+              strokeWidth={FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH}
+              style={{ cursor: EDITOR_CURSOR }}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        )
+      })}
+    </>
+  )
+})
+
 const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   hoveredHandleId,
   midpointHandles,
@@ -4544,6 +4662,7 @@ export function FloorplanPanel() {
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
+  const wallCurveDragRef = useRef<WallCurveDragState | null>(null)
   const siteBoundaryDraftRef = useRef<SiteBoundaryDraft | null>(null)
   const slabBoundaryDraftRef = useRef<SlabBoundaryDraft | null>(null)
   const zoneBoundaryDraftRef = useRef<ZoneBoundaryDraft | null>(null)
@@ -4576,6 +4695,7 @@ export function FloorplanPanel() {
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
   const movingNode = useEditor((state) => state.movingNode)
+  const curvingWall = useEditor((state) => state.curvingWall)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const setPhase = useEditor((state) => state.setPhase)
@@ -4680,6 +4800,22 @@ export function FloorplanPanel() {
         .filter((node): node is SlabNode => node?.type === 'slab')
     }),
   )
+  const ceilings = useScene(
+    useShallow((state) => {
+      if (!levelId) {
+        return [] as CeilingNode[]
+      }
+
+      const nextLevelNode = state.nodes[levelId]
+      if (!nextLevelNode || nextLevelNode.type !== 'level') {
+        return [] as CeilingNode[]
+      }
+
+      return nextLevelNode.children
+        .map((childId) => state.nodes[childId])
+        .filter((node): node is CeilingNode => node?.type === 'ceiling')
+    }),
+  )
   const levelGuides = useScene(
     useShallow((state) => {
       if (!levelId) {
@@ -4741,6 +4877,7 @@ export function FloorplanPanel() {
   const [cursorPoint, setCursorPoint] = useState<WallPlanPoint | null>(null)
   const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
+  const [wallCurveDraft, setWallCurveDraft] = useState<WallCurveDraft | null>(null)
   const [hoveredOpeningId, setHoveredOpeningId] = useState<OpeningNode['id'] | null>(null)
   const [hoveredWallId, setHoveredWallId] = useState<WallNode['id'] | null>(null)
   const [hoveredSlabId, setHoveredSlabId] = useState<SlabNode['id'] | null>(null)
@@ -4748,6 +4885,7 @@ export function FloorplanPanel() {
   const [hoveredStairId, setHoveredStairId] = useState<StairNode['id'] | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
   const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
+  const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
   const [hoveredSiteHandleId, setHoveredSiteHandleId] = useState<string | null>(null)
   const [hoveredSlabHandleId, setHoveredSlabHandleId] = useState<string | null>(null)
   const [hoveredZoneHandleId, setHoveredZoneHandleId] = useState<string | null>(null)
@@ -4922,29 +5060,42 @@ export function FloorplanPanel() {
     [floorplanWalls],
   )
   const displayWallById = useMemo(() => {
-    if (!wallEndpointDraft) {
-      return wallById
-    }
-
-    const wall = wallById.get(wallEndpointDraft.wallId)
-    if (!wall) {
+    if (!wallEndpointDraft && !wallCurveDraft) {
       return wallById
     }
 
     const nextWallById = new Map(wallById)
-    nextWallById.set(
-      wall.id,
-      buildWallWithUpdatedEndpoints(wall, wallEndpointDraft.start, wallEndpointDraft.end),
-    )
+
+    if (wallEndpointDraft) {
+      const wall = nextWallById.get(wallEndpointDraft.wallId)
+      if (wall) {
+        nextWallById.set(
+          wall.id,
+          buildWallWithUpdatedEndpoints(wall, wallEndpointDraft.start, wallEndpointDraft.end),
+        )
+      }
+    }
+
+    if (wallCurveDraft) {
+      const wall = nextWallById.get(wallCurveDraft.wallId)
+      if (wall) {
+        nextWallById.set(wall.id, { ...wall, curveOffset: wallCurveDraft.curveOffset })
+      }
+    }
 
     return nextWallById
-  }, [wallById, wallEndpointDraft])
+  }, [wallById, wallCurveDraft, wallEndpointDraft])
   const displayFloorplanWallById = useMemo(() => {
-    if (!wallEndpointDraft) {
+    if (!wallEndpointDraft && !wallCurveDraft) {
       return floorplanWallById
     }
 
-    const previewWall = displayWallById.get(wallEndpointDraft.wallId)
+    const previewWallId = wallEndpointDraft?.wallId ?? wallCurveDraft?.wallId
+    if (!previewWallId) {
+      return floorplanWallById
+    }
+
+    const previewWall = displayWallById.get(previewWallId)
     if (!previewWall) {
       return floorplanWallById
     }
@@ -4952,7 +5103,7 @@ export function FloorplanPanel() {
     const nextFloorplanWallById = new Map(floorplanWallById)
     nextFloorplanWallById.set(previewWall.id, getFloorplanWall(previewWall))
     return nextFloorplanWallById
-  }, [displayWallById, floorplanWallById, wallEndpointDraft])
+  }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
   const wallPolygons = useMemo(
     () =>
       walls.map((wall) => {
@@ -4967,11 +5118,16 @@ export function FloorplanPanel() {
     [floorplanWallById, wallMiterData, walls],
   )
   const displayWallPolygons = useMemo(() => {
-    if (!wallEndpointDraft) {
+    if (!wallEndpointDraft && !wallCurveDraft) {
       return wallPolygons
     }
 
-    const previewWall = displayWallById.get(wallEndpointDraft.wallId)
+    const previewWallId = wallEndpointDraft?.wallId ?? wallCurveDraft?.wallId
+    if (!previewWallId) {
+      return wallPolygons
+    }
+
+    const previewWall = displayWallById.get(previewWallId)
     if (!previewWall) {
       return wallPolygons
     }
@@ -4990,7 +5146,7 @@ export function FloorplanPanel() {
           }
         : entry,
     )
-  }, [displayWallById, wallEndpointDraft, wallPolygons])
+  }, [displayWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
 
   const openingsPolygons = useMemo(
     () =>
@@ -5046,6 +5202,29 @@ export function FloorplanPanel() {
         : entry,
     )
   }, [slabBoundaryDraft, slabPolygons])
+  const ceilingPolygons = useMemo(
+    () =>
+      ceilings.flatMap((ceiling) => {
+        const polygon = toFloorplanPolygon(ceiling.polygon)
+        if (polygon.length < 3) {
+          return []
+        }
+
+        const holes = (ceiling.holes ?? [])
+          .map((hole) => toFloorplanPolygon(hole))
+          .filter((hole) => hole.length >= 3)
+
+        return [
+          {
+            ceiling,
+            polygon,
+            holes,
+            path: formatPolygonPath(polygon, holes),
+          },
+        ]
+      }),
+    [ceilings],
+  )
   const zonePolygons = useMemo(
     () =>
       zones.flatMap((zone) => {
@@ -5176,6 +5355,13 @@ export function FloorplanPanel() {
 
     return floorplanItemEntries.find(({ item }) => item.id === selectedIds[0]) ?? null
   }, [floorplanItemEntries, selectedIds])
+  const selectedWallEntry = useMemo(() => {
+    if (selectedIds.length !== 1) {
+      return null
+    }
+
+    return displayWallPolygons.find(({ wall }) => wall.id === selectedIds[0]) ?? null
+  }, [displayWallPolygons, selectedIds])
   const selectedStairEntry = useMemo(() => {
     if (selectedIds.length !== 1) {
       return null
@@ -5192,6 +5378,13 @@ export function FloorplanPanel() {
 
     return displaySlabPolygons.find(({ slab }) => slab.id === selectedIds[0]) ?? null
   }, [displaySlabPolygons, selectedIds])
+  const selectedCeilingEntry = useMemo(() => {
+    if (selectedIds.length !== 1) {
+      return null
+    }
+
+    return ceilingPolygons.find(({ ceiling }) => ceiling.id === selectedIds[0]) ?? null
+  }, [ceilingPolygons, selectedIds])
   const selectedZoneEntry = useMemo(() => {
     if (!selectedZoneId) {
       return null
@@ -5212,12 +5405,23 @@ export function FloorplanPanel() {
   const isOpeningPlacementActive = isOpeningBuildActive || isOpeningMoveActive
   const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
   const isStairMoveActive = movingNode?.type === 'stair'
+  const isSlabMoveActive = movingNode?.type === 'slab'
+  const isCeilingMoveActive = movingNode?.type === 'ceiling'
+  const isWallMoveActive = movingNode?.type === 'wall'
+  const isWallCurveActive = curvingWall?.type === 'wall'
   const isItemPlacementPreviewActive =
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
   const isFloorItemMoveActive = movingNode?.type === 'item' && !movingNode.asset.attachTo
   const isFloorplanGridInteractionActive =
-    isStairBuildActive || isStairMoveActive || isFloorItemBuildActive || isFloorItemMoveActive
+    isStairBuildActive ||
+    isStairMoveActive ||
+    isSlabMoveActive ||
+    isCeilingMoveActive ||
+    isWallMoveActive ||
+    isWallCurveActive ||
+    isFloorItemBuildActive ||
+    isFloorItemMoveActive
   const floorplanPreviewStairSegment = useMemo(
     () =>
       StairSegmentNodeSchema.parse({
@@ -5398,6 +5602,56 @@ export function FloorplanPanel() {
     selectedIdSet,
     shouldShowPersistentWallEndpointHandles,
     wallEndpointDraft,
+  ])
+  const wallCurveHandles = useMemo(() => {
+    if (
+      isOpeningPlacementActive ||
+      movingNode ||
+      mode !== 'select' ||
+      floorplanSelectionTool !== 'click' ||
+      !selectedWallEntry
+    ) {
+      return []
+    }
+
+    const hasWallChildrenBlockingCurve = (selectedWallEntry.wall.children ?? []).some((childId) => {
+      const childNode = levelDescendantNodeById.get(childId as AnyNodeId)
+      if (!childNode) {
+        return false
+      }
+
+      if (childNode.type === 'door' || childNode.type === 'window') {
+        return true
+      }
+
+      if (childNode.type === 'item') {
+        const attachTo = childNode.asset?.attachTo
+        return attachTo === 'wall' || attachTo === 'wall-side'
+      }
+
+      return false
+    })
+    if (hasWallChildrenBlockingCurve) {
+      return []
+    }
+
+    const centerPoint = getWallMidpointHandlePoint(selectedWallEntry.wall)
+
+    return [
+      {
+        wall: selectedWallEntry.wall,
+        point: [centerPoint.x, centerPoint.y] as WallPlanPoint,
+        isActive: wallCurveDraft?.wallId === selectedWallEntry.wall.id,
+      },
+    ]
+  }, [
+    floorplanSelectionTool,
+    isOpeningPlacementActive,
+    mode,
+    movingNode,
+    levelDescendantNodeById,
+    selectedWallEntry,
+    wallCurveDraft,
   ])
   const slabVertexHandles = useMemo(() => {
     if (!shouldShowSlabBoundaryHandles) {
@@ -5716,6 +5970,27 @@ export function FloorplanPanel() {
         ? getFloorplanActionMenuPosition(selectedItemEntry.polygon, viewBox, surfaceSize)
         : null,
     [selectedItemEntry, surfaceSize, viewBox],
+  )
+  const selectedSlabActionMenuPosition = useMemo(
+    () =>
+      selectedSlabEntry
+        ? getFloorplanActionMenuPosition(selectedSlabEntry.polygon, viewBox, surfaceSize)
+        : null,
+    [selectedSlabEntry, surfaceSize, viewBox],
+  )
+  const selectedCeilingActionMenuPosition = useMemo(
+    () =>
+      selectedCeilingEntry
+        ? getFloorplanActionMenuPosition(selectedCeilingEntry.polygon, viewBox, surfaceSize)
+        : null,
+    [selectedCeilingEntry, surfaceSize, viewBox],
+  )
+  const selectedWallActionMenuPosition = useMemo(
+    () =>
+      selectedWallEntry
+        ? getFloorplanActionMenuPosition(selectedWallEntry.polygon, viewBox, surfaceSize)
+        : null,
+    [selectedWallEntry, surfaceSize, viewBox],
   )
   const selectedStairActionMenuPosition = useMemo(
     () =>
@@ -6198,6 +6473,11 @@ export function FloorplanPanel() {
     setWallEndpointDraft(null)
     setHoveredEndpointId(null)
   }, [])
+  const clearWallCurveDrag = useCallback(() => {
+    wallCurveDragRef.current = null
+    setWallCurveDraft(null)
+    setHoveredWallCurveHandleId(null)
+  }, [])
   const clearSiteBoundaryInteraction = useCallback(() => {
     setSiteVertexDragState(null)
     setSiteBoundaryDraft(null)
@@ -6219,11 +6499,13 @@ export function FloorplanPanel() {
     clearSlabPlacementDraft()
     clearZonePlacementDraft()
     clearWallEndpointDrag()
+    clearWallCurveDrag()
     clearSiteBoundaryInteraction()
     clearSlabBoundaryInteraction()
     clearZoneBoundaryInteraction()
     setCursorPoint(null)
   }, [
+    clearWallCurveDrag,
     clearSiteBoundaryInteraction,
     clearSlabBoundaryInteraction,
     clearSlabPlacementDraft,
@@ -6430,51 +6712,86 @@ export function FloorplanPanel() {
       }
 
       const dragState = wallEndpointDragRef.current
-      if (!dragState || event.pointerId !== dragState.pointerId) {
+      if (dragState && event.pointerId === dragState.pointerId) {
+        event.preventDefault()
+
+        const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (!planPoint) {
+          return
+        }
+
+        const snappedPoint = snapWallDraftPoint({
+          point: planPoint,
+          walls,
+          start: dragState.fixedPoint,
+          angleSnap: !shiftPressed,
+          ignoreWallIds: [dragState.wallId],
+        })
+
+        if (pointsEqual(dragState.currentPoint, snappedPoint)) {
+          return
+        }
+
+        dragState.currentPoint = snappedPoint
+        setCursorPoint(snappedPoint)
+        setWallEndpointDraft((previousDraft) => {
+          const nextDraft = buildWallEndpointDraft(
+            dragState.wallId,
+            dragState.endpoint,
+            dragState.fixedPoint,
+            snappedPoint,
+          )
+
+          if (
+            !(
+              previousDraft &&
+              pointsEqual(previousDraft.start, nextDraft.start) &&
+              pointsEqual(previousDraft.end, nextDraft.end)
+            )
+          ) {
+            sfxEmitter.emit('sfx:grid-snap')
+          }
+
+          return nextDraft
+        })
+        return
+      }
+
+      const curveDragState = wallCurveDragRef.current
+      if (!curveDragState || event.pointerId !== curveDragState.pointerId) {
         return
       }
 
       event.preventDefault()
 
       const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
-      if (!planPoint) {
+      const wall = wallById.get(curveDragState.wallId)
+      if (!(planPoint && wall)) {
         return
       }
 
-      const snappedPoint = snapWallDraftPoint({
-        point: planPoint,
-        walls,
-        start: dragState.fixedPoint,
-        angleSnap: !shiftPressed,
-        ignoreWallIds: [dragState.wallId],
-      })
-
-      if (pointsEqual(dragState.currentPoint, snappedPoint)) {
-        return
-      }
-
-      dragState.currentPoint = snappedPoint
-      setCursorPoint(snappedPoint)
-      setWallEndpointDraft((previousDraft) => {
-        const nextDraft = buildWallEndpointDraft(
-          dragState.wallId,
-          dragState.endpoint,
-          dragState.fixedPoint,
-          snappedPoint,
+      const chord = getWallChordFrame(wall)
+      const snappedPoint: WallPlanPoint = shiftPressed
+        ? planPoint
+        : [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const rawCurveOffset =
+        -(
+          (snappedPoint[0] - chord.midpoint.x) * chord.normal.x +
+          (snappedPoint[1] - chord.midpoint.y) * chord.normal.y
         )
+      const nextCurveOffset = normalizeWallCurveOffset(
+        wall,
+        shiftPressed ? rawCurveOffset : snapToHalf(rawCurveOffset),
+      )
 
-        if (
-          !(
-            previousDraft &&
-            pointsEqual(previousDraft.start, nextDraft.start) &&
-            pointsEqual(previousDraft.end, nextDraft.end)
-          )
-        ) {
-          sfxEmitter.emit('sfx:grid-snap')
-        }
+      if (curveDragState.currentCurveOffset === nextCurveOffset) {
+        return
+      }
 
-        return nextDraft
-      })
+      curveDragState.currentCurveOffset = nextCurveOffset
+      setWallCurveDraft({ wallId: wall.id, curveOffset: nextCurveOffset })
+      setCursorPoint(snappedPoint)
+      sfxEmitter.emit('sfx:grid-snap')
     }
 
     const commitGuideInteraction = (event: PointerEvent) => {
@@ -6559,6 +6876,26 @@ export function FloorplanPanel() {
       setCursorPoint(null)
     }
 
+    const commitWallCurveDrag = (event: PointerEvent) => {
+      const dragState = wallCurveDragRef.current
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return
+      }
+
+      const wall = wallById.get(dragState.wallId)
+      if (wall) {
+        const nextCurveOffset = normalizeWallCurveOffset(wall, dragState.currentCurveOffset)
+        const currentCurveOffset = normalizeWallCurveOffset(wall, wall.curveOffset ?? 0)
+        if (nextCurveOffset !== currentCurveOffset) {
+          updateNode(wall.id, { curveOffset: nextCurveOffset })
+          sfxEmitter.emit('sfx:structure-build')
+        }
+      }
+
+      clearWallCurveDrag()
+      setCursorPoint(null)
+    }
+
     const cancelWallEndpointDrag = (event: PointerEvent) => {
       const dragState = wallEndpointDragRef.current
       if (!dragState || event.pointerId !== dragState.pointerId) {
@@ -6569,11 +6906,23 @@ export function FloorplanPanel() {
       setCursorPoint(null)
     }
 
+    const cancelWallCurveDrag = (event: PointerEvent) => {
+      const dragState = wallCurveDragRef.current
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return
+      }
+
+      clearWallCurveDrag()
+      setCursorPoint(null)
+    }
+
     window.addEventListener('pointermove', handleWindowPointerMove)
     window.addEventListener('pointerup', commitGuideInteraction)
     window.addEventListener('pointercancel', cancelGuideInteraction)
     window.addEventListener('pointerup', commitWallEndpointDrag)
     window.addEventListener('pointercancel', cancelWallEndpointDrag)
+    window.addEventListener('pointerup', commitWallCurveDrag)
+    window.addEventListener('pointercancel', cancelWallCurveDrag)
 
     return () => {
       window.removeEventListener('pointermove', handleWindowPointerMove)
@@ -6581,8 +6930,11 @@ export function FloorplanPanel() {
       window.removeEventListener('pointercancel', cancelGuideInteraction)
       window.removeEventListener('pointerup', commitWallEndpointDrag)
       window.removeEventListener('pointercancel', cancelWallEndpointDrag)
+      window.removeEventListener('pointerup', commitWallCurveDrag)
+      window.removeEventListener('pointercancel', cancelWallCurveDrag)
     }
   }, [
+    clearWallCurveDrag,
     clearGuideInteraction,
     clearWallEndpointDrag,
     getSvgPointFromClientPoint,
@@ -6596,7 +6948,8 @@ export function FloorplanPanel() {
 
   useEffect(() => {
     clearWallEndpointDrag()
-  }, [clearWallEndpointDrag, levelId])
+    clearWallCurveDrag()
+  }, [clearWallCurveDrag, clearWallEndpointDrag, levelId])
 
   useEffect(() => {
     if (shouldShowSiteBoundaryHandles) {
@@ -7066,7 +7419,9 @@ export function FloorplanPanel() {
       }
 
       if (isOpeningPlacementActive) {
-        const closest = findClosestWallPoint(planPoint, walls)
+        const closest = findClosestWallPoint(planPoint, walls, {
+          canUseWall: (wall) => !isCurvedWall(wall),
+        })
         if (closest) {
           const dx = closest.wall.end[0] - closest.wall.start[0]
           const dz = closest.wall.end[1] - closest.wall.start[1]
@@ -7286,7 +7641,9 @@ export function FloorplanPanel() {
       }
 
       if (isOpeningPlacementActive) {
-        const closest = findClosestWallPoint(planPoint, walls)
+        const closest = findClosestWallPoint(planPoint, walls, {
+          canUseWall: (wall) => !isCurvedWall(wall),
+        })
         if (closest) {
           const dx = closest.wall.end[0] - closest.wall.start[0]
           const dz = closest.wall.end[1] - closest.wall.start[1]
@@ -7373,7 +7730,9 @@ export function FloorplanPanel() {
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isWallBuildActive,
+      isWindowBuildActive,
       isZoneBuildActive,
+      movingOpeningType,
       setSelectedReferenceId,
       setSelection,
       shiftPressed,
@@ -8095,6 +8454,96 @@ export function FloorplanPanel() {
     },
     [deleteNode, selectedItemEntry, setSelection],
   )
+  const handleSelectedWallMove = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const wall = selectedWallEntry?.wall
+      if (!wall) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(wall)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedWallEntry, setMovingNode, setSelection],
+  )
+  const handleSelectedWallDelete = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const wall = selectedWallEntry?.wall
+      if (!wall) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-delete')
+      deleteNode(wall.id as AnyNodeId)
+      setSelection({ selectedIds: [] })
+    },
+    [deleteNode, selectedWallEntry, setSelection],
+  )
+  const handleSelectedSlabMove = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const slab = selectedSlabEntry?.slab
+      if (!slab) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(slab)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedSlabEntry, setMovingNode, setSelection],
+  )
+  const handleSelectedSlabDelete = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const slab = selectedSlabEntry?.slab
+      if (!slab) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-delete')
+      deleteNode(slab.id as AnyNodeId)
+      setSelection({ selectedIds: [] })
+    },
+    [deleteNode, selectedSlabEntry, setSelection],
+  )
+  const handleSelectedCeilingMove = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const ceiling = selectedCeilingEntry?.ceiling
+      if (!ceiling) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(ceiling)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedCeilingEntry, setMovingNode, setSelection],
+  )
+  const handleSelectedCeilingDelete = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const ceiling = selectedCeilingEntry?.ceiling
+      if (!ceiling) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-delete')
+      deleteNode(ceiling.id as AnyNodeId)
+      setSelection({ selectedIds: [] })
+    },
+    [deleteNode, selectedCeilingEntry, setSelection],
+  )
   const handleStairDoubleClick = useCallback(
     (stair: StairNode, event: ReactMouseEvent<SVGElement>) => {
       emitFloorplanNodeClick(stair.id, 'double-click', event)
@@ -8303,6 +8752,45 @@ export function FloorplanPanel() {
       setCursorPoint(movingPoint)
     },
     [clearWallPlacementDraft, handleWallPlacementPoint, handleWallSelect, isWallBuildActive, mode],
+  )
+  const handleWallCurvePointerDown = useCallback(
+    (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      setHoveredWallCurveHandleId(null)
+
+      if (isWallBuildActive || mode !== 'select') {
+        return
+      }
+
+      clearWallPlacementDraft()
+      handleWallSelect(wall)
+      clearWallEndpointDrag()
+
+      const currentCurveOffset = normalizeWallCurveOffset(wall, wall.curveOffset ?? 0)
+      wallCurveDragRef.current = {
+        pointerId: event.pointerId,
+        wallId: wall.id,
+        currentCurveOffset,
+      }
+      setWallCurveDraft({
+        wallId: wall.id,
+        curveOffset: currentCurveOffset,
+      })
+      const center = getWallMidpointHandlePoint(wall)
+      setCursorPoint([center.x, center.y])
+    },
+    [
+      clearWallEndpointDrag,
+      clearWallPlacementDraft,
+      handleWallSelect,
+      isWallBuildActive,
+      mode,
+    ],
   )
   const handleSlabVertexPointerDown = useCallback(
     (slabId: SlabNode['id'], vertexIndex: number, event: ReactPointerEvent<SVGCircleElement>) => {
@@ -8662,12 +9150,21 @@ export function FloorplanPanel() {
         !zoneVertexDragState
       ) {
         const rect = event.currentTarget.getBoundingClientRect()
-        setFloorplanCursorPosition({
+        const nextPosition = {
           x: event.clientX - rect.left,
           y: event.clientY - rect.top,
-        })
+        }
+        setFloorplanCursorPosition((currentPosition) =>
+          currentPosition &&
+          currentPosition.x === nextPosition.x &&
+          currentPosition.y === nextPosition.y
+            ? currentPosition
+            : nextPosition,
+        )
       } else {
-        setFloorplanCursorPosition(null)
+        setFloorplanCursorPosition((currentPosition) =>
+          currentPosition === null ? currentPosition : null,
+        )
       }
 
       handlePointerMove(event)
@@ -9230,7 +9727,7 @@ export function FloorplanPanel() {
             rotationModifierPressed={rotationModifierPressed}
           />
         )}
-        {selectedItemActionMenuPosition && isFloorplanHovered && !movingNode && (
+        {selectedItemActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
           <div
             className="absolute z-30"
             style={{
@@ -9248,7 +9745,58 @@ export function FloorplanPanel() {
             />
           </div>
         )}
-        {selectedOpeningActionMenuPosition && isFloorplanHovered && !movingNode && (
+        {selectedWallActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
+          <div
+            className="absolute z-30"
+            style={{
+              left: selectedWallActionMenuPosition.x,
+              top: selectedWallActionMenuPosition.y,
+              transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y}px))`,
+            }}
+          >
+            <NodeActionMenu
+              onDelete={handleSelectedWallDelete}
+              onMove={handleSelectedWallMove}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+            />
+          </div>
+        )}
+        {selectedSlabActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
+          <div
+            className="absolute z-30"
+            style={{
+              left: selectedSlabActionMenuPosition.x,
+              top: selectedSlabActionMenuPosition.y,
+              transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y}px))`,
+            }}
+          >
+            <NodeActionMenu
+              onDelete={handleSelectedSlabDelete}
+              onMove={handleSelectedSlabMove}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+            />
+          </div>
+        )}
+        {selectedCeilingActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
+          <div
+            className="absolute z-30"
+            style={{
+              left: selectedCeilingActionMenuPosition.x,
+              top: selectedCeilingActionMenuPosition.y,
+              transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y}px))`,
+            }}
+          >
+            <NodeActionMenu
+              onDelete={handleSelectedCeilingDelete}
+              onMove={handleSelectedCeilingMove}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+            />
+          </div>
+        )}
+        {selectedOpeningActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
           <div
             className="absolute z-30"
             style={{
@@ -9266,7 +9814,7 @@ export function FloorplanPanel() {
             />
           </div>
         )}
-        {selectedStairActionMenuPosition && isFloorplanHovered && !movingNode && (
+        {selectedStairActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
           <div
             className="absolute z-30"
             style={{
@@ -9541,6 +10089,13 @@ export function FloorplanPanel() {
               hoveredEndpointId={hoveredEndpointId}
               onEndpointHoverChange={setHoveredEndpointId}
               onWallEndpointPointerDown={handleWallEndpointPointerDown}
+              palette={palette}
+            />
+            <FloorplanWallCurveHandleLayer
+              curveHandles={wallCurveHandles}
+              hoveredHandleId={hoveredWallCurveHandleId}
+              onHandleHoverChange={setHoveredWallCurveHandleId}
+              onWallCurvePointerDown={handleWallCurvePointerDown}
               palette={palette}
             />
 

@@ -1,4 +1,5 @@
 import type { WallNode } from '../../schema'
+import { getWallSurfacePolygon, isCurvedWall } from './wall-curve'
 import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
 
 export const DEFAULT_WALL_THICKNESS = 0.1
@@ -46,6 +47,15 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
   const pEndRight: Point2D = endJunction?.left || {
     x: wallEnd.x - nUnit.x * halfT,
     y: wallEnd.y - nUnit.y * halfT,
+  }
+
+  if (isCurvedWall(wallNode)) {
+    return getWallSurfacePolygon(wallNode, 24, {
+      endLeft: pEndLeft,
+      endRight: pEndRight,
+      startLeft: pStartLeft,
+      startRight: pStartRight,
+    })
   }
 
   const polygon: Point2D[] = [pStartRight, pEndRight]
