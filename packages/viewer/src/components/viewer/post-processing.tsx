@@ -52,6 +52,7 @@ const PostProcessingPasses = () => {
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
+  const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
@@ -76,6 +77,11 @@ const PostProcessingPasses = () => {
   const [pipelineVersion, setPipelineVersion] = useState(0)
 
   const requestPipelineRebuild = useCallback(() => {
+    if (rebuildTimeoutRef.current !== null) {
+      clearTimeout(rebuildTimeoutRef.current)
+      rebuildTimeoutRef.current = null
+    }
+
     setPipelineVersion((v) => v + 1)
   }, [])
 
@@ -108,13 +114,33 @@ const PostProcessingPasses = () => {
     }
   }, [renderer])
 
-  // Reset retry count when project changes
+  // Reset retry state when project changes
   useEffect(() => {
+    // Intentionally touch projectId so the effect reruns on project switches.
+    void projectId
     retryCountRef.current = 0
+    if (rebuildTimeoutRef.current !== null) {
+      clearTimeout(rebuildTimeoutRef.current)
+      rebuildTimeoutRef.current = null
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    return () => {
+      if (rebuildTimeoutRef.current !== null) {
+        clearTimeout(rebuildTimeoutRef.current)
+        rebuildTimeoutRef.current = null
+      }
+    }
   }, [])
 
   // Build / rebuild the post-processing pipeline
   useEffect(() => {
+    // Intentionally touch these so React/biome treat project switches and retry bumps
+    // as explicit rebuild triggers instead of accidental extra dependencies.
+    void projectId
+    void pipelineVersion
+
     if (!(renderer && scene && camera && isInitialized)) {
       return
     }
@@ -248,6 +274,7 @@ const PostProcessingPasses = () => {
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
+      retryCountRef.current = 0
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error(
@@ -266,7 +293,16 @@ const PostProcessingPasses = () => {
       }
       renderPipelineRef.current = null
     }
-  }, [renderer, scene, camera, hoverHighlightMode, isInitialized, zoneLayers])
+  }, [
+    renderer,
+    scene,
+    camera,
+    hoverHighlightMode,
+    isInitialized,
+    zoneLayers,
+    projectId,
+    pipelineVersion,
+  ])
 
   useFrame((_, delta) => {
     // Animate background colour toward the current theme target (same lerp as AnimatedBackground)
@@ -275,6 +311,14 @@ const PostProcessingPasses = () => {
     bgUniform.current.value.copy(bgCurrent.current)
 
     if (hasPipelineErrorRef.current || !renderPipelineRef.current) {
+      try {
+        if ((renderer as any).setClearAlpha) {
+          ;(renderer as any).setClearAlpha(1)
+        }
+        ;(renderer as any).render(scene, camera)
+      } catch (fallbackError) {
+        console.error('[viewer] Fallback render failed.', fallbackError)
+      }
       return
     }
 
@@ -297,7 +341,10 @@ const PostProcessingPasses = () => {
         console.warn(
           `[viewer] Scheduling post-processing rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
         )
-        setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
+        if (rebuildTimeoutRef.current !== null) {
+          clearTimeout(rebuildTimeoutRef.current)
+        }
+        rebuildTimeoutRef.current = setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
       } else {
         console.error(
           '[viewer] Post-processing retries exhausted. Rendering without post FX for this session.',
