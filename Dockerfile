@@ -21,15 +21,17 @@ RUN bun install --frozen-lockfile
 FROM oven/bun:1.3.0-alpine AS builder
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/editor/node_modules ./apps/editor/node_modules
+# Copy all node_modules from deps stage (root + any per-workspace hoisted dirs)
+COPY --from=deps /app/ .
+
+# Copy full source on top (overwrites package.json stubs from deps)
 COPY . .
 
 # Skip runtime env validation at build time — vars injected at runtime
 ENV SKIP_ENV_VALIDATION=1
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN bun run build --filter=editor
+RUN bun run build --filter=editor...
 
 # Stage 3: runner
 FROM node:22-alpine AS runner
