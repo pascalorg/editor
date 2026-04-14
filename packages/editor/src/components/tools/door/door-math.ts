@@ -70,7 +70,7 @@ export function hasWallChildOverlap(
   const newLeft = clampedX - halfW
   const newRight = clampedX + halfW
 
-  for (const childId of wallNode.children) {
+  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
     if (childId === ignoreId) continue
     const child = nodes[childId as AnyNodeId]
     if (!child) continue

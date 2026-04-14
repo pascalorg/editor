@@ -8063,6 +8063,7 @@ export function FloorplanPanel() {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
       isNew: true,
     }
+    cloned.children = []
 
     try {
       const duplicate = ItemNodeSchema.parse(cloned)
@@ -8191,8 +8192,8 @@ export function FloorplanPanel() {
     delete cloned.id
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
-      isNew: true,
     }
+    delete (cloned.metadata as Record<string, unknown>).isNew
 
     const nextPosition =
       Array.isArray(cloned.position) && cloned.position.length >= 3
@@ -8207,9 +8208,11 @@ export function FloorplanPanel() {
 
     try {
       const duplicate = StairNodeSchema.parse(cloned)
-      useScene.getState().createNode(duplicate, stair.parentId as AnyNodeId)
-
       const nodesState = useScene.getState().nodes
+      const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
+        { node: duplicate, parentId: stair.parentId as AnyNodeId },
+      ]
+
       for (const childId of stair.children ?? []) {
         const childNode = nodesState[childId]
         if (childNode?.type !== 'stair-segment') {
@@ -8222,19 +8225,20 @@ export function FloorplanPanel() {
           ...(typeof childClone.metadata === 'object' && childClone.metadata !== null
             ? childClone.metadata
             : {}),
-          isNew: true,
         }
+        delete (childClone.metadata as Record<string, unknown>).isNew
 
         const childDuplicate = StairSegmentNodeSchema.parse(childClone)
-        useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
+        createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
       }
 
-      setMovingNode(duplicate)
-      setSelection({ selectedIds: [] })
+      useScene.getState().createNodes(createOps)
+
+      setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
     } catch (error) {
       console.error('Failed to duplicate stair', error)
     }
-  }, [selectedStairEntry, setMovingNode, setSelection])
+  }, [selectedStairEntry, setSelection])
   const handleSelectedStairDuplicate = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()

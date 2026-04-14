@@ -8,11 +8,11 @@ export const ItemTool: React.FC = () => {
   const draftNode = useDraftNode()
 
   const cursor = usePlacementCoordinator({
-    asset: selectedItem!,
+    asset: selectedItem,
     draftNode,
     initDraft: (gridPosition) => {
-      if (!selectedItem?.attachTo) {
-        draftNode.create(gridPosition, selectedItem!)
+      if (selectedItem && !selectedItem.attachTo) {
+        draftNode.create(gridPosition, selectedItem)
       }
     },
     onCommitted: () => {

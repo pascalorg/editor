@@ -304,15 +304,18 @@ function updateMergedStairGeometry(
   const mergedMesh = group.getObjectByName('merged-stair') as THREE.Mesh | undefined
   if (!mergedMesh) return
 
+  if (stairNode.stairType === 'curved' || stairNode.stairType === 'spiral') {
+    replaceMeshGeometry(mergedMesh, createEmptyGeometry())
+    return
+  }
+
   const children = stairNode.children ?? []
   const segments = children
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
 
   if (segments.length === 0) {
-    mergedMesh.geometry.dispose()
-    mergedMesh.geometry = new THREE.BufferGeometry()
-    mergedMesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    replaceMeshGeometry(mergedMesh, createEmptyGeometry())
     return
   }
 
@@ -337,11 +340,8 @@ function updateMergedStairGeometry(
     geometries.push(geo)
   }
 
-  const merged = mergeGeometries(geometries, false)
-  if (merged) {
-    mergedMesh.geometry.dispose()
-    mergedMesh.geometry = merged
-  }
+  const merged = mergeGeometries(geometries, false) ?? createEmptyGeometry()
+  replaceMeshGeometry(mergedMesh, merged)
 
   // Dispose individual geometries
   for (const geo of geometries) {
@@ -414,6 +414,548 @@ function rotateXZ(x: number, z: number, angle: number): [number, number] {
   const cos = Math.cos(angle)
   const sin = Math.sin(angle)
   return [x * cos + z * sin, -x * sin + z * cos]
+}
+
+function createEmptyGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  return geometry
+}
+
+function replaceMeshGeometry(mesh: THREE.Mesh, geometry: THREE.BufferGeometry) {
+  mesh.geometry.dispose()
+  mesh.geometry = geometry
+}
+
+type StairRailSide = 'left' | 'right'
+type StairRailPathSide = StairRailSide | 'front'
+type StairRailSidePath = {
+  side: StairRailPathSide
+  points: THREE.Vector3[]
+}
+type StairSegmentRailPath = {
+  segment: StairSegmentNode
+  sidePaths: StairRailSidePath[]
+  connectFromPrevious: boolean
+}
+type StairRailLayout = {
+  center: [number, number]
+  elevation: number
+  rotation: number
+  segment: StairSegmentNode
+}
+
+function generateStairRailingGeometry(
+  stairNode: StairNode,
+  segments: StairSegmentNode[],
+  transforms: SegmentTransform[],
+): THREE.BufferGeometry {
+  const railingMode = stairNode.railingMode ?? 'none'
+  if (railingMode === 'none') {
+    return createEmptyGeometry()
+  }
+
+  const railHeight = Math.max(0.5, stairNode.railingHeight ?? 0.92)
+  const midRailHeight = Math.max(railHeight * 0.45, 0.35)
+  const railRadius = 0.022
+  const postRadius = 0.018
+  const inset = 0.06
+  const landingInset = 0.08
+  const geometries: THREE.BufferGeometry[] = []
+
+  const segmentRailPaths = buildStairRailPaths(segments, transforms, railingMode, inset, landingInset)
+
+  for (const segmentRailPath of segmentRailPaths) {
+    for (const sidePath of segmentRailPath.sidePaths) {
+      const points = sidePath.points
+      if (points.length === 0) continue
+
+      geometries.push(...buildBalusterGeometries(points, railHeight, postRadius))
+      geometries.push(...buildOffsetRailSegmentGeometries(points, railHeight, railRadius))
+      geometries.push(
+        ...buildOffsetRailSegmentGeometries(points, midRailHeight, railRadius * 0.8),
+      )
+    }
+  }
+
+  for (let index = 1; index < segmentRailPaths.length; index++) {
+    const previousPath = segmentRailPaths[index - 1]
+    const currentPath = segmentRailPaths[index]
+    if (!(previousPath && currentPath && currentPath.connectFromPrevious)) continue
+    if (previousPath.segment.segmentType === 'landing') continue
+
+    for (const sidePath of currentPath.sidePaths) {
+      if (currentPath.segment.segmentType === 'landing') continue
+      const currentPoint = sidePath.points[0]
+      if (!currentPoint) continue
+
+      const previousSidePath = [...previousPath.sidePaths]
+        .map((entry) => ({
+          entry,
+          distance: entry.points.length
+            ? entry.points[entry.points.length - 1]!.distanceTo(currentPoint)
+            : Number.POSITIVE_INFINITY,
+        }))
+        .sort((left, right) => left.distance - right.distance)[0]?.entry
+
+      const previousPoint =
+        previousSidePath && previousSidePath.points.length > 0
+          ? previousSidePath.points[previousSidePath.points.length - 1]
+          : null
+
+      if (!(previousPoint && currentPoint)) continue
+
+      const connectorPoints = [previousPoint, currentPoint]
+      geometries.push(...buildOffsetRailSegmentGeometries(connectorPoints, railHeight, railRadius))
+      geometries.push(
+        ...buildOffsetRailSegmentGeometries(connectorPoints, midRailHeight, railRadius * 0.8),
+      )
+    }
+  }
+
+  const merged = mergeGeometries(geometries, false) ?? createEmptyGeometry()
+  for (const geometry of geometries) {
+    geometry.dispose()
+  }
+
+  return merged
+}
+
+function buildStairRailPaths(
+  segments: StairSegmentNode[],
+  transforms: SegmentTransform[],
+  railingMode: 'left' | 'right' | 'both',
+  inset: number,
+  landingInset: number,
+): StairSegmentRailPath[] {
+  const layouts = computeStairRailLayouts(segments, transforms)
+
+  if (railingMode === 'both') {
+    const isStraightLineDoubleLandingLayout =
+      segments.length === 4 &&
+      segments[0]?.segmentType === 'stair' &&
+      segments[1]?.segmentType === 'landing' &&
+      segments[2]?.segmentType === 'stair' &&
+      segments[2]?.attachmentSide === 'front' &&
+      segments[3]?.segmentType === 'landing' &&
+      segments[3]?.attachmentSide === 'front'
+
+    return layouts.map((layout, index) => {
+      const segment = layout.segment
+      const previousSegment = index > 0 ? segments[index - 1] : undefined
+      const nextSegment = index < segments.length - 1 ? segments[index + 1] : undefined
+      const hideLandingRailing =
+        segment.segmentType === 'landing' &&
+        previousSegment?.segmentType === 'stair' &&
+        nextSegment?.segmentType === 'stair'
+      const visualTurnSide = nextSegment?.attachmentSide
+      const sideCandidates =
+        hideLandingRailing
+          ? visualTurnSide === 'left'
+            ? (['front', 'right'] as const)
+            : visualTurnSide === 'right'
+              ? (['front', 'left'] as const)
+              : (['left', 'right'] as const)
+          : segment.segmentType === 'landing'
+            ? nextSegment?.segmentType === 'landing' && visualTurnSide === 'left'
+              ? (['front', 'right'] as const)
+              : nextSegment?.segmentType === 'landing' && visualTurnSide === 'right'
+                ? (['front', 'left'] as const)
+                : visualTurnSide === 'left'
+                  ? (['right'] as const)
+                  : visualTurnSide === 'right'
+                    ? (['left'] as const)
+                    : (['left', 'right'] as const)
+            : (['left', 'right'] as const)
+      const sidePaths = sideCandidates
+        .map((side) =>
+          buildSegmentRailPath(
+            layout,
+            side,
+            previousSegment,
+            nextSegment,
+            inset,
+            landingInset,
+          ),
+        )
+        .filter((entry): entry is StairRailSidePath => entry !== null)
+
+      return {
+        segment,
+          sidePaths:
+          isStraightLineDoubleLandingLayout && index === 1
+            ? ((['left', 'right'] as const)
+                .map((side) =>
+                  buildSegmentRailPath(
+                    layout,
+                    side,
+                    previousSegment,
+                    nextSegment,
+                    inset,
+                    landingInset,
+                  ),
+                )
+                .filter((entry): entry is StairRailSidePath => entry !== null))
+            : sidePaths,
+        connectFromPrevious:
+          index > 0 &&
+          !(previousSegment?.segmentType === 'landing' && segment.segmentType === 'landing'),
+      }
+    })
+  }
+
+  const isStraightLineDoubleLandingLayout =
+    segments.length === 4 &&
+    segments[0]?.segmentType === 'stair' &&
+    segments[1]?.segmentType === 'landing' &&
+    segments[2]?.segmentType === 'stair' &&
+    segments[2]?.attachmentSide === 'front' &&
+    segments[3]?.segmentType === 'landing' &&
+    segments[3]?.attachmentSide === 'front'
+
+  const resolved: StairSegmentRailPath[] = []
+  layouts.forEach((layout, index) => {
+    const segment = layout.segment
+    const previousSegment = index > 0 ? segments[index - 1] : undefined
+    const nextSegment = index < segments.length - 1 ? segments[index + 1] : undefined
+    const nextAttachmentSide = nextSegment?.attachmentSide
+    const isMiddleLandingBetweenFlights =
+      segment.segmentType === 'landing' &&
+      previousSegment?.segmentType === 'stair' &&
+      nextSegment?.segmentType === 'stair'
+    const suppressLandingRailing =
+      segment.segmentType === 'landing' &&
+      nextSegment?.segmentType === 'landing' &&
+      nextAttachmentSide === railingMode
+    const landingContinuesOnPreferredSide =
+      segment.segmentType === 'landing'
+        ? nextAttachmentSide == null ||
+          nextAttachmentSide === 'front' ||
+          nextAttachmentSide === railingMode
+        : true
+
+    const sidePaths =
+      suppressLandingRailing
+        ? []
+        : segment.segmentType !== 'landing'
+          ? [
+              buildSegmentRailPath(
+                layout,
+                railingMode,
+                previousSegment,
+                nextSegment,
+                inset,
+                landingInset,
+              ),
+            ]
+          : isStraightLineDoubleLandingLayout
+            ? [
+                buildSegmentRailPath(
+                  layout,
+                  railingMode,
+                  previousSegment,
+                  nextSegment,
+                  inset,
+                  landingInset,
+                ),
+              ]
+            : isMiddleLandingBetweenFlights && railingMode === 'left'
+              ? nextAttachmentSide === 'right'
+                ? [
+                    buildSegmentRailPath(
+                      layout,
+                      'front',
+                      previousSegment,
+                      nextSegment,
+                      inset,
+                      landingInset,
+                    ),
+                    buildSegmentRailPath(
+                      layout,
+                      'left',
+                      previousSegment,
+                      nextSegment,
+                      inset,
+                      landingInset,
+                    ),
+                  ]
+                : []
+              : isMiddleLandingBetweenFlights && railingMode === 'right'
+                ? nextAttachmentSide === 'left'
+                  ? [
+                      buildSegmentRailPath(
+                        layout,
+                        'front',
+                        previousSegment,
+                        nextSegment,
+                        inset,
+                        landingInset,
+                      ),
+                      buildSegmentRailPath(
+                        layout,
+                        'right',
+                        previousSegment,
+                        nextSegment,
+                        inset,
+                        landingInset,
+                      ),
+                    ]
+                  : []
+                : nextSegment?.segmentType === 'landing' &&
+                    nextAttachmentSide != null &&
+                    nextAttachmentSide !== 'front' &&
+                    nextAttachmentSide !== railingMode
+                  ? [
+                      buildSegmentRailPath(
+                        layout,
+                        'front',
+                        previousSegment,
+                        nextSegment,
+                        inset,
+                        landingInset,
+                      ),
+                      buildSegmentRailPath(
+                        layout,
+                        railingMode,
+                        previousSegment,
+                        nextSegment,
+                        inset,
+                        landingInset,
+                      ),
+                    ]
+                  : [
+                      buildSegmentRailPath(
+                        layout,
+                        railingMode,
+                        previousSegment,
+                        nextSegment,
+                        inset,
+                        landingInset,
+                      ),
+                    ]
+
+    resolved.push({
+      segment,
+      sidePaths: sidePaths.filter((entry): entry is StairRailSidePath => entry !== null),
+      connectFromPrevious:
+        index > 0 &&
+        !suppressLandingRailing &&
+        sidePaths.length > 0 &&
+        (segment.segmentType === 'landing' ? landingContinuesOnPreferredSide : true),
+    })
+  })
+
+  return resolved
+}
+
+function computeStairRailLayouts(
+  segments: StairSegmentNode[],
+  transforms: SegmentTransform[],
+): StairRailLayout[] {
+  return segments.map((segment, index) => {
+    const transform = transforms[index]!
+    const [centerOffsetX, centerOffsetZ] = rotateXZ(0, segment.length / 2, transform.rotation)
+
+    return {
+      center: [transform.position[0] + centerOffsetX, transform.position[2] + centerOffsetZ],
+      elevation: transform.position[1],
+      rotation: transform.rotation,
+      segment,
+    }
+  })
+}
+
+function buildSegmentRailPath(
+  layout: StairRailLayout,
+  side: StairRailPathSide,
+  previousSegment: StairSegmentNode | undefined,
+  nextSegment: StairSegmentNode | undefined,
+  inset: number,
+  landingInset: number,
+): StairRailSidePath | null {
+  const segment = layout.segment
+  const segmentSteps = Math.max(1, segment.segmentType === 'landing' ? 1 : segment.stepCount)
+  const segmentStepDepth = segment.length / segmentSteps
+  const segmentStepHeight = segment.segmentType === 'landing' ? 0 : segment.height / segmentSteps
+  const segmentTopThickness = getSegmentTopThickness(segment)
+  const flightSideOffset =
+    side === 'left' ? segment.width / 2 - 0.045 : -segment.width / 2 + 0.045
+  const flightStartX =
+    previousSegment?.segmentType === 'landing' ? -segment.length / 2 + landingInset : -segment.length / 2
+  const flightEndX =
+    nextSegment?.segmentType === 'landing' ? segment.length / 2 - landingInset : segment.length / 2
+
+  if (segment.segmentType === 'landing') {
+    return buildLandingRailPathFromScratch(
+      layout,
+      side,
+      previousSegment,
+      nextSegment,
+      segmentTopThickness,
+      landingInset,
+    )
+  }
+
+  return {
+    side,
+    points: [
+      ...(previousSegment?.segmentType === 'landing'
+        ? []
+        : [
+            toRailLayoutWorldPoint(layout, flightStartX, segmentTopThickness, flightSideOffset),
+          ]),
+      ...Array.from({ length: segmentSteps }).map((_, index) =>
+        toRailLayoutWorldPoint(
+          layout,
+          -segment.length / 2 + segmentStepDepth * index + segmentStepDepth / 2,
+          segmentStepHeight * (index + 1),
+          flightSideOffset,
+        ),
+      ),
+      ...(nextSegment?.segmentType === 'landing'
+        ? []
+        : [
+            toRailLayoutWorldPoint(layout, flightEndX, segment.height, flightSideOffset),
+          ]),
+    ],
+  }
+}
+
+function buildLandingRailPathFromScratch(
+  layout: StairRailLayout,
+  side: StairRailPathSide,
+  previousSegment: StairSegmentNode | undefined,
+  nextSegment: StairSegmentNode | undefined,
+  topY: number,
+  inset: number,
+): StairRailSidePath | null {
+  const segment = layout.segment
+  const backX = -segment.length / 2 + inset
+  const frontX = segment.length / 2 - inset
+  const leftZ = segment.width / 2 - inset
+  const rightZ = -segment.width / 2 + inset
+
+  const edgePoints =
+    side === 'left'
+      ? ([
+          toRailLayoutWorldPoint(layout, backX, topY, leftZ),
+          toRailLayoutWorldPoint(layout, frontX, topY, leftZ),
+        ] as THREE.Vector3[])
+      : side === 'right'
+        ? ([
+            toRailLayoutWorldPoint(layout, backX, topY, rightZ),
+            toRailLayoutWorldPoint(layout, frontX, topY, rightZ),
+          ] as THREE.Vector3[])
+        : ([
+            // When the next flight turns, rail the visible leading edge nearest the turn opening.
+            toRailLayoutWorldPoint(
+              layout,
+              previousSegment?.segmentType === 'stair' &&
+                nextSegment?.attachmentSide &&
+                nextSegment.attachmentSide !== 'front'
+                ? backX
+                : frontX,
+              topY,
+              leftZ,
+            ),
+            toRailLayoutWorldPoint(
+              layout,
+              previousSegment?.segmentType === 'stair' &&
+                nextSegment?.attachmentSide &&
+                nextSegment.attachmentSide !== 'front'
+                ? backX
+                : frontX,
+              topY,
+              rightZ,
+            ),
+          ] as THREE.Vector3[])
+
+  return {
+    side,
+    points: edgePoints,
+  }
+}
+
+function toRailLayoutWorldPoint(
+  layout: StairRailLayout,
+  localX: number,
+  localY: number,
+  localZ: number,
+): THREE.Vector3 {
+  const [offsetX, offsetZ] = rotateXZ(localZ, localX, layout.rotation)
+  return new THREE.Vector3(
+    layout.center[0] + offsetX,
+    layout.elevation + localY,
+    layout.center[1] + offsetZ,
+  )
+}
+
+function buildOffsetRailSegmentGeometries(
+  points: THREE.Vector3[],
+  heightOffset: number,
+  radius: number,
+): THREE.BufferGeometry[] {
+  const geometries: THREE.BufferGeometry[] = []
+
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]
+    const end = points[index + 1]
+    if (!(start && end)) continue
+
+    const segmentGeometry = createCylinderBetweenPoints(
+      start.clone().add(new THREE.Vector3(0, heightOffset, 0)),
+      end.clone().add(new THREE.Vector3(0, heightOffset, 0)),
+      radius,
+      8,
+    )
+    if (segmentGeometry) {
+      geometries.push(segmentGeometry)
+    }
+  }
+
+  return geometries
+}
+
+function buildBalusterGeometries(
+  points: THREE.Vector3[],
+  height: number,
+  radius: number,
+): THREE.BufferGeometry[] {
+  const geometries: THREE.BufferGeometry[] = []
+
+  for (const point of points) {
+    const geometry = new THREE.CylinderGeometry(radius, radius, Math.max(height, 0.05), 8)
+    geometry.translate(point.x, point.y + height / 2, point.z)
+    geometries.push(geometry)
+  }
+
+  return geometries
+}
+
+function getSegmentTopThickness(segment: StairSegmentNode): number {
+  return Math.max(segment.thickness ?? 0.25, 0.02)
+}
+
+function createCylinderBetweenPoints(
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  radius: number,
+  radialSegments: number,
+): THREE.BufferGeometry | null {
+  const direction = new THREE.Vector3().subVectors(end, start)
+  const length = direction.length()
+  if (length <= 1e-5) return null
+
+  const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    direction.clone().normalize(),
+  )
+
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, radialSegments)
+  geometry.applyQuaternion(quaternion)
+  geometry.translate(midpoint.x, midpoint.y, midpoint.z)
+  return geometry
 }
 
 /**
