@@ -1,6 +1,6 @@
 import { type AnyNodeId, type StairNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 /**
  * Imperatively toggles the Three.js visibility of stair objects based on the
@@ -17,6 +17,27 @@ import { useEffect, useRef } from 'react'
  */
 export const StairEditSystem = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedStairSignature = useScene(
+    useCallback(
+      (state) =>
+        selectedIds
+          .map((id) => {
+            const node = state.nodes[id as AnyNodeId]
+            if (!node) return null
+            if (node.type === 'stair') {
+              return `${node.id}:${node.stairType}`
+            }
+            if (node.type === 'stair-segment' && node.parentId) {
+              const parent = state.nodes[node.parentId as AnyNodeId] as StairNode | undefined
+              return parent?.type === 'stair' ? `${parent.id}:${parent.stairType}` : null
+            }
+            return null
+          })
+          .filter(Boolean)
+          .join('|'),
+      [selectedIds],
+    ),
+  )
   const prevActiveStairIds = useRef(new Set<string>())
 
   useEffect(() => {
@@ -41,14 +62,15 @@ export const StairEditSystem = () => {
       const group = sceneRegistry.nodes.get(stairId)
       if (!group) continue
 
+      const stairNode = nodes[stairId as AnyNodeId] as StairNode | undefined
+      const isCurved = stairNode?.stairType === 'curved' || stairNode?.stairType === 'spiral'
       const mergedMesh = group.getObjectByName('merged-stair')
       const segmentsWrapper = group.getObjectByName('segments-wrapper')
       const isActive = activeStairIds.has(stairId)
 
-      if (mergedMesh) mergedMesh.visible = !isActive
-      if (segmentsWrapper) segmentsWrapper.visible = isActive
+      if (mergedMesh) mergedMesh.visible = !isActive && !isCurved
+      if (segmentsWrapper) segmentsWrapper.visible = isActive && !isCurved
 
-      const stairNode = nodes[stairId as AnyNodeId] as StairNode | undefined
       if (stairNode?.children?.length) {
         const wasActive = prevActiveStairIds.current.has(stairId)
         if (isActive !== wasActive) {
@@ -63,7 +85,7 @@ export const StairEditSystem = () => {
     }
 
     prevActiveStairIds.current = activeStairIds
-  }, [selectedIds])
+  }, [selectedIds, selectedStairSignature])
 
   return null
 }

@@ -4,6 +4,7 @@ import type {
   BuildingNode,
   CeilingNode,
   DoorNode,
+  FenceNode,
   ItemNode,
   LevelNode,
   RoofNode,
@@ -41,6 +42,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 }
 
 export type WallEvent = NodeEvent<WallNode>
+export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -111,6 +113,7 @@ type ThumbnailEvents = {
 
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
+  NodeEvents<'fence', FenceEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &

@@ -15,6 +15,7 @@ export const sceneRegistry = {
     ceiling: new Set<string>(),
     level: new Set<string>(),
     wall: new Set<string>(),
+    fence: new Set<string>(),
     item: new Set<string>(),
     slab: new Set<string>(),
     zone: new Set<string>(),

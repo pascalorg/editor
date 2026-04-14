@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import {
   type BuildingNode,
   type DoorNode,
+  type FenceNode,
   type ItemNode,
   type LevelNode,
   type RoofNode,
@@ -33,6 +34,7 @@ export type Mode = 'select' | 'edit' | 'delete' | 'build'
 // Structure mode tools (building elements)
 export type StructureTool =
   | 'wall'
+  | 'fence'
   | 'room'
   | 'custom-room'
   | 'slab'
@@ -85,6 +87,7 @@ type EditorState = {
     | ItemNode
     | WindowNode
     | DoorNode
+    | FenceNode
     | RoofNode
     | RoofSegmentNode
     | StairNode
@@ -96,6 +99,7 @@ type EditorState = {
       | ItemNode
       | WindowNode
       | DoorNode
+      | FenceNode
       | RoofNode
       | RoofSegmentNode
       | StairNode

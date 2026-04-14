@@ -197,7 +197,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
       const node = nodes[childId as AnyNodeId]
       if (!node) continue
 
-      if (node.type === 'wall') {
+      if (node.type === 'wall' || node.type === 'fence') {
         const wall = node as WallNode
         if (
           segmentIntersectsBounds(wall.start[0], wall.start[1], wall.end[0], wall.end[1], bounds)
@@ -205,7 +205,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
           result.push(wall.id)
         }
         // Check wall children (doors/windows)
-        for (const itemId of wall.children) {
+        for (const itemId of Array.isArray(wall.children) ? wall.children : []) {
           const child = nodes[itemId as AnyNodeId]
           if (!child) continue
           if (

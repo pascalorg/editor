@@ -4,6 +4,7 @@ export type {
   CeilingEvent,
   DoorEvent,
   EventSuffix,
+  FenceEvent,
   GridEvent,
   ItemEvent,
   LevelEvent,
@@ -44,6 +45,7 @@ export {
   useInteractive,
 } from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
+export { FenceSystem } from './systems/fence/fence-system'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'

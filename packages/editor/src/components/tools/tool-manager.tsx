@@ -11,6 +11,7 @@ import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { DoorTool } from './door/door-tool'
+import { FenceTool } from './fence/fence-tool'
 import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -30,6 +31,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   },
   structure: {
     wall: WallTool,
+    fence: FenceTool,
     slab: SlabTool,
     ceiling: CeilingTool,
     roof: RoofTool,
