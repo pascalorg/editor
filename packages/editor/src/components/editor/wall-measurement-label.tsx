@@ -4,9 +4,14 @@ import {
   type AnyNodeId,
   calculateLevelMiters,
   DEFAULT_WALL_HEIGHT,
+  getWallCurveLength,
+  getWallMiterBoundaryPoints,
+  isCurvedWall,
   getWallPlanFootprint,
+  getWallSurfacePolygon,
   type Point2D,
   pointToKey,
+  sampleWallCenterline,
   sceneRegistry,
   useScene,
   type WallMiterData,
@@ -28,8 +33,7 @@ const BAR_AXIS = new THREE.Vector3(0, 1, 0)
 type Vec3 = [number, number, number]
 
 type MeasurementGuide = {
-  guideStart: Vec3
-  guideEnd: Vec3
+  guidePath: Vec3[]
   extStartStart: Vec3
   extStartEnd: Vec3
   extEndStart: Vec3
@@ -131,6 +135,37 @@ function worldPointToWallLocal(wall: WallNode, point: Point2D): Vec3 {
   return [dx * cosA - dz * sinA, 0, dx * sinA + dz * cosA]
 }
 
+function getWallExteriorOffsetSign(wall: Pick<WallNode, 'frontSide' | 'backSide'>) {
+  if (wall.frontSide === 'exterior' && wall.backSide !== 'exterior') {
+    return 1
+  }
+
+  if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') {
+    return -1
+  }
+
+  return 1
+}
+
+function getCurvedWallMeasurementPath(
+  wall: WallNode,
+  miterData: WallMiterData,
+): Point2D[] | null {
+  const boundaryPoints = getWallMiterBoundaryPoints(wall, miterData)
+  if (!boundaryPoints) return null
+
+  const surface = getWallSurfacePolygon(wall, 24, boundaryPoints)
+  const sidePointCount = 25
+  if (surface.length < sidePointCount * 2) return null
+
+  const offsetSign = getWallExteriorOffsetSign(wall)
+  if (offsetSign >= 0) {
+    return surface.slice(sidePointCount).reverse()
+  }
+
+  return surface.slice(0, sidePointCount)
+}
+
 function buildMeasurementGuide(
   wall: WallNode,
   nodes: Record<string, WallNode | { type: string; children?: string[] }>,
@@ -143,31 +178,55 @@ function buildMeasurementGuide(
   const height = wall.height ?? DEFAULT_WALL_HEIGHT
   const startLocal = worldPointToWallLocal(wall, middlePoints.start)
   const endLocal = worldPointToWallLocal(wall, middlePoints.end)
+  const curvedMeasurementPath = isCurvedWall(wall)
+    ? getCurvedWallMeasurementPath(wall, miterData)
+    : null
+  const guidePath: Vec3[] = curvedMeasurementPath
+    ? curvedMeasurementPath.map((point) => {
+        const localPoint = worldPointToWallLocal(wall, point)
+        return [localPoint[0], height + GUIDE_Y_OFFSET, localPoint[2]]
+      })
+    : isCurvedWall(wall)
+      ? sampleWallCenterline(wall, 24).map((point, index, points) => {
+          const localPoint =
+            index === 0
+              ? startLocal
+              : index === points.length - 1
+                ? endLocal
+                : worldPointToWallLocal(wall, point)
 
-  const guideStart: Vec3 = [startLocal[0], height + GUIDE_Y_OFFSET, startLocal[2]]
-  const guideEnd: Vec3 = [endLocal[0], height + GUIDE_Y_OFFSET, endLocal[2]]
+          return [localPoint[0], height + GUIDE_Y_OFFSET, localPoint[2]]
+        })
+    : [
+        [startLocal[0], height + GUIDE_Y_OFFSET, startLocal[2]],
+        [endLocal[0], height + GUIDE_Y_OFFSET, endLocal[2]],
+      ]
 
-  const dirX = guideEnd[0] - guideStart[0]
-  const dirZ = guideEnd[2] - guideStart[2]
-  const dirLength = Math.hypot(dirX, dirZ)
+  if (guidePath.length < 2) return null
 
-  if (!Number.isFinite(dirLength) || dirLength < 0.001) return null
+  let guideLength = 0
+  for (let index = 1; index < guidePath.length; index += 1) {
+    const prev = guidePath[index - 1]!
+    const next = guidePath[index]!
+    guideLength += Math.hypot(next[0] - prev[0], next[2] - prev[2])
+  }
+
+  if (!Number.isFinite(guideLength) || guideLength < 0.001) return null
 
   // Extension lines coming out of the extremity markers of the wall
   const extOvershoot = 0.04
+  const guideStart = guidePath[0]!
+  const guideEnd = guidePath[guidePath.length - 1]!
+  const midpointIndex = Math.floor(guidePath.length / 2)
+  const midpoint = guidePath[midpointIndex]!
 
   return {
-    guideStart,
-    guideEnd,
-    extStartStart: [startLocal[0], height, startLocal[2]],
-    extStartEnd: [startLocal[0], height + GUIDE_Y_OFFSET + extOvershoot, startLocal[2]],
-    extEndStart: [endLocal[0], height, endLocal[2]],
-    extEndEnd: [endLocal[0], height + GUIDE_Y_OFFSET + extOvershoot, endLocal[2]],
-    labelPosition: [
-      (guideStart[0] + guideEnd[0]) / 2,
-      guideStart[1] + LABEL_LIFT,
-      (guideStart[2] + guideEnd[2]) / 2,
-    ],
+    guidePath,
+    extStartStart: [guideStart[0], height, guideStart[2]],
+    extStartEnd: [guideStart[0], height + GUIDE_Y_OFFSET + extOvershoot, guideStart[2]],
+    extEndStart: [guideEnd[0], height, guideEnd[2]],
+    extEndEnd: [guideEnd[0], height + GUIDE_Y_OFFSET + extOvershoot, guideEnd[2]],
+    labelPosition: [midpoint[0], midpoint[1] + LABEL_LIFT, midpoint[2]],
   }
 }
 
@@ -208,6 +267,16 @@ function MeasurementBar({ start, end, color }: { start: Vec3; end: Vec3; color: 
   )
 }
 
+function MeasurementPath({ path, color }: { path: Vec3[]; color: string }) {
+  return (
+    <>
+      {path.slice(1).map((point, index) => (
+        <MeasurementBar color={color} end={point} key={index} start={path[index]!} />
+      ))}
+    </>
+  )
+}
+
 function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const nodes = useScene((state) => state.nodes)
   const theme = useViewer((state) => state.theme)
@@ -216,10 +285,6 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const color = isNight ? '#ffffff' : '#111111'
   const shadowColor = isNight ? '#111111' : '#ffffff'
 
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = Math.hypot(dx, dz)
-  const label = formatMeasurement(length, unit)
   const guide = useMemo(
     () =>
       buildMeasurementGuide(
@@ -228,12 +293,26 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
       ),
     [nodes, wall],
   )
+  const length = useMemo(() => {
+    if (!guide?.guidePath?.length || guide.guidePath.length < 2) {
+      return getWallCurveLength(wall)
+    }
+
+    let total = 0
+    for (let index = 1; index < guide.guidePath.length; index += 1) {
+      const prev = guide.guidePath[index - 1]!
+      const next = guide.guidePath[index]!
+      total += Math.hypot(next[0] - prev[0], next[2] - prev[2])
+    }
+    return total
+  }, [guide, wall])
+  const label = formatMeasurement(length, unit)
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null
 
   return (
     <group>
-      <MeasurementBar color={color} end={guide.guideEnd} start={guide.guideStart} />
+      <MeasurementPath color={color} path={guide.guidePath} />
       <MeasurementBar color={color} end={guide.extStartEnd} start={guide.extStartStart} />
       <MeasurementBar color={color} end={guide.extEndEnd} start={guide.extEndStart} />
 

@@ -84,7 +84,9 @@ export {
 } from './systems/wall/wall-curve'
 export {
   calculateLevelMiters,
+  getWallMiterBoundaryPoints,
   type Point2D,
+  type WallMiterBoundaryPoints,
   pointToKey,
   type WallMiterData,
 } from './systems/wall/wall-mitering'

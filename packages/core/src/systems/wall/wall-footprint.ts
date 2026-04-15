@@ -1,9 +1,15 @@
 import type { WallNode } from '../../schema'
 import { getWallSurfacePolygon, isCurvedWall } from './wall-curve'
-import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
+import {
+  getWallMiterBoundaryPoints,
+  type Point2D,
+  pointToKey,
+  type WallMiterData,
+} from './wall-mitering'
 
 export const DEFAULT_WALL_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 2.5
+const CURVED_WALL_SURFACE_SEGMENTS = 24
 
 export function getWallThickness(wallNode: WallNode): number {
   return wallNode.thickness ?? DEFAULT_WALL_THICKNESS
@@ -11,24 +17,37 @@ export function getWallThickness(wallNode: WallNode): number {
 
 export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterData): Point2D[] {
   const { junctionData } = miterData
-
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   const thickness = getWallThickness(wallNode)
   const halfT = thickness / 2
-
   const v = { x: wallEnd.x - wallStart.x, y: wallEnd.y - wallStart.y }
   const L = Math.sqrt(v.x * v.x + v.y * v.y)
+
   if (L < 1e-9) {
     return []
   }
   const nUnit = { x: -v.y / L, y: v.x / L }
-
   const keyStart = pointToKey(wallStart)
   const keyEnd = pointToKey(wallEnd)
-
   const startJunction = junctionData.get(keyStart)?.get(wallNode.id)
   const endJunction = junctionData.get(keyEnd)?.get(wallNode.id)
+
+  if (isCurvedWall(wallNode)) {
+    const boundaryPoints = getWallMiterBoundaryPoints(wallNode, miterData)
+    if (!boundaryPoints) {
+      return []
+    }
+
+    const { startLeft, startRight, endLeft, endRight } = boundaryPoints
+
+    return getWallSurfacePolygon(wallNode, CURVED_WALL_SURFACE_SEGMENTS, {
+      endLeft,
+      endRight,
+      startLeft,
+      startRight,
+    })
+  }
 
   const pStartLeft: Point2D = startJunction?.left || {
     x: wallStart.x + nUnit.x * halfT,
@@ -38,8 +57,6 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
     x: wallStart.x - nUnit.x * halfT,
     y: wallStart.y - nUnit.y * halfT,
   }
-
-  // Junction offsets are stored relative to the outgoing direction.
   const pEndLeft: Point2D = endJunction?.right || {
     x: wallEnd.x + nUnit.x * halfT,
     y: wallEnd.y + nUnit.y * halfT,
@@ -47,15 +64,6 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
   const pEndRight: Point2D = endJunction?.left || {
     x: wallEnd.x - nUnit.x * halfT,
     y: wallEnd.y - nUnit.y * halfT,
-  }
-
-  if (isCurvedWall(wallNode)) {
-    return getWallSurfacePolygon(wallNode, 24, {
-      endLeft: pEndLeft,
-      endRight: pEndRight,
-      startLeft: pStartLeft,
-      startRight: pStartRight,
-    })
   }
 
   const polygon: Point2D[] = [pStartRight, pEndRight]
