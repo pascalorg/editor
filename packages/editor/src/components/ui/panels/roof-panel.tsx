@@ -17,7 +17,6 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
-import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -43,7 +42,14 @@ export function RoofPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -166,7 +172,7 @@ export function RoofPanel() {
       </PanelSection>
 
       <PanelSection title="Position">
-        <MetricControl
+        <SliderControl
           label="X"
           max={50}
           min={-50}
@@ -180,7 +186,7 @@ export function RoofPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Y"
           max={50}
           min={-50}
@@ -194,7 +200,7 @@ export function RoofPanel() {
           unit="m"
           value={Math.round(node.position[1] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Z"
           max={50}
           min={-50}
@@ -255,7 +261,13 @@ export function RoofPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="roof"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

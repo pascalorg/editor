@@ -38,6 +38,16 @@ export {
   wallTouchesOthers,
 } from './lib/space-detection'
 export { baseMaterial, glassMaterial } from './materials'
+export {
+  getCatalogMaterialById,
+  getLibraryMaterialIdFromRef,
+  getMaterialPresetByRef,
+  getMaterialsForTarget,
+  LIBRARY_MATERIAL_REF_PREFIX,
+  MATERIAL_CATALOG,
+  type MaterialCatalogItem,
+  toLibraryMaterialRef,
+} from './material-library'
 export * from './schema'
 export {
   type ControlValue,
@@ -60,8 +70,23 @@ export {
   getWallThickness,
 } from './systems/wall/wall-footprint'
 export {
+  getClampedWallCurveOffset,
+  getMaxWallCurveOffset,
+  getWallChordFrame,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  getWallMidpointHandlePoint,
+  getWallStraightSnapOffset,
+  getWallSurfacePolygon,
+  isCurvedWall,
+  normalizeWallCurveOffset,
+  sampleWallCenterline,
+} from './systems/wall/wall-curve'
+export {
   calculateLevelMiters,
+  getWallMiterBoundaryPoints,
   type Point2D,
+  type WallMiterBoundaryPoints,
   pointToKey,
   type WallMiterData,
 } from './systems/wall/wall-mitering'

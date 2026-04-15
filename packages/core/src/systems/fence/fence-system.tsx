@@ -10,6 +10,66 @@ type FencePart = {
   scale: [number, number, number]
 }
 
+function applyFenceUVs(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+
+  if (!(position && normal)) return
+
+  const uvs = new Float32Array(position.count * 2)
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+
+  for (let index = 0; index < position.count; index += 1) {
+    const px = position.getX(index)
+    const py = position.getY(index)
+    const pz = position.getZ(index)
+    minX = Math.min(minX, px)
+    minY = Math.min(minY, py)
+    minZ = Math.min(minZ, pz)
+    maxX = Math.max(maxX, px)
+    maxY = Math.max(maxY, py)
+    maxZ = Math.max(maxZ, pz)
+  }
+
+  const width = Math.max(maxX - minX, 0.001)
+  const height = Math.max(maxY - minY, 0.001)
+  const depth = Math.max(maxZ - minZ, 0.001)
+
+  for (let index = 0; index < position.count; index += 1) {
+    const px = position.getX(index)
+    const py = position.getY(index)
+    const pz = position.getZ(index)
+    const nx = Math.abs(normal.getX(index))
+    const ny = Math.abs(normal.getY(index))
+    const nz = Math.abs(normal.getZ(index))
+
+    let u = 0
+    let v = 0
+
+    if (ny >= nx && ny >= nz) {
+      u = (px - minX) / width
+      v = (pz - minZ) / depth
+    } else if (nx >= nz) {
+      u = (pz - minZ) / depth
+      v = (py - minY) / height
+    } else {
+      u = (px - minX) / width
+      v = (py - minY) / height
+    }
+
+    uvs[index * 2] = u
+    uvs[index * 2 + 1] = v
+  }
+
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
+}
+
 function getStyleDefaults(style: FenceNode['style']) {
   if (style === 'privacy') {
     return { spacingFactor: 0.42, postFactor: 1.35, baseFactor: 1.2, topFactor: 1.2 }
@@ -103,6 +163,7 @@ function generateFenceGeometry(fence: FenceNode) {
 
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   geometries.forEach((geometry) => geometry.dispose())
+  applyFenceUVs(merged)
   merged.computeVertexNormals()
   return merged
 }

@@ -281,6 +281,10 @@ export const SelectionManager = () => {
       if (!strategy) return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
+        if (event.node.type === 'slab') {
+          useViewer.setState({ hoveredId: null })
+          return
+        }
         useViewer.setState({ hoveredId: event.node.id })
       }
     }
@@ -388,11 +392,14 @@ const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
   const outliner = useViewer((s) => s.outliner)
+  const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
     // Sync selected objects
     outliner.selectedObjects.length = 0
     for (const id of selection.selectedIds) {
+      const node = nodes[id as AnyNodeId]
+      if (node?.type === 'slab') continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj) outliner.selectedObjects.push(obj)
     }
@@ -400,10 +407,12 @@ const OutlinerSync = () => {
     // Sync hovered objects
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
+      const hoveredNode = nodes[hoveredId as AnyNodeId]
+      if (hoveredNode?.type === 'slab') return
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, outliner])
+  }, [selection, hoveredId, outliner, nodes])
 
   return null
 }

@@ -7,10 +7,22 @@ export { type Collection, type CollectionId, generateCollectionId } from './coll
 // Material
 export {
   DEFAULT_MATERIALS,
+  MaterialMapPropertiesSchema,
+  MaterialMapsSchema,
   MaterialPreset,
+  MaterialPresetPayloadSchema,
   MaterialProperties,
   MaterialSchema,
+  MaterialTarget,
+  TextureWrapMode,
   resolveMaterial,
+} from './material'
+export type {
+  MaterialMapProperties,
+  MaterialMaps,
+  MaterialPresetPayload,
+  MaterialTarget as MaterialTargetValue,
+  TextureWrapMode as TextureWrapModeValue,
 } from './material'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'

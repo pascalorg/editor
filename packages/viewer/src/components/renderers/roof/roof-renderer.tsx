@@ -2,7 +2,7 @@ import { type RoofNode, useRegistry } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial } from '../../../lib/materials'
+import { createMaterial, createMaterialFromPresetRef } from '../../../lib/materials'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 import { roofDebugMaterials, roofMaterials } from './roof-materials'
@@ -16,10 +16,12 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const debugColors = useViewer((s) => s.debugColors)
 
   const customMaterial = useMemo(() => {
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    if (presetMaterial) return presetMaterial
     const mat = node.material
     if (!mat) return null
     return createMaterial(mat)
-  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+  }, [node.materialPreset, node.material, node.material?.preset, node.material?.properties, node.material?.texture])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

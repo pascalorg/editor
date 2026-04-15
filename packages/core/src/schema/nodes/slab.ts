@@ -7,6 +7,7 @@ export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
   type: nodeType('slab'),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   elevation: z.number().default(0.05), // Elevation in meters

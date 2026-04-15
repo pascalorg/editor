@@ -1,4 +1,5 @@
 import type { WallNode } from '../../schema'
+import { getWallCurveFrameAt, isCurvedWall } from './wall-curve'
 
 // ============================================================================
 // TYPES
@@ -7,6 +8,13 @@ import type { WallNode } from '../../schema'
 export interface Point2D {
   x: number
   y: number
+}
+
+export interface WallMiterBoundaryPoints {
+  startLeft: Point2D
+  startRight: Point2D
+  endLeft: Point2D
+  endRight: Point2D
 }
 
 interface LineEquation {
@@ -127,6 +135,70 @@ function findJunctions(walls: WallNode[]): Map<string, Junction> {
   return actualJunctions
 }
 
+function getWallDirectionFromJunction(
+  wall: WallNode,
+  endType: 'start' | 'end' | 'passthrough',
+) {
+  if (endType === 'passthrough') {
+    return {
+      x: wall.end[0] - wall.start[0],
+      y: wall.end[1] - wall.start[1],
+    }
+  }
+
+  if (isCurvedWall(wall)) {
+    const frame = getWallCurveFrameAt(wall, endType === 'start' ? 0 : 1)
+    return endType === 'start'
+      ? frame.tangent
+      : { x: -frame.tangent.x, y: -frame.tangent.y }
+  }
+
+  return endType === 'start'
+    ? { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
+    : { x: wall.start[0] - wall.end[0], y: wall.start[1] - wall.end[1] }
+}
+
+function getWallBoundaryFrame(
+  wall: WallNode,
+  endType: 'start' | 'end',
+) {
+  if (isCurvedWall(wall)) {
+    const frame = getWallCurveFrameAt(wall, endType === 'start' ? 0 : 1)
+    return {
+      point: frame.point,
+      tangent:
+        endType === 'start'
+          ? frame.tangent
+          : { x: -frame.tangent.x, y: -frame.tangent.y },
+      normal: frame.normal,
+    }
+  }
+
+  const point =
+    endType === 'start'
+      ? { x: wall.start[0], y: wall.start[1] }
+      : { x: wall.end[0], y: wall.end[1] }
+  const vector =
+    endType === 'start'
+      ? { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
+      : { x: wall.start[0] - wall.end[0], y: wall.start[1] - wall.end[1] }
+  const length = Math.hypot(vector.x, vector.y)
+
+  if (length < 1e-9) {
+    return {
+      point,
+      tangent: { x: 1, y: 0 },
+      normal: { x: 0, y: 1 },
+    }
+  }
+
+  return {
+    point,
+    tangent: { x: vector.x / length, y: vector.y / length },
+    normal: { x: -vector.y / length, y: vector.x / length },
+  }
+}
+
 // ============================================================================
 // MITER CALCULATION (exactly like demo)
 // ============================================================================
@@ -171,10 +243,7 @@ function calculateJunctionIntersections(
       }
     } else {
       // Normal wall endpoint (start or end)
-      const v =
-        endType === 'start'
-          ? { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
-          : { x: wall.start[0] - wall.end[0], y: wall.start[1] - wall.end[1] }
+      const v = getWallDirectionFromJunction(wall, endType)
 
       const L = Math.sqrt(v.x * v.x + v.y * v.y)
       if (L < 1e-9) continue
@@ -262,6 +331,37 @@ export function calculateLevelMiters(walls: WallNode[]): WallMiterData {
   }
 
   return { junctionData, junctions }
+}
+
+export function getWallMiterBoundaryPoints(
+  wall: WallNode,
+  miterData: WallMiterData,
+): WallMiterBoundaryPoints | null {
+  const thickness = wall.thickness ?? 0.1
+  const halfThickness = thickness / 2
+  const startFrame = getWallBoundaryFrame(wall, 'start')
+  const endFrame = getWallBoundaryFrame(wall, 'end')
+  const startJunction = miterData.junctionData.get(pointToKey(startFrame.point))?.get(wall.id)
+  const endJunction = miterData.junctionData.get(pointToKey(endFrame.point))?.get(wall.id)
+
+  return {
+    startLeft: startJunction?.left ?? {
+      x: startFrame.point.x + startFrame.normal.x * halfThickness,
+      y: startFrame.point.y + startFrame.normal.y * halfThickness,
+    },
+    startRight: startJunction?.right ?? {
+      x: startFrame.point.x - startFrame.normal.x * halfThickness,
+      y: startFrame.point.y - startFrame.normal.y * halfThickness,
+    },
+    endLeft: endJunction?.right ?? {
+      x: endFrame.point.x + endFrame.normal.x * halfThickness,
+      y: endFrame.point.y + endFrame.normal.y * halfThickness,
+    },
+    endRight: endJunction?.left ?? {
+      x: endFrame.point.x - endFrame.normal.x * halfThickness,
+      y: endFrame.point.y - endFrame.normal.y * halfThickness,
+    },
+  }
 }
 
 /**

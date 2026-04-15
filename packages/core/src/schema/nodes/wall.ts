@@ -13,8 +13,10 @@ export const WallNode = BaseNode.extend({
     .array(z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id]))
     .default([]),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
+  curveOffset: z.number().optional(),
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
@@ -26,6 +28,7 @@ export const WallNode = BaseNode.extend({
   Wall node - used to represent a wall in the building
   - thickness: thickness in meters
   - height: height in meters
+  - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system
   - size: size of the wall in grid units

@@ -2,10 +2,11 @@
 
 import { type AnyNode, type CeilingNode, type MaterialSchema, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Edit, Plus, Trash2 } from 'lucide-react'
+import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { ActionButton } from '../controls/action-button'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
@@ -18,6 +19,7 @@ export function CeilingPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -34,7 +36,14 @@ export function CeilingPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -101,6 +110,13 @@ export function CeilingPanel() {
     },
     [selectedId, node?.holes, handleUpdate, editingHole, setEditingHole],
   )
+
+  const handleMove = useCallback(() => {
+    if (!node) return
+    sfxEmitter.emit('sfx:item-pick')
+    setMovingNode(node)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
 
   if (!node || node.type !== 'ceiling' || selectedIds.length !== 1) return null
 
@@ -223,8 +239,17 @@ export function CeilingPanel() {
       </PanelSection>
 
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="ceiling"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
+      <ActionGroup>
+        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+      </ActionGroup>
     </PanelWrapper>
   )
 }

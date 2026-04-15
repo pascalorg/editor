@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Move, Trash2 } from 'lucide-react'
+import { Copy, Move, Spline, Trash2 } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
@@ -9,6 +9,7 @@ type NodeActionMenuProps = {
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
+  onCurve?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onPointerUp?: PointerEventHandler<HTMLDivElement>
   onPointerEnter?: PointerEventHandler<HTMLDivElement>
@@ -20,6 +21,7 @@ export function NodeActionMenu({
   onDelete,
   onDuplicate,
   onMove,
+  onCurve,
   onPointerDown,
   onPointerUp,
   onPointerEnter,
@@ -42,6 +44,17 @@ export function NodeActionMenu({
           type="button"
         >
           <Move className="h-4 w-4" />
+        </button>
+      )}
+      {onCurve && (
+        <button
+          aria-label="Curve"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onCurve}
+          title="Curve"
+          type="button"
+        >
+          <Spline className="h-4 w-4" />
         </button>
       )}
       {onDuplicate && (
