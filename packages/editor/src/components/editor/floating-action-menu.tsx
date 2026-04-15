@@ -147,6 +147,7 @@ export function FloatingActionMenu() {
           duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
           duplicate.end = [duplicate.end[0] + 1, duplicate.end[1] + 1]
         } else if (node.type === 'roof') {
+          duplicateInfo.children = []
           duplicate = RoofNode.parse(duplicateInfo)
         } else if (node.type === 'roof-segment') {
           duplicate = RoofSegmentNode.parse(duplicateInfo)
@@ -160,6 +161,12 @@ export function FloatingActionMenu() {
         }
       } catch (error) {
         console.error('Failed to parse duplicate', error)
+        useScene.temporal.getState().resume()
+        return
+      }
+
+      if (!duplicate) {
+        useScene.temporal.getState().resume()
         return
       }
 
