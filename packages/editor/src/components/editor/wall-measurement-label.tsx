@@ -217,15 +217,30 @@ function buildMeasurementGuide(
   const extOvershoot = 0.04
   const guideStart = guidePath[0]!
   const guideEnd = guidePath[guidePath.length - 1]!
-  const midpointIndex = Math.floor(guidePath.length / 2)
-  const midpoint = guidePath[midpointIndex]!
+  const extensionStartBase = curvedMeasurementPath ? guideStart : startLocal
+  const extensionEndBase = curvedMeasurementPath ? guideEnd : endLocal
+  const midpoint = curvedMeasurementPath
+    ? guidePath[Math.floor(guidePath.length / 2)]!
+    : ([
+        (guideStart[0] + guideEnd[0]) / 2,
+        guideStart[1],
+        (guideStart[2] + guideEnd[2]) / 2,
+      ] as Vec3)
 
   return {
     guidePath,
-    extStartStart: [guideStart[0], height, guideStart[2]],
-    extStartEnd: [guideStart[0], height + GUIDE_Y_OFFSET + extOvershoot, guideStart[2]],
-    extEndStart: [guideEnd[0], height, guideEnd[2]],
-    extEndEnd: [guideEnd[0], height + GUIDE_Y_OFFSET + extOvershoot, guideEnd[2]],
+    extStartStart: [extensionStartBase[0], height, extensionStartBase[2]],
+    extStartEnd: [
+      extensionStartBase[0],
+      height + GUIDE_Y_OFFSET + extOvershoot,
+      extensionStartBase[2],
+    ],
+    extEndStart: [extensionEndBase[0], height, extensionEndBase[2]],
+    extEndEnd: [
+      extensionEndBase[0],
+      height + GUIDE_Y_OFFSET + extOvershoot,
+      extensionEndBase[2],
+    ],
     labelPosition: [midpoint[0], midpoint[1] + LABEL_LIFT, midpoint[2]],
   }
 }
