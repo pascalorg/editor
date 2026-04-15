@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   emitter,
+  isCurvedWall,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -86,6 +87,11 @@ export const WindowTool: React.FC = () => {
 
     const onWallEnter = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        hideCursor()
+        return
+      }
       const levelId = getLevelId()
       if (!levelId) return
       // Only interact with walls on the current level
@@ -135,6 +141,11 @@ export const WindowTool: React.FC = () => {
 
     const onWallMove = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        destroyDraft()
+        hideCursor()
+        return
+      }
       // Only interact with walls on the current level
       if (event.node.parentId !== getLevelId()) return
 
@@ -198,6 +209,7 @@ export const WindowTool: React.FC = () => {
     const onWallClick = (event: WallEvent) => {
       if (!draftRef.current) return
       if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
       // Only interact with walls on the current level
       if (event.node.parentId !== getLevelId()) return
 

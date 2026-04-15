@@ -1,5 +1,6 @@
 import { type SlabNode, useRegistry } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import {
@@ -17,10 +18,20 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
 
   const material = useMemo(() => {
     const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
-    if (presetMaterial) return presetMaterial
-    const mat = node.material
-    if (!mat) return DEFAULT_SLAB_MATERIAL
-    return createMaterial(mat)
+    const sourceMaterial = presetMaterial ?? (node.material ? createMaterial(node.material) : DEFAULT_SLAB_MATERIAL)
+    const slabMaterial = sourceMaterial.clone()
+
+    // Slabs participate in the WebGPU MRT scene pass. Keeping them opaque avoids
+    // pipeline variants that can fail when geometry is regenerated while a
+    // transparent/custom material is attached.
+    slabMaterial.transparent = false
+    slabMaterial.opacity = 1
+    slabMaterial.alphaMap = null
+    slabMaterial.side = THREE.DoubleSide
+    slabMaterial.depthWrite = true
+    slabMaterial.needsUpdate = true
+
+    return slabMaterial
   }, [
     node.material,
     node.material?.preset,
@@ -28,6 +39,12 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
     node.material?.texture,
     node.materialPreset,
   ])
+
+  useEffect(() => {
+    return () => {
+      material.dispose()
+    }
+  }, [material])
 
   return (
     <mesh

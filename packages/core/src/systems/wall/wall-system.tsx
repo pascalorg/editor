@@ -8,21 +8,74 @@ import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
+import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
+  getWallMiterBoundaryPoints,
   type Point2D,
   type WallMiterData,
+  pointToKey,
 } from './wall-mitering'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
+const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   const uv = geometry.getAttribute('uv')
   if (!uv) return
 
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
+}
+
+function insetCurvedWallBoundaryPointsFor3D(
+  wall: WallNode,
+  boundaryPoints: ReturnType<typeof getWallMiterBoundaryPoints>,
+  miterData: WallMiterData,
+) {
+  if (!boundaryPoints || !isCurvedWall(wall)) {
+    return boundaryPoints
+  }
+
+  const insetDistance = Math.min(
+    CURVED_WALL_3D_ENDPOINT_INSET,
+    Math.max((wall.thickness ?? 0.1) * 0.01, 0.0005),
+  )
+
+  if (insetDistance <= 0) {
+    return boundaryPoints
+  }
+
+  const next = { ...boundaryPoints }
+  const startJunction = miterData.junctions.get(pointToKey({ x: wall.start[0], y: wall.start[1] }))
+  const endJunction = miterData.junctions.get(pointToKey({ x: wall.end[0], y: wall.end[1] }))
+
+  if (startJunction && startJunction.connectedWalls.length > 1) {
+    const frame = getWallCurveFrameAt(wall, 0)
+    next.startLeft = {
+      x: next.startLeft.x + frame.tangent.x * insetDistance,
+      y: next.startLeft.y + frame.tangent.y * insetDistance,
+    }
+    next.startRight = {
+      x: next.startRight.x + frame.tangent.x * insetDistance,
+      y: next.startRight.y + frame.tangent.y * insetDistance,
+    }
+  }
+
+  if (endJunction && endJunction.connectedWalls.length > 1) {
+    const frame = getWallCurveFrameAt(wall, 1)
+    next.endLeft = {
+      x: next.endLeft.x - frame.tangent.x * insetDistance,
+      y: next.endLeft.y - frame.tangent.y * insetDistance,
+    }
+    next.endRight = {
+      x: next.endRight.x - frame.tangent.x * insetDistance,
+      y: next.endRight.y - frame.tangent.y * insetDistance,
+    }
+  }
+
+  return next
 }
 
 // ============================================================================
@@ -170,7 +223,14 @@ export function generateExtrudedWall(
   if (L < 1e-9) {
     return new THREE.BufferGeometry()
   }
-  const polyPoints = getWallPlanFootprint(wallNode, miterData)
+  const boundaryPoints = getWallMiterBoundaryPoints(wallNode, miterData)
+  const polyPoints = isCurvedWall(wallNode)
+    ? getWallSurfacePolygon(
+        wallNode,
+        24,
+        insetCurvedWallBoundaryPointsFor3D(wallNode, boundaryPoints, miterData) ?? undefined,
+      )
+    : getWallPlanFootprint(wallNode, miterData)
   if (polyPoints.length < 3) {
     return new THREE.BufferGeometry()
   }

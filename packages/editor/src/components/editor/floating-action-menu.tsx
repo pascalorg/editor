@@ -38,7 +38,7 @@ const ALLOWED_TYPES = [
   'slab',
   'ceiling',
 ]
-const DELETE_ONLY_TYPES = ['wall']
+const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
 
 export function FloatingActionMenu() {
@@ -48,6 +48,7 @@ export function FloatingActionMenu() {
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
@@ -57,6 +58,18 @@ export function FloatingActionMenu() {
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const node = selectedId ? nodes[selectedId as AnyNodeId] : null
   const isValidType = node ? ALLOWED_TYPES.includes(node.type) : false
+  const canCurveSelectedWall =
+    node?.type === 'wall' &&
+    !(node.children ?? []).some((childId) => {
+      const child = nodes[childId as AnyNodeId]
+      if (!child) return false
+      if (child.type === 'door' || child.type === 'window') return true
+      if (child.type === 'item') {
+        const attachTo = child.asset?.attachTo
+        return attachTo === 'wall' || attachTo === 'wall-side'
+      }
+      return false
+    })
 
   useFrame(() => {
     if (!(selectedId && isValidType && groupRef.current)) return
@@ -84,7 +97,10 @@ export function FloatingActionMenu() {
         node.type === 'item' ||
         node.type === 'window' ||
         node.type === 'door' ||
+        node.type === 'wall' ||
         node.type === 'fence' ||
+        node.type === 'slab' ||
+        node.type === 'ceiling' ||
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
@@ -95,6 +111,16 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
     },
     [node, setMovingNode, setSelection],
+  )
+  const handleCurve = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!canCurveSelectedWall || !node || node.type !== 'wall') return
+      sfxEmitter.emit('sfx:item-pick')
+      setCurvingWall(node)
+      setSelection({ selectedIds: [] })
+    },
+    [canCurveSelectedWall, node, setCurvingWall, setSelection],
   )
 
   const handleDuplicate = useCallback(
@@ -263,10 +289,15 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!selectedId) return
+      if (node?.type === 'item') {
+        sfxEmitter.emit('sfx:item-delete')
+      } else {
+        sfxEmitter.emit('sfx:structure-delete')
+      }
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [selectedId, setSelection],
+    [node?.type, selectedId, setSelection],
   )
 
   if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null
@@ -283,17 +314,14 @@ export function FloatingActionMenu() {
       >
         <NodeActionMenu
           onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+          onCurve={canCurveSelectedWall ? handleCurve : undefined}
           onDelete={handleDelete}
           onDuplicate={
             node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
               ? handleDuplicate
               : undefined
           }
-          onMove={
-            node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
-              ? handleMove
-              : undefined
-          }
+          onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
