@@ -12,6 +12,7 @@ export const WallNode = BaseNode.extend({
   type: nodeType('wall'),
   children: z.array(ItemNode.shape.id).default([]),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
   // e.g., start/end points for path

@@ -2,7 +2,7 @@ import { type AnyNodeId, type StairNode, type StairSegmentNode, useRegistry, use
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial, DEFAULT_STAIR_MATERIAL } from '../../../lib/materials'
+import { createMaterial, createMaterialFromPresetRef, DEFAULT_STAIR_MATERIAL } from '../../../lib/materials'
 import { NodeRenderer } from '../node-renderer'
 
 type SegmentTransform = {
@@ -47,10 +47,12 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   const handlers = useNodeEvents(node, 'stair')
 
   const material = useMemo(() => {
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    if (presetMaterial) return presetMaterial
     const mat = node.material
     if (!mat) return DEFAULT_STAIR_MATERIAL
     return createMaterial(mat)
-  }, [node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+  }, [node.materialPreset, node.material, node.material?.preset, node.material?.properties, node.material?.texture])
 
   return (
     <group

@@ -55,9 +55,16 @@ export function WallPanel() {
     [node, handleUpdate],
   )
 
-  const handleMaterialChange = useCallback(
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleCustomMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
     },
     [handleUpdate],
   )
@@ -116,7 +123,13 @@ export function WallPanel() {
       </PanelSection>
 
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="wall"
+          onChange={handleCustomMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

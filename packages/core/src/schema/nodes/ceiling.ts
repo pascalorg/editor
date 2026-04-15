@@ -9,6 +9,7 @@ export const CeilingNode = BaseNode.extend({
   type: nodeType('ceiling'),
   children: z.array(ItemNode.shape.id).default([]),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   height: z.number().default(2.5), // Height in meters
