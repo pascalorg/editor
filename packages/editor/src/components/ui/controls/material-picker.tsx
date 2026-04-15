@@ -72,9 +72,11 @@ export function MaterialPicker({
 
   return (
     <div className="space-y-3">
-      {catalogItems.length > 0 && (
+      {(catalogItems.length > 0 || onChange) && (
         <div className="space-y-2">
-          <div className="text-gray-500 text-xs uppercase tracking-[0.16em]">Library</div>
+          {catalogItems.length > 0 ? (
+            <div className="text-gray-500 text-xs uppercase tracking-[0.16em]">Library</div>
+          ) : null}
           <div className="flex flex-wrap gap-1.5">
             {catalogItems.map((item) => (
               <button

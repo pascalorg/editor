@@ -279,7 +279,11 @@ export const WallCutout = () => {
               ? materials.highlightedInvisible
               : materials.invisible
         } else {
-          ;(wallMesh as Mesh).material = getVisibleWallMaterial(wallNode)
+          ;(wallMesh as Mesh).material = isDeleteHighlighted
+            ? materials.deleteVisible
+            : isSelectionHighlighted
+              ? materials.highlightedVisible
+              : getVisibleWallMaterial(wallNode)
         }
       })
       lastWallMode.current = wallMode
