@@ -1,4 +1,14 @@
-import { type AnyNodeId, useScene, type WallNode, WallNode as WallSchema } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type DoorNode,
+  getScaledDimensions,
+  type ItemNode,
+  useScene,
+  type WallNode,
+  WallNode as WallSchema,
+  type WindowNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 
@@ -65,13 +75,13 @@ function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode,
     ...rest,
     start: wall.start,
     end: splitPoint,
-    children: children ?? [],
+    children: [],
   })
   const second = WallSchema.parse({
     ...rest,
     start: splitPoint,
     end: wall.end,
-    children: children ?? [],
+    children: [],
   })
 
   return [first, second]
@@ -124,11 +134,134 @@ function wallHasAttachments(wall: WallNode, nodes: ReturnType<typeof useScene.ge
   })
 }
 
+function wallLength(wall: Pick<WallNode, 'start' | 'end'>) {
+  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+}
+
+function getWallAttachmentSpan(node: AnyNode): { min: number; max: number; center: number } | null {
+  if (node.type === 'door') {
+    const door = node as DoorNode
+    return {
+      min: door.position[0] - door.width / 2,
+      max: door.position[0] + door.width / 2,
+      center: door.position[0],
+    }
+  }
+
+  if (node.type === 'window') {
+    const win = node as WindowNode
+    return {
+      min: win.position[0] - win.width / 2,
+      max: win.position[0] + win.width / 2,
+      center: win.position[0],
+    }
+  }
+
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') {
+      return null
+    }
+
+    const [width] = getScaledDimensions(item)
+    return {
+      min: item.position[0] - width / 2,
+      max: item.position[0] + width / 2,
+      center: item.position[0],
+    }
+  }
+
+  return null
+}
+
+function remapAttachmentToWall(
+  node: AnyNode,
+  nextWallId: WallNode['id'],
+  nextLocalX: number,
+  nextWallLength: number,
+): Partial<AnyNode> | null {
+  const clampedX = Math.max(0, Math.min(nextWallLength, nextLocalX))
+
+  if (node.type === 'door' || node.type === 'window' || node.type === 'item') {
+    const currentPosition = 'position' in node ? node.position : null
+    if (!currentPosition) return null
+
+    const nextPosition: typeof currentPosition = [
+      clampedX,
+      currentPosition[1],
+      currentPosition[2],
+    ] as typeof currentPosition
+
+    return {
+      parentId: nextWallId,
+      position: nextPosition,
+      ...(node.type === 'item'
+        ? {
+            wallId: nextWallId,
+            wallT: nextWallLength > 1e-6 ? clampedX / nextWallLength : 0,
+          }
+        : {
+            wallId: nextWallId,
+          }),
+    } as Partial<AnyNode>
+  }
+
+  return null
+}
+
+function buildAttachmentMigrationPlan(
+  wall: WallNode,
+  splitPoint: WallPlanPoint,
+  firstWall: WallNode,
+  secondWall: WallNode,
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
+  const splitDistance = Math.hypot(splitPoint[0] - wall.start[0], splitPoint[1] - wall.start[1])
+  const firstLength = wallLength(firstWall)
+  const secondLength = wallLength(secondWall)
+  const tolerance = 1e-4
+  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+
+  for (const childId of wall.children ?? []) {
+    const childNode = nodes[childId as AnyNodeId]
+    if (!childNode) continue
+
+    const span = getWallAttachmentSpan(childNode)
+    if (!span) {
+      return null
+    }
+
+    if (span.max <= splitDistance + tolerance) {
+      const nextUpdate = remapAttachmentToWall(childNode, firstWall.id, span.center, firstLength)
+      if (!nextUpdate) return null
+      updates.push({ id: childNode.id as AnyNodeId, data: nextUpdate })
+      continue
+    }
+
+    if (span.min >= splitDistance - tolerance) {
+      const nextUpdate = remapAttachmentToWall(
+        childNode,
+        secondWall.id,
+        span.center - splitDistance,
+        secondLength,
+      )
+      if (!nextUpdate) return null
+      updates.push({ id: childNode.id as AnyNodeId, data: nextUpdate })
+      continue
+    }
+
+    return null
+  }
+
+  return updates
+}
+
 function splitWallIfNeeded(
   intersection: WallSplitIntersection | null,
   walls: WallNode[],
   nodes: ReturnType<typeof useScene.getState>['nodes'],
   createNodes: ReturnType<typeof useScene.getState>['createNodes'],
+  updateNodes: ReturnType<typeof useScene.getState>['updateNodes'],
   deleteNode: ReturnType<typeof useScene.getState>['deleteNode'],
 ): { walls: WallNode[]; point: WallPlanPoint } | null {
   if (!intersection) return null
@@ -138,15 +271,26 @@ function splitWallIfNeeded(
     return { walls, point: intersection.point }
   }
 
-  if (wallHasAttachments(wallToSplit, nodes)) {
+  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point)
+  const attachmentUpdates = buildAttachmentMigrationPlan(
+    wallToSplit,
+    intersection.point,
+    first,
+    second,
+    nodes,
+  )
+
+  if (wallHasAttachments(wallToSplit, nodes) && !attachmentUpdates) {
     return { walls, point: intersection.point }
   }
 
-  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point)
   createNodes([
     { node: first, parentId: wallToSplit.parentId as AnyNodeId | undefined },
     { node: second, parentId: wallToSplit.parentId as AnyNodeId | undefined },
   ])
+  if (attachmentUpdates && attachmentUpdates.length > 0) {
+    updateNodes(attachmentUpdates)
+  }
   deleteNode(wallToSplit.id as AnyNodeId)
 
   return {
@@ -223,6 +367,7 @@ export function createWallOnCurrentLevel(
 ): WallNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
+  const { updateNodes } = useScene.getState()
 
   if (!(currentLevelId && isWallLongEnough(start, end))) {
     return null
@@ -236,7 +381,14 @@ export function createWallOnCurrentLevel(
   let resolvedEnd = end
 
   const endIntersection = findWallIntersection(resolvedEnd, workingWalls)
-  const splitEnd = splitWallIfNeeded(endIntersection, workingWalls, nodes, createNodes, deleteNode)
+  const splitEnd = splitWallIfNeeded(
+    endIntersection,
+    workingWalls,
+    nodes,
+    createNodes,
+    updateNodes,
+    deleteNode,
+  )
   if (splitEnd) {
     workingWalls = splitEnd.walls
     resolvedEnd = splitEnd.point
@@ -248,6 +400,7 @@ export function createWallOnCurrentLevel(
     workingWalls,
     nodes,
     createNodes,
+    updateNodes,
     deleteNode,
   )
   if (splitStart) {
