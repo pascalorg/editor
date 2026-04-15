@@ -1,5 +1,5 @@
-import { type CeilingNode, resolveMaterial, useRegistry } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { type CeilingNode, resolveMaterial, useRegistry, useScene } from '@pascal-app/core'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -37,6 +37,14 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
+
+  // Mark dirty on mount so CeilingSystem regenerates the polygon
+  // geometry after a <Viewer> remount. Without this the placeholder
+  // zero-size box persists and the ceiling disappears. See
+  // WallRenderer for the same pattern.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
 
   const materials = useMemo(() => {
     const props = resolveMaterial(node.material)

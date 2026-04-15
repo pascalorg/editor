@@ -22,6 +22,7 @@ const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
@@ -364,6 +365,17 @@ export const CustomCameraControls = () => {
   const onRest = useCallback(() => {
     useViewer.getState().setCameraDragging(false)
   }, [])
+
+  // The editor's first-person mode is driven by <FirstPersonControls />
+  // (mounted as a sibling in editor/index.tsx via isFirstPersonMode).
+  // It takes over the camera with pointer lock + WASD, so we must
+  // return null here — otherwise drei's CameraControls runs in parallel
+  // and fights FirstPersonControls for the camera, which is exactly why
+  // the "walkthrough" button on desktop appeared to do nothing (the
+  // user saw orbit behaviour because CameraControls was still winning).
+  if (isFirstPersonMode) {
+    return null
+  }
 
   if (walkthroughMode) {
     return <WalkthroughControls />

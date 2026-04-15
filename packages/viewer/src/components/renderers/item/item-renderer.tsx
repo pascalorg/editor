@@ -48,13 +48,34 @@ export const ItemRenderer = ({ node }: { node: ItemNode }) => {
 
   useRegistry(node.id, node.type, ref)
 
+  // Pick a render path based on whether the item has a loadable model.
+  //
+  // - Items with a resolvable `asset.src` → load the GLTF via useGLTF,
+  //   show the animated `PreviewModel` as the Suspense fallback while
+  //   the model downloads.
+  //
+  // - Items without a resolvable src (e.g. scanned furniture from
+  //   RoomPlan that ships with a `placeholder` asset and no URL) →
+  //   render `PlaceholderBox` instead. This is a SOLID opaque box, NOT
+  //   the animated preview material. Using PreviewModel as a
+  //   permanent render looks broken: it has `depthTest: false` and an
+  //   animated time-based opacity, so it renders on top of walls and
+  //   pulses, which is what the "flashing / see-through furniture"
+  //   bug report turned out to be.
+  const src = node.asset.src
+  const resolvedUrl = src ? resolveCdnUrl(src) : null
+
   return (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
-      <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
-        <Suspense fallback={<PreviewModel node={node} />}>
-          <ModelRenderer node={node} />
-        </Suspense>
-      </ErrorBoundary>
+      {resolvedUrl ? (
+        <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
+          <Suspense fallback={<PreviewModel node={node} />}>
+            <ModelRenderer modelUrl={resolvedUrl} node={node} />
+          </Suspense>
+        </ErrorBoundary>
+      ) : (
+        <PlaceholderBox node={node} />
+      )}
       {node.children?.map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
@@ -84,13 +105,33 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
+// Opaque stand-in for items that have no GLTF model to load. Unlike
+// `previewMaterial`, this one has normal depth testing and no animated
+// transparency, so scanned furniture renders as plain grey boxes that
+// sit behind walls correctly instead of pulsing through them.
+const placeholderMaterial = new MeshStandardNodeMaterial({
+  color: '#a8adb3',
+  roughness: 0.75,
+  metalness: 0.05,
+})
+
+const PlaceholderBox = ({ node }: { node: ItemNode }) => {
+  const handlers = useNodeEvents(node, 'item')
+  const [w, h, d] = node.asset.dimensions
+  return (
+    <mesh castShadow material={placeholderMaterial} position-y={h / 2} receiveShadow {...handlers}>
+      <boxGeometry args={[w, h, d]} />
+    </mesh>
+  )
+}
+
 const multiplyScales = (
   a: [number, number, number],
   b: [number, number, number],
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
-const ModelRenderer = ({ node }: { node: ItemNode }) => {
-  const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
+const ModelRenderer = ({ modelUrl, node }: { modelUrl: string; node: ItemNode }) => {
+  const { scene, nodes, animations } = useGLTF(modelUrl)
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
