@@ -5,6 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Edit, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import useEditor from '../../../store/use-editor'
+import { formatArea } from '../../../lib/units'
 import { ActionButton } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
@@ -14,6 +15,7 @@ import { PanelWrapper } from './panel-wrapper'
 export function CeilingPanel() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
+  const unit = useViewer((s) => s.unit)
   const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
@@ -134,7 +136,7 @@ export function CeilingPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.height * 1000) / 1000}
+          value={node.height}
         />
 
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
@@ -147,7 +149,7 @@ export function CeilingPanel() {
       <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>Area</span>
-          <span className="font-mono text-white">{area.toFixed(2)} m²</span>
+          <span className="font-mono text-white">{formatArea(area, unit)}</span>
         </div>
       </PanelSection>
 
@@ -174,7 +176,7 @@ export function CeilingPanel() {
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts
+                      {formatArea(holeArea, unit)} · {hole.length} pts
                     </p>
                   </div>
                   <div className="flex items-center gap-1">

@@ -149,7 +149,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.5}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Depth"
@@ -159,7 +159,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.5}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
       </PanelSection>
 
@@ -172,7 +172,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.wallHeight * 100) / 100}
+          value={node.wallHeight}
         />
         <SliderControl
           label="Roof"
@@ -182,7 +182,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.roofHeight * 100) / 100}
+          value={node.roofHeight}
         />
       </PanelSection>
 
@@ -195,7 +195,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.wallThickness * 100) / 100}
+          value={node.wallThickness}
         />
         <SliderControl
           label="Deck Thick."
@@ -205,7 +205,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.deckThickness * 100) / 100}
+          value={node.deckThickness}
         />
         <SliderControl
           label="Overhang"
@@ -215,7 +215,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.overhang * 100) / 100}
+          value={node.overhang}
         />
         <SliderControl
           label="Shingle Thick."
@@ -225,7 +225,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.shingleThickness * 100) / 100}
+          value={node.shingleThickness}
         />
       </PanelSection>
 
@@ -242,7 +242,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <MetricControl
           label="Y"
@@ -256,7 +256,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <MetricControl
           label="Z"
@@ -270,7 +270,7 @@ export function RoofSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"

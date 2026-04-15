@@ -228,7 +228,7 @@ export function DoorPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <div className="px-1 pt-2 pb-1">
           <ActionButton
@@ -249,7 +249,7 @@ export function DoorPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Height"
@@ -261,7 +261,7 @@ export function DoorPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -274,7 +274,7 @@ export function DoorPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.frameThickness * 1000) / 1000}
+          value={node.frameThickness}
         />
         <SliderControl
           label="Depth"
@@ -284,7 +284,7 @@ export function DoorPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.frameDepth * 1000) / 1000}
+          value={node.frameDepth}
         />
       </PanelSection>
 
@@ -297,7 +297,7 @@ export function DoorPanel() {
           precision={3}
           step={0.005}
           unit="m"
-          value={Math.round(node.contentPadding[0] * 1000) / 1000}
+          value={node.contentPadding[0]}
         />
         <SliderControl
           label="Vertical"
@@ -307,7 +307,7 @@ export function DoorPanel() {
           precision={3}
           step={0.005}
           unit="m"
-          value={Math.round(node.contentPadding[1] * 1000) / 1000}
+          value={node.contentPadding[1]}
         />
       </PanelSection>
 
@@ -358,7 +358,7 @@ export function DoorPanel() {
               precision={3}
               step={0.005}
               unit="m"
-              value={Math.round(node.thresholdHeight * 1000) / 1000}
+              value={node.thresholdHeight}
             />
           </div>
         )}
@@ -380,7 +380,7 @@ export function DoorPanel() {
               precision={2}
               step={0.05}
               unit="m"
-              value={Math.round(node.handleHeight * 100) / 100}
+              value={node.handleHeight}
             />
             <div className="space-y-1">
               <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
@@ -420,7 +420,7 @@ export function DoorPanel() {
               precision={2}
               step={0.05}
               unit="m"
-              value={Math.round(node.panicBarHeight * 100) / 100}
+              value={node.panicBarHeight}
             />
           </div>
         )}
@@ -458,7 +458,7 @@ export function DoorPanel() {
                 precision={1}
                 step={1}
                 unit="%"
-                value={Math.round(normHeights[i]! * 100 * 10) / 10}
+                value={normHeights[i]! * 100}
               />
 
               <SliderControl
@@ -489,7 +489,7 @@ export function DoorPanel() {
                       precision={1}
                       step={1}
                       unit="%"
-                      value={Math.round(ratio * 100 * 10) / 10}
+                      value={ratio * 100}
                     />
                   ))}
                   <SliderControl
@@ -505,7 +505,7 @@ export function DoorPanel() {
                     precision={3}
                     step={0.005}
                     unit="m"
-                    value={Math.round(seg.dividerThickness * 1000) / 1000}
+                    value={seg.dividerThickness}
                   />
                 </div>
               )}
@@ -525,7 +525,7 @@ export function DoorPanel() {
                     precision={3}
                     step={0.005}
                     unit="m"
-                    value={Math.round(seg.panelInset * 1000) / 1000}
+                    value={seg.panelInset}
                   />
                   <SliderControl
                     label="Depth"
@@ -540,7 +540,7 @@ export function DoorPanel() {
                     precision={3}
                     step={0.005}
                     unit="m"
-                    value={Math.round(seg.panelDepth * 1000) / 1000}
+                    value={seg.panelDepth}
                   />
                 </div>
               )}

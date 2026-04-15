@@ -265,7 +265,7 @@ export function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.width ?? 1) * 100) / 100}
+            value={(node.width ?? 1)}
           />
           <MetricControl
             label="Rise"
@@ -275,7 +275,7 @@ export function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
+            value={(node.totalRise ?? 2.5)}
           />
           <MetricControl
             label="Steps"
@@ -303,7 +303,7 @@ export function StairPanel() {
               precision={2}
               step={0.01}
               unit="m"
-              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+              value={(node.thickness ?? 0.25)}
             />
           )}
           <MetricControl
@@ -314,7 +314,7 @@ export function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
+            value={(node.innerRadius ?? 0.9)}
           />
           <SliderControl
             label="Sweep"
@@ -342,7 +342,7 @@ export function StairPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                  value={(node.topLandingDepth ?? 0.9)}
                 />
               )}
               <ToggleControl
@@ -373,7 +373,7 @@ export function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <MetricControl
           label="Y"
@@ -387,7 +387,7 @@ export function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <MetricControl
           label="Z"
@@ -401,7 +401,7 @@ export function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"
@@ -448,7 +448,7 @@ export function StairPanel() {
             precision={2}
             step={0.02}
             unit="m"
-            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+            value={(node.railingHeight ?? 0.92)}
           />
         )}
       </PanelSection>

@@ -228,7 +228,7 @@ export function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label={
@@ -240,7 +240,7 @@ export function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <div className="px-1 pt-2 pb-1">
           <ActionButton
@@ -260,7 +260,7 @@ export function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Height"
@@ -269,7 +269,7 @@ export function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -281,7 +281,7 @@ export function WindowPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.frameThickness * 1000) / 1000}
+          value={node.frameThickness}
         />
         <SliderControl
           label="Depth"
@@ -290,7 +290,7 @@ export function WindowPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.frameDepth * 1000) / 1000}
+          value={node.frameDepth}
         />
       </PanelSection>
 
@@ -335,7 +335,7 @@ export function WindowPanel() {
                 precision={1}
                 step={1}
                 unit="%"
-                value={Math.round(ratio * 100 * 10) / 10}
+                value={ratio * 100}
               />
             ))}
             <div className="mt-1 border-border/50 border-t pt-1">
@@ -347,7 +347,7 @@ export function WindowPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round((node.columnDividerThickness ?? 0.03) * 1000) / 1000}
+                value={(node.columnDividerThickness ?? 0.03)}
               />
             </div>
           </div>
@@ -368,7 +368,7 @@ export function WindowPanel() {
                 precision={1}
                 step={1}
                 unit="%"
-                value={Math.round(ratio * 100 * 10) / 10}
+                value={ratio * 100}
               />
             ))}
             <div className="mt-1 border-border/50 border-t pt-1">
@@ -380,7 +380,7 @@ export function WindowPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round((node.rowDividerThickness ?? 0.03) * 1000) / 1000}
+                value={(node.rowDividerThickness ?? 0.03)}
               />
             </div>
           </div>
@@ -402,7 +402,7 @@ export function WindowPanel() {
               precision={3}
               step={0.01}
               unit="m"
-              value={Math.round(node.sillDepth * 1000) / 1000}
+              value={node.sillDepth}
             />
             <SliderControl
               label="Thickness"
@@ -411,7 +411,7 @@ export function WindowPanel() {
               precision={3}
               step={0.01}
               unit="m"
-              value={Math.round(node.sillThickness * 1000) / 1000}
+              value={node.sillThickness}
             />
           </div>
         )}

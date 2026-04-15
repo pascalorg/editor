@@ -99,7 +99,7 @@ export function ItemPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label={
@@ -115,7 +115,7 @@ export function ItemPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label={
@@ -131,7 +131,7 @@ export function ItemPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
       </PanelSection>
 
@@ -207,7 +207,7 @@ export function ItemPanel() {
             }}
             precision={2}
             step={0.1}
-            value={Math.round(node.scale[0] * 100) / 100}
+            value={node.scale[0]}
           />
         ) : (
           <>
@@ -224,7 +224,7 @@ export function ItemPanel() {
               }
               precision={2}
               step={0.1}
-              value={Math.round(node.scale[0] * 100) / 100}
+              value={node.scale[0]}
             />
             <SliderControl
               label={
@@ -239,7 +239,7 @@ export function ItemPanel() {
               }
               precision={2}
               step={0.1}
-              value={Math.round(node.scale[1] * 100) / 100}
+              value={node.scale[1]}
             />
             <SliderControl
               label={
@@ -254,7 +254,7 @@ export function ItemPanel() {
               }
               precision={2}
               step={0.1}
-              value={Math.round(node.scale[2] * 100) / 100}
+              value={node.scale[2]}
             />
           </>
         )}
@@ -267,7 +267,7 @@ export function ItemPanel() {
             const [w, h, d] = getScaledDimensions(node)
             return (
               <span className="font-mono text-white">
-                {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
+                {w}×{h}×{d}
               </span>
             )
           })()}

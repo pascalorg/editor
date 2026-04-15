@@ -62,7 +62,7 @@ export function ReferencePanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label={
@@ -80,7 +80,7 @@ export function ReferencePanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label={
@@ -98,7 +98,7 @@ export function ReferencePanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
       </PanelSection>
 
@@ -158,7 +158,7 @@ export function ReferencePanel() {
           }}
           precision={2}
           step={0.1}
-          value={Math.round(node.scale * 100) / 100}
+          value={node.scale}
         />
 
         <SliderControl
