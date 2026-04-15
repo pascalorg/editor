@@ -7,15 +7,15 @@ import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manage
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
-import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
+import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
   getWallMiterBoundaryPoints,
   type Point2D,
-  type WallMiterData,
   pointToKey,
+  type WallMiterData,
 } from './wall-mitering'
 
 // Reusable CSG evaluator for better performance
@@ -181,14 +181,32 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
 
   const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
 
+  // Defensive: if the wall collapsed to zero length (bad data, or a
+  // cluster pass that over-merged short walls), `generateExtrudedWall`
+  // returns an empty BufferGeometry with no position attribute. The
+  // WebGPU renderer crashes reading `.count` on undefined, so hide the
+  // mesh instead of assigning the empty geometry. The wall stays in
+  // the scene graph (so Ctrl+Z can still recover it) but draws
+  // nothing until the start/end become valid again.
+  if (!newGeo.attributes.position) {
+    newGeo.dispose()
+    mesh.visible = false
+    return
+  }
+  mesh.visible = node.visible ?? true
+
   mesh.geometry.dispose()
   mesh.geometry = newGeo
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
     const collisionGeo = generateExtrudedWall(node, [], miterData, slabElevation)
-    collisionMesh.geometry.dispose()
-    collisionMesh.geometry = collisionGeo
+    if (collisionGeo.attributes.position) {
+      collisionMesh.geometry.dispose()
+      collisionMesh.geometry = collisionGeo
+    } else {
+      collisionGeo.dispose()
+    }
   }
 
   mesh.position.set(node.start[0], slabElevation, node.start[1])

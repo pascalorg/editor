@@ -1,7 +1,7 @@
-import { type SlabNode, useRegistry } from '@pascal-app/core'
-import { useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import { type SlabNode, useRegistry, useScene } from '@pascal-app/core'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
+import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import {
   createMaterial,
@@ -16,9 +16,17 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
 
   const handlers = useNodeEvents(node, 'slab')
 
+  // Mark dirty on mount so SlabSystem regenerates the polygon geometry
+  // after a <Viewer> remount (preview mode, view mode switches).
+  // Otherwise the zero-size placeholder persists. See WallRenderer.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
+
   const material = useMemo(() => {
     const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
-    const sourceMaterial = presetMaterial ?? (node.material ? createMaterial(node.material) : DEFAULT_SLAB_MATERIAL)
+    const sourceMaterial =
+      presetMaterial ?? (node.material ? createMaterial(node.material) : DEFAULT_SLAB_MATERIAL)
     const slabMaterial = sourceMaterial.clone()
 
     // Slabs participate in the WebGPU MRT scene pass. Keeping them opaque avoids
