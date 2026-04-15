@@ -30,15 +30,20 @@ type LinkedWallSnapshot = {
 
 function getLinkedWallSnapshots(args: {
   wallId: WallNode['id']
+  wallParentId: string | null
   originalStart: [number, number]
   originalEnd: [number, number]
 }) {
-  const { wallId, originalStart, originalEnd } = args
+  const { wallId, wallParentId, originalStart, originalEnd } = args
   const { nodes } = useScene.getState()
   const snapshots: LinkedWallSnapshot[] = []
 
   for (const node of Object.values(nodes)) {
     if (!(node?.type === 'wall' && node.id !== wallId)) {
+      continue
+    }
+
+    if ((node.parentId ?? null) !== wallParentId) {
       continue
     }
 
@@ -99,6 +104,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   const linkedOriginalsRef = useRef(
     getLinkedWallSnapshots({
       wallId: node.id,
+      wallParentId: node.parentId ?? null,
       originalStart: node.start,
       originalEnd: node.end,
     }),

@@ -6,9 +6,9 @@ import {
   DEFAULT_WALL_HEIGHT,
   getWallCurveLength,
   getWallMiterBoundaryPoints,
-  isCurvedWall,
   getWallPlanFootprint,
   getWallSurfacePolygon,
+  isCurvedWall,
   type Point2D,
   pointToKey,
   sampleWallCenterline,
@@ -20,7 +20,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import * as THREE from 'three'
 
 const GUIDE_Y_OFFSET = 0.08
@@ -60,18 +60,19 @@ export function WallMeasurementLabel() {
   const selectedNode = selectedId ? nodes[selectedId as WallNode['id']] : null
   const wall = selectedNode?.type === 'wall' ? selectedNode : null
 
-  const [wallObject, setWallObject] = useState<THREE.Object3D | null>(null)
-
-  useEffect(() => {
-    setWallObject(null)
-  }, [selectedId])
+  const [wallObjectState, setWallObjectState] = useState<{
+    id: WallNode['id']
+    object: THREE.Object3D
+  } | null>(null)
+  const wallObject =
+    selectedId && wallObjectState?.id === selectedId ? wallObjectState.object : null
 
   useFrame(() => {
     if (!selectedId || wallObject) return
 
     const nextWallObject = sceneRegistry.nodes.get(selectedId)
     if (nextWallObject) {
-      setWallObject(nextWallObject)
+      setWallObjectState({ id: selectedId as WallNode['id'], object: nextWallObject })
     }
   })
 
@@ -147,10 +148,7 @@ function getWallExteriorOffsetSign(wall: Pick<WallNode, 'frontSide' | 'backSide'
   return 1
 }
 
-function getCurvedWallMeasurementPath(
-  wall: WallNode,
-  miterData: WallMiterData,
-): Point2D[] | null {
+function getCurvedWallMeasurementPath(wall: WallNode, miterData: WallMiterData): Point2D[] | null {
   const boundaryPoints = getWallMiterBoundaryPoints(wall, miterData)
   if (!boundaryPoints) return null
 
@@ -197,10 +195,10 @@ function buildMeasurementGuide(
 
           return [localPoint[0], height + GUIDE_Y_OFFSET, localPoint[2]]
         })
-    : [
-        [startLocal[0], height + GUIDE_Y_OFFSET, startLocal[2]],
-        [endLocal[0], height + GUIDE_Y_OFFSET, endLocal[2]],
-      ]
+      : [
+          [startLocal[0], height + GUIDE_Y_OFFSET, startLocal[2]],
+          [endLocal[0], height + GUIDE_Y_OFFSET, endLocal[2]],
+        ]
 
   if (guidePath.length < 2) return null
 
@@ -236,11 +234,7 @@ function buildMeasurementGuide(
       extensionStartBase[2],
     ],
     extEndStart: [extensionEndBase[0], height, extensionEndBase[2]],
-    extEndEnd: [
-      extensionEndBase[0],
-      height + GUIDE_Y_OFFSET + extOvershoot,
-      extensionEndBase[2],
-    ],
+    extEndEnd: [extensionEndBase[0], height + GUIDE_Y_OFFSET + extOvershoot, extensionEndBase[2]],
     labelPosition: [midpoint[0], midpoint[1] + LABEL_LIFT, midpoint[2]],
   }
 }
