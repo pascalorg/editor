@@ -1578,3 +1578,8 @@ export const CATALOG_ITEMS: AssetInput[] = [
     },
   },
 ]
+
+export function getDefaultCatalogItem(category: string | null | undefined): AssetInput | null {
+  if (!category) return null
+  return CATALOG_ITEMS.find((item) => item.category === category) ?? null
+}
