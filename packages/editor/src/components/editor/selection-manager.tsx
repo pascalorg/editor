@@ -919,13 +919,13 @@ const EditorOutlinerSync = () => {
     outliner.selectedObjects.length = 0
     for (const id of idsToHighlight) {
       const obj = sceneRegistry.nodes.get(id)
-      if (obj) outliner.selectedObjects.push(obj)
+      if (obj?.parent) outliner.selectedObjects.push(obj)
     }
 
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
       const obj = sceneRegistry.nodes.get(hoveredId)
-      if (obj) outliner.hoveredObjects.push(obj)
+      if (obj?.parent) outliner.hoveredObjects.push(obj)
     }
   }, [phase, previewSelectedIds, selection, hoveredId, outliner])
 
