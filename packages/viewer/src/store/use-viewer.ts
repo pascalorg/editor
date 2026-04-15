@@ -74,6 +74,16 @@ type ViewerState = {
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
 
+  /**
+   * FOV in degrees used by the perspective camera while `walkthroughMode`
+   * is active. Defaults to 85° (standard FPS-ish). 50° orbit FOV feels
+   * telephoto when you're standing inside the scene, so walkthrough gets
+   * its own setting. Persisted so users' preferred FOV sticks across
+   * sessions.
+   */
+  walkthroughFov: number
+  setWalkthroughFov: (fov: number) => void
+
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
 }
@@ -200,6 +210,12 @@ const useViewer = create<ViewerState>()(
       walkthroughMode: false,
       setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
 
+      walkthroughFov: 85,
+      setWalkthroughFov: (fov) =>
+        // Clamp to a sane range. Below ~50 it feels sniper-scope; above
+        // ~110 the near-wall distortion is intolerable.
+        set({ walkthroughFov: Math.max(50, Math.min(110, fov)) }),
+
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
     }),
@@ -212,6 +228,7 @@ const useViewer = create<ViewerState>()(
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,
+        walkthroughFov: state.walkthroughFov,
       }),
     },
   ),

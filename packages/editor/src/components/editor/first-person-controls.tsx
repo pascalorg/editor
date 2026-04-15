@@ -1,5 +1,6 @@
 'use client'
 
+import { WalkthroughFovSlider } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { Euler, Vector3 } from 'three'
@@ -224,6 +225,10 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
           <span className="text-muted-foreground/60 text-xs">Click to look around</span>
         </div>
       </div>
+
+      {/* FOV slider — bottom-right. Only visible during walkthrough,
+          component handles its own gate on walkthroughMode. */}
+      <WalkthroughFovSlider />
     </>
   )
 }

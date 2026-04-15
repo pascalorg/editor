@@ -477,6 +477,13 @@ const useEditor = create<EditorState>()(
           const currentViewMode = get().viewMode
           useViewer.getState().setCameraMode('perspective')
           useViewer.getState().setWallMode('up')
+          // Mirror the flag into the viewer store so viewer-side
+          // reactive visuals (wider FOV in viewer-camera.tsx, any
+          // future first-person-only overlays) pick it up. Safe
+          // because custom-camera-controls.tsx early-returns on
+          // isFirstPersonMode *before* mounting WalkthroughControls,
+          // so there's no pointer-lock conflict.
+          useViewer.getState().setWalkthroughMode(true)
           set({
             isFirstPersonMode: true,
             _viewModeBeforeFirstPerson: currentViewMode,
@@ -489,6 +496,7 @@ const useEditor = create<EditorState>()(
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
           const prevMode = get()._viewModeBeforeFirstPerson
+          useViewer.getState().setWalkthroughMode(false)
           set({
             isFirstPersonMode: false,
             _viewModeBeforeFirstPerson: null,
