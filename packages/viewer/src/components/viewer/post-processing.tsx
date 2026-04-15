@@ -53,7 +53,6 @@ const PostProcessingPasses = () => {
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
   const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current theme so there's no flash on first render.
@@ -85,35 +84,6 @@ const PostProcessingPasses = () => {
     setPipelineVersion((v) => v + 1)
   }, [])
 
-  // Renderer initialization
-
-  useEffect(() => {
-    let mounted = true
-
-    const initRenderer = async () => {
-      try {
-        if (renderer && (renderer as any).init) {
-          await (renderer as any).init()
-        }
-
-        if (mounted) {
-          setIsInitialized(true)
-        }
-      } catch (error) {
-        console.error('[viewer] Failed to initialize renderer for post-processing.', error)
-        if (mounted) {
-          setIsInitialized(false)
-        }
-      }
-    }
-
-    initRenderer()
-
-    return () => {
-      mounted = false
-    }
-  }, [renderer])
-
   // Reset retry state when project changes
   useEffect(() => {
     // Intentionally touch projectId so the effect reruns on project switches.
@@ -141,7 +111,7 @@ const PostProcessingPasses = () => {
     void projectId
     void pipelineVersion
 
-    if (!(renderer && scene && camera && isInitialized)) {
+    if (!(renderer && scene && camera)) {
       return
     }
 
@@ -298,7 +268,6 @@ const PostProcessingPasses = () => {
     scene,
     camera,
     hoverHighlightMode,
-    isInitialized,
     zoneLayers,
     projectId,
     pipelineVersion,
