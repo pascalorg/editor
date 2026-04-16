@@ -2,11 +2,17 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import { useViewer } from '@pascal-app/viewer'
-import { ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun } from 'lucide-react'
+import { Check, ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun } from 'lucide-react'
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import type { GridSnapStep, ViewMode } from '../../store/use-editor'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './primitives/dropdown-menu'
 import { useSidebarStore } from './primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from './primitives/tooltip'
 
@@ -176,7 +182,7 @@ const levelModeLabels: Record<string, string> = {
 
 const gridSnapOrder: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 const gridSnapLabels: Record<GridSnapStep, string> = {
-  0.5: '0.5',
+  0.5: '0.50',
   0.25: '0.25',
   0.1: '0.10',
   0.05: '0.05',
@@ -235,22 +241,33 @@ function GridSnapToggle() {
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const setGridSnapStep = useEditor((s) => s.setGridSnapStep)
 
-  const cycle = () => {
-    const idx = gridSnapOrder.indexOf(gridSnapStep)
-    const next = gridSnapOrder[(idx + 1) % gridSnapOrder.length]
-    if (next) setGridSnapStep(next)
-  }
-
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5')} onClick={cycle} type="button">
-          <IconifyIcon height={14} icon="lucide:grid-2x2" width={14} />
-          <span className="font-medium text-xs">{formatGridSnapStep(gridSnapStep)}</span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Grid snap: {formatGridSnapStep(gridSnapStep)}</TooltipContent>
-    </Tooltip>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5')} type="button">
+              <IconifyIcon height={14} icon="lucide:grid-2x2" width={14} />
+              <span className="font-medium text-xs">{formatGridSnapStep(gridSnapStep)}</span>
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Grid snap: {formatGridSnapStep(gridSnapStep)}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="center" side="bottom">
+        {gridSnapOrder.map((step) => {
+          const isActive = step === gridSnapStep
+          return (
+            <DropdownMenuItem key={step} onSelect={() => setGridSnapStep(step)}>
+              <span className="flex min-w-12 items-center justify-between gap-3">
+                <span>{formatGridSnapStep(step)}</span>
+                {isActive ? <Check className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
+              </span>
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
