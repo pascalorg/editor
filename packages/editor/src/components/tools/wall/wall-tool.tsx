@@ -73,6 +73,7 @@ export const WallTool: React.FC = () => {
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
+  const ctrlPressed = useRef(false)
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -86,7 +87,7 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       // event.localPosition is building-local — consistent with stored wall start/end
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      gridPosition = snapWallDraftPoint({ point: localPoint, walls })
+      gridPosition = snapWallDraftPoint({ point: localPoint, walls, freeSnap: shiftPressed.current })
 
       if (buildingState.current === 1) {
         const snappedLocal = snapWallDraftPoint({
@@ -94,6 +95,7 @@ export const WallTool: React.FC = () => {
           walls,
           start: [startingPoint.current.x, startingPoint.current.z],
           angleSnap: !shiftPressed.current,
+          freeSnap: ctrlPressed.current,
         })
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -120,7 +122,7 @@ export const WallTool: React.FC = () => {
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
       if (buildingState.current === 0) {
-        const snappedStart = snapWallDraftPoint({ point: localClick, walls })
+        const snappedStart = snapWallDraftPoint({ point: localClick, walls, freeSnap: shiftPressed.current })
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
@@ -132,6 +134,7 @@ export const WallTool: React.FC = () => {
           walls,
           start: [startingPoint.current.x, startingPoint.current.z],
           angleSnap: !shiftPressed.current,
+          freeSnap: ctrlPressed.current,
         })
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -144,15 +147,13 @@ export const WallTool: React.FC = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftPressed.current = true
-      }
+      if (e.key === 'Shift') shiftPressed.current = true
+      if (e.key === 'Control') ctrlPressed.current = true
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftPressed.current = false
-      }
+      if (e.key === 'Shift') shiftPressed.current = false
+      if (e.key === 'Control') ctrlPressed.current = false
     }
 
     const onCancel = () => {

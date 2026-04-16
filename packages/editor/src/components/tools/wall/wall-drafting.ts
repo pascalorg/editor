@@ -99,10 +99,18 @@ export function snapWallDraftPoint(args: {
   walls: WallNode[]
   start?: WallPlanPoint
   angleSnap?: boolean
+  freeSnap?: boolean
   ignoreWallIds?: string[]
 }): WallPlanPoint {
-  const { point, walls, start, angleSnap = false, ignoreWallIds } = args
-  const basePoint = start && angleSnap ? snapPointTo45Degrees(start, point) : snapPointToGrid(point)
+  const { point, walls, start, angleSnap = false, freeSnap = false, ignoreWallIds } = args
+  let basePoint: WallPlanPoint
+  if (freeSnap) {
+    basePoint = point
+  } else if (start && angleSnap) {
+    basePoint = snapPointTo45Degrees(start, point)
+  } else {
+    basePoint = snapPointToGrid(point)
+  }
 
   return (
     findWallSnapTarget(basePoint, walls, {
