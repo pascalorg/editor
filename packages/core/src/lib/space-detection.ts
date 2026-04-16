@@ -1,3 +1,4 @@
+import { getClampedWallCurveOffset, sampleWallCenterline } from '../systems/wall/wall-curve'
 import { SlabNode, type SlabNode as SlabNodeType, type WallNode } from '../schema'
 
 type Point2D = { x: number; y: number }
@@ -178,9 +179,8 @@ function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
 }
 
 function getDirectedWallBoundaryPoints(wall: WallNode, forward: boolean) {
-  const start = pointFromTuple(wall.start)
-  const end = pointFromTuple(wall.end)
-  return forward ? [start, end] : [end, start]
+  const points = sampleWallCenterline(wall).map((point) => ({ x: point.x, y: point.y }))
+  return forward ? points : [...points].reverse()
 }
 
 function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
@@ -394,6 +394,7 @@ function wallGeometrySignature(wall: WallNode) {
     wall.end[0].toFixed(4),
     wall.end[1].toFixed(4),
     (wall.thickness ?? 0.2).toFixed(4),
+    getClampedWallCurveOffset(wall).toFixed(4),
   ].join('|')
 }
 
