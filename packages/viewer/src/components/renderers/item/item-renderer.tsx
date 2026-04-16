@@ -1,7 +1,6 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
-  baseMaterial,
   glassMaterial,
   type Interactive,
   type ItemNode,
@@ -15,7 +14,7 @@ import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import type { AnimationAction, Group, Material, Mesh } from 'three'
+import type { AnimationAction, Group, Material, Mesh, MeshStandardMaterial } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -25,11 +24,53 @@ import { useItemLightPool } from '../../../store/use-item-light-pool'
 import { ErrorBoundary } from '../../error-boundary'
 import { NodeRenderer } from '../node-renderer'
 
+const convertedMaterialCache = new WeakMap<Material, MeshStandardNodeMaterial>()
+
+/**
+ * Convert a GLTF's `MeshStandardMaterial` to `MeshStandardNodeMaterial`
+ * while preserving color, textures, and PBR properties. The previous
+ * implementation returned a single shared `baseMaterial` for every mesh,
+ * wiping out all material information and leaving every loaded GLTF as
+ * a uniform cream-coloured blob.
+ */
 const getMaterialForOriginal = (original: Material): MeshStandardNodeMaterial => {
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
-  return baseMaterial
+
+  if ((original as { isMeshStandardNodeMaterial?: boolean }).isMeshStandardNodeMaterial) {
+    return original as MeshStandardNodeMaterial
+  }
+
+  const cached = convertedMaterialCache.get(original)
+  if (cached) return cached
+
+  const std = original as MeshStandardMaterial
+
+  const nodeMat = new MeshStandardNodeMaterial()
+  nodeMat.name = std.name
+  nodeMat.color.copy(std.color)
+  if (std.roughness !== undefined) nodeMat.roughness = std.roughness
+  if (std.metalness !== undefined) nodeMat.metalness = std.metalness
+  if (std.emissive) nodeMat.emissive.copy(std.emissive)
+  if (std.emissiveIntensity !== undefined) nodeMat.emissiveIntensity = std.emissiveIntensity
+  nodeMat.opacity = std.opacity
+  nodeMat.transparent = std.transparent
+  nodeMat.alphaTest = std.alphaTest
+  nodeMat.side = std.side
+  nodeMat.vertexColors = std.vertexColors
+  nodeMat.map = std.map
+  nodeMat.normalMap = std.normalMap
+  if (std.normalScale) nodeMat.normalScale.copy(std.normalScale)
+  nodeMat.roughnessMap = std.roughnessMap
+  nodeMat.metalnessMap = std.metalnessMap
+  nodeMat.emissiveMap = std.emissiveMap
+  nodeMat.aoMap = std.aoMap
+  nodeMat.aoMapIntensity = std.aoMapIntensity
+  nodeMat.alphaMap = std.alphaMap
+
+  convertedMaterialCache.set(original, nodeMat)
+  return nodeMat
 }
 
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
