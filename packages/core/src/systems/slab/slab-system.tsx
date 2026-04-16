@@ -59,6 +59,41 @@ function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
 
 /** Half of default wall thickness — used to extend slab geometry under walls */
 const SLAB_OUTSET = 0.05
+const AUTO_SLAB_INSET = 0.02
+
+function insetPolygonFromCentroid(
+  polygon: Array<[number, number]>,
+  inset: number,
+): Array<[number, number]> {
+  if (inset <= 0) {
+    return polygon.map(([x, z]) => [x, z] as [number, number])
+  }
+
+  const centroid = polygon.reduce(
+    (acc, [x, z]) => ({ x: acc.x + x, z: acc.z + z }),
+    { x: 0, z: 0 },
+  )
+  centroid.x /= Math.max(polygon.length, 1)
+  centroid.z /= Math.max(polygon.length, 1)
+
+  return polygon.map(([x, z]) => {
+    const dx = x - centroid.x
+    const dz = z - centroid.z
+    const length = Math.hypot(dx, dz)
+    if (length <= inset + 1e-6) {
+      return [x, z] as [number, number]
+    }
+
+    const scale = (length - inset) / length
+    return [centroid.x + dx * scale, centroid.z + dz * scale] as [number, number]
+  })
+}
+
+function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, number]> {
+  return slabNode.autoFromWalls
+    ? insetPolygonFromCentroid(slabNode.polygon, AUTO_SLAB_INSET)
+    : outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+}
 
 /**
  * Expand a polygon outward by a uniform distance.
@@ -123,7 +158,7 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
  * Standard slab: flat extrusion upward from Y=0 by elevation thickness.
  */
 function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+  const polygon = getRenderableSlabPolygon(slabNode)
   const elevation = slabNode.elevation ?? 0.05
 
   if (polygon.length < 3) return new THREE.BufferGeometry()
@@ -159,7 +194,7 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
  *   - walls from Y=0 to Y=depth, inward-facing normals (visible from inside pool)
  */
 function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+  const polygon = getRenderableSlabPolygon(slabNode)
   const depth = Math.abs(slabNode.elevation ?? 0.05)
 
   if (polygon.length < 3) return new THREE.BufferGeometry()
