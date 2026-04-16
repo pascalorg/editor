@@ -2101,6 +2101,7 @@ function buildWallEndpointDragDraft(
     'wallId' | 'endpoint' | 'fixedPoint' | 'originalStart' | 'originalEnd' | 'linkedWalls'
   >,
   movingPoint: WallPlanPoint,
+  detachLinkedWalls = false,
 ): WallEndpointDraft {
   const nextDraft = buildWallEndpointDraft(
     dragState.wallId,
@@ -2111,13 +2112,15 @@ function buildWallEndpointDragDraft(
 
   return {
     ...nextDraft,
-    linkedUpdates: getLinkedWallUpdates(
-      dragState.linkedWalls,
-      dragState.originalStart,
-      dragState.originalEnd,
-      nextDraft.start,
-      nextDraft.end,
-    ),
+    linkedUpdates: detachLinkedWalls
+      ? []
+      : getLinkedWallUpdates(
+          dragState.linkedWalls,
+          dragState.originalStart,
+          dragState.originalEnd,
+          nextDraft.start,
+          nextDraft.end,
+        ),
   }
 }
 
@@ -4971,6 +4974,7 @@ export function FloorplanPanel() {
   const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
   const [wallCurveDraft, setWallCurveDraft] = useState<WallCurveDraft | null>(null)
+  const [altPressed, setAltPressed] = useState(false)
   const [hoveredOpeningId, setHoveredOpeningId] = useState<OpeningNode['id'] | null>(null)
   const [hoveredWallId, setHoveredWallId] = useState<WallNode['id'] | null>(null)
   const [hoveredSlabId, setHoveredSlabId] = useState<SlabNode['id'] | null>(null)
@@ -6740,6 +6744,9 @@ export function FloorplanPanel() {
       if (event.key === 'Shift') {
         setShiftPressed(true)
       }
+      if (event.key === 'Alt') {
+        setAltPressed(true)
+      }
 
       if (isStairBuildActive && (event.key === 'r' || event.key === 'R')) {
         setStairBuildPreviewRotation((current) => current + Math.PI / 4)
@@ -6762,11 +6769,15 @@ export function FloorplanPanel() {
       if (event.key === 'Shift') {
         setShiftPressed(false)
       }
+      if (event.key === 'Alt') {
+        setAltPressed(false)
+      }
 
       setRotationModifierPressed(event.metaKey || event.ctrlKey)
     }
     const handleBlur = () => {
       setShiftPressed(false)
+      setAltPressed(false)
       setRotationModifierPressed(false)
     }
 
@@ -6832,7 +6843,7 @@ export function FloorplanPanel() {
         dragState.currentPoint = snappedPoint
         setCursorPoint(snappedPoint)
         setWallEndpointDraft((previousDraft) => {
-          const nextDraft = buildWallEndpointDragDraft(dragState, snappedPoint)
+          const nextDraft = buildWallEndpointDragDraft(dragState, snappedPoint, event.altKey)
 
           if (
             !(
@@ -6955,7 +6966,7 @@ export function FloorplanPanel() {
 
       const wall = wallById.get(dragState.wallId)
       if (wall) {
-        const nextDraft = buildWallEndpointDragDraft(dragState, dragState.currentPoint)
+        const nextDraft = buildWallEndpointDragDraft(dragState, dragState.currentPoint, altPressed)
         const hasChanged = !(
           pointsEqual(nextDraft.start, wall.start) && pointsEqual(nextDraft.end, wall.end)
         )
@@ -7043,6 +7054,7 @@ export function FloorplanPanel() {
     getSvgPointFromClientPoint,
     guideById,
     getPlanPointFromClientPoint,
+    altPressed,
     shiftPressed,
     updateNode,
     wallById,
@@ -9919,21 +9931,47 @@ export function FloorplanPanel() {
           !movingNode &&
           !curvingWall &&
           selectedWallCornerMoveActions.map(({ endpoint, x, y }) => (
-            <button
-              aria-label={endpoint === 'start' ? 'Move wall start' : 'Move wall end'}
-              className="pointer-events-auto absolute z-30 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground"
+            <div
+              className="absolute z-30"
               key={`selected-wall-corner-move-${endpoint}`}
-              onPointerDown={(event) => handleSelectedWallCornerMovePointerDown(endpoint, event)}
               style={{
                 left: x,
                 top: y,
-                transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y + 6}px))`,
+                transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y - 4}px))`,
               }}
-              title={endpoint === 'start' ? 'Move wall start' : 'Move wall end'}
-              type="button"
             >
-              <Move className="h-4 w-4" />
-            </button>
+              <button
+                aria-label={endpoint === 'start' ? 'Move wall start' : 'Move wall end'}
+                className={cn(
+                  'pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors',
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+                onPointerDown={(event) => handleSelectedWallCornerMovePointerDown(endpoint, event)}
+                title={
+                  endpoint === 'start'
+                    ? 'Move wall start (Alt to detach)'
+                    : 'Move wall end (Alt to detach)'
+                }
+                type="button"
+              >
+                <Move className="h-4 w-4" />
+              </button>
+              {wallEndpointDraft?.wallId === selectedWallEntry?.wall.id &&
+                wallEndpointDraft.endpoint === endpoint && (
+                  <div
+                    className={cn(
+                      'pointer-events-none mt-2 whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium shadow-lg backdrop-blur-md transition-colors',
+                      altPressed
+                        ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                        : 'border-border bg-background/95 text-muted-foreground',
+                    )}
+                  >
+                    {altPressed ? 'Detaching corner' : 'Alt to detach'}
+                  </div>
+                )}
+            </div>
           ))}
         {selectedSlabActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
           <div

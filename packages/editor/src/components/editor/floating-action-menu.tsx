@@ -21,7 +21,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -59,6 +59,7 @@ export function FloatingActionMenu() {
   const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
+  const [altPressed, setAltPressed] = useState(false)
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -76,6 +77,34 @@ export function FloatingActionMenu() {
       }
       return false
     })
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') {
+        setAltPressed(true)
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') {
+        setAltPressed(false)
+      }
+    }
+
+    const handleBlur = () => {
+      setAltPressed(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleBlur)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [])
 
   useFrame(() => {
     if (!(selectedId && isValidType && groupRef.current)) return
@@ -384,9 +413,14 @@ export function FloatingActionMenu() {
             <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
               <button
                 aria-label="Move wall start"
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground"
+                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
                 onClick={(e) => handleEndpointMove('start', e)}
                 onPointerDown={(e) => e.stopPropagation()}
+                title="Move wall start (Alt to detach)"
                 type="button"
               >
                 <Move className="h-4 w-4" />
@@ -397,9 +431,14 @@ export function FloatingActionMenu() {
             <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
               <button
                 aria-label="Move wall end"
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground"
+                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
                 onClick={(e) => handleEndpointMove('end', e)}
                 onPointerDown={(e) => e.stopPropagation()}
+                title="Move wall end (Alt to detach)"
                 type="button"
               >
                 <Move className="h-4 w-4" />

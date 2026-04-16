@@ -1,6 +1,7 @@
 'use client'
 
 import { type AnyNodeId, emitter, type GridEvent, useScene, type WallNode } from '@pascal-app/core'
+import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
@@ -87,6 +88,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<WallPlanPoint | null>(null)
   const shiftPressedRef = useRef(false)
+  const altPressedRef = useRef(false)
   const nodeIdRef = useRef(target.wall.id)
   const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
   const originalEndRef = useRef<WallPlanPoint>([...target.wall.end] as WallPlanPoint)
@@ -109,6 +111,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const point = target.endpoint === 'start' ? target.wall.start : target.wall.end
     return [point[0], 0, point[1]]
   })
+  const [altPressed, setAltPressed] = useState(false)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingWallEndpoint(null)
@@ -141,20 +144,22 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
     }
 
-    const applyPreview = (movingPoint: WallPlanPoint) => {
+    const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
       applyNodePreview([
         { id: nodeId, start: nextStart, end: nextEnd },
-        ...getLinkedWallUpdates(
-          linkedOriginalsRef.current,
-          originalStart,
-          originalEnd,
-          nextStart,
-          nextEnd,
-        ),
+        ...(detachLinkedWalls
+          ? []
+          : getLinkedWallUpdates(
+              linkedOriginalsRef.current,
+              originalStart,
+              originalEnd,
+              nextStart,
+              nextEnd,
+            )),
       ])
     }
 
@@ -181,7 +186,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
       previousGridPosRef.current = snappedPoint
 
-      applyPreview(snappedPoint)
+      applyPreview(snappedPoint, event.nativeEvent.altKey)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -199,13 +204,15 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         useScene.temporal.getState().resume()
         applyNodePreview([
           { id: nodeId, start: preview.start, end: preview.end },
-          ...getLinkedWallUpdates(
-            linkedOriginalsRef.current,
-            originalStart,
-            originalEnd,
-            preview.start,
-            preview.end,
-          ),
+          ...(altPressedRef.current
+            ? []
+            : getLinkedWallUpdates(
+                linkedOriginalsRef.current,
+                originalStart,
+                originalEnd,
+                preview.start,
+                preview.end,
+              )),
         ])
         useScene.temporal.getState().pause()
         sfxEmitter.emit('sfx:item-place')
@@ -231,12 +238,26 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (event.key === 'Shift') {
         shiftPressedRef.current = true
       }
+      if (event.key === 'Alt') {
+        altPressedRef.current = true
+        setAltPressed(true)
+      }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Shift') {
         shiftPressedRef.current = false
       }
+      if (event.key === 'Alt') {
+        altPressedRef.current = false
+        setAltPressed(false)
+      }
+    }
+
+    const onWindowBlur = () => {
+      shiftPressedRef.current = false
+      altPressedRef.current = false
+      setAltPressed(false)
     }
 
     emitter.on('grid:move', onGridMove)
@@ -244,6 +265,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
 
     return () => {
       if (!wasCommitted) {
@@ -255,12 +277,30 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
     }
   }, [exitMoveMode, target])
 
   return (
     <group>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
+      <Html
+        position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+        style={{ pointerEvents: 'none', touchAction: 'none' }}
+        zIndexRange={[100, 0]}
+      >
+        <div className="translate-y-10">
+          <div
+            className={`whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium shadow-lg backdrop-blur-md transition-colors ${
+              altPressed
+                ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                : 'border-border bg-background/95 text-muted-foreground'
+            }`}
+          >
+            {altPressed ? 'Detaching corner' : 'Alt to detach'}
+          </div>
+        </div>
+      </Html>
     </group>
   )
 }
