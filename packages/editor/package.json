@@ -47,7 +47,9 @@
     "nanoid": "^5.1.6",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "jspdf": "^2.5.2",
+    "svg2pdf.js": "^2.2.3"
   },
   "devDependencies": {
     "@pascal-app/core": "^0.5.1",

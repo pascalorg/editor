@@ -70,6 +70,7 @@ import { tools as structureTools } from '../ui/action-menu/structure-tools'
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
+import { FloorplanExportButton } from './floorplan-export-button'
 import { NodeActionMenu } from './node-action-menu'
 
 const FALLBACK_VIEW_SIZE = 12
@@ -9621,6 +9622,12 @@ export function FloorplanPanel() {
             </g>
           </svg>
         )}
+
+        <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex items-end">
+          <div className="pointer-events-auto">
+            <FloorplanExportButton />
+          </div>
+        </div>
       </div>
     </div>
   )
