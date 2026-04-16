@@ -5,17 +5,17 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, CeilingNode, LevelNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
-import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
+import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
   getWallMiterBoundaryPoints,
   type Point2D,
-  type WallMiterData,
   pointToKey,
+  type WallMiterData,
 } from './wall-mitering'
 
 // Reusable CSG evaluator for better performance
@@ -174,12 +174,52 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const levelId = resolveLevelId(node, nodes)
   const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
 
-  const childrenIds = node.children || []
+  // Extend the wall to fill the structural cavity if a ceiling on
+  // this level has tray regions that push the upper level's floor
+  // above the main ceiling height. Without this, a 0.3m gap between
+  // the ceiling and the next floor's slab leaves the exterior wall
+  // visually open in orbit view. The wall's stored `height` stays
+  // unchanged — we only inflate the effective height for rendering
+  // so the geometry fills the cavity.
+  let effectiveHeight = node.height ?? DEFAULT_WALL_HEIGHT
+  const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
+  if (level) {
+    for (const siblingId of level.children) {
+      const sibling = nodes[siblingId as AnyNodeId]
+      if (sibling?.type === 'ceiling') {
+        const ceiling = sibling as CeilingNode
+        effectiveHeight = Math.max(effectiveHeight, ceiling.height ?? effectiveHeight)
+        for (const region of (ceiling as any).regions ?? []) {
+          effectiveHeight = Math.max(effectiveHeight, region.height)
+        }
+      }
+    }
+  }
+  const wallNode =
+    effectiveHeight > (node.height ?? DEFAULT_WALL_HEIGHT)
+      ? { ...node, height: effectiveHeight }
+      : node
+
+  const childrenIds = wallNode.children || []
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
 
-  const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
+  const newGeo = generateExtrudedWall(wallNode, childrenNodes, miterData, slabElevation)
+
+  // Defensive: if the wall collapsed to zero length (bad data, or a
+  // cluster pass that over-merged short walls), `generateExtrudedWall`
+  // returns an empty BufferGeometry with no position attribute. The
+  // WebGPU renderer crashes reading `.count` on undefined, so hide the
+  // mesh instead of assigning the empty geometry. The wall stays in
+  // the scene graph (so Ctrl+Z can still recover it) but draws
+  // nothing until the start/end become valid again.
+  if (!newGeo.attributes.position) {
+    newGeo.dispose()
+    mesh.visible = false
+    return
+  }
+  mesh.visible = node.visible ?? true
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -187,8 +227,12 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
     const collisionGeo = generateExtrudedWall(node, [], miterData, slabElevation)
-    collisionMesh.geometry.dispose()
-    collisionMesh.geometry = collisionGeo
+    if (collisionGeo.attributes.position) {
+      collisionMesh.geometry.dispose()
+      collisionMesh.geometry = collisionGeo
+    } else {
+      collisionGeo.dispose()
+    }
   }
 
   mesh.position.set(node.start[0], slabElevation, node.start[1])

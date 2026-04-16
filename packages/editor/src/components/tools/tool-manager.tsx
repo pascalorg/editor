@@ -9,6 +9,7 @@ import { useViewer } from '@pascal-app/viewer'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
+import { CeilingRegionEditor } from './ceiling/ceiling-region-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { DoorTool } from './door/door-tool'
 import { FenceTool } from './fence/fence-tool'
@@ -54,6 +55,7 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
   const editingHole = useEditor((state) => state.editingHole)
+  const editingRegion = useEditor((state) => state.editingRegion)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -91,18 +93,26 @@ export const ToolManager: React.FC = () => {
   const showSlabHoleEditor =
     selectedSlabId !== undefined && editingHole !== null && editingHole.nodeId === selectedSlabId
 
-  // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
+  // Show ceiling boundary editor when in structure/select mode with a ceiling selected
+  // (but not while editing a hole or region on that same ceiling)
   const showCeilingBoundaryEditor =
     phase === 'structure' &&
     mode === 'select' &&
     selectedCeilingId !== undefined &&
-    (!editingHole || editingHole.nodeId !== selectedCeilingId)
+    (!editingHole || editingHole.nodeId !== selectedCeilingId) &&
+    (!editingRegion || editingRegion.nodeId !== selectedCeilingId)
 
   // Show ceiling hole editor when editing a hole on the selected ceiling
   const showCeilingHoleEditor =
     selectedCeilingId !== undefined &&
     editingHole !== null &&
     editingHole.nodeId === selectedCeilingId
+
+  // Show ceiling region editor when editing a region on the selected ceiling
+  const showCeilingRegionEditor =
+    selectedCeilingId !== undefined &&
+    editingRegion !== null &&
+    editingRegion.nodeId === selectedCeilingId
 
   // Show zone boundary editor when in structure/select mode with a zone selected
   // Hide when editing a slab or ceiling to avoid overlapping handles
@@ -141,6 +151,12 @@ export const ToolManager: React.FC = () => {
         )}
         {showCeilingHoleEditor && selectedCeilingId && editingHole && (
           <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
+        )}
+        {showCeilingRegionEditor && selectedCeilingId && editingRegion && (
+          <CeilingRegionEditor
+            ceilingId={selectedCeilingId}
+            regionIndex={editingRegion.regionIndex}
+          />
         )}
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {movingNode && movingNode.type !== 'building' && <MoveTool />}

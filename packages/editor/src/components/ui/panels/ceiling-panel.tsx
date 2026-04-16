@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type CeilingNode, type MaterialSchema, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type CeilingNode,
+  type CeilingRegion,
+  type MaterialSchema,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
@@ -20,6 +26,8 @@ export function CeilingPanel() {
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const editingRegion = useEditor((s) => s.editingRegion)
+  const setEditingRegion = useEditor((s) => s.setEditingRegion)
 
   const selectedId = selectedIds[0]
   const node = selectedId
@@ -51,19 +59,22 @@ export function CeilingPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
     setEditingHole(null)
-  }, [setSelection, setEditingHole])
+    setEditingRegion(null)
+  }, [setSelection, setEditingHole, setEditingRegion])
 
   useEffect(() => {
     if (!node) {
       setEditingHole(null)
+      setEditingRegion(null)
     }
-  }, [node, setEditingHole])
+  }, [node, setEditingHole, setEditingRegion])
 
   useEffect(() => {
     return () => {
       setEditingHole(null)
+      setEditingRegion(null)
     }
-  }, [setEditingHole])
+  }, [setEditingHole, setEditingRegion])
 
   const handleAddHole = useCallback(() => {
     if (!(node && selectedId)) return
@@ -117,6 +128,72 @@ export function CeilingPanel() {
     setMovingNode(node)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
+
+  const handleAddRegion = useCallback(() => {
+    if (!(node && selectedId)) return
+
+    const polygon = node.polygon
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of polygon) {
+      cx += x
+      cz += z
+    }
+    cx /= polygon.length
+    cz /= polygon.length
+
+    // Start with a 1m square centered on the ceiling centroid. A tray
+    // ceiling usually steps *up* from the main plane, so default to
+    // +0.3m above — but clamp so we don't push past a reasonable 6m.
+    const regionSize = 0.5
+    const newRegion: CeilingRegion = {
+      polygon: [
+        [cx - regionSize, cz - regionSize],
+        [cx + regionSize, cz - regionSize],
+        [cx + regionSize, cz + regionSize],
+        [cx - regionSize, cz + regionSize],
+      ],
+      height: Math.min(6, (node.height ?? 2.5) + 0.3),
+      holes: [],
+    }
+    const currentRegions = node?.regions || []
+    handleUpdate({ regions: [...currentRegions, newRegion] })
+    setEditingRegion({ nodeId: selectedId, regionIndex: currentRegions.length })
+  }, [node, selectedId, handleUpdate, setEditingRegion])
+
+  const handleEditRegion = useCallback(
+    (index: number) => {
+      if (!selectedId) return
+      setEditingRegion({ nodeId: selectedId, regionIndex: index })
+    },
+    [selectedId, setEditingRegion],
+  )
+
+  const handleDeleteRegion = useCallback(
+    (index: number) => {
+      if (!selectedId) return
+      const currentRegions = node?.regions || []
+      const newRegions = currentRegions.filter((_, i) => i !== index)
+      handleUpdate({ regions: newRegions })
+      if (editingRegion?.nodeId === selectedId && editingRegion?.regionIndex === index) {
+        setEditingRegion(null)
+      }
+    },
+    [selectedId, node?.regions, handleUpdate, editingRegion, setEditingRegion],
+  )
+
+  const handleRegionHeightChange = useCallback(
+    (index: number, height: number) => {
+      if (!selectedId) return
+      const currentRegions = node?.regions || []
+      const region = currentRegions[index]
+      if (!region) return
+      const newRegions = [...currentRegions]
+      newRegions[index] = { ...region, height }
+      handleUpdate({ regions: newRegions })
+    },
+    [selectedId, node?.regions, handleUpdate],
+  )
 
   if (!node || node.type !== 'ceiling' || selectedIds.length !== 1) return null
 
@@ -234,6 +311,89 @@ export function CeilingPanel() {
             icon={<Plus className="h-3.5 w-3.5" />}
             label="Add Hole"
             onClick={handleAddHole}
+          />
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Regions">
+        {node.regions && node.regions.length > 0 ? (
+          <div className="flex flex-col gap-1 pb-2">
+            {node.regions.map((region, index) => {
+              const regionArea = calculateArea(region.polygon)
+              const isEditing =
+                editingRegion?.nodeId === selectedId && editingRegion?.regionIndex === index
+              return (
+                <div
+                  className={`flex flex-col gap-2 rounded-lg border p-2 transition-colors ${
+                    isEditing
+                      ? 'border-primary/50 bg-primary/10'
+                      : 'border-transparent hover:bg-accent/30'
+                  }`}
+                  key={index}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-white'}`}
+                      >
+                        Region {index + 1} {isEditing && '(Editing)'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {regionArea.toFixed(2)} m² · {region.polygon.length} pts
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {isEditing ? (
+                        <ActionButton
+                          className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
+                          label="Done"
+                          onClick={() => setEditingRegion(null)}
+                        />
+                      ) : (
+                        <>
+                          <button
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
+                            onClick={() => handleEditRegion(index)}
+                            type="button"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                            onClick={() => handleDeleteRegion(index)}
+                            type="button"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <SliderControl
+                    label="Height"
+                    max={6}
+                    min={0}
+                    onChange={(v) => handleRegionHeightChange(index, v)}
+                    precision={3}
+                    step={0.01}
+                    unit="m"
+                    value={region.height}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="px-2 py-3 text-center text-muted-foreground text-xs">No regions</div>
+        )}
+
+        <div className="px-1 pt-1 pb-1">
+          <ActionButton
+            className="w-full"
+            disabled={editingRegion?.nodeId === selectedId}
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add Region"
+            onClick={handleAddRegion}
           />
         </div>
       </PanelSection>

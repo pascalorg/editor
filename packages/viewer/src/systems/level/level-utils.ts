@@ -34,8 +34,18 @@ export function getLevelHeight(
     const child = nodes[childId as keyof typeof nodes]
     if (!child) continue
     if (child.type === 'ceiling') {
-      const ch = (child as CeilingNode).height ?? DEFAULT_LEVEL_HEIGHT
+      const ceiling = child as CeilingNode
+      const ch = ceiling.height ?? DEFAULT_LEVEL_HEIGHT
       if (ch > maxTop) maxTop = ch
+      // Account for ceiling regions (tray ceilings) that extend
+      // above the main ceiling plane. Without this the upper level's
+      // floor sits at the main ceiling height, and tray regions poke
+      // through it. The level height becomes the tallest surface —
+      // main ceiling or any region — so the upper floor clears
+      // everything below it.
+      for (const region of (ceiling as any).regions ?? []) {
+        if (region.height > maxTop) maxTop = region.height
+      }
     } else if (child.type === 'wall') {
       let meshY = sceneRegistry.nodes.get(childId as any)?.position.y ?? 0
       if (meshY < 0) meshY = 0

@@ -127,6 +127,8 @@ type EditorState = {
   // Generic hole editing (works for slabs, ceilings, and any future polygon nodes)
   editingHole: { nodeId: string; holeIndex: number } | null
   setEditingHole: (hole: { nodeId: string; holeIndex: number } | null) => void
+  editingRegion: { nodeId: string; regionIndex: number } | null
+  setEditingRegion: (region: { nodeId: string; regionIndex: number } | null) => void
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
@@ -482,6 +484,8 @@ const useEditor = create<EditorState>()(
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
       setEditingHole: (hole) => set({ editingHole: hole }),
+      editingRegion: null,
+      setEditingRegion: (region) => set({ editingRegion: region }),
       isPreviewMode: false,
       setPreviewMode: (preview) => {
         if (preview) {

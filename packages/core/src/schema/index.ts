@@ -25,7 +25,7 @@ export type {
   TextureWrapMode as TextureWrapModeValue,
 } from './material'
 export { BuildingNode } from './nodes/building'
-export { CeilingNode } from './nodes/ceiling'
+export { CeilingNode, CeilingRegion } from './nodes/ceiling'
 export { DoorNode, DoorSegment } from './nodes/door'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode } from './nodes/guide'
