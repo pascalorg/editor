@@ -117,6 +117,24 @@ const PostProcessingPasses = () => {
 
     hasPipelineErrorRef.current = false
 
+    // WebGPU availability check: SSGI, denoise, and RenderPipeline are all
+    // WebGPU-only APIs. When the browser falls back to WebGL2 (no
+    // `navigator.gpu`, or the device couldn't be created), building the
+    // pipeline either throws silently or produces a broken output where
+    // the scene renders for a few frames and then goes black as the retry
+    // loop fights the direct-render fallback path. Short-circuit here so
+    // `useFrame` uses the direct `renderer.render(scene, camera)` path
+    // exclusively and never attempts the TSL pipeline.
+    const hasWebGPU = typeof navigator !== 'undefined' && typeof navigator.gpu !== 'undefined'
+    if (!hasWebGPU) {
+      console.warn(
+        '[viewer] WebGPU unavailable — rendering without post-processing (SSGI, outlines, denoise).',
+      )
+      hasPipelineErrorRef.current = true
+      renderPipelineRef.current = null
+      return
+    }
+
     // Clear outliner arrays synchronously to prevent stale Object3D refs
     // from the previous project leaking into the new pipeline's outline passes.
     const outliner = useViewer.getState().outliner
@@ -263,15 +281,7 @@ const PostProcessingPasses = () => {
       }
       renderPipelineRef.current = null
     }
-  }, [
-    renderer,
-    scene,
-    camera,
-    hoverHighlightMode,
-    zoneLayers,
-    projectId,
-    pipelineVersion,
-  ])
+  }, [renderer, scene, camera, hoverHighlightMode, zoneLayers, projectId, pipelineVersion])
 
   useFrame((_, delta) => {
     // Animate background colour toward the current theme target (same lerp as AnimatedBackground)

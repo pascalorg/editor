@@ -21,6 +21,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { getDefaultCatalogItem } from '../components/ui/item-catalog/catalog-items'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -344,6 +345,10 @@ export function selectDefaultBuildingAndLevel() {
   }
 }
 
+function getDefaultSelectedItemForCategory(category: CatalogCategory | null): AssetInput | null {
+  return getDefaultCatalogItem(category)
+}
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -365,7 +370,11 @@ const useEditor = create<EditorState>()(
           } else if (phase === 'structure') {
             set({ tool: 'wall', catalogCategory: null })
           } else if (phase === 'furnish') {
-            set({ tool: 'item', catalogCategory: 'furniture' })
+            set({
+              tool: 'item',
+              catalogCategory: 'furniture',
+              selectedItem: getDefaultSelectedItemForCategory('furniture'),
+            })
           }
         } else {
           // Reset to select mode and clear tool/catalog when switching phases
@@ -405,8 +414,15 @@ const useEditor = create<EditorState>()(
             } else if (phase === 'structure' && structureLayer === 'elements') {
               set({ tool: 'wall' })
             } else if (phase === 'furnish') {
-              set({ tool: 'item', catalogCategory: 'furniture' })
+              set({
+                tool: 'item',
+                catalogCategory: 'furniture',
+                selectedItem: getDefaultSelectedItemForCategory('furniture'),
+              })
             }
+          } else if (phase === 'furnish' && tool === 'item' && !get().selectedItem) {
+            const category = get().catalogCategory ?? 'furniture'
+            set({ selectedItem: getDefaultSelectedItemForCategory(category) })
           }
         }
         // When leaving build mode, clear tool
@@ -434,7 +450,17 @@ const useEditor = create<EditorState>()(
         })
       },
       catalogCategory: DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory,
-      setCatalogCategory: (category) => set({ catalogCategory: category }),
+      setCatalogCategory: (category) =>
+        set((state) => ({
+          catalogCategory: category,
+          selectedItem:
+            category !== null &&
+            state.phase === 'furnish' &&
+            state.mode === 'build' &&
+            state.tool === 'item'
+              ? getDefaultSelectedItemForCategory(category)
+              : state.selectedItem,
+        })),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
       movingNode: null as
@@ -517,11 +543,23 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
-        ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
-      }),
+      merge: (persistedState, currentState) => {
+        const mergedState = {
+          ...currentState,
+          ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
+          ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
+        }
+
+        return {
+          ...mergedState,
+          selectedItem:
+            mergedState.phase === 'furnish' &&
+            mergedState.mode === 'build' &&
+            mergedState.tool === 'item'
+              ? getDefaultSelectedItemForCategory(mergedState.catalogCategory ?? 'furniture')
+              : currentState.selectedItem,
+        }
+      },
       partialize: (state) => ({
         phase: state.phase,
         mode: state.mode,

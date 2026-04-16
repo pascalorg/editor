@@ -600,9 +600,14 @@ export class MergedOutlineNode extends TempNode {
 
   private _buildCache(objects: Object3D[], cache: Set<Object3D>) {
     for (const obj of objects) {
-      obj.traverse((child: any) => {
-        if (child.isMesh || child.isSprite) cache.add(child)
-      })
+      if (!obj || !obj.traverse) continue
+      try {
+        obj.traverse((child: any) => {
+          if (child.isMesh || child.isSprite) cache.add(child)
+        })
+      } catch {
+        // Skip objects that were disposed or removed from the scene graph
+      }
     }
   }
 }
