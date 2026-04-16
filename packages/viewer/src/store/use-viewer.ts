@@ -74,9 +74,76 @@ type ViewerState = {
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
 
+  /**
+   * FOV in degrees used by the perspective camera while `walkthroughMode`
+   * is active. Defaults to 85° (standard FPS-ish). 50° orbit FOV feels
+   * telephoto when you're standing inside the scene, so walkthrough gets
+   * its own setting. Persisted so users' preferred FOV sticks across
+   * sessions.
+   */
+  walkthroughFov: number
+  setWalkthroughFov: (fov: number) => void
+
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+
+  /**
+   * Per-door open/close animation state. A door enters this map the first
+   * time the user presses F while looking at it and stays there for the rest
+   * of the session (the rotation tick reads `startedAt` + `from` + `target`
+   * to compute the current open ratio without per-frame store writes — so
+   * subscribers don't re-render during the animation).
+   *
+   * Persisted across phase/mode switches via the viewer store but NOT across
+   * full reloads (excluded from `partialize`), so opening a bunch of doors
+   * while reviewing a scene doesn't leak into the next session.
+   */
+  doorAnim: Record<string, { from: number; target: 0 | 1; startedAt: number }>
+  toggleDoor: (id: string) => void
+  /**
+   * Drops animation entries for door ids that are no longer present in the
+   * scene. Called periodically by the DoorInteractiveSystem so entries for
+   * deleted nodes don't accumulate across long editing sessions.
+   */
+  pruneDoorAnim: (aliveIds: Set<string>) => void
+
+  /**
+   * ID of the door currently under the walkthrough crosshair (within reach).
+   * Populated by DoorInteractiveSystem via a camera-forward raycast; consumed
+   * by the F-key handler and the "Press F" hint overlay. `null` when the
+   * crosshair isn't on a door or walkthrough mode is off.
+   */
+  crosshairHoveredDoorId: string | null
+  setCrosshairHoveredDoorId: (id: string | null) => void
 }
+
+/**
+ * Cubic ease-in-out. Decent default for door swings — starts and ends slow,
+ * snaps through the middle. Used for the visible ratio only; the stored
+ * animation state is linear time-based so the easing curve can change
+ * without invalidating existing data.
+ */
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+}
+
+/**
+ * Shared helper for deriving the eased open ratio at time `now`. Exported
+ * separately so `toggleDoor` can snapshot a mid-animation ratio, and the
+ * per-frame door rotation system can compute the rendered angle without
+ * touching store state.
+ */
+export function computeCurrentRatio(
+  anim: { from: number; target: 0 | 1; startedAt: number },
+  now: number,
+  durationMs: number,
+): number {
+  const t = Math.max(0, Math.min(1, (now - anim.startedAt) / durationMs))
+  return anim.from + (anim.target - anim.from) * easeInOutCubic(t)
+}
+
+export const DOOR_OPEN_DURATION_MS = 450
+export const DOOR_MAX_ANGLE = Math.PI / 2
 
 const useViewer = create<ViewerState>()(
   persist(
@@ -200,8 +267,48 @@ const useViewer = create<ViewerState>()(
       walkthroughMode: false,
       setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
 
+      walkthroughFov: 85,
+      setWalkthroughFov: (fov) =>
+        // Clamp to a sane range. Below ~50 it feels sniper-scope; above
+        // ~110 the near-wall distortion is intolerable.
+        set({ walkthroughFov: Math.max(50, Math.min(110, fov)) }),
+
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+
+      doorAnim: {},
+      toggleDoor: (id) =>
+        set((state) => {
+          const existing = state.doorAnim[id]
+          const now = performance.now()
+          // Compute the door's current open ratio (using whatever animation
+          // it was in mid-way through) so a mid-animation toggle reverses
+          // smoothly from where it is rather than snapping.
+          const current = existing ? computeCurrentRatio(existing, now, DOOR_OPEN_DURATION_MS) : 0
+          const target: 0 | 1 = current > 0.5 ? 0 : 1
+          return {
+            doorAnim: {
+              ...state.doorAnim,
+              [id]: { from: current, target, startedAt: now },
+            },
+          }
+        }),
+      pruneDoorAnim: (aliveIds) =>
+        set((state) => {
+          let changed = false
+          const next: typeof state.doorAnim = {}
+          for (const [id, anim] of Object.entries(state.doorAnim)) {
+            if (aliveIds.has(id)) {
+              next[id] = anim
+            } else {
+              changed = true
+            }
+          }
+          return changed ? { doorAnim: next } : state
+        }),
+
+      crosshairHoveredDoorId: null,
+      setCrosshairHoveredDoorId: (id) => set({ crosshairHoveredDoorId: id }),
     }),
     {
       name: 'viewer-preferences',
@@ -212,6 +319,7 @@ const useViewer = create<ViewerState>()(
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,
+        walkthroughFov: state.walkthroughFov,
       }),
     },
   ),

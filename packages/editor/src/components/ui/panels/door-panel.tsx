@@ -382,19 +382,8 @@ export function DoorPanel() {
               unit="m"
               value={Math.round(node.handleHeight * 100) / 100}
             />
-            <div className="space-y-1">
-              <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                Handle Side
-              </span>
-              <SegmentedControl
-                onChange={(v) => handleUpdate({ handleSide: v })}
-                options={[
-                  { label: 'Left', value: 'left' },
-                  { label: 'Right', value: 'right' },
-                ]}
-                value={node.handleSide}
-              />
-            </div>
+            {/* Handle side is derived from `hingesSide` — the handle
+                always sits on the free edge of the leaf. */}
           </div>
         )}
       </PanelSection>

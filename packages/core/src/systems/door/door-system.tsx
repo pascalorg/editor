@@ -62,9 +62,12 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
 
-  // Dispose and remove all old visual children; preserve 'cutout'
+  // Dispose and remove all old visual children; preserve 'cutout' and any
+  // existing leaf-pivot group (we'll clear + refill its contents, but keep
+  // the group itself so whatever rotation the interactive system has
+  // applied survives geometry regeneration).
   for (const child of [...mesh.children]) {
-    if (child.name === 'cutout') continue
+    if (child.name === 'cutout' || child.name === 'leafPivot') continue
     if (child instanceof THREE.Mesh) child.geometry.dispose()
     mesh.remove(child)
   }
@@ -79,7 +82,6 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     segments,
     handle,
     handleHeight,
-    handleSide,
     doorCloser,
     panicBar,
     panicBarHeight,
@@ -93,6 +95,37 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   const leafDepth = 0.04
   // Leaf center is shifted down from door center by half the top frame
   const leafCenterY = -frameThickness / 2
+
+  // ── Hinge pivot ─────────────────────────────────────────────────────
+  // Everything that physically swings with the leaf (leaf surfaces,
+  // handle, door closer, panic bar) lives under `leafOffset` inside
+  // `leafPivot`. Rotating leafPivot.rotation.y opens the door around
+  // its hinge edge — the DoorInteractiveSystem in packages/viewer
+  // animates that rotation in response to user interaction.
+  //
+  // Structure:
+  //   mesh                 (invisible hitbox; also holds fixed frame/hinges)
+  //     └─ leafPivot       (at hinge edge, rotates around Y)
+  //          └─ leafOffset (inverse offset so children use door-center coords)
+  //               └─ leaf meshes (panels, handle, etc.)
+  const hingePivotX = hingesSide === 'right' ? leafW / 2 : -leafW / 2
+  let leafPivot = mesh.getObjectByName('leafPivot') as THREE.Group | undefined
+  if (!leafPivot) {
+    leafPivot = new THREE.Group()
+    leafPivot.name = 'leafPivot'
+    mesh.add(leafPivot)
+  }
+  leafPivot.position.set(hingePivotX, 0, 0)
+  // Dispose old leaf contents — leafPivot is kept so the current rotation
+  // persists through geometry regeneration, but its children are stale.
+  for (const child of [...leafPivot.children]) {
+    if (child instanceof THREE.Mesh) child.geometry.dispose()
+    leafPivot.remove(child)
+  }
+  const leafOffset = new THREE.Group()
+  leafOffset.name = 'leafOffset'
+  leafOffset.position.set(-hingePivotX, 0, 0)
+  leafPivot.add(leafOffset)
 
   // ── Frame members ──
   // Left post — full height
@@ -148,16 +181,16 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   const cpY = contentPadding[1]
   if (cpY > 0) {
     // Top strip
-    addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY + leafH / 2 - cpY / 2, 0)
+    addBox(leafOffset, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY + leafH / 2 - cpY / 2, 0)
     // Bottom strip
-    addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY - leafH / 2 + cpY / 2, 0)
+    addBox(leafOffset, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY - leafH / 2 + cpY / 2, 0)
   }
   if (cpX > 0) {
     const innerH = leafH - 2 * cpY
     // Left strip
-    addBox(mesh, baseMaterial, cpX, innerH, leafDepth, -leafW / 2 + cpX / 2, leafCenterY, 0)
+    addBox(leafOffset, baseMaterial, cpX, innerH, leafDepth, -leafW / 2 + cpX / 2, leafCenterY, 0)
     // Right strip
-    addBox(mesh, baseMaterial, cpX, innerH, leafDepth, leafW / 2 - cpX / 2, leafCenterY, 0)
+    addBox(leafOffset, baseMaterial, cpX, innerH, leafDepth, leafW / 2 - cpX / 2, leafCenterY, 0)
   }
 
   // Content area inside padding
@@ -192,7 +225,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     for (let c = 0; c < numCols - 1; c++) {
       cx += colWidths[c]!
       addBox(
-        mesh,
+        leafOffset,
         baseMaterial,
         seg.dividerThickness,
         segH,
@@ -212,21 +245,21 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
       if (seg.type === 'glass') {
         // Glass only — no opaque backing so it's truly transparent
         const glassDepth = Math.max(0.004, leafDepth * 0.15)
-        addBox(mesh, glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
+        addBox(leafOffset, glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
       } else if (seg.type === 'panel') {
         // Opaque leaf backing for this column
-        addBox(mesh, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        addBox(leafOffset, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
         // Raised panel detail
         const panelW = colW - 2 * seg.panelInset
         const panelH = segH - 2 * seg.panelInset
         if (panelW > 0.01 && panelH > 0.01) {
           const effectiveDepth = Math.abs(seg.panelDepth) < 0.002 ? 0.005 : Math.abs(seg.panelDepth)
           const panelZ = leafDepth / 2 + effectiveDepth / 2
-          addBox(mesh, baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+          addBox(leafOffset, baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
         }
       } else {
         // 'empty' — opaque backing, no detail
-        addBox(mesh, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        addBox(leafOffset, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
       }
     }
 
@@ -237,26 +270,35 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   if (handle) {
     // Convert from floor-based height to mesh-center-based Y
     const handleY = handleHeight - height / 2
-    // Handle grip sits on the front face (+Z) of the leaf
-    const faceZ = leafDepth / 2
 
-    // X position: handleSide refers to which side the grip is on
-    const handleX = handleSide === 'right' ? leafW / 2 - 0.045 : -leafW / 2 + 0.045
+    // Handle always sits on the free edge — the side opposite the hinges.
+    // A real door never has the handle on the hinge side, so we derive
+    // this from `hingesSide` rather than trusting the (now redundant)
+    // `handleSide` field: flipping hinges used to leave the handle
+    // stranded on the same side.
+    const handleOnRight = hingesSide === 'left'
+    const handleX = handleOnRight ? leafW / 2 - 0.045 : -leafW / 2 + 0.045
 
-    // Backplate
-    addBox(mesh, baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
-    // Grip lever
-    addBox(mesh, baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
+    // Real doors have a handle on both faces — one to grab from each
+    // room. Stamp a backplate + lever on +Z and a mirrored pair on -Z.
+    for (const sign of [1, -1] as const) {
+      const faceZ = (leafDepth / 2) * sign
+      // Backplate sits just off the leaf face; levers stick out further.
+      // Signs multiply through so the -Z pair protrudes into -Z space
+      // rather than back through the leaf.
+      addBox(leafOffset, baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005 * sign)
+      addBox(leafOffset, baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025 * sign)
+    }
   }
 
   // ── Door closer (commercial hardware at top) ──
   if (doorCloser) {
     const closerY = leafCenterY + leafH / 2 - 0.04
     // Body
-    addBox(mesh, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
+    addBox(leafOffset, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
     // Arm (simplified as thin bar to frame side)
     addBox(
-      mesh,
+      leafOffset,
       baseMaterial,
       0.14,
       0.015,
@@ -270,7 +312,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   // ── Panic bar ──
   if (panicBar) {
     const barY = panicBarHeight - height / 2
-    addBox(mesh, baseMaterial, leafW * 0.72, 0.04, 0.055, 0, barY, leafDepth / 2 + 0.03)
+    addBox(leafOffset, baseMaterial, leafW * 0.72, 0.04, 0.055, 0, barY, leafDepth / 2 + 0.03)
   }
 
   // ── Hinges (3 knuckle-style hinges on the hinge side) ──

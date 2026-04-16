@@ -64,6 +64,10 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
         useEditor.getState().setMode('select')
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
+        // F is also the walkthrough "open/close door" keybind. When the
+        // user is in a walkthrough, let DoorInteractiveSystem claim the
+        // keystroke instead of yanking them into the furnish/build panel.
+        if (useViewer.getState().walkthroughMode) return
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')

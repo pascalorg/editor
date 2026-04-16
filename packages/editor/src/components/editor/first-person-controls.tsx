@@ -1,5 +1,6 @@
 'use client'
 
+import { DoorInteractionHint } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { Euler, Vector3 } from 'three'
@@ -221,9 +222,15 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
           <div className="h-5 w-px bg-border/30" />
           <ControlHint label="Sprint" keys={['Shift']} />
           <div className="h-5 w-px bg-border/30" />
+          <ControlHint label="Open door" keys={['F']} />
+          <div className="h-5 w-px bg-border/30" />
           <span className="text-muted-foreground/60 text-xs">Click to look around</span>
         </div>
       </div>
+
+      {/* "Press F to open/close" hint that follows the crosshair when
+          aimed at a door. No-op when the crosshair isn't targeting a door. */}
+      <DoorInteractionHint />
     </>
   )
 }

@@ -16,6 +16,7 @@ import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@re
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
+import { DoorInteractiveSystem } from '../../systems/door/door-interactive-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { LevelSystem } from '../../systems/level/level-system'
@@ -145,6 +146,7 @@ const Viewer: React.FC<ViewerProps> = ({
       {/* Core systems */}
       <CeilingSystem />
       <DoorSystem />
+      <DoorInteractiveSystem />
       <FenceSystem />
       <ItemSystem />
       <RoofSystem />
