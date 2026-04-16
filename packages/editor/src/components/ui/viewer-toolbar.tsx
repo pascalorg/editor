@@ -364,8 +364,8 @@ export function ViewerToolbarRight() {
   return (
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
-      <GridSnapToggle />
       <WallModeToggle />
+      <GridSnapToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
       <ThemeToggle />
