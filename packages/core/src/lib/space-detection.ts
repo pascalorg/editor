@@ -3,8 +3,8 @@ import {
   getWallCurveFrameAt,
   isCurvedWall,
 } from '../systems/wall/wall-curve'
+import { CeilingNode, SlabNode, type CeilingNode as CeilingNodeType, type SlabNode as SlabNodeType, type WallNode } from '../schema'
 import { simplifyClosedPolygon } from './polygon-geometry'
-import { SlabNode, type SlabNode as SlabNodeType, type WallNode } from '../schema'
 
 type Point2D = { x: number; y: number }
 
@@ -31,6 +31,7 @@ type DetectedRoom = {
 }
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
+const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
 const ROOM_CURVE_TOLERANCE = 0.04
 const MAX_CURVE_SUBDIVISION_DEPTH = 6
 const AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE = 0.08
@@ -417,14 +418,15 @@ export function resolveWallSurfaceSides(
 }
 
 function nextAutoRoomName(
-  slabs: Array<{
+  nodes: Array<{
     name?: string
   }>,
+  suffix: 'Slab' | 'Ceiling',
 ) {
   let maxIndex = 0
 
-  for (const slab of slabs) {
-    const match = /^Room\s+(\d+)$/.exec((slab.name ?? '').trim())
+  for (const node of nodes) {
+    const match = /^Room\s+(\d+)(?:\s+(?:Slab|Ceiling))?$/i.exec((node.name ?? '').trim())
     if (!match) continue
     const index = Number(match[1])
     if (Number.isFinite(index)) {
@@ -432,7 +434,17 @@ function nextAutoRoomName(
     }
   }
 
-  return `Room ${maxIndex + 1}`
+  return `Room ${maxIndex + 1} ${suffix}`
+}
+
+function sameTuplePolygon(
+  current: Array<[number, number]>,
+  next: Array<[number, number]>,
+) {
+  return (
+    current.length === next.length &&
+    current.every((point, index) => point[0] === next[index]?.[0] && point[1] === next[index]?.[1])
+  )
 }
 
 function wallGeometrySignature(wall: WallNode) {
@@ -567,14 +579,7 @@ function syncAutoSlabsForLevel(
       const polygon = updatesById.get(slab.id)
       if (!polygon) return []
 
-      const samePolygon =
-        slab.polygon.length === polygon.length &&
-        slab.polygon.every((point, index) => {
-          const nextPoint = polygon[index]
-          return point[0] === nextPoint?.[0] && point[1] === nextPoint?.[1]
-        })
-
-      return samePolygon ? [] : [{ id: slab.id, data: { polygon } }]
+      return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
     })
 
   const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
@@ -585,7 +590,7 @@ function syncAutoSlabsForLevel(
     const room = detected[index]
     if (!room) continue
 
-    const name = nextAutoRoomName(plannedSlabsForNaming)
+    const name = nextAutoRoomName(plannedSlabsForNaming, 'Slab')
     plannedSlabsForNaming.push({ name })
 
     slabsToCreate.push(
@@ -609,6 +614,149 @@ function syncAutoSlabsForLevel(
 
   if (slabsToCreate.length > 0) {
     sceneStore.getState().createNodes(slabsToCreate.map((node) => ({ node, parentId: levelId })))
+  }
+}
+
+function syncAutoCeilingsForLevel(
+  levelId: string,
+  roomPolygons: Point2D[][],
+  existingCeilings: CeilingNodeType[],
+  sceneStore: any,
+) {
+  const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
+  const manualSignatures = new Set(
+    manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
+  )
+
+  const detected: DetectedRoom[] = roomPolygons
+    .map((poly) => ({
+      poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
+        pointFromTuple,
+      ),
+      sig: '',
+      centroid: { x: 0, y: 0 },
+      area: 0,
+      bbox: bboxOf([]),
+    }))
+    .map((room) => ({
+      ...room,
+      sig: polygonSignature(room.poly),
+      centroid: polygonCentroid(room.poly),
+      area: Math.abs(polygonArea(room.poly)),
+      bbox: bboxOf(room.poly),
+    }))
+    .filter(({ sig }) => !manualSignatures.has(sig))
+
+  const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
+  const existingAutoMeta = existingAuto.map((ceiling) => {
+    const poly = ceiling.polygon.map(pointFromTuple)
+    return {
+      ceiling,
+      sig: polygonSignature(poly),
+      centroid: polygonCentroid(poly),
+      area: Math.abs(polygonArea(poly)),
+      bbox: bboxOf(poly),
+    }
+  })
+
+  const matchedCeilingIds = new Set<string>()
+  const matchedDetectedIdx = new Set<number>()
+  const updatesById = new Map<string, [number, number][]>()
+
+  const autoBySignature = new Map<string, (typeof existingAutoMeta)[number]>()
+  for (const entry of existingAutoMeta) {
+    autoBySignature.set(entry.sig, entry)
+  }
+
+  detected.forEach((room, index) => {
+    const existing = autoBySignature.get(room.sig)
+    if (!existing) return
+
+    matchedDetectedIdx.add(index)
+    matchedCeilingIds.add(existing.ceiling.id)
+    updatesById.set(existing.ceiling.id, room.poly.map(pointToTuple))
+  })
+
+  const remainingDetected = detected
+    .map((room, index) => ({ room, index }))
+    .filter(({ index }) => !matchedDetectedIdx.has(index))
+    .sort((a, b) => b.room.area - a.room.area)
+
+  const remainingAuto = existingAutoMeta.filter((entry) => !matchedCeilingIds.has(entry.ceiling.id))
+
+  for (const { room, index } of remainingDetected) {
+    let bestMatch: { entry: (typeof remainingAuto)[number]; score: number } | null = null
+
+    for (const entry of remainingAuto) {
+      if (matchedCeilingIds.has(entry.ceiling.id)) continue
+
+      const dx = room.centroid.x - entry.centroid.x
+      const dy = room.centroid.y - entry.centroid.y
+      const dist = Math.hypot(dx, dy)
+      const areaRatio = entry.area > 1e-6 ? room.area / entry.area : 999
+      const areaPenalty = Math.abs(Math.log(Math.max(1e-6, areaRatio)))
+      const overlap = bboxOverlapArea(room.bbox, entry.bbox)
+
+      if (overlap <= 0.0001 && dist > 1.5) continue
+
+      const score = dist + areaPenalty * 0.35
+      if (!bestMatch || score < bestMatch.score) {
+        bestMatch = { entry, score }
+      }
+    }
+
+    if (!bestMatch) continue
+
+    matchedDetectedIdx.add(index)
+    matchedCeilingIds.add(bestMatch.entry.ceiling.id)
+    updatesById.set(bestMatch.entry.ceiling.id, room.poly.map(pointToTuple))
+  }
+
+  const ceilingsToDelete = existingAuto
+    .filter((ceiling) => !updatesById.has(ceiling.id))
+    .map((ceiling) => ceiling.id)
+
+  const ceilingsToUpdate = existingAuto
+    .filter((ceiling) => updatesById.has(ceiling.id))
+    .flatMap((ceiling) => {
+      const polygon = updatesById.get(ceiling.id)
+      if (!polygon) return []
+
+      return sameTuplePolygon(ceiling.polygon, polygon) ? [] : [{ id: ceiling.id, data: { polygon } }]
+    })
+
+  const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
+  const ceilingsToCreate: CeilingNodeType[] = []
+  for (let index = 0; index < detected.length; index += 1) {
+    if (matchedDetectedIdx.has(index)) continue
+
+    const room = detected[index]
+    if (!room) continue
+
+    const name = nextAutoRoomName(plannedCeilingsForNaming, 'Ceiling')
+    plannedCeilingsForNaming.push({ name })
+
+    ceilingsToCreate.push(
+      CeilingNode.parse({
+        name,
+        polygon: room.poly.map(pointToTuple),
+        holes: [],
+        height: DEFAULT_AUTO_CEILING_HEIGHT,
+        autoFromWalls: true,
+      }),
+    )
+  }
+
+  if (ceilingsToDelete.length > 0) {
+    sceneStore.getState().deleteNodes(ceilingsToDelete)
+  }
+
+  if (ceilingsToUpdate.length > 0) {
+    sceneStore.getState().updateNodes(ceilingsToUpdate)
+  }
+
+  if (ceilingsToCreate.length > 0) {
+    sceneStore.getState().createNodes(ceilingsToCreate.map((node) => ({ node, parentId: levelId })))
   }
 }
 
@@ -657,6 +805,9 @@ function runSpaceDetection(
     const slabs = Object.values(nodes).filter(
       (node: any) => node?.type === 'slab' && node.parentId === levelId,
     )
+    const ceilings = Object.values(nodes).filter(
+      (node: any) => node?.type === 'ceiling' && node.parentId === levelId,
+    )
 
     const { wallUpdates, spaces, roomPolygons } = detectSpacesFromWalls(levelId, walls)
 
@@ -681,6 +832,12 @@ function runSpaceDetection(
       levelId,
       roomPolygons,
       slabs.map((slab: any) => SlabNode.parse(slab)),
+      sceneStore,
+    )
+    syncAutoCeilingsForLevel(
+      levelId,
+      roomPolygons,
+      ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
     )
 

@@ -51,6 +51,9 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     let wasCommitted = false
 
     const applyPreview = (curveOffset: number) => {
+      if (previewOffsetRef.current === curveOffset) {
+        return
+      }
       previewOffsetRef.current = curveOffset
 
       const nextNode = {
@@ -64,6 +67,10 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const restoreOriginal = () => {
+      if (previewOffsetRef.current === originalCurveOffset) {
+        return
+      }
+      previewOffsetRef.current = originalCurveOffset
       useScene.getState().updateNode(nodeId, { curveOffset: originalCurveOffset })
       useScene.getState().markDirty(nodeId as AnyNodeId)
     }
@@ -100,8 +107,10 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const curveOffset = previewOffsetRef.current
       wasCommitted = true
       useScene.temporal.getState().resume()
-      useScene.getState().updateNode(nodeId, { curveOffset })
-      useScene.getState().markDirty(nodeId as AnyNodeId)
+      if (curveOffset !== getClampedWallCurveOffset(node)) {
+        useScene.getState().updateNode(nodeId, { curveOffset })
+        useScene.getState().markDirty(nodeId as AnyNodeId)
+      }
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
