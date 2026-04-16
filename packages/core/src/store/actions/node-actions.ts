@@ -1,12 +1,216 @@
-import type { AnyNode, AnyNodeId } from '../../schema'
+import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
+type WallAttachmentUpdate = { id: AnyNodeId; data: Partial<AnyNode> }
+type WallMergePlan = {
+  primaryWallId: AnyNodeId
+  secondaryWallId: AnyNodeId
+  mergedStart: [number, number]
+  mergedEnd: [number, number]
+  mergedChildren: WallNode['children']
+  attachmentUpdates: WallAttachmentUpdate[]
+}
 
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
+
+function pointsEqual(
+  a: [number, number],
+  b: [number, number],
+  tolerance = 1e-6,
+) {
+  const dx = a[0] - b[0]
+  const dz = a[1] - b[1]
+  return dx * dx + dz * dz <= tolerance * tolerance
+}
+
+function wallLength(wall: Pick<WallNode, 'start' | 'end'>) {
+  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+}
+
+function getWallEndpointAtPoint(
+  wall: Pick<WallNode, 'start' | 'end'>,
+  point: [number, number],
+): 'start' | 'end' | null {
+  if (pointsEqual(wall.start, point)) return 'start'
+  if (pointsEqual(wall.end, point)) return 'end'
+  return null
+}
+
+function getWallFreeEndpoint(
+  wall: Pick<WallNode, 'start' | 'end'>,
+  sharedPoint: [number, number],
+) {
+  return pointsEqual(wall.start, sharedPoint) ? wall.end : wall.start
+}
+
+function areWallStylesCompatible(a: WallNode, b: WallNode) {
+  return (
+    (a.parentId ?? null) === (b.parentId ?? null) &&
+    Math.abs((a.curveOffset ?? 0) - (b.curveOffset ?? 0)) <= 1e-6 &&
+    Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) <= 1e-6 &&
+    Math.abs((a.height ?? 2.5) - (b.height ?? 2.5)) <= 1e-6 &&
+    a.materialPreset === b.materialPreset &&
+    JSON.stringify(a.material ?? null) === JSON.stringify(b.material ?? null) &&
+    a.frontSide === b.frontSide &&
+    a.backSide === b.backSide &&
+    a.visible === b.visible
+  )
+}
+
+function areWallsCollinearAcrossPoint(
+  a: WallNode,
+  b: WallNode,
+  sharedPoint: [number, number],
+) {
+  const freeA = getWallFreeEndpoint(a, sharedPoint)
+  const freeB = getWallFreeEndpoint(b, sharedPoint)
+  const ax = freeA[0] - sharedPoint[0]
+  const az = freeA[1] - sharedPoint[1]
+  const bx = freeB[0] - sharedPoint[0]
+  const bz = freeB[1] - sharedPoint[1]
+  const lenA = Math.hypot(ax, az)
+  const lenB = Math.hypot(bx, bz)
+
+  if (lenA < 1e-6 || lenB < 1e-6) return false
+
+  const cross = (ax * bz - az * bx) / (lenA * lenB)
+  const dot = (ax * bx + az * bz) / (lenA * lenB)
+  return Math.abs(cross) <= 1e-4 && dot < -0.999
+}
+
+function resolveMergedWallEndpoints(
+  primary: WallNode,
+  secondary: WallNode,
+  sharedPoint: [number, number],
+): { start: [number, number]; end: [number, number] } {
+  const primaryEndpoint = getWallEndpointAtPoint(primary, sharedPoint)
+  const secondaryEndpoint = getWallEndpointAtPoint(secondary, sharedPoint)
+
+  if (primaryEndpoint === 'end' && secondaryEndpoint === 'start') {
+    return { start: primary.start, end: secondary.end }
+  }
+  if (primaryEndpoint === 'start' && secondaryEndpoint === 'end') {
+    return { start: secondary.start, end: primary.end }
+  }
+  if (primaryEndpoint === 'start' && secondaryEndpoint === 'start') {
+    return { start: primary.end, end: secondary.end }
+  }
+
+  return { start: primary.start, end: secondary.start }
+}
+
+function buildMergedWallAttachmentUpdates(
+  primary: WallNode,
+  secondary: WallNode,
+  mergedWallId: AnyNodeId,
+  mergedStart: [number, number],
+  mergedEnd: [number, number],
+  nodes: Record<AnyNodeId, AnyNode>,
+): WallAttachmentUpdate[] {
+  const mergedLength = Math.max(Math.hypot(mergedEnd[0] - mergedStart[0], mergedEnd[1] - mergedStart[1]), 1e-6)
+  const tangentX = (mergedEnd[0] - mergedStart[0]) / mergedLength
+  const tangentZ = (mergedEnd[1] - mergedStart[1]) / mergedLength
+  const updates: WallAttachmentUpdate[] = []
+
+  const wallChildren = [...(primary.children ?? []), ...(secondary.children ?? [])] as AnyNodeId[]
+  for (const childId of wallChildren) {
+    const child = nodes[childId]
+    if (!child || !('position' in child) || !Array.isArray(child.position)) {
+      continue
+    }
+
+    const sourceWall = child.parentId === secondary.id ? secondary : primary
+    const sourceLength = Math.max(wallLength(sourceWall), 1e-6)
+    const localX = typeof child.position[0] === 'number' ? child.position[0] : 0
+    const worldX = sourceWall.start[0] + ((sourceWall.end[0] - sourceWall.start[0]) * localX) / sourceLength
+    const worldZ = sourceWall.start[1] + ((sourceWall.end[1] - sourceWall.start[1]) * localX) / sourceLength
+    const nextLocalX = Math.max(
+      0,
+      Math.min(mergedLength, (worldX - mergedStart[0]) * tangentX + (worldZ - mergedStart[1]) * tangentZ),
+    )
+
+    updates.push({
+      id: childId,
+      data: {
+        parentId: mergedWallId,
+        wallId: mergedWallId,
+        position: [nextLocalX, child.position[1], child.position[2]] as typeof child.position,
+        ...('wallT' in child ? { wallT: nextLocalX / mergedLength } : {}),
+      } as Partial<AnyNode>,
+    })
+  }
+
+  return updates
+}
+
+function buildWallMergePlans(
+  nodes: Record<AnyNodeId, AnyNode>,
+  idsToDelete: AnyNodeId[],
+): WallMergePlan[] {
+  const deletedWalls = idsToDelete
+    .map((id) => nodes[id])
+    .filter((node): node is WallNode => node?.type === 'wall')
+  const skippedWallIds = new Set(idsToDelete)
+  const usedWallIds = new Set<AnyNodeId>()
+  const mergePlans: WallMergePlan[] = []
+
+  for (const deletedWall of deletedWalls) {
+    const junctions: Array<[number, number]> = [deletedWall.start, deletedWall.end]
+
+    for (const junction of junctions) {
+      const candidates = Object.values(nodes).filter((node): node is WallNode => {
+        if (node?.type !== 'wall') return false
+        if (skippedWallIds.has(node.id) || usedWallIds.has(node.id)) return false
+        if ((node.parentId ?? null) !== (deletedWall.parentId ?? null)) return false
+        return pointsEqual(node.start, junction) || pointsEqual(node.end, junction)
+      })
+
+      if (candidates.length !== 2) {
+        continue
+      }
+
+      const [primary, secondary] = candidates
+      if (
+        !primary ||
+        !secondary ||
+        !areWallStylesCompatible(primary, secondary) ||
+        !areWallsCollinearAcrossPoint(primary, secondary, junction)
+      ) {
+        continue
+      }
+
+      const { start, end } = resolveMergedWallEndpoints(primary, secondary, junction)
+      const mergedChildren = Array.from(
+        new Set([...(primary.children ?? []), ...(secondary.children ?? [])]),
+      ) as WallNode['children']
+      const attachmentUpdates = buildMergedWallAttachmentUpdates(
+        primary,
+        secondary,
+        primary.id,
+        start,
+        end,
+        nodes,
+      )
+
+      mergePlans.push({
+        primaryWallId: primary.id,
+        secondaryWallId: secondary.id,
+        mergedStart: start,
+        mergedEnd: end,
+        mergedChildren,
+        attachmentUpdates,
+      })
+      usedWallIds.add(primary.id)
+      usedWallIds.add(secondary.id)
+    }
+  }
+
+  return mergePlans
+}
 
 export const createNodesAction = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
@@ -132,6 +336,8 @@ export const deleteNodesAction = (
 ) => {
   if (get().readOnly) return
   const parentsToMarkDirty = new Set<AnyNodeId>()
+  const nodesToMarkDirty = new Set<AnyNodeId>()
+  const mergePlans = buildWallMergePlans(get().nodes, ids)
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -150,6 +356,32 @@ export const deleteNodesAction = (
       }
     }
     for (const id of ids) collect(id)
+    for (const plan of mergePlans) {
+      allIds.add(plan.secondaryWallId)
+    }
+
+    for (const plan of mergePlans) {
+      const primaryWall = nextNodes[plan.primaryWallId]
+      if (!(primaryWall && primaryWall.type === 'wall') || allIds.has(plan.primaryWallId)) {
+        continue
+      }
+
+      nextNodes[plan.primaryWallId] = {
+        ...primaryWall,
+        start: plan.mergedStart,
+        end: plan.mergedEnd,
+        children: plan.mergedChildren,
+      }
+      nodesToMarkDirty.add(plan.primaryWallId)
+
+      for (const update of plan.attachmentUpdates) {
+        if (allIds.has(update.id)) continue
+        const child = nextNodes[update.id]
+        if (!child) continue
+        nextNodes[update.id] = { ...child, ...update.data } as AnyNode
+        nodesToMarkDirty.add(update.id)
+      }
+    }
 
     for (const id of allIds) {
       const node = nextNodes[id]
@@ -198,5 +430,8 @@ export const deleteNodesAction = (
         get().markDirty(childId as AnyNodeId)
       }
     }
+  })
+  nodesToMarkDirty.forEach((id) => {
+    get().markDirty(id)
   })
 }
