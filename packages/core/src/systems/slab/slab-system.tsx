@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
+import { insetPolygonFromCentroid, simplifyClosedPolygon } from '../../lib/polygon-geometry'
 import type { AnyNodeId, SlabNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
@@ -60,38 +61,14 @@ function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
 /** Half of default wall thickness — used to extend slab geometry under walls */
 const SLAB_OUTSET = 0.05
 const AUTO_SLAB_INSET = 0.02
-
-function insetPolygonFromCentroid(
-  polygon: Array<[number, number]>,
-  inset: number,
-): Array<[number, number]> {
-  if (inset <= 0) {
-    return polygon.map(([x, z]) => [x, z] as [number, number])
-  }
-
-  const centroid = polygon.reduce(
-    (acc, [x, z]) => ({ x: acc.x + x, z: acc.z + z }),
-    { x: 0, z: 0 },
-  )
-  centroid.x /= Math.max(polygon.length, 1)
-  centroid.z /= Math.max(polygon.length, 1)
-
-  return polygon.map(([x, z]) => {
-    const dx = x - centroid.x
-    const dz = z - centroid.z
-    const length = Math.hypot(dx, dz)
-    if (length <= inset + 1e-6) {
-      return [x, z] as [number, number]
-    }
-
-    const scale = (length - inset) / length
-    return [centroid.x + dx * scale, centroid.z + dz * scale] as [number, number]
-  })
-}
+const AUTO_SLAB_SIMPLIFY_TOLERANCE = 0.08
 
 function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, number]> {
   return slabNode.autoFromWalls
-    ? insetPolygonFromCentroid(slabNode.polygon, AUTO_SLAB_INSET)
+    ? simplifyClosedPolygon(
+        insetPolygonFromCentroid(slabNode.polygon, AUTO_SLAB_INSET),
+        AUTO_SLAB_SIMPLIFY_TOLERANCE,
+      )
     : outsetPolygon(slabNode.polygon, SLAB_OUTSET)
 }
 

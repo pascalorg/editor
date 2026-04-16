@@ -1,4 +1,9 @@
-import { getClampedWallCurveOffset, sampleWallCenterline } from '../systems/wall/wall-curve'
+import {
+  getClampedWallCurveOffset,
+  getWallCurveFrameAt,
+  isCurvedWall,
+} from '../systems/wall/wall-curve'
+import { simplifyClosedPolygon } from './polygon-geometry'
 import { SlabNode, type SlabNode as SlabNodeType, type WallNode } from '../schema'
 
 type Point2D = { x: number; y: number }
@@ -26,6 +31,9 @@ type DetectedRoom = {
 }
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
+const ROOM_CURVE_TOLERANCE = 0.04
+const MAX_CURVE_SUBDIVISION_DEPTH = 6
+const AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE = 0.08
 
 function pointFromTuple(point: [number, number]): Point2D {
   return { x: point[0], y: point[1] }
@@ -178,8 +186,49 @@ function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
   }
 }
 
+function pointLineDistance(point: Point2D, start: Point2D, end: Point2D) {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+
+  if (lengthSquared < 1e-9) {
+    return Math.hypot(point.x - start.x, point.y - start.y)
+  }
+
+  const cross = (point.x - start.x) * dy - (point.y - start.y) * dx
+  return Math.abs(cross) / Math.sqrt(lengthSquared)
+}
+
+function sampleWallPointsForRoomDetection(
+  wall: Pick<WallNode, 'start' | 'end' | 'curveOffset'>,
+  tolerance = ROOM_CURVE_TOLERANCE,
+) {
+  const start = { x: wall.start[0], y: wall.start[1] }
+  const end = { x: wall.end[0], y: wall.end[1] }
+
+  if (!isCurvedWall(wall)) {
+    return [start, end]
+  }
+
+  const subdivide = (t0: number, p0: Point2D, t1: number, p1: Point2D, depth: number): Point2D[] => {
+    const midT = (t0 + t1) / 2
+    const midPoint = getWallCurveFrameAt(wall, midT).point
+    const deviation = pointLineDistance(midPoint, p0, p1)
+
+    if (depth >= MAX_CURVE_SUBDIVISION_DEPTH || deviation <= tolerance) {
+      return [p0, p1]
+    }
+
+    const left = subdivide(t0, p0, midT, midPoint, depth + 1)
+    const right = subdivide(midT, midPoint, t1, p1, depth + 1)
+    return [...left.slice(0, -1), ...right]
+  }
+
+  return subdivide(0, start, 1, end, 0)
+}
+
 function getDirectedWallBoundaryPoints(wall: WallNode, forward: boolean) {
-  const points = sampleWallCenterline(wall).map((point) => ({ x: point.x, y: point.y }))
+  const points = sampleWallPointsForRoomDetection(wall)
   return forward ? points : [...points].reverse()
 }
 
@@ -426,11 +475,20 @@ function syncAutoSlabsForLevel(
 
   const detected: DetectedRoom[] = roomPolygons
     .map((poly) => ({
-      poly,
-      sig: polygonSignature(poly),
-      centroid: polygonCentroid(poly),
-      area: Math.abs(polygonArea(poly)),
-      bbox: bboxOf(poly),
+      poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
+        pointFromTuple,
+      ),
+      sig: '',
+      centroid: { x: 0, y: 0 },
+      area: 0,
+      bbox: bboxOf([]),
+    }))
+    .map((room) => ({
+      ...room,
+      sig: polygonSignature(room.poly),
+      centroid: polygonCentroid(room.poly),
+      area: Math.abs(polygonArea(room.poly)),
+      bbox: bboxOf(room.poly),
     }))
     .filter(({ sig }) => !manualSignatures.has(sig))
 
