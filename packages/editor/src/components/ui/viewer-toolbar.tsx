@@ -6,7 +6,7 @@ import { ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun } fro
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
-import type { ViewMode } from '../../store/use-editor'
+import type { GridSnapStep, ViewMode } from '../../store/use-editor'
 import { useSidebarStore } from './primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from './primitives/tooltip'
 
@@ -174,6 +174,18 @@ const levelModeLabels: Record<string, string> = {
   solo: 'Solo',
 }
 
+const gridSnapOrder: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
+const gridSnapLabels: Record<GridSnapStep, string> = {
+  0.5: '0.5',
+  0.25: '0.25',
+  0.1: '0.10',
+  0.05: '0.05',
+}
+
+function formatGridSnapStep(step: GridSnapStep): string {
+  return gridSnapLabels[step]
+}
+
 function LevelModeToggle() {
   const levelMode = useViewer((s) => s.levelMode)
   const setLevelMode = useViewer((s) => s.setLevelMode)
@@ -215,6 +227,29 @@ function LevelModeToggle() {
       <TooltipContent side="bottom">
         Levels: {levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode]}
       </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function GridSnapToggle() {
+  const gridSnapStep = useEditor((s) => s.gridSnapStep)
+  const setGridSnapStep = useEditor((s) => s.setGridSnapStep)
+
+  const cycle = () => {
+    const idx = gridSnapOrder.indexOf(gridSnapStep)
+    const next = gridSnapOrder[(idx + 1) % gridSnapOrder.length]
+    if (next) setGridSnapStep(next)
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5')} onClick={cycle} type="button">
+          <IconifyIcon height={14} icon="lucide:grid-2x2" width={14} />
+          <span className="font-medium text-xs">{formatGridSnapStep(gridSnapStep)}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Grid snap: {formatGridSnapStep(gridSnapStep)}</TooltipContent>
     </Tooltip>
   )
 }
@@ -329,6 +364,7 @@ export function ViewerToolbarRight() {
   return (
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
+      <GridSnapToggle />
       <WallModeToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
