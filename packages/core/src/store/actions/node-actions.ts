@@ -173,7 +173,14 @@ function buildWallMergePlans(
         continue
       }
 
-      const [primary, secondary] = candidates
+      const sortedCandidates = [...candidates].sort((a, b) => {
+        const attachmentDiff = (b.children?.length ?? 0) - (a.children?.length ?? 0)
+        if (attachmentDiff !== 0) {
+          return attachmentDiff
+        }
+        return a.id.localeCompare(b.id)
+      })
+      const [primary, secondary] = sortedCandidates
       if (
         !primary ||
         !secondary ||

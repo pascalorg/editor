@@ -42,7 +42,7 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
       </mesh>
 
       {node.children.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId} />
+        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
       ))}
     </mesh>
   )
