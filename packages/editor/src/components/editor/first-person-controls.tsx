@@ -1,7 +1,7 @@
 'use client'
 
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Euler, Vector3 } from 'three'
 import useEditor from '../../store/use-editor'
 
@@ -187,10 +187,53 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
     onExit()
   }, [onExit])
 
+  // Track the R3F canvas's bounding rect so the crosshair centers over
+  // the actual viewer area instead of the whole browser viewport. The
+  // overlay is mounted under a `fixed inset-0` wrapper in the editor
+  // layout, which pushes it across the entire page, so a naive
+  // `flex items-center justify-center` ends up centering on the
+  // browser window — not the Canvas — whenever the sidebar is visible.
+  // Re-measure on resize so the crosshair follows panel collapses and
+  // window drags.
+  const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null)
+  useEffect(() => {
+    const canvas = document.querySelector('canvas')
+    if (!canvas) return
+    const update = () => {
+      setCanvasRect(canvas.getBoundingClientRect())
+    }
+    const observer = new ResizeObserver(update)
+    observer.observe(canvas)
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [])
+
   return (
     <>
-      {/* Crosshair */}
-      <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
+      {/* Crosshair — positioned to match the canvas bounding rect so
+          it sits in the viewer's visual center, not the browser
+          viewport's center. Falls back to `inset: 0` full-screen
+          centering if the canvas hasn't been measured yet (first
+          render before the effect runs). */}
+      <div
+        className="pointer-events-none fixed z-40 flex items-center justify-center"
+        style={
+          canvasRect
+            ? {
+                left: canvasRect.left,
+                top: canvasRect.top,
+                width: canvasRect.width,
+                height: canvasRect.height,
+              }
+            : { inset: 0 }
+        }
+      >
         <div className="relative h-6 w-6">
           <div className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-white/60" />
           <div className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-white/60" />
