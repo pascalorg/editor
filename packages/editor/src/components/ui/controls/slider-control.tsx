@@ -1,7 +1,9 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { feetToMeters, metersToFeet } from '../../../lib/units'
 import { cn } from '../../../lib/utils'
 
 interface SliderControlProps {
@@ -32,10 +34,21 @@ export function SliderControl({
   className,
   unit = '',
 }: SliderControlProps) {
+  // When the slider is rendering a length (caller passes `unit="m"`)
+  // and the user has toggled imperial in the viewer toolbar, we show
+  // and edit feet instead. Scene values stay in metres — we convert
+  // only for display and for parsing the user's typed input.
+  const viewerUnit = useViewer((s) => s.unit)
+  const isLength = unit === 'm'
+  const useImperial = isLength && viewerUnit === 'imperial'
+  const displayUnit = useImperial ? 'ft' : unit
+  const toDisplay = useCallback((m: number) => (useImperial ? metersToFeet(m) : m), [useImperial])
+  const fromDisplay = useCallback((d: number) => (useImperial ? feetToMeters(d) : d), [useImperial])
+
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [inputValue, setInputValue] = useState(value.toFixed(precision))
+  const [inputValue, setInputValue] = useState(toDisplay(value).toFixed(precision))
 
   const dragRef = useRef<{ startX: number; startValue: number } | null>(null)
   const labelRef = useRef<HTMLDivElement>(null)
@@ -46,9 +59,9 @@ export function SliderControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(value.toFixed(precision))
+      setInputValue(toDisplay(value).toFixed(precision))
     }
-  }, [value, precision, isEditing])
+  }, [value, precision, isEditing, toDisplay])
 
   // Wheel support on the label
   useEffect(() => {
@@ -141,39 +154,44 @@ export function SliderControl({
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
-    setInputValue(value.toFixed(precision))
+    setInputValue(toDisplay(value).toFixed(precision))
   }, [value, precision])
 
   const submitValue = useCallback(() => {
-    const numValue = Number.parseFloat(inputValue)
-    if (Number.isNaN(numValue)) {
-      setInputValue(value.toFixed(precision))
+    const typed = Number.parseFloat(inputValue)
+    if (Number.isNaN(typed)) {
+      setInputValue(toDisplay(value).toFixed(precision))
     } else {
-      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
+      // Round in the DISPLAY unit before converting back to metres so
+      // a typed "8.00 ft" with precision=2 doesn't truncate to 2.44 m
+      // and then round-trip to "8.01 ft".
+      const roundedDisplay = Number.parseFloat(typed.toFixed(precision))
+      const meters = fromDisplay(roundedDisplay)
+      onChange(clamp(meters))
     }
     setIsEditing(false)
-  }, [inputValue, onChange, clamp, precision, value])
+  }, [inputValue, onChange, clamp, precision, value, toDisplay, fromDisplay])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(value.toFixed(precision))
+        setInputValue(toDisplay(value).toFixed(precision))
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         const newV = clamp(value + step)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(toDisplay(newV).toFixed(precision))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         const newV = clamp(value - step)
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(toDisplay(newV).toFixed(precision))
       }
     },
-    [submitValue, value, precision, step, clamp, onChange],
+    [submitValue, value, precision, step, clamp, onChange, toDisplay],
   )
 
   return (
@@ -226,7 +244,7 @@ export function SliderControl({
               type="text"
               value={inputValue}
             />
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </>
         ) : (
           <div
@@ -234,9 +252,9 @@ export function SliderControl({
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight" suppressHydrationWarning>
-              {Number(value.toFixed(precision)).toFixed(precision)}
+              {toDisplay(value).toFixed(precision)}
             </span>
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </div>
         )}
       </div>
