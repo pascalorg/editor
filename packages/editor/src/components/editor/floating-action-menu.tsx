@@ -14,11 +14,13 @@ import {
   StairSegmentNode,
   sceneRegistry,
   useScene,
+  type WallNode,
   WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
+import { Move } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -47,12 +49,16 @@ export function FloatingActionMenu() {
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
+  const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setMovingWallEndpoint = useEditor((s) => s.setMovingWallEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
+  const startEndpointGroupRef = useRef<THREE.Group>(null)
+  const endEndpointGroupRef = useRef<THREE.Group>(null)
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -84,6 +90,29 @@ export function FloatingActionMenu() {
         const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
         const yOffset = isStructural ? 0.8 : 0.3
         groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
+      }
+
+      if (node?.type === 'wall') {
+        const wall = node as WallNode
+        const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+        const endpointYOffset = 0.35
+        const startWorld = obj.localToWorld(new THREE.Vector3(0, 0, 0))
+        const endWorld = obj.localToWorld(new THREE.Vector3(wallLength, 0, 0))
+
+        if (startEndpointGroupRef.current) {
+          startEndpointGroupRef.current.position.set(
+            startWorld.x,
+            startWorld.y + endpointYOffset,
+            startWorld.z,
+          )
+        }
+        if (endEndpointGroupRef.current) {
+          endEndpointGroupRef.current.position.set(
+            endWorld.x,
+            endWorld.y + endpointYOffset,
+            endWorld.z,
+          )
+        }
       }
     }
   })
@@ -121,6 +150,16 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
     },
     [canCurveSelectedWall, node, setCurvingWall, setSelection],
+  )
+  const handleEndpointMove = useCallback(
+    (endpoint: 'start' | 'end', e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!(node && node.type === 'wall')) return
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingWallEndpoint({ wall: node, endpoint })
+      setSelection({ selectedIds: [] })
+    },
+    [node, setMovingWallEndpoint, setSelection],
   )
 
   const handleDuplicate = useCallback(
@@ -307,32 +346,68 @@ export function FloatingActionMenu() {
     [node?.type, selectedId, setSelection],
   )
 
-  if (!(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete')) return null
+  if (
+    !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
+    movingWallEndpoint
+  )
+    return null
 
   return (
-    <group ref={groupRef}>
-      <Html
-        center
-        style={{
-          pointerEvents: 'auto',
-          touchAction: 'none',
-        }}
-        zIndexRange={[100, 0]}
-      >
-        <NodeActionMenu
-          onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-          onCurve={canCurveSelectedWall ? handleCurve : undefined}
-          onDelete={handleDelete}
-          onDuplicate={
-            node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
-              ? handleDuplicate
-              : undefined
-          }
-          onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
-          onPointerDown={(e) => e.stopPropagation()}
-          onPointerUp={(e) => e.stopPropagation()}
-        />
-      </Html>
+    <group>
+      <group ref={groupRef}>
+        <Html
+          center
+          style={{
+            pointerEvents: 'auto',
+            touchAction: 'none',
+          }}
+          zIndexRange={[100, 0]}
+        >
+          <NodeActionMenu
+            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+            onCurve={canCurveSelectedWall ? handleCurve : undefined}
+            onDelete={handleDelete}
+            onDuplicate={
+              node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
+                ? handleDuplicate
+                : undefined
+            }
+            onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          />
+        </Html>
+      </group>
+      {node?.type === 'wall' && (
+        <>
+          <group ref={startEndpointGroupRef}>
+            <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
+              <button
+                aria-label="Move wall start"
+                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground"
+                onClick={(e) => handleEndpointMove('start', e)}
+                onPointerDown={(e) => e.stopPropagation()}
+                type="button"
+              >
+                <Move className="h-4 w-4" />
+              </button>
+            </Html>
+          </group>
+          <group ref={endEndpointGroupRef}>
+            <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
+              <button
+                aria-label="Move wall end"
+                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground"
+                onClick={(e) => handleEndpointMove('end', e)}
+                onPointerDown={(e) => e.stopPropagation()}
+                type="button"
+              >
+                <Move className="h-4 w-4" />
+              </button>
+            </Html>
+          </group>
+        </>
+      )}
     </group>
   )
 }

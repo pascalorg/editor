@@ -74,6 +74,11 @@ export type FloorplanSelectionTool = 'click' | 'marquee'
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
+export type MovingWallEndpoint = {
+  wall: WallNode
+  endpoint: 'start' | 'end'
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -117,6 +122,8 @@ type EditorState = {
       | BuildingNode
       | null,
   ) => void
+  movingWallEndpoint: MovingWallEndpoint | null
+  setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   selectedReferenceId: string | null
@@ -467,6 +474,10 @@ const useEditor = create<EditorState>()(
         | ItemNode
         | WindowNode
         | DoorNode
+        | FenceNode
+        | CeilingNode
+        | SlabNode
+        | WallNode
         | RoofNode
         | RoofSegmentNode
         | StairNode
@@ -474,6 +485,8 @@ const useEditor = create<EditorState>()(
         | BuildingNode
         | null,
       setMovingNode: (node) => set({ movingNode: node }),
+      movingWallEndpoint: null,
+      setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       selectedReferenceId: null,
