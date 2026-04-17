@@ -49,8 +49,15 @@ export { ScanNode } from './nodes/scan'
 // Nodes
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
-export { StairNode, StairRailingMode, StairTopLandingMode, StairType } from './nodes/stair'
+export {
+  StairNode,
+  StairRailingMode,
+  StairSlabOpeningMode,
+  StairTopLandingMode,
+  StairType,
+} from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { WallNode } from './nodes/wall'
 export { WindowNode } from './nodes/window'
 export { ZoneNode } from './nodes/zone'

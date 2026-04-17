@@ -356,8 +356,15 @@ export function FloatingActionMenu() {
         [cx + holeSize, cz + holeSize],
         [cx - holeSize, cz + holeSize],
       ]
-      const currentHoles = (node as SlabNode | CeilingNode).holes || []
-      updateNode(selectedId as AnyNodeId, { holes: [...currentHoles, newHole] })
+      const surfaceNode = node as SlabNode | CeilingNode
+      const currentHoles = surfaceNode.holes || []
+      const currentMetadata = currentHoles.map(
+        (_, index) => surfaceNode.holeMetadata?.[index] ?? { source: 'manual' as const },
+      )
+      updateNode(selectedId as AnyNodeId, {
+        holes: [...currentHoles, newHole],
+        holeMetadata: [...currentMetadata, { source: 'manual' }],
+      })
       setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
       // Re-assert selection so the node stays selected
       setSelection({ selectedIds: [selectedId] })
