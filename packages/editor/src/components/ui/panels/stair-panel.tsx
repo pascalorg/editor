@@ -246,6 +246,16 @@ export function StairPanel() {
 
       <PanelSection title="Opening">
         <div className="space-y-3">
+          <ToggleControl
+            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+            label="Auto Cutout"
+            onChange={(checked) =>
+              handleUpdate({
+                slabOpeningMode: checked ? 'destination' : 'none',
+              })
+            }
+          />
+
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
               From Level
