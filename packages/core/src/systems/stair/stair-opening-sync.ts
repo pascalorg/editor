@@ -437,16 +437,10 @@ function getStraightOpeningPolygonsForSurface(
     const segmentTopElevation = layout.topElevation
 
     if (segment.segmentType === 'stair') {
-      const minElevation = Math.min(segmentStartElevation, segmentTopElevation) - targetThreshold
-      const maxElevation = Math.max(segmentStartElevation, segmentTopElevation) + targetThreshold
-
-      if (targetElevation >= minElevation && targetElevation <= maxElevation) {
+      if (Math.abs(targetElevation - segmentTopElevation) <= targetThreshold) {
         const openingDepth = getStraightFlightOpeningDepth(stair, segment)
-        const climbRatio =
-          segment.height > 1e-6 ? clamp((targetElevation - segmentStartElevation) / segment.height, 0, 1) : 1
-        const intersectionAlong = climbRatio * segment.length
         const flightRect = getAxisAlignedRectFromPolygon(
-          getStraightSegmentLocalSlicePolygon(layout, Math.max(0, intersectionAlong - openingDepth), segment.length),
+          getStraightSegmentLocalSlicePolygon(layout, Math.max(0, segment.length - openingDepth), segment.length),
         )
         if (flightRect) openingRects.push(expandRect(flightRect, openingOffset))
       }
@@ -462,24 +456,18 @@ function getStraightOpeningPolygonsForSurface(
     if (landingRect) landingRects.push(expandRect(landingRect, openingOffset))
     const previous = layouts[index - 1]
     if (previous?.segment.segmentType === 'stair') {
-      const previousDepth = getStraightFlightOpeningDepth(stair, previous.segment)
-      const previousRect = getAxisAlignedRectFromPolygon(
-        getStraightSegmentLocalSlicePolygon(
-          previous,
-          Math.max(0, previous.segment.length - previousDepth),
-          previous.segment.length,
-        ),
-      )
-      if (previousRect) landingRects.push(expandRect(previousRect, openingOffset))
-    }
-
-    const next = layouts[index + 1]
-    if (next?.segment.segmentType === 'stair') {
-      const nextDepth = getStraightFlightOpeningDepth(stair, next.segment)
-      const nextRect = getAxisAlignedRectFromPolygon(
-        getStraightSegmentLocalSlicePolygon(next, 0, Math.min(next.segment.length, nextDepth)),
-      )
-      if (nextRect) landingRects.push(expandRect(nextRect, openingOffset))
+      const previousTopElevation = previous.topElevation
+      if (Math.abs(targetElevation - previousTopElevation) <= targetThreshold) {
+        const previousDepth = getStraightFlightOpeningDepth(stair, previous.segment)
+        const previousRect = getAxisAlignedRectFromPolygon(
+          getStraightSegmentLocalSlicePolygon(
+            previous,
+            Math.max(0, previous.segment.length - previousDepth),
+            previous.segment.length,
+          ),
+        )
+        if (previousRect) landingRects.push(expandRect(previousRect, openingOffset))
+      }
     }
 
     openingRects.push(...landingRects)
