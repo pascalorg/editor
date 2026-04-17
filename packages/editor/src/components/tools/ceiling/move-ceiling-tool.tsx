@@ -139,6 +139,14 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       const preview = previewRef.current ?? { polygon: originalPolygon, holes: originalHoles }
 
       wasCommitted = true
+
+      // Restore original baseline while paused so the next resume+update
+      // registers as a single tracked change (undo reverts to original).
+      useScene.getState().updateNode(node.id, {
+        polygon: originalPolygon,
+        holes: originalHoles,
+      })
+
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(node.id, preview)
       useScene.getState().markDirty(node.id as AnyNodeId)
