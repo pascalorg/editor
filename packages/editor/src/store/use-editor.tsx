@@ -70,9 +70,15 @@ export type CatalogCategory =
 export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
+export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
+
+export type MovingWallEndpoint = {
+  wall: WallNode
+  endpoint: 'start' | 'end'
+}
 
 type EditorState = {
   phase: Phase
@@ -117,6 +123,8 @@ type EditorState = {
       | BuildingNode
       | null,
   ) => void
+  movingWallEndpoint: MovingWallEndpoint | null
+  setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   selectedReferenceId: string | null
@@ -143,6 +151,8 @@ type EditorState = {
   setFloorplanHovered: (hovered: boolean) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
+  gridSnapStep: GridSnapStep
+  setGridSnapStep: (step: GridSnapStep) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -163,7 +173,11 @@ export type PersistedEditorUiState = Pick<
 
 type PersistedEditorLayoutState = Pick<
   EditorState,
-  'activeSidebarPanel' | 'floorplanPaneRatio' | 'splitOrientation' | 'floorplanSelectionTool'
+  | 'activeSidebarPanel'
+  | 'floorplanPaneRatio'
+  | 'splitOrientation'
+  | 'floorplanSelectionTool'
+  | 'gridSnapStep'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -182,7 +196,10 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   floorplanPaneRatio: DEFAULT_FLOORPLAN_PANE_RATIO,
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
+  gridSnapStep: 0.5,
 }
+
+const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   if (phase === 'site') {
@@ -286,6 +303,9 @@ function normalizePersistedEditorLayoutState(
     floorplanPaneRatio: normalizeFloorplanPaneRatio(state?.floorplanPaneRatio),
     splitOrientation: state?.splitOrientation === 'vertical' ? 'vertical' : 'horizontal',
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
+    gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
+      ? (state?.gridSnapStep as GridSnapStep)
+      : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
   }
 }
 
@@ -467,6 +487,10 @@ const useEditor = create<EditorState>()(
         | ItemNode
         | WindowNode
         | DoorNode
+        | FenceNode
+        | CeilingNode
+        | SlabNode
+        | WallNode
         | RoofNode
         | RoofSegmentNode
         | StairNode
@@ -474,6 +498,8 @@ const useEditor = create<EditorState>()(
         | BuildingNode
         | null,
       setMovingNode: (node) => set({ movingNode: node }),
+      movingWallEndpoint: null,
+      setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       selectedReferenceId: null,
@@ -507,6 +533,8 @@ const useEditor = create<EditorState>()(
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
+      gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+      setGridSnapStep: (step) => set({ gridSnapStep: step }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
@@ -572,6 +600,7 @@ const useEditor = create<EditorState>()(
         floorplanPaneRatio: state.floorplanPaneRatio,
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
+        gridSnapStep: state.gridSnapStep,
       }),
     },
   ),

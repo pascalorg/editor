@@ -86,7 +86,13 @@ export function CeilingPanel() {
       [cx - holeSize, cz + holeSize],
     ]
     const currentHoles = node?.holes || []
-    handleUpdate({ holes: [...currentHoles, newHole] })
+    const currentMetadata = currentHoles.map(
+      (_, index) => node?.holeMetadata?.[index] ?? { source: 'manual' as const },
+    )
+    handleUpdate({
+      holes: [...currentHoles, newHole],
+      holeMetadata: [...currentMetadata, { source: 'manual' }],
+    })
     setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
   }, [node, selectedId, handleUpdate, setEditingHole])
 
@@ -102,13 +108,18 @@ export function CeilingPanel() {
     (index: number) => {
       if (!selectedId) return
       const currentHoles = node?.holes || []
+      if (node?.holeMetadata?.[index]?.source === 'stair') return
       const newHoles = currentHoles.filter((_, i) => i !== index)
-      handleUpdate({ holes: newHoles })
+      const currentMetadata = currentHoles.map(
+        (_, metadataIndex) => node?.holeMetadata?.[metadataIndex] ?? { source: 'manual' as const },
+      )
+      const newMetadata = currentMetadata.filter((_, i) => i !== index)
+      handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
         setEditingHole(null)
       }
     },
-    [selectedId, node?.holes, handleUpdate, editingHole, setEditingHole],
+    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole, setEditingHole],
   )
 
   const handleMove = useCallback(() => {
@@ -126,8 +137,11 @@ export function CeilingPanel() {
     const n = polygon.length
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
-      area += polygon[i]?.[0] * polygon[j]?.[1]
-      area -= polygon[j]?.[0] * polygon[i]?.[1]
+      const current = polygon[i]
+      const next = polygon[j]
+      if (!(current && next)) continue
+      area += current[0] * next[1]
+      area -= next[0] * current[1]
     }
     return Math.abs(area) / 2
   }
@@ -174,6 +188,8 @@ export function CeilingPanel() {
               const holeArea = calculateArea(hole)
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
+              const source = node.holeMetadata?.[index]?.source ?? 'manual'
+              const isAutoHole = source === 'stair'
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -190,7 +206,8 @@ export function CeilingPanel() {
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts
+                      {holeArea.toFixed(2)} m² · {hole.length} pts ·{' '}
+                      {isAutoHole ? 'Auto stair cutout' : 'Manual'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -200,6 +217,10 @@ export function CeilingPanel() {
                         label="Done"
                         onClick={() => setEditingHole(null)}
                       />
+                    ) : isAutoHole ? (
+                      <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
+                        Auto
+                      </div>
                     ) : (
                       <>
                         <button

@@ -7,10 +7,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-
-function snap(value: number) {
-  return Math.round(value * 2) / 2
-}
+import { getWallGridStep, snapScalarToGrid } from './wall-drafting'
 
 function rotateVector([x, z]: [number, number], angle: number): [number, number] {
   const cos = Math.cos(angle)
@@ -20,6 +17,16 @@ function rotateVector([x, z]: [number, number], angle: number): [number, number]
 
 function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1]
+}
+
+function stripWallIsNewMetadata(meta: WallNode['metadata']): WallNode['metadata'] {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return meta
+  }
+
+  const nextMeta = { ...(meta as Record<string, unknown>) }
+  delete nextMeta.isNew
+  return nextMeta
 }
 
 type LinkedWallSnapshot = {
@@ -89,6 +96,11 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
+  const meta =
+    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+  const isNew = !!meta.isNew
   const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
@@ -102,12 +114,14 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     (node.end[1] - node.start[1]) / 2,
   ])
   const linkedOriginalsRef = useRef(
-    getLinkedWallSnapshots({
-      wallId: node.id,
-      wallParentId: node.parentId ?? null,
-      originalStart: node.start,
-      originalEnd: node.end,
-    }),
+    isNew
+      ? []
+      : getLinkedWallSnapshots({
+          wallId: node.id,
+          wallParentId: node.parentId ?? null,
+          originalStart: node.start,
+          originalEnd: node.end,
+        }),
   )
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const nodeIdRef = useRef(node.id)
@@ -183,8 +197,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const onGridMove = (event: GridEvent) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
-      const localX = shiftPressedRef.current ? rawX : snap(rawX)
-      const localZ = shiftPressedRef.current ? rawZ : snap(rawZ)
+      const snapStep = getWallGridStep()
+      const localX = shiftPressedRef.current ? rawX : snapScalarToGrid(rawX, snapStep)
+      const localZ = shiftPressedRef.current ? rawZ : snapScalarToGrid(rawZ, snapStep)
 
       if (
         previousGridPosRef.current &&
@@ -225,6 +240,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           preview.end,
         ),
       ])
+      if (isNew) {
+        useScene.getState().updateNode(nodeId, {
+          metadata: stripWallIsNewMetadata(node.metadata),
+        })
+      }
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
@@ -297,7 +317,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [exitMoveMode])
+  }, [exitMoveMode, isNew, node.metadata])
 
   return (
     <group>

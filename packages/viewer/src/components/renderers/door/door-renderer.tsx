@@ -1,5 +1,5 @@
-import { type DoorNode, useRegistry } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { type DoorNode, useRegistry, useScene } from '@pascal-app/core'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { createMaterial, DEFAULT_DOOR_MATERIAL } from '../../../lib/materials'
@@ -8,6 +8,9 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'door', ref)
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   const handlers = useNodeEvents(node, 'door')
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 

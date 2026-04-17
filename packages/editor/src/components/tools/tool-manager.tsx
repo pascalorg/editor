@@ -21,6 +21,7 @@ import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
 import { StairTool } from './stair/stair-tool'
 import { CurveWallTool } from './wall/curve-wall-tool'
+import { MoveWallEndpointTool } from './wall/move-wall-endpoint-tool'
 import { WallTool } from './wall/wall-tool'
 import { WindowTool } from './window/window-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
@@ -52,6 +53,7 @@ export const ToolManager: React.FC = () => {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useEditor((state) => state.movingNode)
+  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -142,6 +144,7 @@ export const ToolManager: React.FC = () => {
         {showCeilingHoleEditor && selectedCeilingId && editingHole && (
           <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
         )}
+        {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {movingNode && movingNode.type !== 'building' && <MoveTool />}
         {!movingNode && BuildToolComponent && <BuildToolComponent />}

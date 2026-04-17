@@ -23,6 +23,7 @@ import {
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
@@ -523,6 +524,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
+      <CeilingSelectionAffordanceSystem />
       <RoofEditSystem />
       <StairEditSystem />
       {!isLoading && !isFirstPersonMode && (

@@ -1,4 +1,5 @@
 import { useFrame } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
@@ -6,6 +7,7 @@ import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manage
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import useScene from '../../store/use-scene'
+import { syncAutoStairOpenings } from './stair-opening-sync'
 
 const pendingStairUpdates = new Set<AnyNodeId>()
 const MAX_STAIRS_PER_FRAME = 2
@@ -19,6 +21,26 @@ export const StairSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
+  const syncingAutoOpeningsRef = useRef(false)
+
+  useEffect(() => {
+    const applyUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) => {
+      if (updates.length === 0) return
+      syncingAutoOpeningsRef.current = true
+      useScene.getState().updateNodes(updates)
+      queueMicrotask(() => {
+        syncingAutoOpeningsRef.current = false
+      })
+    }
+
+    applyUpdates(syncAutoStairOpenings(useScene.getState().nodes))
+
+    return useScene.subscribe((state, prevState) => {
+      if (syncingAutoOpeningsRef.current) return
+      if (state.nodes === prevState.nodes) return
+      applyUpdates(syncAutoStairOpenings(state.nodes))
+    })
+  }, [])
 
   useFrame(() => {
     if (rootNodeIds.length === 0) {

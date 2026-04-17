@@ -93,11 +93,21 @@ function commitStairPlacement(
     position: [0, 0, 0],
   })
 
+  const sortedLevels = Object.values(nodes)
+    .filter((node): node is LevelNode => node.type === 'level')
+    .sort((left, right) => left.level - right.level)
+  const currentLevelIndex = sortedLevels.findIndex((level) => level.id === levelId)
+  const nextLevelId = sortedLevels[currentLevelIndex + 1]?.id ?? levelId
+
   const stair = StairNode.parse({
     name,
     position,
     rotation,
     stairType: DEFAULT_STAIR_TYPE,
+    fromLevelId: levelId,
+    toLevelId: nextLevelId,
+    slabOpeningMode: 'destination',
+    openingOffset: 0.08,
     width: DEFAULT_STAIR_WIDTH,
     totalRise: DEFAULT_STAIR_HEIGHT,
     stepCount: DEFAULT_STAIR_STEP_COUNT,
@@ -166,9 +176,7 @@ export const StairTool: React.FC = () => {
 
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const y = event.localPosition[1]
-
-      commitStairPlacement(currentLevelId, [gridX, y, gridZ], rotationRef.current)
+      commitStairPlacement(currentLevelId, [gridX, 0, gridZ], rotationRef.current)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {

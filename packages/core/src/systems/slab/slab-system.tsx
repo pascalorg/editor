@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
+import { insetPolygonFromCentroid, simplifyClosedPolygon } from '../../lib/polygon-geometry'
 import type { AnyNodeId, SlabNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
@@ -59,6 +60,17 @@ function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
 
 /** Half of default wall thickness — used to extend slab geometry under walls */
 const SLAB_OUTSET = 0.05
+const AUTO_SLAB_INSET = 0.02
+const AUTO_SLAB_SIMPLIFY_TOLERANCE = 0.08
+
+function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, number]> {
+  return slabNode.autoFromWalls
+    ? simplifyClosedPolygon(
+        insetPolygonFromCentroid(slabNode.polygon, AUTO_SLAB_INSET),
+        AUTO_SLAB_SIMPLIFY_TOLERANCE,
+      )
+    : outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+}
 
 /**
  * Expand a polygon outward by a uniform distance.
@@ -123,7 +135,7 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
  * Standard slab: flat extrusion upward from Y=0 by elevation thickness.
  */
 function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+  const polygon = getRenderableSlabPolygon(slabNode)
   const elevation = slabNode.elevation ?? 0.05
 
   if (polygon.length < 3) return new THREE.BufferGeometry()
@@ -159,7 +171,7 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
  *   - walls from Y=0 to Y=depth, inward-facing normals (visible from inside pool)
  */
 function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = outsetPolygon(slabNode.polygon, SLAB_OUTSET)
+  const polygon = getRenderableSlabPolygon(slabNode)
   const depth = Math.abs(slabNode.elevation ?? 0.05)
 
   if (polygon.length < 3) return new THREE.BufferGeometry()

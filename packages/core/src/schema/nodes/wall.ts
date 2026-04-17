@@ -2,15 +2,16 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import { DoorNode } from './door'
 import { ItemNode } from './item'
-// import { DoorNode } from "./door";
-// import { ItemNode } from "./item";
-// import { WindowNode } from "./window";
+import { WindowNode } from './window'
 
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z
+    .array(z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id]))
+    .default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   thickness: z.number().optional(),

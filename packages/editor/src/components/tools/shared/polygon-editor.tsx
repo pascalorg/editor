@@ -1,7 +1,7 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Line } from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Line, type Object3D } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 
@@ -44,8 +44,40 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   surfaceHeight = 0,
   allowPolygonMove = false,
 }) => {
-  // Get level node from registry if levelId is provided
-  const levelNode = levelId ? sceneRegistry.nodes.get(levelId) : null
+  const [levelNode, setLevelNode] = useState<Object3D | null>(() =>
+    levelId ? (sceneRegistry.nodes.get(levelId) ?? null) : null,
+  )
+
+  useEffect(() => {
+    if (!levelId) {
+      setLevelNode(null)
+      return
+    }
+
+    let frameId = 0
+
+    const resolveLevelNode = () => {
+      const nextLevelNode = sceneRegistry.nodes.get(levelId) ?? null
+      setLevelNode((currentLevelNode) => {
+        if (currentLevelNode === nextLevelNode) {
+          return currentLevelNode
+        }
+        return nextLevelNode
+      })
+
+      if (!nextLevelNode) {
+        frameId = window.requestAnimationFrame(resolveLevelNode)
+      }
+    }
+
+    resolveLevelNode()
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [levelId])
 
   // When using portal, edit at Y_OFFSET (local to level)
   // When not using portal, edit at world origin

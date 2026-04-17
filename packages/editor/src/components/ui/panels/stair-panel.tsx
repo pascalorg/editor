@@ -3,9 +3,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type LevelNode,
   type MaterialSchema,
   type StairNode,
   type StairRailingMode,
+  type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
   StairNode as StairNodeSchema,
@@ -21,6 +23,7 @@ import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
+import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -43,6 +46,11 @@ const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
 const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] = [
   { label: 'None', value: 'none' },
   { label: 'Integrated', value: 'integrated' },
+]
+
+const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Destination', value: 'destination' },
 ]
 
 export function StairPanel() {
@@ -202,6 +210,11 @@ export function StairPanel() {
 
   if (!node || node.type !== 'stair' || selectedIds.length !== 1) return null
 
+  const levels = Object.values(nodes)
+    .filter((entry): entry is LevelNode => entry.type === 'level')
+    .sort((left, right) => left.level - right.level)
+  const resolvedFromLevelId = node.fromLevelId ?? node.parentId ?? levels[0]?.id ?? null
+  const resolvedToLevelId = node.toLevelId ?? resolvedFromLevelId
   const segments = (node.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
@@ -229,6 +242,63 @@ export function StairPanel() {
           options={STAIR_TYPE_OPTIONS}
           value={node.stairType ?? 'straight'}
         />
+      </PanelSection>
+
+      <PanelSection title="Opening">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              From Level
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) => handleUpdate({ fromLevelId: event.target.value })}
+              value={resolvedFromLevelId ?? ''}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              To Level
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) => handleUpdate({ toLevelId: event.target.value })}
+              value={resolvedToLevelId ?? ''}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <SegmentedControl
+            onChange={(value) => handleUpdate({ slabOpeningMode: value as StairSlabOpeningMode })}
+            options={STAIR_SLAB_OPENING_OPTIONS}
+            value={node.slabOpeningMode ?? 'none'}
+          />
+
+          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+            <MetricControl
+              label="Opening Offset"
+              max={0.5}
+              min={0}
+              onChange={(value) => handleUpdate({ openingOffset: value })}
+              precision={2}
+              step={0.01}
+              unit="m"
+              value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+            />
+          ) : null}
+        </div>
       </PanelSection>
 
       {node.stairType === 'straight' && (

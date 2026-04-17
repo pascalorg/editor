@@ -37,7 +37,7 @@ import {
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Command } from 'lucide-react'
+import { Command, Move } from 'lucide-react'
 import {
   memo,
   type MouseEvent as ReactMouseEvent,
@@ -239,6 +239,9 @@ type WallEndpointDragState = {
   endpoint: WallEndpoint
   fixedPoint: WallPlanPoint
   currentPoint: WallPlanPoint
+  originalStart: WallPlanPoint
+  originalEnd: WallPlanPoint
+  linkedWalls: LinkedWallSnapshot[]
 }
 
 type WallCurveDragState = {
@@ -286,6 +289,11 @@ type WallEndpointDraft = {
   endpoint: WallEndpoint
   start: WallPlanPoint
   end: WallPlanPoint
+  linkedUpdates: Array<{
+    id: WallNode['id']
+    start: WallPlanPoint
+    end: WallPlanPoint
+  }>
 }
 
 type WallCurveDraft = {
@@ -2025,6 +2033,94 @@ function buildWallEndpointDraft(
     endpoint,
     start: endpoint === 'start' ? movingPoint : fixedPoint,
     end: endpoint === 'end' ? movingPoint : fixedPoint,
+    linkedUpdates: [],
+  }
+}
+
+type LinkedWallSnapshot = {
+  id: WallNode['id']
+  start: WallPlanPoint
+  end: WallPlanPoint
+}
+
+function getLinkedWallSnapshots(
+  walls: WallNode[],
+  wallId: WallNode['id'],
+  originalStart: WallPlanPoint,
+  originalEnd: WallPlanPoint,
+): LinkedWallSnapshot[] {
+  return walls.flatMap((wall) => {
+    if (wall.id === wallId) {
+      return []
+    }
+
+    if (
+      !pointsEqual(wall.start, originalStart) &&
+      !pointsEqual(wall.start, originalEnd) &&
+      !pointsEqual(wall.end, originalStart) &&
+      !pointsEqual(wall.end, originalEnd)
+    ) {
+      return []
+    }
+
+    return [
+      {
+        id: wall.id,
+        start: [...wall.start] as WallPlanPoint,
+        end: [...wall.end] as WallPlanPoint,
+      },
+    ]
+  })
+}
+
+function getLinkedWallUpdates(
+  linkedWalls: LinkedWallSnapshot[],
+  originalStart: WallPlanPoint,
+  originalEnd: WallPlanPoint,
+  nextStart: WallPlanPoint,
+  nextEnd: WallPlanPoint,
+) {
+  return linkedWalls.map((wall) => ({
+    id: wall.id,
+    start: pointsEqual(wall.start, originalStart)
+      ? nextStart
+      : pointsEqual(wall.start, originalEnd)
+        ? nextEnd
+        : wall.start,
+    end: pointsEqual(wall.end, originalStart)
+      ? nextStart
+      : pointsEqual(wall.end, originalEnd)
+        ? nextEnd
+        : wall.end,
+  }))
+}
+
+function buildWallEndpointDragDraft(
+  dragState: Pick<
+    WallEndpointDragState,
+    'wallId' | 'endpoint' | 'fixedPoint' | 'originalStart' | 'originalEnd' | 'linkedWalls'
+  >,
+  movingPoint: WallPlanPoint,
+  detachLinkedWalls = false,
+): WallEndpointDraft {
+  const nextDraft = buildWallEndpointDraft(
+    dragState.wallId,
+    dragState.endpoint,
+    dragState.fixedPoint,
+    movingPoint,
+  )
+
+  return {
+    ...nextDraft,
+    linkedUpdates: detachLinkedWalls
+      ? []
+      : getLinkedWallUpdates(
+          dragState.linkedWalls,
+          dragState.originalStart,
+          dragState.originalEnd,
+          nextDraft.start,
+          nextDraft.end,
+        ),
   }
 }
 
@@ -4878,6 +4974,7 @@ export function FloorplanPanel() {
   const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
   const [wallCurveDraft, setWallCurveDraft] = useState<WallCurveDraft | null>(null)
+  const [altPressed, setAltPressed] = useState(false)
   const [hoveredOpeningId, setHoveredOpeningId] = useState<OpeningNode['id'] | null>(null)
   const [hoveredWallId, setHoveredWallId] = useState<WallNode['id'] | null>(null)
   const [hoveredSlabId, setHoveredSlabId] = useState<SlabNode['id'] | null>(null)
@@ -5074,6 +5171,18 @@ export function FloorplanPanel() {
           buildWallWithUpdatedEndpoints(wall, wallEndpointDraft.start, wallEndpointDraft.end),
         )
       }
+
+      for (const linkedUpdate of wallEndpointDraft.linkedUpdates) {
+        const linkedWall = nextWallById.get(linkedUpdate.id)
+        if (!linkedWall) {
+          continue
+        }
+
+        nextWallById.set(
+          linkedWall.id,
+          buildWallWithUpdatedEndpoints(linkedWall, linkedUpdate.start, linkedUpdate.end),
+        )
+      }
     }
 
     if (wallCurveDraft) {
@@ -5090,19 +5199,9 @@ export function FloorplanPanel() {
       return floorplanWallById
     }
 
-    const previewWallId = wallEndpointDraft?.wallId ?? wallCurveDraft?.wallId
-    if (!previewWallId) {
-      return floorplanWallById
-    }
-
-    const previewWall = displayWallById.get(previewWallId)
-    if (!previewWall) {
-      return floorplanWallById
-    }
-
-    const nextFloorplanWallById = new Map(floorplanWallById)
-    nextFloorplanWallById.set(previewWall.id, getFloorplanWall(previewWall))
-    return nextFloorplanWallById
+    return new Map(
+      Array.from(displayWallById.values()).map((wall) => [wall.id, getFloorplanWall(wall)] as const),
+    )
   }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
   const wallPolygons = useMemo(
     () =>
@@ -5122,31 +5221,18 @@ export function FloorplanPanel() {
       return wallPolygons
     }
 
-    const previewWallId = wallEndpointDraft?.wallId ?? wallCurveDraft?.wallId
-    if (!previewWallId) {
-      return wallPolygons
-    }
+    const previewWalls = Array.from(displayFloorplanWallById.values())
+    const previewMiterData = calculateLevelMiters(previewWalls)
 
-    const previewWall = displayWallById.get(previewWallId)
-    if (!previewWall) {
-      return wallPolygons
-    }
-
-    const previewPolygon = getWallPlanFootprint(
-      getFloorplanWall(previewWall),
-      EMPTY_WALL_MITER_DATA,
-    )
-
-    return wallPolygons.map((entry) =>
-      entry.wall.id === previewWall.id
-        ? {
-            wall: previewWall,
-            polygon: previewPolygon,
-            points: formatPolygonPoints(previewPolygon),
-          }
-        : entry,
-    )
-  }, [displayWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
+    return previewWalls.map((wall) => {
+      const polygon = getWallPlanFootprint(wall, previewMiterData)
+      return {
+        wall,
+        polygon,
+        points: formatPolygonPoints(polygon),
+      }
+    })
+  }, [displayFloorplanWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
 
   const openingsPolygons = useMemo(
     () =>
@@ -5992,6 +6078,21 @@ export function FloorplanPanel() {
         : null,
     [selectedWallEntry, surfaceSize, viewBox],
   )
+  const selectedWallCornerMoveActions = useMemo(() => {
+    if (!selectedWallEntry) {
+      return []
+    }
+
+    return (['start', 'end'] as const).map((endpoint) => {
+      const point = endpoint === 'start' ? selectedWallEntry.wall.start : selectedWallEntry.wall.end
+      const svgPoint = toSvgPlanPoint(point)
+      return {
+        endpoint,
+        x: svgPoint.x,
+        y: svgPoint.y,
+      }
+    })
+  }, [selectedWallEntry])
   const selectedStairActionMenuPosition = useMemo(
     () =>
       selectedStairEntry
@@ -6643,6 +6744,9 @@ export function FloorplanPanel() {
       if (event.key === 'Shift') {
         setShiftPressed(true)
       }
+      if (event.key === 'Alt') {
+        setAltPressed(true)
+      }
 
       if (isStairBuildActive && (event.key === 'r' || event.key === 'R')) {
         setStairBuildPreviewRotation((current) => current + Math.PI / 4)
@@ -6665,11 +6769,15 @@ export function FloorplanPanel() {
       if (event.key === 'Shift') {
         setShiftPressed(false)
       }
+      if (event.key === 'Alt') {
+        setAltPressed(false)
+      }
 
       setRotationModifierPressed(event.metaKey || event.ctrlKey)
     }
     const handleBlur = () => {
       setShiftPressed(false)
+      setAltPressed(false)
       setRotationModifierPressed(false)
     }
 
@@ -6735,18 +6843,23 @@ export function FloorplanPanel() {
         dragState.currentPoint = snappedPoint
         setCursorPoint(snappedPoint)
         setWallEndpointDraft((previousDraft) => {
-          const nextDraft = buildWallEndpointDraft(
-            dragState.wallId,
-            dragState.endpoint,
-            dragState.fixedPoint,
-            snappedPoint,
-          )
+          const nextDraft = buildWallEndpointDragDraft(dragState, snappedPoint, event.altKey)
 
           if (
             !(
               previousDraft &&
               pointsEqual(previousDraft.start, nextDraft.start) &&
-              pointsEqual(previousDraft.end, nextDraft.end)
+              pointsEqual(previousDraft.end, nextDraft.end) &&
+              previousDraft.linkedUpdates.length === nextDraft.linkedUpdates.length &&
+              previousDraft.linkedUpdates.every((update, index) => {
+                const nextUpdate = nextDraft.linkedUpdates[index]
+                return (
+                  nextUpdate &&
+                  update.id === nextUpdate.id &&
+                  pointsEqual(update.start, nextUpdate.start) &&
+                  pointsEqual(update.end, nextUpdate.end)
+                )
+              })
             )
           ) {
             sfxEmitter.emit('sfx:grid-snap')
@@ -6853,12 +6966,7 @@ export function FloorplanPanel() {
 
       const wall = wallById.get(dragState.wallId)
       if (wall) {
-        const nextDraft = buildWallEndpointDraft(
-          dragState.wallId,
-          dragState.endpoint,
-          dragState.fixedPoint,
-          dragState.currentPoint,
-        )
+        const nextDraft = buildWallEndpointDragDraft(dragState, dragState.currentPoint, altPressed)
         const hasChanged = !(
           pointsEqual(nextDraft.start, wall.start) && pointsEqual(nextDraft.end, wall.end)
         )
@@ -6868,6 +6976,12 @@ export function FloorplanPanel() {
             start: nextDraft.start,
             end: nextDraft.end,
           })
+          for (const linkedUpdate of nextDraft.linkedUpdates) {
+            updateNode(linkedUpdate.id, {
+              start: linkedUpdate.start,
+              end: linkedUpdate.end,
+            })
+          }
           sfxEmitter.emit('sfx:structure-build')
         }
       }
@@ -6940,6 +7054,7 @@ export function FloorplanPanel() {
     getSvgPointFromClientPoint,
     guideById,
     getPlanPointFromClientPoint,
+    altPressed,
     shiftPressed,
     updateNode,
     wallById,
@@ -8469,6 +8584,79 @@ export function FloorplanPanel() {
     },
     [selectedWallEntry, setMovingNode, setSelection],
   )
+  const beginWallEndpointDrag = useCallback(
+    (
+      wall: WallNode,
+      endpoint: WallEndpoint,
+      pointerId: number,
+      movingPoint: WallPlanPoint,
+    ) => {
+      if (isWallBuildActive) {
+        handleWallPlacementPoint(movingPoint)
+        return
+      }
+
+      if (mode !== 'select') {
+        return
+      }
+
+      clearWallPlacementDraft()
+      handleWallSelect(wall)
+
+      const fixedPoint = endpoint === 'start' ? wall.end : wall.start
+      const linkedWalls = getLinkedWallSnapshots(walls, wall.id, wall.start, wall.end)
+      const originalStart = [...wall.start] as WallPlanPoint
+      const originalEnd = [...wall.end] as WallPlanPoint
+
+      wallEndpointDragRef.current = {
+        pointerId,
+        wallId: wall.id,
+        endpoint,
+        fixedPoint,
+        currentPoint: movingPoint,
+        originalStart,
+        originalEnd,
+        linkedWalls,
+      }
+
+      setWallEndpointDraft(
+        buildWallEndpointDragDraft(
+          {
+            wallId: wall.id,
+            endpoint,
+            fixedPoint,
+            originalStart,
+            originalEnd,
+            linkedWalls,
+          },
+          movingPoint,
+        ),
+      )
+      setCursorPoint(movingPoint)
+    },
+    [clearWallPlacementDraft, handleWallPlacementPoint, handleWallSelect, isWallBuildActive, mode, walls],
+  )
+  const handleSelectedWallCornerMovePointerDown = useCallback(
+    (endpoint: WallEndpoint, event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      const wall = selectedWallEntry?.wall
+      if (!wall) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      setHoveredEndpointId(null)
+      sfxEmitter.emit('sfx:item-pick')
+
+      const movingPoint = endpoint === 'start' ? wall.start : wall.end
+      beginWallEndpointDrag(wall, endpoint, event.pointerId, movingPoint)
+    },
+    [beginWallEndpointDrag, selectedWallEntry],
+  )
   const handleSelectedWallDelete = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
@@ -8725,33 +8913,9 @@ export function FloorplanPanel() {
       setHoveredEndpointId(null)
 
       const movingPoint = endpoint === 'start' ? wall.start : wall.end
-
-      if (isWallBuildActive) {
-        handleWallPlacementPoint(movingPoint)
-        return
-      }
-
-      if (mode !== 'select') {
-        return
-      }
-
-      clearWallPlacementDraft()
-      handleWallSelect(wall)
-
-      const fixedPoint = endpoint === 'start' ? wall.end : wall.start
-
-      wallEndpointDragRef.current = {
-        pointerId: event.pointerId,
-        wallId: wall.id,
-        endpoint,
-        fixedPoint,
-        currentPoint: movingPoint,
-      }
-
-      setWallEndpointDraft(buildWallEndpointDraft(wall.id, endpoint, fixedPoint, movingPoint))
-      setCursorPoint(movingPoint)
+      beginWallEndpointDrag(wall, endpoint, event.pointerId, movingPoint)
     },
-    [clearWallPlacementDraft, handleWallPlacementPoint, handleWallSelect, isWallBuildActive, mode],
+    [beginWallEndpointDrag],
   )
   const handleWallCurvePointerDown = useCallback(
     (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => {
@@ -9762,6 +9926,53 @@ export function FloorplanPanel() {
             />
           </div>
         )}
+        {selectedWallCornerMoveActions.length > 0 &&
+          isFloorplanHovered &&
+          !movingNode &&
+          !curvingWall &&
+          selectedWallCornerMoveActions.map(({ endpoint, x, y }) => (
+            <div
+              className="absolute z-30"
+              key={`selected-wall-corner-move-${endpoint}`}
+              style={{
+                left: x,
+                top: y,
+                transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y - 4}px))`,
+              }}
+            >
+              <button
+                aria-label={endpoint === 'start' ? 'Move wall start' : 'Move wall end'}
+                className={cn(
+                  'pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors',
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+                onPointerDown={(event) => handleSelectedWallCornerMovePointerDown(endpoint, event)}
+                title={
+                  endpoint === 'start'
+                    ? 'Move wall start (Alt to detach)'
+                    : 'Move wall end (Alt to detach)'
+                }
+                type="button"
+              >
+                <Move className="h-4 w-4" />
+              </button>
+              {wallEndpointDraft?.wallId === selectedWallEntry?.wall.id &&
+                wallEndpointDraft.endpoint === endpoint && (
+                  <div
+                    className={cn(
+                      'pointer-events-none mt-2 whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium shadow-lg backdrop-blur-md transition-colors',
+                      altPressed
+                        ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                        : 'border-border bg-background/95 text-muted-foreground',
+                    )}
+                  >
+                    {altPressed ? 'Detaching corner' : 'Alt to detach'}
+                  </div>
+                )}
+            </div>
+          ))}
         {selectedSlabActionMenuPosition && isFloorplanHovered && !movingNode && !curvingWall && (
           <div
             className="absolute z-30"
