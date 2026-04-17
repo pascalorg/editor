@@ -30,7 +30,7 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.182"
+    "three": "^0.184"
   },
   "dependencies": {
     "dedent": "^1.7.1",
@@ -47,7 +47,7 @@
     "@pascal/typescript-config": "*",
     "@types/react": "^19.2.2",
     "typescript": "5.9.3",
-    "@types/three": "^0.183.0"
+    "@types/three": "^0.184.0"
   },
   "keywords": [
     "3d",

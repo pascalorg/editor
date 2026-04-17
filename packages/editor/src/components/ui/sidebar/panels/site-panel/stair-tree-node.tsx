@@ -2,7 +2,7 @@ import { type AnyNodeId, type StairNode, type StairSegmentNode, useScene } from 
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
@@ -16,7 +16,11 @@ interface StairTreeNodeProps {
   isLast?: boolean
 }
 
-export function StairTreeNode({ nodeId, depth, isLast }: StairTreeNodeProps) {
+export const StairTreeNode = memo(function StairTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: StairTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -147,7 +151,7 @@ export function StairTreeNode({ nodeId, depth, isLast }: StairTreeNodeProps) {
       </TreeNodeWrapper>
     </div>
   )
-}
+})
 
 function StairSegmentTreeNode({
   node,

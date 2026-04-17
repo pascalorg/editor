@@ -25,17 +25,17 @@ import { PanelWrapper } from './panel-wrapper'
 import { PresetsPopover } from './presets/presets-popover'
 
 export function DoorPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const adapter = usePresetsAdapter()
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<DoorNode>) => {
@@ -182,7 +182,7 @@ export function DoorPanel() {
     [handleUpdate],
   )
 
-  if (!node || node.type !== 'door' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'door' && selectedId)) return null
 
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)

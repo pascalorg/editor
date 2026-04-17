@@ -3,7 +3,7 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -15,7 +15,11 @@ interface DoorTreeNodeProps {
   isLast?: boolean
 }
 
-export function DoorTreeNode({ nodeId, depth, isLast }: DoorTreeNodeProps) {
+export const DoorTreeNode = memo(function DoorTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: DoorTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
@@ -72,4 +76,4 @@ export function DoorTreeNode({ nodeId, depth, isLast }: DoorTreeNodeProps) {
       onToggle={() => {}}
     />
   )
-}
+})

@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -80,7 +80,7 @@ function useSiteNode(): SiteNode | null {
   )
 }
 
-function PropertyLineSection() {
+const PropertyLineSection = memo(function PropertyLineSection() {
   const siteNode = useSiteNode()
   const updateNode = useScene((state) => state.updateNode)
   const mode = useEditor((state) => state.mode)
@@ -218,13 +218,13 @@ function PropertyLineSection() {
       )}
     </div>
   )
-}
+})
 
 // ============================================================================
 // SITE PHASE VIEW - Property line + building buttons
 // ============================================================================
 
-function CameraPopover({
+const CameraPopover = memo(function CameraPopover({
   nodeId,
   hasCamera,
   open,
@@ -303,9 +303,9 @@ function CameraPopover({
       </PopoverContent>
     </Popover>
   )
-}
+})
 
-function ReferenceItem({
+const ReferenceItem = memo(function ReferenceItem({
   refNode,
   isLastRow,
   setSelectedReferenceId,
@@ -375,7 +375,7 @@ function ReferenceItem({
       </button>
     </div>
   )
-}
+})
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 
@@ -387,7 +387,7 @@ interface LevelReferencesProps {
   onDeleteAsset?: (projectId: string, url: string) => void
 }
 
-function LevelReferences({
+const LevelReferences = memo(function LevelReferences({
   levelId,
   isLastLevel,
   projectId,
@@ -554,9 +554,9 @@ function LevelReferences({
       )}
     </div>
   )
-}
+})
 
-function LevelItem({
+const LevelItem = memo(function LevelItem({
   level,
   selectedLevelId,
   setSelection,
@@ -784,9 +784,9 @@ function LevelItem({
       </AnimatePresence>
     </div>
   )
-}
+})
 
-function LevelsSection({
+const LevelsSection = memo(function LevelsSection({
   projectId,
   onUploadAsset,
   onDeleteAsset,
@@ -870,9 +870,9 @@ function LevelsSection({
       </div>
     </div>
   )
-}
+})
 
-function LayerToggle() {
+const LayerToggle = memo(function LayerToggle() {
   const structureLayer = useEditor((state) => state.structureLayer)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const phase = useEditor((state) => state.phase)
@@ -1000,9 +1000,9 @@ function LayerToggle() {
       </button>
     </div>
   )
-}
+})
 
-function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
+const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   const [isEditing, setIsEditing] = useState(false)
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
@@ -1163,9 +1163,9 @@ function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
       </div>
     </div>
   )
-}
+})
 
-function MultiSelectionBadge() {
+const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
 
@@ -1185,9 +1185,9 @@ function MultiSelectionBadge() {
       </div>
     </div>
   )
-}
+})
 
-function ContentSection() {
+const ContentSection = memo(function ContentSection() {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
   const phase = useEditor((state) => state.phase)
@@ -1265,9 +1265,9 @@ function ContentSection() {
       </div>
     </TreeNodeDragProvider>
   )
-}
+})
 
-function BuildingItem({
+const BuildingItem = memo(function BuildingItem({
   building,
   isBuildingActive,
   buildingCameraOpen,
@@ -1308,19 +1308,16 @@ function BuildingItem({
   }
 
   return (
-    <motion.div
+    <div
       className={cn('flex shrink-0 flex-col overflow-hidden', isBuildingActive && 'min-h-0 flex-1')}
-      layout
-      transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
     >
-      <motion.div
+      <div
         className={cn(
           'group/building flex h-10 shrink-0 cursor-pointer items-center border-border/50 border-b pr-2 transition-all duration-200',
           isBuildingActive
             ? 'bg-accent/50 text-foreground'
             : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
         )}
-        layout="position"
         onClick={handleSelect}
         onDoubleClick={handleDoubleClick}
         ref={itemRef}
@@ -1404,7 +1401,7 @@ function BuildingItem({
             </div>
           </PopoverContent>
         </Popover>
-      </motion.div>
+      </div>
 
       {/* Tools and content for the active building */}
       <AnimatePresence initial={false}>
@@ -1433,9 +1430,9 @@ function BuildingItem({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
-}
+})
 
 export interface SitePanelProps {
   projectId?: string
@@ -1534,7 +1531,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
               No buildings yet
             </motion.div>
           ) : (
-            <motion.div className="flex min-h-0 flex-1 flex-col" layout>
+            <div className="flex min-h-0 flex-1 flex-col">
               {buildings.map((building) => {
                 const isBuildingActive =
                   (phase === 'structure' || phase === 'furnish') &&
@@ -1553,7 +1550,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                   />
                 )
               })}
-            </motion.div>
+            </div>
           )}
         </motion.div>
       </div>

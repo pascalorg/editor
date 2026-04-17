@@ -1,7 +1,7 @@
 import { type AnyNodeId, type BuildingNode, LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Building2, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Tooltip,
@@ -17,7 +17,11 @@ interface BuildingTreeNodeProps {
   isLast?: boolean
 }
 
-export function BuildingTreeNode({ nodeId, depth, isLast }: BuildingTreeNodeProps) {
+export const BuildingTreeNode = memo(function BuildingTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: BuildingTreeNodeProps) {
   const [expanded, setExpanded] = useState(true)
   const createNode = useScene((state) => state.createNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -84,4 +88,4 @@ export function BuildingTreeNode({ nodeId, depth, isLast }: BuildingTreeNodeProp
       ))}
     </TreeNodeWrapper>
   )
-}
+})

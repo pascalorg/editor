@@ -1,7 +1,7 @@
 import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Camera, Eye, EyeOff, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -12,7 +12,7 @@ interface TreeNodeActionsProps {
   nodeId: AnyNodeId
 }
 
-export function TreeNodeActions({ nodeId }: TreeNodeActionsProps) {
+export const TreeNodeActions = memo(function TreeNodeActions({ nodeId }: TreeNodeActionsProps) {
   const [open, setOpen] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const updateNodes = useScene((state) => state.updateNodes)
@@ -112,4 +112,4 @@ export function TreeNodeActions({ nodeId }: TreeNodeActionsProps) {
       </Popover>
     </div>
   )
-}
+})

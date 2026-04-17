@@ -13,6 +13,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -22,15 +23,24 @@ import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function RoofPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined,
+  )
+  // Shallow selector — only re-renders when the segment list content changes.
+  const segments = useScene(
+    useShallow((s) => {
+      if (!node) return []
+      return (node.children ?? [])
+        .map((childId) => s.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
+        .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
+    }),
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
@@ -137,11 +147,7 @@ export function RoofPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'roof' || selectedIds.length !== 1) return null
-
-  const segments = (node.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
-    .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
+  if (!(node && node.type === 'roof' && selectedId)) return null
 
   return (
     <PanelWrapper

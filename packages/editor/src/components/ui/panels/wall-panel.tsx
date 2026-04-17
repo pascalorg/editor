@@ -23,15 +23,31 @@ import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function WallPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
+  )
+
+  // Boolean selector — re-renders only when this specific wall's child
+  // composition crosses the "has a door/window/wall-item" threshold.
+  const hasWallChildrenBlockingCurve = useScene((s) => {
+    if (!node) return false
+    return (node.children ?? []).some((childId) => {
+      const child = s.nodes[childId as AnyNodeId]
+      if (!child) return false
+      if (child.type === 'door' || child.type === 'window') return true
+      if (child.type === 'item') {
+        const attachTo = child.asset?.attachTo
+        return attachTo === 'wall' || attachTo === 'wall-side'
+      }
+      return false
+    })
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<WallNode>) => {
@@ -97,7 +113,7 @@ export function WallPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setCurvingWall, setSelection])
 
-  if (!node || node.type !== 'wall' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'wall' && selectedId)) return null
 
   const dx = node.end[0] - node.start[0]
   const dz = node.end[1] - node.start[1]
@@ -107,16 +123,6 @@ export function WallPanel() {
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
-  const hasWallChildrenBlockingCurve = (node.children ?? []).some((childId) => {
-    const child = nodes[childId as AnyNodeId]
-    if (!child) return false
-    if (child.type === 'door' || child.type === 'window') return true
-    if (child.type === 'item') {
-      const attachTo = child.asset?.attachTo
-      return attachTo === 'wall' || attachTo === 'wall-side'
-    }
-    return false
-  })
 
   return (
     <PanelWrapper

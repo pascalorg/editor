@@ -81,7 +81,7 @@ export const floorStrategy = {
       ctx.levelId,
       pos,
       getScaledDimensions(ctx.draftItem),
-      [0, 0, 0],
+      ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
 
@@ -558,7 +558,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
     ctx.levelId,
     [ctx.gridPosition.x, 0, ctx.gridPosition.z],
     getScaledDimensions(ctx.draftItem),
-    [0, 0, 0],
+    ctx.draftItem.rotation,
     [ctx.draftItem.id],
   ).valid
 }

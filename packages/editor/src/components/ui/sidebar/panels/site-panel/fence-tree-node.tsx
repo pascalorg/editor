@@ -1,7 +1,7 @@
 import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -13,7 +13,11 @@ interface FenceTreeNodeProps {
   isLast?: boolean
 }
 
-export function FenceTreeNode({ nodeId, depth, isLast }: FenceTreeNodeProps) {
+export const FenceTreeNode = memo(function FenceTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: FenceTreeNodeProps) {
   const node = useScene((state) => state.nodes[nodeId]) as FenceNode | undefined
   const [isEditing, setIsEditing] = useState(false)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -62,4 +66,4 @@ export function FenceTreeNode({ nodeId, depth, isLast }: FenceTreeNodeProps) {
       onToggle={() => {}}
     />
   )
-}
+})

@@ -1,7 +1,7 @@
 import { type AnyNodeId, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -13,7 +13,11 @@ interface LevelTreeNodeProps {
   isLast?: boolean
 }
 
-export function LevelTreeNode({ nodeId, depth, isLast }: LevelTreeNodeProps) {
+export const LevelTreeNode = memo(function LevelTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: LevelTreeNodeProps) {
   const [expanded, setExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -67,4 +71,4 @@ export function LevelTreeNode({ nodeId, depth, isLast }: LevelTreeNodeProps) {
       ))}
     </TreeNodeWrapper>
   )
-}
+})

@@ -45,7 +45,6 @@ const HOLE_TYPES = ['slab', 'ceiling']
 
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
@@ -63,12 +62,19 @@ export function FloatingActionMenu() {
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
-  const node = selectedId ? nodes[selectedId as AnyNodeId] : null
+
+  // Subscribe just to the selected node so unrelated scene updates do not
+  // re-render this menu.
+  const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
   const isValidType = node ? ALLOWED_TYPES.includes(node.type) : false
-  const canCurveSelectedWall =
-    node?.type === 'wall' &&
-    !(node.children ?? []).some((childId) => {
-      const child = nodes[childId as AnyNodeId]
+
+  // Boolean selector, only re-renders when curving availability actually flips.
+  const canCurveSelectedWall = useScene((s) => {
+    if (!selectedId) return false
+    const selectedNode = s.nodes[selectedId as AnyNodeId]
+    if (selectedNode?.type !== 'wall') return false
+    return !(selectedNode.children ?? []).some((childId) => {
+      const child = s.nodes[childId as AnyNodeId]
       if (!child) return false
       if (child.type === 'door' || child.type === 'window') return true
       if (child.type === 'item') {
@@ -77,6 +83,7 @@ export function FloatingActionMenu() {
       }
       return false
     })
+  })
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -422,7 +429,11 @@ export function FloatingActionMenu() {
       {node?.type === 'wall' && (
         <>
           <group ref={startEndpointGroupRef}>
-            <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
+            <Html
+              center
+              style={{ pointerEvents: 'auto', touchAction: 'none' }}
+              zIndexRange={[100, 0]}
+            >
               <button
                 aria-label="Move wall start"
                 className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
@@ -440,7 +451,11 @@ export function FloatingActionMenu() {
             </Html>
           </group>
           <group ref={endEndpointGroupRef}>
-            <Html center style={{ pointerEvents: 'auto', touchAction: 'none' }} zIndexRange={[100, 0]}>
+            <Html
+              center
+              style={{ pointerEvents: 'auto', touchAction: 'none' }}
+              zIndexRange={[100, 0]}
+            >
               <button
                 aria-label="Move wall end"
                 className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${

@@ -44,8 +44,12 @@ export function EditorCommands() {
   const register = useCommandRegistry((s) => s.register)
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
-  const { setPhase, setMode, setTool, setStructureLayer, isPreviewMode, setPreviewMode } =
-    useEditor()
+  const setPhase = useEditor((s) => s.setPhase)
+  const setMode = useEditor((s) => s.setMode)
+  const setTool = useEditor((s) => s.setTool)
+  const setStructureLayer = useEditor((s) => s.setStructureLayer)
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
   const exportScene = useViewer((s) => s.exportScene)
 
