@@ -34,25 +34,24 @@ const ATTACHMENT_SIDE_OPTIONS: { label: string; value: AttachmentSide }[] = [
 ]
 
 export function StairSegmentPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as StairSegmentNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairSegmentNode | undefined) : undefined,
+  )
 
-  // Check if this is the first segment in the parent stair
-  const isFirstSegment = (() => {
+  // Boolean selector — re-renders only when this segment's position among the
+  // parent stair's children flips to/from "first".
+  const isFirstSegment = useScene((s) => {
     if (!node?.parentId) return true
-    const parent = nodes[node.parentId as AnyNodeId]
+    const parent = s.nodes[node.parentId as AnyNodeId]
     if (!parent || parent.type !== 'stair') return true
     const children = (parent as any).children ?? []
     return children[0] === node.id
-  })()
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<StairSegmentNode>) => {
@@ -130,7 +129,7 @@ export function StairSegmentPanel() {
     }
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'stair-segment' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'stair-segment' && selectedId)) return null
 
   return (
     <PanelWrapper

@@ -20,12 +20,18 @@ function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
 }
 
 export function SiteEdgeLabels() {
-  const rootNodeIds = useScene((state) => state.rootNodeIds)
-  const nodes = useScene((state) => state.nodes)
+  // Narrow subscription to just the site node — subscribing to the full
+  // s.nodes dict re-rendered this on every wall/level mutation even though
+  // the site itself rarely changes.
+  const siteNode = useScene((state) => {
+    const firstRoot = state.rootNodeIds[0]
+    if (!firstRoot) return null
+    const node = state.nodes[firstRoot]
+    return node?.type === 'site' ? (node as SiteNode) : null
+  })
   const unit = useViewer((state) => state.unit)
   const theme = useViewer((state) => state.theme)
 
-  const siteNode = rootNodeIds[0] ? (nodes[rootNodeIds[0]] as SiteNode) : null
   const siteNodeId = siteNode?.id
 
   const isNight = theme === 'dark'

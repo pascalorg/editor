@@ -1,7 +1,7 @@
 import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
@@ -24,7 +24,11 @@ interface ItemTreeNodeProps {
   isLast?: boolean
 }
 
-export function ItemTreeNode({ nodeId, depth, isLast }: ItemTreeNodeProps) {
+export const ItemTreeNode = memo(function ItemTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: ItemTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -121,4 +125,4 @@ export function ItemTreeNode({ nodeId, depth, isLast }: ItemTreeNodeProps) {
         ))}
     </TreeNodeWrapper>
   )
-}
+})

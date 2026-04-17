@@ -19,7 +19,13 @@ import { WindowPanel } from './window-panel'
 export function PanelManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
-  const nodes = useScene((s) => s.nodes)
+  // Only subscribe to the *type* of the single-selected node — string primitive
+  // so we don't re-render on unrelated scene mutations.
+  const selectedNodeType = useScene((s) => {
+    if (selectedIds.length !== 1) return null
+    const id = selectedIds[0]
+    return id ? (s.nodes[id as AnyNodeId]?.type ?? null) : null
+  })
 
   // Show reference panel if a reference is selected
   if (selectedReferenceId) {
@@ -27,34 +33,30 @@ export function PanelManager() {
   }
 
   // Show appropriate panel based on selected node type
-  if (selectedIds.length === 1) {
-    const selectedNode = selectedIds[0]
-    const node = nodes[selectedNode as AnyNodeId]
-    if (node) {
-      switch (node.type) {
-        case 'item':
-          return <ItemPanel />
-        case 'roof':
-          return <RoofPanel />
-        case 'roof-segment':
-          return <RoofSegmentPanel />
-        case 'stair':
-          return <StairPanel />
-        case 'stair-segment':
-          return <StairSegmentPanel />
-        case 'slab':
-          return <SlabPanel />
-        case 'ceiling':
-          return <CeilingPanel />
-        case 'wall':
-          return <WallPanel />
-        case 'fence':
-          return <FencePanel />
-        case 'door':
-          return <DoorPanel />
-        case 'window':
-          return <WindowPanel />
-      }
+  if (selectedNodeType) {
+    switch (selectedNodeType) {
+      case 'item':
+        return <ItemPanel />
+      case 'roof':
+        return <RoofPanel />
+      case 'roof-segment':
+        return <RoofSegmentPanel />
+      case 'stair':
+        return <StairPanel />
+      case 'stair-segment':
+        return <StairSegmentPanel />
+      case 'slab':
+        return <SlabPanel />
+      case 'ceiling':
+        return <CeilingPanel />
+      case 'wall':
+        return <WallPanel />
+      case 'fence':
+        return <FencePanel />
+      case 'door':
+        return <DoorPanel />
+      case 'window':
+        return <WindowPanel />
     }
   }
 

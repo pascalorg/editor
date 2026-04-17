@@ -18,6 +18,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
@@ -54,18 +55,34 @@ const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }
 ]
 
 export function StairPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as StairNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
+  )
+  const levels = useScene(
+    useShallow((s) =>
+      Object.values(s.nodes)
+        .filter((entry): entry is LevelNode => entry.type === 'level')
+        .sort((left, right) => left.level - right.level),
+    ),
+  )
+  const segments = useScene(
+    useShallow((s) => {
+      if (!selectedId) return []
+      const stairNode = s.nodes[selectedId as AnyNode['id']] as StairNode | undefined
+      if (stairNode?.type !== 'stair') return []
+      return (stairNode.children ?? [])
+        .map((childId) => s.nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
+        .filter((entry): entry is StairSegmentNode => entry?.type === 'stair-segment')
+    }),
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<StairNode>) => {
@@ -98,13 +115,15 @@ export function StairPanel() {
     const children = node.children ?? []
     const lastChildId = children[children.length - 1]
     if (lastChildId) {
-      const lastChild = nodes[lastChildId as AnyNodeId] as StairSegmentNode | undefined
+      const lastChild = useScene.getState().nodes[lastChildId as AnyNodeId] as
+        | StairSegmentNode
+        | undefined
       if (lastChild?.type === 'stair-segment') {
         return { fillToFloor: lastChild.fillToFloor }
       }
     }
     return { fillToFloor: true }
-  }, [node, nodes])
+  }, [node])
 
   const handleAddFlight = useCallback(() => {
     if (!node) return
@@ -208,16 +227,10 @@ export function StairPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'stair' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
-  const levels = Object.values(nodes)
-    .filter((entry): entry is LevelNode => entry.type === 'level')
-    .sort((left, right) => left.level - right.level)
   const resolvedFromLevelId = node.fromLevelId ?? node.parentId ?? levels[0]?.id ?? null
   const resolvedToLevelId = node.toLevelId ?? resolvedFromLevelId
-  const segments = (node.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
 
   return (
     <PanelWrapper

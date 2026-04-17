@@ -216,6 +216,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     let previousGridPos: [number, number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
+      // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
+      if (draftNode.current === null && asset.attachTo === undefined) {
+        configRef.current.initDraft(gridPosition.current)
+      }
+
+      lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
 
@@ -233,7 +239,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Only update X and Z for cursor - useFrame will handle Y (slab elevation)
       cursorGroupRef.current.position.x = result.cursorPosition[0]
       cursorGroupRef.current.position.z = result.cursorPosition[2]
-      lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -499,13 +504,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
+      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
       const result = itemSurfaceStrategy.move(ctx, event)
       if (!result) return
 
       event.stopPropagation()
 
       gridPosition.current.set(...result.gridPosition)
-      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
       const ic = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)
       cursorGroupRef.current.rotation.y = result.cursorRotationY
@@ -609,6 +614,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
+      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
       const result = ceilingStrategy.move(getContext(), event)
       if (!result) return
 
@@ -625,7 +631,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       gridPosition.current.set(...result.gridPosition)
-      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
       const cc = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(cc.x, cc.y, cc.z)
 
@@ -701,14 +706,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const ROTATION_STEP = Math.PI / 2
     const onKeyDown = (event: KeyboardEvent) => {
-      // Don't intercept keys when focus is inside a text input
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
-
       if (event.key === 'Shift') {
         shiftFreeRef.current = true
         revalidate()
+        return
+      }
+
+      // Don't intercept keys when focus is inside a text input
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
 
@@ -716,8 +721,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!draft) return
 
       let rotationDelta = 0
-      if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
-      else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
+      if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey)
+        rotationDelta = ROTATION_STEP
+      else if ((event.key === 't' || event.key === 'T') && !event.metaKey && !event.ctrlKey)
+        rotationDelta = -ROTATION_STEP
 
       if (rotationDelta !== 0) {
         event.preventDefault()
@@ -825,6 +832,29 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const edgesGeometry = new EdgesGeometry(boxGeometry)
     edgesRef.current.geometry = edgesGeometry
 
+    // ---- Undo protection ----
+    // Undo replaces the entire `nodes` object with a previous snapshot, which doesn't
+    // include the draft (created while temporal was paused). Re-insert it so the mesh
+    // doesn't disappear mid-placement.
+    // We defer via queueMicrotask to avoid nested setState during the undo callback.
+    // Temporal is already paused during placement, so createNode won't enter the undo stack.
+    let tearingDown = false
+    const unsubDraftWatch = useScene.subscribe((state) => {
+      if (tearingDown) return
+      const draft = draftNode.current
+      if (draft === null) return
+      if (draft.id in state.nodes) return
+
+      queueMicrotask(() => {
+        if (tearingDown) return
+        const draft = draftNode.current
+        if (draft === null) return
+        if (draft.id in useScene.getState().nodes) return
+        // Temporal is paused during placement, createNode won't be tracked
+        useScene.getState().createNode(draft, draft.parentId as AnyNodeId)
+      })
+    })
+
     // ---- Subscribe ----
 
     emitter.on('grid:move', onGridMove)
@@ -843,6 +873,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:leave', onCeilingLeave)
 
     return () => {
+      tearingDown = true
+      unsubDraftWatch()
       // Clear live transform for any remaining draft
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)

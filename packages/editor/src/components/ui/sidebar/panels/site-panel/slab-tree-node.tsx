@@ -1,7 +1,7 @@
 import { type AnyNodeId, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -13,7 +13,11 @@ interface SlabTreeNodeProps {
   isLast?: boolean
 }
 
-export function SlabTreeNode({ nodeId, depth, isLast }: SlabTreeNodeProps) {
+export const SlabTreeNode = memo(function SlabTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: SlabTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const polygon = useScene((s) => (s.nodes[nodeId] as SlabNode | undefined)?.polygon ?? [])
@@ -74,7 +78,7 @@ export function SlabTreeNode({ nodeId, depth, isLast }: SlabTreeNodeProps) {
       onToggle={() => {}}
     />
   )
-}
+})
 
 /**
  * Calculate the area of a polygon using the shoelace formula

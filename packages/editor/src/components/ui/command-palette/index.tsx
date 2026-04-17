@@ -219,7 +219,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
   const views = usePaletteViewRegistry((s) => s.views)
 
   const activeLevelId = useViewer((s) => s.selection.levelId)
-  const activeLevelNode = useScene((s) => (activeLevelId ? s.nodes[activeLevelId] : null))
 
   const wallMode = useViewer((s) => s.wallMode)
   const setWallMode = useViewer((s) => s.setWallMode)

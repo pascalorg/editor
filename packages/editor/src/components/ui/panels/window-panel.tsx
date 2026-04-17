@@ -24,19 +24,17 @@ import { PanelWrapper } from './panel-wrapper'
 import { PresetsPopover } from './presets/presets-popover'
 
 export function WindowPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const adapter = usePresetsAdapter()
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as WindowNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<WindowNode>) => {
@@ -153,7 +151,7 @@ export function WindowPanel() {
     [handleUpdate],
   )
 
-  if (!node || node.type !== 'window' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'window' && selectedId)) return null
 
   const numCols = node.columnRatios.length
   const numRows = node.rowRatios.length

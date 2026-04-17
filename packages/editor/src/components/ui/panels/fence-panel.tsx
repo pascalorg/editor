@@ -1,14 +1,6 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  type FenceBaseStyle,
-  type FenceNode,
-  type FenceStyle,
-  type MaterialSchema,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type FenceNode, type MaterialSchema, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { MaterialPicker } from '../controls/material-picker'
@@ -17,25 +9,29 @@ import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
-const FENCE_STYLE_OPTIONS: { label: string; value: FenceStyle }[] = [
+type FenceStyleValue = 'slat' | 'rail' | 'privacy'
+type FenceBaseStyleValue = 'grounded' | 'floating'
+
+const FENCE_STYLE_OPTIONS: { label: string; value: FenceStyleValue }[] = [
   { label: 'Slat', value: 'slat' },
   { label: 'Rail', value: 'rail' },
   { label: 'Privacy', value: 'privacy' },
 ]
 
-const FENCE_BASE_STYLE_OPTIONS: { label: string; value: FenceBaseStyle }[] = [
+const FENCE_BASE_STYLE_OPTIONS: { label: string; value: FenceBaseStyleValue }[] = [
   { label: 'Grounded', value: 'grounded' },
   { label: 'Floating', value: 'floating' },
 ]
 
 export function FencePanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as FenceNode | undefined) : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as FenceNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<FenceNode>) => {
@@ -85,14 +81,19 @@ export function FencePanel() {
     [handleUpdate],
   )
 
-  if (!node || node.type !== 'fence' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'fence' && selectedId && selectedCount === 1)) return null
 
   const dx = node.end[0] - node.start[0]
   const dz = node.end[1] - node.start[1]
   const length = Math.sqrt(dx * dx + dz * dz)
 
   return (
-    <PanelWrapper icon="/icons/build.png" onClose={handleClose} title={node.name || 'Fence'} width={300}>
+    <PanelWrapper
+      icon="/icons/build.png"
+      onClose={handleClose}
+      title={node.name || 'Fence'}
+      width={300}
+    >
       <PanelSection title="Style">
         <SegmentedControl
           onChange={(value) => handleUpdate({ style: value })}

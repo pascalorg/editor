@@ -26,7 +26,7 @@
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
-    "three": "^0.183.1"
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",

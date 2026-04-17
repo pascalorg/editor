@@ -1,6 +1,6 @@
 import { type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNodeWrapper } from './tree-node'
@@ -12,7 +12,11 @@ interface ZoneTreeNodeProps {
   isLast?: boolean
 }
 
-export function ZoneTreeNode({ nodeId, depth, isLast }: ZoneTreeNodeProps) {
+export const ZoneTreeNode = memo(function ZoneTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: ZoneTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -61,7 +65,7 @@ export function ZoneTreeNode({ nodeId, depth, isLast }: ZoneTreeNodeProps) {
       onToggle={() => {}}
     />
   )
-}
+})
 
 /**
  * Calculate the area of a polygon using the shoelace formula

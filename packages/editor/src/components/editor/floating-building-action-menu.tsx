@@ -15,7 +15,6 @@ export function FloatingBuildingActionMenu() {
   const levelId = useViewer((s) => s.selection.levelId)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
 
   const groupRef = useRef<THREE.Group>(null)
 
@@ -36,13 +35,15 @@ export function FloatingBuildingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!buildingId) return
-      const node = nodes[buildingId]
+      // Read lazily at click time — no need to subscribe to nodes for a
+      // one-shot action.
+      const node = useScene.getState().nodes[buildingId]
       if (!node || node.type !== 'building') return
       sfxEmitter.emit('sfx:item-pick')
       setMovingNode(node as BuildingNode)
       setSelection({ buildingId: null })
     },
-    [buildingId, nodes, setMovingNode, setSelection],
+    [buildingId, setMovingNode, setSelection],
   )
 
   // Only show when a building is selected without a level

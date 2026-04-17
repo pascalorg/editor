@@ -13,18 +13,16 @@ import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function CeilingPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as CeilingNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
@@ -129,7 +127,7 @@ export function CeilingPanel() {
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
-  if (!node || node.type !== 'ceiling' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'ceiling' && selectedId)) return null
 
   const calculateArea = (polygon: Array<[number, number]>): number => {
     if (polygon.length < 3) return 0

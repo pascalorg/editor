@@ -140,7 +140,7 @@ const PostProcessingPasses = () => {
     // loop fights the direct-render fallback path. Short-circuit here so
     // `useFrame` uses the direct `renderer.render(scene, camera)` path
     // exclusively and never attempts the TSL pipeline.
-    const hasWebGPU = typeof navigator !== 'undefined' && typeof navigator.gpu !== 'undefined'
+    const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
     if (!hasWebGPU) {
       console.warn(
         '[viewer] WebGPU unavailable — rendering without post-processing (SSGI, outlines, denoise).',

@@ -18,7 +18,7 @@
     "next": ">=15",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
-    "three": "^0.183"
+    "three": "^0.184"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
@@ -54,9 +54,10 @@
     "@pascal-app/viewer": "^0.5.1",
     "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
+    "@types/node": "^22.19.12",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "@types/three": "^0.183.1",
+    "@types/three": "^0.184.0",
     "typescript": "5.9.3"
   }
 }

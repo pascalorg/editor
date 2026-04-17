@@ -35,16 +35,14 @@ const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
 ]
 
 export function RoofSegmentPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
@@ -123,7 +121,7 @@ export function RoofSegmentPanel() {
     }
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'roof-segment' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   return (
     <PanelWrapper

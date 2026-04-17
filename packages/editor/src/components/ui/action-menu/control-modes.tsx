@@ -90,12 +90,17 @@ export function ControlModes() {
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
   const levelId = useViewer((s) => s.selection.levelId)
 
-  const levelNode = useScene((state) =>
-    levelId ? (state.nodes[levelId] as LevelNode | undefined) : undefined,
-  )
+  // Only subscribe to the primitive `level` number — when walls are added to
+  // this level the object ref changes but this number doesn't, so Object.is
+  // dedupes and we avoid a re-render.
+  const levelIndex = useScene((state) => {
+    if (!levelId) return null
+    const node = state.nodes[levelId]
+    return node?.type === 'level' ? (node as LevelNode).level : null
+  })
 
   const isSiteEditing = phase === 'site'
-  const isGroundFloor = levelNode?.type === 'level' && levelNode.level === 0
+  const isGroundFloor = levelIndex === 0
   const canEnterSiteEdit = isGroundFloor || isSiteEditing
 
   const structureLayer = useEditor((state) => state.structureLayer)

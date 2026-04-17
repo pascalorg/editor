@@ -1,7 +1,7 @@
 import { type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
@@ -14,7 +14,11 @@ interface WallTreeNodeProps {
   isLast?: boolean
 }
 
-export function WallTreeNode({ nodeId, depth, isLast }: WallTreeNodeProps) {
+export const WallTreeNode = memo(function WallTreeNode({
+  nodeId,
+  depth,
+  isLast,
+}: WallTreeNodeProps) {
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
@@ -107,4 +111,4 @@ export function WallTreeNode({ nodeId, depth, isLast }: WallTreeNodeProps) {
       ))}
     </TreeNodeWrapper>
   )
-}
+})
