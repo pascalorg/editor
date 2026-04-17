@@ -18,6 +18,14 @@ export type WallPlanPoint = [number, number]
 export const WALL_GRID_STEP = 0.5
 export const WALL_JOIN_SNAP_RADIUS = 0.35
 export const WALL_MIN_LENGTH = 0.01
+const DEFAULT_WALL_ANGLE_SNAP_STEP = Math.PI / 4
+
+const WALL_ANGLE_SNAP_BY_GRID_STEP: Record<number, number> = {
+  0.5: Math.PI / 4,
+  0.25: Math.PI / 8,
+  0.1: Math.PI / 12,
+  0.05: Math.PI / 36,
+}
 
 type WallSplitIntersection = {
   wallId: WallNode['id']
@@ -30,11 +38,11 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
   return dx * dx + dz * dz
 }
 
-function getWallGridStep(): number {
+export function getWallGridStep(): number {
   return useEditor.getState().gridSnapStep
 }
 
-function snapScalarToGrid(value: number, step = WALL_GRID_STEP): number {
+export function snapScalarToGrid(value: number, step = WALL_GRID_STEP): number {
   return Math.round(value / step) * step
 }
 
@@ -46,17 +54,22 @@ export function snapPointTo45Degrees(
   start: WallPlanPoint,
   cursor: WallPlanPoint,
   step = WALL_GRID_STEP,
+  angleStep = DEFAULT_WALL_ANGLE_SNAP_STEP,
 ): WallPlanPoint {
   const dx = cursor[0] - start[0]
   const dz = cursor[1] - start[1]
   const angle = Math.atan2(dz, dx)
-  const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
+  const snappedAngle = Math.round(angle / angleStep) * angleStep
   const distance = Math.sqrt(dx * dx + dz * dz)
 
   return snapPointToGrid([
     start[0] + Math.cos(snappedAngle) * distance,
     start[1] + Math.sin(snappedAngle) * distance,
   ], step)
+}
+
+export function getWallAngleSnapStep(step = getWallGridStep()): number {
+  return WALL_ANGLE_SNAP_BY_GRID_STEP[step] ?? DEFAULT_WALL_ANGLE_SNAP_STEP
 }
 
 function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): WallPlanPoint | null {
@@ -358,8 +371,11 @@ export function snapWallDraftPoint(args: {
 }): WallPlanPoint {
   const { point, walls, start, angleSnap = false, ignoreWallIds } = args
   const step = getWallGridStep()
+  const angleStep = getWallAngleSnapStep(step)
   const basePoint =
-    start && angleSnap ? snapPointTo45Degrees(start, point, step) : snapPointToGrid(point, step)
+    start && angleSnap
+      ? snapPointTo45Degrees(start, point, step, angleStep)
+      : snapPointToGrid(point, step)
 
   return (
     findWallSnapTarget(basePoint, walls, {

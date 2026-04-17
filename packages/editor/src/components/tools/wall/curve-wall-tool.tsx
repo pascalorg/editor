@@ -18,10 +18,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-
-function snap(value: number) {
-  return Math.round(value * 2) / 2
-}
+import { getWallGridStep, snapScalarToGrid } from './wall-drafting'
 
 export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
@@ -76,15 +73,22 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const localX = shiftPressedRef.current ? event.localPosition[0] : snap(event.localPosition[0])
-      const localZ = shiftPressedRef.current ? event.localPosition[2] : snap(event.localPosition[2])
+      const snapStep = getWallGridStep()
+      const localX = shiftPressedRef.current
+        ? event.localPosition[0]
+        : snapScalarToGrid(event.localPosition[0], snapStep)
+      const localZ = shiftPressedRef.current
+        ? event.localPosition[2]
+        : snapScalarToGrid(event.localPosition[2], snapStep)
 
       const offsetFromMidpoint =
         -(
           (localX - chord.midpoint.x) * chord.normal.x +
           (localZ - chord.midpoint.y) * chord.normal.y
         )
-      const snappedOffset = shiftPressedRef.current ? offsetFromMidpoint : snap(offsetFromMidpoint)
+      const snappedOffset = shiftPressedRef.current
+        ? offsetFromMidpoint
+        : snapScalarToGrid(offsetFromMidpoint, snapStep)
       const nextCurveOffset = normalizeWallCurveOffset(node, Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)))
 
       if (

@@ -7,10 +7,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-
-function snap(value: number) {
-  return Math.round(value * 2) / 2
-}
+import { getWallGridStep, snapScalarToGrid } from './wall-drafting'
 
 function rotateVector([x, z]: [number, number], angle: number): [number, number] {
   const cos = Math.cos(angle)
@@ -183,8 +180,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const onGridMove = (event: GridEvent) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
-      const localX = shiftPressedRef.current ? rawX : snap(rawX)
-      const localZ = shiftPressedRef.current ? rawZ : snap(rawZ)
+      const snapStep = getWallGridStep()
+      const localX = shiftPressedRef.current ? rawX : snapScalarToGrid(rawX, snapStep)
+      const localZ = shiftPressedRef.current ? rawZ : snapScalarToGrid(rawZ, snapStep)
 
       if (
         previousGridPosRef.current &&
