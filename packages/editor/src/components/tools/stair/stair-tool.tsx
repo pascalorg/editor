@@ -176,9 +176,7 @@ export const StairTool: React.FC = () => {
 
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const y = event.localPosition[1]
-
-      commitStairPlacement(currentLevelId, [gridX, y, gridZ], rotationRef.current)
+      commitStairPlacement(currentLevelId, [gridX, 0, gridZ], rotationRef.current)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
