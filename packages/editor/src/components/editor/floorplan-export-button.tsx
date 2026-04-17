@@ -16,8 +16,6 @@ import { Download, FileImage, FileText, Loader2 } from 'lucide-react'
 export function FloorplanExportButton() {
   const { exportSvg, exportPdf, canExport, isExporting } = useFloorplanExport()
 
-  if (!canExport) return null
-
   return (
     <DropdownMenu>
       <Tooltip>
@@ -27,7 +25,7 @@ export function FloorplanExportButton() {
               variant="outline"
               size="sm"
               className="h-7 gap-1.5 px-2.5 text-xs shadow-sm"
-              disabled={isExporting}
+              disabled={!canExport || isExporting}
             >
               {isExporting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -38,7 +36,9 @@ export function FloorplanExportButton() {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top">Export floor plan</TooltipContent>
+        <TooltipContent side="top">
+          {canExport ? 'Export floor plan' : 'Select a level to export'}
+        </TooltipContent>
       </Tooltip>
 
       <DropdownMenuContent align="end" className="w-44">
