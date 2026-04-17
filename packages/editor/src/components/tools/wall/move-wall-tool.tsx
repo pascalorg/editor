@@ -229,22 +229,43 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
 
       wasCommitted = true
-      useScene.temporal.getState().resume()
+
+      // Restore original baseline while paused so the next resume+update
+      // registers as a single tracked change (undo reverts to original).
       applyNodePreview([
-        { id: nodeId, start: preview.start, end: preview.end },
+        { id: nodeId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
+
+      useScene.temporal.getState().resume()
+
+      const commitUpdates = [
+        {
+          id: nodeId as AnyNodeId,
+          data: isNew
+            ? {
+                start: preview.start,
+                end: preview.end,
+                metadata: stripWallIsNewMetadata(node.metadata),
+              }
+            : { start: preview.start, end: preview.end },
+        },
         ...getLinkedWallUpdates(
           linkedOriginalsRef.current,
           originalStart,
           originalEnd,
           preview.start,
           preview.end,
-        ),
-      ])
-      if (isNew) {
-        useScene.getState().updateNode(nodeId, {
-          metadata: stripWallIsNewMetadata(node.metadata),
-        })
+        ).map((entry) => ({
+          id: entry.id as AnyNodeId,
+          data: { start: entry.start, end: entry.end },
+        })),
+      ]
+      useScene.getState().updateNodes(commitUpdates)
+      for (const { id } of commitUpdates) {
+        useScene.getState().markDirty(id)
       }
+
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')

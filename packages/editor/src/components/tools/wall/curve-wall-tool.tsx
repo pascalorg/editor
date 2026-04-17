@@ -110,12 +110,18 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       const curveOffset = previewOffsetRef.current
       wasCommitted = true
-      useScene.temporal.getState().resume()
-      if (curveOffset !== getClampedWallCurveOffset(node)) {
+
+      if (curveOffset !== originalCurveOffset) {
+        // Restore original baseline while paused so the next resume+update
+        // registers as a single tracked change (undo reverts to original).
+        useScene.getState().updateNode(nodeId, { curveOffset: originalCurveOffset })
+        useScene.getState().markDirty(nodeId as AnyNodeId)
+
+        useScene.temporal.getState().resume()
         useScene.getState().updateNode(nodeId, { curveOffset })
         useScene.getState().markDirty(nodeId as AnyNodeId)
+        useScene.temporal.getState().pause()
       }
-      useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
