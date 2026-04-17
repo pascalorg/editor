@@ -14,7 +14,7 @@ import {
   StairSegmentNode,
   sceneRegistry,
   useScene,
-  type WallNode,
+  WallNode,
   WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -210,6 +210,8 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+        } else if (node.type === 'wall') {
+          duplicate = WallNode.parse(duplicateInfo)
         } else if (node.type === 'fence') {
           duplicate = FenceNode.parse(duplicateInfo)
           duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
@@ -240,6 +242,8 @@ export function FloatingActionMenu() {
 
       if (duplicate) {
         if (duplicate.type === 'door' || duplicate.type === 'window') {
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+        } else if (duplicate.type === 'wall') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (duplicate.type === 'fence') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
@@ -310,6 +314,7 @@ export function FloatingActionMenu() {
         }
         if (
           duplicate.type === 'item' ||
+          duplicate.type === 'wall' ||
           duplicate.type === 'fence' ||
           duplicate.type === 'window' ||
           duplicate.type === 'door' ||

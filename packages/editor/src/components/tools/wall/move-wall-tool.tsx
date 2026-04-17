@@ -19,6 +19,16 @@ function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1]
 }
 
+function stripWallIsNewMetadata(meta: WallNode['metadata']): WallNode['metadata'] {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return meta
+  }
+
+  const nextMeta = { ...(meta as Record<string, unknown>) }
+  delete nextMeta.isNew
+  return nextMeta
+}
+
 type LinkedWallSnapshot = {
   id: WallNode['id']
   start: [number, number]
@@ -86,6 +96,11 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
+  const meta =
+    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+  const isNew = !!meta.isNew
   const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
@@ -99,12 +114,14 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     (node.end[1] - node.start[1]) / 2,
   ])
   const linkedOriginalsRef = useRef(
-    getLinkedWallSnapshots({
-      wallId: node.id,
-      wallParentId: node.parentId ?? null,
-      originalStart: node.start,
-      originalEnd: node.end,
-    }),
+    isNew
+      ? []
+      : getLinkedWallSnapshots({
+          wallId: node.id,
+          wallParentId: node.parentId ?? null,
+          originalStart: node.start,
+          originalEnd: node.end,
+        }),
   )
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const nodeIdRef = useRef(node.id)
@@ -223,6 +240,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           preview.end,
         ),
       ])
+      if (isNew) {
+        useScene.getState().updateNode(nodeId, {
+          metadata: stripWallIsNewMetadata(node.metadata),
+        })
+      }
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
@@ -295,7 +317,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [exitMoveMode])
+  }, [exitMoveMode, isNew, node.metadata])
 
   return (
     <group>
