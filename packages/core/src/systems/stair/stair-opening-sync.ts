@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId, LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
+import type { AnyNode, AnyNodeId, CeilingNode, LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
@@ -542,6 +542,23 @@ function getTargetSlabElevationForStair(
   )
 }
 
+function getTargetCeilingElevationForStair(
+  stair: StairNode,
+  ceiling: CeilingNode,
+  ceilingLevelId: string,
+  nodes: Record<string, AnyNode>,
+) {
+  const { fromLevelId } = getResolvedStairLevelIds(stair, nodes)
+  const fromLevel = getLevelNumber(fromLevelId, nodes)
+  const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
+
+  if (fromLevel === undefined || ceilingLevel === undefined) {
+    return ceiling.height ?? DEFAULT_WALL_HEIGHT
+  }
+
+  return (ceilingLevel - fromLevel) * DEFAULT_WALL_HEIGHT + (ceiling.height ?? DEFAULT_WALL_HEIGHT) - (stair.position[1] ?? 0)
+}
+
 function shouldApplyStairToSlab(stair: StairNode, slabLevelId: string, nodes: Record<string, AnyNode>) {
   const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
   const fromLevel = getLevelNumber(fromLevelId, nodes)
@@ -561,10 +578,30 @@ function shouldApplyStairToSlab(stair: StairNode, slabLevelId: string, nodes: Re
   return slabLevel > minLevel && slabLevel <= maxLevel
 }
 
+function shouldApplyStairToCeiling(stair: StairNode, ceilingLevelId: string, nodes: Record<string, AnyNode>) {
+  const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
+  const fromLevel = getLevelNumber(fromLevelId, nodes)
+  const toLevel = getLevelNumber(toLevelId, nodes)
+  const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
+
+  if (ceilingLevel === undefined) {
+    return fromLevelId === ceilingLevelId
+  }
+
+  if (fromLevel === undefined || toLevel === undefined) {
+    return fromLevelId === ceilingLevelId
+  }
+
+  const minLevel = Math.min(fromLevel, toLevel)
+  const maxLevel = Math.max(fromLevel, toLevel)
+  return ceilingLevel >= minLevel && ceilingLevel < maxLevel
+}
+
 export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
   const stairs = Object.values(nodes).filter((node): node is StairNode => node.type === 'stair' && node.visible !== false)
   const slabs = Object.values(nodes).filter((node): node is SlabNode => node.type === 'slab')
-  const updates: Array<{ id: AnyNodeId; data: Partial<SlabNode> }> = []
+  const ceilings = Object.values(nodes).filter((node): node is CeilingNode => node.type === 'ceiling')
+  const updates: Array<{ id: AnyNodeId; data: Partial<SlabNode | CeilingNode> }> = []
 
   for (const slab of slabs) {
     const slabLevelId = resolveLevelId(slab, nodes)
@@ -603,6 +640,51 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     if (!polygonsEqual(existingHoles, nextHoles) || !metadataEqual(existingMetadata, nextMetadata)) {
       updates.push({
         id: slab.id,
+        data: {
+          holes: nextHoles,
+          holeMetadata: nextMetadata,
+        },
+      })
+    }
+  }
+
+  for (const ceiling of ceilings) {
+    const ceilingLevelId = resolveLevelId(ceiling, nodes)
+    const existingHoles = ceiling.holes ?? []
+    const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
+    const manualHoles = existingHoles.filter((_hole, index) => existingMetadata[index]?.source !== 'stair')
+    const manualMetadata = existingMetadata
+      .filter((entry) => entry.source !== 'stair')
+      .map((entry) => ({ ...entry }))
+
+    const stairHoles = stairs
+      .filter((stair) => shouldApplyStairToCeiling(stair, ceilingLevelId, nodes))
+      .flatMap((stair) =>
+        getStairOpeningPolygons(
+          stair,
+          nodes,
+          getTargetCeilingElevationForStair(stair, ceiling, ceilingLevelId, nodes),
+        ).map((polygon) => ({
+          polygon:
+            stair.stairType === 'straight'
+              ? polygon
+              : expandPolygonFromCentroid(
+                  polygon,
+                  Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0),
+                ),
+          metadata: {
+            source: 'stair' as const,
+            stairId: stair.id,
+          },
+        })),
+      )
+
+    const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
+    const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
+
+    if (!polygonsEqual(existingHoles, nextHoles) || !metadataEqual(existingMetadata, nextMetadata)) {
+      updates.push({
+        id: ceiling.id,
         data: {
           holes: nextHoles,
           holeMetadata: nextMetadata,
