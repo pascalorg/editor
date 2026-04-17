@@ -1,7 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import useViewer from '@pascal-app/viewer/store/use-viewer'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useState } from 'react'
 
 import { exportFloorplanAsPdf } from './pdf-export'
@@ -31,7 +31,7 @@ export function useFloorplanExport(opts: FloorplanExportOptions = {}) {
   const nodes = useScene((s) => s.nodes)
 
   // Active level from viewer selection
-  const levelId = useViewer((s) => s.selection?.levelId)
+  const levelId = useViewer((s) => s.selection.levelId)
 
   // Derive level node and building rotation
   const levelNode = levelId ? (nodes[levelId] as any) : null
