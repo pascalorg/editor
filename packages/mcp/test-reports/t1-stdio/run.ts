@@ -168,18 +168,21 @@ async function main(): Promise<void> {
   }
 
   // ---- 1. get_scene ------------------------------------------------------
-  const sceneResult = await run('get_scene', {}, {
-    describe: (r) => {
-      const s = r.structuredContent as any
-      const nodeCount = s?.nodes ? Object.keys(s.nodes).length : 0
-      const rootCount = s?.rootNodeIds?.length ?? 0
-      return `${nodeCount} nodes, ${rootCount} roots`
+  const sceneResult = await run(
+    'get_scene',
+    {},
+    {
+      describe: (r) => {
+        const s = r.structuredContent as any
+        const nodeCount = s?.nodes ? Object.keys(s.nodes).length : 0
+        const rootCount = s?.rootNodeIds?.length ?? 0
+        return `${nodeCount} nodes, ${rootCount} roots`
+      },
     },
-  })
+  )
 
   // Discover key node ids from the scene snapshot.
-  const sceneNodes: Record<string, any> =
-    (sceneResult?.structuredContent as any)?.nodes ?? {}
+  const sceneNodes: Record<string, any> = (sceneResult?.structuredContent as any)?.nodes ?? {}
   const sceneRoots: string[] = (sceneResult?.structuredContent as any)?.rootNodeIds ?? []
 
   const findFirst = (type: string): any | null => {
@@ -198,30 +201,41 @@ async function main(): Promise<void> {
   )
 
   // ---- 2. get_node -------------------------------------------------------
-  await run('get_node', { id: siteNode?.id ?? sceneRoots[0] ?? '' }, {
-    describe: (r) => {
-      const n = (r.structuredContent as any)?.node
-      return `node type=${n?.type}, id=${n?.id}`
+  await run(
+    'get_node',
+    { id: siteNode?.id ?? sceneRoots[0] ?? '' },
+    {
+      describe: (r) => {
+        const n = (r.structuredContent as any)?.node
+        return `node type=${n?.type}, id=${n?.id}`
+      },
     },
-  })
+  )
 
   // ---- 3. describe_node --------------------------------------------------
-  await run('describe_node', { id: siteNode?.id ?? sceneRoots[0] ?? '' }, {
-    describe: (r) => {
-      const s = r.structuredContent as any
-      return `type=${s?.type}, ${s?.childrenIds?.length ?? 0} children`
+  await run(
+    'describe_node',
+    { id: siteNode?.id ?? sceneRoots[0] ?? '' },
+    {
+      describe: (r) => {
+        const s = r.structuredContent as any
+        return `type=${s?.type}, ${s?.childrenIds?.length ?? 0} children`
+      },
     },
-  })
+  )
 
   // ---- 4. find_nodes -----------------------------------------------------
-  const findLevels = await run('find_nodes', { type: 'level' }, {
-    describe: (r) => `${(r.structuredContent as any)?.nodes?.length ?? 0} level node(s)`,
-  })
+  const findLevels = await run(
+    'find_nodes',
+    { type: 'level' },
+    {
+      describe: (r) => `${(r.structuredContent as any)?.nodes?.length ?? 0} level node(s)`,
+    },
+  )
 
   // Refresh levelNode from find_nodes output (most current).
   const foundLevels = (findLevels?.structuredContent as any)?.nodes ?? []
-  const groundLevelId: string | undefined =
-    foundLevels[0]?.id ?? levelNode?.id ?? undefined
+  const groundLevelId: string | undefined = foundLevels[0]?.id ?? levelNode?.id ?? undefined
   console.log(`[t1] groundLevelId=${groundLevelId}`)
 
   // ---- 5. measure --------------------------------------------------------
@@ -462,38 +476,58 @@ async function main(): Promise<void> {
   }
 
   // ---- 14. undo ----------------------------------------------------------
-  await run('undo', {}, {
-    describe: (r) => `undone=${(r.structuredContent as any)?.undone}`,
-  })
+  await run(
+    'undo',
+    {},
+    {
+      describe: (r) => `undone=${(r.structuredContent as any)?.undone}`,
+    },
+  )
 
   // ---- 15. redo ----------------------------------------------------------
-  await run('redo', {}, {
-    describe: (r) => `redone=${(r.structuredContent as any)?.redone}`,
-  })
+  await run(
+    'redo',
+    {},
+    {
+      describe: (r) => `redone=${(r.structuredContent as any)?.redone}`,
+    },
+  )
 
   // ---- 16. export_json ---------------------------------------------------
-  await run('export_json', { pretty: true }, {
-    describe: (r) => {
-      const s = r.structuredContent as any
-      return `${s?.json?.length ?? 0} chars JSON`
+  await run(
+    'export_json',
+    { pretty: true },
+    {
+      describe: (r) => {
+        const s = r.structuredContent as any
+        return `${s?.json?.length ?? 0} chars JSON`
+      },
     },
-  })
+  )
 
   // ---- 17. export_glb ----------------------------------------------------
   await run('export_glb', {})
 
   // ---- 18. validate_scene ------------------------------------------------
-  await run('validate_scene', {}, {
-    describe: (r) => {
-      const s = r.structuredContent as any
-      return `valid=${s?.valid}, errors=${s?.errors?.length ?? 0}`
+  await run(
+    'validate_scene',
+    {},
+    {
+      describe: (r) => {
+        const s = r.structuredContent as any
+        return `valid=${s?.valid}, errors=${s?.errors?.length ?? 0}`
+      },
     },
-  })
+  )
 
   // ---- 19. check_collisions ----------------------------------------------
-  await run('check_collisions', {}, {
-    describe: (r) => `${(r.structuredContent as any)?.collisions?.length ?? 0} collision(s)`,
-  })
+  await run(
+    'check_collisions',
+    {},
+    {
+      describe: (r) => `${(r.structuredContent as any)?.collisions?.length ?? 0} collision(s)`,
+    },
+  )
 
   // ---- 20. analyze_floorplan_image — expected sampling_unavailable -------
   await run(

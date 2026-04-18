@@ -4,6 +4,13 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+export type {
+  MaterialMapProperties,
+  MaterialMaps,
+  MaterialPresetPayload,
+  MaterialTarget as MaterialTargetValue,
+  TextureWrapMode as TextureWrapModeValue,
+} from './material'
 // Material
 export {
   DEFAULT_MATERIALS,
@@ -14,15 +21,8 @@ export {
   MaterialProperties,
   MaterialSchema,
   MaterialTarget,
-  TextureWrapMode,
   resolveMaterial,
-} from './material'
-export type {
-  MaterialMapProperties,
-  MaterialMaps,
-  MaterialPresetPayload,
-  MaterialTarget as MaterialTargetValue,
-  TextureWrapMode as TextureWrapModeValue,
+  TextureWrapMode,
 } from './material'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'

@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CollectionId } from '../collections'
 
@@ -79,7 +80,7 @@ const assetSchema = z.object({
   category: z.string(),
   name: z.string(),
   thumbnail: z.string(),
-  src: z.string(),
+  src: AssetUrl,
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
   tags: z.array(z.string()).optional(),

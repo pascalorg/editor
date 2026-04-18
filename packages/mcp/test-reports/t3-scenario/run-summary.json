@@ -10,10 +10,7 @@
       "ok": true,
       "durationMs": 4,
       "summary": "building=building_bfqg91ai9ijps9ej, level=level_wyuoxj87czq3v0re (of 1 buildings, 1 levels)",
-      "nodeIds": [
-        "building_bfqg91ai9ijps9ej",
-        "level_wyuoxj87czq3v0re"
-      ]
+      "nodeIds": ["building_bfqg91ai9ijps9ej", "level_wyuoxj87czq3v0re"]
     },
     {
       "n": 2,
@@ -85,10 +82,7 @@
       "ok": true,
       "durationMs": 3,
       "summary": "furthest: zone_3fyksm10tb0dhn1e <-> zone_u95l1bt35jci3gvu = 7.000m",
-      "nodeIds": [
-        "zone_3fyksm10tb0dhn1e",
-        "zone_u95l1bt35jci3gvu"
-      ]
+      "nodeIds": ["zone_3fyksm10tb0dhn1e", "zone_u95l1bt35jci3gvu"]
     },
     {
       "n": 8,
@@ -117,9 +111,7 @@
       "ok": true,
       "durationMs": 2,
       "summary": "newLevelId=level_cxvltlqvgqcasiep, cloned=22, valid=true, errors=0",
-      "nodeIds": [
-        "level_cxvltlqvgqcasiep"
-      ]
+      "nodeIds": ["level_cxvltlqvgqcasiep"]
     },
     {
       "n": 12,

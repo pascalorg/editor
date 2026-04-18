@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
 import { registerCreateLevel } from './create-level'
@@ -14,18 +15,25 @@ import { registerFindNodes } from './find-nodes'
 import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
+import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
+import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSetZone } from './set-zone'
+import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
 import { registerValidateScene } from './validate-scene'
+import { registerVariantTools } from './variants'
 
 /**
  * Register every non-vision MCP tool against the given server.
  * Vision tools (analyze_floorplan_image, analyze_room_photo) are registered
  * separately via `registerVisionTools` (Agent E).
+ *
+ * Scene-lifecycle tools (save/load/list/delete/rename scene) are registered
+ * when a `store` is provided; callers that pass `undefined` skip them.
  */
-export function registerTools(server: McpServer, bridge: SceneBridge): void {
+export function registerTools(server: McpServer, bridge: SceneBridge, store?: SceneStore): void {
   registerGetScene(server, bridge)
   registerGetNode(server, bridge)
   registerDescribeNode(server, bridge)
@@ -45,4 +53,10 @@ export function registerTools(server: McpServer, bridge: SceneBridge): void {
   registerExportGlb(server, bridge)
   registerValidateScene(server, bridge)
   registerCheckCollisions(server, bridge)
+  registerTemplateTools(server, bridge, store)
+  if (store) {
+    registerSceneLifecycleTools(server, bridge, store)
+    registerVariantTools(server, bridge, store)
+    registerPhotoToSceneTool(server, bridge, store)
+  }
 }

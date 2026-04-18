@@ -20,13 +20,14 @@
  * best-effort report.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const TARGET_URL = 'http://localhost:3917/mcp'
-const OUT_DIR = '/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/test-reports/t2-http'
+const OUT_DIR =
+  '/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/test-reports/t2-http'
 
 type ToolResult = {
   name: string
@@ -106,9 +107,9 @@ function getStructured<T>(
   const r = result.result as { structuredContent?: unknown; content?: unknown }
   if (r.structuredContent !== undefined) return r.structuredContent as T
   if (Array.isArray(r.content)) {
-    const textBlock = r.content.find(
-      (c) => (c as { type?: string }).type === 'text',
-    ) as { text?: string } | undefined
+    const textBlock = r.content.find((c) => (c as { type?: string }).type === 'text') as
+      | { text?: string }
+      | undefined
     if (textBlock?.text) {
       try {
         return JSON.parse(textBlock.text) as T
@@ -430,26 +431,24 @@ async function main() {
 
   // ---- cut_opening ------------------------------------------------------
   let openingId: string | null = null
-  {
-    if (!wallId) {
-      record('cut_opening', false, 'skipped — no wall id to cut')
-    } else {
-      const r = await callTool(clientA, 'cut_opening', {
-        wallId,
-        type: 'door',
-        position: 0.5,
-        width: 0.9,
-        height: 2,
-      })
-      const struct = getStructured<{ openingId: string }>(r)
-      openingId = struct?.openingId ?? null
-      record(
-        'cut_opening',
-        r.ok && typeof struct?.openingId === 'string',
-        r.ok ? `cut opening ${struct?.openingId}` : `error: ${String(r.error)}`,
-        r.latencyMs,
-      )
-    }
+  if (!wallId) {
+    record('cut_opening', false, 'skipped — no wall id to cut')
+  } else {
+    const r = await callTool(clientA, 'cut_opening', {
+      wallId,
+      type: 'door',
+      position: 0.5,
+      width: 0.9,
+      height: 2,
+    })
+    const struct = getStructured<{ openingId: string }>(r)
+    openingId = struct?.openingId ?? null
+    record(
+      'cut_opening',
+      r.ok && typeof struct?.openingId === 'string',
+      r.ok ? `cut opening ${struct?.openingId}` : `error: ${String(r.error)}`,
+      r.latencyMs,
+    )
   }
 
   // ---- set_zone ---------------------------------------------------------
@@ -475,59 +474,45 @@ async function main() {
       r.latencyMs,
     )
   }
-
-  // ---- duplicate_level --------------------------------------------------
-  {
-    if (!extraLevelId) {
-      record('duplicate_level', false, 'skipped — no extra level to duplicate')
-    } else {
-      const r = await callTool(clientA, 'duplicate_level', { levelId: extraLevelId })
-      const struct = getStructured<{ newLevelId: string; newNodeIds: string[] }>(r)
-      record(
-        'duplicate_level',
-        r.ok && typeof struct?.newLevelId === 'string',
-        r.ok
-          ? `duplicated → new level ${struct?.newLevelId} (${struct?.newNodeIds?.length ?? 0} nodes)`
-          : `error: ${String(r.error)}`,
-        r.latencyMs,
-      )
-    }
+  if (!extraLevelId) {
+    record('duplicate_level', false, 'skipped — no extra level to duplicate')
+  } else {
+    const r = await callTool(clientA, 'duplicate_level', { levelId: extraLevelId })
+    const struct = getStructured<{ newLevelId: string; newNodeIds: string[] }>(r)
+    record(
+      'duplicate_level',
+      r.ok && typeof struct?.newLevelId === 'string',
+      r.ok
+        ? `duplicated → new level ${struct?.newLevelId} (${struct?.newNodeIds?.length ?? 0} nodes)`
+        : `error: ${String(r.error)}`,
+      r.latencyMs,
+    )
   }
-
-  // ---- apply_patch ------------------------------------------------------
-  {
-    if (!zoneId) {
-      record('apply_patch', false, 'skipped — no zone to patch')
-    } else {
-      const r = await callTool(clientA, 'apply_patch', {
-        patches: [{ op: 'update', id: zoneId, data: { name: 'T2-zone-renamed' } }],
-      })
-      const struct = getStructured<{ appliedOps: number }>(r)
-      record(
-        'apply_patch',
-        r.ok && struct?.appliedOps === 1,
-        r.ok ? `appliedOps=${struct?.appliedOps}` : `error: ${String(r.error)}`,
-        r.latencyMs,
-      )
-    }
+  if (!zoneId) {
+    record('apply_patch', false, 'skipped — no zone to patch')
+  } else {
+    const r = await callTool(clientA, 'apply_patch', {
+      patches: [{ op: 'update', id: zoneId, data: { name: 'T2-zone-renamed' } }],
+    })
+    const struct = getStructured<{ appliedOps: number }>(r)
+    record(
+      'apply_patch',
+      r.ok && struct?.appliedOps === 1,
+      r.ok ? `appliedOps=${struct?.appliedOps}` : `error: ${String(r.error)}`,
+      r.latencyMs,
+    )
   }
-
-  // ---- delete_node ------------------------------------------------------
-  {
-    if (!openingId) {
-      record('delete_node', false, 'skipped — no opening to delete')
-    } else {
-      const r = await callTool(clientA, 'delete_node', { id: openingId, cascade: true })
-      const struct = getStructured<{ deletedIds: string[] }>(r)
-      record(
-        'delete_node',
-        r.ok && Array.isArray(struct?.deletedIds) && (struct?.deletedIds?.length ?? 0) >= 1,
-        r.ok
-          ? `deleted ${struct?.deletedIds?.length ?? 0} nodes`
-          : `error: ${String(r.error)}`,
-        r.latencyMs,
-      )
-    }
+  if (!openingId) {
+    record('delete_node', false, 'skipped — no opening to delete')
+  } else {
+    const r = await callTool(clientA, 'delete_node', { id: openingId, cascade: true })
+    const struct = getStructured<{ deletedIds: string[] }>(r)
+    record(
+      'delete_node',
+      r.ok && Array.isArray(struct?.deletedIds) && (struct?.deletedIds?.length ?? 0) >= 1,
+      r.ok ? `deleted ${struct?.deletedIds?.length ?? 0} nodes` : `error: ${String(r.error)}`,
+      r.latencyMs,
+    )
   }
 
   // ---- undo -------------------------------------------------------------
@@ -695,7 +680,9 @@ async function main() {
     distinctSessions = sidA !== sidB
     const toolsListB = await clientB.listTools()
     toolCountB = toolsListB.tools.length
-    console.log(`Session B listTools() → ${toolCountB} tools; sessions distinct: ${distinctSessions}`)
+    console.log(
+      `Session B listTools() → ${toolCountB} tools; sessions distinct: ${distinctSessions}`,
+    )
 
     const sceneB = await callTool(clientB, 'get_scene', {})
     const sceneBstruct = getStructured<{ nodes: Record<string, unknown> }>(sceneB)

@@ -14,12 +14,12 @@
  *   bun packages/mcp/test-reports/t3-scenario/run.ts
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_URL = 'http://localhost:3917/mcp'
@@ -293,15 +293,8 @@ async function main(): Promise<void> {
     }
   })
 
-  const [
-    bed1SouthId,
-    bed1EastId,
-    bed2SouthId,
-    bed2WestId,
-    bathSouthId,
-    bathWestId,
-    bathEastId,
-  ] = interior ?? []
+  const [bed1SouthId, bed1EastId, bed2SouthId, bed2WestId, bathSouthId, bathWestId, bathEastId] =
+    interior ?? []
 
   // ----- Step 4: Set zones -----
   const zones = await timed(4, 'set zones', async () => {

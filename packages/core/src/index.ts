@@ -1,6 +1,7 @@
 export type {
   BuildingEvent,
   CameraControlEvent,
+  CameraControlFitSceneEvent,
   CeilingEvent,
   DoorEvent,
   EventSuffix,
@@ -37,7 +38,6 @@ export {
   type Space,
   wallTouchesOthers,
 } from './lib/space-detection'
-export { baseMaterial, glassMaterial } from './materials'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
@@ -48,6 +48,7 @@ export {
   type MaterialCatalogItem,
   toLibraryMaterialRef,
 } from './material-library'
+export { baseMaterial, glassMaterial } from './materials'
 export * from './schema'
 export {
   type ControlValue,
@@ -55,20 +56,14 @@ export {
   useInteractive,
 } from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
-export { FenceSystem } from './systems/fence/fence-system'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'
+export { FenceSystem } from './systems/fence/fence-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'
 export { StairSystem } from './systems/stair/stair-system'
-export {
-  DEFAULT_WALL_HEIGHT,
-  DEFAULT_WALL_THICKNESS,
-  getWallPlanFootprint,
-  getWallThickness,
-} from './systems/wall/wall-footprint'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -83,11 +78,17 @@ export {
   sampleWallCenterline,
 } from './systems/wall/wall-curve'
 export {
+  DEFAULT_WALL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
+  getWallPlanFootprint,
+  getWallThickness,
+} from './systems/wall/wall-footprint'
+export {
   calculateLevelMiters,
   getWallMiterBoundaryPoints,
   type Point2D,
-  type WallMiterBoundaryPoints,
   pointToKey,
+  type WallMiterBoundaryPoints,
   type WallMiterData,
 } from './systems/wall/wall-mitering'
 export { WallSystem } from './systems/wall/wall-system'

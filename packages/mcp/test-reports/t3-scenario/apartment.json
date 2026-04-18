@@ -9,24 +9,7 @@
       "metadata": {},
       "polygon": {
         "type": "polygon",
-        "points": [
-          [
-            -15,
-            -15
-          ],
-          [
-            15,
-            -15
-          ],
-          [
-            15,
-            15
-          ],
-          [
-            -15,
-            15
-          ]
-        ]
+        "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
       },
       "children": [
         {
@@ -36,19 +19,9 @@
           "parentId": null,
           "visible": true,
           "metadata": {},
-          "children": [
-            "level_wyuoxj87czq3v0re"
-          ],
-          "position": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ]
+          "children": ["level_wyuoxj87czq3v0re"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
         }
       ]
     },
@@ -59,19 +32,9 @@
       "parentId": null,
       "visible": true,
       "metadata": {},
-      "children": [
-        "level_wyuoxj87czq3v0re"
-      ],
-      "position": [
-        0,
-        0,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ]
+      "children": ["level_wyuoxj87czq3v0re"],
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0]
     },
     "level_wyuoxj87czq3v0re": {
       "object": "node",
@@ -106,20 +69,11 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "children": [
-        "window_47x40mtv2l4ca9p4",
-        "window_n09awmg5m3ct4fvn"
-      ],
+      "children": ["window_47x40mtv2l4ca9p4", "window_n09awmg5m3ct4fvn"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        0,
-        0
-      ],
-      "end": [
-        10,
-        0
-      ],
+      "start": [0, 0],
+      "end": [10, 0],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -133,14 +87,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        10,
-        0
-      ],
-      "end": [
-        10,
-        8
-      ],
+      "start": [10, 0],
+      "end": [10, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -151,19 +99,11 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "children": [
-        "window_xlta3f3f0cnmbti3"
-      ],
+      "children": ["window_xlta3f3f0cnmbti3"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        10,
-        8
-      ],
-      "end": [
-        0,
-        8
-      ],
+      "start": [10, 8],
+      "end": [0, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -177,14 +117,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        0,
-        8
-      ],
-      "end": [
-        0,
-        0
-      ],
+      "start": [0, 8],
+      "end": [0, 0],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -198,14 +132,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        0,
-        5
-      ],
-      "end": [
-        3,
-        5
-      ],
+      "start": [0, 5],
+      "end": [3, 5],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -216,19 +144,11 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_cjzja4lt8owg88wg"
-      ],
+      "children": ["door_cjzja4lt8owg88wg"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        3,
-        5
-      ],
-      "end": [
-        3,
-        8
-      ],
+      "start": [3, 5],
+      "end": [3, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -242,14 +162,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        7,
-        5
-      ],
-      "end": [
-        10,
-        5
-      ],
+      "start": [7, 5],
+      "end": [10, 5],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -260,19 +174,11 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_bs7bf0azevq9vd76"
-      ],
+      "children": ["door_bs7bf0azevq9vd76"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        7,
-        5
-      ],
-      "end": [
-        7,
-        8
-      ],
+      "start": [7, 5],
+      "end": [7, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -283,19 +189,11 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_o8etwqsemfgj5mkj"
-      ],
+      "children": ["door_o8etwqsemfgj5mkj"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        4,
-        6
-      ],
-      "end": [
-        6,
-        6
-      ],
+      "start": [4, 6],
+      "end": [6, 6],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -309,14 +207,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        4,
-        6
-      ],
-      "end": [
-        4,
-        8
-      ],
+      "start": [4, 6],
+      "end": [4, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -330,14 +222,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        6,
-        6
-      ],
-      "end": [
-        6,
-        8
-      ],
+      "start": [6, 6],
+      "end": [6, 8],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -349,24 +235,7 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          0,
-          5
-        ],
-        [
-          3,
-          5
-        ],
-        [
-          3,
-          8
-        ],
-        [
-          0,
-          8
-        ]
-      ],
+      "polygon": [[0, 5], [3, 5], [3, 8], [0, 8]],
       "color": "#3b82f6"
     },
     "zone_u95l1bt35jci3gvu": {
@@ -377,24 +246,7 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          7,
-          5
-        ],
-        [
-          10,
-          5
-        ],
-        [
-          10,
-          8
-        ],
-        [
-          7,
-          8
-        ]
-      ],
+      "polygon": [[7, 5], [10, 5], [10, 8], [7, 8]],
       "color": "#3b82f6"
     },
     "zone_r9ma8tvsqt9w1zey": {
@@ -405,24 +257,7 @@
       "parentId": "level_wyuoxj87czq3v0re",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          4,
-          6
-        ],
-        [
-          6,
-          6
-        ],
-        [
-          6,
-          8
-        ],
-        [
-          4,
-          8
-        ]
-      ],
+      "polygon": [[4, 6], [6, 6], [6, 8], [4, 8]],
       "color": "#3b82f6"
     },
     "zone_l189q61kf9ra2m8t": {
@@ -434,54 +269,18 @@
       "visible": true,
       "metadata": {},
       "polygon": [
-        [
-          0,
-          0
-        ],
-        [
-          10,
-          0
-        ],
-        [
-          10,
-          5
-        ],
-        [
-          7,
-          5
-        ],
-        [
-          7,
-          8
-        ],
-        [
-          6,
-          8
-        ],
-        [
-          6,
-          6
-        ],
-        [
-          4,
-          6
-        ],
-        [
-          4,
-          8
-        ],
-        [
-          3,
-          8
-        ],
-        [
-          3,
-          5
-        ],
-        [
-          0,
-          5
-        ]
+        [0, 0],
+        [10, 0],
+        [10, 5],
+        [7, 5],
+        [7, 8],
+        [6, 8],
+        [6, 6],
+        [4, 6],
+        [4, 8],
+        [3, 8],
+        [3, 5],
+        [0, 5]
       ],
       "color": "#3b82f6"
     },
@@ -492,16 +291,8 @@
       "parentId": "wall_qv53jm9kvl7k6slf",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_qv53jm9kvl7k6slf",
       "width": 0.9,
       "height": 2.1,
@@ -515,9 +306,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -525,9 +314,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -536,10 +323,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -551,16 +335,8 @@
       "parentId": "wall_hrfixeusz7zb7x63",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_hrfixeusz7zb7x63",
       "width": 0.9,
       "height": 2.1,
@@ -574,9 +350,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -584,9 +358,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -595,10 +367,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -610,16 +379,8 @@
       "parentId": "wall_1ullk9bm6dw15i9t",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_1ullk9bm6dw15i9t",
       "width": 0.9,
       "height": 2.1,
@@ -633,9 +394,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -643,9 +402,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -654,10 +411,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -669,27 +423,15 @@
       "parentId": "wall_y87bsrljd2245n51",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.3,
-        0.6,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.3, 0.6, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_y87bsrljd2245n51",
       "width": 1.2,
       "height": 1.2,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -703,27 +445,15 @@
       "parentId": "wall_y87bsrljd2245n51",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.7,
-        0.6,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.7, 0.6, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_y87bsrljd2245n51",
       "width": 1.2,
       "height": 1.2,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -737,27 +467,15 @@
       "parentId": "wall_aegff27krjwgmkmi",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        0.6,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 0.6, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_aegff27krjwgmkmi",
       "width": 1.2,
       "height": 1.2,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -765,8 +483,6 @@
       "sillThickness": 0.03
     }
   },
-  "rootNodeIds": [
-    "site_xs1r72ib2ymzpjus"
-  ],
+  "rootNodeIds": ["site_xs1r72ib2ymzpjus"],
   "collections": {}
 }

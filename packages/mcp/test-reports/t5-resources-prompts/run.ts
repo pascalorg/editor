@@ -1,18 +1,6 @@
-/**
- * T5 — MCP resources + prompts test harness.
- *
- * Connects to the shared MCP HTTP server at http://localhost:3917 (path /mcp),
- * exercises the 4 documented resources and 3 prompts, and prints a structured
- * pass/fail summary that the REPORT.md can be authored from.
- *
- * Usage:
- *   bun packages/mcp/test-reports/t5-resources-prompts/run.ts
- */
-import { existsSync } from 'node:fs'
 import { dirname, resolve as pathResolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const HTTP_URL = new URL('http://localhost:3917/mcp')
@@ -104,9 +92,7 @@ async function main(): Promise<void> {
           .join(', ')}`,
       )
     } catch (err) {
-      console.error(
-        `[t5] listResources error: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      console.error(`[t5] listResources error: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     // ---------------- Resource 1: pascal://scene/current ----------------
@@ -116,9 +102,7 @@ async function main(): Promise<void> {
       if (!c) {
         resourceOutcomes.push(fail('scene/current', 'no contents returned'))
       } else if (c.mimeType !== 'application/json') {
-        resourceOutcomes.push(
-          fail('scene/current', `wrong mime type: ${String(c.mimeType)}`),
-        )
+        resourceOutcomes.push(fail('scene/current', `wrong mime type: ${String(c.mimeType)}`))
       } else {
         const text = typeof c.text === 'string' ? c.text : ''
         let parsed: unknown
@@ -144,10 +128,7 @@ async function main(): Promise<void> {
           const nodeCount = Object.keys(obj.nodes as Record<string, unknown>).length
           const rootCount = (obj.rootNodeIds as unknown[]).length
           resourceOutcomes.push(
-            ok(
-              'scene/current',
-              `application/json, nodes=${nodeCount}, rootNodeIds=${rootCount}`,
-            ),
+            ok('scene/current', `application/json, nodes=${nodeCount}, rootNodeIds=${rootCount}`),
           )
         }
       }
@@ -172,13 +153,9 @@ async function main(): Promise<void> {
         const hasHeading = /^# /m.test(text)
         const hasZoneOrLevel = /level/i.test(text) || /zone/i.test(text)
         if (!hasHeading) {
-          resourceOutcomes.push(
-            fail('scene/current/summary', 'no markdown # heading found'),
-          )
+          resourceOutcomes.push(fail('scene/current/summary', 'no markdown # heading found'))
         } else if (!hasZoneOrLevel) {
-          resourceOutcomes.push(
-            fail('scene/current/summary', 'no level/zone references'),
-          )
+          resourceOutcomes.push(fail('scene/current/summary', 'no level/zone references'))
         } else {
           // Extract a few first lines as preview
           const preview = text.split('\n').slice(0, 4).join(' | ')
@@ -192,10 +169,7 @@ async function main(): Promise<void> {
       }
     } catch (err) {
       resourceOutcomes.push(
-        fail(
-          'scene/current/summary',
-          `threw: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        fail('scene/current/summary', `threw: ${err instanceof Error ? err.message : String(err)}`),
       )
     }
 
@@ -206,15 +180,16 @@ async function main(): Promise<void> {
       if (!c) {
         resourceOutcomes.push(fail('catalog/items', 'no contents returned'))
       } else if (c.mimeType !== 'application/json') {
-        resourceOutcomes.push(
-          fail('catalog/items', `wrong mime type: ${String(c.mimeType)}`),
-        )
+        resourceOutcomes.push(fail('catalog/items', `wrong mime type: ${String(c.mimeType)}`))
       } else {
         const text = typeof c.text === 'string' ? c.text : ''
         const parsed = JSON.parse(text) as { status?: unknown; items?: unknown }
         if (parsed.status !== 'catalog_unavailable') {
           resourceOutcomes.push(
-            fail('catalog/items', `expected status='catalog_unavailable' got ${String(parsed.status)}`),
+            fail(
+              'catalog/items',
+              `expected status='catalog_unavailable' got ${String(parsed.status)}`,
+            ),
           )
         } else {
           resourceOutcomes.push(
@@ -241,8 +216,7 @@ async function main(): Promise<void> {
         name: 'find_nodes',
         arguments: { type: 'level' },
       })
-      const sc = (findResult as { structuredContent?: { nodes?: unknown[] } })
-        .structuredContent
+      const sc = (findResult as { structuredContent?: { nodes?: unknown[] } }).structuredContent
       const nodes = Array.isArray(sc?.nodes) ? sc.nodes : []
       if (nodes.length > 0) {
         const first = nodes[0] as { id?: string }
@@ -252,9 +226,7 @@ async function main(): Promise<void> {
       }
       console.log(`[t5] discovered levelId = ${String(discoveredLevelId)}`)
     } catch (err) {
-      console.error(
-        `[t5] find_nodes threw: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      console.error(`[t5] find_nodes threw: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     if (!discoveredLevelId) {
@@ -281,19 +253,12 @@ async function main(): Promise<void> {
           }
           if (parsed.error) {
             resourceOutcomes.push(
-              fail(
-                'constraints/{levelId}',
-                `error in payload: ${safeStringify(parsed.error)}`,
-              ),
+              fail('constraints/{levelId}', `error in payload: ${safeStringify(parsed.error)}`),
             )
           } else if (!Array.isArray(parsed.slabs)) {
-            resourceOutcomes.push(
-              fail('constraints/{levelId}', 'missing slabs array'),
-            )
+            resourceOutcomes.push(fail('constraints/{levelId}', 'missing slabs array'))
           } else if (!Array.isArray(parsed.wallPolygons)) {
-            resourceOutcomes.push(
-              fail('constraints/{levelId}', 'missing wallPolygons array'),
-            )
+            resourceOutcomes.push(fail('constraints/{levelId}', 'missing wallPolygons array'))
           } else {
             resourceOutcomes.push(
               ok(
@@ -318,15 +283,9 @@ async function main(): Promise<void> {
       const list = await client.listPrompts()
       listPromptsCount = Array.isArray(list.prompts) ? list.prompts.length : 0
       console.log(`[t5] listPrompts count = ${listPromptsCount}`)
-      console.log(
-        `[t5] listPrompts names = ${(list.prompts ?? [])
-          .map((p) => p.name)
-          .join(', ')}`,
-      )
+      console.log(`[t5] listPrompts names = ${(list.prompts ?? []).map((p) => p.name).join(', ')}`)
     } catch (err) {
-      console.error(
-        `[t5] listPrompts error: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      console.error(`[t5] listPrompts error: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     // ---------------- Prompt 1: from_brief ----------------
@@ -386,10 +345,7 @@ async function main(): Promise<void> {
       }
     } catch (err) {
       promptOutcomes.push(
-        fail(
-          'iterate_on_feedback',
-          `threw: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        fail('iterate_on_feedback', `threw: ${err instanceof Error ? err.message : String(err)}`),
       )
     }
 
@@ -406,9 +362,7 @@ async function main(): Promise<void> {
       const messages = result.messages ?? []
       const userMsgs = messages.filter((m) => m.role === 'user')
       if (userMsgs.length === 0) {
-        promptOutcomes.push(
-          fail('renovation_from_photos', 'no user messages returned'),
-        )
+        promptOutcomes.push(fail('renovation_from_photos', 'no user messages returned'))
       } else {
         // Look across all message content for the URLs we passed.
         const allText = messages

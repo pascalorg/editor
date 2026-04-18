@@ -9,24 +9,7 @@
       "metadata": {},
       "polygon": {
         "type": "polygon",
-        "points": [
-          [
-            -15,
-            -15
-          ],
-          [
-            15,
-            -15
-          ],
-          [
-            15,
-            15
-          ],
-          [
-            -15,
-            15
-          ]
-        ]
+        "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
       },
       "children": [
         {
@@ -36,19 +19,9 @@
           "parentId": null,
           "visible": true,
           "metadata": {},
-          "children": [
-            "level_9ded0vdlfag09tdt"
-          ],
-          "position": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ]
+          "children": ["level_9ded0vdlfag09tdt"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
         }
       ]
     },
@@ -59,19 +32,9 @@
       "parentId": null,
       "visible": true,
       "metadata": {},
-      "children": [
-        "level_9ded0vdlfag09tdt"
-      ],
-      "position": [
-        0,
-        0,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ]
+      "children": ["level_9ded0vdlfag09tdt"],
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0]
     },
     "level_9ded0vdlfag09tdt": {
       "object": "node",
@@ -123,14 +86,8 @@
       ],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -8,
-        4
-      ],
-      "end": [
-        4,
-        4
-      ],
+      "start": [-8, 4],
+      "end": [4, 4],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -141,20 +98,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_lv8wmjjs6em9ayqg",
-        "window_qy4pp3lwyn5cq2u1"
-      ],
+      "children": ["door_lv8wmjjs6em9ayqg", "window_qy4pp3lwyn5cq2u1"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -8,
-        -4
-      ],
-      "end": [
-        4,
-        -4
-      ],
+      "start": [-8, -4],
+      "end": [4, -4],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -165,19 +113,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "window_r9mc8jkp0dem9s8u"
-      ],
+      "children": ["window_r9mc8jkp0dem9s8u"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -8,
-        -4
-      ],
-      "end": [
-        -8,
-        4
-      ],
+      "start": [-8, -4],
+      "end": [-8, 4],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -188,20 +128,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "window_bbmwfj9hjxfz6y7c",
-        "window_19otr8qt84hke69s"
-      ],
+      "children": ["window_bbmwfj9hjxfz6y7c", "window_19otr8qt84hke69s"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        4,
-        -4
-      ],
-      "end": [
-        4,
-        4
-      ],
+      "start": [4, -4],
+      "end": [4, 4],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -215,14 +146,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -1,
-        0
-      ],
-      "end": [
-        -1,
-        4
-      ],
+      "start": [-1, 0],
+      "end": [-1, 4],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -233,19 +158,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_g1ffn08lohho4vf0"
-      ],
+      "children": ["door_g1ffn08lohho4vf0"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -1,
-        -4
-      ],
-      "end": [
-        -1,
-        0
-      ],
+      "start": [-1, -4],
+      "end": [-1, 0],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -256,19 +173,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_zuyuxee4afd5ae0o"
-      ],
+      "children": ["door_zuyuxee4afd5ae0o"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -4,
-        -4
-      ],
-      "end": [
-        -4,
-        0
-      ],
+      "start": [-4, -4],
+      "end": [-4, 0],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -282,14 +191,8 @@
       "children": [],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -4,
-        -1
-      ],
-      "end": [
-        -1,
-        -1
-      ],
+      "start": [-4, -1],
+      "end": [-1, -1],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -300,19 +203,11 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "children": [
-        "door_n4kgjkvq18a87rh0"
-      ],
+      "children": ["door_n4kgjkvq18a87rh0"],
       "thickness": 0.2,
       "height": 2.7,
-      "start": [
-        -4,
-        -2
-      ],
-      "end": [
-        -1,
-        -2
-      ],
+      "start": [-4, -2],
+      "end": [-1, -2],
       "frontSide": "unknown",
       "backSide": "unknown"
     },
@@ -324,24 +219,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -8,
-          0
-        ],
-        [
-          -1,
-          0
-        ],
-        [
-          -1,
-          4
-        ],
-        [
-          -8,
-          4
-        ]
-      ],
+      "polygon": [[-8, 0], [-1, 0], [-1, 4], [-8, 4]],
       "color": "#3b82f6"
     },
     "zone_x409m2lnw1jpmi8m": {
@@ -352,24 +230,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -1,
-          0
-        ],
-        [
-          4,
-          0
-        ],
-        [
-          4,
-          4
-        ],
-        [
-          -1,
-          4
-        ]
-      ],
+      "polygon": [[-1, 0], [4, 0], [4, 4], [-1, 4]],
       "color": "#3b82f6"
     },
     "zone_and0s1ux5v8rexj6": {
@@ -380,24 +241,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -8,
-          -4
-        ],
-        [
-          -4,
-          -4
-        ],
-        [
-          -4,
-          0
-        ],
-        [
-          -8,
-          0
-        ]
-      ],
+      "polygon": [[-8, -4], [-4, -4], [-4, 0], [-8, 0]],
       "color": "#3b82f6"
     },
     "zone_n8w3oyzr3c4ovcbu": {
@@ -408,24 +252,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -4,
-          -2
-        ],
-        [
-          -1,
-          -2
-        ],
-        [
-          -1,
-          -1
-        ],
-        [
-          -4,
-          -1
-        ]
-      ],
+      "polygon": [[-4, -2], [-1, -2], [-1, -1], [-4, -1]],
       "color": "#3b82f6"
     },
     "zone_c1wa4cr91h215zzk": {
@@ -436,24 +263,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -4,
-          -4
-        ],
-        [
-          -1,
-          -4
-        ],
-        [
-          -1,
-          -2
-        ],
-        [
-          -4,
-          -2
-        ]
-      ],
+      "polygon": [[-4, -4], [-1, -4], [-1, -2], [-4, -2]],
       "color": "#3b82f6"
     },
     "zone_e8e6qqmx85tockrm": {
@@ -464,24 +274,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -4,
-          -1
-        ],
-        [
-          -1,
-          -1
-        ],
-        [
-          -1,
-          0
-        ],
-        [
-          -4,
-          0
-        ]
-      ],
+      "polygon": [[-4, -1], [-1, -1], [-1, 0], [-4, 0]],
       "color": "#3b82f6"
     },
     "zone_ebbidjjln9doosy5": {
@@ -492,24 +285,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          -1,
-          -4
-        ],
-        [
-          4,
-          -4
-        ],
-        [
-          4,
-          0
-        ],
-        [
-          -1,
-          0
-        ]
-      ],
+      "polygon": [[-1, -4], [4, -4], [4, 0], [-1, 0]],
       "color": "#3b82f6"
     },
     "door_v19tfw6dbg60pjka": {
@@ -519,16 +295,8 @@
       "parentId": "wall_vc5l8mk2b3j3ukvq",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.2,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.2, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_vc5l8mk2b3j3ukvq",
       "width": 0.9,
       "height": 2.1,
@@ -542,9 +310,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -552,9 +318,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -563,10 +327,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -578,16 +339,8 @@
       "parentId": "wall_vc5l8mk2b3j3ukvq",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.75,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.75, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_vc5l8mk2b3j3ukvq",
       "width": 2.2,
       "height": 2.1,
@@ -601,9 +354,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -611,9 +362,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -622,10 +371,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -637,16 +383,8 @@
       "parentId": "wall_9jaybb53j2r5j5en",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.65,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.65, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_9jaybb53j2r5j5en",
       "width": 0.9,
       "height": 2.1,
@@ -660,9 +398,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -670,9 +406,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -681,10 +415,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -696,16 +427,8 @@
       "parentId": "wall_53gr0rtp1ssmxvz2",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.3,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.3, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_53gr0rtp1ssmxvz2",
       "width": 0.8,
       "height": 2.1,
@@ -719,9 +442,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -729,9 +450,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -740,10 +459,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -755,16 +471,8 @@
       "parentId": "wall_yzuosc4u4z0a9jqo",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        1.05,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 1.05, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_yzuosc4u4z0a9jqo",
       "width": 0.8,
       "height": 2.1,
@@ -778,9 +486,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -788,9 +494,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -799,10 +503,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -814,16 +515,8 @@
       "parentId": "wall_3mznfrklw8ar7jrz",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.5,
-        1,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.5, 1, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_3mznfrklw8ar7jrz",
       "width": 0.7,
       "height": 2,
@@ -837,9 +530,7 @@
         {
           "type": "panel",
           "heightRatio": 0.4,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -847,9 +538,7 @@
         {
           "type": "panel",
           "heightRatio": 0.6,
-          "columnRatios": [
-            1
-          ],
+          "columnRatios": [1],
           "dividerThickness": 0.03,
           "panelDepth": 0.01,
           "panelInset": 0.04
@@ -858,10 +547,7 @@
       "handle": true,
       "handleHeight": 1.05,
       "handleSide": "right",
-      "contentPadding": [
-        0.04,
-        0.04
-      ],
+      "contentPadding": [0.04, 0.04],
       "doorCloser": false,
       "panicBar": false,
       "panicBarHeight": 1
@@ -873,27 +559,15 @@
       "parentId": "wall_vc5l8mk2b3j3ukvq",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.3,
-        0.7,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.3, 0.7, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_vc5l8mk2b3j3ukvq",
       "width": 2,
       "height": 1.4,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -907,27 +581,15 @@
       "parentId": "wall_vc5l8mk2b3j3ukvq",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.45,
-        0.7,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.45, 0.7, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_vc5l8mk2b3j3ukvq",
       "width": 1.4,
       "height": 1.4,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -941,27 +603,15 @@
       "parentId": "wall_a16b1eirqz5p9f98",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.25,
-        0.55,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.25, 0.55, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_a16b1eirqz5p9f98",
       "width": 1,
       "height": 1.1,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -975,27 +625,15 @@
       "parentId": "wall_yiwfcyw716g5ql5y",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.25,
-        0.7,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.25, 0.7, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_yiwfcyw716g5ql5y",
       "width": 1.4,
       "height": 1.4,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -1009,27 +647,15 @@
       "parentId": "wall_yiwfcyw716g5ql5y",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.75,
-        0.7,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.75, 0.7, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_yiwfcyw716g5ql5y",
       "width": 1.4,
       "height": 1.4,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -1043,27 +669,15 @@
       "parentId": "wall_9jaybb53j2r5j5en",
       "visible": true,
       "metadata": {},
-      "position": [
-        0.3,
-        0.3,
-        0
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
+      "position": [0.3, 0.3, 0],
+      "rotation": [0, 0, 0],
       "wallId": "wall_9jaybb53j2r5j5en",
       "width": 0.8,
       "height": 0.6,
       "frameThickness": 0.05,
       "frameDepth": 0.07,
-      "columnRatios": [
-        1
-      ],
-      "rowRatios": [
-        1
-      ],
+      "columnRatios": [1],
+      "rowRatios": [1],
       "columnDividerThickness": 0.03,
       "rowDividerThickness": 0.03,
       "sill": true,
@@ -1082,24 +696,7 @@
         "depthM": 1.8,
         "finish": "tile"
       },
-      "polygon": [
-        [
-          5,
-          -1.5
-        ],
-        [
-          10,
-          -1.5
-        ],
-        [
-          10,
-          1.5
-        ],
-        [
-          5,
-          1.5
-        ]
-      ],
+      "polygon": [[5, -1.5], [10, -1.5], [10, 1.5], [5, 1.5]],
       "color": "#3b82f6"
     },
     "slab_tqyxze2hshzm1it3": {
@@ -1109,24 +706,7 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "polygon": [
-        [
-          5,
-          -1.5
-        ],
-        [
-          10,
-          -1.5
-        ],
-        [
-          10,
-          1.5
-        ],
-        [
-          5,
-          1.5
-        ]
-      ],
+      "polygon": [[5, -1.5], [10, -1.5], [10, 1.5], [5, 1.5]],
       "holes": [],
       "holeMetadata": [],
       "elevation": -1.8,
@@ -1139,14 +719,8 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "start": [
-        -10,
-        7.5
-      ],
-      "end": [
-        -1,
-        7.5
-      ],
+      "start": [-10, 7.5],
+      "end": [-1, 7.5],
       "height": 1.8,
       "thickness": 0.08,
       "baseHeight": 0.22,
@@ -1166,14 +740,8 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "start": [
-        1,
-        7.5
-      ],
-      "end": [
-        10,
-        7.5
-      ],
+      "start": [1, 7.5],
+      "end": [10, 7.5],
       "height": 1.8,
       "thickness": 0.08,
       "baseHeight": 0.22,
@@ -1193,14 +761,8 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "start": [
-        10,
-        7.5
-      ],
-      "end": [
-        10,
-        -7.5
-      ],
+      "start": [10, 7.5],
+      "end": [10, -7.5],
       "height": 1.8,
       "thickness": 0.08,
       "baseHeight": 0.22,
@@ -1220,14 +782,8 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "start": [
-        10,
-        -7.5
-      ],
-      "end": [
-        -10,
-        -7.5
-      ],
+      "start": [10, -7.5],
+      "end": [-10, -7.5],
       "height": 1.8,
       "thickness": 0.08,
       "baseHeight": 0.22,
@@ -1247,14 +803,8 @@
       "parentId": "level_9ded0vdlfag09tdt",
       "visible": true,
       "metadata": {},
-      "start": [
-        -10,
-        -7.5
-      ],
-      "end": [
-        -10,
-        7.5
-      ],
+      "start": [-10, -7.5],
+      "end": [-10, 7.5],
       "height": 1.8,
       "thickness": 0.08,
       "baseHeight": 0.22,
@@ -1277,29 +827,10 @@
       "metadata": {
         "kind": "garden"
       },
-      "polygon": [
-        [
-          -10,
-          -7.5
-        ],
-        [
-          10,
-          -7.5
-        ],
-        [
-          10,
-          7.5
-        ],
-        [
-          -10,
-          7.5
-        ]
-      ],
+      "polygon": [[-10, -7.5], [10, -7.5], [10, 7.5], [-10, 7.5]],
       "color": "#3b82f6"
     }
   },
-  "rootNodeIds": [
-    "site_3ss5ro12ozrgtdbf"
-  ],
+  "rootNodeIds": ["site_3ss5ro12ozrgtdbf"],
   "collections": {}
 }

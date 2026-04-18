@@ -19,12 +19,12 @@
  *   bun packages/mcp/test-reports/casa-sol/build.ts
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_URL = 'http://localhost:3917/mcp'
@@ -234,7 +234,14 @@ const OPENINGS: OpeningSpec[] = [
   },
   { wallDesignId: 2, kind: 'door', position: 0.65, width: 0.9, height: 2.1, label: 'kitchen-back' },
   { wallDesignId: 6, kind: 'door', position: 0.3, width: 0.8, height: 2.1, label: 'master-door' },
-  { wallDesignId: 7, kind: 'door', position: 0.5, width: 0.8, height: 2.1, label: 'bedroom-2-door' },
+  {
+    wallDesignId: 7,
+    kind: 'door',
+    position: 0.5,
+    width: 0.8,
+    height: 2.1,
+    label: 'bedroom-2-door',
+  },
   { wallDesignId: 9, kind: 'door', position: 0.5, width: 0.7, height: 2.0, label: 'bath2-door' },
   {
     wallDesignId: 1,
@@ -329,8 +336,12 @@ async function main(): Promise<void> {
     log(`[casa] falling back to in-memory MCP server (same tool surface)`)
     // Load the in-process MCP server to keep the build moving. This preserves
     // the tool contract; the only thing we lose is the HTTP wire test.
-    const { SceneBridge } = await import('/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/src/bridge/scene-bridge.ts')
-    const { createPascalMcpServer } = await import('/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/src/server.ts')
+    const { SceneBridge } = await import(
+      '/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/src/bridge/scene-bridge.ts'
+    )
+    const { createPascalMcpServer } = await import(
+      '/Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/src/server.ts'
+    )
 
     const bridge = new SceneBridge()
     bridge.loadDefault()
@@ -530,7 +541,9 @@ async function main(): Promise<void> {
         })
       }
     }
-    const ids = openingResults.filter((r) => r.ok && r.openingId).map((r) => r.openingId!) as string[]
+    const ids = openingResults
+      .filter((r) => r.ok && r.openingId)
+      .map((r) => r.openingId!) as string[]
     return {
       summary: `${doors} doors, ${windows} windows, ${failures.length} failures`,
       nodeIds: ids,
@@ -691,9 +704,8 @@ async function main(): Promise<void> {
 
   // ----- Step 12: Final validate + summary counts -----
   const finalValid = await runValidate(client, 'final')
-  const allNodes = (
-    await callTool<{ nodes: Array<{ type: string }> }>(client, 'find_nodes', {})
-  ).nodes
+  const allNodes = (await callTool<{ nodes: Array<{ type: string }> }>(client, 'find_nodes', {}))
+    .nodes
   const tally: Record<string, number> = {}
   for (const n of allNodes) {
     tally[n.type] = (tally[n.type] ?? 0) + 1
@@ -790,7 +802,9 @@ async function main(): Promise<void> {
 
   lines.push('## Validation')
   lines.push('')
-  lines.push(`- Final \`validate_scene\`: valid=\`${finalValid.valid}\`, errors=${finalValid.errors.length}`)
+  lines.push(
+    `- Final \`validate_scene\`: valid=\`${finalValid.valid}\`, errors=${finalValid.errors.length}`,
+  )
   if (!finalValid.valid && finalValid.errors.length > 0) {
     lines.push('')
     lines.push('Errors (verbatim):')

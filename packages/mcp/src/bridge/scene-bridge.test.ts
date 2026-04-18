@@ -530,7 +530,10 @@ describe('SceneBridge', () => {
           category: 'test',
           name: 'Test Asset',
           thumbnail: 'data:image/png;base64,',
-          src: 'data:model/gltf-binary;base64,',
+          // AssetUrl validator (asset-url.ts) only allows asset://, blob:,
+          // data:image/, /path, or https://; `data:model/gltf-binary` is not
+          // in the allowlist, so this test uses an internal asset handle.
+          src: 'asset://test/chair.glb',
         },
       })
       // Place item directly on level — ItemNode supports arbitrary parents in the model.

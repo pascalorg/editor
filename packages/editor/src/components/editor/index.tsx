@@ -12,6 +12,7 @@ import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from '
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
@@ -22,8 +23,8 @@ import {
 } from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
+import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
@@ -732,6 +733,7 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   useKeyboard({ isVersionPreviewMode })
+  useAutoFrame()
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,

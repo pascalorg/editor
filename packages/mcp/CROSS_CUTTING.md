@@ -95,3 +95,107 @@ Delete `.github/workflows/mcp-ci.yml`.
 
 ---
 
+## 4. `packages/mcp/package.json` — added `./storage` subpath export
+
+### What
+
+Added a `./storage` entry to the `"exports"` map of `@pascal-app/mcp`, pointing at the built `dist/storage/index.{js,d.ts}`. The existing `"."` entry is unchanged.
+
+### Why
+
+The Next.js editor (`apps/editor`) needs access to `createSceneStore()` + the `SceneStore` types/errors in server-only code (API route handlers + `lib/scene-store-server.ts`). The main entry `.` pulls in the full MCP server surface (tools, transports, MCP SDK), which is overkill for a consumer that only needs the storage adapter. The subpath export lets `apps/editor` do `import { createSceneStore, SceneVersionConflictError } from '@pascal-app/mcp/storage'` without dragging the rest of the package.
+
+### Impact
+
+Zero on existing consumers. Purely additive. The `.` entry continues to export `SceneBridge`, `createPascalMcpServer`, etc., exactly as before.
+
+### Reversibility
+
+Remove the `./storage` entry from `exports` and update `apps/editor` to inline the types / use a different factory. No data or behavior changes — pure module-graph shaping.
+
+### Related
+
+- `apps/editor/package.json` adds `@pascal-app/mcp` as a workspace dependency so the subpath resolves.
+- `apps/editor/lib/scene-store-server.ts` and `apps/editor/app/api/scenes/**` consume this subpath.
+
+---
+
+## 5. `packages/core/src/schema/asset-url.ts` — URL scheme allowlist on scene URL fields
+
+### What
+
+Introduced a shared `AssetUrl` Zod validator and replaced the bare `z.string()`
+on every URL-bearing field in core's schemas:
+
+- `scan.url` (`packages/core/src/schema/nodes/scan.ts`)
+- `guide.url` (`packages/core/src/schema/nodes/guide.ts`)
+- `item.asset.src` (`packages/core/src/schema/nodes/item.ts`)
+- `material.texture.url` (`packages/core/src/schema/material.ts`)
+- `material.maps.*` (`albedoMap`, `normalMap`, `roughnessMap`, `metalnessMap`,
+  `aoMap`, `displacementMap`, `emissiveMap`, `bumpMap`, `alphaMap`, `lightMap`)
+
+The validator accepts `asset://…`, `blob:…`, `data:image/…`, `/…` app-relative
+paths, `https://…`, and `http://localhost|127.0.0.1/…`. Optional origin
+narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated).
+Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
+`data:application/*`, link-local / private IPs over bare `http`, empty strings,
+and non-URL garbage.
+
+### Why
+
+Phase 3 security audit (`packages/mcp/test-reports/research/R9-production-readiness.md`
+entry "URL validation in scenes"): an attacker-crafted scene containing
+`javascript:alert(1)` or `http://169.254.169.254/latest/meta-data/` for a
+texture URL would beacon or exfiltrate when the editor renders it.
+`AnyNode.safeParse`, used by the MCP bridge, now rejects those payloads at the
+schema boundary.
+
+### Impact
+
+- **Existing scenes**: localStorage-resident scenes bypass strict validation on
+  load (the store's `setScene` only runs `safeParse` on stair-type via
+  `migrateNodes`), so this is *not* a breakage for returning users. Legacy
+  URLs will keep loading; only explicit MCP-bridge `safeParse` calls reject.
+- **MCP consumers**: one existing test
+  (`packages/mcp/src/bridge/scene-bridge.test.ts`, previously using
+  `src: 'data:model/gltf-binary;base64,'`) now fails because `data:model/` is
+  not in the allowlist. Replaced with `asset://test/chair.glb` — the only
+  sanctioned scheme for an in-repo ItemNode fixture.
+- **Other packages**: `@pascal-app/viewer`, `@pascal-app/editor`, and
+  `material-library.ts` all continue to work because every built-in URL is a
+  `/material/…` app-relative path (allowlisted).
+
+### Known gaps / follow-ups
+
+1. **`item.asset.thumbnail` stayed untyped** — the field is still bare
+   `z.string()` in `item.ts`. The Phase 3 audit called it out alongside `src`,
+   but the Phase 7 task scope only required `src`. Follow-up: apply `AssetUrl`
+   to `thumbnail` as well. Verify the `place-item` tool's default
+   `thumbnail: ''` (currently empty string) gets a proper fallback first.
+2. **`dist/` pollution** — `packages/core/tsconfig.json` `include`s `src` and
+   doesn't exclude `**/*.test.ts`, so the new `asset-url.test.ts` is emitted
+   to `dist/schema/`. Harmless (nothing imports it), but should be excluded
+   for a clean publish. Mirror the `exclude: ["**/*.test.ts"]` pattern used
+   in `packages/mcp/tsconfig.json`. Out of scope for A7 because tsconfig is
+   not in the ownership list.
+3. **`bun:test` typing** — the test file uses `@ts-expect-error` on its
+   `bun:test` import because `@pascal-app/core` does not depend on
+   `@types/bun`. Adding it as a dev dep (or, preferred, excluding tests from
+   the core tsc build per gap 2) would remove the directive.
+4. **`data:image/svg+xml` loophole** — passes the validator because it starts
+   with `data:image/`, but SVG can carry inline scripts. If the editor ever
+   renders SVG via unsanitised HTML-injection APIs or `<foreignObject>`, this
+   becomes an injection vector. Consider a stricter variant
+   (`data:image/(png|jpe?g|webp|gif)`) for texture slots where SVG isn't needed.
+5. **Same-origin HTTP scenes** — `http://localhost` is allowed for dev, but a
+   scene persisted in dev and shared in prod will still validate. Consider
+   gating on `NODE_ENV` once we have a stable env-flag story.
+
+### Reversibility
+
+Delete `packages/core/src/schema/asset-url.ts` and revert the five imports in
+`scan.ts`, `guide.ts`, `item.ts`, and `material.ts` to `z.string()`. The
+scene-bridge test update is self-contained.
+
+---
+

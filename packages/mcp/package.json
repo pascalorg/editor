@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "import": "./dist/storage/index.js",
+      "default": "./dist/storage/index.js"
     }
   },
   "bin": {
@@ -33,6 +38,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@supabase/supabase-js": "^2",
     "zod": "^4.3.5"
   },
   "devDependencies": {
