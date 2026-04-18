@@ -6,6 +6,13 @@ import {
   ViewerToolbarLeft,
   ViewerToolbarRight,
 } from '@pascal-app/editor'
+import { useScene } from '@pascal-app/core'
+
+// Dev-only: expose the scene store on window so MCP can inject a built
+// scene into the running editor for visual verification. No-op in prod.
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  ;(window as unknown as { __pascalScene?: typeof useScene }).__pascalScene = useScene
+}
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   {
