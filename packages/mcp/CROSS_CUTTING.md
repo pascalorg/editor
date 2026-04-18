@@ -75,3 +75,23 @@ Align `SiteNode.children` to `z.array(z.string())` + migration in `setScene.migr
 
 ---
 
+## 3. `.github/workflows/mcp-ci.yml` — new CI workflow
+
+### What
+
+Adds a CI workflow that runs on pushes to `main` and on pull requests touching `packages/mcp/`, `packages/core/`, or `bun.lock`. The job installs deps with Bun, builds `@pascal-app/core` then `@pascal-app/mcp`, runs `bun test` in the mcp package, and runs `bunx biome check packages/mcp`.
+
+### Why
+
+The existing `.github/workflows/release.yml` is `workflow_dispatch`-only (manual releases for `core` / `viewer`). There was no automated pre-merge check for MCP builds/tests. A new workflow is needed so that PRs touching mcp/core are verified before merge.
+
+### Impact
+
+None on existing workflows; purely additive. The new workflow only triggers for paths under `packages/mcp/`, `packages/core/`, or `bun.lock`, so unrelated PRs remain unaffected. `release.yml` is untouched.
+
+### Reversibility
+
+Delete `.github/workflows/mcp-ci.yml`.
+
+---
+
