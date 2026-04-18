@@ -1,21 +1,27 @@
 import type {
   BuildingNode,
+  CeilingNode,
   DoorNode,
   FenceNode,
   ItemNode,
   RoofNode,
   RoofSegmentNode,
+  SlabNode,
   StairNode,
   StairSegmentNode,
+  WallNode,
   WindowNode,
 } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { MoveBuildingContent } from '../building/move-building-tool'
+import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
 import { MoveDoorTool } from '../door/move-door-tool'
 import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
+import { MoveSlabTool } from '../slab/move-slab-tool'
+import { MoveWallTool } from '../wall/move-wall-tool'
 import { MoveWindowTool } from '../window/move-window-tool'
 import type { PlacementState } from './placement-types'
 import { useDraftNode } from './use-draft-node'
@@ -89,6 +95,9 @@ export const MoveTool: React.FC = () => {
   if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
   if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
+  if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
+  if (movingNode.type === 'slab') return <MoveSlabTool node={movingNode as SlabNode} />
+  if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')

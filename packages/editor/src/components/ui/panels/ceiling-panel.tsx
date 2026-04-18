@@ -2,27 +2,27 @@
 
 import { type AnyNode, type CeilingNode, type MaterialSchema, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Edit, Plus, Trash2 } from 'lucide-react'
+import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
+import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { ActionButton } from '../controls/action-button'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
 export function CeilingPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as CeilingNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined) : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
@@ -34,7 +34,14 @@ export function CeilingPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -77,7 +84,13 @@ export function CeilingPanel() {
       [cx - holeSize, cz + holeSize],
     ]
     const currentHoles = node?.holes || []
-    handleUpdate({ holes: [...currentHoles, newHole] })
+    const currentMetadata = currentHoles.map(
+      (_, index) => node?.holeMetadata?.[index] ?? { source: 'manual' as const },
+    )
+    handleUpdate({
+      holes: [...currentHoles, newHole],
+      holeMetadata: [...currentMetadata, { source: 'manual' }],
+    })
     setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
   }, [node, selectedId, handleUpdate, setEditingHole])
 
@@ -93,16 +106,28 @@ export function CeilingPanel() {
     (index: number) => {
       if (!selectedId) return
       const currentHoles = node?.holes || []
+      if (node?.holeMetadata?.[index]?.source === 'stair') return
       const newHoles = currentHoles.filter((_, i) => i !== index)
-      handleUpdate({ holes: newHoles })
+      const currentMetadata = currentHoles.map(
+        (_, metadataIndex) => node?.holeMetadata?.[metadataIndex] ?? { source: 'manual' as const },
+      )
+      const newMetadata = currentMetadata.filter((_, i) => i !== index)
+      handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
         setEditingHole(null)
       }
     },
-    [selectedId, node?.holes, handleUpdate, editingHole, setEditingHole],
+    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole, setEditingHole],
   )
 
-  if (!node || node.type !== 'ceiling' || selectedIds.length !== 1) return null
+  const handleMove = useCallback(() => {
+    if (!node) return
+    sfxEmitter.emit('sfx:item-pick')
+    setMovingNode(node)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
+
+  if (!(node && node.type === 'ceiling' && selectedId)) return null
 
   const calculateArea = (polygon: Array<[number, number]>): number => {
     if (polygon.length < 3) return 0
@@ -110,8 +135,11 @@ export function CeilingPanel() {
     const n = polygon.length
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
-      area += polygon[i]?.[0] * polygon[j]?.[1]
-      area -= polygon[j]?.[0] * polygon[i]?.[1]
+      const current = polygon[i]
+      const next = polygon[j]
+      if (!(current && next)) continue
+      area += current[0] * next[1]
+      area -= next[0] * current[1]
     }
     return Math.abs(area) / 2
   }
@@ -158,6 +186,8 @@ export function CeilingPanel() {
               const holeArea = calculateArea(hole)
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
+              const source = node.holeMetadata?.[index]?.source ?? 'manual'
+              const isAutoHole = source === 'stair'
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -174,7 +204,8 @@ export function CeilingPanel() {
                       Hole {index + 1} {isEditing && '(Editing)'}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts
+                      {holeArea.toFixed(2)} m² · {hole.length} pts ·{' '}
+                      {isAutoHole ? 'Auto stair cutout' : 'Manual'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -184,6 +215,10 @@ export function CeilingPanel() {
                         label="Done"
                         onClick={() => setEditingHole(null)}
                       />
+                    ) : isAutoHole ? (
+                      <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
+                        Auto
+                      </div>
                     ) : (
                       <>
                         <button
@@ -223,8 +258,17 @@ export function CeilingPanel() {
       </PanelSection>
 
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="ceiling"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
+      <ActionGroup>
+        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+      </ActionGroup>
     </PanelWrapper>
   )
 }

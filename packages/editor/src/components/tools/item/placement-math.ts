@@ -1,22 +1,30 @@
 import { isObject } from '@pascal-app/core'
+import useEditor from '../../../store/use-editor'
+
+function getGridSnapStep(): number {
+  return useEditor.getState().gridSnapStep
+}
+
+function positiveModulo(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor
+}
 
 /**
  * Snaps a position to 0.5 grid, with an offset to align item edges to grid lines.
  * For items with dimensions like 2.5, the center would be at 1.25 from the edge,
  * which doesn't align with 0.5 grid. This adds an offset so edges align instead.
  */
-export function snapToGrid(position: number, dimension: number): number {
+export function snapToGrid(position: number, dimension: number, step = getGridSnapStep()): number {
   const halfDim = dimension / 2
-  const needsOffset = Math.abs(((halfDim * 2) % 1) - 0.5) < 0.01
-  const offset = needsOffset ? 0.25 : 0
-  return Math.round((position - offset) * 2) / 2 + offset
+  const offset = positiveModulo(halfDim, step)
+  return Math.round((position - offset) / step) * step + offset
 }
 
 /**
  * Snap a value to 0.5 increments (used for wall-local positions).
  */
-export function snapToHalf(value: number): number {
-  return Math.round(value * 2) / 2
+export function snapToHalf(value: number, step = getGridSnapStep()): number {
+  return Math.round(value / step) * step
 }
 
 /**

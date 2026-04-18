@@ -7,19 +7,26 @@ import { StairSegmentNode } from './stair-segment'
 export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
+export const StairSlabOpeningMode = z.enum(['none', 'destination'])
 
 export type StairRailingMode = z.infer<typeof StairRailingMode>
 export type StairType = z.infer<typeof StairType>
 export type StairTopLandingMode = z.infer<typeof StairTopLandingMode>
+export type StairSlabOpeningMode = z.infer<typeof StairSlabOpeningMode>
 
 export const StairNode = BaseNode.extend({
   id: objectId('stair'),
   type: nodeType('stair'),
   material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   stairType: StairType.default('straight'),
+  fromLevelId: z.string().nullable().default(null),
+  toLevelId: z.string().nullable().default(null),
+  slabOpeningMode: StairSlabOpeningMode.default('none'),
+  openingOffset: z.number().default(0),
   width: z.number().default(1.0),
   totalRise: z.number().default(2.5),
   stepCount: z.number().default(10),
@@ -43,6 +50,9 @@ export const StairNode = BaseNode.extend({
   - position: center position of the stair group
   - rotation: rotation around Y axis
   - stairType: straight (segment-based), curved (arc-based), or spiral
+  - fromLevelId / toLevelId: source and destination levels used for auto slab cutouts
+  - slabOpeningMode: whether a destination-level slab opening is generated for this stair
+  - openingOffset: extra opening expansion applied after the cutout polygon is computed
   - width: stair width
   - totalRise: total stair height
   - stepCount: number of visible steps

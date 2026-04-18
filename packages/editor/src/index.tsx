@@ -15,11 +15,13 @@ export {
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
+export { ViewerToolbarLeft, ViewerToolbarRight } from './components/ui/viewer-toolbar'
 export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
 export { PresetsProvider } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
+export { triggerSFX } from './lib/sfx-bus'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type { FloorplanSelectionTool, SplitOrientation, ViewMode } from './store/use-editor'
@@ -30,4 +32,3 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
-export { ViewerToolbarLeft, ViewerToolbarRight } from './components/ui/viewer-toolbar'

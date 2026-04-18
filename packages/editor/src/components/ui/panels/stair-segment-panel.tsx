@@ -17,7 +17,6 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
-import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -35,25 +34,24 @@ const ATTACHMENT_SIDE_OPTIONS: { label: string; value: AttachmentSide }[] = [
 ]
 
 export function StairSegmentPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as StairSegmentNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairSegmentNode | undefined) : undefined,
+  )
 
-  // Check if this is the first segment in the parent stair
-  const isFirstSegment = (() => {
+  // Boolean selector — re-renders only when this segment's position among the
+  // parent stair's children flips to/from "first".
+  const isFirstSegment = useScene((s) => {
     if (!node?.parentId) return true
-    const parent = nodes[node.parentId as AnyNodeId]
+    const parent = s.nodes[node.parentId as AnyNodeId]
     if (!parent || parent.type !== 'stair') return true
     const children = (parent as any).children ?? []
     return children[0] === node.id
-  })()
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<StairSegmentNode>) => {
@@ -65,7 +63,14 @@ export function StairSegmentPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -124,7 +129,7 @@ export function StairSegmentPanel() {
     }
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'stair-segment' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'stair-segment' && selectedId)) return null
 
   return (
     <PanelWrapper
@@ -243,7 +248,7 @@ export function StairSegmentPanel() {
       </PanelSection>
 
       <PanelSection title="Position">
-        <MetricControl
+        <SliderControl
           label="X"
           max={50}
           min={-50}
@@ -257,7 +262,7 @@ export function StairSegmentPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Y"
           max={50}
           min={-50}
@@ -271,7 +276,7 @@ export function StairSegmentPanel() {
           unit="m"
           value={Math.round(node.position[1] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Z"
           max={50}
           min={-50}
@@ -332,7 +337,13 @@ export function StairSegmentPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="stair-segment"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

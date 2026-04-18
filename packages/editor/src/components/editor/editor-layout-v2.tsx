@@ -39,6 +39,15 @@ function LeftColumn({
     }
   }, [tabs, activePanel, setActivePanel])
 
+  // Leaving the items tab while furnishing should drop back to select mode
+  useEffect(() => {
+    if (activePanel === 'items') return
+    const { phase, mode, setMode } = useEditor.getState()
+    if (phase === 'furnish' && mode === 'build') {
+      setMode('select')
+    }
+  }, [activePanel])
+
   const handleResizerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()

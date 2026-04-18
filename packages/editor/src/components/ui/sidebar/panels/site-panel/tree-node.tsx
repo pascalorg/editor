@@ -1,7 +1,7 @@
 import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { forwardRef, useEffect, useRef } from 'react'
+import { forwardRef, memo, useEffect, useRef } from 'react'
 
 export function handleTreeSelection(
   e: React.MouseEvent,
@@ -73,7 +73,7 @@ interface TreeNodeProps {
   isLast?: boolean
 }
 
-export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
+export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
   const nodeType = useScene((state) => state.nodes[nodeId]?.type)
 
   if (!nodeType) return null
@@ -106,7 +106,7 @@ export function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
     default:
       return null
   }
-}
+})
 
 interface TreeNodeWrapperProps {
   nodeId?: string

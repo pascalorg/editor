@@ -23,6 +23,7 @@ import { ScanSystem } from '../../systems/scan/scan-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
 import { ZoneSystem } from '../../systems/zone/zone-system'
 import { SceneRenderer } from '../renderers/scene-renderer'
+import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing from './post-processing'
@@ -69,18 +70,27 @@ extend(THREE as any)
  *  - Driver crash or GPU reset
  *  - Browser security policy kills the context
  */
+type WebGPUDeviceLossInfo = {
+  reason?: string
+  message?: string
+}
+
+type WebGPUDeviceLike = {
+  lost: Promise<WebGPUDeviceLossInfo>
+}
+
 function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
     const backend = (gl as any).backend
-    const device: GPUDevice | undefined = backend?.device
+    const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) return
 
-    device.lost.then((info) => {
+    device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
-        `[viewer] WebGPU device lost: reason="${info.reason}", message="${info.message}". ` +
+        `[viewer] WebGPU device lost: reason="${info.reason ?? 'unknown'}", message="${info.message ?? ''}". ` +
           'The page must be reloaded to recover the GPU context.',
       )
     })
@@ -106,11 +116,18 @@ const Viewer: React.FC<ViewerProps> = ({
       camera={{ position: [50, 50, 50], fov: 50 }}
       className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       dpr={[1, 1.5]}
-      gl={(props) => {
+      frameloop="never"
+      gl={async (props) => {
         const renderer = new THREE.WebGPURenderer(props as any)
         renderer.toneMapping = THREE.ACESFilmicToneMapping
         renderer.toneMappingExposure = 0.9
-        // renderer.init() // Only use when using <DebugRenderer />
+        // Awaiting init() is required when the browser falls back to the
+        // WebGL2 backend (Safari without the WebGPU flag, older Chrome on
+        // machines without a WebGPU device). In native WebGPU mode the
+        // init resolves almost instantly. Without this await, the first
+        // render throws "Renderer: .render() called before the backend is
+        // initialized" from the post-processing fallback path.
+        await renderer.init()
         return renderer
       }}
       resize={{
@@ -121,6 +138,7 @@ const Viewer: React.FC<ViewerProps> = ({
         enabled: true,
       }}
     >
+      <FrameLimiter fps={50} />
       {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
 

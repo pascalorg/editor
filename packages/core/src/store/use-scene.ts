@@ -8,8 +8,97 @@ import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
+import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
+import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import * as nodeActions from './actions/node-actions'
+
+function getFiniteNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function getBoolean(value: unknown, fallback: boolean) {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function getEnumValue<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  fallback: T[number],
+): T[number] {
+  return typeof value === 'string' && allowed.includes(value) ? value : fallback
+}
+
+function getNullableString(value: unknown) {
+  return typeof value === 'string' ? value : null
+}
+
+function getStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
+function getVector3(value: unknown, fallback: [number, number, number]): [number, number, number] {
+  if (!Array.isArray(value) || value.length < 3) {
+    return fallback
+  }
+
+  return [
+    getFiniteNumber(value[0], fallback[0]),
+    getFiniteNumber(value[1], fallback[1]),
+    getFiniteNumber(value[2], fallback[2]),
+  ]
+}
+
+function normalizeStairNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getFiniteNumber(node.rotation, 0),
+    stairType: getEnumValue(node.stairType, ['straight', 'curved', 'spiral'] as const, 'straight'),
+    fromLevelId: getNullableString(node.fromLevelId),
+    toLevelId: getNullableString(node.toLevelId),
+    slabOpeningMode: getEnumValue(node.slabOpeningMode, ['none', 'destination'] as const, 'none'),
+    openingOffset: getFiniteNumber(node.openingOffset, 0),
+    width: getFiniteNumber(node.width, 1),
+    totalRise: getFiniteNumber(node.totalRise, 2.5),
+    stepCount: getFiniteNumber(node.stepCount, 10),
+    thickness: getFiniteNumber(node.thickness, 0.25),
+    fillToFloor: getBoolean(node.fillToFloor, true),
+    innerRadius: getFiniteNumber(node.innerRadius, 0.9),
+    sweepAngle: getFiniteNumber(node.sweepAngle, Math.PI / 2),
+    topLandingMode: getEnumValue(node.topLandingMode, ['none', 'integrated'] as const, 'none'),
+    topLandingDepth: getFiniteNumber(node.topLandingDepth, 0.9),
+    showCenterColumn: getBoolean(node.showCenterColumn, true),
+    showStepSupports: getBoolean(node.showStepSupports, true),
+    railingMode: getEnumValue(node.railingMode, ['none', 'left', 'right', 'both'] as const, 'none'),
+    railingHeight: getFiniteNumber(node.railingHeight, 0.92),
+    children: getStringArray(node.children),
+  }
+
+  const parsed = StairNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
+}
+
+function normalizeStairSegmentNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getFiniteNumber(node.rotation, 0),
+    segmentType: getEnumValue(node.segmentType, ['stair', 'landing'] as const, 'stair'),
+    width: getFiniteNumber(node.width, 1),
+    length: getFiniteNumber(node.length, 3),
+    height: getFiniteNumber(node.height, 2.5),
+    stepCount: getFiniteNumber(node.stepCount, 10),
+    attachmentSide: getEnumValue(node.attachmentSide, ['front', 'left', 'right'] as const, 'front'),
+    fillToFloor: getBoolean(node.fillToFloor, true),
+    thickness: getFiniteNumber(node.thickness, 0.25),
+  }
+
+  const parsed = StairSegmentNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
+}
 
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   const patchedNodes = { ...nodes }
@@ -48,6 +137,20 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = {
         ...oldRoof,
         children: [segmentId],
+      }
+    }
+
+    if (node.type === 'stair') {
+      const normalized = normalizeStairNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
+    if (node.type === 'stair-segment') {
+      const normalized = normalizeStairSegmentNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
       }
     }
   }

@@ -3,9 +3,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type LevelNode,
   type MaterialSchema,
   type StairNode,
   type StairRailingMode,
+  type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
   StairNode as StairNodeSchema,
@@ -16,6 +18,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
@@ -46,19 +49,40 @@ const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] 
   { label: 'Integrated', value: 'integrated' },
 ]
 
+const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Destination', value: 'destination' },
+]
+
 export function StairPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId
-    ? (nodes[selectedId as AnyNode['id']] as StairNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
+  )
+  const levels = useScene(
+    useShallow((s) =>
+      Object.values(s.nodes)
+        .filter((entry): entry is LevelNode => entry.type === 'level')
+        .sort((left, right) => left.level - right.level),
+    ),
+  )
+  const segments = useScene(
+    useShallow((s) => {
+      if (!selectedId) return []
+      const stairNode = s.nodes[selectedId as AnyNode['id']] as StairNode | undefined
+      if (stairNode?.type !== 'stair') return []
+      return (stairNode.children ?? [])
+        .map((childId) => s.nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
+        .filter((entry): entry is StairSegmentNode => entry?.type === 'stair-segment')
+    }),
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<StairNode>) => {
@@ -70,7 +94,14 @@ export function StairPanel() {
 
   const handleMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material })
+      handleUpdate({ material, materialPreset: undefined })
+    },
+    [handleUpdate],
+  )
+
+  const handleMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      handleUpdate({ materialPreset, material: undefined })
     },
     [handleUpdate],
   )
@@ -84,13 +115,15 @@ export function StairPanel() {
     const children = node.children ?? []
     const lastChildId = children[children.length - 1]
     if (lastChildId) {
-      const lastChild = nodes[lastChildId as AnyNodeId] as StairSegmentNode | undefined
+      const lastChild = useScene.getState().nodes[lastChildId as AnyNodeId] as
+        | StairSegmentNode
+        | undefined
       if (lastChild?.type === 'stair-segment') {
         return { fillToFloor: lastChild.fillToFloor }
       }
     }
     return { fillToFloor: true }
-  }, [node, nodes])
+  }, [node])
 
   const handleAddFlight = useCallback(() => {
     if (!node) return
@@ -194,11 +227,10 @@ export function StairPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
-  if (!node || node.type !== 'stair' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
-  const segments = (node.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+  const resolvedFromLevelId = node.fromLevelId ?? node.parentId ?? levels[0]?.id ?? null
+  const resolvedToLevelId = node.toLevelId ?? resolvedFromLevelId
 
   return (
     <PanelWrapper
@@ -223,6 +255,73 @@ export function StairPanel() {
           options={STAIR_TYPE_OPTIONS}
           value={node.stairType ?? 'straight'}
         />
+      </PanelSection>
+
+      <PanelSection title="Opening">
+        <div className="space-y-3">
+          <ToggleControl
+            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+            label="Auto Cutout"
+            onChange={(checked) =>
+              handleUpdate({
+                slabOpeningMode: checked ? 'destination' : 'none',
+              })
+            }
+          />
+
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              From Level
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) => handleUpdate({ fromLevelId: event.target.value })}
+              value={resolvedFromLevelId ?? ''}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              To Level
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              onChange={(event) => handleUpdate({ toLevelId: event.target.value })}
+              value={resolvedToLevelId ?? ''}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <SegmentedControl
+            onChange={(value) => handleUpdate({ slabOpeningMode: value as StairSlabOpeningMode })}
+            options={STAIR_SLAB_OPENING_OPTIONS}
+            value={node.slabOpeningMode ?? 'none'}
+          />
+
+          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+            <MetricControl
+              label="Opening Offset"
+              max={0.5}
+              min={0}
+              onChange={(value) => handleUpdate({ openingOffset: value })}
+              precision={2}
+              step={0.01}
+              unit="m"
+              value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+            />
+          ) : null}
+        </div>
       </PanelSection>
 
       {node.stairType === 'straight' && (
@@ -361,7 +460,7 @@ export function StairPanel() {
       )}
 
       <PanelSection title="Position">
-        <MetricControl
+        <SliderControl
           label="X"
           max={50}
           min={-50}
@@ -375,7 +474,7 @@ export function StairPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Y"
           max={50}
           min={-50}
@@ -389,7 +488,7 @@ export function StairPanel() {
           unit="m"
           value={Math.round(node.position[1] * 100) / 100}
         />
-        <MetricControl
+        <SliderControl
           label="Z"
           max={50}
           min={-50}
@@ -470,7 +569,13 @@ export function StairPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
+        <MaterialPicker
+          nodeType="stair"
+          onChange={handleMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={node.materialPreset}
+          value={node.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

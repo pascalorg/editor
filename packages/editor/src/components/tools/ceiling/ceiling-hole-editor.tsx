@@ -36,6 +36,7 @@ export const CeilingHoleEditor: React.FC<CeilingHoleEditorProps> = ({ ceilingId,
 
   return (
     <PolygonEditor
+      allowPolygonMove
       color="#ef4444"
       levelId={resolveLevelId(ceiling, useScene.getState().nodes)} // red for holes
       minVertices={3}

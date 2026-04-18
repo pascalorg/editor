@@ -4,6 +4,13 @@ import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import type { AnyNodeId, CeilingNode } from '../../schema'
 import useScene from '../../store/use-scene'
 
+function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
+}
+
 // ============================================================================
 // CEILING SYSTEM
 // ============================================================================
@@ -100,6 +107,7 @@ export function generateCeilingGeometry(ceilingNode: CeilingNode): THREE.BufferG
   // Rotate so the shape lies flat in X-Z plane
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
+  ensureUv2Attribute(geometry)
 
   return geometry
 }

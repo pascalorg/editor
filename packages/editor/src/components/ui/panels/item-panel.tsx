@@ -14,15 +14,15 @@ import { CollectionsPopover } from './collections/collections-popover'
 import { PanelWrapper } from './panel-wrapper'
 
 export function ItemPanel() {
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  const selectedId = selectedIds[0]
-  const node = selectedId ? (nodes[selectedId as AnyNode['id']] as ItemNode | undefined) : undefined
+  const node = useScene((s) =>
+    selectedId ? (s.nodes[selectedId as AnyNode['id']] as ItemNode | undefined) : undefined,
+  )
 
   const [uniformScale, setUniformScale] = useState(true)
 
@@ -75,7 +75,7 @@ export function ItemPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, deleteNode, setSelection])
 
-  if (!node || node.type !== 'item' || selectedIds.length !== 1) return null
+  if (!(node && node.type === 'item' && selectedId)) return null
 
   return (
     <PanelWrapper

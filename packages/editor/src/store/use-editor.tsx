@@ -3,21 +3,25 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
   type BuildingNode,
+  type CeilingNode,
   type DoorNode,
   type FenceNode,
   type ItemNode,
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
+  type SlabNode,
   type Space,
   type StairNode,
   type StairSegmentNode,
   useScene,
+  type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { getDefaultCatalogItem } from '../components/ui/item-catalog/catalog-items'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -66,9 +70,15 @@ export type CatalogCategory =
 export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
+export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
+
+export type MovingWallEndpoint = {
+  wall: WallNode
+  endpoint: 'start' | 'end'
+}
 
 type EditorState = {
   phase: Phase
@@ -88,6 +98,9 @@ type EditorState = {
     | WindowNode
     | DoorNode
     | FenceNode
+    | CeilingNode
+    | SlabNode
+    | WallNode
     | RoofNode
     | RoofSegmentNode
     | StairNode
@@ -100,6 +113,9 @@ type EditorState = {
       | WindowNode
       | DoorNode
       | FenceNode
+      | CeilingNode
+      | SlabNode
+      | WallNode
       | RoofNode
       | RoofSegmentNode
       | StairNode
@@ -107,6 +123,10 @@ type EditorState = {
       | BuildingNode
       | null,
   ) => void
+  movingWallEndpoint: MovingWallEndpoint | null
+  setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
+  curvingWall: WallNode | null
+  setCurvingWall: (wall: WallNode | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -131,6 +151,8 @@ type EditorState = {
   setFloorplanHovered: (hovered: boolean) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
+  gridSnapStep: GridSnapStep
+  setGridSnapStep: (step: GridSnapStep) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -151,7 +173,11 @@ export type PersistedEditorUiState = Pick<
 
 type PersistedEditorLayoutState = Pick<
   EditorState,
-  'activeSidebarPanel' | 'floorplanPaneRatio' | 'splitOrientation' | 'floorplanSelectionTool'
+  | 'activeSidebarPanel'
+  | 'floorplanPaneRatio'
+  | 'splitOrientation'
+  | 'floorplanSelectionTool'
+  | 'gridSnapStep'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -170,7 +196,10 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   floorplanPaneRatio: DEFAULT_FLOORPLAN_PANE_RATIO,
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
+  gridSnapStep: 0.5,
 }
+
+const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   if (phase === 'site') {
@@ -274,6 +303,9 @@ function normalizePersistedEditorLayoutState(
     floorplanPaneRatio: normalizeFloorplanPaneRatio(state?.floorplanPaneRatio),
     splitOrientation: state?.splitOrientation === 'vertical' ? 'vertical' : 'horizontal',
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
+    gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
+      ? (state?.gridSnapStep as GridSnapStep)
+      : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
   }
 }
 
@@ -333,6 +365,10 @@ export function selectDefaultBuildingAndLevel() {
   }
 }
 
+function getDefaultSelectedItemForCategory(category: CatalogCategory | null): AssetInput | null {
+  return getDefaultCatalogItem(category)
+}
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -354,7 +390,11 @@ const useEditor = create<EditorState>()(
           } else if (phase === 'structure') {
             set({ tool: 'wall', catalogCategory: null })
           } else if (phase === 'furnish') {
-            set({ tool: 'item', catalogCategory: 'furniture' })
+            set({
+              tool: 'item',
+              catalogCategory: 'furniture',
+              selectedItem: getDefaultSelectedItemForCategory('furniture'),
+            })
           }
         } else {
           // Reset to select mode and clear tool/catalog when switching phases
@@ -394,8 +434,15 @@ const useEditor = create<EditorState>()(
             } else if (phase === 'structure' && structureLayer === 'elements') {
               set({ tool: 'wall' })
             } else if (phase === 'furnish') {
-              set({ tool: 'item', catalogCategory: 'furniture' })
+              set({
+                tool: 'item',
+                catalogCategory: 'furniture',
+                selectedItem: getDefaultSelectedItemForCategory('furniture'),
+              })
             }
+          } else if (phase === 'furnish' && tool === 'item' && !get().selectedItem) {
+            const category = get().catalogCategory ?? 'furniture'
+            set({ selectedItem: getDefaultSelectedItemForCategory(category) })
           }
         }
         // When leaving build mode, clear tool
@@ -423,13 +470,27 @@ const useEditor = create<EditorState>()(
         })
       },
       catalogCategory: DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory,
-      setCatalogCategory: (category) => set({ catalogCategory: category }),
+      setCatalogCategory: (category) =>
+        set((state) => ({
+          catalogCategory: category,
+          selectedItem:
+            category !== null &&
+            state.phase === 'furnish' &&
+            state.mode === 'build' &&
+            state.tool === 'item'
+              ? getDefaultSelectedItemForCategory(category)
+              : state.selectedItem,
+        })),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
       movingNode: null as
         | ItemNode
         | WindowNode
         | DoorNode
+        | FenceNode
+        | CeilingNode
+        | SlabNode
+        | WallNode
         | RoofNode
         | RoofSegmentNode
         | StairNode
@@ -437,6 +498,10 @@ const useEditor = create<EditorState>()(
         | BuildingNode
         | null,
       setMovingNode: (node) => set({ movingNode: node }),
+      movingWallEndpoint: null,
+      setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
+      curvingWall: null,
+      setCurvingWall: (wall) => set({ curvingWall: wall }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       spaces: {},
@@ -468,6 +533,8 @@ const useEditor = create<EditorState>()(
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
+      gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+      setGridSnapStep: (step) => set({ gridSnapStep: step }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
@@ -504,11 +571,23 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
-        ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
-      }),
+      merge: (persistedState, currentState) => {
+        const mergedState = {
+          ...currentState,
+          ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
+          ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
+        }
+
+        return {
+          ...mergedState,
+          selectedItem:
+            mergedState.phase === 'furnish' &&
+            mergedState.mode === 'build' &&
+            mergedState.tool === 'item'
+              ? getDefaultSelectedItemForCategory(mergedState.catalogCategory ?? 'furniture')
+              : currentState.selectedItem,
+        }
+      },
       partialize: (state) => ({
         phase: state.phase,
         mode: state.mode,
@@ -521,6 +600,7 @@ const useEditor = create<EditorState>()(
         floorplanPaneRatio: state.floorplanPaneRatio,
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
+        gridSnapStep: state.gridSnapStep,
       }),
     },
   ),

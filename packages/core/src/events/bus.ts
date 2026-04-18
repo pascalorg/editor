@@ -24,9 +24,10 @@ export interface GridEvent {
   /** World-space intersection point on the grid plane. */
   position: [number, number, number]
   /**
-   * Building-local intersection point — relative to the currently selected building.
+   * Building-local intersection point, relative to the currently selected building.
    * Equals `position` when no building is selected.
-   * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
+   * Use this for placing or committing anything that lives inside a building
+   * (walls, slabs, items, etc.).
    */
   localPosition: [number, number, number]
   nativeEvent: ThreeEvent<PointerEvent>
@@ -57,7 +58,7 @@ export type StairSegmentEvent = NodeEvent<StairSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 
-// Event suffixes - exported for use in hooks
+// Event suffixes, exported for use in hooks
 export const eventSuffixes = [
   'click',
   'move',
@@ -85,6 +86,15 @@ export interface CameraControlEvent {
 
 export interface ThumbnailGenerateEvent {
   projectId: string
+  captureMode?: 'standard' | 'viewport' | 'area'
+  cropRegion?: { x: number; y: number; width: number; height: number }
+  /**
+   * When true, snap levels to their true positions before capturing (for a
+   * consistent auto-thumbnail angle) and defer the capture if the tab is
+   * hidden, the background auto-save path. Omit for user-driven captures
+   * that should fire immediately from the current camera pose.
+   */
+  snapLevels?: boolean
 }
 
 type CameraControlEvents = {
@@ -111,6 +121,17 @@ type ThumbnailEvents = {
   'thumbnail:after-capture': undefined
 }
 
+type SnapshotEvents = {
+  'snapshot:saved': undefined
+  'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
+}
+
+type AIChatEvents = {
+  'ai-chat:attach-images': {
+    images: { url: string; name: string; kind: 'snapshot' | 'render' }[]
+  }
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
@@ -130,6 +151,8 @@ type EditorEvents = GridEvents &
   CameraControlEvents &
   ToolEvents &
   PresetEvents &
-  ThumbnailEvents
+  ThumbnailEvents &
+  SnapshotEvents &
+  AIChatEvents
 
 export const emitter = mitt<EditorEvents>()

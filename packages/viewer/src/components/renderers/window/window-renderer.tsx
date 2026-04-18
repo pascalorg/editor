@@ -1,5 +1,5 @@
-import { useRegistry, type WindowNode } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { useRegistry, useScene, type WindowNode } from '@pascal-app/core'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { createMaterial, DEFAULT_WINDOW_MATERIAL } from '../../../lib/materials'
@@ -8,6 +8,9 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const ref = useRef<Mesh>(null!)
 
   useRegistry(node.id, 'window', ref)
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   const handlers = useNodeEvents(node, 'window')
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 

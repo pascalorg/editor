@@ -15,12 +15,13 @@ type ReferenceNode = ScanNode | GuideNode
 export function ReferencePanel() {
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
-  const nodes = useScene((s) => s.nodes)
   const updateNode = useScene((s) => s.updateNode)
 
-  const node = selectedReferenceId
-    ? (nodes[selectedReferenceId as AnyNode['id']] as ReferenceNode | undefined)
-    : undefined
+  const node = useScene((s) =>
+    selectedReferenceId
+      ? (s.nodes[selectedReferenceId as AnyNode['id']] as ReferenceNode | undefined)
+      : undefined,
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<ReferenceNode>) => {

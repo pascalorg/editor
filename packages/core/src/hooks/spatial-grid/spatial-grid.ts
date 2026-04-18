@@ -4,6 +4,13 @@ interface GridCell {
   itemIds: Set<string>
 }
 
+interface ItemBounds {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
 interface SpatialGridConfig {
   cellSize: number // e.g., 0.5 meters = Sims-style half-tile
 }
@@ -11,6 +18,7 @@ interface SpatialGridConfig {
 export class SpatialGrid {
   private readonly cells = new Map<CellKey, GridCell>()
   private readonly itemCells = new Map<string, Set<CellKey>>() // reverse lookup
+  private readonly itemBounds = new Map<string, ItemBounds>() // actual AABB for narrow-phase
 
   private readonly config: SpatialGridConfig
 
@@ -26,34 +34,35 @@ export class SpatialGrid {
     return `${cx},${cz}`
   }
 
-  // Get all cells an item occupies based on its AABB
-  private getItemCells(
+  // Compute the axis-aligned bounding box for a rotated item
+  private getAABB(
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
-  ): CellKey[] {
-    // Simplified: axis-aligned bounding box
-    // For full rotation support, compute rotated corners
+  ): ItemBounds {
     const [x, , z] = position
     const [w, , d] = dimensions
-    const yRot = rotation[1] // Y-axis rotation
+    const yRot = rotation[1]
 
-    // Compute rotated footprint (simplified for 90° increments)
     const cos = Math.abs(Math.cos(yRot))
     const sin = Math.abs(Math.sin(yRot))
     const rotatedW = w * cos + d * sin
     const rotatedD = w * sin + d * cos
 
-    const minX = x - rotatedW / 2
-    const maxX = x + rotatedW / 2
-    const minZ = z - rotatedD / 2
-    const maxZ = z + rotatedD / 2
+    return {
+      minX: x - rotatedW / 2,
+      maxX: x + rotatedW / 2,
+      minZ: z - rotatedD / 2,
+      maxZ: z + rotatedD / 2,
+    }
+  }
+
+  // Get all cells an item occupies based on its AABB
+  private getItemCells(bounds: ItemBounds): CellKey[] {
+    const { minX, maxX, minZ, maxZ } = bounds
 
     const [minCx, minCz] = this.posToCell(minX, minZ)
-    // Use exclusive upper bound: subtract epsilon so exact boundaries don't overlap
-    // This allows adjacent items (touching but not overlapping) to not conflict
-    const epsilon = 1e-6
-    const [maxCx, maxCz] = this.posToCell(maxX - epsilon, maxZ - epsilon)
+    const [maxCx, maxCz] = this.posToCell(maxX, maxZ)
 
     const keys: CellKey[] = []
     for (let cx = minCx; cx <= maxCx; cx++) {
@@ -71,9 +80,11 @@ export class SpatialGrid {
     dimensions: [number, number, number],
     rotation: [number, number, number],
   ) {
-    const cellKeys = this.getItemCells(position, dimensions, rotation)
+    const bounds = this.getAABB(position, dimensions, rotation)
+    const cellKeys = this.getItemCells(bounds)
 
     this.itemCells.set(itemId, new Set(cellKeys))
+    this.itemBounds.set(itemId, bounds)
 
     for (const key of cellKeys) {
       if (!this.cells.has(key)) {
@@ -98,6 +109,7 @@ export class SpatialGrid {
       }
     }
     this.itemCells.delete(itemId)
+    this.itemBounds.delete(itemId)
   }
 
   // Update = remove + insert
@@ -112,30 +124,51 @@ export class SpatialGrid {
   }
 
   // Query: is this placement valid?
+  // Uses cells as broad-phase, then checks actual AABB overlap (narrow-phase)
+  // to avoid false positives when adjacent items share a cell but don't overlap.
   canPlace(
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
     ignoreIds: string[] = [],
   ): { valid: boolean; conflictIds: string[] } {
-    const cellKeys = this.getItemCells(position, dimensions, rotation)
+    const bounds = this.getAABB(position, dimensions, rotation)
+    const cellKeys = this.getItemCells(bounds)
     const ignoreSet = new Set(ignoreIds)
-    const conflicts = new Set<string>()
 
+    // Broad phase: collect candidate items from overlapping cells
+    const candidates = new Set<string>()
     for (const key of cellKeys) {
       const cell = this.cells.get(key)
       if (cell) {
         for (const id of cell.itemIds) {
           if (!ignoreSet.has(id)) {
-            conflicts.add(id)
+            candidates.add(id)
           }
         }
       }
     }
 
+    // Narrow phase: check actual AABB overlap
+    // Items that merely touch (share an edge) are allowed; only true overlap conflicts.
+    const EPSILON = 1e-4 // tolerance to allow touching
+    const conflicts: string[] = []
+    for (const id of candidates) {
+      const other = this.itemBounds.get(id)
+      if (!other) continue
+      if (
+        bounds.minX < other.maxX - EPSILON &&
+        bounds.maxX > other.minX + EPSILON &&
+        bounds.minZ < other.maxZ - EPSILON &&
+        bounds.maxZ > other.minZ + EPSILON
+      ) {
+        conflicts.push(id)
+      }
+    }
+
     return {
-      valid: conflicts.size === 0,
-      conflictIds: [...conflicts],
+      valid: conflicts.length === 0,
+      conflictIds: conflicts,
     }
   }
 
